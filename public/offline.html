@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIOB GMAO - وضع بدون إنترنت</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'IBM Plex Sans Arabic', Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #1e293b;
+    }
+
+    .container {
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.35);
+      padding: 40px;
+      max-width: 520px;
+      width: 100%;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .icon-wrapper {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      background: #ecfdf5;
+      border: 2px solid #a7f3d0;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.85; }
+    }
+
+    h1 {
+      color: #0f172a;
+      margin-bottom: 12px;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    p {
+      color: #64748b;
+      margin-bottom: 24px;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .status {
+      background: #f0fdf4;
+      border-right: 4px solid #10b981;
+      padding: 16px;
+      margin-bottom: 24px;
+      text-align: right;
+      border-radius: 12px;
+    }
+
+    .status-text {
+      color: #065f46;
+      font-weight: 600;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-direction: column;
+    }
+
+    button {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 700;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-primary {
+      background: #059669;
+      color: white;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: #047857;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(5, 150, 105, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #e2e8f0;
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+
+    .info {
+      background: #f8fafc;
+      border-right: 4px solid #3b82f6;
+      padding: 14px;
+      margin-top: 24px;
+      text-align: right;
+      border-radius: 12px;
+      font-size: 13px;
+      color: #1e3a8a;
+      line-height: 1.6;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon-wrapper">📡</div>
+    
+    <h1>وضع بدون إنترنت (100% Offline)</h1>
+    
+    <p>
+      يبدو أنه لا يوجد اتصال نشط بالإنترنت حالياً.
+      <br>
+      تطبيق <strong>CIOB GMAO</strong> مصمم بتقنية Offline-First ليعمل بكفاءة تامة بدون انترنت!
+    </p>
+
+    <div class="status">
+      <div class="status-text">
+        <span>✅</span>
+        <span>جميع بيانات المخزون، الحركات، والآلات محفوظة محلياً على هذا الجهاز.</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" id="retry-btn" onclick="retryConnection(event)">
+        إعادة التحقق من الاتصال
+      </button>
+      
+      <button class="btn-secondary" onclick="goToApp()">
+        الاستمرار إلى التطبيق دون اتصال
+      </button>
+    </div>
+
+    <div class="info">
+      💡 نصيحة: بإمكانك تسجيل الصرفيات والإدخالات وإدارة المقالات بشكل طبيعي، وستتم مزامنة أي تحديثات فور استعادة الشبكة.
+    </div>
+  </div>
+
+  <script>
+    /**
+     * إعادة محاولة الاتصال
+     */
+    function retryConnection(e) {
+      const btn = document.getElementById('retry-btn');
+      btn.innerHTML = '<span class="spinner"></span> جاري التحقق...';
+      btn.disabled = true;
+
+      // محاولة الوصول إلى الموقع
+      fetch('/', { method: 'HEAD', cache: 'no-cache' })
+        .then(() => {
+          showNotification('تم استعادة الاتصال بنجاح! جاري التوجيه...');
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 1000);
+        })
+        .catch(() => {
+          btn.innerHTML = 'إعادة التحقق من الاتصال';
+          btn.disabled = false;
+          showNotification('لا يزال لا يوجد اتصال بالإنترنت. التطبيق متاح بدون إنترنت.');
+        });
+    }
+
+    /**
+     * الذهاب إلى التطبيق
+     */
+    function goToApp() {
+      window.location.href = '/';
+    }
+
+    /**
+     * الاستماع لاستعادة الاتصال تلقائياً
+     */
+    window.addEventListener('online', () => {
+      showNotification('تم استعادة الاتصال! جاري تحديث التطبيق...');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1200);
+    });
+
+    /**
+     * عرض إشعار عائم
+     */
+    function showNotification(message) {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background: #059669;
+        color: white;
+        padding: 14px 22px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        direction: rtl;
+        transition: all 0.3s ease;
+      `;
+      notification.textContent = message;
+      document.body.appendChild(notification);
+
+      setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateY(10px)';
+        setTimeout(() => notification.remove(), 300);
+      }, 3500);
+    }
+
+    // إذا كان الجهاز متصلاً بالفعل، التوجيه للتطبيق فوراً
+    if (navigator.onLine) {
+      window.location.href = '/';
+    }
+  </script>
+</body>
+</html>

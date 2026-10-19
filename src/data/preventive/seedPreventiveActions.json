@@ -1,0 +1,86 @@
+[
+  {
+    "id": "ID-ACT-C-CONTR-001",
+    "code": "C",
+    "ref": "ISO-17359-C",
+    "libelle": "Contrôle",
+    "description": "Contrôle visuel, mesure de jeux mécaniques, auscultation vibratoire et relevé de température.",
+    "couleur": "blue",
+    "icone": "Eye",
+    "duree_standard": "15 min",
+    "outils": "Stéthoscope mécanique, Thermomètre infrarouge, Jauge de jeu",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-N-NETTOY-002",
+    "code": "N",
+    "ref": "STD-CLEAN-01",
+    "libelle": "Nettoyage",
+    "description": "Nettoyage approfondi, dépoussiérage des ouïes de ventilation, dégraissage et soufflage basse pression.",
+    "couleur": "emerald",
+    "icone": "Sparkles",
+    "duree_standard": "20 min",
+    "outils": "Soufflette régulée, Chiffons non pelucheux, Dégraissant diélectrique",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-G-GRAISS-003",
+    "code": "G",
+    "ref": "DIN-51825-G",
+    "libelle": "Graissage",
+    "description": "Graissage périodique des roulements, paliers et guides linéaires avec la graisse prescrite.",
+    "couleur": "amber",
+    "icone": "Droplet",
+    "duree_standard": "10 min",
+    "outils": "Pompe à graisse manuelle graduée, Graisse SKF LGMT3 / Mobil Polyrex",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-V-VERIF-004",
+    "code": "V",
+    "ref": "ISO-10816-V",
+    "libelle": "Vérification",
+    "description": "Vérification fonctionnelle des sécurités, arrêts d'urgence, alignement et fin de course.",
+    "couleur": "indigo",
+    "icone": "CheckCircle",
+    "duree_standard": "15 min",
+    "outils": "Multimètre de sécurité, Règle d'alignement laser",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-R-REVIS-005",
+    "code": "R",
+    "ref": "STD-REV-2025",
+    "libelle": "Révision",
+    "description": "Révision générale périodique, démontage partiel, contrôle d'usure et tests complets sous charge.",
+    "couleur": "purple",
+    "icone": "Wrench",
+    "duree_standard": "60 min",
+    "outils": "Caisse à outils complète, Extracteur de roulements, Comparateur",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-S-SERR-006",
+    "code": "S",
+    "ref": "NF-E-25030-S",
+    "libelle": "Serrage",
+    "description": "Contrôle au couple prescrit et resserrage de la boulonnerie et des connexions électriques.",
+    "couleur": "rose",
+    "icone": "ShieldAlert",
+    "duree_standard": "15 min",
+    "outils": "Clé dynamométrique étalonnée, Tournevis dynamométrique",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-ACT-L-LUBRIF-007",
+    "code": "L",
+    "ref": "ISO-6743-L",
+    "libelle": "Lubrification",
+    "description": "Appoint ou vidange complète des carters d'huile, réducteurs et centrales hydrauliques.",
+    "couleur": "cyan",
+    "icone": "Droplet",
+    "duree_standard": "25 min",
+    "outils": "Entonnoir filtrant, Huile ISO VG 220 / 46, Bac de récupération",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  }
+]

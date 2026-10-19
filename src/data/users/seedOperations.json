@@ -1,0 +1,38 @@
+[
+  {
+    "id_operation": "RESP-01",
+    "nom": "Ismail",
+    "id_zone": "ALL",
+    "zones": [
+      "ALL"
+    ],
+    "type_profil": "RESPONSABLE",
+    "templates": [
+      "RMG"
+    ],
+    "template_ids": [
+      "RMG"
+    ],
+    "template_id": "RMG",
+    "template_label": "Responsable Magasin"
+  },
+  {
+    "id_operation": "RESP-02",
+    "nom": "Nabile Ghazawi",
+    "id_zone": "ALL",
+    "zones": [
+      "ALL"
+    ],
+    "type_profil": "RESPONSABLE",
+    "templates": [
+      "RMT",
+      "RZN"
+    ],
+    "template_ids": [
+      "RMT",
+      "RZN"
+    ],
+    "template_id": "RMT, RZN",
+    "template_label": "Responsable Maintenance, Responsable Zone"
+  }
+]

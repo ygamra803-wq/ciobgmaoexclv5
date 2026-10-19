@@ -1,0 +1,38 @@
+[
+  {
+    "id": "GRP-MOTEUR-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "code": "MOTEUR",
+    "libelle": "Moteurs & Actionneurs Électriques",
+    "ref": "",
+    "description": "Groupe parent englobant tous les moteurs industriels (Triphasé, Monophasé, Asynchrone, Synchrone, Servo, DC, AC)",
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-REDUCTEUR-001",
+    "id_groupe": "GRP-REDUCTEUR-001",
+    "code": "REDUCTEUR",
+    "libelle": "Réducteurs & Boîtes Mécaniques",
+    "ref": "",
+    "description": "Groupe des réducteurs à engrenages coaxiaux, orthogonaux et pendulaires",
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-POMPE-001",
+    "id_groupe": "GRP-POMPE-001",
+    "code": "POMPE",
+    "libelle": "Pompes & Systèmes Hydrauliques",
+    "ref": "",
+    "description": "Groupe des pompes centrifuges, pompes hydrauliques et groupes de lubrification",
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-VARIATEUR-001",
+    "id_groupe": "GRP-VARIATEUR-001",
+    "code": "VARIATEUR",
+    "libelle": "Variateurs & Contrôle de Vitesse",
+    "ref": "",
+    "description": "Groupe des variateurs de fréquence et servodrivers d'asservissement",
+    "created_at": "2024-01-01"
+  }
+]

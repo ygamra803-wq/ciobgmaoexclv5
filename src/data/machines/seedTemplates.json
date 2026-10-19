@@ -1,0 +1,302 @@
+[
+  {
+    "id_templates": "TPL-ASPIRATEUR",
+    "libelle": "Aspirateur",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-BALANCE",
+    "libelle": "Balance",
+    "id_family": "FAM-EMBA",
+    "famille_lib": "Emballage"
+  },
+  {
+    "id_templates": "TPL-BROYEUR",
+    "libelle": "Broyeur",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-CENTREUSE",
+    "libelle": "Centreuse",
+    "id_family": "FAM-PERC",
+    "famille_lib": "Perceuse"
+  },
+  {
+    "id_templates": "TPL-CISAILLE",
+    "libelle": "Cisaille",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-COMPRESSEUR",
+    "libelle": "Compresseur",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-ELEVATEUR",
+    "libelle": "Elévateur",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-FOUR",
+    "libelle": "Four",
+    "id_family": "FAM-FINI",
+    "famille_lib": "Finition"
+  },
+  {
+    "id_templates": "TPL-FRAISEUSE",
+    "libelle": "Fraiseuse",
+    "id_family": "FAM-FRAI",
+    "famille_lib": "Fraiseuse"
+  },
+  {
+    "id_templates": "TPL-FRAISEUSEAUR",
+    "libelle": "Fraiseuse aureillete",
+    "id_family": "FAM-FRAI",
+    "famille_lib": "Fraiseuse"
+  },
+  {
+    "id_templates": "TPL-MACHINEDETAN",
+    "libelle": "Machine d'étancheité",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-MACHINEDECER",
+    "libelle": "Machine de cerclage",
+    "id_family": "FAM-EMBA",
+    "famille_lib": "Emballage"
+  },
+  {
+    "id_templates": "TPL-MACHINEDETRA",
+    "libelle": "Machine de traitement de surface",
+    "id_family": "FAM-FINI",
+    "famille_lib": "Finition"
+  },
+  {
+    "id_templates": "TPL-MACHINEDECOR",
+    "libelle": "Machine décoration",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-MACHINEEMBAL",
+    "libelle": "Machine emballage",
+    "id_family": "FAM-EMBA",
+    "famille_lib": "Emballage"
+  },
+  {
+    "id_templates": "TPL-MACHINETRACA",
+    "libelle": "Machine traçage circulaire",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-MEULE",
+    "libelle": "Meule",
+    "id_family": "FAM-MEUL",
+    "famille_lib": "Meule"
+  },
+  {
+    "id_templates": "TPL-MONTECHARGE",
+    "libelle": "Monte charge",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-MOTEURMEULE",
+    "libelle": "Moteur Meule",
+    "id_family": "FAM-MEUL",
+    "famille_lib": "Meule"
+  },
+  {
+    "id_templates": "TPL-PERCEUSE",
+    "libelle": "Perçeuse",
+    "id_family": "FAM-PERC",
+    "famille_lib": "Perceuse"
+  },
+  {
+    "id_templates": "TPL-POINCONNEUSE",
+    "libelle": "Poinçonneuse corp auto-cuiss",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-POICONAGE",
+    "libelle": "Poiçonage",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-POMPEDEAU",
+    "libelle": "Pompe d'eau",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-PORTEBOBINE",
+    "libelle": "Porte bobine",
+    "id_family": "FAM-FINI",
+    "famille_lib": "Finition"
+  },
+  {
+    "id_templates": "TPL-POSTESOUDAGE",
+    "libelle": "Poste soudage",
+    "id_family": "FAM-SOUD",
+    "famille_lib": "Soudage"
+  },
+  {
+    "id_templates": "TPL-PRESSEHYDRAU",
+    "libelle": "Presse Hydraulique",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-PRESSECHUTEA",
+    "libelle": "Presse chute aluminuim",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-PRESSEDINJEC",
+    "libelle": "Presse d'injection bakelite",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-PRESSEMECANI",
+    "libelle": "Presse mécanique",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-PRESSEPOURRO",
+    "libelle": "Presse pour roulement",
+    "id_family": "FAM-PRES",
+    "famille_lib": "Presse"
+  },
+  {
+    "id_templates": "TPL-RAVIVAGE",
+    "libelle": "Ravivage",
+    "id_family": "FAM-FINI",
+    "famille_lib": "Finition"
+  },
+  {
+    "id_templates": "TPL-REFROIDISSEU",
+    "libelle": "Refroidisseur d'eau Bakélite",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-RIVTEUSEUSE",
+    "libelle": "Rivteuseuse",
+    "id_family": "FAM-RIVE",
+    "famille_lib": "Rivetage"
+  },
+  {
+    "id_templates": "TPL-RECTIFIEUSEP",
+    "libelle": "Réctifieuse paralléle",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-SCIEMECANIQU",
+    "libelle": "Scie mécanique",
+    "id_family": "FAM-SCIE",
+    "famille_lib": "Scie"
+  },
+  {
+    "id_templates": "TPL-SCOTCHEUSE",
+    "libelle": "Scotcheuse",
+    "id_family": "FAM-EMBA",
+    "famille_lib": "Emballage"
+  },
+  {
+    "id_templates": "TPL-SERTISSEUSE",
+    "libelle": "Sertisseuse",
+    "id_family": "FAM-SERT",
+    "famille_lib": "Sertissage"
+  },
+  {
+    "id_templates": "TPL-TAPIECONVOYE",
+    "libelle": "TAPIE CONVOYEUR",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-TARAUDEUSE",
+    "libelle": "Taraudeuse",
+    "id_family": "FAM-PERC",
+    "famille_lib": "Perceuse"
+  },
+  {
+    "id_templates": "TPL-TONNEAUXVIBR",
+    "libelle": "Tonneaux vibreur",
+    "id_family": "FAM-MANU",
+    "famille_lib": "Manutention"
+  },
+  {
+    "id_templates": "TPL-TOURDESATINA",
+    "libelle": "Tour de Satinage",
+    "id_family": "FAM-TOUR",
+    "famille_lib": "Tour"
+  },
+  {
+    "id_templates": "TPL-TOURDEDETOUR",
+    "libelle": "Tour de détourage",
+    "id_family": "FAM-TOUR",
+    "famille_lib": "Tour"
+  },
+  {
+    "id_templates": "TPL-TOURDEPOLISS",
+    "libelle": "Tour de polissage",
+    "id_family": "FAM-TOUR",
+    "famille_lib": "Tour"
+  },
+  {
+    "id_templates": "TPL-TOURDEREPOUS",
+    "libelle": "Tour de repoussage",
+    "id_family": "FAM-TOUR",
+    "famille_lib": "Tour"
+  },
+  {
+    "id_templates": "TPL-TOURPARALLEL",
+    "libelle": "Tour paralléle",
+    "id_family": "FAM-TOUR",
+    "famille_lib": "Tour"
+  },
+  {
+    "id_templates": "TPL-TRANCONNEUSE",
+    "libelle": "Trançonneuse",
+    "id_family": "FAM-SCIE",
+    "famille_lib": "Scie"
+  },
+  {
+    "id_templates": "TPL-VISSEUSE",
+    "libelle": "Visseuse",
+    "id_family": "FAM-EMBA",
+    "famille_lib": "Emballage"
+  },
+  {
+    "id_templates": "TPL-DECOUPEDUCAG",
+    "libelle": "découpe du cage cassrole",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-DIVERS",
+    "libelle": "Divers",
+    "id_family": "FAM-DIVE",
+    "famille_lib": "Divers"
+  },
+  {
+    "id_templates": "TPL-RIVETEUSE",
+    "libelle": "Riveteuse",
+    "id_family": "FAM-RIVE",
+    "famille_lib": "Rivetage"
+  }
+]

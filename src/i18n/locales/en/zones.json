@@ -1,0 +1,80 @@
+{
+  "title": "Industrial Zones & Workshops",
+  "subtitle": "Geographical mapping and segmentation of plant machinery and maintenance staff",
+  "stats": {
+    "total_zones": "Registered Zones",
+    "total_machines": "Associated Machinery",
+    "total_staff": "Personnel / Staff",
+    "active_coverage": "Workshop Coverage"
+  },
+  "filters": {
+    "title": "Filters & Advanced Search",
+    "subtitle": "Directory of Production Zones & Workshops • Columns A → F",
+    "search_label": "Search",
+    "search_placeholder": "Search by zone code, ID, label...",
+    "sort_label": "Sort Records",
+    "sort_by": "Sort by",
+    "order_asc": "A→Z",
+    "order_desc": "Z→A",
+    "code_col": "Zone Code (ID)",
+    "label_col": "Label / Description",
+    "active_filter": "Active filter:",
+    "filter_search": "Search",
+    "reset_tooltip": "Reset search"
+  },
+  "columns": {
+    "identifiers": "IDENTIFIERS (CODE / ID)",
+    "label": "SECTOR / WORKSHOP LABEL",
+    "team": "USERS (TEAM)",
+    "machines": "MACHINERY FLEET (EQUIPMENT)",
+    "actions": "ACTIONS / MANAGEMENT",
+    "technician": "TECHNICIAN",
+    "technicians": "TECHNICIANS",
+    "machine": "machine",
+    "machines_plural": "machines"
+  },
+  "table": {
+    "title": "Zones Table • System Code & User ID",
+    "empty_msg": "No zones found",
+    "item_label": "zones"
+  },
+  "buttons": {
+    "add_zone": "Add Zone",
+    "view_formulas": "Excel Formulas",
+    "edit": "Edit zone",
+    "delete": "Delete zone",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close"
+  },
+  "modal": {
+    "add_title": "New Zone / Workshop",
+    "add_subtitle": "Create a geographical zone or factory sector.",
+    "edit_title": "Edit Zone",
+    "delete_title": "Delete zone?",
+    "delete_confirm": "Do you confirm the deletion of this zone? Links with this zone might be broken.",
+    "code_label": "Zone Code (e.g., ZONE-01) *",
+    "code_helper": "Sequential system code with flexible number choice",
+    "id_label": "Zone ID (e.g., POL, DET, AMBO) *",
+    "id_helper": "Manual user identifier (e.g., DET, POL, SAT, AMBO)",
+    "libelle_label": "Sector / Workshop Label",
+    "libelle_placeholder": "Finishing & Painting Workshop...",
+    "type_label": "Zone Type",
+    "desc_label": "Description (Industrial Philosophy)",
+    "desc_placeholder": "Physical and mechanical principle of operation...",
+    "code_b1": "Zone Code (B.1)",
+    "id_b2": "Zone ID (B.2)"
+  },
+  "formulas": {
+    "title": "Mirror Excel Formulas — Zones & Sectors",
+    "sheet": "Zones Sheet",
+    "subtitle": "Aggregation and relational count formulas of the Zones sheet",
+    "f_d_title": "Formula D (Technicians)",
+    "f_d_desc": "Dynamic count of maintenance technicians assigned to this zone.",
+    "f_e_title": "Formula E (Operations)",
+    "f_e_desc": "Dynamic count of line operators and managers linked to this zone.",
+    "f_f_title": "Formula F (Machines)",
+    "f_f_desc": "Total production equipment and machinery installed in this sector.",
+    "footer_note": "100% compliant with the model Excel file GMAO_Light_Template_V2"
+  }
+}

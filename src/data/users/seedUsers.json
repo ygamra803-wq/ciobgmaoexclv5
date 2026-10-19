@@ -1,0 +1,80 @@
+[
+  {
+    "id": "TECH-01",
+    "id_technician": "TECH-01",
+    "nom": "Rachid",
+    "role": "Technicien",
+    "type_profil": "TECHNICIEN",
+    "id_zone": "FM",
+    "zones": ["FM"],
+    "specialite": "Fabrication Mécanique & Maintenance"
+  },
+  {
+    "id": "TECH-02",
+    "id_technician": "TECH-02",
+    "nom": "Youssef",
+    "role": "Technicien",
+    "type_profil": "TECHNICIEN",
+    "id_zone": "Polissage",
+    "zones": ["Polissage"],
+    "specialite": "Polissage & Finition"
+  },
+  {
+    "id": "TECH-03",
+    "id_technician": "TECH-03",
+    "nom": "Mhammed",
+    "role": "Technicien",
+    "type_profil": "TECHNICIEN",
+    "id_zone": "Presse injection",
+    "zones": ["Presse injection"],
+    "specialite": "Presse Injection & Outillage"
+  },
+  {
+    "id": "TECH-04",
+    "id_technician": "TECH-04",
+    "nom": "Ismail",
+    "role": "Technicien",
+    "type_profil": "TECHNICIEN",
+    "id_zone": "Presse Hydraulique",
+    "zones": ["Presse Hydraulique"],
+    "specialite": "Emboutissage & Presses"
+  },
+  {
+    "id": "TECH-05",
+    "id_technician": "TECH-05",
+    "nom": "Boujamaa",
+    "role": "Technicien",
+    "type_profil": "TECHNICIEN",
+    "id_zone": "FEMB2",
+    "zones": ["FEMB2"],
+    "specialite": "Finition & Emballage"
+  },
+  {
+    "id": "RESP-01",
+    "id_operation": "RESP-01",
+    "nom": "Ismail",
+    "role": "Responsable",
+    "type_profil": "RESPONSABLE",
+    "id_zone": "ALL",
+    "zones": ["ALL"],
+    "templates": ["RMG"],
+    "template_ids": ["RMG"],
+    "template_id": "RMG",
+    "template_label": "Responsable Magasin",
+    "specialite": "Gestion Magasin & Stocks PDR"
+  },
+  {
+    "id": "RESP-02",
+    "id_operation": "RESP-02",
+    "nom": "Nabile Ghazawi",
+    "role": "Responsable",
+    "type_profil": "RESPONSABLE",
+    "id_zone": "ALL",
+    "zones": ["ALL"],
+    "templates": ["RMT", "RZN"],
+    "template_ids": ["RMT", "RZN"],
+    "template_id": "RMT, RZN",
+    "template_label": "Responsable Maintenance, Responsable Zone",
+    "specialite": "Responsable Maintenance, Responsable Zone"
+  }
+]

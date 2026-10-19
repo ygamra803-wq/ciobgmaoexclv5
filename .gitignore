@@ -1,0 +1,35 @@
+# Logs and temp files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lint_output*.txt
+
+# Dependency directories
+node_modules/
+
+# Production build outputs
+dist/
+dev-dist/
+
+# Runtime server state & temporary workbooks (anchored to root /data/ only — never ignore /src/data/ seeds)
+/data/
+/data/gmao_state.json
+!/src/data/
+/GMAO_x5f_Light_x5f_Template_x5f_V2_x5f_Formules.xlsx
+
+# Local & alternative lockfiles to prevent cloud deployment conflicts (e.g. bun exit status 127)
+bun.lock
+bun.lockb
+yarn.lock
+pnpm-lock.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment configs
+.env.local
+.env.production.local
+.env*.local
+.env.*.local

@@ -1,0 +1,50 @@
+{
+  "Vibrations anormales palier / roulement": [
+    "Contrôle de l état des roulements et mesure vibratoire",
+    "Remplacement des roulements AV/AR (SKF)",
+    "Vérification de l alignement des poulies et tension courroies",
+    "Graissage des paliers avec graisse haute température"
+  ],
+  "Échauffement anormal réducteur / moteur": [
+    "Contrôle niveau et viscosité huile réducteur",
+    "Nettoyage des ailettes de ventilation moteur",
+    "Vidange et appoint huile ISO VG 220",
+    "Contrôle du courant absorbé par phase au multimètre"
+  ],
+  "Déclenchement relais thermique / disjoncteur moteur": [
+    "Mesure de la résistance d isolement bobinage au mégohmmètre",
+    "Vérification de l équilibrage des courants des 3 phases",
+    "Réarmement et test sous charge nominale",
+    "Remplacement du relais thermique ou contacteur usé"
+  ],
+  "Défaut d isolement moteur (masse électrique)": [
+    "Test d isolement phase-terre au mégohmmètre (500V)",
+    "Démontage moteur pour envoi au bobinier (Sortie Externe)",
+    "Montage moteur de réserve du stock entrepôt",
+    "Contrôle du câble d alimentation et boîte à bornes"
+  ],
+  "Fuite d air comprimé raccord / tuyau Festo": [
+    "Localisation fuite au détecteur à bulles / écoute",
+    "Coupe propre du tube Festo Ø8 ou Ø10 et réenclenchement",
+    "Remplacement du raccord rapide instantané",
+    "Contrôle étanchéité sous 7 bar"
+  ],
+  "Chute de pression groupe hydraulique": [
+    "Contrôle niveau d huile dans le réservoir central",
+    "Nettoyage ou remplacement de la cartouche filtrante",
+    "Réglage du limiteur de pression principal",
+    "Contrôle débit de la pompe à engrenages"
+  ],
+  "Vérin pneumatique lent / amortisseur détérioré": [
+    "Réglage des réducteurs de débit d échappement",
+    "Remplacement des joints d étanchéité vérin",
+    "Contrôle de la pression d alimentation FRL",
+    "Remplacement du vérin pneumatique complet"
+  ],
+  "Bobinage moteur grillé / surchauffe stator": [
+    "Test des enroulements au pont d impédance / multimètre",
+    "Démontage moteur et émission Bon de Sortie Externe",
+    "Remplacement par moteur de secours de l Entrepôt",
+    "Essai à vide puis accouplement et essai en charge"
+  ]
+}

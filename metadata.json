@@ -1,0 +1,8 @@
+{
+  "name": "Remix CiobGMAO-excelv3.0.0",
+  "description": "CIOB GMAO Light UI Excel (الإصدار v3.0.0 Enterprise):\n\nالنموذج التوأم لإكسيل (Excel Twin Digital Model):\nالتطبيق ليس مجرد واجهة عادية، بل هو محاكاة برمجية رقمية فائقة الدقة لنموذج إدارة الصيانة المرجعي (GMAO_Light_Template_V2_Formules.xlsx)، حيث تُطابق جداوله كل ورقة عمل (Worksheet) ومعادلاتها الميدانية مثل SUMIFS لحساب الإدخالات والإخراجات وتحديد رصيد المخزون الفعلي وحالات التنبيه (OK / ALERTE / RUPTURE) لحظياً.\n100% Offline-First مع PWA متكامل:\nالنظام مصمم ليعمل في البيئات الصناعية التي قد تنعدم فيها الشبكة، مع دعم التثبيت المكتبي والمحمول (Service Worker, Web App Manifest)، وتخزين محلي هجين متعدد الطبقات:\nL1 Memory Cache: للوصول الفوري في جزء من الثانية (O(1)).\nL2 Transient Storage: لتخزين الجلسة والمسودات السريعة.\nL3 IndexedDB \u0026 LocalStorage: لحفظ البيانات الدائم والعمليات التراكمية.\nخزنة الأمان والتشفير (Zero-Knowledge Vault):\nنظام مصادقة وتشفير متقدم بالاعتماد على Web Crypto API و AES-256 و BCrypt/PBKDF2 لإدارة الجلسات ورموز الـ PIN، مع نظام حماية وقفل تلقائي عند الخمول.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

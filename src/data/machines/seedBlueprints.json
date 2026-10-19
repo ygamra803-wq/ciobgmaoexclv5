@@ -1,0 +1,2111 @@
+[
+  {
+    "id_blueprint": "BPT-FRAISEUS",
+    "libelle": "Fraiseuse aureillete",
+    "id_family": "FAM-FRAI",
+    "id_templates": "TPL-FRAISEUSEAUR",
+    "famille_lib": "Fraiseuse",
+    "template_lib": "Fraiseuse aureillete",
+    "description": "Fraisage mécanique - Enlèvement de copeaux - Fraise rotative multi-dents",
+    "specs": {
+      "puissance_kw": 1.25,
+      "vitesse_tours": 1400,
+      "amperage_a": 2.5,
+      "dimensions": "1100x800x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-FRAISEUS",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur de broche",
+        "famille": "Fraiseuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Table croisée XY",
+        "famille": "Fraiseuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Système d'arrosage",
+        "famille": "Fraiseuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Boîte de vitesses",
+        "famille": "Fraiseuse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TOURPARA",
+    "libelle": "Tour paralléle",
+    "id_family": "FAM-TOUR",
+    "id_templates": "TPL-TOURPARALLEL",
+    "famille_lib": "Tour",
+    "template_lib": "Tour paralléle",
+    "description": "Usinage par tournage cylindrique et conique - Broche horizontale",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 1450,
+      "amperage_a": 11.2,
+      "dimensions": "2200x900x1400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TOURPARA",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur principal",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Mandrin 3 mors",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Tourelle porte-outil",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Contre-pointe",
+        "famille": "Tour",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-RECTIFIE",
+    "libelle": "Réctifieuse paralléle",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-RECTIFIEUSEP",
+    "famille_lib": "Divers",
+    "template_lib": "Réctifieuse paralléle",
+    "description": "Rectification plane de haute précision - Meule abrasive tangentielle",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 2800,
+      "amperage_a": 6.5,
+      "dimensions": "1500x1200x1700 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-RECTIFIE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Broche porte-meule",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Plateau magnétique",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Groupe hydraulique table",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Filtre lubrifiant",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-SCIEMECA",
+    "libelle": "Scie mécanique",
+    "id_family": "FAM-SCIE",
+    "id_templates": "TPL-SCIEMECANIQU",
+    "famille_lib": "Scie",
+    "template_lib": "Scie mécanique",
+    "description": "Découpe par lame ruban/alternative - Sciage de profilés et barres",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 900,
+      "amperage_a": 4.8,
+      "dimensions": "1300x700x1200 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-SCIEMECA",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur réducteur",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Archet de sciage",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Étau de serrage",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Pompe de coupe",
+        "famille": "Scie",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PERCEUSE",
+    "libelle": "Perçeuse",
+    "id_family": "FAM-PERC",
+    "id_templates": "TPL-PERCEUSE",
+    "famille_lib": "Perceuse",
+    "template_lib": "Perçeuse",
+    "description": "Perçage vertical sensitif ou à colonne - Forets hélicoïdaux",
+    "specs": {
+      "puissance_kw": 1.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 3.4,
+      "dimensions": "800x600x1800 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PERCEUSE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur électrique",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Courroies étagées",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Mandrin B16/B18",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Colonne en fonte",
+        "famille": "Perceuse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MOTEURME",
+    "libelle": "Moteur Meule",
+    "id_family": "FAM-MEUL",
+    "id_templates": "TPL-MOTEURMEULE",
+    "famille_lib": "Meule",
+    "template_lib": "Moteur Meule",
+    "description": "Touret à meuler double - Ébavurage et affûtage d'outils",
+    "specs": {
+      "puissance_kw": 0.75,
+      "vitesse_tours": 2850,
+      "amperage_a": 1.8,
+      "dimensions": "500x300x350 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MOTEURME",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Rotor équilibré",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Flasques de serrage",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Écrans pare-étincelles",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Porte-pièce",
+        "famille": "Meule",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-POSTESOU",
+    "libelle": "Poste soudage",
+    "id_family": "FAM-SOUD",
+    "id_templates": "TPL-POSTESOUDAGE",
+    "famille_lib": "Soudage",
+    "template_lib": "Poste soudage",
+    "description": "Soudage par résistance / arc électrique - Assemblage thermique",
+    "specs": {
+      "puissance_kw": 15,
+      "vitesse_tours": 0,
+      "amperage_a": 32,
+      "dimensions": "900x600x1100 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-POSTESOU",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Transformateur de puissance",
+        "famille": "Soudage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Bras porte-électrodes",
+        "famille": "Soudage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Circuit de refroidissement",
+        "famille": "Soudage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Temporisateur",
+        "famille": "Soudage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TOURDERE",
+    "libelle": "Tour de repoussage",
+    "id_family": "FAM-TOUR",
+    "id_templates": "TPL-TOURDEREPOUS",
+    "famille_lib": "Tour",
+    "template_lib": "Tour de repoussage",
+    "description": "Repoussage de flans en aluminium/inox sur mandrin rotatif - Formage sans copeau",
+    "specs": {
+      "puissance_kw": 7.5,
+      "vitesse_tours": 950,
+      "amperage_a": 15,
+      "dimensions": "2600x1100x1500 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TOURDERE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Broche lourde",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Molettes de repoussage",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Poupée mobile hydraulique",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Variateur de vitesse",
+        "famille": "Tour",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TOURDESA",
+    "libelle": "Tour de Satinage",
+    "id_family": "FAM-TOUR",
+    "id_templates": "TPL-TOURDESATINA",
+    "famille_lib": "Tour",
+    "template_lib": "Tour de Satinage",
+    "description": "Satinage circulaire extérieur/intérieur des corps culinaires - Finition soyeuse",
+    "specs": {
+      "puissance_kw": 4,
+      "vitesse_tours": 1420,
+      "amperage_a": 8.5,
+      "dimensions": "1800x900x1400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TOURDESA",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur entraînement pièce",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Tête oscillante abrasive",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Aspirateur de poussières",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Mandrin expansible",
+        "famille": "Tour",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MONTECHA",
+    "libelle": "Monte charge",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-MONTECHARGE",
+    "famille_lib": "Manutention",
+    "template_lib": "Monte charge",
+    "description": "Élévation verticale de charges inter-niveaux d'usine - Sécurité parachute",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 1450,
+      "amperage_a": 11.5,
+      "dimensions": "2000x2000x6000 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MONTECHA",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Treuil à câble/chaîne",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Cabine guidée",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Frein électromagnétique",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Portes asservies",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PRESSEHY",
+    "libelle": "Presse Hydraulique",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-PRESSEHYDRAU",
+    "famille_lib": "Presse",
+    "template_lib": "Presse Hydraulique",
+    "description": "Emboutissage profond sous haute pression hydraulique (200T-400T) - Formage des corps de casseroles/cocottes",
+    "specs": {
+      "puissance_kw": 30,
+      "vitesse_tours": 1460,
+      "amperage_a": 58,
+      "dimensions": "2500x1800x4200 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PRESSEHY",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Centrale hydraulique haute pression",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Vérin principal double effet",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Serre-flan hydraulique",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Bloc foré distributeur",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PRESSEDI",
+    "libelle": "Presse d'injection bakelite",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-PRESSEDINJEC",
+    "famille_lib": "Presse",
+    "template_lib": "Presse d'injection bakelite",
+    "description": "Moulage par compression/injection de poignées et boutons thermodurcissables en bakélite",
+    "specs": {
+      "puissance_kw": 22,
+      "vitesse_tours": 1450,
+      "amperage_a": 44,
+      "dimensions": "3200x1400x2200 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PRESSEDI",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Groupe de plastification",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Plateaux chauffants régulés",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Fermeture genouillère",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Extracteur hydraulique",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-REFROIDI",
+    "libelle": "Refroidisseur  d'eau Bakélite",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-REFROIDISSEU",
+    "famille_lib": "Manutention",
+    "template_lib": "Refroidisseur  d'eau Bakélite",
+    "description": "Refroidissement des moules de bakélite par boucle d'eau glacée en circuit fermé",
+    "specs": {
+      "puissance_kw": 7.5,
+      "vitesse_tours": 2900,
+      "amperage_a": 15.2,
+      "dimensions": "1600x1000x1800 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-REFROIDI",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Compresseur frigorifique",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Échangeur multitubulaire",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Pompe de circulation d'eau",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Régulateur thermostatique",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-BROYEUR",
+    "libelle": "Broyeur",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-BROYEUR",
+    "famille_lib": "Manutention",
+    "template_lib": "Broyeur",
+    "description": "Broyage des carottes et rebuts de bakélite et matières plastiques pour recyclage",
+    "specs": {
+      "puissance_kw": 11,
+      "vitesse_tours": 960,
+      "amperage_a": 22.5,
+      "dimensions": "1400x1100x1900 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-BROYEUR",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Rotor à couteaux rotatifs",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Contre-couteaux fixes",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Grille de calibrage",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Volant d'inertie lourd",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PRESSEME",
+    "libelle": "Presse mécanique",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-PRESSEMECANI",
+    "famille_lib": "Presse",
+    "template_lib": "Presse mécanique",
+    "description": "Découpe, cambrage et poinçonnage à haute cadence par mécanisme bielle-manivelle",
+    "specs": {
+      "puissance_kw": 15,
+      "vitesse_tours": 1450,
+      "amperage_a": 29,
+      "dimensions": "1800x1400x2900 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PRESSEME",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Embrayage pneumatique à friction",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Volant d'inertie",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Bielle à vis de réglage",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Coulisseau prismatique",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TOURDEDE",
+    "libelle": "Tour de détourage",
+    "id_family": "FAM-TOUR",
+    "id_templates": "TPL-TOURDEDETOUR",
+    "famille_lib": "Tour",
+    "template_lib": "Tour de détourage",
+    "description": "Détourage et bordage des bords de casseroles - Coupe franche du surplus d'emboutissage",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 1420,
+      "amperage_a": 11.5,
+      "dimensions": "1900x1000x1450 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TOURDEDE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Molettes de coupe circulaires",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Mandrin intérieur",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Vérin de placage pneumatique",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Moteur réducteur",
+        "famille": "Tour",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PRESSECH",
+    "libelle": "Presse chute aluminuim",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-PRESSECHUTEA",
+    "famille_lib": "Presse",
+    "template_lib": "Presse chute aluminuim",
+    "description": "Compactage et mise en balles des chutes d'aluminium pour refusion",
+    "specs": {
+      "puissance_kw": 7.5,
+      "vitesse_tours": 1440,
+      "amperage_a": 15.5,
+      "dimensions": "2100x1200x1800 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PRESSECH",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Vérin compacteur hydraulique",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Trémie de chargement",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Volet de déchargement",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Centrale oléohydraulique",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TOURDEPO",
+    "libelle": "Tour de polissage",
+    "id_family": "FAM-TOUR",
+    "id_templates": "TPL-TOURDEPOLISS",
+    "famille_lib": "Tour",
+    "template_lib": "Tour de polissage",
+    "description": "Polissage miroir brillant des surfaces métalliques par disques en coton imprégnés de pâte à polir",
+    "specs": {
+      "puissance_kw": 7.5,
+      "vitesse_tours": 2850,
+      "amperage_a": 14.8,
+      "dimensions": "1700x1200x1500 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TOURDEPO",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Arbre porte-tampons double",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Disques coton/sisal",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Distributeur automatique de pâte",
+        "famille": "Tour",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Hotte de captage",
+        "famille": "Tour",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-RAVIVAGE",
+    "libelle": "Ravivage",
+    "id_family": "FAM-FINI",
+    "id_templates": "TPL-RAVIVAGE",
+    "famille_lib": "Finition",
+    "template_lib": "Ravivage",
+    "description": "Lustrage final et ravivage d'éclat sans rayure - Élimination des micro-traces",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 2800,
+      "amperage_a": 6.3,
+      "dimensions": "1200x800x1300 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-RAVIVAGE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur haute vitesse",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Disques flanelle douce",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Carénage enveloppant",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Buse d'aspiration",
+        "famille": "Finition",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-SERTISSE",
+    "libelle": "Sertisseuse",
+    "id_family": "FAM-SERT",
+    "id_templates": "TPL-SERTISSEUSE",
+    "famille_lib": "Sertissage",
+    "template_lib": "Sertisseuse",
+    "description": "Sertissage mécanique des fonds diffuseurs et viroles sur articles culinaires",
+    "specs": {
+      "puissance_kw": 4,
+      "vitesse_tours": 950,
+      "amperage_a": 8.5,
+      "dimensions": "1500x1000x1700 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-SERTISSE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Galets sertisseurs profilés",
+        "famille": "Sertissage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Tête tournante porte-galets",
+        "famille": "Sertissage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Plateau inférieur presseur",
+        "famille": "Sertissage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Commande bi-manuelle",
+        "famille": "Sertissage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TARAUDEU",
+    "libelle": "Taraudeuse",
+    "id_family": "FAM-PERC",
+    "id_templates": "TPL-TARAUDEUSE",
+    "famille_lib": "Perceuse",
+    "template_lib": "Taraudeuse",
+    "description": "Taraudage de trous taraudés borgnes/débouchants à inversion automatique du sens de rotation",
+    "specs": {
+      "puissance_kw": 0.75,
+      "vitesse_tours": 700,
+      "amperage_a": 1.9,
+      "dimensions": "600x500x1400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TARAUDEU",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Broche à inversion instantanée",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Mandrin à débrayage",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Butée micrométrique de profondeur",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Buse de fluide taraudage",
+        "famille": "Perceuse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-CISAILLE",
+    "libelle": "Cisaille",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-CISAILLE",
+    "famille_lib": "Presse",
+    "template_lib": "Cisaille",
+    "description": "Cisaille guillotine pour découpe linéaire précise de tôles en aluminium et inox",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 1420,
+      "amperage_a": 11.8,
+      "dimensions": "2800x1600x1700 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-CISAILLE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Lames supérieure/inférieure en acier spécial",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Serre-tôle mécanique/hydraulique",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Butée arrière motorisée",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Pédale de commande",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MACHINET",
+    "libelle": "Machine traçage circulaire",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-MACHINETRACA",
+    "famille_lib": "Divers",
+    "template_lib": "Machine traçage circulaire",
+    "description": "Traçage et repérage concentrique précis sur fonds d'ustensiles",
+    "specs": {
+      "puissance_kw": 1.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 3.2,
+      "dimensions": "1100x900x1300 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MACHINET",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Plateau rotatif autocentreur",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Pointe à tracer carbure",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Règle vernier de positionnement",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Pédale pneumatique",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MACHINED",
+    "libelle": "Machine d'étancheité",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-MACHINEDETAN",
+    "famille_lib": "Divers",
+    "template_lib": "Machine d'étancheité",
+    "description": "Banc d'épreuve et de contrôle d'étanchéité sous pression d'air/eau pour autocuiseurs",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 0,
+      "amperage_a": 4.6,
+      "dimensions": "1600x1200x1800 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MACHINED",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Chambre d'épreuve pressurisée",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Manomètre étalonné haute précision",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Capteurs de micro-fuite",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Verrouillage de sécurité",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PORTEBOB",
+    "libelle": "Porte bobine",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-PORTEBOBINE",
+    "famille_lib": "Divers",
+    "template_lib": "Porte bobine",
+    "description": "Dévidoir dérouleur de bobines de tôle aluminium avec freinage régulé",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 60,
+      "amperage_a": 6.8,
+      "dimensions": "2000x1500x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PORTEBOB",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Mandrin expansible hydraulique",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Bras palpeur de boucle",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Frein pneumatique régulateur",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Châssis mécano-soudé",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-RIVTEUSE",
+    "libelle": "Rivteuseuse",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-RIVTEUSEUSE",
+    "famille_lib": "Divers",
+    "template_lib": "Rivteuseuse",
+    "description": "Rivetage orbital ou radial des queues, oreilles et supports de manches",
+    "specs": {
+      "puissance_kw": 1.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 3.5,
+      "dimensions": "900x700x1650 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-RIVTEUSE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Bouterolle orbitale",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Vérin de descente réglable",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Enclume inférieure interchangeable",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Graisseur automatique",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MACHINEE",
+    "libelle": "Machine emballage",
+    "id_family": "FAM-EMBA",
+    "id_templates": "TPL-MACHINEEMBAL",
+    "famille_lib": "Emballage",
+    "template_lib": "Machine emballage",
+    "description": "Mise sous film rétractable et emballage sous thermo-tunnel des produits finis",
+    "specs": {
+      "puissance_kw": 12,
+      "vitesse_tours": 0,
+      "amperage_a": 24.5,
+      "dimensions": "3400x1200x1700 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MACHINEE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Tunnel de chauffe ventilé",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Barre de soudure d'angle",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Convoyeur à rouleaux téflonnés",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Régulateur PID de chauffe",
+        "famille": "Emballage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-SCOTCHEU",
+    "libelle": "Scotcheuse",
+    "id_family": "FAM-EMBA",
+    "id_templates": "TPL-SCOTCHEUSE",
+    "famille_lib": "Emballage",
+    "template_lib": "Scotcheuse",
+    "description": "Fermeture automatique supérieure et inférieure des cartons d'expédition par ruban adhésif",
+    "specs": {
+      "puissance_kw": 0.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 1.2,
+      "dimensions": "1200x850x1500 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-SCOTCHEU",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Têtes d'application adhésive K11",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Courroies d'entraînement latérales",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Colonnes de réglage en hauteur",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Rouleaux presseurs",
+        "famille": "Emballage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-POICONAG",
+    "libelle": "Poiçonage",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-POICONAGE",
+    "famille_lib": "Divers",
+    "template_lib": "Poiçonage",
+    "description": "Poinçonnage rapide de trous de rivets et de passages d'axes",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 1420,
+      "amperage_a": 4.9,
+      "dimensions": "1000x800x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-POICONAG",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Poinçon trempé rectifié",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Matrice épaulée",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Dévêtisseur élastique",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Butées d'indexation",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-VISSEUSE",
+    "libelle": "Visseuse",
+    "id_family": "FAM-EMBA",
+    "id_templates": "TPL-VISSEUSE",
+    "famille_lib": "Emballage",
+    "template_lib": "Visseuse",
+    "description": "Visseuse automatique à couple débrayable pour fixation des poignées et pommeaux",
+    "specs": {
+      "puissance_kw": 0.4,
+      "vitesse_tours": 900,
+      "amperage_a": 0.9,
+      "dimensions": "500x400x1100 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-VISSEUSE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur pneumatique/brushless",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Limiteur de couple réglable",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Bras de réaction articulé",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Distributeur de vis vibrant",
+        "famille": "Emballage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TONNEAUX",
+    "libelle": "Tonneaux vibreur",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-TONNEAUXVIBR",
+    "famille_lib": "Manutention",
+    "template_lib": "Tonneaux vibreur",
+    "description": "Tribofinition / ébavurage en cuve vibrante avec médias céramiques et pâte abrasive",
+    "specs": {
+      "puissance_kw": 4,
+      "vitesse_tours": 1450,
+      "amperage_a": 8.8,
+      "dimensions": "1600x1600x1400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TONNEAUX",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Cuve circulaire polyuréthane",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Moteur vibrant à balourds réglables",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Ressorts hélicoïdaux de suspension",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Système de dosage liquide",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-POINCONN",
+    "libelle": "Poinçonneuse corp auto-cuiss",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-POINCONNEUSE",
+    "famille_lib": "Presse",
+    "template_lib": "Poinçonneuse corp auto-cuiss",
+    "description": "Poinçonnage indexé spécifique pour soupapes et corps d'autocuiseurs",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 1430,
+      "amperage_a": 11.5,
+      "dimensions": "1700x1200x2100 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-POINCONN",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Outillage multi-poinçons guidé",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Indexeur rotatif pneumatique",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Capteurs de présence pièce",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Éjection par soufflage",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-BALANCE",
+    "libelle": "Balance",
+    "id_family": "FAM-EMBA",
+    "id_templates": "TPL-BALANCE",
+    "famille_lib": "Emballage",
+    "template_lib": "Balance",
+    "description": "Balance électronique industrielle de contrôle de poids de conformité colis",
+    "specs": {
+      "puissance_kw": 0.05,
+      "vitesse_tours": 0,
+      "amperage_a": 0.2,
+      "dimensions": "600x500x150 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-BALANCE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Capteur de pesage à jauge de contrainte",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Indicateur numérique rétroéclairé",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Plateau inox",
+        "famille": "Emballage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Interface RS232/Ethernet",
+        "famille": "Emballage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-PRESSEPO",
+    "libelle": "Presse pour roulement",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-PRESSEPOURRO",
+    "famille_lib": "Presse",
+    "template_lib": "Presse pour roulement",
+    "description": "Presse d'emmanchement axial de roulements et bagues sans détérioration des pistes",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 1400,
+      "amperage_a": 5,
+      "dimensions": "800x600x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-PRESSEPO",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Vérin hydraulique manuel/électrique",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Manomètre indicateur d'effort",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Embouts d'emmanchement épaulés",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Table réglable à crémaillère",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TRANCONN",
+    "libelle": "Trançonneuse",
+    "id_family": "FAM-SCIE",
+    "id_templates": "TPL-TRANCONNEUSE",
+    "famille_lib": "Scie",
+    "template_lib": "Trançonneuse",
+    "description": "Tronçonneuse à disque abrasif haute vitesse pour coupe rapide de profilés acier",
+    "specs": {
+      "puissance_kw": 4,
+      "vitesse_tours": 3800,
+      "amperage_a": 8.4,
+      "dimensions": "900x700x1300 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TRANCONN",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Moteur haute vitesse",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Disque tronçonnage 350mm",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Carter articulé de protection",
+        "famille": "Scie",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Étau orientable à 45°",
+        "famille": "Scie",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-FOUR",
+    "libelle": "Four",
+    "id_family": "FAM-FINI",
+    "id_templates": "TPL-FOUR",
+    "famille_lib": "Finition",
+    "template_lib": "Four",
+    "description": "Four thermique de cuisson de revêtements antiadhésifs (PTFE/Céramique) et recuit",
+    "specs": {
+      "puissance_kw": 45,
+      "vitesse_tours": 0,
+      "amperage_a": 95,
+      "dimensions": "4500x2200x2400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-FOUR",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Batteries de résistances blindées",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Turbines de brassage d'air chaud",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Régulateur programmateur multi-zones",
+        "famille": "Finition",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Isolation laine céramique",
+        "famille": "Finition",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-DECOUPED",
+    "libelle": "découpe du cage cassrole",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-DECOUPEDUCAG",
+    "famille_lib": "Divers",
+    "template_lib": "découpe du cage cassrole",
+    "description": "Découpage et ajourage des cages de casseroles et paniers inox",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 1420,
+      "amperage_a": 6.8,
+      "dimensions": "1300x950x1700 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-DECOUPED",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Matrice de découpe spéciale",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Vérin mécanique à genouillère",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Guidage à 4 colonnes",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Butées d'insertion",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-CENTREUS",
+    "libelle": "Centreuse",
+    "id_family": "FAM-PERC",
+    "id_templates": "TPL-CENTREUSE",
+    "famille_lib": "Perceuse",
+    "template_lib": "Centreuse",
+    "description": "Pointage et centrage précis avant perçage et usinage d'arbres",
+    "specs": {
+      "puissance_kw": 1.1,
+      "vitesse_tours": 2800,
+      "amperage_a": 2.6,
+      "dimensions": "700x550x1250 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-CENTREUS",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Broche haute précision",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Foret à centrer 60°",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Étau auto-centreur prismatique",
+        "famille": "Perceuse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Protecteur asservi",
+        "famille": "Perceuse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-ASPIRATE",
+    "libelle": "Aspirateur",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-ASPIRATEUR",
+    "famille_lib": "Manutention",
+    "template_lib": "Aspirateur",
+    "description": "Aspiration industrielle cyclonique de poussières de polissage et limailles",
+    "specs": {
+      "puissance_kw": 5.5,
+      "vitesse_tours": 2900,
+      "amperage_a": 11.2,
+      "dimensions": "1400x900x2100 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-ASPIRATE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Turbine d'aspiration haute dépression",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Cyclone de décantation",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Manches filtrantes antistatiques",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Bac de récupération amovible",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-COMPRESS",
+    "libelle": "Compresseur",
+    "id_family": "FAM-PRES",
+    "id_templates": "TPL-COMPRESSEUR",
+    "famille_lib": "Presse",
+    "template_lib": "Compresseur",
+    "description": "Compresseur à vis lubrifiée fournissant le réseau d'air comprimé 7-8 bars d'usine",
+    "specs": {
+      "puissance_kw": 37,
+      "vitesse_tours": 2950,
+      "amperage_a": 72,
+      "dimensions": "1800x1100x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-COMPRESS",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Élément à vis bi-étagé",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Moteur principal IE3",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Séparateur d'huile air/huile",
+        "famille": "Presse",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Sécheur frigorifique intégré",
+        "famille": "Presse",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-ELEVATEU",
+    "libelle": "Elévateur",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-ELEVATEUR",
+    "famille_lib": "Divers",
+    "template_lib": "Elévateur",
+    "description": "Élévateur gerbeur électrique de palettes et caisses de flans",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 1400,
+      "amperage_a": 4.8,
+      "dimensions": "1700x850x2100 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-ELEVATEU",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Mât de levage duplex",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Groupe moto-pompe hydraulique",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Fourches forgées réglables",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Batterie traction 24V",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-POMPEDEA",
+    "libelle": "Pompe d'eau",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-POMPEDEAU",
+    "famille_lib": "Manutention",
+    "template_lib": "Pompe d'eau",
+    "description": "Surpresseur centrifuge multi-étages de distribution d'eau technique",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 2900,
+      "amperage_a": 6.4,
+      "dimensions": "800x400x500 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-POMPEDEA",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Corps de pompe inox",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Turbines centrifuges fermées",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Garniture mécanique carbure",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Clapet anti-retour",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TAPIECON",
+    "libelle": "TAPIE CONVOYEUR",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-TAPIECONVOYE",
+    "famille_lib": "Divers",
+    "template_lib": "TAPIE CONVOYEUR",
+    "description": "Convoyeur à bande modulaire pour transfert continu inter-postes",
+    "specs": {
+      "puissance_kw": 1.1,
+      "vitesse_tours": 1400,
+      "amperage_a": 2.8,
+      "dimensions": "4000x600x900 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TAPIECON",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Motoréducteur pendulaire",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Tambour moteur caoutchouté",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Bande transporteuse PVC",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Rouleaux de soutien à billes",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-DIVERS",
+    "libelle": "Divers",
+    "id_family": "FAM-DIVE",
+    "id_templates": "TPL-DIVERS",
+    "famille_lib": "Divers",
+    "template_lib": "Divers",
+    "description": "Postes et équipements auxiliaires de production",
+    "specs": {
+      "puissance_kw": 1.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 3.5,
+      "dimensions": "1000x800x1200 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-DIVERS",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Châssis mécano-soudé",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Alimentation électrique 380V",
+        "famille": "Divers",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Arrêt d'urgence de sécurité",
+        "famille": "Divers",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-MEULE",
+    "libelle": "Meule",
+    "id_family": "FAM-MEUL",
+    "id_templates": "TPL-MEULE",
+    "famille_lib": "Meule",
+    "template_lib": "Meule",
+    "description": "Meuleuse sur pied pour ébavurage lourd de pièces brutes",
+    "specs": {
+      "puissance_kw": 2.2,
+      "vitesse_tours": 2850,
+      "amperage_a": 4.9,
+      "dimensions": "800x600x1200 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-MEULE",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Meule corindon grain moyen",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Carter de protection épais",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Pare-éclats en polycarbonate",
+        "famille": "Meule",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Socle en fonte antivibratile",
+        "famille": "Meule",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-RIVETEUS",
+    "libelle": "Riveteuse",
+    "id_family": "FAM-RIVE",
+    "id_templates": "TPL-RIVETEUSE",
+    "famille_lib": "Rivetage",
+    "template_lib": "Riveteuse",
+    "description": "Rivetage d'assemblage sous effort contrôlé",
+    "specs": {
+      "puissance_kw": 1.5,
+      "vitesse_tours": 1400,
+      "amperage_a": 3.4,
+      "dimensions": "900x700x1600 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-RIVETEUS",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Bouterolle trempée",
+        "famille": "Rivetage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Vérin presseur",
+        "famille": "Rivetage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Enclume inférieure",
+        "famille": "Rivetage",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Pédale pneumatique",
+        "famille": "Rivetage",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  },
+  {
+    "id_blueprint": "BPT-TONNEAU",
+    "libelle": "Tonneau",
+    "id_family": "FAM-MANU",
+    "id_templates": "TPL-TONNEAU",
+    "famille_lib": "Manutention",
+    "template_lib": "Tonneau",
+    "description": "Tonneau rotatif d'ébavurage en vrac pour petites pièces embouties",
+    "specs": {
+      "puissance_kw": 3,
+      "vitesse_tours": 45,
+      "amperage_a": 6.8,
+      "dimensions": "1500x1100x1400 mm"
+    },
+    "statut": "Approuvé",
+    "ref_plan": "PLAN-TONNEAU",
+    "components_theoriques": [
+      {
+        "id": "COMP-1",
+        "libelle": "Tambour hexagonal en acier",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-2",
+        "libelle": "Motoréducteur d'entraînement",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-3",
+        "libelle": "Paliers à rouleaux étanches",
+        "famille": "Manutention",
+        "type": "Standard"
+      },
+      {
+        "id": "COMP-4",
+        "libelle": "Portillon étanche de chargement",
+        "famille": "Manutention",
+        "type": "Standard"
+      }
+    ],
+    "parts_theoriques": [],
+    "pdr_theoriques": []
+  }
+]

@@ -1,0 +1,67 @@
+[
+  {
+    "id_family": "FAM-DIVE",
+    "libelle": "Divers",
+    "code": "DIVE"
+  },
+  {
+    "id_family": "FAM-EMBA",
+    "libelle": "Emballage",
+    "code": "EMBA"
+  },
+  {
+    "id_family": "FAM-FINI",
+    "libelle": "Finition",
+    "code": "FINI"
+  },
+  {
+    "id_family": "FAM-FRAI",
+    "libelle": "Fraiseuse",
+    "code": "FRAI"
+  },
+  {
+    "id_family": "FAM-MANU",
+    "libelle": "Manutention",
+    "code": "MANU"
+  },
+  {
+    "id_family": "FAM-MEUL",
+    "libelle": "Meule",
+    "code": "MEUL"
+  },
+  {
+    "id_family": "FAM-PERC",
+    "libelle": "Perceuse",
+    "code": "PERC"
+  },
+  {
+    "id_family": "FAM-PRES",
+    "libelle": "Presse",
+    "code": "PRES"
+  },
+  {
+    "id_family": "FAM-RIVE",
+    "libelle": "Rivetage",
+    "code": "RIVE"
+  },
+  {
+    "id_family": "FAM-SCIE",
+    "libelle": "Scie",
+    "code": "SCIE"
+  },
+  {
+    "id_family": "FAM-SERT",
+    "libelle": "Sertissage",
+    "code": "SERT"
+  },
+  {
+    "id_family": "FAM-SOUD",
+    "libelle": "Soudage",
+    "code": "SOUD"
+  },
+  {
+    "id_family": "FAM-TOUR",
+    "libelle": "Tour",
+    "code": "TOUR"
+  }
+]

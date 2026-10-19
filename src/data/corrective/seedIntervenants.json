@@ -1,0 +1,32 @@
+[
+  {
+    "id": "INT-01",
+    "nom": "Rachid",
+    "role": "Électromécanicien Senior",
+    "specialite": "Électricité / Variateurs"
+  },
+  {
+    "id": "INT-02",
+    "nom": "Soufiane",
+    "role": "Mécanicien Spécialiste",
+    "specialite": "Mécanique / Bobinage"
+  },
+  {
+    "id": "INT-03",
+    "nom": "Ismaayl",
+    "role": "Technicien Maintenance",
+    "specialite": "Hydraulique / Pneumatique"
+  },
+  {
+    "id": "INT-04",
+    "nom": "Mhammed",
+    "role": "Électromécanicien",
+    "specialite": "Automatisme / Câblage"
+  },
+  {
+    "id": "INT-05",
+    "nom": "Youssef",
+    "role": "Superviseur Maintenance",
+    "specialite": "Diagnostic / GMAO"
+  }
+]

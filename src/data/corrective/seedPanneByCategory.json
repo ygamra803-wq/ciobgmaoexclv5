@@ -1,0 +1,44 @@
+{
+  "M": [
+    "Vibrations anormales palier / roulement",
+    "Échauffement anormal réducteur / moteur",
+    "Bruit anormal engrenages / pignons",
+    "Fuite d huile carter ou joint spi",
+    "Usure ou rupture courroie de transmission",
+    "Désalignement arbre d entraînement",
+    "Jeu mécanique important dans les guidages",
+    "Blocage mécanique convoyeur / chaîne",
+    "Rupture accouplement élastique",
+    "Glaçage ou usure garniture de frein"
+  ],
+  "E": [
+    "Déclenchement relais thermique / disjoncteur moteur",
+    "Défaut d isolement moteur (masse électrique)",
+    "Court-circuit ou fusible grillé armoire",
+    "Bobinage moteur grillé / surchauffe stator",
+    "Défaut capteur de position / fin de course",
+    "Problème variateur de vitesse (Code défaut err)",
+    "Coupure commande 24V DC / alimentation HS",
+    "Bouton d arrêt d urgence bloqué / défectueux",
+    "Échauffement bornier de puissance ou contacteur",
+    "Câble de puissance sectionné ou écrasé"
+  ],
+  "H": [
+    "Chute de pression groupe hydraulique",
+    "Fuite d huile flexible haute pression",
+    "Vérin hydraulique bloqué ou manque de force",
+    "Électrovanne hydraulique bloquée / non excitée",
+    "Filtre retour colmaté / voyant alerte",
+    "Surchauffe huile hydraulique (> 65°C)",
+    "Bruit de cavitation pompe hydraulique",
+    "Clapet anti-retour défaillant / fuite interne"
+  ],
+  "P": [
+    "Fuite d air comprimé raccord / tuyau Festo",
+    "Manque de pression générale réseau (< 6 bar)",
+    "Distributeur pneumatique bloqué / silencieux encrassé",
+    "Vérin pneumatique lent / amortisseur détérioré",
+    "Filtre-régulateur-lubrificateur (FRL) encrassé / plein d eau",
+    "Ventouse de préhension défectueuse / perte de vide"
+  ]
+}

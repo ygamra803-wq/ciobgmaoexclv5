@@ -1,0 +1,686 @@
+[
+  {
+    "id_type": "Accouplement",
+    "libelle": "Accouplement"
+  },
+  {
+    "id_type": "Alcinor",
+    "libelle": "Alcinor"
+  },
+  {
+    "id_type": "Alimentation",
+    "libelle": "Alimentation"
+  },
+  {
+    "id_type": "Appareille",
+    "libelle": "Appareille"
+  },
+  {
+    "id_type": "Arrêt d'urgence",
+    "libelle": "Arrêt d'urgence"
+  },
+  {
+    "id_type": "Baguette",
+    "libelle": "Baguette"
+  },
+  {
+    "id_type": "Bande",
+    "libelle": "Bande"
+  },
+  {
+    "id_type": "Bande de soudage",
+    "libelle": "Bande de soudage"
+  },
+  {
+    "id_type": "Boite",
+    "libelle": "Boite"
+  },
+  {
+    "id_type": "Boulonneuse",
+    "libelle": "Boulonneuse"
+  },
+  {
+    "id_type": "Bouton",
+    "libelle": "Bouton"
+  },
+  {
+    "id_type": "Bride",
+    "libelle": "Bride"
+  },
+  {
+    "id_type": "Brosse",
+    "libelle": "Brosse"
+  },
+  {
+    "id_type": "Bruleur",
+    "libelle": "Bruleur"
+  },
+  {
+    "id_type": "Burette",
+    "libelle": "Burette"
+  },
+  {
+    "id_type": "CETAMINE",
+    "libelle": "CETAMINE"
+  },
+  {
+    "id_type": "Capteur",
+    "libelle": "Capteur"
+  },
+  {
+    "id_type": "Carte",
+    "libelle": "Carte"
+  },
+  {
+    "id_type": "Cellule",
+    "libelle": "Cellule"
+  },
+  {
+    "id_type": "Charbon",
+    "libelle": "Charbon"
+  },
+  {
+    "id_type": "Cheville",
+    "libelle": "Cheville"
+  },
+  {
+    "id_type": "Circlips",
+    "libelle": "Circlips"
+  },
+  {
+    "id_type": "Clapet",
+    "libelle": "Clapet"
+  },
+  {
+    "id_type": "Climatiseur",
+    "libelle": "Climatiseur"
+  },
+  {
+    "id_type": "Clé",
+    "libelle": "Clé"
+  },
+  {
+    "id_type": "Commutateur",
+    "libelle": "Commutateur"
+  },
+  {
+    "id_type": "Comparateur",
+    "libelle": "Comparateur"
+  },
+  {
+    "id_type": "Compteur",
+    "libelle": "Compteur"
+  },
+  {
+    "id_type": "Contacte",
+    "libelle": "Contacte"
+  },
+  {
+    "id_type": "Contacteur",
+    "libelle": "Contacteur"
+  },
+  {
+    "id_type": "Controleur",
+    "libelle": "Controleur"
+  },
+  {
+    "id_type": "Cosse",
+    "libelle": "Cosse"
+  },
+  {
+    "id_type": "Courroie",
+    "libelle": "Courroie"
+  },
+  {
+    "id_type": "DERMOGD",
+    "libelle": "DERMOGD"
+  },
+  {
+    "id_type": "DESOXAL",
+    "libelle": "DESOXAL"
+  },
+  {
+    "id_type": "DET",
+    "libelle": "DET"
+  },
+  {
+    "id_type": "Disjoncteur",
+    "libelle": "Disjoncteur"
+  },
+  {
+    "id_type": "Disque",
+    "libelle": "Disque"
+  },
+  {
+    "id_type": "Distributeur",
+    "libelle": "Distributeur"
+  },
+  {
+    "id_type": "Divers",
+    "libelle": "Divers"
+  },
+  {
+    "id_type": "Douille",
+    "libelle": "Douille"
+  },
+  {
+    "id_type": "Détecteur",
+    "libelle": "Détecteur"
+  },
+  {
+    "id_type": "Ecrou",
+    "libelle": "Ecrou"
+  },
+  {
+    "id_type": "Ejecteur",
+    "libelle": "Ejecteur"
+  },
+  {
+    "id_type": "Electro-vanne",
+    "libelle": "Electro-vanne"
+  },
+  {
+    "id_type": "Embout",
+    "libelle": "Embout"
+  },
+  {
+    "id_type": "Etrangleur",
+    "libelle": "Etrangleur"
+  },
+  {
+    "id_type": "FILTRE",
+    "libelle": "FILTRE"
+  },
+  {
+    "id_type": "FLEXIBLE",
+    "libelle": "FLEXIBLE"
+  },
+  {
+    "id_type": "Fer à souder",
+    "libelle": "Fer à souder"
+  },
+  {
+    "id_type": "Fiche",
+    "libelle": "Fiche"
+  },
+  {
+    "id_type": "Fin de course",
+    "libelle": "Fin de course"
+  },
+  {
+    "id_type": "Fond",
+    "libelle": "Fond"
+  },
+  {
+    "id_type": "Foret",
+    "libelle": "Foret"
+  },
+  {
+    "id_type": "Fusible",
+    "libelle": "Fusible"
+  },
+  {
+    "id_type": "Glissiere",
+    "libelle": "Glissiere"
+  },
+  {
+    "id_type": "Graisseur",
+    "libelle": "Graisseur"
+  },
+  {
+    "id_type": "Guide",
+    "libelle": "Guide"
+  },
+  {
+    "id_type": "HYDROCIDE",
+    "libelle": "HYDROCIDE"
+  },
+  {
+    "id_type": "Horloge",
+    "libelle": "Horloge"
+  },
+  {
+    "id_type": "Huile",
+    "libelle": "Huile"
+  },
+  {
+    "id_type": "Huileur",
+    "libelle": "Huileur"
+  },
+  {
+    "id_type": "Imprimante",
+    "libelle": "Imprimante"
+  },
+  {
+    "id_type": "Jeu de barre",
+    "libelle": "Jeu de barre"
+  },
+  {
+    "id_type": "Joint",
+    "libelle": "Joint"
+  },
+  {
+    "id_type": "Jupiter",
+    "libelle": "Jupiter"
+  },
+  {
+    "id_type": "L'eau distillé",
+    "libelle": "L'eau distillé"
+  },
+  {
+    "id_type": "L'etain",
+    "libelle": "L'etain"
+  },
+  {
+    "id_type": "Lame",
+    "libelle": "Lame"
+  },
+  {
+    "id_type": "Lampe",
+    "libelle": "Lampe"
+  },
+  {
+    "id_type": "Limetteur",
+    "libelle": "Limetteur"
+  },
+  {
+    "id_type": "Loupe",
+    "libelle": "Loupe"
+  },
+  {
+    "id_type": "Lunette",
+    "libelle": "Lunette"
+  },
+  {
+    "id_type": "Manomètre",
+    "libelle": "Manomètre"
+  },
+  {
+    "id_type": "Meule",
+    "libelle": "Meule"
+  },
+  {
+    "id_type": "Meulette",
+    "libelle": "Meulette"
+  },
+  {
+    "id_type": "Moteur",
+    "libelle": "Moteur"
+  },
+  {
+    "id_type": "Motoreducteur",
+    "libelle": "Motoreducteur"
+  },
+  {
+    "id_type": "Multi neuf",
+    "libelle": "Multi neuf"
+  },
+  {
+    "id_type": "Multimetre",
+    "libelle": "Multimetre"
+  },
+  {
+    "id_type": "Nylon",
+    "libelle": "Nylon"
+  },
+  {
+    "id_type": "Outil",
+    "libelle": "Outil"
+  },
+  {
+    "id_type": "PRISE",
+    "libelle": "PRISE"
+  },
+  {
+    "id_type": "Papier",
+    "libelle": "Papier"
+  },
+  {
+    "id_type": "Papier collant",
+    "libelle": "Papier collant"
+  },
+  {
+    "id_type": "Pastille",
+    "libelle": "Pastille"
+  },
+  {
+    "id_type": "Percuteur",
+    "libelle": "Percuteur"
+  },
+  {
+    "id_type": "Photocellule",
+    "libelle": "Photocellule"
+  },
+  {
+    "id_type": "Pignon",
+    "libelle": "Pignon"
+  },
+  {
+    "id_type": "Pile",
+    "libelle": "Pile"
+  },
+  {
+    "id_type": "Pince",
+    "libelle": "Pince"
+  },
+  {
+    "id_type": "Pinceau",
+    "libelle": "Pinceau"
+  },
+  {
+    "id_type": "Plaquette",
+    "libelle": "Plaquette"
+  },
+  {
+    "id_type": "Pointeau",
+    "libelle": "Pointeau"
+  },
+  {
+    "id_type": "Poinçon",
+    "libelle": "Poinçon"
+  },
+  {
+    "id_type": "Polyuréthane",
+    "libelle": "Polyuréthane"
+  },
+  {
+    "id_type": "Pompe",
+    "libelle": "Pompe"
+  },
+  {
+    "id_type": "Prise",
+    "libelle": "Prise"
+  },
+  {
+    "id_type": "Pédale",
+    "libelle": "Pédale"
+  },
+  {
+    "id_type": "ROULEMENT",
+    "libelle": "ROULEMENT"
+  },
+  {
+    "id_type": "Raccord",
+    "libelle": "Raccord"
+  },
+  {
+    "id_type": "Radiateur",
+    "libelle": "Radiateur"
+  },
+  {
+    "id_type": "Reduction",
+    "libelle": "Reduction"
+  },
+  {
+    "id_type": "Reglette",
+    "libelle": "Reglette"
+  },
+  {
+    "id_type": "Regulateur",
+    "libelle": "Regulateur"
+  },
+  {
+    "id_type": "Reinz",
+    "libelle": "Reinz"
+  },
+  {
+    "id_type": "Relais",
+    "libelle": "Relais"
+  },
+  {
+    "id_type": "Resistance",
+    "libelle": "Resistance"
+  },
+  {
+    "id_type": "Ressort",
+    "libelle": "Ressort"
+  },
+  {
+    "id_type": "Robinet",
+    "libelle": "Robinet"
+  },
+  {
+    "id_type": "Rondelle",
+    "libelle": "Rondelle"
+  },
+  {
+    "id_type": "Roue",
+    "libelle": "Roue"
+  },
+  {
+    "id_type": "Rouleau",
+    "libelle": "Rouleau"
+  },
+  {
+    "id_type": "Réducteur",
+    "libelle": "Réducteur"
+  },
+  {
+    "id_type": "Scotch",
+    "libelle": "Scotch"
+  },
+  {
+    "id_type": "Servo",
+    "libelle": "Servo"
+  },
+  {
+    "id_type": "Silencieux",
+    "libelle": "Silencieux"
+  },
+  {
+    "id_type": "Sonde",
+    "libelle": "Sonde"
+  },
+  {
+    "id_type": "T shirt",
+    "libelle": "T shirt"
+  },
+  {
+    "id_type": "TOLE",
+    "libelle": "TOLE"
+  },
+  {
+    "id_type": "Tarraud",
+    "libelle": "Tarraud"
+  },
+  {
+    "id_type": "Technomark",
+    "libelle": "Technomark"
+  },
+  {
+    "id_type": "Temporisateur",
+    "libelle": "Temporisateur"
+  },
+  {
+    "id_type": "Tenaille",
+    "libelle": "Tenaille"
+  },
+  {
+    "id_type": "Testeur",
+    "libelle": "Testeur"
+  },
+  {
+    "id_type": "Thermocouple",
+    "libelle": "Thermocouple"
+  },
+  {
+    "id_type": "Tourne",
+    "libelle": "Tourne"
+  },
+  {
+    "id_type": "Vaccum",
+    "libelle": "Vaccum"
+  },
+  {
+    "id_type": "Variateur",
+    "libelle": "Variateur"
+  },
+  {
+    "id_type": "Ventilateur",
+    "libelle": "Ventilateur"
+  },
+  {
+    "id_type": "Verin",
+    "libelle": "Verin"
+  },
+  {
+    "id_type": "Vis",
+    "libelle": "Vis"
+  },
+  {
+    "id_type": "Visseuse",
+    "libelle": "Visseuse"
+  },
+  {
+    "id_type": "Vontouses",
+    "libelle": "Vontouses"
+  },
+  {
+    "id_type": "Voyant",
+    "libelle": "Voyant"
+  },
+  {
+    "id_type": "Vérin",
+    "libelle": "Vérin"
+  },
+  {
+    "id_type": "anses",
+    "libelle": "anses"
+  },
+  {
+    "id_type": "bloc",
+    "libelle": "bloc"
+  },
+  {
+    "id_type": "ceinture",
+    "libelle": "ceinture"
+  },
+  {
+    "id_type": "colier",
+    "libelle": "colier"
+  },
+  {
+    "id_type": "contacteur",
+    "libelle": "contacteur"
+  },
+  {
+    "id_type": "coude",
+    "libelle": "coude"
+  },
+  {
+    "id_type": "câble",
+    "libelle": "câble"
+  },
+  {
+    "id_type": "gants",
+    "libelle": "gants"
+  },
+  {
+    "id_type": "gorge",
+    "libelle": "gorge"
+  },
+  {
+    "id_type": "gradateur",
+    "libelle": "gradateur"
+  },
+  {
+    "id_type": "lampe",
+    "libelle": "lampe"
+  },
+  {
+    "id_type": "lubrificateur",
+    "libelle": "lubrificateur"
+  },
+  {
+    "id_type": "masque",
+    "libelle": "masque"
+  },
+  {
+    "id_type": "monchon",
+    "libelle": "monchon"
+  },
+  {
+    "id_type": "multi neuf",
+    "libelle": "multi neuf"
+  },
+  {
+    "id_type": "paliers",
+    "libelle": "paliers"
+  },
+  {
+    "id_type": "pile",
+    "libelle": "pile"
+  },
+  {
+    "id_type": "pistolet",
+    "libelle": "pistolet"
+  },
+  {
+    "id_type": "poinçon",
+    "libelle": "poinçon"
+  },
+  {
+    "id_type": "polyuréthane",
+    "libelle": "polyuréthane"
+  },
+  {
+    "id_type": "pompe",
+    "libelle": "pompe"
+  },
+  {
+    "id_type": "projecteur",
+    "libelle": "projecteur"
+  },
+  {
+    "id_type": "reduction",
+    "libelle": "reduction"
+  },
+  {
+    "id_type": "relais",
+    "libelle": "relais"
+  },
+  {
+    "id_type": "repartiteur",
+    "libelle": "repartiteur"
+  },
+  {
+    "id_type": "servo",
+    "libelle": "servo"
+  },
+  {
+    "id_type": "silicone",
+    "libelle": "silicone"
+  },
+  {
+    "id_type": "spots",
+    "libelle": "spots"
+  },
+  {
+    "id_type": "te",
+    "libelle": "te"
+  },
+  {
+    "id_type": "teflon",
+    "libelle": "teflon"
+  },
+  {
+    "id_type": "temporisateur",
+    "libelle": "temporisateur"
+  },
+  {
+    "id_type": "thermocouple",
+    "libelle": "thermocouple"
+  },
+  {
+    "id_type": "valves",
+    "libelle": "valves"
+  },
+  {
+    "id_type": "vanne",
+    "libelle": "vanne"
+  },
+  {
+    "id_type": "vis",
+    "libelle": "vis"
+  }
+]

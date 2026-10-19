@@ -1,0 +1,32 @@
+[
+  {
+    "id_technician": "TECH-01",
+    "nom": "Rachid",
+    "id_zone": "FM",
+    "specialite": "Fabrication Mécanique & Maintenance"
+  },
+  {
+    "id_technician": "TECH-02",
+    "nom": "Youssef",
+    "id_zone": "Polissage",
+    "specialite": "Polissage & Finition"
+  },
+  {
+    "id_technician": "TECH-03",
+    "nom": "Mhammed",
+    "id_zone": "Presse injection",
+    "specialite": "Presse Injection & Outillage"
+  },
+  {
+    "id_technician": "TECH-04",
+    "nom": "Ismail",
+    "id_zone": "Presse Hydraulique",
+    "specialite": "Emboutissage & Presses"
+  },
+  {
+    "id_technician": "TECH-05",
+    "nom": "Boujamaa",
+    "id_zone": "FEMB2",
+    "specialite": "Finition & Emballage"
+  }
+]

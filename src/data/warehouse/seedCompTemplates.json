@@ -1,0 +1,2416 @@
+[
+  {
+    "id_template": "TPL-MOT-3PH-40KW-1430-001",
+    "id_templates": "TPL-MOT-3PH-40KW-1430-001",
+    "id": "TPL-MOT-3PH-40KW-1430-001",
+    "code": "MOT-3PH-40KW-1430",
+    "ref": "Siemens 1LA7083-4AA",
+    "libelle": "Moteur Triphasé 4.0KW 1430 tr/min",
+    "id_family": "FAM-MOT-3PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "type": "Moteur Triphasé",
+    "specs": {
+      "puissance": "4.0KW",
+      "Kw": "4KW",
+      "Hp": "5,5CV",
+      "Tr": "1430tr/min",
+      "vitesse": "1430 tr/min",
+      "A": "8,8A",
+      "courant": "8,8A",
+      "V": "380V",
+      "type_moteur": "Triphasé",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-3PH-75KW-2910-001",
+    "id_templates": "TPL-MOT-3PH-75KW-2910-001",
+    "id": "TPL-MOT-3PH-75KW-2910-001",
+    "code": "MOT-3PH-75KW-2910",
+    "ref": "ABB M2BAX-132SMA",
+    "libelle": "Moteur Triphasé 7.5KW 2910 tr/min",
+    "id_family": "FAM-MOT-3PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "type": "Moteur Triphasé",
+    "specs": {
+      "puissance": "7.5KW",
+      "Kw": "7,5KW",
+      "Hp": "10CV",
+      "Tr": "2910tr/min",
+      "vitesse": "2910 tr/min",
+      "A": "14,2A",
+      "courant": "14,2A",
+      "V": "380V",
+      "type_moteur": "Triphasé",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-3PH-185KW-1420-001",
+    "id_templates": "TPL-MOT-3PH-185KW-1420-001",
+    "id": "TPL-MOT-3PH-185KW-1420-001",
+    "code": "MOT-3PH-185KW-1420",
+    "ref": "Leroy Somer LSES-160",
+    "libelle": "Moteur Triphasé 18.5KW 1420 tr/min",
+    "id_family": "FAM-MOT-3PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "type": "Moteur Triphasé",
+    "specs": {
+      "puissance": "18.5KW",
+      "Kw": "18,5KW",
+      "Hp": "25CV",
+      "Tr": "1420tr/min",
+      "vitesse": "1420 tr/min",
+      "A": "36A",
+      "courant": "36A",
+      "V": "380V",
+      "type_moteur": "Triphasé",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-1PH-15KW-1400-001",
+    "id_templates": "TPL-MOT-1PH-15KW-1400-001",
+    "id": "TPL-MOT-1PH-15KW-1400-001",
+    "code": "MOT-1PH-15KW-1400",
+    "ref": "SEW-Eurodrive DRS71S4",
+    "libelle": "Moteur Monophasé 1.5KW 1400 tr/min",
+    "id_family": "FAM-MOT-1PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "type": "Moteur Monophasé",
+    "specs": {
+      "puissance": "1.5KW",
+      "Kw": "1,5KW",
+      "Hp": "2CV",
+      "Tr": "1400tr/min",
+      "vitesse": "1400 tr/min",
+      "A": "9,2A",
+      "courant": "9,2A",
+      "V": "220V",
+      "type_moteur": "Monophasé",
+      "alimentation": "Monophasé 220V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-SERVO-22KW-3000-001",
+    "id_templates": "TPL-MOT-SERVO-22KW-3000-001",
+    "id": "TPL-MOT-SERVO-22KW-3000-001",
+    "code": "MOT-SERVO-22KW-3000",
+    "ref": "Siemens 1FK7063-5AF71",
+    "libelle": "Servo Moteur 2.2KW 3000 tr/min",
+    "id_family": "FAM-MOT-SERVO-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "type": "Servo Moteur",
+    "specs": {
+      "puissance": "2.2KW",
+      "Kw": "2,2KW",
+      "Hp": "3CV",
+      "Tr": "3000tr/min",
+      "vitesse": "3000 tr/min",
+      "A": "6,5A",
+      "courant": "6,5A",
+      "V": "400V",
+      "type_moteur": "Servo",
+      "alimentation": "Triphasé 400V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-001",
+    "id_templates": "TPL-MOT-ASYNC-001",
+    "id": "TPL-MOT-ASYNC-001",
+    "code": "MOT-ASYNC-10A111-NA",
+    "ref": "REF-10A111-NA",
+    "libelle": "Moteur Asynchrone 10A-11,1A/1,1A   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "10A-11,1A/1,1A",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-002",
+    "id_templates": "TPL-MOT-ASYNC-002",
+    "id": "TPL-MOT-ASYNC-002",
+    "code": "MOT-ASYNC-40KW-NA",
+    "ref": "REF-40KW-NA",
+    "libelle": "Moteur Asynchrone 4,0KW   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4,0KW",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-003",
+    "id_templates": "TPL-MOT-ASYNC-003",
+    "id": "TPL-MOT-ASYNC-003",
+    "code": "MOT-ASYNC-75KW05-NA",
+    "ref": "REF-75KW05-NA",
+    "libelle": "Moteur Asynchrone 7,5 KW/0,55KW   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5 KW/0,55KW",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-004",
+    "id_templates": "TPL-MOT-ASYNC-004",
+    "id": "TPL-MOT-ASYNC-004",
+    "code": "MOT-ASYNC-3A-NA",
+    "ref": "REF-3A-NA",
+    "libelle": "Moteur Asynchrone 3A   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3A",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-005",
+    "id_templates": "TPL-MOT-ASYNC-005",
+    "id": "TPL-MOT-ASYNC-005",
+    "code": "MOT-ASYNC-22KW-NA",
+    "ref": "REF-22KW-NA",
+    "libelle": "Moteur Asynchrone 2,2KW   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-006",
+    "id_templates": "TPL-MOT-ASYNC-006",
+    "id": "TPL-MOT-ASYNC-006",
+    "code": "MOT-ASYNC-55KW-NA",
+    "ref": "REF-55KW-NA",
+    "libelle": "Moteur Asynchrone 5,5KW   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5,5KW",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-007",
+    "id_templates": "TPL-MOT-ASYNC-007",
+    "id": "TPL-MOT-ASYNC-007",
+    "code": "MOT-ASYNC-27A-NA",
+    "ref": "REF-27A-NA",
+    "libelle": "Moteur Asynchrone 2,7A   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,7A",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-008",
+    "id_templates": "TPL-MOT-ASYNC-008",
+    "id": "TPL-MOT-ASYNC-008",
+    "code": "MOT-ASYNC-716A-NA",
+    "ref": "REF-716A-NA",
+    "libelle": "Moteur Asynchrone 7,16A   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,16A",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-009",
+    "id_templates": "TPL-MOT-ASYNC-009",
+    "id": "TPL-MOT-ASYNC-009",
+    "code": "MOT-ASYNC-45KW-NA",
+    "ref": "REF-45KW-NA",
+    "libelle": "Moteur Asynchrone 4,5KW   tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4,5KW",
+      "chevaux": "",
+      "vitesse": "",
+      "courant": "",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-010",
+    "id_templates": "TPL-MOT-ASYNC-010",
+    "id": "TPL-MOT-ASYNC-010",
+    "code": "MOT-ASYNC-15KW-1400",
+    "ref": "REF-15KW-1400",
+    "libelle": "Moteur Asynchrone 1,5KW 2CV 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "2CV",
+      "vitesse": "1400 tr/min",
+      "courant": "4,7A",
+      "dimension": "90x75",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-011",
+    "id_templates": "TPL-MOT-ASYNC-011",
+    "id": "TPL-MOT-ASYNC-011",
+    "code": "MOT-ASYNC-75KW-920",
+    "ref": "REF-75KW-920",
+    "libelle": "Moteur Asynchrone 7,5KW 10CV 920 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5KW",
+      "chevaux": "10CV",
+      "vitesse": "920 tr/min",
+      "courant": "18A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-012",
+    "id_templates": "TPL-MOT-ASYNC-012",
+    "id": "TPL-MOT-ASYNC-012",
+    "code": "MOT-ASYNC-9KW-1430",
+    "ref": "REF-9KW-1430",
+    "libelle": "Moteur Asynchrone 9KW 12,5CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "9KW",
+      "chevaux": "12,5CV",
+      "vitesse": "1430 tr/min",
+      "courant": "18,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-013",
+    "id_templates": "TPL-MOT-ASYNC-013",
+    "id": "TPL-MOT-ASYNC-013",
+    "code": "MOT-ASYNC-22KW-1500",
+    "ref": "REF-22KW-1500",
+    "libelle": "Moteur Asynchrone 2,2KW 3CV 1500 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW",
+      "chevaux": "3CV",
+      "vitesse": "1500 tr/min",
+      "courant": "6A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-014",
+    "id_templates": "TPL-MOT-ASYNC-014",
+    "id": "TPL-MOT-ASYNC-014",
+    "code": "MOT-ASYNC-075KW-1410",
+    "ref": "REF-075KW-1410",
+    "libelle": "Moteur Asynchrone 0,75KW 1CV 1410 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1CV",
+      "vitesse": "1410 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-015",
+    "id_templates": "TPL-MOT-ASYNC-015",
+    "id": "TPL-MOT-ASYNC-015",
+    "code": "MOT-ASYNC-075KW-1350",
+    "ref": "REF-075KW-1350",
+    "libelle": "Moteur Asynchrone 0,75KW 1CV 1350 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1CV",
+      "vitesse": "1350 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-016",
+    "id_templates": "TPL-MOT-ASYNC-016",
+    "id": "TPL-MOT-ASYNC-016",
+    "code": "MOT-ASYNC-3KW-1400",
+    "ref": "REF-3KW-1400",
+    "libelle": "Moteur Asynchrone 3KW 4CV 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3KW",
+      "chevaux": "4CV",
+      "vitesse": "1400 tr/min",
+      "courant": "6,6A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-017",
+    "id_templates": "TPL-MOT-ASYNC-017",
+    "id": "TPL-MOT-ASYNC-017",
+    "code": "MOT-ASYNC-3KW-1430",
+    "ref": "REF-3KW-1430",
+    "libelle": "Moteur Asynchrone 3KW 4CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3KW",
+      "chevaux": "4CV",
+      "vitesse": "1430 tr/min",
+      "courant": "6,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-018",
+    "id_templates": "TPL-MOT-ASYNC-018",
+    "id": "TPL-MOT-ASYNC-018",
+    "code": "MOT-ASYNC-11KW-1460",
+    "ref": "REF-11KW-1460",
+    "libelle": "Moteur Asynchrone 11KW 15CV 1460 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW",
+      "chevaux": "15CV",
+      "vitesse": "1460 tr/min",
+      "courant": "23A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-019",
+    "id_templates": "TPL-MOT-ASYNC-019",
+    "id": "TPL-MOT-ASYNC-019",
+    "code": "MOT-ASYNC-4KW-1425",
+    "ref": "REF-4KW-1425",
+    "libelle": "Moteur Asynchrone 4 KW 5,5CV 1425 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4 KW",
+      "chevaux": "5,5CV",
+      "vitesse": "1425 tr/min",
+      "courant": "6,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-020",
+    "id_templates": "TPL-MOT-ASYNC-020",
+    "id": "TPL-MOT-ASYNC-020",
+    "code": "MOT-ASYNC-21KW-880",
+    "ref": "REF-21KW-880",
+    "libelle": "Moteur Asynchrone 2,1 KW 2,8CV 880 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,1 KW",
+      "chevaux": "2,8CV",
+      "vitesse": "880 tr/min",
+      "courant": "6,35A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-021",
+    "id_templates": "TPL-MOT-ASYNC-021",
+    "id": "TPL-MOT-ASYNC-021",
+    "code": "MOT-ASYNC-11KW-1460",
+    "ref": "REF-11KW-1460",
+    "libelle": "Moteur Asynchrone 11 KW 14CV 1460 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11 KW",
+      "chevaux": "14CV",
+      "vitesse": "1460 tr/min",
+      "courant": "22A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-022",
+    "id_templates": "TPL-MOT-ASYNC-022",
+    "id": "TPL-MOT-ASYNC-022",
+    "code": "MOT-ASYNC-75KW-1435",
+    "ref": "REF-75KW-1435",
+    "libelle": "Moteur Asynchrone 7,5 KW 10CV 1435 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5 KW",
+      "chevaux": "10CV",
+      "vitesse": "1435 tr/min",
+      "courant": "16,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-023",
+    "id_templates": "TPL-MOT-ASYNC-023",
+    "id": "TPL-MOT-ASYNC-023",
+    "code": "MOT-ASYNC-22KW-1460",
+    "ref": "REF-22KW-1460",
+    "libelle": "Moteur Asynchrone 2,2KW 3CV 1460 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW",
+      "chevaux": "3CV",
+      "vitesse": "1460 tr/min",
+      "courant": "8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-024",
+    "id_templates": "TPL-MOT-ASYNC-024",
+    "id": "TPL-MOT-ASYNC-024",
+    "code": "MOT-ASYNC-75KW-1460",
+    "ref": "REF-75KW-1460",
+    "libelle": "Moteur Asynchrone 7,5KW 10CV 1460 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5KW",
+      "chevaux": "10CV",
+      "vitesse": "1460 tr/min",
+      "courant": "16,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-025",
+    "id_templates": "TPL-MOT-ASYNC-025",
+    "id": "TPL-MOT-ASYNC-025",
+    "code": "MOT-ASYNC-75KW-2910",
+    "ref": "REF-75KW-2910",
+    "libelle": "Moteur Asynchrone 7,5 KW 10CV 2910 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5 KW",
+      "chevaux": "10CV",
+      "vitesse": "2910 tr/min",
+      "courant": "12,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-026",
+    "id_templates": "TPL-MOT-ASYNC-026",
+    "id": "TPL-MOT-ASYNC-026",
+    "code": "MOT-ASYNC-44KW-1430",
+    "ref": "REF-44KW-1430",
+    "libelle": "Moteur Asynchrone 4,4KW 6CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4,4KW",
+      "chevaux": "6CV",
+      "vitesse": "1430 tr/min",
+      "courant": "18A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-027",
+    "id_templates": "TPL-MOT-ASYNC-027",
+    "id": "TPL-MOT-ASYNC-027",
+    "code": "MOT-ASYNC-11KW-960",
+    "ref": "REF-11KW-960",
+    "libelle": "Moteur Asynchrone 11KW 15CV 960 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW",
+      "chevaux": "15CV",
+      "vitesse": "960 tr/min",
+      "courant": "23A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-028",
+    "id_templates": "TPL-MOT-ASYNC-028",
+    "id": "TPL-MOT-ASYNC-028",
+    "code": "MOT-ASYNC-147KW-1337",
+    "ref": "REF-147KW-1337",
+    "libelle": "Moteur Asynchrone 14,7kw 20CV 1337 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "14,7kw",
+      "chevaux": "20CV",
+      "vitesse": "1337 tr/min",
+      "courant": "34 A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-029",
+    "id_templates": "TPL-MOT-ASYNC-029",
+    "id": "TPL-MOT-ASYNC-029",
+    "code": "MOT-ASYNC-22KW-1430",
+    "ref": "REF-22KW-1430",
+    "libelle": "Moteur Asynchrone 2,2KW 3 CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW",
+      "chevaux": "3 CV",
+      "vitesse": "1430 tr/min",
+      "courant": "5,6A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-030",
+    "id_templates": "TPL-MOT-ASYNC-030",
+    "id": "TPL-MOT-ASYNC-030",
+    "code": "MOT-ASYNC-92KW-1410",
+    "ref": "REF-92KW-1410",
+    "libelle": "Moteur Asynchrone 9,2KW 12,5 CV 1410 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "9,2KW",
+      "chevaux": "12,5 CV",
+      "vitesse": "1410 tr/min",
+      "courant": "13 A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-031",
+    "id_templates": "TPL-MOT-ASYNC-031",
+    "id": "TPL-MOT-ASYNC-031",
+    "code": "MOT-ASYNC-075-3000",
+    "ref": "REF-075-3000",
+    "libelle": "Moteur Asynchrone 0.75 1CV 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0.75",
+      "chevaux": "1CV",
+      "vitesse": "3000 tr/min",
+      "courant": "3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-032",
+    "id_templates": "TPL-MOT-ASYNC-032",
+    "id": "TPL-MOT-ASYNC-032",
+    "code": "MOT-ASYNC-22KW-1425",
+    "ref": "REF-22KW-1425",
+    "libelle": "Moteur Asynchrone 2,2KW 3CV 1425 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW",
+      "chevaux": "3CV",
+      "vitesse": "1425 tr/min",
+      "courant": "5,55A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-033",
+    "id_templates": "TPL-MOT-ASYNC-033",
+    "id": "TPL-MOT-ASYNC-033",
+    "code": "MOT-ASYNC-15KW-2870",
+    "ref": "REF-15KW-2870",
+    "libelle": "Moteur Asynchrone 1,5KW 2CV 2870 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "2CV",
+      "vitesse": "2870 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-034",
+    "id_templates": "TPL-MOT-ASYNC-034",
+    "id": "TPL-MOT-ASYNC-034",
+    "code": "MOT-ASYNC-56KW-NA",
+    "ref": "REF-56KW-NA",
+    "libelle": "Moteur Asynchrone 5,6KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5,6KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "14,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-035",
+    "id_templates": "TPL-MOT-ASYNC-035",
+    "id": "TPL-MOT-ASYNC-035",
+    "code": "MOT-ASYNC-45KW55-1475",
+    "ref": "REF-45KW55-1475",
+    "libelle": "Moteur Asynchrone 45kw 5,5kw 60CV 7,5CV 1475 1470 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "45kw 5,5kw",
+      "chevaux": "60CV 7,5CV",
+      "vitesse": "1475 1470 tr/min",
+      "courant": "47 A 11,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-036",
+    "id_templates": "TPL-MOT-ASYNC-036",
+    "id": "TPL-MOT-ASYNC-036",
+    "code": "MOT-ASYNC-185KW1-1460",
+    "ref": "REF-185KW1-1460",
+    "libelle": "Moteur Asynchrone 18,5KW 1,5KW 25CV 2 CV 1460 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "18,5KW 1,5KW",
+      "chevaux": "25CV 2 CV",
+      "vitesse": "1460 1420 tr/min",
+      "courant": "36A 3,7 A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-037",
+    "id_templates": "TPL-MOT-ASYNC-037",
+    "id": "TPL-MOT-ASYNC-037",
+    "code": "MOT-ASYNC-30KW15-1465",
+    "ref": "REF-30KW15-1465",
+    "libelle": "Moteur Asynchrone 30KW 1,5KW 40 CV 2 CV 1465 1460 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "30KW 1,5KW",
+      "chevaux": "40 CV 2 CV",
+      "vitesse": "1465 1460 tr/min",
+      "courant": "60/34A 3,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-038",
+    "id_templates": "TPL-MOT-ASYNC-038",
+    "id": "TPL-MOT-ASYNC-038",
+    "code": "MOT-ASYNC-37KW14-1475",
+    "ref": "REF-37KW14-1475",
+    "libelle": "Moteur Asynchrone 37KW 1,45KW 50 CV 2 CV 1475 1450 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "37KW 1,45KW",
+      "chevaux": "50 CV 2 CV",
+      "vitesse": "1475 1450 tr/min",
+      "courant": "70A 3,6A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-039",
+    "id_templates": "TPL-MOT-ASYNC-039",
+    "id": "TPL-MOT-ASYNC-039",
+    "code": "MOT-ASYNC-45KW4K-1400",
+    "ref": "REF-45KW4K-1400",
+    "libelle": "Moteur Asynchrone 45kw 4 kw 60CV 5,5CV 1400 1750 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "45kw 4 kw",
+      "chevaux": "60CV 5,5CV",
+      "vitesse": "1400 1750 tr/min",
+      "courant": "47A 11,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-040",
+    "id_templates": "TPL-MOT-ASYNC-040",
+    "id": "TPL-MOT-ASYNC-040",
+    "code": "MOT-ASYNC-13KW-1400",
+    "ref": "REF-13KW-1400",
+    "libelle": "Moteur Asynchrone 13 KW 18 CV 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "13 KW",
+      "chevaux": "18 CV",
+      "vitesse": "1400 tr/min",
+      "courant": "27,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-041",
+    "id_templates": "TPL-MOT-ASYNC-041",
+    "id": "TPL-MOT-ASYNC-041",
+    "code": "MOT-ASYNC-13KW-1440",
+    "ref": "REF-13KW-1440",
+    "libelle": "Moteur Asynchrone 13 KW 18 CV 1440 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "13 KW",
+      "chevaux": "18 CV",
+      "vitesse": "1440 tr/min",
+      "courant": "24,5A",
+      "dimension": "11",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-042",
+    "id_templates": "TPL-MOT-ASYNC-042",
+    "id": "TPL-MOT-ASYNC-042",
+    "code": "MOT-ASYNC-15KW15-1456",
+    "ref": "REF-15KW15-1456",
+    "libelle": "Moteur Asynchrone 15kw 1,5kw 20CV 2CV 1456 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "15kw 1,5kw",
+      "chevaux": "20CV 2CV",
+      "vitesse": "1456 1420 tr/min",
+      "courant": "30,3A 3,8A",
+      "dimension": "16.4",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-043",
+    "id_templates": "TPL-MOT-ASYNC-043",
+    "id": "TPL-MOT-ASYNC-043",
+    "code": "MOT-ASYNC-37KW75-1475",
+    "ref": "REF-37KW75-1475",
+    "libelle": "Moteur Asynchrone 37KW 7,5KW 50 CV 10CV 1475 1445 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "37KW 7,5KW",
+      "chevaux": "50 CV 10CV",
+      "vitesse": "1475 1445 tr/min",
+      "courant": "72A 15,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-044",
+    "id_templates": "TPL-MOT-ASYNC-044",
+    "id": "TPL-MOT-ASYNC-044",
+    "code": "MOT-ASYNC-15KW15-1455",
+    "ref": "REF-15KW15-1455",
+    "libelle": "Moteur Asynchrone 15KW 1,5KW 20CV 2CV 1455 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "15KW 1,5KW",
+      "chevaux": "20CV 2CV",
+      "vitesse": "1455 1420 tr/min",
+      "courant": "30,3A 3,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-045",
+    "id_templates": "TPL-MOT-ASYNC-045",
+    "id": "TPL-MOT-ASYNC-045",
+    "code": "MOT-ASYNC-11KW15-1445",
+    "ref": "REF-11KW15-1445",
+    "libelle": "Moteur Asynchrone 11KW 1,5KW 15CV 2CV 1445 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW 1,5KW",
+      "chevaux": "15CV 2CV",
+      "vitesse": "1445 tr/min",
+      "courant": "40-23A 6,6A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-046",
+    "id_templates": "TPL-MOT-ASYNC-046",
+    "id": "TPL-MOT-ASYNC-046",
+    "code": "MOT-ASYNC-125KW-1430",
+    "ref": "REF-125KW-1430",
+    "libelle": "Moteur Asynchrone 12,5KW 17CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "12,5KW",
+      "chevaux": "17CV",
+      "vitesse": "1430 tr/min",
+      "courant": "33 A",
+      "dimension": "9.7",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-047",
+    "id_templates": "TPL-MOT-ASYNC-047",
+    "id": "TPL-MOT-ASYNC-047",
+    "code": "MOT-ASYNC-30KW-1465",
+    "ref": "REF-30KW-1465",
+    "libelle": "Moteur Asynchrone 30KW 40 CV 1465 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "30KW",
+      "chevaux": "40 CV",
+      "vitesse": "1465 tr/min",
+      "courant": "58A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-048",
+    "id_templates": "TPL-MOT-ASYNC-048",
+    "id": "TPL-MOT-ASYNC-048",
+    "code": "MOT-ASYNC-22KW-1455",
+    "ref": "REF-22KW-1455",
+    "libelle": "Moteur Asynchrone 22KW 30 CV 1455 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "22KW",
+      "chevaux": "30 CV",
+      "vitesse": "1455 tr/min",
+      "courant": "46,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-049",
+    "id_templates": "TPL-MOT-ASYNC-049",
+    "id": "TPL-MOT-ASYNC-049",
+    "code": "MOT-ASYNC-30KW-2960",
+    "ref": "REF-30KW-2960",
+    "libelle": "Moteur Asynchrone 30 KW 40 CV 2960 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "30 KW",
+      "chevaux": "40 CV",
+      "vitesse": "2960 tr/min",
+      "courant": "57,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-050",
+    "id_templates": "TPL-MOT-ASYNC-050",
+    "id": "TPL-MOT-ASYNC-050",
+    "code": "MOT-ASYNC-55KW-3000",
+    "ref": "REF-55KW-3000",
+    "libelle": "Moteur Asynchrone 55 KW 74,32CV 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "55 KW",
+      "chevaux": "74,32CV",
+      "vitesse": "3000 tr/min",
+      "courant": "101 A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-051",
+    "id_templates": "TPL-MOT-ASYNC-051",
+    "id": "TPL-MOT-ASYNC-051",
+    "code": "MOT-ASYNC-57KW-NA",
+    "ref": "REF-57KW-NA",
+    "libelle": "Moteur Asynchrone 5,7KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5,7KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "15A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-052",
+    "id_templates": "TPL-MOT-ASYNC-052",
+    "id": "TPL-MOT-ASYNC-052",
+    "code": "MOT-ASYNC-74KW-NA",
+    "ref": "REF-74KW-NA",
+    "libelle": "Moteur Asynchrone 7,4 KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,4 KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "19,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-053",
+    "id_templates": "TPL-MOT-ASYNC-053",
+    "id": "TPL-MOT-ASYNC-053",
+    "code": "MOT-ASYNC-74KW-NA",
+    "ref": "REF-74KW-NA",
+    "libelle": "Moteur Asynchrone 7,4KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,4KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "19,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-054",
+    "id_templates": "TPL-MOT-ASYNC-054",
+    "id": "TPL-MOT-ASYNC-054",
+    "code": "MOT-ASYNC-55KW-NA",
+    "ref": "REF-55KW-NA",
+    "libelle": "Moteur Asynchrone 5,5KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5,5KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "10A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-055",
+    "id_templates": "TPL-MOT-ASYNC-055",
+    "id": "TPL-MOT-ASYNC-055",
+    "code": "MOT-ASYNC-5KW-NA",
+    "ref": "REF-5KW-NA",
+    "libelle": "Moteur Asynchrone 5KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "15A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-056",
+    "id_templates": "TPL-MOT-ASYNC-056",
+    "id": "TPL-MOT-ASYNC-056",
+    "code": "MOT-ASYNC-7KW-NA",
+    "ref": "REF-7KW-NA",
+    "libelle": "Moteur Asynchrone 7KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "18,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-057",
+    "id_templates": "TPL-MOT-ASYNC-057",
+    "id": "TPL-MOT-ASYNC-057",
+    "code": "MOT-ASYNC-65KW-NA",
+    "ref": "REF-65KW-NA",
+    "libelle": "Moteur Asynchrone 6,5KW * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "6,5KW",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "17,1A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-058",
+    "id_templates": "TPL-MOT-ASYNC-058",
+    "id": "TPL-MOT-ASYNC-058",
+    "code": "MOT-ASYNC-185KW-1420",
+    "ref": "REF-185KW-1420",
+    "libelle": "Moteur Asynchrone 18,5kw 25CV 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "18,5kw",
+      "chevaux": "25CV",
+      "vitesse": "1420 tr/min",
+      "courant": "66-38A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-059",
+    "id_templates": "TPL-MOT-ASYNC-059",
+    "id": "TPL-MOT-ASYNC-059",
+    "code": "MOT-ASYNC-185KW-1450",
+    "ref": "REF-185KW-1450",
+    "libelle": "Moteur Asynchrone 18,5kw 25CV 1450 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "18,5kw",
+      "chevaux": "25CV",
+      "vitesse": "1450 tr/min",
+      "courant": "66-38A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-060",
+    "id_templates": "TPL-MOT-ASYNC-060",
+    "id": "TPL-MOT-ASYNC-060",
+    "code": "MOT-ASYNC-185KW-970",
+    "ref": "REF-185KW-970",
+    "libelle": "Moteur Asynchrone 18,5kw 25CV 970 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "18,5kw",
+      "chevaux": "25CV",
+      "vitesse": "970 tr/min",
+      "courant": "38,5-22,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-061",
+    "id_templates": "TPL-MOT-ASYNC-061",
+    "id": "TPL-MOT-ASYNC-061",
+    "code": "MOT-ASYNC-11KW-910",
+    "ref": "REF-11KW-910",
+    "libelle": "Moteur Asynchrone 1,1 KW 1,5 CV 910 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1 KW",
+      "chevaux": "1,5 CV",
+      "vitesse": "910 tr/min",
+      "courant": "3,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-062",
+    "id_templates": "TPL-MOT-ASYNC-062",
+    "id": "TPL-MOT-ASYNC-062",
+    "code": "MOT-ASYNC-65KW-1400",
+    "ref": "REF-65KW-1400",
+    "libelle": "Moteur Asynchrone 6,5KW 9 CV 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "6,5KW",
+      "chevaux": "9 CV",
+      "vitesse": "1400 tr/min",
+      "courant": "14A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-063",
+    "id_templates": "TPL-MOT-ASYNC-063",
+    "id": "TPL-MOT-ASYNC-063",
+    "code": "MOT-ASYNC-9511KW-1460",
+    "ref": "REF-9511KW-1460",
+    "libelle": "Moteur Asynchrone 9,5/11KW 13CV 1460-2930 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "9,5/11KW",
+      "chevaux": "13CV",
+      "vitesse": "1460-2930 tr/min",
+      "courant": "20-22A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-064",
+    "id_templates": "TPL-MOT-ASYNC-064",
+    "id": "TPL-MOT-ASYNC-064",
+    "code": "MOT-ASYNC-15KW-1450",
+    "ref": "REF-15KW-1450",
+    "libelle": "Moteur Asynchrone 15KW 20CV 1450 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "15KW",
+      "chevaux": "20CV",
+      "vitesse": "1450 tr/min",
+      "courant": "30,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-065",
+    "id_templates": "TPL-MOT-ASYNC-065",
+    "id": "TPL-MOT-ASYNC-065",
+    "code": "MOT-ASYNC-9511KW-1460",
+    "ref": "REF-9511KW-1460",
+    "libelle": "Moteur Asynchrone 9,5/11KW 13 CV 1460-2930 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "9,5/11KW",
+      "chevaux": "13 CV",
+      "vitesse": "1460-2930 tr/min",
+      "courant": "22A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-066",
+    "id_templates": "TPL-MOT-ASYNC-066",
+    "id": "TPL-MOT-ASYNC-066",
+    "code": "MOT-ASYNC-11KW-2920",
+    "ref": "REF-11KW-2920",
+    "libelle": "Moteur Asynchrone 11KW 15CV 2920 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW",
+      "chevaux": "15CV",
+      "vitesse": "2920 tr/min",
+      "courant": "21A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-067",
+    "id_templates": "TPL-MOT-ASYNC-067",
+    "id": "TPL-MOT-ASYNC-067",
+    "code": "MOT-ASYNC-11KW-2918",
+    "ref": "REF-11KW-2918",
+    "libelle": "Moteur Asynchrone 11KW 15CV 2918 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW",
+      "chevaux": "15CV",
+      "vitesse": "2918 tr/min",
+      "courant": "20,41A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-068",
+    "id_templates": "TPL-MOT-ASYNC-068",
+    "id": "TPL-MOT-ASYNC-068",
+    "code": "MOT-ASYNC-75KW-2910",
+    "ref": "REF-75KW-2910",
+    "libelle": "Moteur Asynchrone 7,5KW 10HP 2910 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5KW",
+      "chevaux": "10HP",
+      "vitesse": "2910 tr/min",
+      "courant": "15,5A",
+      "dimension": "ok",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-069",
+    "id_templates": "TPL-MOT-ASYNC-069",
+    "id": "TPL-MOT-ASYNC-069",
+    "code": "MOT-ASYNC-75KW-2910",
+    "ref": "REF-75KW-2910",
+    "libelle": "Moteur Asynchrone 7,5KW  10CV 2910 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5KW",
+      "chevaux": "10CV",
+      "vitesse": "2910 tr/min",
+      "courant": "15,5A",
+      "dimension": "ok",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-070",
+    "id_templates": "TPL-MOT-ASYNC-070",
+    "id": "TPL-MOT-ASYNC-070",
+    "code": "MOT-ASYNC-7555KW-2840",
+    "ref": "REF-7555KW-2840",
+    "libelle": "Moteur Asynchrone 7,5-5,5KW 10CV 2840 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5-5,5KW",
+      "chevaux": "10CV",
+      "vitesse": "2840 tr/min",
+      "courant": "20,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-071",
+    "id_templates": "TPL-MOT-ASYNC-071",
+    "id": "TPL-MOT-ASYNC-071",
+    "code": "MOT-ASYNC-75KW-2890",
+    "ref": "REF-75KW-2890",
+    "libelle": "Moteur Asynchrone 7,5kw 10CV 2890 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5kw",
+      "chevaux": "10CV",
+      "vitesse": "2890 tr/min",
+      "courant": "15,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-072",
+    "id_templates": "TPL-MOT-ASYNC-072",
+    "id": "TPL-MOT-ASYNC-072",
+    "code": "MOT-ASYNC-11KW-3000",
+    "ref": "REF-11KW-3000",
+    "libelle": "Moteur Asynchrone 11KW 15CV 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11KW",
+      "chevaux": "15CV",
+      "vitesse": "3000 tr/min",
+      "courant": "18A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-073",
+    "id_templates": "TPL-MOT-ASYNC-073",
+    "id": "TPL-MOT-ASYNC-073",
+    "code": "MOT-ASYNC-75KW-1430",
+    "ref": "REF-75KW-1430",
+    "libelle": "Moteur Asynchrone 7,5KW 10CV 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "7,5KW",
+      "chevaux": "10CV",
+      "vitesse": "1430 tr/min",
+      "courant": "15A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-074",
+    "id_templates": "TPL-MOT-ASYNC-074",
+    "id": "TPL-MOT-ASYNC-074",
+    "code": "MOT-ASYNC-4KW15K-1410",
+    "ref": "REF-4KW15K-1410",
+    "libelle": "Moteur Asynchrone 4KW                         1,5KW                    0,75KW 5,5CV                           2CV                                 1CV 1410                              1420                              1440  tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4KW                         1,5KW                    0,75KW",
+      "chevaux": "5,5CV                           2CV                                 1CV",
+      "vitesse": "1410                              1420                              1440  tr/min",
+      "courant": "9,4A                        3,5A                                 2A",
+      "dimension": "95x80",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-075",
+    "id_templates": "TPL-MOT-ASYNC-075",
+    "id": "TPL-MOT-ASYNC-075",
+    "code": "MOT-ASYNC-22KW11-1415",
+    "ref": "REF-22KW11-1415",
+    "libelle": "Moteur Asynchrone 2,2KW                1,1KW             0,75KW 3CV                               1,5CV                     1CV 1415                             1460                       1440 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2KW                1,1KW             0,75KW",
+      "chevaux": "3CV                               1,5CV                     1CV",
+      "vitesse": "1415                             1460                       1440 tr/min",
+      "courant": "5,4A                               2,8A                            2A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-076",
+    "id_templates": "TPL-MOT-ASYNC-076",
+    "id": "TPL-MOT-ASYNC-076",
+    "code": "MOT-ASYNC-55KW12-1440",
+    "ref": "REF-55KW12-1440",
+    "libelle": "Moteur Asynchrone 5,5 KW                             1,2KW                    0,75KW 3CV                     1,5CV                            1 CV  1440                             1380                              1390 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "5,5 KW                             1,2KW                    0,75KW",
+      "chevaux": "3CV                     1,5CV                            1 CV",
+      "vitesse": "1440                             1380                              1390 tr/min",
+      "courant": "11-7 A                      2,8A                      1,2A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-077",
+    "id_templates": "TPL-MOT-ASYNC-077",
+    "id": "TPL-MOT-ASYNC-077",
+    "code": "MOT-ASYNC-4KW12K-1440",
+    "ref": "REF-4KW12K-1440",
+    "libelle": "Moteur Asynchrone 4kw                            1,2KW                     0,75KW 5,5 CV                                1,5 CV                         1 CV 1440                                 1380                              1390 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4kw                            1,2KW                     0,75KW",
+      "chevaux": "5,5 CV                                1,5 CV                         1 CV",
+      "vitesse": "1440                                 1380                              1390 tr/min",
+      "courant": "15,5A                                    2,8A                                 1,2A",
+      "dimension": "230x170",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-078",
+    "id_templates": "TPL-MOT-ASYNC-078",
+    "id": "TPL-MOT-ASYNC-078",
+    "code": "MOT-ASYNC-4KW12K-1440",
+    "ref": "REF-4KW12K-1440",
+    "libelle": "Moteur Asynchrone 4KW                          1,2KW               0,75KW 5,5CV                                 1,5CV                          1CV 1440                              1380                            1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4KW                          1,2KW               0,75KW",
+      "chevaux": "5,5CV                                 1,5CV                          1CV",
+      "vitesse": "1440                              1380                            1420 tr/min",
+      "courant": "16,6 A                                2,8A                            2,5A",
+      "dimension": "170x130",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-079",
+    "id_templates": "TPL-MOT-ASYNC-079",
+    "id": "TPL-MOT-ASYNC-079",
+    "code": "MOT-ASYNC-4KW15K-1500",
+    "ref": "REF-4KW15K-1500",
+    "libelle": "Moteur Asynchrone 4KW                                 1,5KW 5,5CV                              2CV 1500                               1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4KW                                 1,5KW",
+      "chevaux": "5,5CV                              2CV",
+      "vitesse": "1500                               1420 tr/min",
+      "courant": "7,4A                                  3A",
+      "dimension": "320x160",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-080",
+    "id_templates": "TPL-MOT-ASYNC-080",
+    "id": "TPL-MOT-ASYNC-080",
+    "code": "MOT-ASYNC-KW-NBTO",
+    "ref": "REF-KW-NBTO",
+    "libelle": "Moteur Asynchrone KW CH NB TOURS tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "KW",
+      "chevaux": "CH",
+      "vitesse": "NB TOURS tr/min",
+      "courant": "AMP",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-081",
+    "id_templates": "TPL-MOT-ASYNC-081",
+    "id": "TPL-MOT-ASYNC-081",
+    "code": "MOT-ASYNC-074KW-900",
+    "ref": "REF-074KW-900",
+    "libelle": "Moteur Asynchrone 0,74KW 1CV 900 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,74KW",
+      "chevaux": "1CV",
+      "vitesse": "900 tr/min",
+      "courant": "3,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-082",
+    "id_templates": "TPL-MOT-ASYNC-082",
+    "id": "TPL-MOT-ASYNC-082",
+    "code": "MOT-ASYNC-11KW-900",
+    "ref": "REF-11KW-900",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5CV 900 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5CV",
+      "vitesse": "900 tr/min",
+      "courant": "3,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-083",
+    "id_templates": "TPL-MOT-ASYNC-083",
+    "id": "TPL-MOT-ASYNC-083",
+    "code": "MOT-ASYNC-037KW-1420",
+    "ref": "REF-037KW-1420",
+    "libelle": "Moteur Asynchrone 0,37KW 0,5CV 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,37KW",
+      "chevaux": "0,5CV",
+      "vitesse": "1420 tr/min",
+      "courant": "3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-084",
+    "id_templates": "TPL-MOT-ASYNC-084",
+    "id": "TPL-MOT-ASYNC-084",
+    "code": "MOT-ASYNC-11KW-715",
+    "ref": "REF-11KW-715",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5CV 715 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5CV",
+      "vitesse": "715 tr/min",
+      "courant": "3,1A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-085",
+    "id_templates": "TPL-MOT-ASYNC-085",
+    "id": "TPL-MOT-ASYNC-085",
+    "code": "MOT-ASYNC-075KW-920",
+    "ref": "REF-075KW-920",
+    "libelle": "Moteur Asynchrone 0,75KW 1CV 920 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1CV",
+      "vitesse": "920 tr/min",
+      "courant": "3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-086",
+    "id_templates": "TPL-MOT-ASYNC-086",
+    "id": "TPL-MOT-ASYNC-086",
+    "code": "MOT-ASYNC-15KW-900",
+    "ref": "REF-15KW-900",
+    "libelle": "Moteur Asynchrone 1,5KW 1,5CV 900 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "1,5CV",
+      "vitesse": "900 tr/min",
+      "courant": "3,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-087",
+    "id_templates": "TPL-MOT-ASYNC-087",
+    "id": "TPL-MOT-ASYNC-087",
+    "code": "MOT-ASYNC-12KW-940",
+    "ref": "REF-12KW-940",
+    "libelle": "Moteur Asynchrone 1,2KW 1.6 940 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,2KW",
+      "chevaux": "1.6",
+      "vitesse": "940 tr/min",
+      "courant": "3,1A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-088",
+    "id_templates": "TPL-MOT-ASYNC-088",
+    "id": "TPL-MOT-ASYNC-088",
+    "code": "MOT-ASYNC-037KW-900",
+    "ref": "REF-037KW-900",
+    "libelle": "Moteur Asynchrone 0,37KW 0,5CV 900 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,37KW",
+      "chevaux": "0,5CV",
+      "vitesse": "900 tr/min",
+      "courant": "1,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-089",
+    "id_templates": "TPL-MOT-ASYNC-089",
+    "id": "TPL-MOT-ASYNC-089",
+    "code": "MOT-ASYNC-15KW-920",
+    "ref": "REF-15KW-920",
+    "libelle": "Moteur Asynchrone 1,5KW 2CV 920 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "2CV",
+      "vitesse": "920 tr/min",
+      "courant": "3,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-090",
+    "id_templates": "TPL-MOT-ASYNC-090",
+    "id": "TPL-MOT-ASYNC-090",
+    "code": "MOT-ASYNC-11KW-700",
+    "ref": "REF-11KW-700",
+    "libelle": "Moteur Asynchrone 1,1KW 1,4CV 700 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,4CV",
+      "vitesse": "700 tr/min",
+      "courant": "3,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-091",
+    "id_templates": "TPL-MOT-ASYNC-091",
+    "id": "TPL-MOT-ASYNC-091",
+    "code": "MOT-ASYNC-11KW-720",
+    "ref": "REF-11KW-720",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5CV 720 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5CV",
+      "vitesse": "720 tr/min",
+      "courant": "3,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-092",
+    "id_templates": "TPL-MOT-ASYNC-092",
+    "id": "TPL-MOT-ASYNC-092",
+    "code": "MOT-ASYNC-15KW-940",
+    "ref": "REF-15KW-940",
+    "libelle": "Moteur Asynchrone 1,5KW 2 940 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "2",
+      "vitesse": "940 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-093",
+    "id_templates": "TPL-MOT-ASYNC-093",
+    "id": "TPL-MOT-ASYNC-093",
+    "code": "MOT-ASYNC-11KW-2980",
+    "ref": "REF-11KW-2980",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5 CV 2980 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5 CV",
+      "vitesse": "2980 tr/min",
+      "courant": "2,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-094",
+    "id_templates": "TPL-MOT-ASYNC-094",
+    "id": "TPL-MOT-ASYNC-094",
+    "code": "MOT-ASYNC-3KW-2950",
+    "ref": "REF-3KW-2950",
+    "libelle": "Moteur Asynchrone 3KW 4 CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3KW",
+      "chevaux": "4 CV",
+      "vitesse": "2950 tr/min",
+      "courant": "6,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-095",
+    "id_templates": "TPL-MOT-ASYNC-095",
+    "id": "TPL-MOT-ASYNC-095",
+    "code": "MOT-ASYNC-18KW-2920",
+    "ref": "REF-18KW-2920",
+    "libelle": "Moteur Asynchrone 1,8KW 2,5 CV 2920 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,8KW",
+      "chevaux": "2,5 CV",
+      "vitesse": "2920 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-096",
+    "id_templates": "TPL-MOT-ASYNC-096",
+    "id": "TPL-MOT-ASYNC-096",
+    "code": "MOT-ASYNC-15KW-2950",
+    "ref": "REF-15KW-2950",
+    "libelle": "Moteur Asynchrone 1,5KW 2 CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,5KW",
+      "chevaux": "2 CV",
+      "vitesse": "2950 tr/min",
+      "courant": "3,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-097",
+    "id_templates": "TPL-MOT-ASYNC-097",
+    "id": "TPL-MOT-ASYNC-097",
+    "code": "MOT-ASYNC-11KW-2950",
+    "ref": "REF-11KW-2950",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5 CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5 CV",
+      "vitesse": "2950 tr/min",
+      "courant": "3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-098",
+    "id_templates": "TPL-MOT-ASYNC-098",
+    "id": "TPL-MOT-ASYNC-098",
+    "code": "MOT-ASYNC-075KW-3000",
+    "ref": "REF-075KW-3000",
+    "libelle": "Moteur Asynchrone 0,75KW 1 CV 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1 CV",
+      "vitesse": "3000 tr/min",
+      "courant": "2A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-099",
+    "id_templates": "TPL-MOT-ASYNC-099",
+    "id": "TPL-MOT-ASYNC-099",
+    "code": "MOT-ASYNC-075KW-2950",
+    "ref": "REF-075KW-2950",
+    "libelle": "Moteur Asynchrone 0,75KW 1 CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1 CV",
+      "vitesse": "2950 tr/min",
+      "courant": "2A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-100",
+    "id_templates": "TPL-MOT-ASYNC-100",
+    "id": "TPL-MOT-ASYNC-100",
+    "code": "MOT-ASYNC-075KW-2980",
+    "ref": "REF-075KW-2980",
+    "libelle": "Moteur Asynchrone 0,75KW 1 CV 2980 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,75KW",
+      "chevaux": "1 CV",
+      "vitesse": "2980 tr/min",
+      "courant": "1,9A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-101",
+    "id_templates": "TPL-MOT-ASYNC-101",
+    "id": "TPL-MOT-ASYNC-101",
+    "code": "MOT-ASYNC-3KW-2950",
+    "ref": "REF-3KW-2950",
+    "libelle": "Moteur Asynchrone 3KW 4CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3KW",
+      "chevaux": "4CV",
+      "vitesse": "2950 tr/min",
+      "courant": "6,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-102",
+    "id_templates": "TPL-MOT-ASYNC-102",
+    "id": "TPL-MOT-ASYNC-102",
+    "code": "MOT-ASYNC-22KW-2950",
+    "ref": "REF-22KW-2950",
+    "libelle": "Moteur Asynchrone 2,2 KW 3 CV 2950 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2,2 KW",
+      "chevaux": "3 CV",
+      "vitesse": "2950 tr/min",
+      "courant": "4,9A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-103",
+    "id_templates": "TPL-MOT-ASYNC-103",
+    "id": "TPL-MOT-ASYNC-103",
+    "code": "MOT-ASYNC-3KW3KW-2860",
+    "ref": "REF-3KW3KW-2860",
+    "libelle": "Moteur Asynchrone 3KW                 3KW              3KW 4 CV              4CV               4CV 2860               2860            2860 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "3KW                 3KW              3KW",
+      "chevaux": "4 CV              4CV               4CV",
+      "vitesse": "2860               2860            2860 tr/min",
+      "courant": "6,3A                6,3A              6,3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-104",
+    "id_templates": "TPL-MOT-ASYNC-104",
+    "id": "TPL-MOT-ASYNC-104",
+    "code": "MOT-ASYNC-11KW-940",
+    "ref": "REF-11KW-940",
+    "libelle": "Moteur Asynchrone 1,1KW 1,5CV 940 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1,1KW",
+      "chevaux": "1,5CV",
+      "vitesse": "940 tr/min",
+      "courant": "2,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-105",
+    "id_templates": "TPL-MOT-ASYNC-105",
+    "id": "TPL-MOT-ASYNC-105",
+    "code": "MOT-ASYNC-04KW-1380",
+    "ref": "REF-04KW-1380",
+    "libelle": "Moteur Asynchrone 0,4KW 0,5CV 1380 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0,4KW",
+      "chevaux": "0,5CV",
+      "vitesse": "1380 tr/min",
+      "courant": "1,4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-106",
+    "id_templates": "TPL-MOT-ASYNC-106",
+    "id": "TPL-MOT-ASYNC-106",
+    "code": "MOT-ASYNC-15-940",
+    "ref": "REF-15-940",
+    "libelle": "Moteur Asynchrone 1.5 2 940 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "1.5",
+      "chevaux": "2",
+      "vitesse": "940 tr/min",
+      "courant": "4A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-107",
+    "id_templates": "TPL-MOT-ASYNC-107",
+    "id": "TPL-MOT-ASYNC-107",
+    "code": "MOT-ASYNC-165-1456",
+    "ref": "REF-165-1456",
+    "libelle": "Moteur Asynchrone 16.5 20CV 2CV 1456 1420 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "16.5",
+      "chevaux": "20CV 2CV",
+      "vitesse": "1456 1420 tr/min",
+      "courant": "30,3A 3,8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-108",
+    "id_templates": "TPL-MOT-ASYNC-108",
+    "id": "TPL-MOT-ASYNC-108",
+    "code": "MOT-ASYNC-80-3000",
+    "ref": "REF-80-3000",
+    "libelle": "Moteur Asynchrone 80 * 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "80",
+      "chevaux": "*",
+      "vitesse": "3000 tr/min",
+      "courant": "16,5A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-109",
+    "id_templates": "TPL-MOT-ASYNC-109",
+    "id": "TPL-MOT-ASYNC-109",
+    "code": "MOT-ASYNC-013-1400",
+    "ref": "REF-013-1400",
+    "libelle": "Moteur Asynchrone 0.13 0.17 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0.13",
+      "chevaux": "0.17",
+      "vitesse": "1400 tr/min",
+      "courant": "0.6",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-110",
+    "id_templates": "TPL-MOT-ASYNC-110",
+    "id": "TPL-MOT-ASYNC-110",
+    "code": "MOT-ASYNC-2155-NA",
+    "ref": "REF-2155-NA",
+    "libelle": "Moteur Asynchrone 215.5 TOTAL AMP tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "215.5",
+      "chevaux": "",
+      "vitesse": "TOTAL AMP tr/min",
+      "courant": "215.5",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-111",
+    "id_templates": "TPL-MOT-ASYNC-111",
+    "id": "TPL-MOT-ASYNC-111",
+    "code": "MOT-ASYNC-44-1430",
+    "ref": "REF-44-1430",
+    "libelle": "Moteur Asynchrone 4.4 3 CV 3 CV 1430 1430 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4.4",
+      "chevaux": "3 CV 3 CV",
+      "vitesse": "1430 1430 tr/min",
+      "courant": "18.8A 18.8A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-112",
+    "id_templates": "TPL-MOT-ASYNC-112",
+    "id": "TPL-MOT-ASYNC-112",
+    "code": "MOT-ASYNC-21-3000",
+    "ref": "REF-21-3000",
+    "libelle": "Moteur Asynchrone 2.1 3CV 3000 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "2.1",
+      "chevaux": "3CV",
+      "vitesse": "3000 tr/min",
+      "courant": "4.7",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-113",
+    "id_templates": "TPL-MOT-ASYNC-113",
+    "id": "TPL-MOT-ASYNC-113",
+    "code": "MOT-ASYNC-074-900",
+    "ref": "REF-074-900",
+    "libelle": "Moteur Asynchrone 0.74 1CV 900 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "0.74",
+      "chevaux": "1CV",
+      "vitesse": "900 tr/min",
+      "courant": "3.5",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-114",
+    "id_templates": "TPL-MOT-ASYNC-114",
+    "id": "TPL-MOT-ASYNC-114",
+    "code": "MOT-ASYNC-10-NA",
+    "ref": "REF-10-NA",
+    "libelle": "Moteur Asynchrone 10 * * tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "10",
+      "chevaux": "*",
+      "vitesse": "* tr/min",
+      "courant": "23",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-115",
+    "id_templates": "TPL-MOT-ASYNC-115",
+    "id": "TPL-MOT-ASYNC-115",
+    "code": "MOT-ASYNC-45-1475",
+    "ref": "REF-45-1475",
+    "libelle": "Moteur Asynchrone 45 1475 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "45",
+      "chevaux": "",
+      "vitesse": "1475 tr/min",
+      "courant": "47A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-116",
+    "id_templates": "TPL-MOT-ASYNC-116",
+    "id": "TPL-MOT-ASYNC-116",
+    "code": "MOT-ASYNC-75-1475",
+    "ref": "REF-75-1475",
+    "libelle": "Moteur Asynchrone 75 1475 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "75",
+      "chevaux": "",
+      "vitesse": "1475 tr/min",
+      "courant": "72A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-117",
+    "id_templates": "TPL-MOT-ASYNC-117",
+    "id": "TPL-MOT-ASYNC-117",
+    "code": "MOT-ASYNC-15-1450",
+    "ref": "REF-15-1450",
+    "libelle": "Moteur Asynchrone 15 1450 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "15",
+      "chevaux": "",
+      "vitesse": "1450 tr/min",
+      "courant": "30.3A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-118",
+    "id_templates": "TPL-MOT-ASYNC-118",
+    "id": "TPL-MOT-ASYNC-118",
+    "code": "MOT-ASYNC-3015-1470",
+    "ref": "REF-3015-1470",
+    "libelle": "Moteur Asynchrone 30 1,5 1470 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "30 1,5",
+      "chevaux": "",
+      "vitesse": "1470 tr/min",
+      "courant": "60A 3,7A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-119",
+    "id_templates": "TPL-MOT-ASYNC-119",
+    "id": "TPL-MOT-ASYNC-119",
+    "code": "MOT-ASYNC-4-9001",
+    "ref": "REF-4-9001",
+    "libelle": "Moteur Asynchrone 4 8,/12 900 1400 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "4",
+      "chevaux": "",
+      "vitesse": "8,/12 900 1400 tr/min",
+      "courant": "10A",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-120",
+    "id_templates": "TPL-MOT-ASYNC-120",
+    "id": "TPL-MOT-ASYNC-120",
+    "code": "MOT-ASYNC-96-NA",
+    "ref": "REF-96-NA",
+    "libelle": "Moteur Asynchrone 9,/,6 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "9,/,6",
+      "chevaux": "",
+      "vitesse": "tr/min",
+      "courant": "23",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  },
+  {
+    "id_template": "TPL-MOT-ASYNC-121",
+    "id_templates": "TPL-MOT-ASYNC-121",
+    "id": "TPL-MOT-ASYNC-121",
+    "code": "MOT-ASYNC-11-1450",
+    "ref": "REF-11-1450",
+    "libelle": "Moteur Asynchrone 11 15 1450 tr/min",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "type": "Moteur Asynchrone Triphasé",
+    "specs": {
+      "puissance": "11",
+      "chevaux": "15",
+      "vitesse": "1450 tr/min",
+      "courant": "24",
+      "dimension": "",
+      "type_moteur": "Asynchrone",
+      "alimentation": "Triphasé 380V"
+    }
+  }
+]

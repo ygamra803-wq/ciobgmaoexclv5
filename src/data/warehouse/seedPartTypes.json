@@ -1,0 +1,22 @@
+[
+  {
+    "id_type": "TYPE-FIX",
+    "libelle": "Fixation & Visserie Industrielle"
+  },
+  {
+    "id_type": "TYPE-MEC",
+    "libelle": "Organes Mécaniques & Transmission"
+  },
+  {
+    "id_type": "TYPE-PNE",
+    "libelle": "Pneumatique & Composants Fluides"
+  },
+  {
+    "id_type": "TYPE-ELE",
+    "libelle": "Électrique, Relais & Capteurs"
+  },
+  {
+    "id_type": "TYPE-HYD",
+    "libelle": "Hydraulique, Raccords & Flexibles"
+  }
+]

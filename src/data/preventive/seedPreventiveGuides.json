@@ -1,0 +1,451 @@
+[
+  {
+    "id": "ID-GUIDE-ROULEMENT-CG-001",
+    "code": "GUIDE-ROULEMENT-CG",
+    "ref": "Manuel-SKF-Roulement",
+    "composant_nom": "Roulement",
+    "famille": "Mécanique / Paliers",
+    "actions_liees": [
+      "C",
+      "G"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-GRS-01",
+        "designation": "Graisse SKF LGMT3 (Cartouche 400g)",
+        "reference": "SKF-LGMT3-400",
+        "quantite": 1,
+        "unite": "Cartouche",
+        "prix_unitaire": 18.5
+      },
+      {
+        "id_article": "PDR-RLM-01",
+        "designation": "Roulement rigide à billes 6205-2RS1 SKF",
+        "reference": "SKF-6205-2RS",
+        "quantite": 1,
+        "unite": "Pièce",
+        "prix_unitaire": 24.5
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle jeu axial et température",
+        "description": "Vérifier l'absence de bruit suspect au stéthoscope. Mesurer la température du palier (doit être < 70°C). Contrôler le jeu résiduel.",
+        "duree": "5 min",
+        "outils": "Stéthoscope de mécanicien, Thermomètre infrarouge"
+      },
+      "G": {
+        "titre": "Graissage périodique des roulements",
+        "description": "Injecter la quantité de graisse recommandée (15-20g). Utiliser une graisse lithium haute performance. Ne pas sur-graisser.",
+        "duree": "10 min",
+        "outils": "Pompe à graisse manuelle, Graisse SKF LGMT3"
+      }
+    },
+    "consignes_securite": "Cadenasser l'équipement (LOTO) avant accès aux pièces en mouvement. Attention au risque de surchauffe en cas de sur-graissage.",
+    "criticite": "Haute",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-COURROIE-CN-002",
+    "code": "GUIDE-COURROIE-CN",
+    "ref": "ISO-5296-Belt",
+    "composant_nom": "Courroie",
+    "famille": "Transmission",
+    "actions_liees": [
+      "C",
+      "N"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-CRW-01",
+        "designation": "Courroie trapézoïdale renforcée Optibelt SPA-1250",
+        "reference": "OPTI-SPA-1250",
+        "quantite": 1,
+        "unite": "Pièce",
+        "prix_unitaire": 19
+      },
+      {
+        "id_article": "PDR-CLN-01",
+        "designation": "Dégraissant & Nettoyant Contacts Diélectrique",
+        "reference": "CRC-ELECTRO-500",
+        "quantite": 1,
+        "unite": "Aérosol",
+        "prix_unitaire": 12
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle tension et craquelures",
+        "description": "Mesurer la flèche ou utiliser un fréquencemètre de tension optique. Contrôler l'absence d'effilochage, de craquelures ou d'usure des flancs.",
+        "duree": "10 min",
+        "outils": "Tensiomètre optique, Jauge d'usure de poulie"
+      },
+      "N": {
+        "titre": "Nettoyage des poulies et gorges",
+        "description": "Dégraisser les gorges de poulies et éliminer les poussières de gomme accumulées avec un chiffon sec.",
+        "duree": "10 min",
+        "outils": "Brosse nylon, Chiffon dégraissant doux"
+      }
+    },
+    "consignes_securite": "Interdiction de toucher les courroies en rotation. Mise sous consigne électrique obligatoire.",
+    "criticite": "Moyenne",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-NIVEAUHUILE-CL-003",
+    "code": "GUIDE-HUILE-CL",
+    "ref": "Manuel-Hydraulique-ISO",
+    "composant_nom": "Niveau d'huile",
+    "famille": "Hydraulique / Lubrification",
+    "actions_liees": [
+      "C",
+      "L"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-OIL-02",
+        "designation": "Huile Hydraulique Anti-usure ISO VG 46",
+        "reference": "TOTAL-AZOLLA-46",
+        "quantite": 2,
+        "unite": "Litre",
+        "prix_unitaire": 14.5
+      },
+      {
+        "id_article": "PDR-JNT-01",
+        "designation": "Bague d'étanchéité radiale NBR 25x52x7",
+        "reference": "SIMRIT-25-52-7",
+        "quantite": 1,
+        "unite": "Pièce",
+        "prix_unitaire": 8.5
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle visuel niveau et clarté",
+        "description": "Vérifier que le niveau se situe entre le repère MIN et MAX sur le voyant optique. Contrôler la couleur et l'absence d'émulsion (eau).",
+        "duree": "5 min",
+        "outils": "Chiffon d'essuyage, Lampe torche LED"
+      },
+      "L": {
+        "titre": "Appoint ou vidange hydraulique",
+        "description": "Faire l'appoint avec l'huile conforme ISO VG préconisée. Utiliser un entonnoir avec tamis filtrant propre.",
+        "duree": "15 min",
+        "outils": "Huile hydraulique ISO VG 46 / 68, Entonnoir filtrant"
+      }
+    },
+    "consignes_securite": "Purger la pression résiduelle du circuit hydraulique avant ouverture du bouchon.",
+    "criticite": "Critique",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-GLISSIERE-CG-004",
+    "code": "GUIDE-GLISSIERE-CG",
+    "ref": "DIN-51825-Gliss",
+    "composant_nom": "Glissière",
+    "famille": "Guidage linéaire",
+    "actions_liees": [
+      "C",
+      "G"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-GRS-01",
+        "designation": "Graisse SKF LGMT3 (Cartouche 400g)",
+        "reference": "SKF-LGMT3-400",
+        "quantite": 1,
+        "unite": "Cartouche",
+        "prix_unitaire": 18.5
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle état des pistes et racleurs",
+        "description": "Inspecter les rails de guidage pour détecter d'éventuelles rayures, traces de corrosion ou jeu excessif sur les patins.",
+        "duree": "10 min",
+        "outils": "Comparateur à cadran, Lampe d'inspection"
+      },
+      "G": {
+        "titre": "Graissage des patins linéaires",
+        "description": "Injecter la graisse via les graisseurs dédiés tout en déplaçant le chariot manuellement pour répartir le film lubrifiant.",
+        "duree": "10 min",
+        "outils": "Pompe manuelle à embout conique, Graisse fluide NLGI 1/2"
+      }
+    },
+    "consignes_securite": "Attention aux risques de pincement lors du déplacement manuel de l'axe.",
+    "criticite": "Haute",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-ARMOIRE-NCS-005",
+    "code": "GUIDE-ARMOIRE-NCS",
+    "ref": "NF-C-15100-Elec",
+    "composant_nom": "Armoire électrique",
+    "famille": "Électrique / Automatisme",
+    "actions_liees": [
+      "N",
+      "C",
+      "S"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-FLT-01",
+        "designation": "Filtre de ventilation armoire électrique 200x200",
+        "reference": "RITTAL-SK3182",
+        "quantite": 1,
+        "unite": "Pièce",
+        "prix_unitaire": 16
+      },
+      {
+        "id_article": "PDR-CLN-01",
+        "designation": "Dégraissant & Nettoyant Contacts Diélectrique",
+        "reference": "CRC-ELECTRO-500",
+        "quantite": 1,
+        "unite": "Aérosol",
+        "prix_unitaire": 12
+      }
+    ],
+    "fiches_actions": {
+      "N": {
+        "titre": "Nettoyage et dépoussiérage armoire",
+        "description": "Aspiration des filtres de climatisation/ventilation et soufflage très doux avec air sec déshuilé.",
+        "duree": "15 min",
+        "outils": "Aspirateur industriel antistatique, Filtres de rechange"
+      },
+      "C": {
+        "titre": "Contrôle thermique et état voyants",
+        "description": "Thermographie infrarouge des disjoncteurs et contacteurs pour détecter les points chauds. Contrôle des ventilateurs.",
+        "duree": "10 min",
+        "outils": "Caméra thermique ou thermomètre IR, Multimètre"
+      },
+      "S": {
+        "titre": "Resserrage des borniers de puissance",
+        "description": "Vérifier au tournevis dynamométrique le serrage des connexions électriques principales (moteur, variateur, contacteurs).",
+        "duree": "15 min",
+        "outils": "Tournevis isolé 1000V dynamométrique"
+      }
+    },
+    "consignes_securite": "Habilitation électrique BR/BC requise. Porter gants isolants et écran facial.",
+    "criticite": "Critique",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-MOTEUR-CNV-006",
+    "code": "GUIDE-MOTEUR-CNV",
+    "ref": "IEC-60034-Motor",
+    "composant_nom": "Moteur électrique",
+    "famille": "Électromécanique",
+    "actions_liees": [
+      "C",
+      "N",
+      "V"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-GRS-02",
+        "designation": "Graisse Haute Température Mobil Polyrex EM",
+        "reference": "MOBIL-POLY-400",
+        "quantite": 1,
+        "unite": "Cartouche",
+        "prix_unitaire": 26
+      },
+      {
+        "id_article": "PDR-CLN-01",
+        "designation": "Dégraissant & Nettoyant Contacts Diélectrique",
+        "reference": "CRC-ELECTRO-500",
+        "quantite": 1,
+        "unite": "Aérosol",
+        "prix_unitaire": 12
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle vibration et échauffement",
+        "description": "Mesurer le niveau de vibration global (RMS) et la température de la carcasse.",
+        "duree": "10 min",
+        "outils": "Vibromètre portable, Thermomètre IR"
+      },
+      "N": {
+        "titre": "Dépoussiérage du capot ventilateur",
+        "description": "Nettoyer la grille de ventilation et les ailettes de refroidissement pour garantir un flux d'air optimal.",
+        "duree": "10 min",
+        "outils": "Brosse souple, Soufflette régulée"
+      },
+      "V": {
+        "titre": "Vérification alignement et accouplement",
+        "description": "Vérifier l'état du flector d'accouplement élastique et l'alignement moteur-réducteur.",
+        "duree": "15 min",
+        "outils": "Règle laser, Clés mixtes"
+      }
+    },
+    "consignes_securite": "Consignation électrique obligatoire avant toute intervention sur l'accouplement.",
+    "criticite": "Haute",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-REDUCTEUR-CL-007",
+    "code": "GUIDE-REDUCTEUR-CL",
+    "ref": "ISO-12925-Gear",
+    "composant_nom": "Réducteur",
+    "famille": "Transmission mécanique",
+    "actions_liees": [
+      "C",
+      "L"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-OIL-01",
+        "designation": "Huile pour engrenages synthétique ISO VG 220",
+        "reference": "TOTAL-CARTER-220",
+        "quantite": 5,
+        "unite": "Litre",
+        "prix_unitaire": 21
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle étanchéité et bruit d'engrènement",
+        "description": "Contrôler l'absence de fuite au niveau des joints d'arbre d'entrée et de sortie. Écouter le bruit des pignons.",
+        "duree": "5 min",
+        "outils": "Lampe torche, Chiffon propre"
+      },
+      "L": {
+        "titre": "Niveau et vidange huile réducteur",
+        "description": "Vérifier le voyant de niveau. Prélever un échantillon d'huile pour contrôler la présence éventuelle de particules d'usure.",
+        "duree": "15 min",
+        "outils": "Huile pour engrenages synthétique ISO VG 220"
+      }
+    },
+    "consignes_securite": "Attendre le refroidissement du réducteur avant d'ouvrir le bouchon de vidange.",
+    "criticite": "Haute",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-VERIN-CN-008",
+    "code": "GUIDE-VERIN-CN",
+    "ref": "ISO-6431-Cyl",
+    "composant_nom": "Vérin pneumatique",
+    "famille": "Pneumatique",
+    "actions_liees": [
+      "C",
+      "N"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-JNT-02",
+        "designation": "Kit joints d'étanchéité vérin pneumatique D50",
+        "reference": "FESTO-KIT-D50",
+        "quantite": 1,
+        "unite": "Kit",
+        "prix_unitaire": 32
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle fuite d'air et tige",
+        "description": "Vérifier l'absence de fuite d'air sur les raccords et le nez de tige. Inspecter la tige chromée (rayures, chocs).",
+        "duree": "5 min",
+        "outils": "Détecteur de fuite moussant (mille-bulles)"
+      },
+      "N": {
+        "titre": "Nettoyage tige et capteurs magnétiques",
+        "description": "Nettoyer la tige avec un chiffon sec et essuyer les capteurs ILS / magnétiques de fin de course.",
+        "duree": "5 min",
+        "outils": "Chiffon microfibre sec"
+      }
+    },
+    "consignes_securite": "Couper et purger l'alimentation d'air comprimé avant toute intervention mécanique.",
+    "criticite": "Moyenne",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-FILTRE-NR-009",
+    "code": "GUIDE-FILTRE-NR",
+    "ref": "ISO-4548-Filter",
+    "composant_nom": "Filtre à air / huile",
+    "famille": "Conditionnement fluides",
+    "actions_liees": [
+      "N",
+      "R"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-FLT-02",
+        "designation": "Cartouche filtrante régulateur FRL 5 microns",
+        "reference": "SMC-AF30P-060S",
+        "quantite": 1,
+        "unite": "Pièce",
+        "prix_unitaire": 14
+      }
+    ],
+    "fiches_actions": {
+      "N": {
+        "titre": "Nettoyage cartouche filtrante",
+        "description": "Dépoussiérer la cartouche lavable de l'intérieur vers l'extérieur avec de l'air sec comprimé.",
+        "duree": "10 min",
+        "outils": "Soufflette régulée max 2 bars"
+      },
+      "R": {
+        "titre": "Remplacement cartouche saturée",
+        "description": "Remplacer la cartouche filtrante par une pièce neuve certifiée d'origine.",
+        "duree": "10 min",
+        "outils": "Clé à sangle, Cartouche neuve"
+      }
+    },
+    "consignes_securite": "Vérifier l'absence de pression résiduelle avant de dévisser le bol porte-filtre.",
+    "criticite": "Moyenne",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "ID-GUIDE-CHAINE-CGS-010",
+    "code": "GUIDE-CHAINE-CGS",
+    "ref": "ISO-606-Chain",
+    "composant_nom": "Chaîne de transmission",
+    "famille": "Transmission mécanique",
+    "actions_liees": [
+      "C",
+      "G",
+      "S"
+    ],
+    "pieces_rechange": [
+      {
+        "id_article": "PDR-CHN-01",
+        "designation": "Chaîne à rouleaux pas 12.7 (08B-1) boîte 5m",
+        "reference": "RENOLD-08B1-5M",
+        "quantite": 1,
+        "unite": "Boîte",
+        "prix_unitaire": 48
+      },
+      {
+        "id_article": "PDR-LUB-01",
+        "designation": "Lubrifiant chaîne haute adhérence PTFE",
+        "reference": "MOTUL-CHAIN-LUBE",
+        "quantite": 1,
+        "unite": "Aérosol",
+        "prix_unitaire": 15
+      }
+    ],
+    "fiches_actions": {
+      "C": {
+        "titre": "Contrôle élongation et pignons",
+        "description": "Mesurer l'allongement de la chaîne sur 10 maillons (max +2%). Contrôler l'usure en dents de requin des pignons.",
+        "duree": "10 min",
+        "outils": "Pied à coulisse, Règle de contrôle"
+      },
+      "G": {
+        "titre": "Lubrification de la chaîne",
+        "description": "Appliquer un lubrifiant haute adhérence spécial chaînes entre les plaques intérieures et rouleaux.",
+        "duree": "10 min",
+        "outils": "Aérosol lubrifiant chaîne PTFE / Huile spéciale"
+      },
+      "S": {
+        "titre": "Resserrage du tendeur de chaîne",
+        "description": "Ajuster la position du galet tendeur pour obtenir une flèche de chaîne conforme.",
+        "duree": "10 min",
+        "outils": "Clés plates 17/19"
+      }
+    },
+    "consignes_securite": "Interdiction formelle de graisser une chaîne en marche. Consignation électrique obligatoire.",
+    "criticite": "Haute",
+    "created_at": "2025-01-01T00:00:00.000Z"
+  }
+]

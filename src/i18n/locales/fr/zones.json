@@ -1,0 +1,80 @@
+{
+  "title": "Zones & Ateliers Industriels",
+  "subtitle": "Cartographie et découpage géographique du parc machines et des équipes de maintenance",
+  "stats": {
+    "total_zones": "Zones Enregistrées",
+    "total_machines": "Machines Associées",
+    "total_staff": "Personnel / Effectif",
+    "active_coverage": "Couverture Ateliers"
+  },
+  "filters": {
+    "title": "Filtres & Recherche Avancée",
+    "subtitle": "Référentiel des Zones & Ateliers de Production • Colonnes A → F",
+    "search_label": "Recherche",
+    "search_placeholder": "Rechercher par code zone, identifiant, libellé...",
+    "sort_label": "Tri des enregistrements",
+    "sort_by": "Trier par",
+    "order_asc": "A→Z",
+    "order_desc": "Z→A",
+    "code_col": "Code Zone (ID)",
+    "label_col": "Libellé / Description",
+    "active_filter": "Filtre actif :",
+    "filter_search": "Recherche",
+    "reset_tooltip": "Réinitialiser la recherche"
+  },
+  "columns": {
+    "identifiers": "IDENTIFIANTS (CODE / ID)",
+    "label": "LIBELLÉ SECTEUR / ATELIER",
+    "team": "UTILISATEURS (ÉQUIPE)",
+    "machines": "PARC MACHINES (EQUIPEMENTS)",
+    "actions": "ACTIONS / GESTION",
+    "technician": "TECHNICIEN",
+    "technicians": "TECHNICIENS",
+    "machine": "machine",
+    "machines_plural": "machines"
+  },
+  "table": {
+    "title": "Tableau Zones • Code Système & ID Utilisateur",
+    "empty_msg": "Aucune zone trouvée",
+    "item_label": "zones"
+  },
+  "buttons": {
+    "add_zone": "Ajouter une Zone",
+    "view_formulas": "Formules Excel",
+    "edit": "Modifier la zone",
+    "delete": "Supprimer la zone",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer"
+  },
+  "modal": {
+    "add_title": "Nouvelle Zone / Atelier",
+    "add_subtitle": "Créez une zone géographique ou un secteur d'usine.",
+    "edit_title": "Modifier Zone",
+    "delete_title": "Supprimer la zone ?",
+    "delete_confirm": "Confirmez-vous la suppression de cette zone ? Les liaisons avec cette zone pourraient être rompues.",
+    "code_label": "Code Zone (ex: ZONE-01) *",
+    "code_helper": "Code séquentiel système avec choix libre du numéro",
+    "id_label": "ID Zone (ex: POL, DET, AMBO) *",
+    "id_helper": "Identifiant manuel utilisateur (ex: DET, POL, SAT, AMBO)",
+    "libelle_label": "Libellé Secteur / Atelier",
+    "libelle_placeholder": "Atelier Finition & Peinture...",
+    "type_label": "Type de Zone",
+    "desc_label": "Description (Philosophie Industrielle)",
+    "desc_placeholder": "Principe physique et mécanique de l'opération...",
+    "code_b1": "Code Zone (B.1)",
+    "id_b2": "ID Zone (B.2)"
+  },
+  "formulas": {
+    "title": "Formules Excel Miroir — Zones & Secteurs",
+    "sheet": "Feuille Zones",
+    "subtitle": "Formules d'agrégation et de décompte relationnel de la feuille Zones",
+    "f_d_title": "Formule D (Techniciens)",
+    "f_d_desc": "Décompte dynamique du nombre de techniciens de maintenance affectés à cette zone.",
+    "f_e_title": "Formule E (Opérations)",
+    "f_e_desc": "Décompte dynamique des opérateurs de ligne et responsables rattachés à la zone.",
+    "f_f_title": "Formule F (Machines)",
+    "f_f_desc": "Total d'équipements et machines de production installés dans ce secteur.",
+    "footer_note": "Conforme à 100% avec le fichier Excel modèle GMAO_Light_Template_V2"
+  }
+}

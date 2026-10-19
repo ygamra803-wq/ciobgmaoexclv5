@@ -1,0 +1,47 @@
+[
+  {
+    "id_part": "FIX-01",
+    "ref": "FIX-01",
+    "designation": "Cheville Filetée Haute Résistance 12x100",
+    "id_type": "TYPE-FIX",
+    "id_diag": "DIAG-DESSERAGE",
+    "seuil": 10,
+    "emplacement": "E-MAG-RAYON-C01"
+  },
+  {
+    "id_part": "MEC-01",
+    "ref": "MEC-01",
+    "designation": "Courroie Plate Thermocollée 1200x50 Spéciale",
+    "id_type": "TYPE-MEC",
+    "id_diag": "DIAG-USURE",
+    "seuil": 5,
+    "emplacement": "E-MAG-RAYON-B02"
+  },
+  {
+    "id_part": "PNE-01",
+    "ref": "PNE-01",
+    "designation": "Vérin Pneumatique Compact Double Effet 50mm",
+    "id_type": "TYPE-PNE",
+    "id_diag": "DIAG-FUITE",
+    "seuil": 3,
+    "emplacement": "E-MAG-RAYON-C04"
+  },
+  {
+    "id_part": "ELE-01",
+    "ref": "ELE-01",
+    "designation": "Capteur Inductif M12 PNP NO Blindé",
+    "id_type": "TYPE-ELE",
+    "id_diag": "DIAG-SIGNAL",
+    "seuil": 4,
+    "emplacement": "E-MAG-RAYON-A01"
+  },
+  {
+    "id_part": "HYD-01",
+    "ref": "HYD-01",
+    "designation": "Flexible Hydraulique 2 Tresses 1/2\" 1500mm",
+    "id_type": "TYPE-HYD",
+    "id_diag": "DIAG-JOINT",
+    "seuil": 2,
+    "emplacement": "E-MAG-PAL-03"
+  }
+]

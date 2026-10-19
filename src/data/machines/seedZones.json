@@ -1,0 +1,154 @@
+[
+  {
+    "code_zone": "DETOURAG",
+    "id_zone": "Détourage",
+    "code": "Détourage",
+    "libelle": "Détourage",
+    "type": "PRODUCTION",
+    "description": "DET - Détourage - Principe de cisaillement mécanique - Élimination bavures après formage - Shear Stress - Lame et matrice"
+  },
+  {
+    "code_zone": "FEMB1",
+    "id_zone": "FEMB1",
+    "code": "FEMB1",
+    "libelle": "FEMB1",
+    "type": "PRODUCTION",
+    "description": "FEMB1 - Finition Emballage Ligne 1 - Rivetage, montage accessoires, conditionnement final - Assemblage"
+  },
+  {
+    "code_zone": "FEMB2",
+    "id_zone": "FEMB2",
+    "code": "FEMB2",
+    "libelle": "FEMB2",
+    "type": "PRODUCTION",
+    "description": "FEMB2 - Finition Emballage Ligne 2 - Faitouts et casseroles - Rivetage et conditionnement"
+  },
+  {
+    "code_zone": "FEMB3",
+    "id_zone": "FEMB3",
+    "code": "FEMB3",
+    "libelle": "FEMB3",
+    "type": "PRODUCTION",
+    "description": "FEMB3 - Finition Emballage Ligne 3 - Bouilloires et articles spéciaux"
+  },
+  {
+    "code_zone": "FEMB4",
+    "id_zone": "FEMB4",
+    "code": "FEMB4",
+    "libelle": "FEMB4",
+    "type": "PRODUCTION",
+    "description": "FEMB4 - Finition Emballage Ligne 4 - Haute cadence - Réserve"
+  },
+  {
+    "code_zone": "FM",
+    "id_zone": "FM",
+    "code": "FM",
+    "libelle": "FM",
+    "type": "PRODUCTION",
+    "description": "FM - Fabrication Mécanique - Usinage par enlèvement de matière - Tournage, Fraisage, Rectification - Principe: copeau, dépouille, précision dimensionnelle"
+  },
+  {
+    "code_zone": "MAINTENA",
+    "id_zone": "Maintenance",
+    "code": "Maintenance",
+    "libelle": "Maintenance",
+    "type": "PRODUCTION",
+    "description": "Maintenance - Secteur production & maintenance générale"
+  },
+  {
+    "code_zone": "POLISSAG",
+    "id_zone": "Polissage",
+    "code": "Polissage",
+    "libelle": "Polissage",
+    "type": "PRODUCTION",
+    "description": "POL - Polissage - Abrasion fine - Polissage miroir spéculaire - Inox et Aluminium - Réflexion totale"
+  },
+  {
+    "code_zone": "PRESSEHY",
+    "id_zone": "Presse Hydraulique",
+    "code": "Presse Hydraulique",
+    "libelle": "Presse Hydraulique",
+    "type": "PRODUCTION",
+    "description": "PRH - Presse Hydraulique - Emboutissage profond - Deep Drawing - Flan plat → corps creux - Pression hydraulique 200T-400T"
+  },
+  {
+    "code_zone": "PRESSEIN",
+    "id_zone": "Presse injection",
+    "code": "Presse injection",
+    "libelle": "Presse injection",
+    "type": "PRODUCTION",
+    "description": "PRI - Presse Injection Bakélite - Moulage haute pression polymère - Injection plastique"
+  },
+  {
+    "code_zone": "REPOUSSA",
+    "id_zone": "Repoussage",
+    "code": "Repoussage",
+    "libelle": "Repoussage",
+    "type": "PRODUCTION",
+    "description": "REPO - Repoussage - Formage rotatif - Metal Spinning - Déformation plastique localisée axisymétrique - Tour de repoussage"
+  },
+  {
+    "code_zone": "RIVETAGE",
+    "id_zone": "Rivetage",
+    "code": "Rivetage",
+    "libelle": "Rivetage",
+    "type": "PRODUCTION",
+    "description": "RIV - Rivetage - Assemblage par déformation rivet - Fixation permanente"
+  },
+  {
+    "code_zone": "SATINAGE",
+    "id_zone": "Satinage",
+    "code": "Satinage",
+    "libelle": "Satinage",
+    "type": "PRODUCTION",
+    "description": "SAT - Satinage - Rayage contrôlé directionnel - Finition soyeuse non spéculaire - Diffusion lumière"
+  },
+  {
+    "code_zone": "SOUDEUR",
+    "id_zone": "Soudeur",
+    "code": "Soudeur",
+    "libelle": "Soudeur",
+    "type": "PRODUCTION",
+    "description": "SOUD - Soudeur - Soudure par points et perçage assemblage - Fusion métal"
+  },
+  {
+    "code_zone": "PCE",
+    "id_zone": "Préparation Corniche et Emballage",
+    "code": "Préparation Corniche et Emballage",
+    "libelle": "Préparation Corniche et Emballage",
+    "type": "PRODUCTION",
+    "description": "PCE - Préparation Corniche et Emballage - Conditionnement et mise sous carton"
+  },
+  {
+    "code_zone": "FRL",
+    "id_zone": "Fraisage et Lignes",
+    "code": "Fraisage et Lignes",
+    "libelle": "Fraisage et Lignes",
+    "type": "PRODUCTION",
+    "description": "FRL - Fraisage et Lignes - Lignes d'usinage et fraisage grande série"
+  },
+  {
+    "code_zone": "PP",
+    "id_zone": "Presse Polyester",
+    "code": "Presse Polyester",
+    "libelle": "Presse Polyester",
+    "type": "PRODUCTION",
+    "description": "PP - Presse Polyester - Moulage thermodurcissable haute pression"
+  },
+  {
+    "code_zone": "PM",
+    "id_zone": "Presse Matrice",
+    "code": "Presse Matrice",
+    "libelle": "Presse Matrice",
+    "type": "PRODUCTION",
+    "description": "PM - Presse Matrice - Formage de précision et découpe matrice"
+  },
+  {
+    "code_zone": "PHENIC",
+    "id_zone": "Presse Hénické",
+    "code": "Presse Hénické",
+    "libelle": "Presse Hénické",
+    "type": "PRODUCTION",
+    "description": "PHENIC - Presse Hénické - Presse d'emboutissage spécialisé"
+  }
+]

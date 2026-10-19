@@ -1,0 +1,90 @@
+[
+  {
+    "id": "FAM-MOT-3PH-001",
+    "id_comp_family": "FAM-MOT-3PH-001",
+    "id_family": "FAM-MOT-3PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur Triphasé",
+    "code": "MOT-3PH",
+    "ref": "",
+    "type": "Moteur Triphasé",
+    "description": "Moteurs industriels triphasés 380V / 400V à haut rendement"
+  },
+  {
+    "id": "FAM-MOT-1PH-001",
+    "id_comp_family": "FAM-MOT-1PH-001",
+    "id_family": "FAM-MOT-1PH-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur Monophasé",
+    "code": "MOT-1PH",
+    "ref": "",
+    "type": "Moteur Monophasé",
+    "description": "Moteurs électriques monophasés 220V avec condensateur de démarrage"
+  },
+  {
+    "id": "FAM-MOT-ASYNC-001",
+    "id_comp_family": "FAM-MOT-ASYNC-001",
+    "id_family": "FAM-MOT-ASYNC-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur Asynchrone",
+    "code": "MOT-ASYNC",
+    "ref": "",
+    "type": "Moteur Asynchrone",
+    "description": "Moteurs asynchrones standard à induction et rotor à cage"
+  },
+  {
+    "id": "FAM-MOT-SYNC-001",
+    "id_comp_family": "FAM-MOT-SYNC-001",
+    "id_family": "FAM-MOT-SYNC-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur Synchrone",
+    "code": "MOT-SYNC",
+    "ref": "",
+    "type": "Moteur Synchrone",
+    "description": "Moteurs synchrones haute précision et aimants permanents"
+  },
+  {
+    "id": "FAM-MOT-SERVO-001",
+    "id_comp_family": "FAM-MOT-SERVO-001",
+    "id_family": "FAM-MOT-SERVO-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Servo Moteur",
+    "code": "MOT-SERVO",
+    "ref": "",
+    "type": "Servo Moteur",
+    "description": "Servomoteurs d'asservissement d'axe haute dynamique avec résolveur"
+  },
+  {
+    "id": "FAM-MOT-DC-001",
+    "id_comp_family": "FAM-MOT-DC-001",
+    "id_family": "FAM-MOT-DC-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur DC",
+    "code": "MOT-DC",
+    "ref": "",
+    "type": "Moteur DC",
+    "description": "Moteurs industriels à courant continu"
+  },
+  {
+    "id": "FAM-MOT-AC-001",
+    "id_comp_family": "FAM-MOT-AC-001",
+    "id_family": "FAM-MOT-AC-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur AC",
+    "code": "MOT-AC",
+    "ref": "",
+    "type": "Moteur AC",
+    "description": "Moteurs industriels à courant alternatif"
+  },
+  {
+    "id": "FAM-MOTEUR-ELEC-001",
+    "id_comp_family": "FAM-MOTEUR-ELEC-001",
+    "id_family": "FAM-MOTEUR-ELEC-001",
+    "id_groupe": "GRP-MOTEUR-001",
+    "libelle": "Moteur Électrique Général",
+    "code": "MOTEUR",
+    "ref": "",
+    "type": "Moteur",
+    "description": "Type Moteur Électrique Général - Tous les moteurs asynchrones triphasés du parc"
+  }
+]
