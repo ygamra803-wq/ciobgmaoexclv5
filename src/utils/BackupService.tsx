@@ -12,7 +12,7 @@ export class BackupService {
    * @param {Object|string} [dbOrReason] - Database instance or snapshot reason description
    * @returns {Promise<Object>} Created backup snapshot object
    */
-  static async createBackup(dbOrReason = 'Sauvegarde manuelle') {
+  static async createBackup(dbOrReason: any = 'Sauvegarde manuelle') {
     try {
       Logger.debug('🔄 Creating backup snapshot...');
 
@@ -156,8 +156,8 @@ export class BackupService {
     }
   }
 
-  static exportBackup(id) {
-    return AutoBackupService.exportFullBackupJSON(id);
+  static exportBackup(_id?: string) {
+    return AutoBackupService.exportFullBackupJSON();
   }
 }
 

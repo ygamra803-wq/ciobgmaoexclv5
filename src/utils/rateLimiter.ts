@@ -2,13 +2,17 @@
  * Simple client-side rate limiter for sensitive actions (e.g. PIN attempts, API syncs)
  */
 export class RateLimiter {
+  private maxAttempts: number;
+  private windowMs: number;
+  private attempts: Map<string, { count: number; startTime: number }>;
+
   constructor(maxAttempts = 5, windowMs = 60000) {
     this.maxAttempts = maxAttempts;
     this.windowMs = windowMs;
     this.attempts = new Map();
   }
 
-  isAllowed(key) {
+  isAllowed(key: string): boolean {
     const now = Date.now();
     const record = this.attempts.get(key);
 

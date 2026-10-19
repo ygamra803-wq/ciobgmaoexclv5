@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { StockCalculationService } from '../../domain/pdr/services/StockCalculationService';
 import { ValidationService } from '../../core/validation/ValidationService';
-import { retry } from '../../utils/retry.ts';
+import { retry } from '../../utils/retry';
 
 describe('2. Integration Tests: End-to-End, Offline Sync, Concurrency, and Recovery', () => {
   beforeEach(() => {

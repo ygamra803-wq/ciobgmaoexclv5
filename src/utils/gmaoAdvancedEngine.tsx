@@ -125,11 +125,13 @@ export class GmaoHybridTemplateService {
  * sans redondance, avec mise à plat (Flattening) et compression structurelle binaire.
  */
 export class GmaoRecursiveAssetTree {
+  public root: any;
+
   /**
    * Crée une instance de l'arbre d'actifs.
    * @param {Object} [rootNode] - Le nœud racine initial.
    */
-  constructor(rootNode = null) {
+  constructor(rootNode: any = null) {
     this.root = rootNode || {
       id: 'ROOT',
       name: 'Référentiel Industriel',
@@ -239,6 +241,11 @@ export class GmaoRecursiveAssetTree {
  * (Directed Acyclic Graph) pour éviter les recalculs intempestifs et coûteux du système.
  */
 export class GmaoReactiveCalculationEngine {
+  public nodes: Map<string, any>;
+  public dependencies: Map<string, Set<string>>;
+  public dependents: Map<string, Set<string>>;
+  public formulas: Map<string, Function>;
+
   constructor() {
     this.nodes = new Map(); // id -> cellValue
     this.dependencies = new Map(); // id -> set of dependencies (upstream)
@@ -285,16 +292,16 @@ export class GmaoReactiveCalculationEngine {
    * @param {string} id - Identifiant de la variable d'entrée.
    * @param {any} newValue - La nouvelle valeur.
    */
-  setValueAndPropagate(id, newValue) {
+  setValueAndPropagate(id: string, newValue: any) {
     this.nodes.set(id, newValue);
     
     // Propagation topologique à l'aide d'un graphe orienté
-    const queue = [];
-    const inDegree = new Map();
-    const affectedNodes = new Set();
+    const queue: string[] = [];
+    const inDegree = new Map<string, number>();
+    const affectedNodes = new Set<string>();
 
     // 1. Identifier tous les nœuds affectés en aval via BFS
-    const collect = (nodeId) => {
+    const collect = (nodeId: string) => {
       const dependents = this.dependents.get(nodeId);
       if (dependents) {
         dependents.forEach((depId) => {

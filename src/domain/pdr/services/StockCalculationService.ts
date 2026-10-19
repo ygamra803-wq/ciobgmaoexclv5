@@ -140,7 +140,7 @@ export class StockCalculationService {
         article.isAchatUnique
       );
 
-      return status.stockActuel;
+      return status.stockActuelRaw !== undefined ? status.stockActuelRaw : status.stockActuel;
     } catch (error) {
       Logger.error('❌ Stock calculation failed', error, 'StockCalc');
       return safeNum(article?.stockInitial, 0);

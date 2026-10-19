@@ -37,6 +37,9 @@ function cleanupCache() {
 
 // CacheManager class to prevent interval memory leaks and control lifecycle
 class CacheManager {
+  private timerId: any = null;
+  private isActive: boolean = false;
+
   constructor() {
     this.timerId = null;
     this.isActive = false;
@@ -161,18 +164,18 @@ try {
 
 // Resilient IDB helper with strict timeout to prevent hangs in iframes
 const idbKeyStore = {
-  get(key) {
-    return new Promise((resolve) => {
+  get(key: string): Promise<any> {
+    return new Promise<any>((resolve) => {
       try {
         if (typeof indexedDB === 'undefined') return resolve(null);
         const timer = setTimeout(() => resolve(null), 300);
         const request = indexedDB.open('GMAO_Crypto_Store', 1);
-        request.onupgradeneeded = (e) => {
+        request.onupgradeneeded = (e: any) => {
           try {
             e.target.result.createObjectStore(KEY_STORE_NAME);
           } catch {}
         };
-        request.onsuccess = (e) => {
+        request.onsuccess = (e: any) => {
           clearTimeout(timer);
           try {
             const db = e.target.result;
@@ -199,18 +202,18 @@ const idbKeyStore = {
       }
     });
   },
-  set(key, val) {
-    return new Promise((resolve) => {
+  set(key: string, val: any): Promise<void> {
+    return new Promise<void>((resolve) => {
       try {
         if (typeof indexedDB === 'undefined') return resolve();
         const timer = setTimeout(() => resolve(), 300);
         const request = indexedDB.open('GMAO_Crypto_Store', 1);
-        request.onupgradeneeded = (e) => {
+        request.onupgradeneeded = (e: any) => {
           try {
             e.target.result.createObjectStore(KEY_STORE_NAME);
           } catch {}
         };
-        request.onsuccess = (e) => {
+        request.onsuccess = (e: any) => {
           clearTimeout(timer);
           try {
             const db = e.target.result;
@@ -432,7 +435,7 @@ export const storageService = {
           const serialized = typeof value === 'object' ? JSON.stringify(value) : String(value);
           try {
             localStorage.setItem(key, serialized);
-          } catch (writeErr) {
+          } catch (writeErr: any) {
             // If quota exceeded, purge stale keys and retry once
             const isQuotaError =
               writeErr?.name === 'QuotaExceededError' ||

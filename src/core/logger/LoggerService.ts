@@ -17,33 +17,33 @@ export class Logger {
     this.currentLevel = this.LOG_LEVELS[level] || this.LOG_LEVELS.INFO;
   }
 
-  static debug(message, data = {}) {
+  static debug(message: string, data: any = {}, context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.DEBUG) {
-      console.log(`🔵 [DEBUG] ${message}`, data);
+      console.log(`🔵 [DEBUG] ${context ? `[${context}] ` : ''}${message}`, data);
     }
   }
 
-  static info(message, data = {}) {
+  static info(message: string, data: any = {}, context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.INFO) {
-      console.log(`🟢 [INFO] ${message}`, data);
+      console.log(`🟢 [INFO] ${context ? `[${context}] ` : ''}${message}`, data);
     }
   }
 
-  static warn(message, data = {}) {
+  static warn(message: string, data: any = {}, context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.WARN) {
-      console.warn(`🟡 [WARN] ${message}`, data);
+      console.warn(`🟡 [WARN] ${context ? `[${context}] ` : ''}${message}`, data);
     }
   }
 
-  static error(message, error = {}) {
+  static error(message: string, error: any = {}, context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.ERROR) {
-      console.error(`🔴 [ERROR] ${message}`, error);
+      console.error(`🔴 [ERROR] ${context ? `[${context}] ` : ''}${message}`, error);
     }
   }
 
-  static fatal(message, error = {}) {
+  static fatal(message: string, error: any = {}, context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.FATAL) {
-      console.error(`⛔ [FATAL] ${message}`, error);
+      console.error(`⛔ [FATAL] ${context ? `[${context}] ` : ''}${message}`, error);
     }
   }
 

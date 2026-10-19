@@ -23,7 +23,7 @@ export const BASELINE_STOCK_ITEMS = seedStockItems.map((item) => {
     INITIAL_STOCK_LOOKUP.set(desigKey, dataObj);
   }
 
-  const typeName = String(item.type || item.id_type || 'Divers').trim().toLowerCase();
+  const typeName = String(item.type || (item as any).id_type || 'Divers').trim().toLowerCase();
   BASELINE_TYPE_COUNTERS[typeName] = (BASELINE_TYPE_COUNTERS[typeName] || 0) + 1;
 
   return dataObj;

@@ -43,7 +43,7 @@ let lastContextRef = null;
  * Updates lookup maps for high performance O(1) validation lookups.
  * Caches by context reference to avoid redundant re-allocations in tight loops.
  */
-export function updateLookups(context = {}, force = false) {
+export function updateLookups(context: any = {}, force = false) {
   try {
     if (!context || typeof context !== 'object') {
       return;
@@ -156,20 +156,20 @@ export function calculateStockStatus(stockInitial, entrees, sorties, seuil, isAc
     }
 
     return {
-      stockActuel: stockActuel,
+      stockActuel: displayStock,
       stockActuelRaw: stockActuel,
       alerte,
       isValid: true,
       calculatedAt: new Date().toISOString(),
     };
-  } catch (error) {
+  } catch (error: any) {
     Logger.error('calculateStockStatus error:', error, 'formulaEngine');
     return {
       stockActuel: 0,
       stockActuelRaw: 0,
       alerte: 'RUPTURE',
       isValid: false,
-      error: error.message || 'Error calculating stock status',
+      error: error?.message || 'Error calculating stock status',
       calculatedAt: new Date().toISOString(),
     };
   }

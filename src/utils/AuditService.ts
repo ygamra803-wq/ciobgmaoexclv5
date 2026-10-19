@@ -4,6 +4,8 @@ import { Logger } from '../core/logger/LoggerService';
  * خدمة تسجيل التدقيق (Audit Trail)
  */
 export class AuditService {
+  public auditLog: any[];
+
   constructor() {
     this.auditLog = [];
   }
@@ -16,7 +18,7 @@ export class AuditService {
    * @param {Object} changes - التغييرات
    * @param {string} userId - معرف المستخدم
    */
-  log(action, entity, entityId, changes, userId = 'unknown') {
+  log(action: string, entity: string, entityId: string, changes: any, userId = 'unknown') {
     const auditEntry = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
@@ -25,7 +27,7 @@ export class AuditService {
       entityId,
       changes,
       userId,
-      userAgent: navigator ? navigator.userAgent : 'Unknown',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
       ipAddress: 'N/A', // في بيئة الإنتاج، احصل على IP من الخادم
     };
 
@@ -38,7 +40,7 @@ export class AuditService {
   /**
    * حفظ في IndexedDB
    */
-  async saveToIndexedDB(entry) {
+  async saveToIndexedDB(entry: any) {
     try {
       const db = await this.getDB();
       const tx = db.transaction(['auditLog'], 'readwrite');
@@ -52,11 +54,11 @@ export class AuditService {
   /**
    * الحصول على قاعدة البيانات
    */
-  async getDB() {
+  async getDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open('GMAO_Audit', 1);
 
-      request.onupgradeneeded = (e) => {
+      request.onupgradeneeded = (e: any) => {
         const db = e.target.result;
         if (!db.objectStoreNames.contains('auditLog')) {
           const store = db.createObjectStore('auditLog', {
@@ -76,7 +78,7 @@ export class AuditService {
   /**
    * الحصول على السجل
    */
-  async getLog(filters = {}) {
+  async getLog(filters: any = {}) {
     try {
       const db = await this.getDB();
       const tx = db.transaction(['auditLog'], 'readonly');

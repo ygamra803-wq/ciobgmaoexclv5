@@ -16,7 +16,7 @@ export const MovementSchema = z.object({
   code_bon: z.string().optional(),
   ref: z.string().min(1, 'La référence est obligatoire'),
   quantite: z.coerce.number().min(1, 'Quantité invalide').default(1),
-  type: z.enum(['Entrée', 'Sortie', 'IN', 'OUT'], { errorMap: () => ({ message: 'Type invalide' }) }).default('Sortie'),
+  type: z.enum(['Entrée', 'Sortie', 'IN', 'OUT']).default('Sortie'),
   date: z.string().optional(),
   machine: z.string().optional(),
   demandeur: z.string().optional(),
@@ -39,7 +39,7 @@ export const UserSchema = z.object({
   email: z.string().email('Email invalide').optional(),
   password: z.string().min(6, 'Mot de passe trop court').optional(),
   prenom: z.string().optional(),
-  role: z.enum(['ADMIN', 'TECHNICIEN', 'RESPONSABLE', 'USER'], { errorMap: () => ({ message: 'Rôle invalide' }) }).optional(),
+  role: z.enum(['ADMIN', 'TECHNICIEN', 'RESPONSABLE', 'USER']).optional(),
   telephone: z.string().optional(),
 }).passthrough();
 

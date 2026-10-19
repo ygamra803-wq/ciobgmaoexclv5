@@ -4,6 +4,8 @@ import { Logger } from '../core/logger/LoggerService';
  * نظام مراقبة الأداء
  */
 export class PerformanceMonitor {
+  private metrics: Map<string, any[]>;
+
   constructor() {
     this.metrics = new Map();
   }
@@ -11,7 +13,7 @@ export class PerformanceMonitor {
   /**
    * قياس مدة تنفيذ دالة
    */
-  async measure(name, fn) {
+  async measure(name: string, fn: () => any) {
     const start = performance.now();
     try {
       const result = await fn();
@@ -20,7 +22,7 @@ export class PerformanceMonitor {
       this.recordMetric(name, duration, 'success');
 
       if (duration > 1000) {
-        Logger.warn(`⚠️ ${name} استغرق ${duration.toFixed(2)}ms`, 'PerformanceMonitor');
+        Logger.warn(`⚠️ ${name} استغرق ${duration.toFixed(2)}ms`, {}, 'PerformanceMonitor');
       }
 
       return result;
@@ -34,12 +36,12 @@ export class PerformanceMonitor {
   /**
    * تسجيل المقياس
    */
-  recordMetric(name, duration, status) {
+  recordMetric(name: string, duration: number, status: string) {
     if (!this.metrics.has(name)) {
       this.metrics.set(name, []);
     }
 
-    this.metrics.get(name).push({
+    this.metrics.get(name)?.push({
       duration,
       status,
       timestamp: new Date().toISOString(),
@@ -49,7 +51,7 @@ export class PerformanceMonitor {
   /**
    * الحصول على إحصائيات
    */
-  getStats(name) {
+  getStats(name: string) {
     const metrics = this.metrics.get(name) || [];
     if (metrics.length === 0) return null;
 
@@ -65,14 +67,14 @@ export class PerformanceMonitor {
    * طباعة التقرير
    */
   printReport() {
-    const report = Array.from(this.metrics.entries()).map(([name]) => ({
+    const report = Array.from(this.metrics.entries()).map(([name]: [string, any[]]) => ({
       الاسم: name,
       'المتوسط (ms)': this.getStats(name)?.avg.toFixed(2),
       'الحد الأدنى (ms)': this.getStats(name)?.min.toFixed(2),
       'الحد الأقصى (ms)': this.getStats(name)?.max.toFixed(2),
       العدد: this.getStats(name)?.count,
     }));
-    Logger.info('Performance Report:', 'PerformanceMonitor', report);
+    Logger.info('Performance Report:', report, 'PerformanceMonitor');
   }
 }
 
