@@ -49,9 +49,28 @@ export default function SyncButtons({
     }
   }, []);
 
-  // Check once on mount (NO silent background polling every second)
+  // Check once on mount and subscribe to background auto-sync events
   useEffect(() => {
     checkServerStatusOnce();
+
+    const handleServerSynced = (e: any) => {
+      const updatedAt = e?.detail?.updatedAt || serverSyncService.getLastSyncAt();
+      if (updatedAt) setLastSyncAt(updatedAt);
+      setServerOnline(true);
+    };
+
+    const handleServerConflict = (e: any) => {
+      if (e?.detail) {
+        setConflictModal(e.detail);
+      }
+    };
+
+    window.addEventListener('gmao:server_synced', handleServerSynced);
+    window.addEventListener('gmao:server_conflict', handleServerConflict);
+    return () => {
+      window.removeEventListener('gmao:server_synced', handleServerSynced);
+      window.removeEventListener('gmao:server_conflict', handleServerConflict);
+    };
   }, [checkServerStatusOnce]);
 
   const notify = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {

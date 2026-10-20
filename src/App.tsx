@@ -70,11 +70,13 @@ export default function App() {
     preventiveActions,
     preventiveGuides,
     preventivePlans,
+    preventiveExecutions,
     sortiesExterne,
     handleUpdateTask,
     handleDeleteTask,
     handleUpdateTaskCounter,
     handleMarkTaskDone,
+    handleDeletePreventiveExecution,
     handleCreatePlanWithTasks,
     handleAddAction: handleAddPreventiveAction,
     handleUpdateAction: handleUpdatePreventiveAction,
@@ -173,6 +175,7 @@ export default function App() {
       preventiveActions,
       preventiveGuides,
       preventivePlans,
+      preventiveExecutions,
       sortiesExterne,
     };
   }, [
@@ -192,6 +195,7 @@ export default function App() {
     preventiveActions,
     preventiveGuides,
     preventivePlans,
+    preventiveExecutions,
     sortiesExterne,
   ]);
 
@@ -308,6 +312,7 @@ export default function App() {
     preventiveActions,
     preventiveGuides,
     preventivePlans,
+    preventiveExecutions,
     sortiesExterne,
     correctiveInterventions,
     correctiveActionsByPanne,
@@ -329,6 +334,7 @@ export default function App() {
       handleDeleteTask,
       handleUpdateTaskCounter,
       handleMarkTaskDone,
+      handleDeletePreventiveExecution,
       handleCreatePlanWithTasks,
       handleAddPreventiveAction,
       handleUpdatePreventiveAction,
@@ -403,10 +409,14 @@ export default function App() {
           preventiveActions: (preventiveActions || []).length,
           preventivePlans: (preventivePlans || []).length,
           corrective: (correctiveInterventions || []).length,
-          corrective_di: (correctiveInterventions || []).filter(i => i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length,
-          corrective_bt: (correctiveInterventions || []).filter(i => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR').length,
-          corrective_live: (correctiveInterventions || []).filter(i => i.statut === 'EN_COURS').length,
-          corrective_cloture: (correctiveInterventions || []).filter(i => i.statut === 'CLOTURE').length,
+          corrective_di: (correctiveInterventions || []).filter(
+            (i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION'
+          ).length,
+          corrective_bt: (correctiveInterventions || []).filter(
+            (i) => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR' || (i.statut === 'EN_COURS' && i.num_bt)
+          ).length,
+          corrective_live: (correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length,
+          corrective_cloture: (correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length,
           warehouse: warehouseItemsComputed.length,
           entrepot: (entrepotComponents || []).length,
           comp_groups: (compGroups || []).length,

@@ -5,6 +5,10 @@ import { HardDrive, Database, Activity, FileSpreadsheet, Download } from 'lucide
  */
 export default function SettingsOverviewTab({
   localStorageSizeKB,
+  totalUsedMB = '0.00',
+  allocatedCacheCeilingMB = 1024,
+  idbQuotaInfo = { isPersisted: false, browserQuotaGB: '1.0' },
+  handleCeilingChange,
   storagePercentage,
   rawStock = [],
   machines = [],
@@ -22,7 +26,7 @@ export default function SettingsOverviewTab({
   onDownloadBlankTemplate,
   onExportExcel,
   showToast,
-}) {
+}: any) {
   return (
     <div className="space-y-6">
       <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
@@ -31,23 +35,47 @@ export default function SettingsOverviewTab({
       </h3>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* LocalStorage Usage */}
+        {/* LocalStorage & IndexedDB High-Capacity Usage */}
         <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
           <div className="flex justify-between items-center text-xs font-bold text-slate-700">
             <span className="flex items-center gap-1.5">
               <Database className="w-4 h-4 text-cyan-600" />
-              Cache Navigateur Local
+              Cache Navigateur (IndexedDB L2 + L1)
             </span>
-            <span className="font-mono text-cyan-800">{localStorageSizeKB} KB / 5 MB</span>
+            <span className="font-mono text-cyan-800">
+              {totalUsedMB} MB /{' '}
+              {allocatedCacheCeilingMB >= 1024
+                ? `${allocatedCacheCeilingMB / 1024} GB`
+                : `${allocatedCacheCeilingMB} MB`}
+            </span>
           </div>
           <div className="w-full h-2 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
             <div
               className="h-full bg-cyan-600 rounded-full transition-all duration-500"
-              style={{ width: `${storagePercentage}%` }}
+              style={{ width: `${Math.max(1, parseFloat(storagePercentage) || 0)}%` }}
             />
           </div>
-          <div className="text-[11px] text-slate-400 font-medium">
-            Le stockage local est occupé à {storagePercentage}%.
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-medium pt-0.5">
+            <span>
+              L1 Rapide: <b className="text-slate-700 font-mono">{localStorageSizeKB} KB</b> • L2 IndexedDB:{' '}
+              <b className="text-emerald-700 font-mono">
+                {idbQuotaInfo?.isPersisted ? 'Persistant' : 'Actif'} (Disque: {idbQuotaInfo?.browserQuotaGB || '1.0'} GB)
+              </b>
+            </span>
+            {typeof handleCeilingChange === 'function' && (
+              <select
+                value={allocatedCacheCeilingMB}
+                onChange={(e) => handleCeilingChange(e.target.value)}
+                className="px-2 py-0.5 text-[10px] font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-700 cursor-pointer focus:outline-none focus:border-cyan-500"
+                title="Plafond de capacité alloué au cache industriel"
+              >
+                <option value={256}>Plafond: 256 MB</option>
+                <option value={512}>Plafond: 512 MB</option>
+                <option value={1024}>Plafond: 1 GB (Recommandé)</option>
+                <option value={2048}>Plafond: 2 GB (Big Data)</option>
+                <option value={5120}>Plafond: 5 GB (Max Usine)</option>
+              </select>
+            )}
           </div>
         </div>
 
@@ -142,7 +170,7 @@ export default function SettingsOverviewTab({
                 if (typeof onDownloadBlankTemplate === 'function') {
                   onDownloadBlankTemplate();
                 } else {
-                  showToast?.("Téléchargement du gabarit vierge déclenché !", "success");
+                  showToast?.('Téléchargement du gabarit vierge déclenché !', 'success');
                 }
               }}
               className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
@@ -158,7 +186,7 @@ export default function SettingsOverviewTab({
                 if (typeof onExportExcel === 'function') {
                   onExportExcel();
                 } else {
-                  showToast?.("Export Excel déclenché avec succès !", "success");
+                  showToast?.('Export Excel déclenché avec succès !', 'success');
                 }
               }}
               className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"

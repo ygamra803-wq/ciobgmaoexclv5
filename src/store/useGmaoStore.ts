@@ -790,9 +790,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // 8. Corrective Nexus Slice
     // ==========================================
     correctiveInterventions: correctiveInit.interventions,
+    correctiveActionsByPanne: correctiveInit.actionsByPanne,
     actionsByPanne: correctiveInit.actionsByPanne,
+    correctivePanneCategories: correctiveInit.panneCategories,
     panneCategories: correctiveInit.panneCategories,
+    correctiveTravauxAFaire: correctiveInit.travauxAFaire,
     travauxAFaire: correctiveInit.travauxAFaire,
+    correctiveIntervenants: correctiveInit.intervenants,
     intervenants: correctiveInit.intervenants,
     activeLiveInterventionId: correctiveInit.activeLiveId,
 
@@ -803,26 +807,30 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setCorrectiveActionsByPanne: (updater) => {
-      const next = resolveUpdate(updater, get().actionsByPanne);
-      set({ actionsByPanne: next });
+      const current = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
+      const next = resolveUpdate(updater, current);
+      set({ correctiveActionsByPanne: next, actionsByPanne: next } as any);
       DataGateway.saveCorrectiveActionsByPanne(next);
     },
 
     setCorrectivePanneCategories: (updater) => {
-      const next = resolveUpdate(updater, get().panneCategories);
-      set({ panneCategories: next });
+      const current = get().correctivePanneCategories ?? (get() as any).panneCategories ?? {};
+      const next = resolveUpdate(updater, current);
+      set({ correctivePanneCategories: next, panneCategories: next } as any);
       DataGateway.saveCorrectivePanneCategories(next);
     },
 
     setCorrectiveTravauxAFaire: (updater) => {
-      const next = resolveUpdate(updater, get().travauxAFaire);
-      set({ travauxAFaire: next });
+      const current = get().correctiveTravauxAFaire ?? (get() as any).travauxAFaire ?? [];
+      const next = resolveUpdate(updater, current);
+      set({ correctiveTravauxAFaire: next, travauxAFaire: next } as any);
       DataGateway.saveCorrectiveTravaux(next);
     },
 
     setCorrectiveIntervenants: (updater) => {
-      const next = resolveUpdate(updater, get().intervenants);
-      set({ intervenants: next });
+      const current = get().correctiveIntervenants ?? (get() as any).intervenants ?? [];
+      const next = resolveUpdate(updater, current);
+      set({ correctiveIntervenants: next, intervenants: next } as any);
       DataGateway.saveCorrectiveIntervenants(next);
     },
 
@@ -838,7 +846,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleGetCorrectiveActionsForPanne: (anomalie) => {
-      const actionsByPanne = get().actionsByPanne;
+      const actionsByPanne = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne;
       if (!anomalie || !actionsByPanne) return [];
       const anom = String(anomalie).trim();
       if (!anom) return [];
@@ -849,11 +857,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (actionsByPanne[withSpace]) return actionsByPanne[withSpace];
       const lower = anom.toLowerCase().replace(/_/g, ' ').trim();
       for (const [key, acts] of Object.entries(actionsByPanne)) {
-        if (key.toLowerCase().replace(/_/g, ' ').trim() === lower) return acts;
+        if (key.toLowerCase().replace(/_/g, ' ').trim() === lower) return acts as string[];
       }
       for (const [key, acts] of Object.entries(actionsByPanne)) {
         const normKey = key.toLowerCase().replace(/_/g, ' ').trim();
-        if (normKey.includes(lower) || lower.includes(normKey)) return acts;
+        if (normKey.includes(lower) || lower.includes(normKey)) return acts as string[];
       }
       return [];
     },
@@ -862,11 +870,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (!panneKey || !actionText) return;
       const cleanAction = String(actionText).trim();
       if (!cleanAction) return;
-      const prev = get().actionsByPanne;
+      const prev = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
       const existing = prev[panneKey] || [];
       if (existing.includes(cleanAction)) return;
       const updated = { ...prev, [panneKey]: [...existing, cleanAction] };
-      set({ actionsByPanne: updated });
+      set({ correctiveActionsByPanne: updated, actionsByPanne: updated } as any);
       DataGateway.saveCorrectiveActionsByPanne(updated);
     },
 
@@ -874,28 +882,28 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (!panneKey || actionIndex < 0 || !newActionText) return;
       const cleanAction = String(newActionText).trim();
       if (!cleanAction) return;
-      const prev = get().actionsByPanne;
+      const prev = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
       const existing = prev[panneKey] || [];
       if (actionIndex >= existing.length) return;
-      const updatedList = existing.map((act, idx) => (idx === actionIndex ? cleanAction : act));
+      const updatedList = existing.map((act: string, idx: number) => (idx === actionIndex ? cleanAction : act));
       const updated = { ...prev, [panneKey]: updatedList };
-      set({ actionsByPanne: updated });
+      set({ correctiveActionsByPanne: updated, actionsByPanne: updated } as any);
       DataGateway.saveCorrectiveActionsByPanne(updated);
     },
 
     handleDeleteCorrectiveActionForPanne: (panneKey, actionIndex) => {
       if (!panneKey || actionIndex < 0) return;
-      const prev = get().actionsByPanne;
+      const prev = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
       const existing = prev[panneKey] || [];
       if (actionIndex >= existing.length) return;
-      const updatedList = existing.filter((_, idx) => idx !== actionIndex);
+      const updatedList = existing.filter((_: string, idx: number) => idx !== actionIndex);
       const updated = { ...prev };
       if (updatedList.length > 0) {
         updated[panneKey] = updatedList;
       } else {
         delete updated[panneKey];
       }
-      set({ actionsByPanne: updated });
+      set({ correctiveActionsByPanne: updated, actionsByPanne: updated } as any);
       DataGateway.saveCorrectiveActionsByPanne(updated);
     },
 
@@ -904,11 +912,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const cleanCat = String(category).trim().toUpperCase();
       const cleanCode = String(panneCode).trim();
       if (!cleanCode) return;
-      const prev = get().panneCategories;
+      const prev = get().correctivePanneCategories ?? (get() as any).panneCategories ?? {};
       const existingList = prev[cleanCat] || [];
       if (existingList.includes(cleanCode)) return;
       const updated = { ...prev, [cleanCat]: [...existingList, cleanCode] };
-      set({ panneCategories: updated });
+      set({ correctivePanneCategories: updated, panneCategories: updated } as any);
       DataGateway.saveCorrectivePanneCategories(updated);
     },
 
@@ -919,21 +927,26 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const cleanNew = String(newCode).trim();
       if (!cleanNew || cleanOld === cleanNew) return;
 
-      const prevCats = get().panneCategories;
+      const prevCats = get().correctivePanneCategories ?? (get() as any).panneCategories ?? {};
       const list = prevCats[cleanCat] || [];
       const updatedCats = {
         ...prevCats,
-        [cleanCat]: list.map((item) => (item === cleanOld ? cleanNew : item)),
+        [cleanCat]: list.map((item: string) => (item === cleanOld ? cleanNew : item)),
       };
 
-      const prevActions = get().actionsByPanne;
+      const prevActions = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
       let updatedActions = prevActions;
       if (prevActions[cleanOld] && !prevActions[cleanNew]) {
         updatedActions = { ...prevActions, [cleanNew]: prevActions[cleanOld] };
         delete updatedActions[cleanOld];
       }
 
-      set({ panneCategories: updatedCats, actionsByPanne: updatedActions });
+      set({
+        correctivePanneCategories: updatedCats,
+        panneCategories: updatedCats,
+        correctiveActionsByPanne: updatedActions,
+        actionsByPanne: updatedActions,
+      } as any);
       DataGateway.saveCorrectivePanneCategories(updatedCats);
       DataGateway.saveCorrectiveActionsByPanne(updatedActions);
     },
@@ -943,20 +956,25 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const cleanCat = String(category).trim();
       const cleanCode = String(panneCode).trim();
 
-      const prevCats = get().panneCategories;
+      const prevCats = get().correctivePanneCategories ?? (get() as any).panneCategories ?? {};
       const list = prevCats[cleanCat] || [];
       const updatedCats = {
         ...prevCats,
-        [cleanCat]: list.filter((item) => item !== cleanCode),
+        [cleanCat]: list.filter((item: string) => item !== cleanCode),
       };
 
-      const prevActions = get().actionsByPanne;
+      const prevActions = get().correctiveActionsByPanne ?? (get() as any).actionsByPanne ?? {};
       const updatedActions = { ...prevActions };
       if (updatedActions[cleanCode]) {
         delete updatedActions[cleanCode];
       }
 
-      set({ panneCategories: updatedCats, actionsByPanne: updatedActions });
+      set({
+        correctivePanneCategories: updatedCats,
+        panneCategories: updatedCats,
+        correctiveActionsByPanne: updatedActions,
+        actionsByPanne: updatedActions,
+      } as any);
       DataGateway.saveCorrectivePanneCategories(updatedCats);
       DataGateway.saveCorrectiveActionsByPanne(updatedActions);
     },
@@ -965,10 +983,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (!travailText) return;
       const cleanText = String(travailText).trim();
       if (!cleanText) return;
-      const prev = get().travauxAFaire;
+      const prev = get().correctiveTravauxAFaire ?? (get() as any).travauxAFaire ?? [];
       if (prev.includes(cleanText)) return;
       const updated = [...prev, cleanText];
-      set({ travauxAFaire: updated });
+      set({ correctiveTravauxAFaire: updated, travauxAFaire: updated } as any);
       DataGateway.saveCorrectiveTravaux(updated);
     },
 
@@ -977,16 +995,18 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const cleanOld = String(oldText).trim();
       const cleanNew = String(newText).trim();
       if (!cleanNew || cleanOld === cleanNew) return;
-      const updated = get().travauxAFaire.map((item) => (item === cleanOld ? cleanNew : item));
-      set({ travauxAFaire: updated });
+      const prev = get().correctiveTravauxAFaire ?? (get() as any).travauxAFaire ?? [];
+      const updated = prev.map((item: string) => (item === cleanOld ? cleanNew : item));
+      set({ correctiveTravauxAFaire: updated, travauxAFaire: updated } as any);
       DataGateway.saveCorrectiveTravaux(updated);
     },
 
     handleDeleteTravail: (travailText) => {
       if (!travailText) return;
       const cleanText = String(travailText).trim();
-      const updated = get().travauxAFaire.filter((item) => item !== cleanText);
-      set({ travauxAFaire: updated });
+      const prev = get().correctiveTravauxAFaire ?? (get() as any).travauxAFaire ?? [];
+      const updated = prev.filter((item: string) => item !== cleanText);
+      set({ correctiveTravauxAFaire: updated, travauxAFaire: updated } as any);
       DataGateway.saveCorrectiveTravaux(updated);
     },
 
@@ -999,11 +1019,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const intervenants = baseline.intervenants || [];
 
       set({
+        correctiveActionsByPanne: actionsByPanne,
         actionsByPanne,
+        correctivePanneCategories: panneCategories,
         panneCategories,
+        correctiveTravauxAFaire: travauxAFaire,
         travauxAFaire,
+        correctiveIntervenants: intervenants,
         intervenants,
-      });
+      } as any);
 
       DataGateway.saveCorrectiveActionsByPanne(actionsByPanne);
       DataGateway.saveCorrectivePanneCategories(panneCategories);
@@ -1467,12 +1491,20 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.correctiveInterventions)) updates.correctiveInterventions = remoteState.correctiveInterventions;
       if (remoteState.correctiveActionsByPanne && typeof remoteState.correctiveActionsByPanne === 'object') {
         updates.correctiveActionsByPanne = remoteState.correctiveActionsByPanne;
+        updates.actionsByPanne = remoteState.correctiveActionsByPanne;
       }
       if (remoteState.correctivePanneCategories && typeof remoteState.correctivePanneCategories === 'object') {
         updates.correctivePanneCategories = remoteState.correctivePanneCategories;
+        updates.panneCategories = remoteState.correctivePanneCategories;
       }
-      if (Array.isArray(remoteState.correctiveTravauxAFaire)) updates.correctiveTravauxAFaire = remoteState.correctiveTravauxAFaire;
-      if (Array.isArray(remoteState.correctiveIntervenants)) updates.correctiveIntervenants = remoteState.correctiveIntervenants;
+      if (Array.isArray(remoteState.correctiveTravauxAFaire)) {
+        updates.correctiveTravauxAFaire = remoteState.correctiveTravauxAFaire;
+        updates.travauxAFaire = remoteState.correctiveTravauxAFaire;
+      }
+      if (Array.isArray(remoteState.correctiveIntervenants)) {
+        updates.correctiveIntervenants = remoteState.correctiveIntervenants;
+        updates.intervenants = remoteState.correctiveIntervenants;
+      }
 
       if (Object.keys(updates).length > 0) {
         set(updates);

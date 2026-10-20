@@ -5,6 +5,7 @@ import { indexedDBService } from '../utils/indexedDBService';
 import { Logger } from '../core/logger/LoggerService';
 import { AutoBackupService } from '../core/backup/AutoBackupService';
 import { tabSyncService } from '../services/TabSyncService';
+import { serverSyncService } from '../services/serverSyncService';
 
 /**
  * High-Performance Hook to manage debounced auto-saving of GMAO application state to LocalStorage and IndexedDB,
@@ -47,6 +48,7 @@ export function useAutoSave(state, debounceMs = 1000, onStateChange = null) {
 
   const saveTimer = useRef(null);
   const lastSavedState = useRef(null);
+  const isInitialSave = useRef(true);
 
   // Request persistent storage protection on mount
   useEffect(() => {
@@ -88,11 +90,10 @@ export function useAutoSave(state, debounceMs = 1000, onStateChange = null) {
     };
 
     const currentStateStr = JSON.stringify(fullState);
-    const currentStateLength = currentStateStr.length;
-    if (lastSavedState.current === currentStateLength) {
+    if (lastSavedState.current === currentStateStr) {
       return;
     }
-    lastSavedState.current = currentStateLength;
+    lastSavedState.current = currentStateStr;
 
     try {
       AutoBackupService.checkStorageQuota();
@@ -170,6 +171,13 @@ export function useAutoSave(state, debounceMs = 1000, onStateChange = null) {
 
       // Broadcast state update instantly to other open browser tabs
       tabSyncService.broadcastState(fullState);
+
+      if (isInitialSave.current) {
+        isInitialSave.current = false;
+      } else {
+        serverSyncService.markLocalModified();
+        serverSyncService.scheduleAutoPush(fullState, 2000);
+      }
 
       window.dispatchEvent(new CustomEvent('gmao:state_saved', { detail: { timestamp: Date.now() } }));
       if (typeof onStateChange === 'function') {

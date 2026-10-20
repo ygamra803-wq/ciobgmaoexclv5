@@ -240,38 +240,35 @@ export default function InterventionLiveTab({
     const dateFin = now.toISOString().split('T')[0];
     const heureFin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    // 1. Clôturer l'intervention dans le sous-état
-    onClotureIntervention(activeIntervention.id, {
+    const targetMachine = machineMap.get(activeIntervention.code_machine);
+    const machineZone =
+      targetMachine?.id_zone_default ||
+      targetMachine?.id_zone ||
+      activeIntervention.zone ||
+      'Atelier';
+    const machineDesignation =
+      targetMachine?.designation || activeIntervention.code_machine;
+
+    // Clôturer l'intervention via FSM (génère automatiquement l'unique mouvement de sortie PDR)
+    const closedResult = onClotureIntervention(activeIntervention.id, {
       ...formState,
+      zone: machineZone,
+      machine_designation: machineDesignation,
       date_fin: dateFin,
       heure_fin: heureFin,
       temps_intervention_calc: liveWorkingTime.formatted,
+      temps_intervention_mins: liveWorkingTime.minutes,
       temps_minutes: liveWorkingTime.minutes,
       statut: 'CLOTURE',
       action_fermee: 'OUI',
     });
 
-    // 2. Si une PDR a été renseignée, créer un mouvement de sortie automatique
-    if (formState.pdr_ref && onAddMouvement) {
-      const targetMachine = machineMap.get(activeIntervention.code_machine);
-      const machineZone = targetMachine?.id_zone_default || targetMachine?.id_zone || activeIntervention.zone || 'Atelier';
-      const machineDesignation = targetMachine?.designation || activeIntervention.code_machine;
-
-      onAddMouvement({
-        type: 'SORTIE',
-        ref: formState.pdr_ref,
-        code_article: formState.pdr_ref,
-        designation: formState.pdr_designation || formState.pdr_ref,
-        quantite: Number(formState.pdr_quantite) || 1,
-        date: dateFin,
-        demandeur: activeIntervention.intervenant || 'Technicien GMAO',
-        machine: activeIntervention.code_machine,
-        zone: machineZone,
-        machine_designation: machineDesignation,
-        prix_unitaire: Number(formState.pdr_prix) || 0,
-        unite: formState.pdr_unite || 'Pièce',
-        observation: `Consommation BT ${activeIntervention.num_bt || activeIntervention.id} · Machine: ${activeIntervention.code_machine} (${activeIntervention.anomalie || 'Correctif'})`,
-      });
+    if (closedResult === null) {
+      showToast?.(
+        'Transition refusée : vérifiez le travail réalisé ou le statut du Bon de Travail.',
+        'warning'
+      );
+      return;
     }
 
     showToast?.(

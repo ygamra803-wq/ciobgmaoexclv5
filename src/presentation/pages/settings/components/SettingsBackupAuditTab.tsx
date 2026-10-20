@@ -4,6 +4,7 @@ import {
   Activity,
   Clock,
   ShieldCheck,
+  ShieldAlert,
   Gauge,
   Bug,
   Globe,
@@ -17,12 +18,16 @@ import {
   Zap,
   CheckCircle2,
   AlertTriangle,
+  Link2,
+  Wifi,
 } from 'lucide-react';
 import TelemetryAuditPanel from '../../../components/settings/TelemetryAuditPanel';
-import BackupManagerModal from '../../../components/backup/BackupManagerModal';
+import SyncButtons from '../../../components/common/SyncButtons';
+import { performanceService } from '../../../../services/performanceService';
+import { syncQueueService } from '../../../../services/syncQueueService';
 
 /**
- * Access Logs, Data Audits, Restore Points, Data Integrity & Telemetry Hub.
+ * Access Logs, Data Audits, Restore Points, Data Integrity, Orphan Cleanup & Telemetry Hub.
  */
 export default function SettingsBackupAuditTab({
   auditSubTab,
@@ -31,12 +36,12 @@ export default function SettingsBackupAuditTab({
   auditLogs = [],
   backupsList = [],
   errorReports = [],
+  analyticsEvents = [],
   loadAccessLogs,
   handleClearAccessLogs,
   loadAuditLogs,
   loadingAudit,
   loadBackups,
-  showBackupManagerModal,
   setShowBackupManagerModal,
   handleExportBackup,
   handleRestoreBackup,
@@ -47,13 +52,22 @@ export default function SettingsBackupAuditTab({
   rawStock = [],
   mouvements = [],
   currentChecksum,
+  preventiveOrphans = [],
+  correctiveOrphans = [],
+  handlePurgePreventiveOrphans,
+  handlePurgeCorrectiveOrphans,
+  handleBulkRelink,
   refreshPerformanceMetrics,
-  perfMetrics,
+  runPerformanceBenchmark,
+  perfStats = { heapMB: 0, recalcStats: null },
+  syncQueueState = { isOnline: true, pendingCount: 0, failedCount: 0 },
   refreshTelemetry,
-  handleClearTelemetry,
-  onRestoreState,
+  handleSimulateError,
+  handleExportErrorReports,
+  handleClearErrorReports,
+  handleClearAnalytics,
   showToast,
-}) {
+}: any) {
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -78,7 +92,7 @@ export default function SettingsBackupAuditTab({
             }`}
           >
             <Laptop className="w-3.5 h-3.5 text-fuchsia-600" />
-            <span>Connexions ({accessLogs.length})</span>
+            <span>Connexions & Postes ({accessLogs.length})</span>
           </button>
           <button
             onClick={() => setAuditSubTab('events')}
@@ -89,7 +103,7 @@ export default function SettingsBackupAuditTab({
             }`}
           >
             <Activity className="w-3.5 h-3.5 text-blue-600" />
-            <span>Actions ({auditLogs.length})</span>
+            <span>Actions & Données ({auditLogs.length})</span>
           </button>
           <button
             onClick={() => setAuditSubTab('backups')}
@@ -105,7 +119,7 @@ export default function SettingsBackupAuditTab({
           <button
             onClick={() => {
               setAuditSubTab('integrity');
-              runIntegrityCheck();
+              runIntegrityCheck?.();
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               auditSubTab === 'integrity'
@@ -119,7 +133,7 @@ export default function SettingsBackupAuditTab({
           <button
             onClick={() => {
               setAuditSubTab('performance');
-              refreshPerformanceMetrics();
+              refreshPerformanceMetrics?.();
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               auditSubTab === 'performance'
@@ -133,7 +147,7 @@ export default function SettingsBackupAuditTab({
           <button
             onClick={() => {
               setAuditSubTab('telemetry');
-              refreshTelemetry();
+              refreshTelemetry?.();
             }}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
               auditSubTab === 'telemetry'
@@ -142,7 +156,7 @@ export default function SettingsBackupAuditTab({
             }`}
           >
             <Bug className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Erreurs ({errorReports.length})</span>
+            <span>Erreurs & Analytics ({errorReports.length})</span>
           </button>
         </div>
       </div>
@@ -160,7 +174,7 @@ export default function SettingsBackupAuditTab({
                   Surveillance des Postes & Historique de Connexion
                 </h4>
                 <p className="text-[11px] text-fuchsia-800/80">
-                  Enregistre l'adresse IP, le nom du poste, le navigateur, l'heure d'entrée et la durée d'utilisation.
+                  Enregistre l'adresse IP, le nom du poste/ordinateur, le navigateur, l'heure d'entrée et la durée d'utilisation.
                 </p>
               </div>
             </div>
@@ -198,7 +212,7 @@ export default function SettingsBackupAuditTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {accessLogs.map((log) => (
+                  {accessLogs.map((log: any) => (
                     <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
@@ -238,14 +252,14 @@ export default function SettingsBackupAuditTab({
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-slate-700">
                         <div className="flex items-center gap-1">
-                          <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+                          <LogIn className="w-3 h-3 text-emerald-600" />
                           <span>{new Date(log.loginTime).toLocaleString('fr-FR')}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-slate-500">
                         {log.logoutTime ? (
                           <div className="flex items-center gap-1">
-                            <LogOutIcon className="w-3.5 h-3.5 text-rose-500" />
+                            <LogOutIcon className="w-3 h-3 text-rose-500" />
                             <span>{new Date(log.logoutTime).toLocaleString('fr-FR')}</span>
                           </div>
                         ) : (
@@ -293,15 +307,15 @@ export default function SettingsBackupAuditTab({
                 <tbody className="divide-y divide-slate-100">
                   {auditLogs.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="px-4 py-6 text-center text-slate-500">
+                      <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
                         Aucun événement enregistré
                       </td>
                     </tr>
                   ) : (
                     [...auditLogs]
-                      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                       .slice(0, 100)
-                      .map((log) => (
+                      .map((log: any) => (
                         <tr key={log.id} className="hover:bg-white transition-colors">
                           <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
                             {new Date(log.timestamp).toLocaleString()}
@@ -343,6 +357,8 @@ export default function SettingsBackupAuditTab({
       {/* SUBTAB 3: BACKUPS & RESTORE */}
       {auditSubTab === 'backups' && (
         <div className="space-y-4">
+          <SyncButtons showToast={showToast} />
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
               Points de Restauration Locaux
@@ -377,12 +393,12 @@ export default function SettingsBackupAuditTab({
               <tbody className="divide-y divide-slate-100">
                 {backupsList.length === 0 ? (
                   <tr>
-                    <td colSpan="3" className="px-4 py-6 text-center text-slate-500">
+                    <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
                       Aucune sauvegarde disponible
                     </td>
                   </tr>
                 ) : (
-                  backupsList.map((b) => (
+                  backupsList.map((b: any) => (
                     <tr key={b.id} className="hover:bg-white transition-colors">
                       <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[11px]">
                         {new Date(b.timestamp).toLocaleString()}
@@ -490,62 +506,311 @@ export default function SettingsBackupAuditTab({
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* SUBTAB 5: PERFORMANCE */}
-      {auditSubTab === 'performance' && (
-        <div className="space-y-4">
-          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-            <h4 className="text-xs font-bold text-slate-800">
-              Métriques de Performance & Temps de Réponse Stockage
-            </h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Latence IndexedDB</div>
-                <div className="text-sm font-bold font-mono text-emerald-600">
-                  {perfMetrics?.idbLatency || '< 2ms'}
+          {/* Bulk Orphan Cleanup Panel */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-amber-600" />
+                <div>
+                  <h5 className="text-xs font-bold text-slate-900">
+                    Gestion des Liaisons Orphelines (Intégrité Relationnelle)
+                  </h5>
+                  <p className="text-[11px] text-slate-500">
+                    Détection et nettoyage des tâches ou interventions pointant vers des machines supprimées ou archivées.
+                  </p>
                 </div>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Transactions / sec</div>
-                <div className="text-sm font-bold font-mono text-indigo-600">
-                  {perfMetrics?.tps || '1200+'}
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                  {preventiveOrphans.length + correctiveOrphans.length} Orphelins total
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Preventive Orphans */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">Tâches Préventives</span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                        preventiveOrphans.length > 0
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-emerald-100 text-emerald-900'
+                      }`}
+                    >
+                      {preventiveOrphans.length} orpheline(s)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Liées à des machines inexistantes ou archivées.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                  <button
+                    onClick={handlePurgePreventiveOrphans}
+                    disabled={preventiveOrphans.length === 0}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Purger Préventif</span>
+                  </button>
+                  <button
+                    onClick={() => handleBulkRelink?.('preventive')}
+                    disabled={preventiveOrphans.length === 0}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>Relier en Masse</span>
+                  </button>
                 </div>
               </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Cache Hit Rate</div>
-                <div className="text-sm font-bold font-mono text-blue-600">
-                  {perfMetrics?.hitRate || '99.4%'}
+
+              {/* Corrective Orphans */}
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800">
+                      Interventions Correctives & BTs
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold ${
+                        correctiveOrphans.length > 0
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-emerald-100 text-emerald-900'
+                      }`}
+                    >
+                      {correctiveOrphans.length} orpheline(s)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Demandes et ordres de travail sans machine active.
+                  </p>
                 </div>
-              </div>
-              <div className="bg-white p-3 rounded-xl border border-slate-200">
-                <div className="text-[10px] text-slate-400 font-bold uppercase">Broadcast Sync</div>
-                <div className="text-sm font-bold font-mono text-teal-600">
-                  {perfMetrics?.syncStatus || 'Actif'}
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
+                  <button
+                    onClick={handlePurgeCorrectiveOrphans}
+                    disabled={correctiveOrphans.length === 0}
+                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Purger Correctif</span>
+                  </button>
+                  <button
+                    onClick={() => handleBulkRelink?.('corrective')}
+                    disabled={correctiveOrphans.length === 0}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    <span>Relier en Masse</span>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Audit Results Table */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800">
+                Rapport d'Audit Détaillé ({integrityReport?.overall?.totalErrors || 0} Erreurs,{' '}
+                {integrityReport?.overall?.totalWarnings || 0} Avertissements)
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">
+                Horodatage:{' '}
+                {integrityReport?.timestamp
+                  ? new Date(integrityReport.timestamp).toLocaleTimeString()
+                  : 'En attente'}
+              </span>
+            </div>
+
+            {!integrityReport ||
+            (integrityReport.overall.totalErrors === 0 &&
+              integrityReport.overall.totalWarnings === 0) ? (
+              <div className="p-6 text-center text-xs text-slate-500 space-y-1">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                <div className="font-bold text-slate-800 mt-2">Aucune anomalie détectée</div>
+                <div>
+                  Toutes les formules Excel Twin et les cohérences relationnelles sont parfaitement alignées.
+                </div>
+              </div>
+            ) : (
+              <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
+                {integrityReport.stock?.errors?.map((err: any, i: number) => (
+                  <div key={`se-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-rose-900 font-mono">[{err.type}]</span>
+                      <span className="ml-2 text-rose-800">{err.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport.stock?.warnings?.map((warn: any, i: number) => (
+                  <div key={`sw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-amber-900 font-mono">[{warn.type}]</span>
+                      <span className="ml-2 text-amber-800">{warn.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport.movements?.errors?.map((err: any, i: number) => (
+                  <div key={`me-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-rose-900 font-mono">[MVT_{err.type}]</span>
+                      <span className="ml-2 text-rose-800">{err.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport.movements?.warnings?.map((warn: any, i: number) => (
+                  <div key={`mw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-amber-900 font-mono">[MVT_{warn.type}]</span>
+                      <span className="ml-2 text-amber-800">{warn.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport.referential?.errors?.map((err: any, i: number) => (
+                  <div key={`re-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-rose-900 font-mono">[REF_{err.type}]</span>
+                      <span className="ml-2 text-rose-800">{err.message}</span>
+                    </div>
+                  </div>
+                ))}
+                {integrityReport.referential?.warnings?.map((warn: any, i: number) => (
+                  <div key={`rw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <span className="font-bold text-amber-900 font-mono">[REF_{warn.type}]</span>
+                      <span className="ml-2 text-amber-800">{warn.message}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* SUBTAB 6: TELEMETRY & ERROR REPORTS */}
-      {auditSubTab === 'telemetry' && (
-        <TelemetryAuditPanel
-          reports={errorReports}
-          onClear={handleClearTelemetry}
-          onRefresh={refreshTelemetry}
-        />
+      {/* SUBTAB 5: PERFORMANCE MONITOR & OFFLINE SYNC QUEUE */}
+      {auditSubTab === 'performance' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Gauge className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-amber-950">
+                  Moniteur de Performance & File d'Attente Offline
+                </h4>
+                <p className="text-[11px] text-amber-800/80">
+                  Suivi des temps d'exécution, consommation mémoire JS Heap et état des opérations en attente de synchronisation.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={runPerformanceBenchmark}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Tester le Recalcul</span>
+              </button>
+              <button
+                onClick={() => performanceService.exportReport()}
+                className="px-3 py-1.5 bg-white hover:bg-amber-50 text-amber-900 text-xs font-bold rounded-xl border border-amber-300 shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-700" />
+                <span>Exporter CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <SyncButtons showToast={showToast} />
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-mono text-slate-500">Consommation Mémoire Heap</div>
+              <div className="text-lg font-black text-slate-900 mt-1 font-mono">
+                {perfStats?.heapMB ? `${perfStats.heapMB.toFixed(1)} Mo` : 'Non disponible'}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">Estimée via performance.memory</div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-mono text-slate-500">Recalcul Twin (Moyenne)</div>
+              <div className="text-lg font-black text-amber-600 mt-1 font-mono">
+                {perfStats?.recalcStats?.avg ? `${perfStats.recalcStats.avg} ms` : 'À tester'}
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                Min: {perfStats?.recalcStats?.min ?? 'N/A'}ms • Max: {perfStats?.recalcStats?.max ?? 'N/A'}ms
+              </div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-mono text-slate-500">File de Synchronisation</div>
+              <div className="text-lg font-black mt-1 font-mono flex items-center gap-2">
+                <span className={syncQueueState?.isOnline ? 'text-emerald-700' : 'text-amber-600'}>
+                  {syncQueueState?.isOnline ? 'En ligne' : 'Hors-ligne'}
+                </span>
+                <span className="text-xs font-bold text-slate-400">
+                  ({syncQueueState?.pendingCount || 0} en attente)
+                </span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">
+                {syncQueueState?.failedCount || 0} échec(s) • IndexedDB actif
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Wifi className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-slate-800">
+                  Gestionnaire de File d'Attente de Synchronisation
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => syncQueueService.processQueue()}
+                  className="px-2.5 py-1 text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition cursor-pointer"
+                >
+                  Rejouer la file
+                </button>
+                <button
+                  onClick={() => syncQueueService.clearQueue()}
+                  className="px-2.5 py-1 text-[11px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg transition cursor-pointer"
+                >
+                  Vider la file
+                </button>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Le service <strong>SyncQueueService</strong> enregistre toute transaction d'écriture en mode hors-ligne dans IndexedDB avec priorité d'exécution et tentatives automatiques (jusqu'à 3 essais) dès que le réseau ou le partage est réactivé.
+            </p>
+          </div>
+        </div>
       )}
 
-      {/* Backup Manager Modal */}
-      {showBackupManagerModal && (
-        <BackupManagerModal
-          isOpen={showBackupManagerModal}
-          onClose={() => setShowBackupManagerModal(false)}
-          onRestoreState={onRestoreState}
-          showToast={showToast}
+      {/* SUBTAB 6: ERROR TRACKING & USAGE ANALYTICS */}
+      {auditSubTab === 'telemetry' && (
+        <TelemetryAuditPanel
+          errorReports={errorReports}
+          analyticsEvents={analyticsEvents}
+          onSimulateError={handleSimulateError}
+          onExportErrors={handleExportErrorReports}
+          onClearErrors={handleClearErrorReports}
+          onClearAnalytics={handleClearAnalytics}
+          onRefresh={refreshTelemetry}
         />
       )}
     </div>

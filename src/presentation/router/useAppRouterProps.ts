@@ -195,6 +195,17 @@ export function useAppRouterProps({
       onExportExcel: handleExportExcel,
     },
 
+    executiveReport: {
+      stockItems,
+      mouvements,
+      correctiveInterventions,
+      preventiveTasks,
+      preventiveExecutions,
+      machines,
+      onNavigateToTab: navigateTo,
+      showToast: showToast || navigation?.showToast,
+    },
+
     stock: {
       stockItems,
       mouvements,
@@ -656,12 +667,21 @@ export function useAppRouterProps({
       onAddMouvement: handleAddMouvement,
       onDirectAdjustStock: handleDirectAdjustStock,
       onUpdateMachine: handleUpdateMachine,
-      showToast: navigation?.showToast,
+      showToast: showToast || navigation?.showToast,
       onNavigateToMachine: (_machId) => navigateTo('machines'),
       onNavigateToReferentiel: () => navigateTo('preventive_referentiel'),
-      onCreateCorrective: (payload) => {
-        if (navigation?.showToast) {
-          navigation.showToast(`BT Correctif ${payload.id_bt} créé avec succès !`, 'info');
+      onCreateCorrective: (payload = {}) => {
+        if (typeof handleAddDemandeIntervention === 'function') {
+          handleAddDemandeIntervention({
+            ...payload,
+            code_machine: payload.code_machine || payload.id_machine || payload.machine || '',
+            anomalie: payload.anomalie || payload.description || payload.composant || 'Anomalie détectée en préventif',
+            demandeur: payload.demandeur || payload.technicien || 'Maintenance Préventive',
+          });
+        }
+        const toastFn = showToast || navigation?.showToast;
+        if (toastFn) {
+          toastFn(`BT/DI Correctif ${payload.id_bt || payload.num_bt || ''} créé avec succès !`, 'info');
         }
       },
     },
@@ -691,7 +711,7 @@ export function useAppRouterProps({
       mouvements,
       onAddMouvement: handleAddMouvement,
       onDirectAdjustStock: handleDirectAdjustStock,
-      showToast: navigation?.showToast,
+      showToast: showToast || navigation?.showToast,
       onNavigateToMainView: () => navigateTo('preventive'),
       preventiveRecommendations: correctivePreventiveRecommendations,
     },
@@ -740,7 +760,7 @@ export function useAppRouterProps({
       warehouseItems: warehouseItemsComputed,
       onAddMouvement: handleAddMouvement,
       onAddPreventiveTask: handleAddPreventiveAction,
-      showToast: navigation?.showToast,
+      showToast: showToast || navigation?.showToast,
       onNavigateToTab: navigateTo,
     },
 

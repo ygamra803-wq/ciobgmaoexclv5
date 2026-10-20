@@ -11,6 +11,7 @@ import initialTravauxAFaire from '../data/corrective/seedTravailAFaire.json';
 import initialIntervenants from '../data/corrective/seedIntervenants.json';
 import { CorrectiveIntervention } from '../domain/corrective/entities/CorrectiveIntervention';
 import { CorrectiveCalculationService } from '../domain/corrective/services/CorrectiveCalculationService';
+import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderStateMachine';
 import { movementRepository } from '../application/MovementRepository';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 
@@ -409,20 +410,29 @@ export function useCorrectiveSubState(groupedState = {}) {
     return newDi;
   }, []);
 
-  // 2. Convert DI to BT (Bon de Travail)
-  const convertToBt = useCallback((id, btDetails = {}) => {
+  // 2. Convert DI to BT (Bon de Travail) with FSM validation
+  const convertToBt = useCallback((id, btDetails: Record<string, any> = {}) => {
     let convertedItem = null;
     setInterventions((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const num_bt = btDetails.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`;
+          const targetStatus = btDetails.statut || 'EN_COURS';
+          const num_bt = btDetails.num_bt || item.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`;
+          const check = WorkOrderStateMachine.validateTransition(item, targetStatus, {
+            ...btDetails,
+            num_bt,
+          });
+          if (!check.valid) {
+            console.warn(`[WorkOrderStateMachine] ${check.reason}`);
+            return item;
+          }
           convertedItem = new CorrectiveIntervention({
             ...item,
             ...btDetails,
             num_bt,
-            statut: 'EN_COURS',
-            date_debut: btDetails.date_debut || new Date().toISOString().split('T')[0],
-            heure_debut: btDetails.heure_debut || new Date().toTimeString().slice(0, 5),
+            statut: check.toStatus,
+            date_debut: btDetails.date_debut || item.date_debut || new Date().toISOString().split('T')[0],
+            heure_debut: btDetails.heure_debut || item.heure_debut || new Date().toTimeString().slice(0, 5),
           }).toJSON();
           return convertedItem;
         }
@@ -432,7 +442,7 @@ export function useCorrectiveSubState(groupedState = {}) {
     return convertedItem;
   }, []);
 
-  // 3. Start Live Intervention (Chronometer)
+  // 3. Start Live Intervention (Chronometer) with FSM validation
   const startLiveIntervention = useCallback((id) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
@@ -442,8 +452,16 @@ export function useCorrectiveSubState(groupedState = {}) {
     setInterventions((prev) =>
       prev.map((item) => {
         if (item.id === id) {
+          const check = WorkOrderStateMachine.validateTransition(item, 'EN_COURS', {
+            num_bt: item.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`,
+          });
+          if (!check.valid) {
+            console.warn(`[WorkOrderStateMachine] ${check.reason}`);
+            return item;
+          }
           return {
             ...item,
+            num_bt: item.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`,
             statut: 'EN_COURS',
             date_debut: item.date_debut || today,
             heure_debut: item.heure_debut || timeNow,
@@ -454,73 +472,76 @@ export function useCorrectiveSubState(groupedState = {}) {
     );
   }, []);
 
-  // 4. Clôturer intervention & optional PDR sortie
-  const clotureIntervention = useCallback((id, clotureData = {}, onAddMouvement = null) => {
+  // 4. Clôturer intervention & single-path idempotent PDR sortie
+  const clotureIntervention = useCallback((id, clotureData: Record<string, any> = {}, onAddMouvement = null) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     const timeNow = now.toTimeString().slice(0, 5);
 
     let updated = null;
+    let pendingMvt = null;
 
     setInterventions((prev) =>
       prev.map((item) => {
         if (item.id === id) {
+          const num_bt = clotureData.num_bt || item.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`;
+          const check = WorkOrderStateMachine.validateTransition(item, 'CLOTURE', {
+            ...clotureData,
+            num_bt,
+          });
+          if (!check.valid) {
+            console.warn(`[WorkOrderStateMachine] ${check.reason}`);
+            return item;
+          }
+
           const dDebut = item.date_debut || clotureData.date_debut || today;
           const hDebut = item.heure_debut || clotureData.heure_debut || '08:00';
           const dFin = clotureData.date_fin || today;
           const hFin = clotureData.heure_fin || timeNow;
 
           const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
+          const alreadyDeducted = Boolean(item.pdr_sortie_generated);
 
           updated = new CorrectiveIntervention({
             ...item,
             ...clotureData,
+            num_bt,
             date_debut: dDebut,
             heure_debut: hDebut,
             date_fin: dFin,
             heure_fin: hFin,
-            temps_intervention: timeCalc.formatted,
-            temps_intervention_mins: timeCalc.minutes,
+            temps_intervention: clotureData.temps_intervention || timeCalc.formatted,
+            temps_intervention_mins: Number(clotureData.temps_intervention_mins) || timeCalc.minutes,
             action_fermee: 'OUI',
             statut: 'CLOTURE',
             rapport_redige: 'OUI',
+            pdr_sortie_generated:
+              alreadyDeducted || Boolean((clotureData.pdr_ref || item.pdr_ref) && Number(clotureData.pdr_quantite ?? item.pdr_quantite) > 0),
           }).toJSON();
 
-          // Auto-generate PDR Sortie if parts were used
-          if (updated.pdr_ref && Number(updated.pdr_quantite) > 0) {
+          // Auto-generate PDR Sortie ONCE if parts were used and not already deducted
+          if (!alreadyDeducted && updated.pdr_ref && Number(updated.pdr_quantite) > 0) {
             const btIdentifier = updated.num_bt || updated.id;
-            const mvt = {
+            pendingMvt = {
               id: `MVT-BT-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
               code_bon: `BS-BT-${btIdentifier}`,
               ref: updated.pdr_ref,
               code_article: updated.pdr_ref,
               designation: updated.pdr_designation || updated.pdr_ref,
-              type: 'Sortie',
+              type: 'Sortie Interne',
               quantite: Number(updated.pdr_quantite),
               date: dFin,
               machine: updated.code_machine,
               id_machine_registered: updated.code_machine,
+              id_zone: updated.zone || 'ZONE-01',
               technicien: updated.intervenant || 'Technicien',
               demandeur: updated.intervenant || 'Technicien GMAO',
               prix_unitaire: Number(updated.pdr_prix) || 0,
               unite: updated.pdr_unite || 'Pièce',
               motif: `Consommation BT ${btIdentifier} · Machine: ${updated.code_machine}`,
+              commentaire: `Consommation BT ${btIdentifier} · Machine: ${updated.code_machine} (${updated.anomalie || 'Correctif'})`,
               observation: `Sortie PDR automatique clôture BT ${btIdentifier} (${updated.anomalie || 'Correctif'})`,
             };
-
-            try {
-              movementRepository.add(mvt);
-            } catch (err) {
-              console.warn('[useCorrectiveSubState] Failed to add movement via repository:', err);
-            }
-
-            if (typeof onAddMouvement === 'function') {
-              try {
-                onAddMouvement(mvt);
-              } catch (e) {
-                console.warn('[useCorrectiveSubState] onAddMouvement error:', e);
-              }
-            }
           }
 
           return updated;
@@ -529,18 +550,42 @@ export function useCorrectiveSubState(groupedState = {}) {
       })
     );
 
-    if (activeLiveId === id) {
+    // Execute stock deduction outside state updater via a single authoritative path
+    if (pendingMvt) {
+      if (typeof onAddMouvement === 'function') {
+        try {
+          onAddMouvement(pendingMvt);
+        } catch (e) {
+          console.warn('[useCorrectiveSubState] onAddMouvement error:', e);
+        }
+      } else {
+        try {
+          movementRepository.add(pendingMvt);
+        } catch (err) {
+          console.warn('[useCorrectiveSubState] Failed to add movement via repository:', err);
+        }
+      }
+    }
+
+    if (activeLiveId === id && updated) {
       setActiveLiveId(null);
     }
 
     return updated;
   }, [activeLiveId]);
 
-  // 5. Update intervention partially
-  const updateIntervention = useCallback((id, patch = {}) => {
+  // 5. Update intervention partially (with FSM guard if status is changing)
+  const updateIntervention = useCallback((id, patch: Record<string, any> = {}) => {
     setInterventions((prev) =>
       prev.map((item) => {
         if (item.id === id) {
+          if (patch.statut && patch.statut !== item.statut) {
+            const check = WorkOrderStateMachine.validateTransition(item, patch.statut, patch);
+            if (!check.valid) {
+              console.warn(`[WorkOrderStateMachine] ${check.reason}`);
+              return item;
+            }
+          }
           return new CorrectiveIntervention({ ...item, ...patch }).toJSON();
         }
         return item;

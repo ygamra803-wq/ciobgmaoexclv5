@@ -23,16 +23,14 @@ export function MobileContainer({
         setIsQRScannerOpen(true);
         break;
       case 'quick_out':
-        if (onAddMouvement) {
-          onAddMouvement();
-        } else if (setCurrentTab) {
-          setCurrentTab('stock');
+        if (setCurrentTab) {
+          setCurrentTab('sortie');
         }
         break;
       case 'create_di':
       case 'create_bt':
         if (setCurrentTab) {
-          setCurrentTab('correctif');
+          setCurrentTab('corrective');
         }
         break;
       default:

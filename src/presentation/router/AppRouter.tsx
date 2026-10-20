@@ -5,6 +5,7 @@ import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import usePageOrchestrator from '../components/common/usePageOrchestrator';
 
 import DashboardView from '../pages/dashboard/DashboardView';
+import MonthlyExecutiveReportView from '../components/views/MonthlyExecutiveReportView';
 import StockView from '../pages/stock/StockView';
 import TypeView from '../pages/referentiel/TypeView';
 import DesignationView from '../pages/referentiel/DesignationView';
@@ -37,12 +38,18 @@ import {
   MachinesContext,
   CorrectiveContext,
 } from '../../context/GmaoDomainContext';
+import { useAuth } from '../../context/AuthContext';
+import { AuthorizationService } from '../../core/security/AuthorizationService';
+import { ShieldAlert, ArrowLeft } from 'lucide-react';
 
 export default function AppRouter({
   currentTab, setCurrentTab: _setCurrentTab, props
 }) {
+  const { user: currentUser } = useAuth();
   // Page load orchestrator: manages per-tab first load skeletons and instant visited transitions
   const { isCurrentTabLoading } = usePageOrchestrator(currentTab);
+
+  const isTabAllowed = !currentUser || AuthorizationService.canAccessTab(currentUser, currentTab);
 
   return (
     <StockContext.Provider value={props.stock}>
@@ -52,6 +59,31 @@ export default function AppRouter({
             <SortieExterneContext.Provider value={props.sortie}>
               <CorrectiveContext.Provider value={props.corrective}>
                 <div className="w-full min-w-0 relative">
+                {!isTabAllowed ? (
+                  <div className="max-w-xl mx-auto my-12 p-6 sm:p-8 rounded-3xl bg-white border border-amber-200 shadow-lg text-center space-y-4">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                      <ShieldAlert className="w-7 h-7" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <h2 className="text-lg font-black text-slate-900 tracking-tight">
+                        Accès Restreint par Rôle (RBAC)
+                      </h2>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Votre profil actuel (<span className="font-bold text-slate-900">{currentUser?.titleFr || currentUser?.role}</span>) ne dispose pas des privilèges requis pour accéder à la section <code className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-slate-800">{currentTab}</code>.
+                      </p>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => _setCurrentTab('dashboard')}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                        <span>Retour au Tableau de Bord</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <AnimatePresence mode="wait">
                   {isCurrentTabLoading ? (
                     <motion.div
@@ -73,6 +105,12 @@ export default function AppRouter({
                       {currentTab === 'dashboard' && (
                         <ErrorBoundary sectionName="Tableau de Bord Operations">
                           <DashboardView {...props.dashboard} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'executive_report' && (
+                        <ErrorBoundary sectionName="Rapport Mensuel Exécutif (Direction)">
+                          <MonthlyExecutiveReportView {...props.executiveReport} />
                         </ErrorBoundary>
                       )}
 
@@ -225,6 +263,7 @@ export default function AppRouter({
                     </Suspense>
                   )}
                 </AnimatePresence>
+                )}
               </div>
               </CorrectiveContext.Provider>
             </SortieExterneContext.Provider>

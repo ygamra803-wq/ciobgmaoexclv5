@@ -1,53 +1,198 @@
 import { Logger } from '../logger/LoggerService';
 import { PermissionError } from '../errors/ApplicationError';
+import { ROLES, normalizeRole } from './Roles';
 
 /**
- * @file AuthorizationService.js
+ * @file AuthorizationService.tsx
  * @module core/security/AuthorizationService
  * @description
  * جدول مصفوفة الصلاحيات وخيارات التحكم بالوصول المبني على الأدوار (Role-Based Access Control - RBAC).
- * 
+ *
  * الأدوار المعتمدة بالنظام:
- * - ADMIN: مدير النظام (جميع الصلاحيات الإدارية، التعديل، التصدير، النسخ الاحتياطي).
- * - RESPONSABLE: رئيس الفرقة/المشرف (عرض، إنشاء، تعديل المخزون والآلات، وتصدير التقارير).
- * - TECHNICIEN: الفني الميداني (عرض المخزون والآلات، تسجيل وإجراء حركات الصيانة PDR).
- * - OPERATEUR: المشغل الميداني (عرض واستخدام قطع الغيار وحركات الصرف المباشرة).
+ * - ADMIN: مدير النظام (جميع الصلاحيات الإدارية، التعديل، التصدير، النسخ الاحتياطي، وتفريغ المصنع).
+ * - RESPONSABLE / RESPONSABLE_MAINTENANCE: رئيس الفرقة/المشرف (عرض، إنشاء، تعديل الصيانة والمخزون والآلات، وتصدير التقارير).
+ * - RESPONSABLE_MAGASIN: أمين المخزن (إدارة المخزون PDR، المستودع، وحركات الصرف والاستلام).
+ * - TECHNICIEN: الفني الميداني (عرض المخزون والآلات، تنفيذ المهام الوقائية والعلاجية، وصرف القطع).
+ * - OPERATEUR: المشغل الميداني (عرض واستخدام قطع الغيار وتبليغ الأعطال).
+ * - VIEWER: المراقب (قراءة فقط للوحات القيادة والمخزون والآلات والصيانة).
  */
-export const PERMISSIONS = {
+export const PERMISSIONS: Record<string, string[]> = {
   // إدارة المخزون والمقالات (Stock PDR)
-  'stock.view': ['ADMIN', 'RESPONSABLE', 'TECHNICIEN'],
-  'stock.create': ['ADMIN', 'RESPONSABLE'],
-  'stock.edit': ['ADMIN', 'RESPONSABLE'],
-  'stock.delete': ['ADMIN'],
-  'stock.export': ['ADMIN', 'RESPONSABLE'],
+  'stock.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'stock.create': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+  'stock.edit': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+  'stock.update': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+  'stock.delete': [ROLES.ADMIN],
+  'stock.export': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+
+  // إدارة المستودع الاحتياطي (Warehouse / Entrepôt)
+  'warehouse.view': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+  'warehouse.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
 
   // إدارة حركات الصرف والإرجاع (Movements)
-  'movement.view': ['ADMIN', 'RESPONSABLE', 'TECHNICIEN', 'OPERATEUR'],
-  'movement.create': ['ADMIN', 'RESPONSABLE', 'TECHNICIEN'],
-  'movement.edit': ['ADMIN', 'RESPONSABLE'],
-  'movement.delete': ['ADMIN'],
+  'movement.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'movement.create': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+  ],
+  'movement.edit': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
+  'movement.delete': [ROLES.ADMIN],
 
   // إدارة الآلات والمعدات (Machines)
-  'machine.view': ['ADMIN', 'RESPONSABLE', 'TECHNICIEN'],
-  'machine.create': ['ADMIN', 'RESPONSABLE'],
-  'machine.edit': ['ADMIN', 'RESPONSABLE'],
-  'machine.delete': ['ADMIN'],
+  'machine.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'machine.create': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'machine.edit': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'machine.update': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
+  'machine.delete': [ROLES.ADMIN],
+
+  // الصيانة الوقائية والعلاجية (Preventive & Corrective)
+  'preventive.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+    ROLES.VIEWER,
+  ],
+  'preventive.execute': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
+  'preventive.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'corrective.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'corrective.execute': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+  ],
+  'corrective.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
 
   // إدارة المستخدمين والملفات الشخصية (User Management)
-  'user.view': ['ADMIN'],
-  'user.create': ['ADMIN'],
-  'user.edit': ['ADMIN'],
-  'user.delete': ['ADMIN'],
+  'user.view': [ROLES.ADMIN],
+  'user.create': [ROLES.ADMIN],
+  'user.edit': [ROLES.ADMIN],
+  'user.delete': [ROLES.ADMIN],
 
   // التقارير والإحصائيات (Reports & Analytics)
-  'report.view': ['ADMIN', 'RESPONSABLE'],
-  'report.export': ['ADMIN', 'RESPONSABLE'],
+  'report.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.VIEWER,
+  ],
+  'report.export': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
 
   // إعدادات النظام والنسخ الاحتياطي (Settings & Backup)
-  'settings.view': ['ADMIN'],
-  'settings.edit': ['ADMIN'],
-  'settings.backup': ['ADMIN'],
-  'settings.restore': ['ADMIN']
+  'settings.view': [ROLES.ADMIN],
+  'settings.edit': [ROLES.ADMIN],
+  'settings.manage': [ROLES.ADMIN],
+  'settings.backup': [ROLES.ADMIN],
+  'settings.restore': [ROLES.ADMIN],
+};
+
+// مصفوفة التبويبات المسموحة لكل دور قياسي
+const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
+  [ROLES.ADMIN]: '*',
+  [ROLES.RESPONSABLE_MAINTENANCE]: '*',
+  [ROLES.RESPONSABLE_MAGASIN]: new Set([
+    'dashboard',
+    'executive_report',
+    'stock',
+    'types',
+    'designations',
+    'diagnostics',
+    'sortie',
+    'entrepot',
+    'comp_groups',
+    'comp_families',
+    'comp_templates',
+    'part_types',
+    'part_designations',
+    'machines',
+    'families',
+    'templates',
+    'blueprints',
+    'zones',
+    'guide',
+  ]),
+  [ROLES.TECHNICIEN]: new Set([
+    'dashboard',
+    'stock',
+    'sortie',
+    'machines',
+    'families',
+    'templates',
+    'blueprints',
+    'preventive',
+    'corrective',
+    'corrective_di',
+    'corrective_bt',
+    'corrective_live',
+    'corrective_cloture',
+    'corrective_analytics',
+    'corrective_history',
+    'corrective_pieces',
+    'zones',
+    'guide',
+  ]),
+  [ROLES.OPERATEUR]: new Set([
+    'dashboard',
+    'stock',
+    'sortie',
+    'machines',
+    'corrective',
+    'corrective_di',
+    'zones',
+    'guide',
+  ]),
+  [ROLES.VIEWER]: new Set([
+    'dashboard',
+    'executive_report',
+    'stock',
+    'machines',
+    'preventive',
+    'corrective',
+    'corrective_di',
+    'corrective_bt',
+    'corrective_cloture',
+    'corrective_analytics',
+    'zones',
+    'guide',
+  ]),
 };
 
 /**
@@ -55,14 +200,7 @@ export const PERMISSIONS = {
  * ✅ خدمة التحقق من الصلاحيات والتحكم في الوصول المباشر
  */
 export class AuthorizationService {
-  /**
-   * فحص ما إذا كان المستخدم يملك صلاحية محددة
-   * 
-   * @param {Object} user - كائن المستخدم الحالي (يحتوي على role و id)
-   * @param {string} permission - اسم الصلاحية المطلوب فحصها (مثل: 'stock.edit', 'movement.create')
-   * @returns {boolean} true إذا كان المستخدم يملك الصلاحية، و false خلاف ذلك
-   */
-  static hasPermission(user, permission) {
+  static hasPermission(user: any, permission: string): boolean {
     if (!user) {
       Logger.warn('⚠️ User is null or undefined during permission check');
       return false;
@@ -74,69 +212,76 @@ export class AuthorizationService {
       return false;
     }
 
-    const hasPermission = allowedRoles.includes(user.role);
-    
-    if (!hasPermission) {
-      Logger.warn('⚠️ Permission denied', { 
-        userId: user.id, 
-        permission, 
-        userRole: user.role 
+    const rawRole = typeof user === 'string' ? user : user.role;
+    const normalized = normalizeRole(rawRole);
+
+    const hasPerm =
+      allowedRoles.includes(rawRole) ||
+      allowedRoles.includes(normalized);
+
+    if (!hasPerm) {
+      Logger.warn('⚠️ Permission denied', {
+        userId: user?.id,
+        permission,
+        userRole: rawRole,
       });
     }
 
-    return hasPermission;
+    return hasPerm;
   }
 
   /**
-   * دالة حظر إجبارية (Higher-Order Function) تفرض وجود الصلاحية وتطرح استثناءً عند عدم التخويل
-   * 
-   * @param {string} permission - اسم الصلاحية المطلوبة
-   * @returns {(user: Object) => void} دالة تتحقق من صلاحية المستخدم
-   * @throws {PermissionError} عند رفض الوصول وعدم مطابقة الصلاحية
+   * التحقق من صلاحية الوصول إلى تبويب/شاشة معينة حسب دور المستخدم
    */
-  static requirePermission(permission) {
-    return (user) => {
+  static canAccessTab(userOrRole: any, tabId: string): boolean {
+    if (!userOrRole) return false;
+    const rawRole = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+    const normalized = normalizeRole(rawRole);
+    const allowed = ROLE_ALLOWED_TABS[normalized];
+    if (allowed === '*') return true;
+    if (!allowed) return false;
+    const cleanTab = String(tabId || 'dashboard').trim();
+    if (allowed.has(cleanTab)) return true;
+    if (cleanTab.startsWith('corrective_') && cleanTab !== 'corrective_referentiel' && allowed.has('corrective')) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * التحقق مما إذا كان الحساب للقراءة فقط (Observateur / VIEWER)
+   */
+  static isReadOnly(userOrRole: any): boolean {
+    if (!userOrRole) return true;
+    const rawRole = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+    return normalizeRole(rawRole) === ROLES.VIEWER;
+  }
+
+  static requirePermission(permission: string) {
+    return (user: any) => {
       if (!this.hasPermission(user, permission)) {
         throw new PermissionError(`Permission denied: ${permission}`, permission);
       }
     };
   }
 
-  /**
-   * استخراج قائمة كافة الصلاحيات المتاحة لدور معين
-   * 
-   * @param {string} role - اسم الدور المراد استعلام صلاحياته
-   * @returns {Array<string>} مصفوفة بجميع مسميات الصلاحيات المسموحة لهذا الدور
-   */
-  static getAllPermissions(role) {
+  static getAllPermissions(role: string): string[] {
+    const normalized = normalizeRole(role);
     return Object.entries(PERMISSIONS)
-      .filter(([_, roles]) => roles.includes(role))
+      .filter(([_, roles]) => roles.includes(role) || roles.includes(normalized))
       .map(([permission]) => permission);
   }
 
-  /**
-   * فحص إمكانية الوصول إلى مورد عام بناءً على المجال والحدث (e.g., 'stock.view')
-   * 
-   * @param {Object} user - كائن المستخدم
-   * @param {string} resource - اسم المورد النمطي
-   * @returns {boolean} true إذا كان يمتلك أي صلاحية تابعة للمورد
-   */
-  static canAccess(user, resource) {
+  static canAccess(user: any, resource: string): boolean {
     const permissions = this._getResourcePermissions(resource);
-    return permissions.some(p => this.hasPermission(user, p));
+    return permissions.some((p) => this.hasPermission(user, p));
   }
 
-  /**
-   * استخراج الصلاحيات الفرعية المرتبطة بمورد محدد
-   * 
-   * @private
-   * @param {string} resource
-   * @returns {Array<string>}
-   */
-  static _getResourcePermissions(resource) {
+  static _getResourcePermissions(resource: string): string[] {
     const [domain, action] = resource.split('.');
     return Object.keys(PERMISSIONS)
-      .filter(p => p.startsWith(domain))
-      .filter(p => p.endsWith(action));
+      .filter((p) => p.startsWith(domain))
+      .filter((p) => p.endsWith(action));
   }
 }
+

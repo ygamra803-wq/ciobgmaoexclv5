@@ -30,9 +30,21 @@ export function useStateSync(setters = {}, validators = {}) {
       const currentValidators = validatorsRef.current || {};
 
       try {
-        // If the store provides an atomic applyRemoteStateUpdate method, use it first
+        // If the store provides an atomic applyRemoteStateUpdate method, use it to update in-memory state cleanly
+        // without triggering 29 separate localStorage writes from the receiving tab
         if (typeof currentSetters.applyRemoteStateUpdate === 'function') {
-          currentSetters.applyRemoteStateUpdate(fresh);
+          let mergedPayload = fresh;
+          if (isBroadcast && Array.isArray(fresh.mouvements)) {
+            const currentMovements = ConflictResolutionService.resolveMultipleConflicts(
+              [],
+              fresh.mouvements,
+              ConflictResolutionService.STRATEGIES.LAST_WRITE_WINS
+            );
+            mergedPayload = { ...fresh, mouvements: currentMovements };
+          }
+          currentSetters.applyRemoteStateUpdate(mergedPayload);
+          Logger.info(`[useStateSync] State synchronized atomically across tabs via ${isBroadcast ? 'BroadcastChannel' : 'StorageEvent'}`);
+          return;
         }
 
         // 1. Stock Slice

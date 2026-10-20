@@ -5,6 +5,7 @@ import { useEnterpriseDbSync } from './useEnterpriseDbSync';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { storageService } from '../utils/storageService';
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
+import { serverSyncService } from '../services/serverSyncService';
 
 /**
  * Handles persistence, debounced storage, multi-tab sync, and Enterprise database sync
@@ -18,7 +19,7 @@ export function useGmaoPersistence({
 }) {
   const hydratedFromIdb = useRef(false);
 
-  // 0. L2 -> L1 Self-Healing Hydration from IndexedDB on initial mount
+  // 0. L2 -> L1 Self-Healing Hydration from IndexedDB & Server-Authoritative Sync on initial mount
   useEffect(() => {
     if (hydratedFromIdb.current) return;
     hydratedFromIdb.current = true;
@@ -31,6 +32,23 @@ export function useGmaoPersistence({
 
     (async () => {
       try {
+        // First check if Server has authoritative persisted state
+        const serverCheck = await serverSyncService.fetchServerState();
+        if (serverCheck.online && serverCheck.state && serverCheck.summary.totalItems > 0) {
+          const lastSyncAt = serverSyncService.getLastSyncAt();
+          const localModifiedAt = serverSyncService.getLocalModifiedAt();
+          const serverTime = serverCheck.summary.updatedAt
+            ? new Date(serverCheck.summary.updatedAt).getTime()
+            : 0;
+          const localTime = localModifiedAt ? new Date(localModifiedAt).getTime() : 0;
+
+          // If never synced on this browser OR server state is newer than local modifications, pull cleanly
+          if (!lastSyncAt || serverTime >= localTime) {
+            await serverSyncService.pullFromServer({ force: true, setters });
+            return;
+          }
+        }
+
         const idbSnap = await indexedDBService.getItem(STORAGE_KEYS.FULL_STATE_SNAPSHOT);
         if (!idbSnap || typeof idbSnap !== 'object') return;
 
@@ -78,7 +96,7 @@ export function useGmaoPersistence({
           setters.applyRemoteStateUpdate(patch);
         }
       } catch {
-        // Ignore IndexedDB read errors in restricted environments
+        // Ignore IndexedDB or network read errors in restricted environments
       }
     })();
   }, []);

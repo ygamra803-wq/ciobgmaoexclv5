@@ -114,11 +114,7 @@ export function useGmaoState() {
       isValidMachineFamilies: store.isValidMachineFamilies,
       isValidMachineTemplates: store.isValidMachineTemplates,
     },
-    onStateChange: (newState) => {
-      if (!newState || typeof newState !== 'object') return;
-      // Propagate changes from multi-tab sync or auto-save into Zustand store
-      store.applyRemoteStateUpdate(newState);
-    },
+    onStateChange: null,
   });
 
   return {

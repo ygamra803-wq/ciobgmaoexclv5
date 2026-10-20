@@ -111,7 +111,7 @@ export default function PreventiveView({
       ? validationData.usedPDR
       : (Array.isArray(validationData?.pieces_utilisees) ? validationData.pieces_utilisees : []);
 
-    // If PDR consumed, synchronize with stock
+    // If PDR consumed, synchronize with stock via Sortie Interne movement (single source of truth for stock deduction)
     if (consumedPDR.length > 0 && onAddMouvement) {
       consumedPDR.forEach((pdr) => {
         const pdrRef = pdr.reference || pdr.ref;
@@ -132,16 +132,6 @@ export default function PreventiveView({
           technicien: validationData.technicien || validationData.technicien_realisateur || targetTask?.responsable || targetTask?.id_technicien || '',
           commentaire: `Consommation automatique sur maintenance préventive ${targetTask?.composant || ''} (${targetTask?.id_machine || ''})`,
         });
-      });
-    }
-
-    // Direct stock decrement if callback provided
-    if (consumedPDR.length > 0 && onDirectAdjustStock) {
-      consumedPDR.forEach((pdr) => {
-        const pdrRef = pdr.reference || pdr.ref;
-        if (pdrRef) {
-          onDirectAdjustStock(pdrRef, -Number(pdr.quantite || 1));
-        }
       });
     }
 

@@ -195,30 +195,29 @@ export default function AnalyseCorrectiveTab({
     let totalPdrCost = 0;
 
     filteredInterventions.forEach((item) => {
-      let mins = Number(item.temps_minutes) || 0;
-      if (!mins && (item.temps_intervention_calc || item.temps_intervention)) {
-        const str = String(item.temps_intervention_calc || item.temps_intervention);
-        const match = str.match(/(\d+)\s*h(?:our)?\s*(\d+)?/i);
-        if (match) {
-          const h = Number(match[1]) || 0;
-          const m = Number(match[2]) || 0;
-          mins = h * 60 + m;
-        } else if (str.includes(':')) {
-          const [h, m] = str.split(':');
-          mins = (Number(h) || 0) * 60 + (Number(m) || 0);
-        }
-      }
-
       if (item.arret_machine === true || item.arret_machine === 'OUI') {
+        const mins = AvailabilityCalculationService.getDowntimeMinutes(item);
         totalDowntimeMinutes += mins > 0 ? mins : 45;
       }
 
-      // Compute PDR Cost
-      const pdrKey = String(item.pdr_ref || item.pdr || '').trim().toUpperCase();
-      const stockItem = pdrKey ? stockMap.get(pdrKey) : null;
-      const price = Number(item.pdr_prix) || Number(stockItem?.prix) || Number(stockItem?.prix_unitaire) || 35;
-      const qty = Number(item.pdr_quantite) || (pdrKey ? 1 : 0);
-      totalPdrCost += price * qty;
+      // Compute PDR Cost accurately only when a spare part was used or explicit cost recorded
+      const explicitCost = Number(item.pdr_cost ?? item.cout_pdr ?? item.cout_total ?? 0);
+      if (explicitCost > 0) {
+        totalPdrCost += explicitCost;
+      } else {
+        const pdrKey = String(item.pdr_ref || item.pdr || '').trim().toUpperCase();
+        if (pdrKey) {
+          const stockItem = stockMap.get(pdrKey);
+          const price =
+            Number(item.pdr_prix) ||
+            Number(stockItem?.prix_unitaire) ||
+            Number(stockItem?.prix_achat_ht) ||
+            Number(stockItem?.prix) ||
+            0;
+          const qty = Number(item.pdr_quantite || item.quantite) || 1;
+          totalPdrCost += price * qty;
+        }
+      }
     });
 
     // 1. MTTR via AvailabilityCalculationService

@@ -10,7 +10,7 @@ export function useAppComplexHandlers({
   zones, setZones,
   operations, setOperations,
   technicians, setTechnicians,
-  _machines, setMachines,
+  machines, _machines, setMachines,
   mouvements, setMouvements,
   setTypes,
   rawStock, setRawStock,
@@ -29,6 +29,7 @@ export function useAppComplexHandlers({
   showToast,
   setCurrentTab,
 }) {
+  const activeMachines = machines || _machines || [];
   const handleUpdateZone = (id, updatedZone) => {
     setZones((prev) => prev.map((z) => (z.id_zone === id ? updatedZone : z)));
     const oldZone = zones.find((z) => z.id_zone === id);
@@ -50,7 +51,7 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeleteZone = (id) => {
-    const hasMachines = (_machines || []).some((m) => m.id_zone_default === id || m.id_zone === id);
+    const hasMachines = activeMachines.some((m) => m.id_zone_default === id || m.id_zone === id);
     const hasTechs = (technicians || []).some((t) => t.id_zone === id);
     if (hasMachines || hasTechs) {
       showToast?.(`Zone ${id} contient des machines ou techniciens actifs. Supprimez ou réaffectez-les d'abord.`, 'warning');
@@ -315,7 +316,7 @@ export function useAppComplexHandlers({
 
     // Check if technician is linked to movements or machine responsibilities
     const hasMovements = (mouvements || []).some((m) => m.technicien === techName || m.technicien === id);
-    const hasMachines = (_machines || []).some((m) => m.technician === techName);
+    const hasMachines = activeMachines.some((m) => m.technician === techName);
 
     if (hasMovements || hasMachines) {
       // Soft Delete: Mark as inactive / archived to preserve integrity of Work Orders & KPIs

@@ -5,8 +5,8 @@ import {
   Save,
   Users,
 } from 'lucide-react';
-import { vaultService } from '../../../utils/vaultService';
-import { storageService } from '../../../utils/storageService';
+import { vaultService } from '../../../../utils/vaultService';
+import { storageService } from '../../../../utils/storageService';
 
 /**
  * Admin Security, Zero-Knowledge Vault, PIN management, and RBAC matrix.

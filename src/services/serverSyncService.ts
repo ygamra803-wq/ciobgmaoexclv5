@@ -2,8 +2,10 @@ import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import { storageService } from '../utils/storageService';
 import { DataGateway } from '../application/DataGateway';
 import { useGmaoStore } from '../store/useGmaoStore';
+import { networkConfigService } from './networkConfigService';
 
 export interface ServerStateSummary {
+  version?: number;
   updatedAt: string | null;
   machinesCount: number;
   stockCount: number;
@@ -12,6 +14,16 @@ export interface ServerStateSummary {
   movementsCount: number;
   zonesCount: number;
   totalItems: number;
+}
+
+export interface ServerAuditEntry {
+  id: string;
+  timestamp: string;
+  version: number;
+  actor: string;
+  action: string;
+  entity: string;
+  summary: string;
 }
 
 export interface ConflictDetectionResult {
@@ -23,7 +35,49 @@ export interface ConflictDetectionResult {
 }
 
 const LAST_SYNC_AT_KEY = 'gmao_last_server_sync_at';
+const LAST_SERVER_VERSION_KEY = 'gmao_last_server_version';
 const LOCAL_MODIFIED_AT_KEY = 'gmao_local_modified_at';
+
+let autoPushTimer: ReturnType<typeof setTimeout> | null = null;
+let autoPushInFlight = false;
+
+const resolveSessionUser = (): Record<string, any> | null => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const signedRaw = sessionStorage.getItem('gmao_session_v2');
+      if (signedRaw) {
+        const parsed = JSON.parse(signedRaw);
+        if (parsed?.payload && typeof parsed.payload === 'object') {
+          return parsed.payload;
+        }
+      }
+    }
+    const activeUser = storageService.getItem('gmao_active_user');
+    if (activeUser && typeof activeUser === 'object') {
+      return activeUser;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+};
+
+const getActiveActorName = (): string => {
+  const user = resolveSessionUser();
+  if (user) {
+    return user.nom || user.name || user.username || user.role || 'operator';
+  }
+  return 'web-operator';
+};
+
+const getActiveActorRole = (): string => {
+  const user = resolveSessionUser();
+  if (user && typeof user.role === 'string' && user.role.trim()) {
+    return user.role.trim().toUpperCase();
+  }
+  return 'ADMIN';
+};
+
 
 export const serverSyncService = {
   getLastSyncAt(): string | null {
@@ -32,6 +86,18 @@ export const serverSyncService = {
 
   setLastSyncAt(isoTimestamp: string): void {
     storageService.setItem(LAST_SYNC_AT_KEY, isoTimestamp);
+  },
+
+  getLastServerVersion(): number | null {
+    const raw = storageService.getItem(LAST_SERVER_VERSION_KEY);
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  },
+
+  setLastServerVersion(version: number | undefined): void {
+    if (typeof version === 'number' && Number.isFinite(version) && version > 0) {
+      storageService.setItem(LAST_SERVER_VERSION_KEY, version);
+    }
   },
 
   getLocalModifiedAt(): string | null {
@@ -207,6 +273,7 @@ export const serverSyncService = {
     const zonesCount = Array.isArray(data.zones) ? data.zones.length : 0;
 
     return {
+      version: typeof data.version === 'number' ? data.version : undefined,
       updatedAt: data.updatedAt || null,
       machinesCount,
       stockCount,
@@ -229,7 +296,7 @@ export const serverSyncService = {
    */
   async fetchServerState(): Promise<{ online: boolean; state: Record<string, any> | null; summary: ServerStateSummary }> {
     try {
-      const response = await fetch('/api/gmao/state', {
+      const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -241,6 +308,9 @@ export const serverSyncService = {
       }
       const json = await response.json();
       const state = json?.data || {};
+      if (typeof json?.version === 'number' && state.version === undefined) {
+        state.version = json.version;
+      }
       return {
         online: true,
         state,
@@ -256,7 +326,30 @@ export const serverSyncService = {
   },
 
   /**
-   * Detects temporal or quantitative conflicts between local state and server gmao_state.json.
+   * Fetches recent append-only audit log entries from the server.
+   */
+  async fetchAuditLogs(limit = 100): Promise<ServerAuditEntry[]> {
+    try {
+      const response = await fetch(
+        networkConfigService.resolveApiUrl(`/api/gmao/audit?limit=${encodeURIComponent(String(limit))}`),
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            'x-gmao-client-origin': 'gmao-web-client',
+          },
+        }
+      );
+      if (!response.ok) return [];
+      const json = await response.json();
+      return Array.isArray(json?.data) ? json.data : [];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Detects temporal, version, or quantitative conflicts between local state and server gmao_state.json.
    */
   detectConflict(
     localData: Record<string, any>,
@@ -266,6 +359,7 @@ export const serverSyncService = {
     const localSummary = this.summarizeState(localData);
     const serverSummary = this.summarizeState(serverData);
     const lastSyncAt = this.getLastSyncAt();
+    const lastKnownVersion = this.getLastServerVersion();
 
     const serverTime = serverSummary.updatedAt ? new Date(serverSummary.updatedAt).getTime() : 0;
     const lastSyncTime = lastSyncAt ? new Date(lastSyncAt).getTime() : 0;
@@ -278,11 +372,16 @@ export const serverSyncService = {
       localSummary.movementsCount !== serverSummary.movementsCount;
 
     if (direction === 'push') {
-      // Conflict on push if server has non-empty data that is newer than our last sync OR differs when local is empty
       const serverHasData = serverSummary.totalItems > 0;
-      const isServerNewerThanLastSync = serverHasData && (!lastSyncTime || serverTime > lastSyncTime + 1000);
+      const versionAdvanced =
+        serverHasData &&
+        lastKnownVersion !== null &&
+        typeof serverSummary.version === 'number' &&
+        serverSummary.version > lastKnownVersion;
+      const isServerNewerThanLastSync =
+        serverHasData && (!lastSyncTime || serverTime > lastSyncTime + 1000 || versionAdvanced);
       const isOverwritingNonEmptyWithDifferent =
-        serverHasData && countsDiffer && isServerNewerThanLastSync;
+        serverHasData && (countsDiffer || versionAdvanced) && isServerNewerThanLastSync;
 
       if (isOverwritingNonEmptyWithDifferent) {
         return {
@@ -294,7 +393,6 @@ export const serverSyncService = {
         };
       }
     } else if (direction === 'pull') {
-      // Conflict on pull if local has data that differs from server
       const localHasData = localSummary.totalItems > 0;
       if (localHasData && countsDiffer) {
         return {
@@ -317,16 +415,18 @@ export const serverSyncService = {
 
   /**
    * Explicitly pushes local state to server gmao_state.json.
-   * If force=false, checks for conflict first.
+   * If force=false, checks for conflict first and sends expectedVersion for optimistic concurrency.
    */
   async pushToServer(options: { force?: boolean; customState?: Record<string, any> } = {}): Promise<{
     success: boolean;
     conflict?: ConflictDetectionResult;
+    version?: number;
     updatedAt?: string;
     summary?: ServerStateSummary;
     error?: string;
   }> {
     const localPayload = this.buildLocalPayload(options.customState);
+    const lastKnownVersion = this.getLastServerVersion();
 
     if (!options.force) {
       const serverCheck = await this.fetchServerState();
@@ -344,18 +444,60 @@ export const serverSyncService = {
             conflict,
           };
         }
+        if (typeof serverCheck.state.version === 'number') {
+          localPayload.expectedVersion = serverCheck.state.version;
+        }
       }
+    } else {
+      localPayload.force = true;
+    }
+
+    if (localPayload.expectedVersion === undefined && lastKnownVersion !== null && !options.force) {
+      localPayload.expectedVersion = lastKnownVersion;
     }
 
     try {
-      const response = await fetch('/api/gmao/state', {
+      const actorRole = getActiveActorRole();
+      if (actorRole === 'VIEWER' || actorRole === 'OBSERVATEUR') {
+        return {
+          success: false,
+          error: 'Accès refusé : le profil Observateur (VIEWER) est en lecture seule.',
+        };
+      }
+
+      const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
+          'x-gmao-actor': getActiveActorName(),
+          'x-gmao-role': actorRole,
         },
         body: JSON.stringify(localPayload),
       });
+
+      if (response.status === 403) {
+        const forbiddenJson = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: forbiddenJson?.message || 'Action non autorisée pour votre rôle (403 Forbidden).',
+        };
+      }
+
+      if (response.status === 409) {
+        const conflictJson = await response.json();
+        const serverState = conflictJson?.data || {};
+        return {
+          success: false,
+          conflict: {
+            hasConflict: true,
+            reason: 'SERVER_NEWER',
+            localSummary: this.summarizeState(localPayload),
+            serverSummary: this.summarizeState(serverState),
+            serverState,
+          },
+        };
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -364,10 +506,20 @@ export const serverSyncService = {
       const result = await response.json();
       const updatedAt = result?.updatedAt || new Date().toISOString();
       this.setLastSyncAt(updatedAt);
+      this.setLastServerVersion(result?.version);
       storageService.setItem(LOCAL_MODIFIED_AT_KEY, updatedAt);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('gmao:server_synced', {
+            detail: { version: result?.version, updatedAt },
+          })
+        );
+      }
 
       return {
         success: true,
+        version: result?.version,
         updatedAt,
         summary: this.summarizeState(localPayload),
       };
@@ -380,6 +532,38 @@ export const serverSyncService = {
   },
 
   /**
+   * Schedules a non-blocking background server sync (debounced) when local state changes.
+   * Respects optimistic concurrency so it never overwrites a newer server version silently.
+   */
+  scheduleAutoPush(customState?: Record<string, any>, delayMs = 2500): void {
+    if (typeof window === 'undefined') return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const role = getActiveActorRole();
+    if (role === 'VIEWER' || role === 'OBSERVATEUR') return;
+
+    if (autoPushTimer) {
+      clearTimeout(autoPushTimer);
+    }
+
+    autoPushTimer = setTimeout(async () => {
+      if (autoPushInFlight) return;
+      autoPushInFlight = true;
+      try {
+        const res = await this.pushToServer({ force: false, customState });
+        if (!res.success && res.conflict) {
+          window.dispatchEvent(
+            new CustomEvent('gmao:server_conflict', { detail: res.conflict })
+          );
+        }
+      } catch {
+        // Silent background fallback when server is unreachable in offline/unit-test environments
+      } finally {
+        autoPushInFlight = false;
+      }
+    }, delayMs);
+  },
+
+  /**
    * Explicitly pulls state from server gmao_state.json and applies it via DataGateway.loadFullServerState.
    * If force=false, checks for conflict first.
    */
@@ -389,6 +573,7 @@ export const serverSyncService = {
   } = {}): Promise<{
     success: boolean;
     conflict?: ConflictDetectionResult;
+    version?: number;
     updatedAt?: string;
     summary?: ServerStateSummary;
     error?: string;
@@ -452,9 +637,11 @@ export const serverSyncService = {
 
     const syncTimestamp = serverCheck.state.updatedAt || new Date().toISOString();
     this.setLastSyncAt(syncTimestamp);
+    this.setLastServerVersion(serverCheck.state.version);
 
     return {
       success: true,
+      version: serverCheck.state.version,
       updatedAt: syncTimestamp,
       summary: serverCheck.summary,
     };
