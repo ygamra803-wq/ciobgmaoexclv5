@@ -1,59 +1,67 @@
-# 🏛️ GMAO Nexus — Architecture Status & Engineering Roadmap
+# 🏛️ وثيقة القدرات والقرارات المعمارية — CIOB GMAO v4 (`ARCHITECTURE.md`)
 
-> **Document Version:** 2.0.0  
-> **Last Audit:** September 2026  
-> **Target Environment:** React 19 + Vite 6 + Web Crypto API + PWA (Offline-First)
-
----
-
-## 1. Security & Cryptography (Zero-Knowledge Vault)
-
-- ✅ **Implemented & Verified:**
-  - **Native Web Crypto Engine:** `AES-256-GCM` encryption with PBKDF2 key derivation using dynamic cryptographically secure salt (`vaultService.js`).
-  - **No Plaintext Passwords/Backdoors:** Default backdoors (`admin123`/`1234`) removed; default admin accounts stripped from production runtime.
-  - **Non-Reversible Master PIN:** PIN verifier hashed via bcrypt/SHA-256; zero plain PIN prefilling in `SettingsView.jsx`.
-  - **Fail-Closed RBAC:** Default guest role `VIEWER` when no valid session is present (`PermissionService.js`).
-- 🟡 **In Progress:**
-  - Session HMAC signing with secret held in memory vault.
-  - Absolute session expiration (8h max lifetime, 30m idle lock).
-- 🔵 **Planned (P1):**
-  - Upgrading PBKDF2 to 600,000 iterations / Argon2id WASM.
-  - Strict Content Security Policy (CSP) with nonce-based script loading.
+> **فلسفة الوثيقة:**
+> نحن لا نجرّ خلفنا مشاكل محلولة؛ نحوّلها إلى **ضمانات تصميم موثّقة وقابلة للفحص**.
+> جودة المنتج تُقاس بصمود مسارات المصنع الحرجة أمام مستخدم حقيقي ومراجع تقني.
 
 ---
 
-## 2. Calculation Engine & Indexing
+## 1️⃣ للمستثمر والإدارة التنفيذية (صفحة واحدة صادقة — Executive One-Pager)
 
-- ✅ **Implemented & Verified:**
-  - **$O(1)$ Incremental Movement Index:** `IncrementalStockIndex.js` with `applyDelta`, `rollbackDelta`, and `updateDelta` for real-time shopfloor operations.
-  - **$O(A + M)$ Batch Stock Report Generator:** Single-pass movement aggregation index with direct article stock resolution.
-  - **Nullish Coalescing (`??`) Stock Resolution:** Prevents zero balances from falling back onto neighboring padded/unpadded reference variants.
-  - **French Number & Locale Normalization:** Safe handling of non-breaking spaces (NBSP) and comma decimal separators in `formulaEngine.js`.
-  - **Finite Numeric Guards:** Strict `Number.isFinite(qty) && qty > 0` validation.
-- 🟡 **In Progress:**
-  - Dependency Graph-based selective cache invalidation across sub-states.
-- 🔵 **Planned (P1):**
-  - Property-based testing with `fast-check` for comprehensive inventory invariants.
+### ماذا يفعل النظام في المصنع؟
+يدير **CIOB GMAO v4** دورة الصيانة الصناعية وقطع الغيار اليومية عبر 5 مسارات مترابطة:
+1. **سجل الآلات والخطوط (`Parc Machines & BOM`):** هيكلة آلات المصنع حسب المناطق، مع سجل تاريخي للقطع المركبة (`Machine BOM Ledger`) وحساب آلي لمؤشرات الموثوقية (`MTBF`, `MTTR`, `Availability`).
+2. **مخزون قطع الغيار والحركات (`Stock PDR & Mouvements`):** تتبع لحظي لأرصدة المخزون وحالات الخطر (`OK` / `ALERTE` / `RUPTURE`)، مرتبط مباشرة بحركات الإدخال والصرف والورش الخارجية (`Bobinage / Sortie Externe`).
+3. **الصيانة الوقائية المؤرخة (`Maintenance Préventive`):** جدولة المهام الدورية (أسبوعية، شهرية، ربع سنوية...) وتسجيل كل عملية تنفيذ كحدث تاريخي مستقل (`PreventiveExecution`) يحسب الاستحقاق القادم ويخصم القطع المستهلكة تلقائياً.
+4. **الصيانة التصحيحية وأوامر العمل (`DI / BT Correctif`):** دورة حياة منضبطة تبدأ من طلب التدخل (`DI`)، مروراً بأمر العمل (`BT`) والتنفيذ، وصولاً إلى الإغلاق الموثق بزمن التوقف (`Downtime`) وتكلفة القطع.
+5. **تقرير إغلاق الشهر التنفيذي (`Rapport Mensuel Direction`):** وثيقة إدارية ومالية بضغطة زر تلخص استهلاك الشهر، انضباط الصيانة الوقائية، أكثر الآلات توقفاً، ونواقص الشراء العاجلة، مع مقارنة شهر بشهر (`MoM Delta`) وتصدير مباشر إلى `PDF` و`Excel`.
+
+### لماذا يُوثق به؟ (ضمانات التصميم الأساسية)
+- **لا يُحذف تاريخ مرتبط:** الآلة أو الفني المرتبط بسجل حركات أو أعطال سابقة لا يُحذف حذفا صلباً يفسد تقارير الماضي، بل يُؤرشف (`Soft Delete`) فيختفي من قوائم الإدخال الجديدة ويبقى تاريخه المالي والفني مصوناً.
+- **لا رصيد سحري:** رصيد أي قطعة غيار هو ناتج معادلة رياضية صارمة (`الرصيد الأولي + مجموع الدخول − مجموع الخروج`) عبر محرك واحد (`IncrementalStockIndex`)، بلا تعديل عشوائي يخلّ بالمطابقة الدفترية.
+- **تفريغ آمن للتحضير للمصنع الحقيقي (`Zero-Residue Factory Clear`):** يمكنك استعراض النظام ببيانات المصنع التجريبية الغنية (`873` قطعة، `102` حركة، `12` عطل)، ثم بضغطة واحدة (`Clear All for Real Factory`) تصفير النظام بالكامل (`0` سجلات صامدة بعد `F5`) للبدء بإدخال بيانات مصنعك الفعلي.
+- **مخ واحد على الشبكة المحلية (`LAN Host Single Brain`):** يعمل الحاسوب الرئيسي كمضيف (`Host`) يدير الحالة عبر طابور كتابة ذري متسلسل ورقم إصدار (`version / ETag`) يمنع تضارب الكتابة المتزامنة من هواتف الفنيين.
+
+### أين وصلنا بصدق؟ (الوضع الحالي وحدود المنتج)
+- **جاهز وتشغيلي بالكامل:** تطبيق الويب المحلي والشبكي (`Offline-First + LAN Host/Client`)، محرك المخزون والحركات، الذاكرة الزمنية للوقائي والتصحيحي، نظام الصلاحيات (`RBAC`)، وتقرير الشهر التنفيذي.
+- **قيد التهذيب في قائمة الانتظار القصيرة:** تغليف سطح المكتب كملف تنفيذي مستقل (`Desktop Native Wrapper`)، ومزامنة قفل ملف الإكسل الشبكي المشترك (`EBUSY Retry Queue`).
+- **ما لا يدّعيه المنتج:** النظام هو **محرك صيانة ومخزون فني رشيق للمصانع**؛ ليس نظام `SAP` أو `ERP` محاسبي/مالي شامل (لا يدير الرواتب، الفوترة الضريبية، أو المحاسبة العامة).
+
+### 🧪 دعوة للفحص العملي في 15 دقيقة (15-Minute Verifiable Walkthrough)
+لا نطلب الثقة بالكلام؛ افتح المتصفح واختبر المسارات الخمسة بنفسك:
+1. **الديمو المترابط (3 دقائق):** حمّل بيانات الديمو وتفقد تطابق أرصدة `Stock Actuel` وحالات `RUPTURE` مع جدول الحركات (`102` حركة).
+2. **تنفيذ وقائي مؤرخ (3 دقائق):** نفّذ مهمة وقائية مع صرف قطعة غيار؛ لاحظ تسجيل الحدث في سجل الشهر وخصم القطعة مرة واحدة بالضبط.
+3. **إغلاق عطل تصحيحي (3 دقائق):** افتح أمر عمل (`BT`)، أغلقه بقطعة غيار وساعات توقف، وحاول إغلاقه مرة ثانية — سيرفض النظام الانتقال غير القانوني (`FSM Guard`).
+4. **تقرير الشهر التنفيذي (3 دقائق):** افتح `Rapport Mensuel` وتأكد أن تكلفة الشهر وساعات التوقف تعكس فوراً ما قمت به، ثم صدّر ملف `Excel` متعدد الأوراق.
+5. **التفريغ والصمود بعد `F5` (3 دقائق):** نفّذ `Clear All`، ثم اضغط `F5`؛ ستجد جميع الجداول والعدادات (`Stock`, `Preventive`, `Movements`, `Corrective`) عند الصفر الحقيقي (`0`).
 
 ---
 
-## 3. Data Integrity, Storage & PWA
+## 2️⃣ للمبرمج والمراجع التقني (معمارية بقرار — Architecture by Decision)
 
-- ✅ **Implemented & Verified:**
-  - **Zod v4 Compatibility:** Transitioned to `error.issues` for structured schema error reporting across Stock, Movements, and Machines.
-  - **Sanitized Direct File Linking:** File System Access API path passes through schema validation, data sanitization, and date parsing.
-  - **Service Worker GET Filtering:** Cache API operations guarded to intercept `GET` requests exclusively.
-- 🟡 **In Progress:**
-  - Moving hot data writes from `localStorage` to IndexedDB with explicit quota error surfaces.
-- 🔵 **Planned (P2):**
-  - Cross-tab state synchronization via dedicated `BroadcastChannel API`.
-  - Encrypted backup exports (`.gmao` container encrypted with AES-256-GCM).
+| الركيزة المعمارية | التصميم المعتمد والتنفيذ في الشيفرة | الاختبارات الضامنة |
+| :--- | :--- | :--- |
+| **1. مصدر الحقيقة (`SSOT`)** | مسار كتابة وقراءة أحادي عبر `src/application/DataGateway.ts` يتحكم في 32 مفتاحاً قياسياً (`STORAGE_KEYS`). يفصل صراحةً بين وضع الديمو (`START_MODE = 'demo'`) ووضع المصنع الفارغ (`START_MODE = 'empty'`)، ويمنع انبعاث المفاتيح القديمة (`ALL_LEGACY_KEYS`) أو لقطات `IndexedDB` بعد التفريغ. | `PreventiveClearPersistence.test.ts`<br>`ThreeCriticalPaths.test.ts` |
+| **2. سلامة البيانات (`Data Integrity`)** | منع الحذف الصلب للكيانات المرتبطة تاريخياً: فحص ارتباط الآلات قبل حذف المناطق (`Zones`) أو أرشفة الفنيين (`useAppComplexHandlers.ts`)، واستبعاد الآلات المؤرشفة من قوائم الإنشاء الجديدة عبر `filterActiveMachines` (`src/utils/activeMachines.ts`). | `ThreeCriticalPaths.test.ts`<br>`Round3StateAndWiringFixes.test.ts` |
+| **3. محرك المخزون (`Inventory Engine`)** | معادلة وحيدة لا تقبل الالتفاف: `stockActuel = stockInitial + entrées − sorties` عبر `src/application/IncrementalStockIndex.ts` ($O(1)$ delta) و`StockCalculationService.ts`. كافة عمليات الصرف في الوقائي والتصحيحي تمر حصراً عبر إضافة حركة `Sortie Interne` دون أي خصم مباشر مزدوج. | `StockMovementsCorrectiveSeeds.test.ts`<br>`StockPropertyAndEdgeCases.test.ts` |
+| **4. الذاكرة الزمنية (`Temporal Memory & FSM`)** | فصل الخطة الوقائية الثابتة (`PreventiveTask`) عن سجل التنفيذ المؤرخ (`PreventiveExecution` في `ExecutionService.ts`). ضبط دورة حياة أوامر العمل عبر آلة حالة محدودة صارمة (`WorkOrderStateMachine.ts`: `DI ➔ BT ➔ EN_COURS ➔ CLOTURE`) تمنع القفز أو الإغلاق المكرر. | `Phase1FactoryMemory.test.ts`<br>`Round6FsmAndMonthlyReport.test.ts` |
+| **5. الحماية والمضيف (`Security & LAN Host`)** | حماية `/api/gmao/*` في `server.ts` بتوكن `X-GMAO-API-TOKEN`، قائمة كيانات بيضاء (`ALLOWED_ENTITIES`)، وفحص صلاحيات الأدوار (`x-gmao-role` / `AuthorizationService.tsx`). كتابة ذرية متسلسلة (`Write MutexQueue`: `.tmp` ➔ `rename`) مع رقم إصدار `version / ETag` وحماية `409 Conflict` ومزامنة `SSE` عبر `networkConfigService.ts`. | `Round4ServerSyncAndConcurrency.test.ts`<br>`Round5RbacAndSecurity.test.ts`<br>`Round7LanArchitectureAndRefactoring.test.ts` |
+| **6. التقرير الشهري (`Monthly Analytics`)** | محرك حساب شهري خالص (`MonthlyReportCalculationService.ts`) يشتق مؤشرات الشهر المختار (`YYYY-MM`) ومقارنة الشهر السابق (`MoM Delta`) من السجلات المؤرخة مباشرة، مع حساب `MTTR / MTBF / Availability` الفعلي (`AvailabilityCalculationService.ts`). | `Round6FsmAndMonthlyReport.test.ts`<br>`Phase1FactoryMemory.test.ts` |
+| **7. حدود صريحة (`Explicit Boundaries`)** | معمارية **Web & LAN-Host First** (`React 19 + Zustand + Express 5`). المكونات المقسمة بوضوح (مثل تفكيك `SettingsView.tsx` إلى 10 وحدات فرعية). لا تبعيات خارجية ثقيلة لقواعد بيانات خارجية أو سحابية إلزامية في صالة الإنتاج. | `Round7LanArchitectureAndRefactoring.test.ts` |
 
 ---
 
-## 4. TypeScript Migration Strategy
+## 3️⃣ سجل القرارات المعمارية الخفيف (Lightweight ADR Log)
 
-- **Boundary-First Rule:** Every new public API or domain service must export TypeScript type definitions (`.d.ts` / `.ts`).
-- **Phase 1 (Domain & Schemas):** Type definitions for Stock, Movements, Machines, Interventions, and Auth.
-- **Phase 2 (Application & Core):** Conversion of services (`IncrementalStockIndex.ts`, `StockCalculationService.ts`, `vaultService.ts`).
-- **Phase 3 (Hooks & Presentation):** Custom hooks converted to TypeScript; UI components maintained in `.jsx` with strict JSDoc/Zod contracts.
+كل قرار هندسي في **CIOB GMAO v4** موثق بقاعدة: **المشكلة ➔ القرار ➔ لماذا ➔ ماذا لا نفعل.**
+
+| المعرف | القرار المعماري (المشكلة ➔ القرار ➔ لماذا ➔ ماذا لا نفعل) |
+| :--- | :--- |
+| **ADR-01**<br>*(SSOT & Clear)* | **المشكلة:** تعدد مسارات التخزين (`localStorage`, `IndexedDB`, مفاتيح قديمة) قد يعيد بيانات الديمو بعد التفريغ.<br>**القرار:** حصر الكتابة والتفريغ في `DataGateway.ts` مع راية `START_MODE = 'empty'` وتطهير `ALL_LEGACY_KEYS`.<br>**لماذا:** لضمان أن تفريغ المصنع نهائي وصامد 100% بعد تحديث الصفحة `F5`.<br>**ماذا لا نفعل:** لا نكتب في `localStorage` مباشرة من مكونات الواجهة، ولا نضع أرقاماً احتياطية وهمية (`\|\| 800`) في العدادات. |
+| **ADR-02**<br>*(Soft Delete)* | **المشكلة:** حذف آلة أو فني له سجل حركات وأعطال سابق يدمر حسابات التكلفة و`MTBF` التاريخية.<br>**القرار:** منع الحذف الصلب للكيانات المرتبطة واعتماد الأرشفة (`ARCHIVEE` / `is_active: false`) مع فلتر `filterActiveMachines`.<br>**لماذا:** للحفاظ على نزاهة السجل التاريخي والتقارير المالية مع إخفاء الآلات المتقاعدة من قوائم العمل اليومي.<br>**ماذا لا نفعل:** لا نحذف سجلاً مرجعياً يملك مفاتيح خارجية في جداول الحركات أو التدخلات. |
+| **ADR-03**<br>*(Single Stock Engine)* | **المشكلة:** تعديل رصيد القطعة يدوياً في أكثر من مكان يؤدي لتضارب بين الرصيد المعروض ومجموع الحركات.<br>**القرار:** الرصيد الفعلي يُحسب حصراً من `stockInitial + entrées − sorties` عبر `IncrementalStockIndex.ts`.<br>**لماذا:** لضمان مطابقة رياضية 100% قابلة للتدقيق في أي لحظة.<br>**ماذا لا نفعل:** لا نستدعي دالة تعديل رصيد مباشر (`directAdjust`) بالتوازي مع تسجيل حركة صرف (`Sortie Interne`). |
+| **ADR-04**<br>*(Preventive Events)* | **المشكلة:** الاكتفاء بتبديل حالة المهمة الوقائية (`Done / Pending`) يمسح تاريخ التنفيذات السابقة عند حلول الدورة التالية.<br>**القرار:** فصل تعريف المهمة (`PreventiveTask`) عن حدث التنفيذ المؤرخ (`PreventiveExecution` يحمل `periodMonth: YYYY-MM`).<br>**لماذا:** لتمكين المصنع من مراجعة سجل أي شهر سابق وحساب نسبة الانضباط الوقائي الشهري بدقة.<br>**ماذا لا نفعل:** لا نعتمد على حقل حالة متغير وحيد لحساب إحصائيات الأشهر الماضية. |
+| **ADR-05**<br>*(WorkOrder FSM)* | **المشكلة:** إغلاق أمر العمل أكثر من مرة أو الانتقال العشوائي بين الحالات يسبب خصماً مكرراً للقطع وتشويهاً لمؤشر `MTTR`.<br>**القرار:** فرض آلة حالة محدودة (`WorkOrderStateMachine.ts`) تحكم انتقالات `DEMANDE ➔ EN_COURS / EN_ATTENTE_PDR ➔ CLOTURE`.<br>**لماذا:** لمنع إعادة إغلاق أمر مغلق ولضمان خصم قطع الغيار مرة واحدة فقط عند الإغلاق القانوني.<br>**ماذا لا نفعل:** لا نسمح بتغيير حالة أمر العمل خارج حارس الانتقال (`assertValidTransition`). |
+| **ADR-06**<br>*(Atomic Host & 409)* | **المشكلة:** كتابة أكثر من جهاز على `data/gmao_state.json` في نفس اللحظة قد تتلف ملف JSON أو تمسح تعديل زميل.<br>**القرار:** طابور كتابة متسلسل غير حاجب (`Write Mutex`) يكتب إلى ملف مؤقت `.tmp` ثم يبدله ذرياً (`rename`)، مع رقم إصدار `version` وفحص `expectedVersion` يرجع `409 Conflict` عند التعارض.<br>**لماذا:** لحماية ملف الدولة المركزي على المضيف (`Host`) في بيئة الشبكة المحلية متعددة الهواتف.<br>**ماذا لا نفعل:** لا نستخدم `fs.writeFileSync` المباشر على ملف الحالة الرئيسي ولا نقبل كتابة عمياء تتجاهل رقم الإصدار. |
+| **ADR-07**<br>*(Whitelist & RBAC)* | **المشكلة:** فتح نقاط نهاية `/api/gmao/:entity` لأي اسم كيان أو لأي مستخدم يعرض الخادم لحقن مفاتيح عشوائية أو تعديل غير مصرح.<br>**القرار:** فرض قائمة بيضاء صارمة (`ALLOWED_ENTITIES` — 32 مفتاحاً)، وتوكن `X-GMAO-API-TOKEN`، وفحص دور المستخدم (`x-gmao-role` + `AuthorizationService.tsx`).<br>**لماذا:** لتطبيق مبدأ الصلاحيات الدنيا (`Least Privilege`) على مستوى الواجهة والخادم معاً.<br>**ماذا لا نفعل:** لا نسمح لدور `VIEWER` بأي عملية كتابة (`403`)، ولا نسمح لغير المشرفين بتعديل المستخدمين أو المناطق. |
+| **ADR-08**<br>*(LAN Host Topology)* | **المشكلة:** تشغيل قواعد بيانات مستقلة على كل جهاز في المصنع يخلق جزر بيانات منعزلة.<br>**القرار:** معمارية المضيف والأطراف (`HOST` مقابل `LAN_CLIENT` عبر `networkConfigService.ts`) مع بث `QR Code` وإشعارات تحديث لحظية `SSE` (`/api/gmao/events`).<br>**لماذا:** ليعمل حاسوب الصيانة الرئيسي كعقل مركزي واحد تتصل به هواتف الفنيين عبر الـ Wi-Fi المحلي بدون إنترنت خارجي.<br>**ماذا لا نفعل:** لا نستخدم استقصاءً خلفياً صامتاً عشوائياً يرهق الشبكة أو يكتب فوق مسودات المستخدم. |
