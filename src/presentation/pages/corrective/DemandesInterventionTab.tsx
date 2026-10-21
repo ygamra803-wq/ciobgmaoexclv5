@@ -29,12 +29,14 @@ import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGr
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { getBlueprintCommonFailuresForMachine } from '../../../core/domain';
 
 export default function DemandesInterventionTab({
   interventions = [],
   onAddDemande,
   onConvertToBt,
   machines = [],
+  blueprints = [],
   technicians = [],
   stockItems = [],
   warehouseItems = [],
@@ -135,6 +137,7 @@ export default function DemandesInterventionTab({
     return active.map((m) => ({
       id_machine_registered: m.id_machine_registered || m.code || m.id,
       code: m.code || m.id_machine_registered || m.id,
+      id_blueprint: m.id_blueprint || '',
       zone: m.id_zone_default || m.id_zone || m.zone || 'Atelier',
       designation: m.designation || m.nom || m.id_machine_registered || m.id,
       totalInterventions: m.totalInterventions || 0,
@@ -239,6 +242,43 @@ export default function DemandesInterventionTab({
       return (wMach === code || wMach.includes(code)) && isPart;
     });
   }, [newForm.code_machine, warehouseItems]);
+
+  // Blueprint common failures for the currently selected active machine (BP-5)
+  const selectedMachineBlueprintId = useMemo(() => {
+    if (!newForm.code_machine) return '';
+    const code = String(newForm.code_machine).trim().toUpperCase();
+    const matched = allMachineOptions.find(
+      (m) => String(m.code || m.id_machine_registered || '').trim().toUpperCase() === code
+    );
+    return matched?.id_blueprint || '';
+  }, [newForm.code_machine, allMachineOptions]);
+
+  const blueprintCommonFailures = useMemo(() => {
+    return getBlueprintCommonFailuresForMachine(newForm.code_machine, machines, blueprints);
+  }, [newForm.code_machine, machines, blueprints]);
+
+  const handleApplyBlueprintCommonFailure = useCallback((failure) => {
+    if (!failure) return;
+    setNewForm((prev) => {
+      const nextTypePanne = failure.type_panne || prev.type_panne || 'M';
+      const nextAnomalie = failure.title || prev.anomalie;
+      const nextUrgence = failure.urgence || prev.priorite || 'HAUTE';
+      const nextPdrRef = failure.pdr_ref !== undefined && failure.pdr_ref !== '' ? failure.pdr_ref : prev.pdr_ref;
+      const parts = [failure.recommended_action, failure.description].filter(
+        (x) => x && String(x).trim()
+      );
+      const nextTravail = parts.length > 0 ? parts.join(' — ') : failure.title || prev.travail_a_faire;
+
+      return {
+        ...prev,
+        type_panne: nextTypePanne,
+        anomalie: nextAnomalie,
+        priorite: nextUrgence,
+        pdr_ref: nextPdrRef,
+        travail_a_faire: nextTravail,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (presetData) {
@@ -1382,6 +1422,56 @@ export default function DemandesInterventionTab({
                 </select>
               </div>
 
+              {/* Pannes fréquentes du blueprint (BP-5) */}
+              {blueprintCommonFailures.length > 0 && (
+                <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                      <Wrench className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Pannes fréquentes du blueprint ({selectedMachineBlueprintId})</span>
+                    </span>
+                    <span className="text-[10px] font-mono font-bold text-indigo-700 bg-white px-2 py-0.5 rounded border border-indigo-200">
+                      Cliquer pour pré-remplir
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {blueprintCommonFailures.map((cf, idx) => (
+                      <button
+                        key={cf.id || idx}
+                        type="button"
+                        onClick={() => handleApplyBlueprintCommonFailure(cf)}
+                        className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-indigo-100/80 text-indigo-950 border border-indigo-200 hover:border-indigo-400 font-semibold text-[11px] cursor-pointer transition shadow-2xs text-left flex items-center gap-1.5"
+                        title={
+                          [cf.description, cf.recommended_action]
+                            .filter(Boolean)
+                            .join(' • ') || cf.title
+                        }
+                      >
+                        {cf.type_panne && (
+                          <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-mono font-bold text-[10px]">
+                            {cf.type_panne}
+                          </span>
+                        )}
+                        <span>{cf.title}</span>
+                        {cf.urgence && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold ${
+                              cf.urgence === 'HAUTE'
+                                ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                : cf.urgence === 'BASSE'
+                                ? 'bg-slate-100 text-slate-600'
+                                : 'bg-amber-50 text-amber-700 border border-amber-200'
+                            }`}
+                          >
+                            {cf.urgence}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Entrepôt: Composants & Pièces Spéciales de la Machine */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-amber-50/50 border border-amber-200/60">
                 <div>
@@ -1501,6 +1591,9 @@ export default function DemandesInterventionTab({
                     onChange={(e) => setNewForm({ ...newForm, anomalie: e.target.value })}
                     className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-amber-400 focus:outline-hidden"
                   >
+                    {newForm.anomalie && !anomaliesForSelectedCategory.includes(newForm.anomalie) && (
+                      <option value={newForm.anomalie}>{newForm.anomalie}</option>
+                    )}
                     {anomaliesForSelectedCategory.map((anom) => (
                       <option key={anom} value={anom}>
                         {anom}

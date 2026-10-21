@@ -100,6 +100,7 @@ export const DataGateway = {
       ? list.map((b) => ({
           ...b,
           preventivePlanItems: Array.isArray(b?.preventivePlanItems) ? b.preventivePlanItems : [],
+          commonFailures: Array.isArray(b?.commonFailures) ? b.commonFailures : [],
         }))
       : [];
     storageService.setItem(STORAGE_KEYS.BLUEPRINTS, clean);

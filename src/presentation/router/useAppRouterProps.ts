@@ -756,6 +756,7 @@ export function useAppRouterProps({
       onBulkImport: handleBulkImportCorrective,
       onResetToSeed: (ctx) => handleResetCorrectiveToSeed({ machines, ...ctx }),
       machines,
+      blueprints,
       zones,
       technicians,
       onAddTechnician: handleAddTechnician,

@@ -121,13 +121,14 @@ export default function BlueprintMachineView({
     parts_theoriques: [],
     pdr_theoriques: [],
     preventivePlanItems: [],
+    commonFailures: [],
   };
 
   const [form, setForm] = useState(initialFormState);
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
-  // Helper inputs for adding items into Tab 2, 3, 4, 5
+  // Helper inputs for adding items into Tab 2, 3, 4, 5, 6
   const [newCompItem, setNewCompItem] = useState({ id_component: '', libelle: '', qte: 1 });
   const [newPartItem, setNewPartItem] = useState({ id_part: '', libelle: '', qte: 1 });
   const [newPdrItem, setNewPdrItem] = useState({ id_pdr: '', libelle: '', qte: 1, criticite: 'Haute' });
@@ -137,6 +138,14 @@ export default function BlueprintMachineView({
     frequence: 'Mensuel',
     duree_min: 15,
     description: '',
+  });
+  const [newCommonFailureItem, setNewCommonFailureItem] = useState({
+    title: '',
+    type_panne: 'M',
+    urgence: 'HAUTE',
+    recommended_action: '',
+    description: '',
+    pdr_ref: '',
   });
   const [applyFeedback, setApplyFeedback] = useState(null);
 
@@ -385,6 +394,7 @@ export default function BlueprintMachineView({
       parts_theoriques: bp.parts_theoriques || [],
       pdr_theoriques: bp.pdr_theoriques || [],
       preventivePlanItems: Array.isArray(bp.preventivePlanItems) ? bp.preventivePlanItems : [],
+      commonFailures: Array.isArray(bp.commonFailures) ? bp.commonFailures : [],
     });
     setActiveModalTab('specs');
   };
@@ -396,6 +406,7 @@ export default function BlueprintMachineView({
     onAddBlueprint({
       ...form,
       preventivePlanItems: Array.isArray(form.preventivePlanItems) ? form.preventivePlanItems : [],
+      commonFailures: Array.isArray(form.commonFailures) ? form.commonFailures : [],
     });
     setShowAddModal(false);
     setForm(initialFormState);
@@ -411,6 +422,7 @@ export default function BlueprintMachineView({
     onUpdateBlueprint(toEdit.id_blueprint, {
       ...toEdit,
       preventivePlanItems: Array.isArray(toEdit.preventivePlanItems) ? toEdit.preventivePlanItems : [],
+      commonFailures: Array.isArray(toEdit.commonFailures) ? toEdit.commonFailures : [],
     });
     setToEdit(null);
   };
@@ -1288,6 +1300,19 @@ export default function BlueprintMachineView({
                               type="button"
                               onClick={() => {
                                 setActiveActionMenuId(null);
+                                setSelectedInspectBlueprint(bp);
+                                setInspectActiveTab('failures');
+                              }}
+                              className="w-full px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-900 rounded-xl transition flex items-center gap-2.5 cursor-pointer group"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 group-hover:scale-110 transition-transform" />
+                              <span>Pannes fréquentes du blueprint ({(bp.commonFailures || []).length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
                                 handleOpenEditModal(bp);
                               }}
                               className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
@@ -1409,6 +1434,19 @@ export default function BlueprintMachineView({
               >
                 <Calendar className="w-3.5 h-3.5 text-teal-600" />
                 <span>5. Plan préventif du blueprint ({(selectedInspectBlueprint.preventivePlanItems || []).length})</span>
+              </button>
+              <button
+                onClick={() => {
+                  setInspectActiveTab('failures');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+                  inspectActiveTab === 'failures'
+                    ? 'border-amber-600 text-amber-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>6. Pannes fréquentes (DI) ({(selectedInspectBlueprint.commonFailures || []).length})</span>
               </button>
             </div>
 
@@ -1814,6 +1852,207 @@ export default function BlueprintMachineView({
                   </div>
                 );
               })()}
+
+              {inspectActiveTab === 'failures' && (() => {
+                const currentFailures = Array.isArray(selectedInspectBlueprint.commonFailures)
+                  ? selectedInspectBlueprint.commonFailures
+                  : [];
+                return (
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-amber-950 text-xs flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          <span>Pannes fréquentes du blueprint (Suggestions DI Correctif)</span>
+                        </h4>
+                        <p className="text-[11px] text-amber-800 mt-0.5">
+                          Pannes et travaux types proposés automatiquement lors de la création d&apos;une DI sur toute machine active rattachée à ce Blueprint.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Add Common Failure Row */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <input
+                          type="text"
+                          value={newCommonFailureItem.title}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({ ...newCommonFailureItem, title: e.target.value })
+                          }
+                          placeholder="Titre / Symptôme (ex: Échauffement palier broche)"
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                        />
+                        <select
+                          value={newCommonFailureItem.type_panne}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({ ...newCommonFailureItem, type_panne: e.target.value })
+                          }
+                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                        >
+                          <option value="M">M • Mécanique</option>
+                          <option value="E">E • Électrique</option>
+                          <option value="H">H • Hydraulique</option>
+                          <option value="P">P • Pneumatique</option>
+                        </select>
+                        <select
+                          value={newCommonFailureItem.urgence}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({ ...newCommonFailureItem, urgency: e.target.value, urgence: e.target.value })
+                          }
+                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                        >
+                          <option value="HAUTE">Urgence : HAUTE</option>
+                          <option value="MOYENNE">Urgence : MOYENNE</option>
+                          <option value="BASSE">Urgence : BASSE</option>
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          value={newCommonFailureItem.recommended_action}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({
+                              ...newCommonFailureItem,
+                              recommended_action: e.target.value,
+                            })
+                          }
+                          placeholder="Travail suggéré (ex: Contrôler jeu et remplacer roulement)"
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                        />
+                        <select
+                          value={newCommonFailureItem.pdr_ref}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({ ...newCommonFailureItem, pdr_ref: e.target.value })
+                          }
+                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs"
+                        >
+                          <option value="">PDR associée (optionnel)</option>
+                          {stockItems.map((s, idx) => (
+                            <option key={`insp-cf-pdr-${s.ref || idx}-${idx}`} value={s.ref}>
+                              {s.ref} • {s.designation}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newCommonFailureItem.description}
+                          onChange={(e) =>
+                            setNewCommonFailureItem({
+                              ...newCommonFailureItem,
+                              description: e.target.value,
+                            })
+                          }
+                          placeholder="Description complémentaire / cause..."
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newCommonFailureItem.title.trim()) return;
+                            const item = {
+                              id: `BPF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                              title: newCommonFailureItem.title.trim(),
+                              type_panne: newCommonFailureItem.type_panne || 'M',
+                              urgence: newCommonFailureItem.urgence || 'HAUTE',
+                              recommended_action: newCommonFailureItem.recommended_action.trim(),
+                              description: newCommonFailureItem.description.trim(),
+                              pdr_ref: newCommonFailureItem.pdr_ref || undefined,
+                            };
+                            const nextFailures = [...currentFailures, item];
+                            const updatedBp = {
+                              ...selectedInspectBlueprint,
+                              commonFailures: nextFailures,
+                            };
+                            setSelectedInspectBlueprint(updatedBp);
+                            onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                            setNewCommonFailureItem({
+                              title: '',
+                              type_panne: 'M',
+                              urgence: 'HAUTE',
+                              recommended_action: '',
+                              description: '',
+                              pdr_ref: '',
+                            });
+                          }}
+                          className="h-8 px-3 rounded-lg bg-amber-600 text-white font-semibold text-xs hover:bg-amber-700 transition flex items-center gap-1 shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Ajouter</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Failures List */}
+                    {currentFailures.length > 0 ? (
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                        {currentFailures.map((cf, idx) => (
+                          <div
+                            key={`inspect-cf-${cf.id || idx}-${idx}`}
+                            className="p-3 flex items-center justify-between hover:bg-slate-50 text-xs gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-[11px]">
+                                  {cf.type_panne || 'M'}
+                                </span>
+                                <span className="font-bold text-slate-900">{cf.title}</span>
+                                {cf.urgence && (
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                                      cf.urgence === 'HAUTE'
+                                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                        : cf.urgence === 'BASSE'
+                                        ? 'bg-slate-100 text-slate-600'
+                                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                    }`}
+                                  >
+                                    {cf.urgence}
+                                  </span>
+                                )}
+                                {cf.pdr_ref && (
+                                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px] font-bold">
+                                    PDR: {cf.pdr_ref}
+                                  </span>
+                                )}
+                              </div>
+                              {(cf.recommended_action || cf.description) && (
+                                <p className="text-[11px] text-slate-600 mt-1 truncate">
+                                  {[cf.recommended_action, cf.description].filter(Boolean).join(' • ')}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextFailures = currentFailures.filter((_, i) => i !== idx);
+                                const updatedBp = {
+                                  ...selectedInspectBlueprint,
+                                  commonFailures: nextFailures,
+                                };
+                                setSelectedInspectBlueprint(updatedBp);
+                                onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                              }}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
+                              title="Supprimer cette panne fréquente"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                        Aucune panne fréquente enregistrée sur ce Blueprint.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Drawer Footer */}
@@ -1926,6 +2165,22 @@ export default function BlueprintMachineView({
                 <Calendar className="w-3.5 h-3.5 text-teal-600" />
                 <span>
                   5. Plan préventif du blueprint ({toEdit ? toEdit.preventivePlanItems?.length || 0 : form.preventivePlanItems?.length || 0})
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModalTab('failures');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+                  activeModalTab === 'failures'
+                    ? 'border-amber-600 text-amber-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span>
+                  6. Pannes fréquentes (DI) ({toEdit ? toEdit.commonFailures?.length || 0 : form.commonFailures?.length || 0})
                 </span>
               </button>
             </div>
@@ -2706,6 +2961,217 @@ export default function BlueprintMachineView({
                         ) : (
                           <div className="p-6 text-center text-slate-400">
                             Aucun élément préventif ajouté à ce Blueprint.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* TAB 6: Pannes fréquentes du blueprint (DI Correctif) */}
+                {activeModalTab === 'failures' && (() => {
+                  const targetObj = toEdit || form;
+                  const currentFailures = Array.isArray(targetObj.commonFailures)
+                    ? targetObj.commonFailures
+                    : [];
+                  return (
+                    <div className="space-y-4">
+                      <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-amber-950 flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
+                            <span>Pannes fréquentes du blueprint (Suggestions DI Correctif)</span>
+                          </div>
+                          <div className="text-[11px] text-amber-800 mt-0.5">
+                            Définissez les pannes récurrentes et travaux recommandés pour pré-remplir les demandes d&apos;intervention (DI).
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <input
+                            type="text"
+                            value={newCommonFailureItem.title}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({ ...newCommonFailureItem, title: e.target.value })
+                            }
+                            placeholder="Titre / Symptôme (ex: Échauffement palier broche)"
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                          />
+                          <select
+                            value={newCommonFailureItem.type_panne}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({ ...newCommonFailureItem, type_panne: e.target.value })
+                            }
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                          >
+                            <option value="M">M • Mécanique</option>
+                            <option value="E">E • Électrique</option>
+                            <option value="H">H • Hydraulique</option>
+                            <option value="P">P • Pneumatique</option>
+                          </select>
+                          <select
+                            value={newCommonFailureItem.urgence}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({ ...newCommonFailureItem, urgence: e.target.value })
+                            }
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                          >
+                            <option value="HAUTE">Urgence : HAUTE</option>
+                            <option value="MOYENNE">Urgence : MOYENNE</option>
+                            <option value="BASSE">Urgence : BASSE</option>
+                          </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            value={newCommonFailureItem.recommended_action}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({
+                                ...newCommonFailureItem,
+                                recommended_action: e.target.value,
+                              })
+                            }
+                            placeholder="Travail suggéré (ex: Contrôler jeu et remplacer roulement)"
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                          />
+                          <select
+                            value={newCommonFailureItem.pdr_ref}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({ ...newCommonFailureItem, pdr_ref: e.target.value })
+                            }
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs"
+                          >
+                            <option value="">PDR associée (optionnel)</option>
+                            {stockItems.map((s, idx) => (
+                              <option key={`mod-cf-pdr-${s.ref || idx}-${idx}`} value={s.ref}>
+                                {s.ref} • {s.designation}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={newCommonFailureItem.description}
+                            onChange={(e) =>
+                              setNewCommonFailureItem({
+                                ...newCommonFailureItem,
+                                description: e.target.value,
+                              })
+                            }
+                            placeholder="Description complémentaire / cause..."
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newCommonFailureItem.title.trim()) return;
+                              const item = {
+                                id: `BPF-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                title: newCommonFailureItem.title.trim(),
+                                type_panne: newCommonFailureItem.type_panne || 'M',
+                                urgence: newCommonFailureItem.urgence || 'HAUTE',
+                                recommended_action: newCommonFailureItem.recommended_action.trim(),
+                                description: newCommonFailureItem.description.trim(),
+                                pdr_ref: newCommonFailureItem.pdr_ref || undefined,
+                              };
+                              const nextFailures = [...currentFailures, item];
+                              if (toEdit) {
+                                setToEdit({
+                                  ...toEdit,
+                                  commonFailures: nextFailures,
+                                });
+                              } else {
+                                setForm({
+                                  ...form,
+                                  commonFailures: nextFailures,
+                                });
+                              }
+                              setNewCommonFailureItem({
+                                title: '',
+                                type_panne: 'M',
+                                urgence: 'HAUTE',
+                                recommended_action: '',
+                                description: '',
+                                pdr_ref: '',
+                              });
+                            }}
+                            className="h-8 px-3 rounded-lg bg-amber-600 text-white font-semibold text-xs hover:bg-amber-700 transition flex items-center gap-1 shrink-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ajouter</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                        {currentFailures.length > 0 ? (
+                          currentFailures.map((cf, idx) => (
+                            <div
+                              key={`form-cf-${cf.id || idx}-${idx}`}
+                              className="p-2.5 flex items-center justify-between hover:bg-slate-50 gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 text-[11px]">
+                                    {cf.type_panne || 'M'}
+                                  </span>
+                                  <span className="font-semibold text-slate-800">{cf.title}</span>
+                                  {cf.urgence && (
+                                    <span
+                                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                                        cf.urgence === 'HAUTE'
+                                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                          : cf.urgence === 'BASSE'
+                                          ? 'bg-slate-100 text-slate-600'
+                                          : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      }`}
+                                    >
+                                      {cf.urgence}
+                                    </span>
+                                  )}
+                                  {cf.pdr_ref && (
+                                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px] font-bold">
+                                      PDR: {cf.pdr_ref}
+                                    </span>
+                                  )}
+                                </div>
+                                {(cf.recommended_action || cf.description) && (
+                                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                                    {[cf.recommended_action, cf.description].filter(Boolean).join(' • ')}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextFailures = currentFailures.filter((_, i) => i !== idx);
+                                  if (toEdit) {
+                                    setToEdit({
+                                      ...toEdit,
+                                      commonFailures: nextFailures,
+                                    });
+                                  } else {
+                                    setForm({
+                                      ...form,
+                                      commonFailures: nextFailures,
+                                    });
+                                  }
+                                }}
+                                className="p-1 rounded text-rose-500 hover:bg-rose-50 shrink-0"
+                                title="Supprimer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-6 text-center text-slate-400">
+                            Aucune panne fréquente ajoutée à ce Blueprint.
                           </div>
                         )}
                       </div>

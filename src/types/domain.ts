@@ -116,6 +116,16 @@ export interface IBlueprintPreventivePlanItem {
   duree_min?: number;
 }
 
+export interface IBlueprintCommonFailureItem {
+  id: string;
+  title: string;
+  description?: string;
+  type_panne?: string;
+  urgence?: string;
+  recommended_action?: string;
+  pdr_ref?: string;
+}
+
 export interface IBlueprint {
   id_blueprint: string;
   id_family: string;
@@ -131,6 +141,7 @@ export interface IBlueprint {
     type?: string;
   }>;
   preventivePlanItems?: IBlueprintPreventivePlanItem[];
+  commonFailures?: IBlueprintCommonFailureItem[];
 }
 
 export interface IWarehouseItem {

@@ -46,6 +46,7 @@ export default function CorrectiveView({
   onResetActionsToSeed,
   onForceSyncSeed: _onForceSyncSeed,
   machines = [],
+  blueprints = [],
   technicians = [],
   stockItems = [],
   warehouseItems = [],
@@ -342,6 +343,7 @@ export default function CorrectiveView({
               onAddDemande={onAddDemande}
               onConvertToBt={onConvertToBt}
               machines={machines}
+              blueprints={blueprints}
               technicians={technicians}
               stockItems={stockItems}
               warehouseItems={warehouseItems}

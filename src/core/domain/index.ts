@@ -5,7 +5,9 @@ export {
   applyBlueprintPlanToActiveMachines,
   doesTaskMatchBlueprint,
   filterTasksByBlueprint,
+  getBlueprintCommonFailuresForMachine,
   type BlueprintPreventivePlanItem,
+  type BlueprintCommonFailureItem,
 } from './Blueprint';
 export { Machine } from './Machine';
 export { CompTemplate } from './CompTemplate';

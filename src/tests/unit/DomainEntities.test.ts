@@ -291,6 +291,76 @@ describe('Domain Entities Unit Tests', () => {
       const filteredAll = filterTasksByBlueprint(tasks, 'ALL', machines);
       expect(filteredAll.length).toBe(3);
     });
+
+    it('defaults commonFailures to [] for legacy records and resolves commonFailures for active linked machines (BP-5)', async () => {
+      const { Blueprint, getBlueprintCommonFailuresForMachine } = await import('../../core/domain');
+
+      const legacyBp = new Blueprint({
+        id_blueprint: 'BPT-TOURPARA',
+        id_family: 'FAM-USI',
+        id_templates: 'TPL-TOURPARA',
+      });
+      expect(legacyBp.commonFailures).toEqual([]);
+
+      const blueprints = [
+        {
+          id_blueprint: 'BPT-TOURPARA',
+          libelle: 'Plan Tour Parallèle',
+          commonFailures: [
+            {
+              id: 'BPF-1',
+              title: 'Échauffement palier broche',
+              type_panne: 'M',
+              urgence: 'HAUTE',
+              recommended_action: 'Contrôler jeu et remplacer roulement',
+              pdr_ref: 'ROUL-6204',
+            },
+          ],
+        },
+        {
+          id_blueprint: 'BPT-FRAISEUSE',
+          libelle: 'Plan Fraiseuse',
+        },
+      ];
+
+      const machines = [
+        {
+          id_machine_registered: 'TRP-01',
+          id_blueprint: 'BPT-TOURPARA',
+          status: 'En service',
+        },
+        {
+          id_machine_registered: 'TRP-02-ARCH',
+          id_blueprint: 'BPT-TOURPARA',
+          status: 'ARCHIVEE',
+        },
+        {
+          id_machine_registered: 'MCH-NO-BP',
+          status: 'En service',
+        },
+        {
+          id_machine_registered: 'FRM-01',
+          id_blueprint: 'BPT-FRAISEUSE',
+          status: 'En service',
+        },
+      ];
+
+      // Active machine linked to BPT-TOURPARA -> returns commonFailures
+      const trpFailures = getBlueprintCommonFailuresForMachine('TRP-01', machines, blueprints);
+      expect(trpFailures.length).toBe(1);
+      expect(trpFailures[0].title).toBe('Échauffement palier broche');
+      expect(trpFailures[0].type_panne).toBe('M');
+      expect(trpFailures[0].urgence).toBe('HAUTE');
+
+      // Machine without blueprint -> []
+      expect(getBlueprintCommonFailuresForMachine('MCH-NO-BP', machines, blueprints)).toEqual([]);
+
+      // Machine linked to blueprint with no commonFailures -> []
+      expect(getBlueprintCommonFailuresForMachine('FRM-01', machines, blueprints)).toEqual([]);
+
+      // Archived machine -> [] (excluded via filterActiveMachines)
+      expect(getBlueprintCommonFailuresForMachine('TRP-02-ARCH', machines, blueprints)).toEqual([]);
+    });
   });
 });
 

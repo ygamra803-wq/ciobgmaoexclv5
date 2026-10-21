@@ -9,6 +9,16 @@ export interface BlueprintPreventivePlanItem {
   duree_min?: number;
 }
 
+export interface BlueprintCommonFailureItem {
+  id: string;
+  title: string;
+  description?: string;
+  type_panne?: string;
+  urgence?: string;
+  recommended_action?: string;
+  pdr_ref?: string;
+}
+
 const ACTION_LABELS: Record<string, string> = {
   C: 'Contrôle',
   N: 'Nettoyage',
@@ -186,6 +196,58 @@ export function filterTasksByBlueprint(
   return tasks.filter((t) => doesTaskMatchBlueprint(t, blueprintId, machines));
 }
 
+export function getBlueprintCommonFailuresForMachine(
+  machineCodeOrObj: any,
+  machines: any[] = [],
+  blueprints: any[] = []
+): BlueprintCommonFailureItem[] {
+  if (!machineCodeOrObj || !Array.isArray(blueprints) || blueprints.length === 0) {
+    return [];
+  }
+
+  let bpId = '';
+  if (typeof machineCodeOrObj === 'object' && machineCodeOrObj !== null) {
+    bpId = String(machineCodeOrObj.id_blueprint || '').trim();
+  }
+
+  if (!bpId) {
+    const targetCode = String(
+      typeof machineCodeOrObj === 'object'
+        ? machineCodeOrObj.code || machineCodeOrObj.id_machine_registered || machineCodeOrObj.id || ''
+        : machineCodeOrObj
+    )
+      .trim()
+      .toUpperCase();
+    if (!targetCode) return [];
+
+    const norm = (s: any) =>
+      String(s || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[-_\s]/g, '');
+    const targetNorm = norm(targetCode);
+
+    const activeMachines = filterActiveMachines(machines);
+    const matchedMachine = activeMachines.find((m) => {
+      if (!m) return false;
+      const mId = m.id_machine_registered || m.code_machine || m.code || m.id || m.id_machine;
+      return String(mId || '').trim().toUpperCase() === targetCode || norm(mId) === targetNorm;
+    });
+
+    if (!matchedMachine || !matchedMachine.id_blueprint) return [];
+    bpId = String(matchedMachine.id_blueprint).trim();
+  }
+
+  if (!bpId) return [];
+  const matchedBlueprint = blueprints.find(
+    (b) => b && String(b.id_blueprint || b.id || '').trim() === bpId
+  );
+  if (!matchedBlueprint || !Array.isArray(matchedBlueprint.commonFailures)) {
+    return [];
+  }
+  return matchedBlueprint.commonFailures;
+}
+
 export class Blueprint {
   id: any;
   specs: any;
@@ -193,6 +255,7 @@ export class Blueprint {
   parts_theoriques: any[];
   pdr_theoriques: any[];
   preventivePlanItems: BlueprintPreventivePlanItem[];
+  commonFailures: BlueprintCommonFailureItem[];
 
   constructor(data: any = {}) {
     this.id = data.id_blueprint || data.id;
@@ -203,6 +266,7 @@ export class Blueprint {
     this.preventivePlanItems = Array.isArray(data.preventivePlanItems)
       ? data.preventivePlanItems
       : [];
+    this.commonFailures = Array.isArray(data.commonFailures) ? data.commonFailures : [];
   }
 
   isSameSpecs(other: any) {

@@ -98,6 +98,9 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
       preventivePlanItems: Array.isArray(newBlueprint?.preventivePlanItems)
         ? newBlueprint.preventivePlanItems
         : [],
+      commonFailures: Array.isArray(newBlueprint?.commonFailures)
+        ? newBlueprint.commonFailures
+        : [],
     };
     setBlueprints((prev) => [...prev, normalized]);
     showToast(`Blueprint "${normalized.id_blueprint}" ajouté avec succès !`);
@@ -119,6 +122,11 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
                 ? payload.preventivePlanItems
                 : Array.isArray(b.preventivePlanItems)
                 ? b.preventivePlanItems
+                : [],
+              commonFailures: Array.isArray(payload.commonFailures)
+                ? payload.commonFailures
+                : Array.isArray(b.commonFailures)
+                ? b.commonFailures
                 : [],
             }
           : b
