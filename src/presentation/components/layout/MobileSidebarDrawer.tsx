@@ -402,7 +402,7 @@ export default function MobileSidebarDrawer({
                   />
                   <span>Planning Préventif</span>
                 </span>
-                <span className={getBadgeClass('preventive')}>{counts.preventive || 150}</span>
+                <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
               </button>
 
               {/* Référentiel, Guides, Actions & Concepteur de Plans */}
