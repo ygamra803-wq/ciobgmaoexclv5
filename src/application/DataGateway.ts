@@ -96,7 +96,12 @@ export const DataGateway = {
   },
 
   saveBlueprints(list = []) {
-    const clean = Array.isArray(list) ? list : [];
+    const clean = Array.isArray(list)
+      ? list.map((b) => ({
+          ...b,
+          preventivePlanItems: Array.isArray(b?.preventivePlanItems) ? b.preventivePlanItems : [],
+        }))
+      : [];
     storageService.setItem(STORAGE_KEYS.BLUEPRINTS, clean);
     return clean;
   },

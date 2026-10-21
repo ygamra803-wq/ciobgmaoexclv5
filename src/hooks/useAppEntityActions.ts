@@ -1,4 +1,5 @@
 import { useAppComplexHandlers } from './useAppComplexHandlers';
+import { applyBlueprintPlanToActiveMachines } from '../core/domain/Blueprint';
 
 /**
  * Custom hook consolidating all GMAO entity handlers (Add, Update, Delete, Adjust).
@@ -92,15 +93,38 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
   };
 
   const handleAddBlueprint = (newBlueprint) => {
-    setBlueprints((prev) => [...prev, newBlueprint]);
-    showToast(`Blueprint "${newBlueprint.id_blueprint}" ajouté avec succès !`);
+    const normalized = {
+      ...newBlueprint,
+      preventivePlanItems: Array.isArray(newBlueprint?.preventivePlanItems)
+        ? newBlueprint.preventivePlanItems
+        : [],
+    };
+    setBlueprints((prev) => [...prev, normalized]);
+    showToast(`Blueprint "${normalized.id_blueprint}" ajouté avec succès !`);
   };
 
-  const handleUpdateBlueprint = (id, updated) => {
+  const handleUpdateBlueprint = (idOrObj, updated) => {
+    const isObj = typeof idOrObj === 'object' && idOrObj !== null;
+    const targetId = isObj ? idOrObj.id_blueprint : idOrObj;
+    const payload = isObj ? idOrObj : updated;
+    if (!targetId || !payload) return;
+
     setBlueprints((prev) =>
-      prev.map((b) => (b.id_blueprint === id ? { ...b, ...updated } : b))
+      prev.map((b) =>
+        b.id_blueprint === targetId
+          ? {
+              ...b,
+              ...payload,
+              preventivePlanItems: Array.isArray(payload.preventivePlanItems)
+                ? payload.preventivePlanItems
+                : Array.isArray(b.preventivePlanItems)
+                ? b.preventivePlanItems
+                : [],
+            }
+          : b
+      )
     );
-    showToast(`Blueprint "${id}" mis à jour avec succès !`);
+    showToast(`Blueprint "${targetId}" mis à jour avec succès !`);
   };
 
   const handleDeleteBlueprint = (id) => {
@@ -114,6 +138,35 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     }
     setBlueprints((prev) => prev.filter((b) => b.id_blueprint !== id));
     showToast(`Blueprint "${id}" supprimé avec succès !`, 'info');
+  };
+
+  const handleApplyBlueprintPreventivePlan = (blueprint) => {
+    if (!blueprint) return { addedCount: 0, targetMachinesCount: 0 };
+    const { addedTasks, updatedTasks, targetMachinesCount } = applyBlueprintPlanToActiveMachines(
+      blueprint,
+      machines,
+      preventiveTasks
+    );
+    if (targetMachinesCount === 0) {
+      showToast(
+        `Aucune machine active liée au Blueprint "${blueprint.id_blueprint}".`,
+        'warning'
+      );
+      return { addedCount: 0, targetMachinesCount: 0 };
+    }
+    if (addedTasks.length === 0) {
+      showToast(
+        `Toutes les tâches du Blueprint "${blueprint.id_blueprint}" sont déjà appliquées aux ${targetMachinesCount} machine(s) active(s).`,
+        'info'
+      );
+      return { addedCount: 0, targetMachinesCount };
+    }
+    gmaoState.setPreventiveTasks(updatedTasks);
+    showToast(
+      `${addedTasks.length} tâche(s) préventive(s) générée(s) pour ${targetMachinesCount} machine(s) active(s) liée(s) au Blueprint "${blueprint.id_blueprint}".`,
+      'success'
+    );
+    return { addedCount: addedTasks.length, targetMachinesCount };
   };
 
   const handleAddZone = (newZone) => {
@@ -184,6 +237,7 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     handleAddBlueprint,
     handleUpdateBlueprint,
     handleDeleteBlueprint,
+    handleApplyBlueprintPreventivePlan,
     handleAddZone,
   };
 }

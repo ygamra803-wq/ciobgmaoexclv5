@@ -30,9 +30,13 @@ import {
   FileText,
   Radio,
   FileSpreadsheet,
+  Calendar,
+  Plus,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react';
 import { CubeIcon } from '../../components/common/icons/CubeIcon';
-import { Blueprint } from '../../../core/domain';
+import { Blueprint, applyBlueprintPlanToActiveMachines } from '../../../core/domain';
 import { LayersIcon } from '../../components/common/icons/LayersIcon';
 import { HubIcon } from '../../components/common/icons/HubIcon';
 import { CategoryIcon } from '../../components/common/icons/CategoryIcon';
@@ -40,6 +44,7 @@ import { SpokeIcon } from '../../components/common/icons/SpokeIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../i18n/I18nContext';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 const STATUS_OPTIONS = [
   { value: 'Approuvé', label: 'Approuvé' },
@@ -68,6 +73,8 @@ export default function BlueprintMachineView({
   onAddBlueprint = () => {},
   onUpdateBlueprint = () => {},
   onDeleteBlueprint = () => {},
+  onApplyBlueprintPreventivePlan = null,
+  preventiveActions = [],
   onOpenAddFamilyModal: _onOpenAddFamilyModal = () => {},
   onOpenAddTemplateModal: _onOpenAddTemplateModal = () => {},
   onNavigateToMachinesByTemplate: _onNavigateToMachinesByTemplate = () => {},
@@ -88,11 +95,11 @@ export default function BlueprintMachineView({
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState('specs'); // 'specs' | 'components' | 'parts' | 'pdr'
+  const [activeModalTab, setActiveModalTab] = useState('specs'); // 'specs' | 'components' | 'parts' | 'pdr' | 'preventive'
   const [selectedInspectBlueprint, setSelectedInspectBlueprint] = useState(null);
   const [inspectActiveTab, setInspectActiveTab] = useState('specs');
 
-  // Form State for Add/Edit Blueprint with 4-Tab BOM architecture
+  // Form State for Add/Edit Blueprint with BOM + Preventive Plan architecture
   const initialFormState = {
     id_blueprint: '',
     libelle: '',
@@ -112,16 +119,25 @@ export default function BlueprintMachineView({
     components_theoriques: [],
     parts_theoriques: [],
     pdr_theoriques: [],
+    preventivePlanItems: [],
   };
 
   const [form, setForm] = useState(initialFormState);
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
-  // Helper inputs for adding items into Tab 2, 3, 4
+  // Helper inputs for adding items into Tab 2, 3, 4, 5
   const [newCompItem, setNewCompItem] = useState({ id_component: '', libelle: '', qte: 1 });
   const [newPartItem, setNewPartItem] = useState({ id_part: '', libelle: '', qte: 1 });
   const [newPdrItem, setNewPdrItem] = useState({ id_pdr: '', libelle: '', qte: 1, criticite: 'Haute' });
+  const [newPreventiveItem, setNewPreventiveItem] = useState({
+    composant: '',
+    action_code: 'C',
+    frequence: 'Mensuel',
+    duree_min: 15,
+    description: '',
+  });
+  const [applyFeedback, setApplyFeedback] = useState(null);
 
   // Taken blueprint numbers for SequentialCodePicker
   const takenBlueprintNumbers = useMemo(() => {
@@ -318,6 +334,7 @@ export default function BlueprintMachineView({
 
   // Open Edit Modal
   const handleOpenEditModal = (bp) => {
+    setApplyFeedback(null);
     setToEdit({
       ...bp,
       specs: {
@@ -330,6 +347,7 @@ export default function BlueprintMachineView({
       components_theoriques: bp.components_theoriques || [],
       parts_theoriques: bp.parts_theoriques || [],
       pdr_theoriques: bp.pdr_theoriques || [],
+      preventivePlanItems: Array.isArray(bp.preventivePlanItems) ? bp.preventivePlanItems : [],
     });
     setActiveModalTab('specs');
   };
@@ -338,7 +356,10 @@ export default function BlueprintMachineView({
   const handleAddSubmit = (e) => {
     e.preventDefault();
     if (!form.id_blueprint || !form.libelle) return;
-    onAddBlueprint(form);
+    onAddBlueprint({
+      ...form,
+      preventivePlanItems: Array.isArray(form.preventivePlanItems) ? form.preventivePlanItems : [],
+    });
     setShowAddModal(false);
     setForm(initialFormState);
     if (quickCreateBlueprintPreset && setQuickCreateBlueprintPreset) {
@@ -350,8 +371,67 @@ export default function BlueprintMachineView({
   const handleEditSubmit = (e) => {
     e.preventDefault();
     if (!toEdit.id_blueprint || !toEdit.libelle) return;
-    onUpdateBlueprint(toEdit);
+    onUpdateBlueprint(toEdit.id_blueprint, {
+      ...toEdit,
+      preventivePlanItems: Array.isArray(toEdit.preventivePlanItems) ? toEdit.preventivePlanItems : [],
+    });
     setToEdit(null);
+  };
+
+  // Apply Blueprint Preventive Plan to Active Linked Machines Only
+  const handleTriggerApplyPreventivePlan = (targetBlueprint) => {
+    if (!targetBlueprint) return;
+    const normalizedBp = {
+      ...targetBlueprint,
+      preventivePlanItems: Array.isArray(targetBlueprint.preventivePlanItems)
+        ? targetBlueprint.preventivePlanItems
+        : [],
+    };
+    onUpdateBlueprint(normalizedBp.id_blueprint, normalizedBp);
+
+    if (typeof onApplyBlueprintPreventivePlan === 'function') {
+      const res = onApplyBlueprintPreventivePlan(normalizedBp);
+      if (res) {
+        setApplyFeedback(
+          res.targetMachinesCount === 0
+            ? { type: 'warning', message: 'Aucune machine active liée à ce Blueprint.' }
+            : res.addedCount > 0
+            ? {
+                type: 'success',
+                message: `${res.addedCount} tâche(s) générée(s) sur ${res.targetMachinesCount} machine(s) active(s) liée(s).`,
+              }
+            : {
+                type: 'info',
+                message: `Les tâches sont déjà présentes sur les ${res.targetMachinesCount} machine(s) active(s) liée(s).`,
+              }
+        );
+      }
+      return;
+    }
+
+    // Fallback store execution if prop not injected
+    const storeState = useGmaoStore.getState();
+    const { addedTasks, updatedTasks, targetMachinesCount } = applyBlueprintPlanToActiveMachines(
+      normalizedBp,
+      machines,
+      storeState.preventiveTasks || []
+    );
+    if (targetMachinesCount > 0 && addedTasks.length > 0) {
+      storeState.setPreventiveTasks(updatedTasks);
+    }
+    setApplyFeedback(
+      targetMachinesCount === 0
+        ? { type: 'warning', message: 'Aucune machine active liée à ce Blueprint.' }
+        : addedTasks.length > 0
+        ? {
+            type: 'success',
+            message: `${addedTasks.length} tâche(s) générée(s) sur ${targetMachinesCount} machine(s) active(s) liée(s).`,
+          }
+        : {
+            type: 'info',
+            message: `Les tâches sont déjà présentes sur les ${targetMachinesCount} machine(s) active(s) liée(s).`,
+          }
+    );
   };
 
   // Extract real PDR from machine history into form
@@ -1127,6 +1207,20 @@ export default function BlueprintMachineView({
                               type="button"
                               onClick={() => {
                                 setActiveActionMenuId(null);
+                                setApplyFeedback(null);
+                                setSelectedInspectBlueprint(bp);
+                                setInspectActiveTab('preventive');
+                              }}
+                              className="w-full px-3 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-50 hover:text-teal-900 rounded-xl transition flex items-center gap-2.5 cursor-pointer group"
+                            >
+                              <Calendar className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
+                              <span>Plan préventif du blueprint ({(bp.preventivePlanItems || []).length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveActionMenuId(null);
                                 handleOpenEditModal(bp);
                               }}
                               className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
@@ -1226,7 +1320,7 @@ export default function BlueprintMachineView({
               </button>
               <button
                 onClick={() => setInspectActiveTab('pdr')}
-                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
                   inspectActiveTab === 'pdr'
                     ? 'border-blue-600 text-blue-700'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1234,6 +1328,20 @@ export default function BlueprintMachineView({
               >
                 <Wrench className="w-3.5 h-3.5 text-blue-600" />
                 <span>4. PDR Consommables ({selectedInspectBlueprint.pdr_theoriques?.length || 0})</span>
+              </button>
+              <button
+                onClick={() => {
+                  setApplyFeedback(null);
+                  setInspectActiveTab('preventive');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+                  inspectActiveTab === 'preventive'
+                    ? 'border-teal-600 text-teal-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                <span>5. Plan préventif du blueprint ({(selectedInspectBlueprint.preventivePlanItems || []).length})</span>
               </button>
             </div>
 
@@ -1397,6 +1505,224 @@ export default function BlueprintMachineView({
                   )}
                 </div>
               )}
+
+              {inspectActiveTab === 'preventive' && (() => {
+                const currentItems = Array.isArray(selectedInspectBlueprint.preventivePlanItems)
+                  ? selectedInspectBlueprint.preventivePlanItems
+                  : [];
+                const activeLinkedMachines = filterActiveMachines(machines).filter(
+                  (m) => m.id_blueprint === selectedInspectBlueprint.id_blueprint
+                );
+                const totalLinkedMachines = (machines || []).filter(
+                  (m) => m.id_blueprint === selectedInspectBlueprint.id_blueprint
+                );
+                return (
+                  <div className="space-y-4">
+                    <div className="p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4 text-teal-600" />
+                          <span>Plan préventif du blueprint</span>
+                        </h4>
+                        <p className="text-[11px] text-teal-800 mt-0.5">
+                          Gamme préventive standard associée au modèle ({activeLinkedMachines.length} machine(s) active(s) sur {totalLinkedMachines.length} liée(s)).
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={currentItems.length === 0 || activeLinkedMachines.length === 0}
+                        onClick={() => handleTriggerApplyPreventivePlan(selectedInspectBlueprint)}
+                        className="h-8 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Appliquer aux machines actives liées ({activeLinkedMachines.length})</span>
+                      </button>
+                    </div>
+
+                    {applyFeedback && (
+                      <div
+                        className={`p-3 rounded-xl text-xs font-semibold border ${
+                          applyFeedback.type === 'success'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : applyFeedback.type === 'warning'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-sky-50 text-sky-800 border-sky-200'
+                        }`}
+                      >
+                        {applyFeedback.message}
+                      </div>
+                    )}
+
+                    {/* Add Preventive Plan Item Row */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                        <input
+                          type="text"
+                          list="bp-inspect-comps-datalist"
+                          value={newPreventiveItem.composant}
+                          onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, composant: e.target.value })}
+                          placeholder="Composant (ex: Broche, Courroie...)"
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                        />
+                        <datalist id="bp-inspect-comps-datalist">
+                          {(selectedInspectBlueprint.components_theoriques || []).map((c, idx) => (
+                            <option key={`insp-dl-${idx}`} value={c.libelle || c.id_component} />
+                          ))}
+                        </datalist>
+
+                        <select
+                          value={newPreventiveItem.action_code}
+                          onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, action_code: e.target.value })}
+                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                        >
+                          {(preventiveActions && preventiveActions.length > 0
+                            ? preventiveActions
+                            : [
+                                { code: 'C', libelle: 'Contrôle' },
+                                { code: 'N', libelle: 'Nettoyage' },
+                                { code: 'G', libelle: 'Graissage' },
+                                { code: 'V', libelle: 'Vérification' },
+                                { code: 'R', libelle: 'Révision' },
+                                { code: 'S', libelle: 'Serrage' },
+                                { code: 'L', libelle: 'Lubrification' },
+                              ]
+                          ).map((act, idx) => (
+                            <option key={`insp-act-${act.code || idx}-${idx}`} value={act.code}>
+                              {act.code} • {act.libelle}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={newPreventiveItem.frequence}
+                          onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, frequence: e.target.value })}
+                          className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                        >
+                          <option value="Hebdo">Hebdo</option>
+                          <option value="Bi-hebdo">Bi-hebdo</option>
+                          <option value="Mensuel">Mensuel</option>
+                          <option value="Trimestriel">Trimestriel</option>
+                          <option value="Semestriel">Semestriel</option>
+                          <option value="Annuel">Annuel</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="text"
+                          value={newPreventiveItem.description}
+                          onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, description: e.target.value })}
+                          placeholder="Consigne / Description de l'opération..."
+                          className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1 min-w-[180px]"
+                        />
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <input
+                            type="number"
+                            min="1"
+                            value={newPreventiveItem.duree_min}
+                            onChange={(e) =>
+                              setNewPreventiveItem({
+                                ...newPreventiveItem,
+                                duree_min: Number(e.target.value) || 15,
+                              })
+                            }
+                            placeholder="Min"
+                            className="h-8 w-16 px-2 text-center rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold"
+                          />
+                          <span className="text-[11px] text-slate-500">min</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newPreventiveItem.frequence) return;
+                            const item = {
+                              id: `BPP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                              composant: newPreventiveItem.composant.trim() || 'Machine entière',
+                              action_code: newPreventiveItem.action_code || 'C',
+                              frequence: newPreventiveItem.frequence || 'Mensuel',
+                              duree_min: Number(newPreventiveItem.duree_min) || 15,
+                              description: newPreventiveItem.description.trim(),
+                            };
+                            const nextItems = [...currentItems, item];
+                            const updatedBp = {
+                              ...selectedInspectBlueprint,
+                              preventivePlanItems: nextItems,
+                            };
+                            setSelectedInspectBlueprint(updatedBp);
+                            onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                            setNewPreventiveItem({
+                              composant: '',
+                              action_code: 'C',
+                              frequence: 'Mensuel',
+                              duree_min: 15,
+                              description: '',
+                            });
+                          }}
+                          className="h-8 px-3 rounded-lg bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition flex items-center gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Ajouter</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Items List */}
+                    {currentItems.length > 0 ? (
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden bg-white">
+                        {currentItems.map((item, idx) => (
+                          <div
+                            key={`inspect-pm-${item.id || idx}-${idx}`}
+                            className="p-3 flex items-center justify-between hover:bg-slate-50 text-xs gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 text-[11px]">
+                                  {item.action_code || 'C'}
+                                </span>
+                                <span className="font-bold text-slate-800">
+                                  {item.composant || 'Machine entière'}
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                                  {item.frequence}
+                                </span>
+                                {item.duree_min && (
+                                  <span className="font-mono text-[11px] text-slate-500">
+                                    {item.duree_min} min
+                                  </span>
+                                )}
+                              </div>
+                              {item.description && (
+                                <p className="text-[11px] text-slate-500 mt-1 truncate">{item.description}</p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextItems = currentItems.filter((_, i) => i !== idx);
+                                const updatedBp = {
+                                  ...selectedInspectBlueprint,
+                                  preventivePlanItems: nextItems,
+                                };
+                                setSelectedInspectBlueprint(updatedBp);
+                                onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                              }}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
+                              title="Supprimer cet élément du plan"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                        Aucun élément dans le plan préventif de ce Blueprint.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Drawer Footer */}
@@ -1483,7 +1809,7 @@ export default function BlueprintMachineView({
               <button
                 type="button"
                 onClick={() => setActiveModalTab('pdr')}
-                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition ${
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
                   activeModalTab === 'pdr'
                     ? 'border-blue-600 text-blue-700'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1492,6 +1818,23 @@ export default function BlueprintMachineView({
                 <Wrench className="w-3.5 h-3.5 text-blue-600" />
                 <span>
                   4. PDR Consommables ({toEdit ? toEdit.pdr_theoriques?.length || 0 : form.pdr_theoriques?.length || 0})
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setApplyFeedback(null);
+                  setActiveModalTab('preventive');
+                }}
+                className={`pb-2.5 px-3 text-xs font-bold flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+                  activeModalTab === 'preventive'
+                    ? 'border-teal-600 text-teal-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-teal-600" />
+                <span>
+                  5. Plan préventif du blueprint ({toEdit ? toEdit.preventivePlanItems?.length || 0 : form.preventivePlanItems?.length || 0})
                 </span>
               </button>
             </div>
@@ -2049,12 +2392,241 @@ export default function BlueprintMachineView({
                     </div>
                   </div>
                 )}
+
+                {/* TAB 5: Plan préventif du blueprint */}
+                {activeModalTab === 'preventive' && (() => {
+                  const targetObj = toEdit || form;
+                  const currentItems = Array.isArray(targetObj.preventivePlanItems)
+                    ? targetObj.preventivePlanItems
+                    : [];
+                  const activeLinkedMachines = filterActiveMachines(machines).filter(
+                    (m) => m.id_blueprint === targetObj.id_blueprint
+                  );
+                  return (
+                    <div className="space-y-4">
+                      <div className="p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <div className="font-bold text-teal-950 flex items-center gap-1.5">
+                            <Calendar className="w-4 h-4 text-teal-600" />
+                            <span>Plan préventif du blueprint</span>
+                          </div>
+                          <div className="text-[11px] text-teal-800 mt-0.5">
+                            Définissez les opérations préventives standards du modèle ({activeLinkedMachines.length} machine(s) active(s) liée(s)).
+                          </div>
+                        </div>
+
+                        {toEdit && (
+                          <button
+                            type="button"
+                            disabled={currentItems.length === 0 || activeLinkedMachines.length === 0}
+                            onClick={() => handleTriggerApplyPreventivePlan(toEdit)}
+                            className="h-8 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Appliquer aux machines actives liées ({activeLinkedMachines.length})</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {applyFeedback && (
+                        <div
+                          className={`p-3 rounded-xl text-xs font-semibold border ${
+                            applyFeedback.type === 'success'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : applyFeedback.type === 'warning'
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-sky-50 text-sky-800 border-sky-200'
+                          }`}
+                        >
+                          {applyFeedback.message}
+                        </div>
+                      )}
+
+                      {/* Add Item Form */}
+                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                          <input
+                            type="text"
+                            list="bp-modal-comps-datalist"
+                            value={newPreventiveItem.composant}
+                            onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, composant: e.target.value })}
+                            placeholder="Composant (ex: Broche, Courroie...)"
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs sm:col-span-2"
+                          />
+                          <datalist id="bp-modal-comps-datalist">
+                            {(targetObj.components_theoriques || []).map((c, idx) => (
+                              <option key={`mod-dl-${idx}`} value={c.libelle || c.id_component} />
+                            ))}
+                          </datalist>
+
+                          <select
+                            value={newPreventiveItem.action_code}
+                            onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, action_code: e.target.value })}
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                          >
+                            {(preventiveActions && preventiveActions.length > 0
+                              ? preventiveActions
+                              : [
+                                  { code: 'C', libelle: 'Contrôle' },
+                                  { code: 'N', libelle: 'Nettoyage' },
+                                  { code: 'G', libelle: 'Graissage' },
+                                  { code: 'V', libelle: 'Vérification' },
+                                  { code: 'R', libelle: 'Révision' },
+                                  { code: 'S', libelle: 'Serrage' },
+                                  { code: 'L', libelle: 'Lubrification' },
+                                ]
+                            ).map((act, idx) => (
+                              <option key={`mod-act-${act.code || idx}-${idx}`} value={act.code}>
+                                {act.code} • {act.libelle}
+                              </option>
+                            ))}
+                          </select>
+
+                          <select
+                            value={newPreventiveItem.frequence}
+                            onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, frequence: e.target.value })}
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold"
+                          >
+                            <option value="Hebdo">Hebdo</option>
+                            <option value="Bi-hebdo">Bi-hebdo</option>
+                            <option value="Mensuel">Mensuel</option>
+                            <option value="Trimestriel">Trimestriel</option>
+                            <option value="Semestriel">Semestriel</option>
+                            <option value="Annuel">Annuel</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            value={newPreventiveItem.description}
+                            onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, description: e.target.value })}
+                            placeholder="Consigne / Description de l'opération..."
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1 min-w-[180px]"
+                          />
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <input
+                              type="number"
+                              min="1"
+                              value={newPreventiveItem.duree_min}
+                              onChange={(e) =>
+                                setNewPreventiveItem({
+                                  ...newPreventiveItem,
+                                  duree_min: Number(e.target.value) || 15,
+                                })
+                              }
+                              placeholder="Min"
+                              className="h-8 w-16 px-2 text-center rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold"
+                            />
+                            <span className="text-[11px] text-slate-500">min</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newPreventiveItem.frequence) return;
+                              const item = {
+                                id: `BPP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                composant: newPreventiveItem.composant.trim() || 'Machine entière',
+                                action_code: newPreventiveItem.action_code || 'C',
+                                frequence: newPreventiveItem.frequence || 'Mensuel',
+                                duree_min: Number(newPreventiveItem.duree_min) || 15,
+                                description: newPreventiveItem.description.trim(),
+                              };
+                              if (toEdit) {
+                                setToEdit({
+                                  ...toEdit,
+                                  preventivePlanItems: [...currentItems, item],
+                                });
+                              } else {
+                                setForm({
+                                  ...form,
+                                  preventivePlanItems: [...currentItems, item],
+                                });
+                              }
+                              setNewPreventiveItem({
+                                composant: '',
+                                action_code: 'C',
+                                frequence: 'Mensuel',
+                                duree_min: 15,
+                                description: '',
+                              });
+                            }}
+                            className="h-8 px-3 rounded-lg bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Ajouter</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* List */}
+                      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                        {currentItems.length > 0 ? (
+                          currentItems.map((item, idx) => (
+                            <div
+                              key={`form-pm-${item.id || idx}-${idx}`}
+                              className="p-2.5 flex items-center justify-between hover:bg-slate-50 gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-mono font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 text-[11px]">
+                                    {item.action_code || 'C'}
+                                  </span>
+                                  <span className="font-semibold text-slate-800">
+                                    {item.composant || 'Machine entière'}
+                                  </span>
+                                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                                    {item.frequence}
+                                  </span>
+                                  {item.duree_min && (
+                                    <span className="font-mono text-[11px] text-slate-500">
+                                      {item.duree_min} min
+                                    </span>
+                                  )}
+                                </div>
+                                {item.description && (
+                                  <p className="text-[11px] text-slate-500 mt-0.5 truncate">{item.description}</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextItems = currentItems.filter((_, i) => i !== idx);
+                                  if (toEdit) {
+                                    setToEdit({
+                                      ...toEdit,
+                                      preventivePlanItems: nextItems,
+                                    });
+                                  } else {
+                                    setForm({
+                                      ...form,
+                                      preventivePlanItems: nextItems,
+                                    });
+                                  }
+                                }}
+                                className="p-1 rounded text-rose-500 hover:bg-rose-50 shrink-0"
+                                title="Supprimer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-6 text-center text-slate-400">
+                            Aucun élément préventif ajouté à ce Blueprint.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Form Actions Footer */}
               <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <div className="text-[11px] text-slate-500">
-                  {activeModalTab !== 'pdr' ? 'Onglet suivant pour renseigner les pièces' : 'Prêt à enregistrer'}
+                  {activeModalTab !== 'preventive' ? 'Onglet suivant pour renseigner les pièces et le plan préventif' : 'Prêt à enregistrer'}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

@@ -154,4 +154,90 @@ describe('Domain Entities Unit Tests', () => {
       expect(task.action_id).toBe('CORRECTIVE');
     });
   });
+
+  describe('Blueprint (BP-1 & BP-2 Preventive Plan)', () => {
+    it('defaults preventivePlanItems to [] for legacy records without breaking them', async () => {
+      const { Blueprint } = await import('../../core/domain');
+      const legacyBp = new Blueprint({
+        id_blueprint: 'BPT-TOURPARA',
+        id_family: 'FAM-USI',
+        id_templates: 'TPL-TOURPARA',
+      });
+      expect(legacyBp.id).toBe('BPT-TOURPARA');
+      expect(legacyBp.preventivePlanItems).toEqual([]);
+    });
+
+    it('applies preventivePlanItems only to active machines linked to the blueprint', async () => {
+      const { applyBlueprintPlanToActiveMachines } = await import('../../core/domain');
+      const blueprint = {
+        id_blueprint: 'BPT-TOURPARA',
+        libelle: 'Plan Tour Parallèle',
+        preventivePlanItems: [
+          {
+            id: 'BPP-1',
+            composant: 'Broche principale',
+            action_code: 'G',
+            frequence: 'Mensuel',
+            duree_min: 20,
+            description: 'Graissage palier broche',
+          },
+          {
+            id: 'BPP-2',
+            composant: 'Courroie',
+            action_code: 'C',
+            frequence: 'Hebdo',
+            duree_min: 10,
+            description: 'Contrôle tension courroie',
+          },
+        ],
+      };
+
+      const machines = [
+        {
+          id_machine_registered: 'TRP-01',
+          designation: 'Tour Parallèle 01',
+          id_blueprint: 'BPT-TOURPARA',
+          id_zone_default: 'AFM',
+          technician: 'Youssef',
+          status: 'En service',
+        },
+        {
+          id_machine_registered: 'TRP-02-ARCH',
+          designation: 'Tour Parallèle Archivé',
+          id_blueprint: 'BPT-TOURPARA',
+          id_zone_default: 'AFM',
+          status: 'ARCHIVEE',
+        },
+        {
+          id_machine_registered: 'FRM-01',
+          designation: 'Fraiseuse 01',
+          id_blueprint: 'BPT-FRAISEUSE',
+          id_zone_default: 'AFM',
+          status: 'En service',
+        },
+      ];
+
+      const { addedTasks, updatedTasks, targetMachinesCount } = applyBlueprintPlanToActiveMachines(
+        blueprint,
+        machines,
+        []
+      );
+
+      // Only TRP-01 is active and linked to BPT-TOURPARA
+      expect(targetMachinesCount).toBe(1);
+      expect(addedTasks.length).toBe(2);
+      expect(updatedTasks.length).toBe(2);
+      expect(addedTasks.every((t) => t.id_machine === 'TRP-01')).toBe(true);
+      expect(addedTasks[0].composant).toBe('Broche principale');
+      expect(addedTasks[0].action_code).toBe('G');
+      expect(addedTasks[0].duree_min).toBe(20);
+      expect(addedTasks[0].duree_estimee).toBe('20 min');
+
+      // Re-applying same items does not duplicate existing tasks
+      const secondRun = applyBlueprintPlanToActiveMachines(blueprint, machines, updatedTasks);
+      expect(secondRun.addedTasks.length).toBe(0);
+      expect(secondRun.updatedTasks.length).toBe(2);
+    });
+  });
 });
+

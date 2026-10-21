@@ -107,11 +107,21 @@ export interface IType {
   famille?: string;
 }
 
+export interface IBlueprintPreventivePlanItem {
+  id: string;
+  action_code?: string;
+  composant?: string;
+  frequence: string;
+  description?: string;
+  duree_min?: number;
+}
+
 export interface IBlueprint {
   id_blueprint: string;
   id_family: string;
   id_templates: string;
-  nom: string;
+  nom?: string;
+  libelle?: string;
   description?: string;
   pdr_theoriques: Array<{
     id_pdr: string;
@@ -120,6 +130,7 @@ export interface IBlueprint {
     quantite_recommandee?: number;
     type?: string;
   }>;
+  preventivePlanItems?: IBlueprintPreventivePlanItem[];
 }
 
 export interface IWarehouseItem {

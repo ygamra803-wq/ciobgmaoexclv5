@@ -1,6 +1,6 @@
 export { Zone } from './Zone';
 export { StockItem } from './StockItem';
-export { Blueprint } from './Blueprint';
+export { Blueprint, applyBlueprintPlanToActiveMachines, type BlueprintPreventivePlanItem } from './Blueprint';
 export { Machine } from './Machine';
 export { CompTemplate } from './CompTemplate';
 export { Technician } from './Technician';
