@@ -191,7 +191,7 @@ export default function DemandesInterventionTab({
 
   // Form State for new DI
   const [newForm, setNewForm] = useState({
-    code_machine: allMachineOptions[0]?.code || allMachineOptions[0]?.id_machine_registered || 'RCP-02',
+    code_machine: allMachineOptions[0]?.code || allMachineOptions[0]?.id_machine_registered || '',
     id_composant: '',
     id_part: '',
     pdr_ref: '',
@@ -203,6 +203,20 @@ export default function DemandesInterventionTab({
     travail_a_faire: '',
     arret_machine: true,
   });
+
+  useEffect(() => {
+    const validCodes = new Set(
+      allMachineOptions.map((m) => String(m.code || m.id_machine_registered || '').trim())
+    );
+    if (allMachineOptions.length === 0) {
+      if (newForm.code_machine !== '') {
+        setNewForm((prev) => ({ ...prev, code_machine: '', id_composant: '', id_part: '' }));
+      }
+    } else if (!newForm.code_machine || !validCodes.has(String(newForm.code_machine).trim())) {
+      const firstCode = allMachineOptions[0]?.code || allMachineOptions[0]?.id_machine_registered || '';
+      setNewForm((prev) => ({ ...prev, code_machine: firstCode, id_composant: '', id_part: '' }));
+    }
+  }, [allMachineOptions, newForm.code_machine]);
 
   // Available components for the selected machine from Entrepôt
   const machineComponents = useMemo(() => {
@@ -443,8 +457,8 @@ export default function DemandesInterventionTab({
   // Submit new DI
   const handleCreateSubmit = (e) => {
     e.preventDefault();
-    if (!newForm.code_machine) {
-      showToast?.('Veuillez sélectionner une machine', 'warning');
+    if (!newForm.code_machine || allMachineOptions.length === 0) {
+      showToast?.('Veuillez sélectionner une machine active du Parc', 'warning');
       return;
     }
 
@@ -1351,14 +1365,20 @@ export default function DemandesInterventionTab({
                   onChange={(e) => setNewForm({ ...newForm, code_machine: e.target.value, id_composant: '', id_part: '' })}
                   className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-amber-400 focus:outline-hidden"
                 >
-                  {allMachineOptions.map((m) => {
-                    const code = m.code || m.id_machine_registered || m.id;
-                    return (
-                      <option key={code} value={code}>
-                        {code} {m.zone ? `(${m.zone})` : ''} - {m.totalInterventions ? `${m.totalInterventions} interventions` : 'Parc'}
-                      </option>
-                    );
-                  })}
+                  {allMachineOptions.length > 0 ? (
+                    allMachineOptions.map((m) => {
+                      const code = m.code || m.id_machine_registered || m.id;
+                      return (
+                        <option key={code} value={code}>
+                          {code} {m.zone ? `(${m.zone})` : ''} - {m.totalInterventions ? `${m.totalInterventions} interventions` : 'Parc'}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    <option value="" disabled>
+                      -- Aucune machine active enregistrée dans le Parc --
+                    </option>
+                  )}
                 </select>
               </div>
 
@@ -1652,7 +1672,8 @@ export default function DemandesInterventionTab({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-md shadow-amber-600/25 active:scale-95"
+                  disabled={!newForm.code_machine || allMachineOptions.length === 0}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer shadow-md shadow-amber-600/25 active:scale-95"
                 >
                   Enregistrer la Demande (DI)
                 </button>

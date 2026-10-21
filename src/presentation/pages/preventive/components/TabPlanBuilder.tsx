@@ -521,13 +521,9 @@ export default function TabPlanBuilder({
                     </option>
                   ))
                 ) : (
-                  <>
-                    <option value="FRM-01">FRM-01 - Formeuse Hydraulique (AFM)</option>
-                    <option value="TRP-01">TRP-01 - Tour à repousser CNC (Repoussage)</option>
-                    <option value="SER-04">SER-04 - Sertisseuse automatique (SAT)</option>
-                    <option value="DET-02">DET-02 - Détoureuse circulaire (Détourage)</option>
-                    <option value="POL-03">POL-03 - Polisseuse automatique (Polissage)</option>
-                  </>
+                  <option value="" disabled>
+                    -- Aucune machine active enregistrée dans le Parc --
+                  </option>
                 )}
               </select>
             </div>

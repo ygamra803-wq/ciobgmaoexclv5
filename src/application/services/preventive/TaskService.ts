@@ -31,8 +31,8 @@ function computeNextDueDate(dateRealisation: string, frequence?: string): string
 export class TaskService {
   static getTasks() {
     return loadCollection(STORAGE_KEY_TASKS, {
-      allowDemoFallback: true,
-      demoSeed: INITIAL_TASKS,
+      allowDemoFallback: false,
+      demoSeed: [],
     });
   }
 

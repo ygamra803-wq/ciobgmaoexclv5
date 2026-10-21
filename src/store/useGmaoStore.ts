@@ -228,8 +228,8 @@ function getInitialPreventive() {
     demoSeed: [],
   });
   const tasks = loadCollection(STORAGE_KEYS.PREVENTIVE_TASKS, {
-    allowDemoFallback: true,
-    demoSeed: initialTasks,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const executions = loadCollection(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, {
     allowDemoFallback: false,
@@ -240,16 +240,16 @@ function getInitialPreventive() {
 
 function getInitialSorties() {
   const sorties = loadCollection(STORAGE_KEYS.SORTIE_EXTERNE, {
-    allowDemoFallback: true,
-    demoSeed: INITIAL_SORTIES_BOBINAGE,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   return { sorties };
 }
 
 function getInitialCorrective() {
   const interventions = loadCollection(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS, {
-    allowDemoFallback: true,
-    demoSeed: initialInterventions,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const actionsByPanne = loadCollection(STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE, {
     allowDemoFallback: true,

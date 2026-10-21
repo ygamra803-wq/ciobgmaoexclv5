@@ -1,6 +1,6 @@
-# AGENTS.md — CIOB GMAO Light UI Excel System Instructions & Architecture
+# 📜 SYSTEM_RULES.md — Legacy UI & Formula Reference
 
-هذا الملف يحتوي على الإرشادات المرجعية والمعمارية لنظام **CIOB GMAO Light UI Excel** لمطوري ومساعدي الذكاء الاصطناعي (**AI Agents & Developers**).
+> **⚠️ تنبيه مرجعي:** البوابة الرسمية للوكلاء هي [`/AGENTS.md`](../AGENTS.md) و[`/docs/DATA_SSOT.md`](./DATA_SSOT.md). يُحتفظ بهذا الملف كمرجع لتسميات الحقول ومعايير العرض فقط؛ مصدر الحقيقة الفعلي هو `DataGateway.ts` + `useGmaoStore.ts` وليس الإكسل أو `localStorage` المباشر.
 
 ---
 

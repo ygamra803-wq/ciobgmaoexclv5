@@ -1,6 +1,6 @@
 # 🏛️ دليل المعمارية الموحد ونظام إدارة الحالة (State Orchestrator & Architectural Standard)
 
-> تم نقل وتوحيد محتويات هذا المستند من تعليمات المعمارية وإدارة الحالة لحفظها كمرجع توثيقي دائم ومفصل للمطورين، ولتقليل حمولة سياق العمل والرموز (Token Optimization).
+> **⚠️ تنبيه مرجعي:** تم توحيد إدارة الحالة فعلياً في `src/store/useGmaoStore.ts` وبوابة التخزين `src/application/DataGateway.ts` مع منع الحقن التلقائي لبذور الديمو عند فراغ التخزين (`allowDemoFallback: false`). راجع [`/AGENTS.md`](../AGENTS.md) و[`/docs/DATA_SSOT.md`](./DATA_SSOT.md) للمواصفة الحالية. (القسم 4 أدناه الخاص بـ `IncrementalStockIndex.ts` سارٍ ومعتمد بالكامل).
 
 ---
 

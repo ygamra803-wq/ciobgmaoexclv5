@@ -19,8 +19,8 @@ class SortieExterneService {
    */
   static getSorties() {
     return loadCollection(STORAGE_KEY, {
-      allowDemoFallback: true,
-      demoSeed: INITIAL_SORTIES_BOBINAGE,
+      allowDemoFallback: false,
+      demoSeed: [],
     });
   }
 

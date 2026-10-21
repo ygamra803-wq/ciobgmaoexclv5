@@ -1,6 +1,14 @@
 # 🏛️ GMAO Industrial Architecture & Developer Master Manual
 **CIOB GMAO Light UI Excel — المواصفة الهندسية والمعمارية الشاملة للمطورين والوكلاء الذكيين**
 
+> **⚠️ ملاحظة مرجعية هامة (Architecture Supersession Notice):**
+> للاطلاع على المعمارية الحالية المنفذة بالكود (`TypeScript`, `useGmaoStore.ts`, `DataGateway.ts`, `STORAGE_KEYS`, `IncrementalStockIndex.ts`, `ExecutionService.ts`, `WorkOrderStateMachine.ts`, وخادم الشبكة المحلية `server.ts`)، يرجى الرجوع أولاً إلى:
+> 1. [`/AGENTS.md`](../AGENTS.md) — البوابة الإلزامية للوكلاء والمطورين.
+> 2. [`/CAPABILITIES_AND_STRENGTHS.md`](../CAPABILITIES_AND_STRENGTHS.md) — سجل القدرات الموثقة بالكود.
+> 3. [`/ARCHITECTURE.md`](../ARCHITECTURE.md) — القرارات المعمارية (`ADR-01` إلى `ADR-08`).
+> 4. [`/docs/DATA_SSOT.md`](./DATA_SSOT.md) — جدول مفاتيح التخزين القياسية والعلاقات.
+> *(الإشارات الواردة أدناه إلى ملفات `.js/.jsx` القديمة أو اعتبار الإكسل مصدر الحقيقة الداخلي هي مرجع تاريخي لتوافق صيغ التصدير فقط).*
+
 ---
 
 ## 📑 الفهرس العام (Table of Contents)

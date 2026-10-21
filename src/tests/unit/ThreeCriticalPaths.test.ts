@@ -117,4 +117,29 @@ describe('Five-Point Critical GMAO Verification Suite', () => {
     expect(activeCodes).not.toContain('PCE-01');
     expect(activeCodes).not.toContain('FRL-01');
   });
+
+  // Path 4: Operational collections (Preventive Tasks, Corrective Interventions, Sorties Externe, Executions) never auto-fallback on startup
+  it('4) enforces allowDemoFallback: false for operational slices (PREVENTIVE_TASKS, CORRECTIVE_INTERVENTIONS, SORTIE_EXTERNE, PREVENTIVE_EXECUTIONS) until explicit loadDemoData', () => {
+    localStorage.clear();
+    // Even if a stale DEMO_MODE=true flag exists in storage without actual collection data:
+    storageService.setItem(STORAGE_KEYS.DEMO_MODE, true);
+    storageService.setItem(STORAGE_KEYS.START_MODE, 'demo');
+
+    expect(
+      loadCollection(STORAGE_KEYS.PREVENTIVE_TASKS, { allowDemoFallback: false, demoSeed: [] })
+    ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS, { allowDemoFallback: false, demoSeed: [] })
+    ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.SORTIE_EXTERNE, { allowDemoFallback: false, demoSeed: [] })
+    ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, { allowDemoFallback: false, demoSeed: [] })
+    ).toEqual([]);
+
+    // And when machines is empty, filterActiveMachines returns [] (no hardcoded FRM-01 / RCP-02 fallback)
+    expect(filterActiveMachines([])).toEqual([]);
+  });
 });
+
