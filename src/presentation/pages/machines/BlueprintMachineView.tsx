@@ -39,6 +39,7 @@ import { CategoryIcon } from '../../components/common/icons/CategoryIcon';
 import { SpokeIcon } from '../../components/common/icons/SpokeIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../i18n/I18nContext';
+import { filterActiveMachines } from '../../../utils/activeMachines';
 
 const STATUS_OPTIONS = [
   { value: 'Approuvé', label: 'Approuvé' },
@@ -1552,11 +1553,17 @@ export default function BlueprintMachineView({
                           }}
                           className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
                         >
-                          {families.map((f, idx) => (
-                            <option key={`modal-fam-${f.id_family || idx}-${idx}`} value={f.id_family}>
-                              {f.id_family} • {f.label_family || f.libelle}
+                          {families.length === 0 ? (
+                            <option value="" disabled>
+                              Aucune famille enregistrée
                             </option>
-                          ))}
+                          ) : (
+                            families.map((f, idx) => (
+                              <option key={`modal-fam-${f.id_family || idx}-${idx}`} value={f.id_family}>
+                                {f.id_family} • {f.label_family || f.libelle}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </div>
 
@@ -1571,11 +1578,17 @@ export default function BlueprintMachineView({
                           }}
                           className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900"
                         >
-                          {(toEdit ? editModalTemplates : modalTemplates).map((t, idx) => (
-                            <option key={`modal-tpl-${t.id_templates || idx}-${idx}`} value={t.id_templates}>
-                              {t.id_templates} • {t.label_templates || t.libelle}
+                          {(toEdit ? editModalTemplates : modalTemplates).length === 0 ? (
+                            <option value="" disabled>
+                              Aucun modèle enregistré pour cette famille
                             </option>
-                          ))}
+                          ) : (
+                            (toEdit ? editModalTemplates : modalTemplates).map((t, idx) => (
+                              <option key={`modal-tpl-${t.id_templates || idx}-${idx}`} value={t.id_templates}>
+                                {t.id_templates} • {t.label_templates || t.libelle}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </div>
                     </div>
@@ -1895,21 +1908,29 @@ export default function BlueprintMachineView({
                       <div className="flex items-center gap-1.5">
                         <select
                           id="nexus-mch-select"
-                          className="h-8 px-2 rounded-lg border border-indigo-200 bg-white text-xs font-mono text-slate-800"
+                          disabled={filterActiveMachines(machines).length === 0}
+                          className="h-8 px-2 rounded-lg border border-indigo-200 bg-white text-xs font-mono text-slate-800 disabled:opacity-50"
                         >
-                          {machines.map((m, idx) => (
-                            <option key={`nexus-mch-${m.id_machine_registered || idx}-${idx}`} value={m.id_machine_registered}>
-                              {m.id_machine_registered}
+                          {filterActiveMachines(machines).length === 0 ? (
+                            <option value="" disabled>
+                              Aucune machine active enregistrée
                             </option>
-                          ))}
+                          ) : (
+                            filterActiveMachines(machines).map((m, idx) => (
+                              <option key={`nexus-mch-${m.id_machine_registered || idx}-${idx}`} value={m.id_machine_registered}>
+                                {m.id_machine_registered}
+                              </option>
+                            ))
+                          )}
                         </select>
                         <button
                           type="button"
+                          disabled={filterActiveMachines(machines).length === 0}
                           onClick={() => {
-                            const sel = document.getElementById('nexus-mch-select')?.value;
+                            const sel = (document.getElementById('nexus-mch-select') as HTMLSelectElement | null)?.value;
                             handleExtractFromMachineHistory(sel, toEdit ? 'edit' : 'add');
                           }}
-                          className="h-8 px-3 rounded-lg bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-700 transition"
+                          className="h-8 px-3 rounded-lg bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Extraire
                         </button>
@@ -2045,7 +2066,12 @@ export default function BlueprintMachineView({
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition"
+                    disabled={
+                      !(toEdit ? toEdit.id_family : form.id_family) ||
+                      !(toEdit ? toEdit.id_templates : form.id_templates) ||
+                      !(toEdit ? toEdit.libelle : form.libelle)?.trim()
+                    }
+                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                   >
                     {toEdit ? 'Enregistrer Modifications' : 'Créer Blueprint BOM'}
                   </button>
@@ -2057,44 +2083,56 @@ export default function BlueprintMachineView({
       )}
 
       {/* Delete Confirmation Modal */}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5 max-w-sm w-full space-y-4">
-            <div className="flex items-center gap-3 text-rose-600">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5" />
+      {toDelete && (() => {
+        const linkedCount = blueprintMachineCountMap[toDelete.id_blueprint] || 0;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5 max-w-sm w-full space-y-4">
+              <div className="flex items-center gap-3 text-rose-600">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    {linkedCount > 0 ? 'Suppression bloquée (Intégrité Référentielle)' : 'Supprimer ce Blueprint ?'}
+                  </h3>
+                  <div className="font-mono text-xs text-rose-600 font-bold">{toDelete.id_blueprint}</div>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-sm">Supprimer ce Blueprint ?</h3>
-                <div className="font-mono text-xs text-rose-600 font-bold">{toDelete.id_blueprint}</div>
+
+              {linkedCount > 0 ? (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  Ce Blueprint est rattaché à <b>{linkedCount} machine(s)</b> du parc. Dissociez-le des machines concernées avant de pouvoir le supprimer afin d&apos;éviter des références orphelines.
+                </p>
+              ) : (
+                <p className="text-xs text-slate-500">
+                  Cette action supprimera définitivement le schéma et la nomenclature (BOM) associée.
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setToDelete(null)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
+                >
+                  {linkedCount > 0 ? 'Fermer' : 'Annuler'}
+                </button>
+                {linkedCount === 0 && (
+                  <button
+                    onClick={() => {
+                      onDeleteBlueprint(toDelete.id_blueprint);
+                      setToDelete(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out"
+                  >
+                    Confirmer Suppression
+                  </button>
+                )}
               </div>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Cette action supprimera définitivement le schéma et la nomenclature (BOM) associée. Les machines liées conserveront leurs
-              paramètres d'usine standards.
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setToDelete(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteBlueprint(toDelete.id_blueprint);
-                  setToDelete(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out"
-              >
-                Confirmer Suppression
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Excel Formulas Modal */}
       {showFormulasModal && (

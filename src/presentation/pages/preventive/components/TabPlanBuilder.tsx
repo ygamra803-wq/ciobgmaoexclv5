@@ -96,19 +96,39 @@ export default function TabPlanBuilder({
       }
     });
 
-    // 1c. Components from Blueprints matching machine template
-    const templateId = mach.id_machine_template || mach.template || mach.id_template;
-    if (templateId) {
+    // 1c. Components from Blueprints matching machine id_blueprint or template (id_templates)
+    const blueprintId = mach.id_blueprint;
+    const templateId = mach.id_templates || mach.id_machine_template || mach.template || mach.id_template;
+    if (blueprintId || templateId) {
       (blueprints || []).forEach((bp) => {
-        if (bp.id_machine_template === templateId || bp.template === templateId) {
-          const bpName = bp.nom_organe || bp.composant || bp.designation;
-          if (bpName) {
-            compMap.set(String(bpName).toLowerCase(), {
-              nom: bpName,
-              ref: bp.ref,
-              source: 'Blueprint Modèle',
-              icon: 'blueprint',
+        const matchesBlueprint = blueprintId && bp.id_blueprint === blueprintId;
+        const matchesTemplate =
+          templateId &&
+          (bp.id_templates === templateId || bp.id_machine_template === templateId || bp.template === templateId);
+
+        if (matchesBlueprint || matchesTemplate) {
+          if (Array.isArray(bp.components_theoriques)) {
+            bp.components_theoriques.forEach((comp) => {
+              const compName = comp.libelle || comp.id_component || comp.id;
+              if (compName) {
+                compMap.set(String(compName).toLowerCase(), {
+                  nom: compName,
+                  ref: comp.id_component || comp.id || bp.id_blueprint,
+                  source: 'Blueprint Modèle',
+                  icon: 'blueprint',
+                });
+              }
             });
+          } else {
+            const bpName = bp.nom_organe || bp.composant || bp.designation;
+            if (bpName) {
+              compMap.set(String(bpName).toLowerCase(), {
+                nom: bpName,
+                ref: bp.ref || bp.id_blueprint,
+                source: 'Blueprint Modèle',
+                icon: 'blueprint',
+              });
+            }
           }
         }
       });

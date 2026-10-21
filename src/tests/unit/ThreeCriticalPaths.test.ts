@@ -137,6 +137,9 @@ describe('Five-Point Critical GMAO Verification Suite', () => {
     expect(
       loadCollection(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, { allowDemoFallback: false, demoSeed: [] })
     ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.BLUEPRINTS, { allowDemoFallback: false, demoSeed: [] })
+    ).toEqual([]);
 
     // And when machines is empty, filterActiveMachines returns [] (no hardcoded FRM-01 / RCP-02 fallback)
     expect(filterActiveMachines([])).toEqual([]);

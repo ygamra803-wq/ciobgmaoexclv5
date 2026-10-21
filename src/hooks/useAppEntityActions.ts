@@ -104,6 +104,14 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
   };
 
   const handleDeleteBlueprint = (id) => {
+    const linkedMachines = (machines || []).filter((m) => m.id_blueprint === id);
+    if (linkedMachines.length > 0) {
+      showToast(
+        `Suppression refusée : Blueprint "${id}" est lié à ${linkedMachines.length} machine(s).`,
+        'warning'
+      );
+      return;
+    }
     setBlueprints((prev) => prev.filter((b) => b.id_blueprint !== id));
     showToast(`Blueprint "${id}" supprimé avec succès !`, 'info');
   };

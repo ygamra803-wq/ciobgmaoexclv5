@@ -131,8 +131,8 @@ function getInitialMachines() {
     demoSeed: initialTemplates,
   });
   const blueprints = loadCollection(STORAGE_KEYS.BLUEPRINTS, {
-    allowDemoFallback: true,
-    demoSeed: initialBlueprints,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const machines = loadCollection(STORAGE_KEYS.MACHINES, {
     allowDemoFallback: true,
