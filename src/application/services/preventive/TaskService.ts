@@ -59,7 +59,28 @@ export class TaskService {
   }
 
   static updateTaskCounter(taskId, newCounterValue) {
-    return this.updateTask(taskId, { dernier_releve: Number(newCounterValue || 0) });
+    const current = this.getTasks();
+    const target = current.find((t) => String(t.id) === String(taskId));
+    const targetMachine = String(target?.id_machine || '').trim().toUpperCase();
+    const numericVal = Number(newCounterValue || 0);
+    const nowIso = new Date().toISOString();
+
+    const updated = current.map((t) => {
+      const isSameTask = String(t.id) === String(taskId);
+      const isSameMachine =
+        targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
+      if (isSameTask || isSameMachine) {
+        return {
+          ...t,
+          dernier_releve: numericVal,
+          compteur_actuel: numericVal,
+          updated_at: nowIso,
+        };
+      }
+      return t;
+    });
+    this.saveTasks(updated);
+    return updated;
   }
 
   static markTaskAsDone(taskId, validationData: Record<string, any> = {}) {
@@ -71,13 +92,33 @@ export class TaskService {
       nowIso.split('T')[0];
 
     const targetTask = current.find((t) => String(t.id) === String(taskId));
+    const targetMachine = String(targetTask?.id_machine || '').trim().toUpperCase();
+    const releveNum = Number(
+      validationData?.compteur_releve ?? validationData?.dernier_releve ?? 0
+    );
+
     const { execution } = ExecutionService.recordExecution(targetTask || { id: taskId }, {
       ...validationData,
       date_realisation: dateRealisation,
     });
 
     const updated = current.map((t) => {
-      if (String(t.id) !== String(taskId)) return t;
+      const isTarget = String(t.id) === String(taskId);
+      const isSameMachine =
+        targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
+
+      if (!isTarget) {
+        if (isSameMachine && releveNum > 0) {
+          return {
+            ...t,
+            dernier_releve: releveNum,
+            compteur_actuel: releveNum,
+            updated_at: nowIso,
+          };
+        }
+        return t;
+      }
+
       const nextDue = computeNextDueDate(dateRealisation, t.frequence);
       const prevCost = Number(t.cout_cumule || 0);
       const addedCost = Number(execution.totalCost || 0);
@@ -96,6 +137,9 @@ export class TaskService {
         observations_validation: execution.notes || '',
         duree_reelle: validationData?.duree_reelle || `${execution.durationMinutes} min`,
         cout_cumule: Number((prevCost + addedCost).toFixed(2)),
+        ...(releveNum > 0
+          ? { dernier_releve: releveNum, compteur_actuel: releveNum }
+          : {}),
         planning: nextPlanning,
         updated_at: nowIso,
       };

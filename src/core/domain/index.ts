@@ -13,7 +13,14 @@ export { Machine } from './Machine';
 export { CompTemplate } from './CompTemplate';
 export { Technician } from './Technician';
 export { CompFamily } from './CompFamily';
-export { EntrepotItem } from './EntrepotItem';
+export {
+  EntrepotItem,
+  isComponentNature,
+  isPartNature,
+  isWarehouseComponent,
+  isWarehousePart,
+  type EntrepotItemNature,
+} from './EntrepotItem';
 export { Mouvement } from './Mouvement';
 export { Operation } from './Operation';
 export { Diagnostic } from './Diagnostic';

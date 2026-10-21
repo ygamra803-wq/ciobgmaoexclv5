@@ -67,18 +67,38 @@ export class CorrectiveCalculationService {
   }
 
   static detectPreventiveRecommendations(interventions: any[] = []) {
-    const freq: Record<string, number> = {};
+    const byMachine: Record<string, { count: number; anomalies: Record<string, number>; zone?: string }> = {};
     for (const item of interventions || []) {
-      const mId = item.code_machine || item.id_machine_registered || item.machine;
-      if (mId) freq[mId] = (freq[mId] || 0) + 1;
+      const mId = String(item.code_machine || item.id_machine_registered || item.machine || '').trim();
+      if (!mId) continue;
+      if (!byMachine[mId]) {
+        byMachine[mId] = { count: 0, anomalies: {}, zone: item.zone };
+      }
+      byMachine[mId].count += 1;
+      const anom = String(item.anomalie || item.panne || 'inspection_generale').trim();
+      if (anom) {
+        byMachine[mId].anomalies[anom] = (byMachine[mId].anomalies[anom] || 0) + 1;
+      }
     }
-    return Object.entries(freq)
-      .filter(([_, count]) => count >= 3)
-      .map(([machine, count]) => ({
-        machine,
-        repetitionCount: count,
-        recommendation: `Créer une inspection préventive renforcée sur ${machine} suite à ${count} pannes récentes.`,
-      }));
+    return Object.entries(byMachine)
+      .filter(([_, data]) => data.count >= 3)
+      .map(([machine, data]) => {
+        const topAnomalie =
+          Object.entries(data.anomalies).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+          'inspection_generale';
+        const cleanLabel = topAnomalie.replace(/_/g, ' ');
+        return {
+          machine,
+          code_machine: machine,
+          count: data.count,
+          repetitionCount: data.count,
+          anomalie: topAnomalie,
+          zone: data.zone || 'Atelier',
+          suggestedIntervalDays: data.count >= 5 ? 7 : 30,
+          recommendedAction: `Contrôle préventif systématique (${cleanLabel}) sur ${machine}`,
+          recommendation: `Créer une inspection préventive renforcée sur ${machine} suite à ${data.count} pannes récentes (${cleanLabel}).`,
+        };
+      });
   }
 }
 

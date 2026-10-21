@@ -71,6 +71,14 @@
   - `annotatePreventiveOrphans` و `annotateCorrectiveOrphans` (مربوطتان أيضاً داخل `DataGateway.savePreventiveTasks` و `DataGateway.saveCorrectiveInterventions`).
   - `relinkForeignKey` و `bulkRelinkOrphans`: إعادة توجيه كود آلة أو منطقة أو قطعة عبر الحركات والتدخلات والمهام الوقائية دفعةً واحدة.
 
+### د) توحيد تصنيف المستودع وحراس الحذف المرجعي للقوالب والأجزاء (`Warehouse Taxonomy & Referential Delete Guards`)
+- **توحيد التصنيف القياسي (`isWarehouseComponent` & `isWarehousePart`):**
+  - المرجع البرمجي: `src/core/domain/EntrepotItem.ts` يوفّر الدوال المعيارية `isComponentNature`, `isPartNature`, `isWarehouseComponent`, و `isWarehousePart` لضمان التطابق التام بين شاشة المستودع (`EntrepotView.tsx`) وشاشة طلبات التدخل التصحيحي (`DemandesInterventionTab.tsx`) مع دعم الحقول القياسية (`nature: 'COMPONENT' | 'PART'`) والسجلات القديمة (`category: 'COMPOSANT'`, `nature: 'PARTIE'`) والروابط الهيكلية (`id_comp_template`, `id_designation`).
+- **حراس الحذف المرجعي والأرشفة الآمنة (`src/hooks/useAppComplexHandlers.ts`):**
+  - يمنع النظام الحذف الصلب لأي تصنيف أو قالب (`TypeMachine`, `Famille`, `Template`, `CompGroup`, `CompFamily`, `CompTemplate`, `PartType`, `PartDesignation`) إذا كان مرتبطاً بسجلات تابعة (`machines`, `blueprints`, `warehouseItems`).
+  - عند محاولة حذف عنصر مستودع (`handleDeleteWarehouseItem`)، يمنع النظام الحذف إذا كان العنصر مركّباً حالياً على آلة (`status === 'MONTE'` أو `machine_id` نشط)، ويحوّل العملية تلقائياً إلى **أرشفة آمنة** (`status: 'REFORME'`, `is_active: false`) إذا كان العنصر مرتبطاً بسجل حركات (`mouvements`) أو تدخلات (`correctiveInterventions`) أو إرساليات خارجية (`sortiesExterne`) أو لف محركات (`bobinage`).
+- **الاختبار المُثبت:** `src/tests/unit/DomainEntities.test.ts` (`EntrepotItem Nature & Taxonomy Classification (FIX-2)`).
+
 ---
 
 ## 4. محرك المخزون
@@ -128,6 +136,14 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 ### ج) الاستمرار بعد `F5` والتصفير مع `clearAllForRealFactory`
 - تُحمَّل سجلات التنفيذ عبر `ExecutionService.getExecutions()` باستخدام `loadCollection(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, { allowDemoFallback: false, demoSeed: [] })`، مما يضمن بقاءها بعد تحديث الصفحة (`F5`) وتصفيرها الكامل عند استدعاء `DataGateway.clearAllForRealFactory()`.
 - **الاختبار المُثبت:** `src/tests/unit/Phase1FactoryMemory.test.ts` (`P1.1`, `P1.2`, `P1.6`).
+
+### د) الجسر التنبؤي (`Correctif ⇄ Préventif`) ومزامنة عداد ساعات الآلة (`FIX-4`)
+- **الجسر التنبؤي ثنائي الاتجاه (`Bidirectional Maintenance Bridge`):**
+  1. **من التصحيحي إلى الوقائي (`Pont Prédictif Anti-Récidive`):** يرصد `CorrectiveCalculationService.detectPreventiveRecommendations` الآلات التي تعرضت لـ `≥ 3` أعطال متكررة مع تحديد العطل الأكثر تكراراً (`anomalie`). وعند النقر على `+ Créer routine` في `PreventiveView.tsx` أو `Créer la Tâche Préventive` في `AnalyseCorrectiveTab.tsx`، يقوم النظام (مع حارس منع التكرار) بإنشاء خطة ومهمة وقائية مجدولة فعلياً في `preventiveTasks` عبر `handleCreatePlanWithTasks`.
+  2. **من الوقائي إلى التصحيحي (`Anomalie Préventive → DI Corrective`):** يتيح `onCreateCorrective` في `useAppRouterProps.ts` تحويل أي شذوذ يُكتشف أثناء الفحص الوقائي إلى طلب تدخل تصحيحي (`DI`) مربوط بـ `id_tache_preventive` دون الكتابة فوق معرف التدخل (`id`).
+- **مزامنة عداد ساعات الآلة (`Machine Hour-Counter Propagation`):**
+  - عند إدخال قراءة عداد الساعات (`compteur_releve`) أثناء التحقق من مهمة وقائية (`handleMarkTaskDone`) أو تحديث العداد (`handleUpdateTaskCounter`)، ينشر `TaskService` و `useGmaoStore` القراءة الجديدة (`dernier_releve`, `compteur_actuel`) على جميع المهام الوقائية التابعة لنفس الآلة، ويُحدّث حقل `compteur_heures` و `dernier_releve_compteur` في بطاقة الآلة (`machines`) تلقائياً.
+- **الاختبار المُثبت:** `src/tests/unit/ThreeCriticalPaths.test.ts` (المسار السابع: `FIX-4`).
 
 ---
 
@@ -217,17 +233,25 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 
 ## 8. آلة الحالة المحدودة للصيانة التصحيحية (`Work Order FSM`)
 
-- **المرجع البرمجي:** `src/domain/corrective/services/WorkOrderStateMachine.ts`.
+- **المراجع البرمجية:**
+  - آلة الحالة: `src/domain/corrective/services/WorkOrderStateMachine.ts`.
+  - معالجات الحالة في المخزن المركزي: `src/store/useGmaoStore.ts` (`handleConvertToBt`, `handleStartLiveIntervention`, `handleClotureIntervention`, `handleUpdateCorrectiveIntervention`).
+  - واجهات التشغيل الميداني: `src/presentation/pages/corrective/BonsTravailTab.tsx` و `src/presentation/pages/corrective/InterventionLiveTab.tsx`.
 - **الحالات القياسية المعتمدة (`WorkOrderStatus`):**
   `DEMANDE` ← `BT_PLANIFIE` ← `EN_COURS` ⇄ `EN_ATTENTE_PDR` ← `CLOTURE` (أو `ANNULE`).
 - **الضمانات التصميمية المُنفَّذة:**
   1. **تطبيع المسميات (`normalizeStatus`):** تحويل جميع المسميات التاريخية والفرنسية (`DEMANDE_CREEE`, `DI`, `PLANIFIE`, `LIVE`, `ON_HOLD`, `FERME`, `TERMINE`, إلخ) إلى الحالات الست القياسية.
-  2. **حراسة الانتقالات (`canTransition` & `ALLOWED_TRANSITIONS`):** اعتبار حالتي `CLOTURE` و `ANNULE` حالات نهائية (`Terminal States`) لا تقبل إعادة الإغلاق أو التعديل العشوائي.
-  3. **شروط صحة المجال (`validateTransition`):**
-     - منع انتقال أي طلب إلى `BT_PLANIFIE` أو `EN_COURS` بدون تحديد كود الآلة (`code_machine`).
-     - منع إغلاق أمر العمل (`CLOTURE`) بدون توثيق العمل المنجز فعلياً (`action_realisee` أو `travail_a_faire`).
-  4. **منع الازدواجية عند الإغلاق:** في `src/presentation/pages/corrective/InterventionLiveTab.tsx`، يفوّض `handleClotureSubmit` عملية الإغلاق إلى `onClotureIntervention` دون تكرار استدعاء حركة الصرف.
-- **الاختبار المُثبت:** `src/tests/unit/Round6FsmAndMonthlyReport.test.ts`.
+  2. **حراسة الانتقالات على مستوى المخزن (`Store-Level Transition Guards`):** تتحقق جميع دوال التحويل والبدء والتحديث والإغلاق في `useGmaoStore.ts` عبر `WorkOrderStateMachine.validateTransition` قبل تعديل الحالة، وتعتبر حالتي `CLOTURE` و `ANNULE` حالات نهائية (`Terminal States`) لا تقبل إعادة الإغلاق أو الرجوع إلى `EN_COURS`.
+  3. **التعليق المؤقت بانتظار قطعة غيار (`EN_ATTENTE_PDR`):** إتاحة تعليق أمر العمل من جدول `BonsTravailTab` أو شاشة `InterventionLiveTab` إلى حالة `EN_ATTENTE_PDR` واستئنافه لاحقاً إلى `EN_COURS` مع فلترة مخصصة وعداد مستقل.
+  4. **الإغلاق الذري غير المتكرر ومنع الخصم المزدوج (`Idempotent BT Closure & Single Movement Path`):**
+     - يرفض `handleClotureIntervention` في `src/store/useGmaoStore.ts` أي محاولة لإعادة إغلاق أمر عمل مغلق مسبقاً (`statut === 'CLOTURE'` أو `action_fermee === 'OUI'`) ويُرجع `null` دون المساس بالمخزون.
+     - عند الإغلاق الصالح مع استهلاك قطعة غيار (`pdr_ref` و `pdr_quantite > 0`)، تمر حركة الصرف عبر مسار واحد فقط (`onAddMouvement` عند تمريره من الموجه، أو `movementRepository.add` + `setMouvements` عند الاستدعاء المباشر للمخزن) لمنع تكرار الإضافة في `movementRepository`.
+  5. **استهلاك متعدد لقطع الغيار (`Multi-PDR pieces_utilisees`) وتحديث حالة المكون (`Component Lifecycle Sync` — `FIX-3`):**
+     - يدعم `handleClotureIntervention` في `src/store/useGmaoStore.ts` وشاشة `InterventionLiveTab.tsx` إضافة قائمة متعددة من قطع الغيار المستهلكة (`pieces_utilisees`) في نفس أمر العمل، مع توليد حركة صرف مستقلة (`BS-BT-<num>-1`, `BS-BT-<num>-2`, ...) لكل قطعة، وحساب التكلفة الإجمالية (`cout_pdr` / `pdr_cost`) المتوافقة مع `MonthlyReportCalculationService.ts`، مع الحفاظ على التوافق التام مع الحقل المفرد `pdr_ref`.
+     - عند ربط التدخل التصحيحي بمكون مستودع (`id_composant`)، تتيح شاشة الإغلاق تحديد الحالة الجديدة للمكون بعد التدخل (`En service`, `En réparation`, `Hors service`) وتُحدّث سجله في `warehouseItems` تلقائياً مع ختم رقم أمر العمل وتاريخ آخر تدخل (`derniere_intervention_bt`, `derniere_intervention_date`).
+- **الاختبارات المُثبتة:**
+  - `src/tests/unit/Round6FsmAndMonthlyReport.test.ts`
+  - `src/tests/unit/ThreeCriticalPaths.test.ts` (المساران الخامس والسادس: `FIX-1` و `FIX-3`)
 
 ---
 
@@ -236,7 +260,7 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | المجال الهندسي | القدرة الموثّقة | ملف الاختبار الآلي (`Vitest`) |
 |---|---|---|
 | **SSOT والتفريغ** | ثبات التفريغ (`clearAllForRealFactory`)، تطهير المفاتيح القديمة، وعدم عودة البيانات بعد `F5` | `src/tests/unit/PreventiveClearPersistence.test.ts` |
-| **المسارات الحرجة الثلاثة** | 1) معادلة المخزون على 102 حركة، 2) ثبات التفريغ الشامل، 3) عزل الآلات المؤرشفة عن قوائم الإنشاء | `src/tests/unit/ThreeCriticalPaths.test.ts` |
+| **المسارات الحرجة السبعة** | 1) معادلة المخزون، 2) ثبات التفريغ الشامل، 3) عزل الآلات المؤرشفة، 4) منع الحقن التلقائي للبذور، 5) الإغلاق الذري لأوامر العمل (`BT`) وحراسة `EN_ATTENTE_PDR`، 6) الصرف المتعدد لقطع الغيار (`Multi-PDR`) وتحديث حالة المكون، 7) الجسر التنبؤي (`Correctif → Préventif`) ومزامنة عداد ساعات الآلة | `src/tests/unit/ThreeCriticalPaths.test.ts` |
 | **ترابط البذور ومحرك المخزون** | توحيد `IncrementalStockIndex` و `StockCalculationService` وتطابق الرصيد 100% مع كشف `RUPTURE` و `ALERTE` | `src/tests/unit/StockMovementsCorrectiveSeeds.test.ts` |
 | **الذاكرة الزمنية والتقارير** | `ExecutionService.recordExecution`، تحديث الاستحقاق، فلاتر الفترات، وحساب التقرير الشهري | `src/tests/unit/Phase1FactoryMemory.test.ts` |
 | **التزامن والتدقيق (الخادم)** | كشف تعارض الإصدارات (`SERVER_NEWER`)، معالجة `HTTP 409 Conflict`، وسجل التدقيق `GET /api/gmao/audit` | `src/tests/unit/Round4ServerSyncAndConcurrency.test.ts` |

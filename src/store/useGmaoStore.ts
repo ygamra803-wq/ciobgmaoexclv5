@@ -44,6 +44,7 @@ import PreventiveService from '../application/services/PreventiveService';
 import SortieExterneService, { INITIAL_SORTIES_BOBINAGE } from '../application/services/SortieExterneService';
 import { CorrectiveIntervention } from '../domain/corrective/entities/CorrectiveIntervention';
 import { CorrectiveCalculationService } from '../domain/corrective/services/CorrectiveCalculationService';
+import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderStateMachine';
 import { movementRepository } from '../application/MovementRepository';
 
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
@@ -582,30 +583,98 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleUpdateTaskCounter: (id, newCounterValue) => {
-      const next = get().preventiveTasks.map((t) =>
-        t.id === id ? { ...t, dernier_releve: Number(newCounterValue || 0), updated_at: new Date().toISOString() } : t
-      );
+      const targetTask = get().preventiveTasks.find((t) => String(t.id) === String(id));
+      const targetMachine = String(targetTask?.id_machine || '').trim().toUpperCase();
+      const numericVal = Number(newCounterValue || 0);
+      const nowIso = new Date().toISOString();
+
+      const next = get().preventiveTasks.map((t) => {
+        const isSameTask = String(t.id) === String(id);
+        const isSameMachine =
+          targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
+        if (isSameTask || isSameMachine) {
+          return {
+            ...t,
+            dernier_releve: numericVal,
+            compteur_actuel: numericVal,
+            updated_at: nowIso,
+          };
+        }
+        return t;
+      });
       set({ preventiveTasks: next });
       DataGateway.savePreventiveTasks(next);
+
+      if (targetMachine && numericVal > 0) {
+        const today = nowIso.split('T')[0];
+        const nextMachines = (get().machines || []).map((m: any) => {
+          const mCode = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
+          if (mCode === targetMachine) {
+            return {
+              ...m,
+              compteur_heures: numericVal,
+              dernier_releve_compteur: numericVal,
+              date_releve_compteur: today,
+            };
+          }
+          return m;
+        });
+        set({ machines: nextMachines });
+        DataGateway.saveMachines(nextMachines);
+      }
     },
 
     handleMarkTaskDone: (id, validationData) => {
+      const targetTask = get().preventiveTasks.find((t) => String(t.id) === String(id));
+      const targetMachine = String(targetTask?.id_machine || '').trim().toUpperCase();
+      const releveNum = Number(
+        validationData?.compteur_releve ?? validationData?.dernier_releve ?? 0
+      );
+
       const updated = PreventiveService.markTaskAsDone(id, validationData);
       const executions = PreventiveService.getExecutions();
       set({ preventiveTasks: updated, preventiveExecutions: executions });
+      DataGateway.savePreventiveTasks(updated);
+      DataGateway.savePreventiveExecutions(executions);
+
+      if (targetMachine && releveNum > 0) {
+        const dateRealisation =
+          validationData?.date_realisation ||
+          validationData?.date_execution ||
+          new Date().toISOString().split('T')[0];
+        const nextMachines = (get().machines || []).map((m: any) => {
+          const mCode = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
+          if (mCode === targetMachine) {
+            return {
+              ...m,
+              compteur_heures: releveNum,
+              dernier_releve_compteur: releveNum,
+              date_releve_compteur: dateRealisation,
+            };
+          }
+          return m;
+        });
+        set({ machines: nextMachines });
+        DataGateway.saveMachines(nextMachines);
+      }
     },
 
     handleDeletePreventiveExecution: (id) => {
       const updated = PreventiveService.deleteExecution(id);
       set({ preventiveExecutions: updated });
+      DataGateway.savePreventiveExecutions(updated);
     },
 
     handleCreatePlanWithTasks: (planData, taskItems) => {
       const result = PreventiveService.createPlanWithTasks(planData, taskItems);
+      const nextPlans = [result.plan, ...get().preventivePlans];
+      const nextTasks = [...result.tasks, ...get().preventiveTasks];
       set({
-        preventivePlans: [result.plan, ...get().preventivePlans],
-        preventiveTasks: [...result.tasks, ...get().preventiveTasks],
+        preventivePlans: nextPlans,
+        preventiveTasks: nextTasks,
       });
+      DataGateway.savePreventivePlans(nextPlans);
+      DataGateway.savePreventiveTasks(nextTasks);
       return result;
     },
 
@@ -1069,17 +1138,30 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleConvertToBt: (id, btDetails = {}) => {
+      const target = get().correctiveInterventions.find((item) => item.id === id);
+      if (!target) return null;
+
+      const targetStatus = btDetails.statut || 'EN_COURS';
+      const validation = WorkOrderStateMachine.validateTransition(target, targetStatus, {
+        ...btDetails,
+        num_bt: btDetails.num_bt || target.num_bt || 'BT-PENDING',
+      });
+      if (!validation.valid) {
+        console.warn('[useGmaoStore] handleConvertToBt transition blocked:', validation.reason);
+        return null;
+      }
+
       let convertedItem: any = null;
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
-          const num_bt = btDetails.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`;
+          const num_bt = btDetails.num_bt || item.num_bt || `BT-${Math.floor(1000 + Math.random() * 9000)}`;
           convertedItem = new CorrectiveIntervention({
             ...item,
             ...btDetails,
             num_bt,
-            statut: 'EN_COURS',
-            date_debut: btDetails.date_debut || new Date().toISOString().split('T')[0],
-            heure_debut: btDetails.heure_debut || new Date().toTimeString().slice(0, 5),
+            statut: validation.toStatus,
+            date_debut: btDetails.date_debut || item.date_debut || new Date().toISOString().split('T')[0],
+            heure_debut: btDetails.heure_debut || item.heure_debut || new Date().toTimeString().slice(0, 5),
           }).toJSON();
           return convertedItem;
         }
@@ -1091,6 +1173,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleStartLiveIntervention: (id) => {
+      const target = get().correctiveInterventions.find((item) => item.id === id);
+      if (!target) return;
+
+      const validation = WorkOrderStateMachine.validateTransition(target, 'EN_COURS');
+      if (!validation.valid) {
+        console.warn('[useGmaoStore] handleStartLiveIntervention transition blocked:', validation.reason);
+        return;
+      }
+
       const now = new Date();
       const today = now.toISOString().split('T')[0];
       const timeNow = now.toTimeString().slice(0, 5);
@@ -1112,10 +1203,33 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleClotureIntervention: (id, clotureData = {}, onAddMouvement = null) => {
+      const existing = get().correctiveInterventions.find((item) => item.id === id);
+      if (!existing) return null;
+
+      // Re-closure & FSM guard: never re-close an already closed BT or emit duplicate stock movements
+      if (String(existing.action_fermee || '').trim().toUpperCase() === 'OUI') {
+        console.warn(`[useGmaoStore] handleClotureIntervention blocked: intervention ${id} is already closed.`);
+        return null;
+      }
+
+      const validation = WorkOrderStateMachine.validateTransition(existing, 'CLOTURE', clotureData);
+      if (!validation.valid) {
+        console.warn('[useGmaoStore] handleClotureIntervention blocked:', validation.reason);
+        return null;
+      }
+
       const now = new Date();
       const today = now.toISOString().split('T')[0];
       const timeNow = now.toTimeString().slice(0, 5);
       let updated: any = null;
+      const movementsToRecord: any[] = [];
+
+      const stockList = get().rawStock || [];
+      const stockLookup = new Map<string, any>();
+      stockList.forEach((s: any) => {
+        const r = String(s.ref || s.code_article || '').trim().toUpperCase();
+        if (r) stockLookup.set(r, s);
+      });
 
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
@@ -1125,9 +1239,109 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           const hFin = clotureData.heure_fin || timeNow;
           const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
 
+          // Normalize multi-PDR consumption (pieces_utilisees + backward-compatible single pdr_ref)
+          const rawPieces = Array.isArray(clotureData.pieces_utilisees)
+            ? clotureData.pieces_utilisees
+            : Array.isArray(item.pieces_utilisees) && !clotureData.pdr_ref
+            ? item.pieces_utilisees
+            : [];
+
+          const normalizedPieces: Array<{
+            ref: string;
+            designation: string;
+            quantite: number;
+            prix_unitaire: number;
+            unite: string;
+            marque?: string;
+            etat_piece?: string;
+          }> = [];
+
+          rawPieces.forEach((p: any) => {
+            const ref = String(p?.ref || p?.code_article || '').trim();
+            const quantite = Number(p?.quantite ?? p?.qte ?? 0);
+            if (!ref || !(quantite > 0)) return;
+            const stockMatch = stockLookup.get(ref.toUpperCase());
+            const existingIdx = normalizedPieces.findIndex(
+              (np) => np.ref.toUpperCase() === ref.toUpperCase()
+            );
+            const prix =
+              Number(p?.prix_unitaire ?? p?.prix ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
+            if (existingIdx >= 0) {
+              normalizedPieces[existingIdx].quantite += quantite;
+            } else {
+              normalizedPieces.push({
+                ref,
+                designation: String(
+                  p?.designation || stockMatch?.designation || stockMatch?.nom || ref
+                ).trim(),
+                quantite,
+                prix_unitaire: prix,
+                unite: String(p?.unite || stockMatch?.unite || 'Pièce'),
+                marque: p?.marque || stockMatch?.marque || clotureData.marque || item.marque || '',
+                etat_piece: p?.etat_piece || clotureData.etat_piece || item.etat_piece || 'Neuve',
+              });
+            }
+          });
+
+          // Also merge single pdr_ref if provided and not already in normalizedPieces
+          const singleRef = String(
+            clotureData.pdr_ref ?? item.pdr_ref ?? item.pdr ?? ''
+          ).trim();
+          const singleQty = Number(clotureData.pdr_quantite ?? item.pdr_quantite ?? 0);
+          if (singleRef && singleQty > 0) {
+            const alreadyIncluded = normalizedPieces.some(
+              (np) => np.ref.toUpperCase() === singleRef.toUpperCase()
+            );
+            if (!alreadyIncluded) {
+              const stockMatch = stockLookup.get(singleRef.toUpperCase());
+              normalizedPieces.push({
+                ref: singleRef,
+                designation: String(
+                  clotureData.pdr_designation ||
+                    item.pdr_designation ||
+                    stockMatch?.designation ||
+                    stockMatch?.nom ||
+                    singleRef
+                ).trim(),
+                quantite: singleQty,
+                prix_unitaire:
+                  Number(
+                    clotureData.pdr_prix ??
+                      item.pdr_prix ??
+                      stockMatch?.prix ??
+                      stockMatch?.prix_unitaire ??
+                      0
+                  ) || 0,
+                unite: String(
+                  clotureData.pdr_unite || item.pdr_unite || stockMatch?.unite || 'Pièce'
+                ),
+                marque: clotureData.marque || item.marque || stockMatch?.marque || '',
+                etat_piece: clotureData.etat_piece || item.etat_piece || 'Neuve',
+              });
+            }
+          }
+
+          const totalPdrCost = normalizedPieces.reduce(
+            (sum, p) => sum + p.quantite * (p.prix_unitaire || 0),
+            0
+          );
+          const primaryPiece = normalizedPieces[0] || null;
+
           updated = new CorrectiveIntervention({
             ...item,
             ...clotureData,
+            pdr_ref: primaryPiece ? primaryPiece.ref : '',
+            pdr_designation: primaryPiece
+              ? normalizedPieces.length > 1
+                ? `${primaryPiece.designation} (+${normalizedPieces.length - 1} réf.)`
+                : primaryPiece.designation
+              : '',
+            pdr_quantite: primaryPiece ? primaryPiece.quantite : 0,
+            pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : 0,
+            pdr_unite: primaryPiece ? primaryPiece.unite : 'Pièce',
+            pieces_utilisees: normalizedPieces,
+            cout_pdr: totalPdrCost,
+            pdr_cost: totalPdrCost,
             date_debut: dDebut,
             heure_debut: hDebut,
             date_fin: dFin,
@@ -1139,40 +1353,29 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             rapport_redige: 'OUI',
           }).toJSON();
 
-          if (updated.pdr_ref && Number(updated.pdr_quantite) > 0) {
+          if (normalizedPieces.length > 0) {
             const btIdentifier = updated.num_bt || updated.id;
-            const mvt: any = {
-              id: `MVT-BT-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
-              code_bon: `BS-BT-${btIdentifier}`,
-              ref: updated.pdr_ref,
-              code_article: updated.pdr_ref,
-              designation: updated.pdr_designation || updated.pdr_ref,
-              type: 'Sortie',
-              quantite: Number(updated.pdr_quantite),
-              date: dFin,
-              machine: updated.code_machine,
-              id_machine_registered: updated.code_machine,
-              technicien: updated.intervenant || 'Technicien',
-              demandeur: updated.intervenant || 'Technicien GMAO',
-              prix_unitaire: Number(updated.pdr_prix) || 0,
-              unite: updated.pdr_unite || 'Pièce',
-              motif: `Consommation BT ${btIdentifier} · Machine: ${updated.code_machine}`,
-              observation: `Sortie PDR automatique clôture BT ${btIdentifier} (${updated.anomalie || 'Correctif'})`,
-            };
-
-            try {
-              movementRepository.add(mvt);
-            } catch (err) {
-              console.warn('[useGmaoStore] Failed to add movement via repository:', err);
-            }
-
-            if (typeof onAddMouvement === 'function') {
-              try {
-                onAddMouvement(mvt);
-              } catch (e) {
-                console.warn('[useGmaoStore] onAddMouvement error:', e);
-              }
-            }
+            normalizedPieces.forEach((piece, idx) => {
+              const suffix = normalizedPieces.length > 1 ? `-${idx + 1}` : '';
+              movementsToRecord.push({
+                id: `MVT-BT-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+                code_bon: `BS-BT-${btIdentifier}${suffix}`,
+                ref: piece.ref,
+                code_article: piece.ref,
+                designation: piece.designation || piece.ref,
+                type: 'Sortie',
+                quantite: Number(piece.quantite),
+                date: dFin,
+                machine: updated.code_machine,
+                id_machine_registered: updated.code_machine,
+                technicien: updated.intervenant || 'Technicien',
+                demandeur: updated.intervenant || 'Technicien GMAO',
+                prix_unitaire: Number(piece.prix_unitaire) || 0,
+                unite: piece.unite || 'Pièce',
+                motif: `Consommation BT ${btIdentifier} · Machine: ${updated.code_machine}`,
+                observation: `Sortie PDR automatique clôture BT ${btIdentifier} (${updated.anomalie || 'Correctif'})`,
+              });
+            });
           }
 
           return updated;
@@ -1183,6 +1386,50 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       set({ correctiveInterventions: next });
       DataGateway.saveCorrectiveInterventions(next);
 
+      if (movementsToRecord.length > 0) {
+        if (typeof onAddMouvement === 'function') {
+          movementsToRecord.forEach((mvt) => {
+            try {
+              onAddMouvement(mvt);
+            } catch (e) {
+              console.warn('[useGmaoStore] onAddMouvement error:', e);
+            }
+          });
+        } else {
+          movementsToRecord.forEach((mvt) => {
+            try {
+              movementRepository.add(mvt);
+            } catch (err) {
+              console.warn('[useGmaoStore] Failed to add movement via repository:', err);
+            }
+          });
+          get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+        }
+      }
+
+      // Optional linked component lifecycle update in Entrepôt (id_composant + statut_composant_cloture)
+      const targetCompId = String(updated?.id_composant || '').trim();
+      const targetCompStatus = String(clotureData?.statut_composant_cloture || '').trim();
+      if (targetCompId && targetCompStatus) {
+        const btRef = updated?.num_bt || updated?.id || '';
+        const dFin = updated?.date_fin || today;
+        get().setWarehouseItems((prev) =>
+          (prev || []).map((w: any) => {
+            const wId = String(w.id_warehouse_item || w.id || w.id_item || '').trim();
+            if (wId === targetCompId) {
+              return {
+                ...w,
+                status: targetCompStatus,
+                statut: targetCompStatus,
+                derniere_intervention_bt: btRef,
+                derniere_intervention_date: dFin,
+              };
+            }
+            return w;
+          })
+        );
+      }
+
       if (get().activeLiveInterventionId === id) {
         get().setActiveLiveInterventionId(null);
       }
@@ -1191,9 +1438,24 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleUpdateCorrectiveIntervention: (id, patch = {}) => {
+      const existing = get().correctiveInterventions.find((item) => item.id === id);
+      if (!existing) return;
+
+      if (patch.statut && patch.statut !== existing.statut) {
+        const validation = WorkOrderStateMachine.validateTransition(existing, patch.statut, patch);
+        if (!validation.valid) {
+          console.warn('[useGmaoStore] handleUpdateCorrectiveIntervention transition blocked:', validation.reason);
+          return;
+        }
+      }
+
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
-          return new CorrectiveIntervention({ ...item, ...patch }).toJSON();
+          return new CorrectiveIntervention({
+            ...item,
+            ...patch,
+            ...(patch.statut ? { statut: WorkOrderStateMachine.normalizeStatus(patch.statut) } : {}),
+          }).toJSON();
         }
         return item;
       });

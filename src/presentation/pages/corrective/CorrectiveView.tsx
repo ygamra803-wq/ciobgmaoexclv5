@@ -148,7 +148,7 @@ export default function CorrectiveView({
     (i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION'
   ).length;
   const inProgressBtCount = interventions.filter(
-    (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE') && i.num_bt
+    (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR') && i.num_bt
   ).length;
   const closedCount = interventions.filter((i) => i.statut === 'CLOTURE').length;
   const isLiveRunning = Boolean(activeLiveId);

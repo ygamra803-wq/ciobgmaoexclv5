@@ -284,10 +284,21 @@ export class MonthlyReportCalculationService {
         totalDowntimeHours += dtHours;
       }
 
-      // Spares cost calculation
+      // Spares cost calculation (supports explicit cost, multi-PDR pieces_utilisees, or single pdr_ref)
       const explicitCost = Number(ci.pdr_cost ?? ci.cout_pdr ?? ci.cout_total ?? 0);
       if (Number.isFinite(explicitCost) && explicitCost > 0) {
         correctiveSparesCost += explicitCost;
+      } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
+        ci.pieces_utilisees.forEach((p: any) => {
+          const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
+          const pQty = Number(p?.quantite ?? p?.qte ?? 0);
+          const pPrice =
+            Number(p?.prix_unitaire ?? p?.prix ?? 0) ||
+            (pRef ? stockPriceMap.get(pRef) || 0 : 0);
+          if (pQty > 0 && pPrice > 0) {
+            correctiveSparesCost += pQty * pPrice;
+          }
+        });
       } else {
         const pdrRef = String(ci.pdr_ref || ci.pdr || '').trim().toUpperCase();
         const qty = Number(ci.pdr_quantite ?? ci.quantite ?? (pdrRef ? 1 : 0));

@@ -213,6 +213,8 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     setPartDesignations,
     warehouseItems,
     setWarehouseItems,
+    blueprints: gmaoState.blueprints || [],
+    sortiesExterne: gmaoState.sortiesExterne || [],
     preventiveTasks,
     correctiveInterventions,
     machineElementsLedger: machineElementsLedger || [],

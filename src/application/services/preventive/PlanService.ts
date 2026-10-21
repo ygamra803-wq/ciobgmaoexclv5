@@ -9,7 +9,7 @@ export const INITIAL_PLANS = [];
 export class PlanService {
   static getPlans() {
     return loadCollection(STORAGE_KEY_PLANS, {
-      allowDemoFallback: true,
+      allowDemoFallback: false,
       demoSeed: INITIAL_PLANS,
     });
   }

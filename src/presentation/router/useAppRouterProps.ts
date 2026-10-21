@@ -309,6 +309,7 @@ export function useAppRouterProps({
       onNavigateToPartTypes: navigation.handleNavigateToPartTypes,
       onNavigateToPartDesignations: navigation.handleNavigateToPartDesignations,
       onNavigateToEntrepotByPart: navigation.handleNavigateToEntrepotByPart,
+      showToast: showToast || navigation?.showToast,
     },
 
     types: {
@@ -660,6 +661,66 @@ export function useAppRouterProps({
       onUpdateTaskCounter: handleUpdateTaskCounter,
       onMarkTaskDone: handleMarkTaskDone,
       onDeleteExecution: handleDeletePreventiveExecution,
+      onCreatePlanWithTasks: handleCreatePlanWithTasks,
+      onAddAction: handleAddPreventiveAction,
+      preventiveRecommendations: correctivePreventiveRecommendations,
+      onAdoptRecommendation: (rec) => {
+        const machineId = String(rec?.machine || rec?.code_machine || '').trim().toUpperCase();
+        if (!machineId) return { skipped: true };
+        const anomClean = String(rec?.anomalie || rec?.titre || 'inspection_generale')
+          .replace(/^Maintenance Préventive Ciblée\s*:\s*/i, '')
+          .replace(/_/g, ' ')
+          .trim();
+        const composantName = `Contrôle ${anomClean}`;
+        const alreadyExists = (preventiveTasks || []).some(
+          (t) =>
+            String(t.id_machine || '').trim().toUpperCase() === machineId &&
+            String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase()
+        );
+        const toastFn = showToast || navigation?.showToast;
+        if (alreadyExists) {
+          toastFn?.(`Une routine préventive "${composantName}" existe déjà pour ${machineId}.`, 'info');
+          return { skipped: true };
+        }
+        const matchedMachine = (machines || []).find(
+          (m) => String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase() === machineId
+        );
+        const zoneId = matchedMachine?.id_zone_default || matchedMachine?.id_zone || rec?.zone || 'Atelier';
+        const freq = rec?.suggestedIntervalDays && Number(rec.suggestedIntervalDays) <= 10 ? 'Hebdo' : 'Mensuel';
+        if (typeof handleCreatePlanWithTasks === 'function') {
+          handleCreatePlanWithTasks(
+            {
+              id_machine: machineId,
+              nom_machine: matchedMachine?.designation || `Machine ${machineId}`,
+              id_zone: zoneId,
+              id_technicien: 'Technicien',
+              semaine_cible: 'S1',
+              description: rec?.recommendation || rec?.description || `Routine anti-récidive (${anomClean}) pour ${machineId}`,
+            },
+            [
+              {
+                composant: composantName,
+                action_code: 'C',
+                frequence: freq,
+                duree_estimee: '20 min',
+                priorite: 'Haute',
+                consigne: rec?.recommendedAction || rec?.description || `Contrôle préventif systématique (${anomClean})`,
+              },
+            ]
+          );
+        }
+        if (typeof handleAddPreventiveAction === 'function') {
+          handleAddPreventiveAction({
+            code: 'C',
+            libelle: `${composantName} (${machineId})`,
+            description: rec?.recommendedAction || rec?.description || '',
+            type_maintenance: 'Préventif',
+            frequence_defaut: freq === 'Hebdo' ? '1S' : '1M',
+          });
+        }
+        toastFn?.(`Routine préventive "${composantName}" planifiée pour ${machineId} (${freq}).`, 'success');
+        return { skipped: false, machineId, composant: composantName };
+      },
       onResetToBaseline: (ctx) => handleResetPreventiveToBaseline({ machines, ...ctx }),
       onClearPreventiveForRealFactory: (ctx) => handleClearPreventiveForRealFactory({ machines, ...ctx }),
       machines,
@@ -675,18 +736,45 @@ export function useAppRouterProps({
       showToast: showToast || navigation?.showToast,
       onNavigateToMachine: (_machId) => navigateTo('machines'),
       onNavigateToReferentiel: () => navigateTo('preventive_referentiel'),
-      onCreateCorrective: (payload = {}) => {
+      onCreateCorrective: (taskOrPayload = {}, btData = {}) => {
         if (typeof handleAddDemandeIntervention === 'function') {
+          const { id: preventiveTaskId, etat: _etat, statut: _statut, ...restTask } = taskOrPayload || {};
           handleAddDemandeIntervention({
-            ...payload,
-            code_machine: payload.code_machine || payload.id_machine || payload.machine || '',
-            anomalie: payload.anomalie || payload.description || payload.composant || 'Anomalie détectée en préventif',
-            demandeur: payload.demandeur || payload.technicien || 'Maintenance Préventive',
+            ...restTask,
+            ...btData,
+            id_tache_preventive: preventiveTaskId || undefined,
+            code_machine:
+              btData?.code_machine ||
+              taskOrPayload?.code_machine ||
+              taskOrPayload?.id_machine ||
+              taskOrPayload?.machine ||
+              '',
+            anomalie:
+              btData?.anomalie ||
+              btData?.description ||
+              taskOrPayload?.anomalie ||
+              taskOrPayload?.description ||
+              taskOrPayload?.composant ||
+              'Anomalie détectée en préventif',
+            travail_a_faire:
+              btData?.description ||
+              taskOrPayload?.consigne ||
+              `Intervention corrective suite au contrôle ${taskOrPayload?.composant || ''}`,
+            priorite: String(btData?.priorite || taskOrPayload?.priorite || 'HAUTE').toUpperCase(),
+            demandeur:
+              btData?.demandeur ||
+              taskOrPayload?.demandeur ||
+              taskOrPayload?.technicien ||
+              taskOrPayload?.responsable ||
+              'Maintenance Préventive',
           });
         }
         const toastFn = showToast || navigation?.showToast;
         if (toastFn) {
-          toastFn(`BT/DI Correctif ${payload.id_bt || payload.num_bt || ''} créé avec succès !`, 'info');
+          toastFn(
+            `DI Corrective créée depuis le préventif (${taskOrPayload?.id_machine || taskOrPayload?.code_machine || ''}) !`,
+            'info'
+          );
         }
       },
     },
@@ -765,7 +853,45 @@ export function useAppRouterProps({
       stockItems,
       warehouseItems: warehouseItemsComputed,
       onAddMouvement: handleAddMouvement,
-      onAddPreventiveTask: handleAddPreventiveAction,
+      onAddPreventiveTask: (recOrTask) => {
+        const machineId = String(recOrTask?.code_machine || recOrTask?.machine || '').trim().toUpperCase();
+        if (!machineId || typeof handleCreatePlanWithTasks !== 'function') return;
+        const anomClean = String(recOrTask?.anomalie || recOrTask?.titre || 'inspection_generale')
+          .replace(/^Maintenance Préventive Ciblée\s*:\s*/i, '')
+          .replace(/_/g, ' ')
+          .trim();
+        const composantName = `Contrôle ${anomClean}`;
+        const alreadyExists = (preventiveTasks || []).some(
+          (t) =>
+            String(t.id_machine || '').trim().toUpperCase() === machineId &&
+            String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase()
+        );
+        if (alreadyExists) return;
+        const matchedMachine = (machines || []).find(
+          (m) => String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase() === machineId
+        );
+        const zoneId = matchedMachine?.id_zone_default || matchedMachine?.id_zone || recOrTask?.zone || 'Atelier';
+        handleCreatePlanWithTasks(
+          {
+            id_machine: machineId,
+            nom_machine: matchedMachine?.designation || `Machine ${machineId}`,
+            id_zone: zoneId,
+            id_technicien: 'Technicien',
+            semaine_cible: 'S1',
+            description: recOrTask?.description || `Plan préventif ciblé (${anomClean}) pour ${machineId}`,
+          },
+          [
+            {
+              composant: composantName,
+              action_code: 'C',
+              frequence: 'Mensuel',
+              duree_estimee: '20 min',
+              priorite: 'Haute',
+              consigne: recOrTask?.description || `Contrôle préventif systématique (${anomClean})`,
+            },
+          ]
+        );
+      },
       showToast: showToast || navigation?.showToast,
       onNavigateToTab: navigateTo,
     },

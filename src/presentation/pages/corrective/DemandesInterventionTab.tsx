@@ -30,6 +30,7 @@ import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { getBlueprintCommonFailuresForMachine } from '../../../core/domain';
+import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
 
 export default function DemandesInterventionTab({
   interventions = [],
@@ -227,8 +228,7 @@ export default function DemandesInterventionTab({
     const code = String(newForm.code_machine).trim().toUpperCase();
     return warehouseItems.filter((w) => {
       const wMach = String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase();
-      const isComp = w.category === 'COMPOSANT' || w.type === 'COMPOSANT' || (!w.part_type && !w.id_part);
-      return (wMach === code || wMach.includes(code)) && isComp;
+      return (wMach === code || wMach.includes(code)) && isWarehouseComponent(w);
     });
   }, [newForm.code_machine, warehouseItems]);
 
@@ -238,8 +238,7 @@ export default function DemandesInterventionTab({
     const code = String(newForm.code_machine).trim().toUpperCase();
     return warehouseItems.filter((w) => {
       const wMach = String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase();
-      const isPart = w.category === 'PART' || w.type === 'PART' || Boolean(w.part_type);
-      return (wMach === code || wMach.includes(code)) && isPart;
+      return (wMach === code || wMach.includes(code)) && isWarehousePart(w);
     });
   }, [newForm.code_machine, warehouseItems]);
 

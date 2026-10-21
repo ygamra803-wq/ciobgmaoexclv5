@@ -56,6 +56,8 @@ export default function PreventiveView({
   onNavigateToReferentiel = null,
   preventiveRecommendations = [],
   onAddAction = null,
+  onCreatePlanWithTasks = null,
+  onAdoptRecommendation = null,
 }) {
   const { t } = useI18n();
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -349,30 +351,59 @@ export default function PreventiveView({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {preventiveRecommendations.slice(0, 2).map((rec, i) => (
-                <button
-                  key={i}
-                  onClick={() => {
-                    if (onAddAction) {
-                      onAddAction({
-                        id_action: `ACT-PREV-${Date.now().toString().slice(-4)}`,
-                        nom_action: `Contrôle systématique ${rec.anomalie.replace(/_/g, ' ')} (${rec.machine})`,
-                        description: rec.recommendedAction,
-                        type_action: 'MECANIQUE',
-                        periodicite_jours: rec.suggestedIntervalDays,
-                        machine: rec.machine,
-                      });
-                      showToast?.(`Tâche préventive créée pour ${rec.machine}`, 'success');
-                    } else {
-                      showToast?.(`Recommandation transmise à l'ingénierie pour ${rec.machine}`, 'success');
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Créer routine: {rec.machine}
-                </button>
-              ))}
+              {preventiveRecommendations.slice(0, 2).map((rec, i) => {
+                const machineLabel = rec.machine || rec.code_machine || 'Machine';
+                const anomClean = String(rec.anomalie || 'inspection_generale').replace(/_/g, ' ');
+                return (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (typeof onAdoptRecommendation === 'function') {
+                        onAdoptRecommendation(rec);
+                        return;
+                      }
+                      if (typeof onCreatePlanWithTasks === 'function') {
+                        onCreatePlanWithTasks(
+                          {
+                            id_machine: machineLabel,
+                            nom_machine: `Machine ${machineLabel}`,
+                            id_zone: rec.zone || 'Atelier',
+                            id_technicien: 'Technicien',
+                            semaine_cible: 'S1',
+                            description: rec.recommendation || `Routine anti-récidive (${anomClean})`,
+                          },
+                          [
+                            {
+                              composant: `Contrôle ${anomClean}`,
+                              action_code: 'C',
+                              frequence: rec.suggestedIntervalDays && rec.suggestedIntervalDays <= 10 ? 'Hebdo' : 'Mensuel',
+                              duree_estimee: '20 min',
+                              priorite: 'Haute',
+                              consigne: rec.recommendedAction || `Contrôle préventif systématique (${anomClean})`,
+                            },
+                          ]
+                        );
+                        showToast?.(`Routine préventive planifiée pour ${machineLabel}`, 'success');
+                      } else if (onAddAction) {
+                        onAddAction({
+                          code: 'C',
+                          libelle: `Contrôle systématique ${anomClean} (${machineLabel})`,
+                          description: rec.recommendedAction || '',
+                          type_maintenance: 'Préventif',
+                          frequence_defaut: '1M',
+                        });
+                        showToast?.(`Tâche préventive créée pour ${machineLabel}`, 'success');
+                      } else {
+                        showToast?.(`Recommandation transmise à l'ingénierie pour ${machineLabel}`, 'success');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Créer routine: {machineLabel}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

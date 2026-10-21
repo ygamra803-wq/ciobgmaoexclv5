@@ -7,6 +7,10 @@ import {
   Diagnostic,
   PartType,
   PartDesignation,
+  isComponentNature,
+  isPartNature,
+  isWarehouseComponent,
+  isWarehousePart,
 } from '../../core/domain';
 
 describe('Domain Entities Unit Tests', () => {
@@ -360,6 +364,41 @@ describe('Domain Entities Unit Tests', () => {
 
       // Archived machine -> [] (excluded via filterActiveMachines)
       expect(getBlueprintCommonFailuresForMachine('TRP-02-ARCH', machines, blueprints)).toEqual([]);
+    });
+  });
+
+  describe('EntrepotItem Nature & Taxonomy Classification (FIX-2)', () => {
+    it('should accurately classify COMPONENT and PART natures across canonical and legacy French tags without inversion', () => {
+      expect(isComponentNature('COMPONENT')).toBe(true);
+      expect(isComponentNature('COMPOSANT')).toBe(true);
+      expect(isComponentNature('PART')).toBe(false);
+      expect(isComponentNature('PARTIE')).toBe(false);
+
+      expect(isPartNature('PART')).toBe(true);
+      expect(isPartNature('PARTIE')).toBe(true);
+      expect(isPartNature('ORGANE')).toBe(true);
+      expect(isPartNature('COMPONENT')).toBe(false);
+      expect(isPartNature('COMPOSANT')).toBe(false);
+    });
+
+    it('should classify warehouse items uniformly via isWarehouseComponent and isWarehousePart', () => {
+      const canonicalComp = { id_item: 'CMP-1', nature: 'COMPONENT', machine_id: 'TRP-01' };
+      const legacyComp = { id_item: 'CMP-2', category: 'COMPOSANT', machine_id: 'TRP-01' };
+      const templateComp = { id_item: 'CMP-3', id_comp_template: 'CT-MOT-15KW', machine_id: 'TRP-01' };
+
+      const canonicalPart = { id_item: 'PRT-1', nature: 'PART', machine_id: 'TRP-01' };
+      const legacyPart = { id_item: 'PRT-2', nature: 'PARTIE', machine_id: 'TRP-01' };
+      const designationPart = { id_item: 'PRT-3', id_designation: 'PD-BROCHE-01', machine_id: 'TRP-01' };
+
+      expect(isWarehouseComponent(canonicalComp)).toBe(true);
+      expect(isWarehouseComponent(legacyComp)).toBe(true);
+      expect(isWarehouseComponent(templateComp)).toBe(true);
+      expect(isWarehouseComponent(canonicalPart)).toBe(false);
+
+      expect(isWarehousePart(canonicalPart)).toBe(true);
+      expect(isWarehousePart(legacyPart)).toBe(true);
+      expect(isWarehousePart(designationPart)).toBe(true);
+      expect(isWarehousePart(canonicalComp)).toBe(false);
     });
   });
 });

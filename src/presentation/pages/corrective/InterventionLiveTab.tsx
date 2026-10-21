@@ -8,9 +8,13 @@ import {
   ArrowRight,
   ShieldCheck,
   FileCheck,
+  Plus,
+  Trash2,
+  Cpu,
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { stockIndexStore } from '../../../application/StockIndexStore';
+import { isWarehouseComponent } from '../../../core/domain/EntrepotItem';
 import { useI18n } from '../../../i18n/I18nContext';
 
 export default function InterventionLiveTab({
@@ -20,10 +24,11 @@ export default function InterventionLiveTab({
   activeLiveId,
   setActiveLiveId,
   onClotureIntervention,
-  onUpdateIntervention: _onUpdateIntervention,
+  onUpdateIntervention,
   onNavigateToTab,
   stockItems = [],
-  onAddMouvement,
+  warehouseItems = [],
+  onAddMouvement: _onAddMouvement,
   actionsByPanne = {},
   travauxAFaire = [],
   getActionsForPanne: getActionsForPanneProp,
@@ -124,7 +129,7 @@ export default function InterventionLiveTab({
   }, [currentTimestamp]);
 
   // Form State for closing or modifying the live intervention
-  const [formState, setFormState] = useState({
+  const [formState, setFormState] = useState<any>({
     travail_a_faire: '',
     action_realisee: '',
     pdr_ref: '',
@@ -134,6 +139,9 @@ export default function InterventionLiveTab({
     etat_piece: 'Neuve',
     arret_machine: true,
     temps_arret: '',
+    pieces_utilisees: [],
+    id_composant: '',
+    statut_composant_cloture: 'En service',
   });
 
   // Autocomplete suggestions
@@ -153,10 +161,25 @@ export default function InterventionLiveTab({
         etat_piece: activeIntervention.etat_piece || 'Neuve',
         arret_machine: Boolean(activeIntervention.arret_machine),
         temps_arret: activeIntervention.temps_arret || '',
+        pieces_utilisees: Array.isArray(activeIntervention.pieces_utilisees)
+          ? activeIntervention.pieces_utilisees
+          : [],
+        id_composant: activeIntervention.id_composant || '',
+        statut_composant_cloture: 'En service',
       });
       setTravailSearch(activeIntervention.travail_a_faire || '');
     }
   }, [activeIntervention]);
+
+  // Machine components from Entrepôt for optional component lifecycle tracking
+  const machineComponents = useMemo(() => {
+    if (!activeIntervention?.code_machine || !Array.isArray(warehouseItems)) return [];
+    const code = String(activeIntervention.code_machine).trim().toUpperCase();
+    return warehouseItems.filter((w) => {
+      const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
+      return (wMach === code || wMach.includes(code)) && isWarehouseComponent(w);
+    });
+  }, [activeIntervention?.code_machine, warehouseItems]);
 
   // Filtered standard phrases from travauxAFaire prop
   const filteredSuggestions = useMemo(() => {
@@ -226,6 +249,56 @@ export default function InterventionLiveTab({
     }));
     setPdrSearch(`${item.ref || item.code_article} - ${item.designation || item.nom}`);
     setShowPdrList(false);
+  };
+
+  // Add currently selected PDR to pieces_utilisees list (Multi-PDR support)
+  const handleAddPieceToList = () => {
+    const ref = String(formState.pdr_ref || '').trim();
+    const qty = Number(formState.pdr_quantite || 0);
+    if (!ref || !(qty > 0)) {
+      showToast?.('Veuillez sélectionner un article PDR et une quantité valide.', 'warning');
+      return;
+    }
+    setFormState((prev) => {
+      const currentList = Array.isArray(prev.pieces_utilisees) ? [...prev.pieces_utilisees] : [];
+      const existingIdx = currentList.findIndex(
+        (p) => String(p.ref || '').toUpperCase() === ref.toUpperCase()
+      );
+      if (existingIdx >= 0) {
+        currentList[existingIdx] = {
+          ...currentList[existingIdx],
+          quantite: Number(currentList[existingIdx].quantite || 0) + qty,
+        };
+      } else {
+        currentList.push({
+          ref,
+          designation: prev.pdr_designation || ref,
+          quantite: qty,
+          prix_unitaire: Number(prev.pdr_prix || 0),
+          unite: prev.pdr_unite || 'Pièce',
+          marque: prev.marque || '',
+          etat_piece: prev.etat_piece || 'Neuve',
+        });
+      }
+      return {
+        ...prev,
+        pieces_utilisees: currentList,
+        pdr_ref: '',
+        pdr_designation: '',
+        pdr_quantite: 1,
+        pdr_stock_actuel: undefined,
+      };
+    });
+    setPdrSearch('');
+  };
+
+  const handleRemovePieceFromList = (refToRemove: string) => {
+    setFormState((prev) => ({
+      ...prev,
+      pieces_utilisees: (prev.pieces_utilisees || []).filter(
+        (p: any) => String(p.ref || '').toUpperCase() !== String(refToRemove || '').toUpperCase()
+      ),
+    }));
   };
 
   // Handle Clôture Final Submit
@@ -572,20 +645,74 @@ export default function InterventionLiveTab({
               )}
             </div>
 
-            {/* Quantité Sortie */}
+            {/* Quantité Sortie + Bouton Ajouter Multi-PDR */}
             <div>
               <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
                 Quantité Utilisée
               </label>
-              <input
-                type="number"
-                min={1}
-                value={formState.pdr_quantite}
-                onChange={(e) => setFormState({ ...formState, pdr_quantite: Number(e.target.value) })}
-                className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={formState.pdr_quantite}
+                  onChange={(e) => setFormState({ ...formState, pdr_quantite: Number(e.target.value) })}
+                  className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddPieceToList}
+                  disabled={!formState.pdr_ref}
+                  title="Ajouter cette pièce à la liste multi-PDR du Bon de Travail"
+                  className="px-3 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Ajouter</span>
+                </button>
+              </div>
             </div>
           </div>
+
+          {/* Multi-PDR Consumed List (pieces_utilisees) */}
+          {Array.isArray(formState.pieces_utilisees) && formState.pieces_utilisees.length > 0 && (
+            <div className="p-3 rounded-xl bg-white/90 border border-cyan-200 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-bold text-cyan-950">
+                <span>Pièces sélectionnées pour sortie magasin ({formState.pieces_utilisees.length}) :</span>
+                <span className="font-mono text-cyan-700">
+                  Total Qte: {formState.pieces_utilisees.reduce((s: number, p: any) => s + Number(p.quantite || 0), 0)}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {formState.pieces_utilisees.map((piece: any) => (
+                  <div
+                    key={piece.ref}
+                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-cyan-50/70 border border-cyan-200/80 text-xs"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
+                        {piece.ref}
+                      </span>
+                      <span className="font-medium text-slate-700 truncate">
+                        {piece.designation}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="font-mono font-black text-cyan-900 bg-cyan-100 px-2 py-0.5 rounded">
+                        × {piece.quantite} {piece.unite || 'Pièce'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePieceFromList(piece.ref)}
+                        className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer transition"
+                        title="Retirer de la liste"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {/* Marque */}
@@ -618,22 +745,89 @@ export default function InterventionLiveTab({
               </select>
             </div>
           </div>
+
+          {/* Organe / Composant Entrepôt Lifecycle Update on Closure */}
+          {(machineComponents.length > 0 || formState.id_composant) && (
+            <div className="pt-3 border-t border-cyan-200/70 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+                  <Cpu className="w-3.5 h-3.5 text-cyan-700" />
+                  <span>Organe / Composant concerné (Entrepôt)</span>
+                </label>
+                <select
+                  value={formState.id_composant || ''}
+                  onChange={(e) => setFormState({ ...formState, id_composant: e.target.value })}
+                  className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+                >
+                  <option value="">— Aucun composant spécifique —</option>
+                  {machineComponents.map((comp: any) => {
+                    const cId = comp.id_warehouse_item || comp.id || comp.id_item;
+                    return (
+                      <option key={cId} value={cId}>
+                        {cId} · {comp.designation || comp.nom || 'Composant'} ({comp.status || 'En service'})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              {formState.id_composant && (
+                <div>
+                  <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+                    État du Composant après clôture
+                  </label>
+                  <select
+                    value={formState.statut_composant_cloture || 'En service'}
+                    onChange={(e) =>
+                      setFormState({ ...formState, statut_composant_cloture: e.target.value })
+                    }
+                    className="w-full py-2 px-3 text-xs font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+                  >
+                    <option value="En service">En service (Opérationnel sur machine)</option>
+                    <option value="En réparation">En réparation (Déposé atelier / révision)</option>
+                    <option value="Hors service">Hors service (À réformer / remplacer)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Modal / Form Submit Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm('Suspendre l\'intervention et revenir aux Bons de Travail ?')) {
+          <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => {
                 setActiveLiveId(null);
+                showToast?.(`Intervention ${activeIntervention.num_bt || ''} mise en pause.`, 'info');
                 onNavigateToTab?.('corrective_bt');
-              }
-            }}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-bold text-xs text-slate-700 cursor-pointer w-full sm:w-auto"
-          >
-            Mettre en Pause / Quitter
-          </button>
+              }}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-bold text-xs text-slate-700 cursor-pointer w-full sm:w-auto"
+            >
+              Mettre en Pause / Quitter
+            </button>
+
+            {typeof onUpdateIntervention === 'function' && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateIntervention(activeIntervention.id, {
+                    ...formState,
+                    statut: 'EN_ATTENTE_PDR',
+                  });
+                  setActiveLiveId(null);
+                  showToast?.(
+                    `BT ${activeIntervention.num_bt || activeIntervention.id} suspendu en attente de pièce (EN_ATTENTE_PDR).`,
+                    'warning'
+                  );
+                  onNavigateToTab?.('corrective_bt');
+                }}
+                className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 font-bold text-xs text-amber-900 cursor-pointer w-full sm:w-auto"
+              >
+                Suspendre (Attente PDR)
+              </button>
+            )}
+          </div>
 
           <button
             type="submit"

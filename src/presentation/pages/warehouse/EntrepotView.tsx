@@ -36,6 +36,12 @@ import IndustrialFilterCard, { FilterField, FilterSearchInput } from '../../comp
 import ComponentsTable from './components/ComponentsTable';
 import PartsTable from './components/PartsTable';
 import { useTranslation } from '../../../i18n/I18nContext';
+import {
+  isComponentNature,
+  isPartNature,
+  isWarehouseComponent,
+  isWarehousePart,
+} from '../../../core/domain/EntrepotItem';
 
 export default function EntrepotView({
   warehouseItems = [],
@@ -78,6 +84,7 @@ export default function EntrepotView({
   onNavigateToDiag,
   onNavigateToZone,
   onNavigateToMachine,
+  showToast,
 }) {
   const { t } = useTranslation();
   const families = compFamilies && compFamilies.length > 0 ? compFamilies : propFamilies;
@@ -108,10 +115,6 @@ export default function EntrepotView({
   const [internalRattachementFilter, setInternalRattachementFilter] = useState('ALL');
   const [internalStatusFilter, setInternalStatusFilter] = useState('ALL');
   const [activeKpiFilter, setActiveKpiFilter] = useState('ALL'); // ALL | 'COMPONENT' | 'PART' | 'SERVICE' | 'RESERVE'
-
-  // Backward compatibility nature matchers
-  const isComponentNature = (n) => n === 'COMPONENT' || n === 'PARTIE';
-  const isPartNature = (n) => n === 'PART' || n === 'COMPOSANT';
 
   const currentFamilyFilter = whFamilyFilter !== undefined ? whFamilyFilter : internalFamilyFilter;
   const changeFamilyFilter = setWhFamilyFilter || setInternalFamilyFilter;
@@ -211,7 +214,7 @@ export default function EntrepotView({
 
     // 3. From existing items in warehouseItems
     (warehouseItems || []).forEach((item) => {
-      if (isComponentNature(item.nature) && item.id_family && item.id_warehouse_item) {
+      if (isWarehouseComponent(item) && item.id_family && item.id_warehouse_item) {
         if (!initialMap[item.id_family]) {
           const match = String(item.id_warehouse_item).match(/^([A-Z0-9]+)-/i);
           if (match) {
@@ -263,7 +266,7 @@ export default function EntrepotView({
 
     let maxIdx = 0;
     items.forEach((it) => {
-      if (isComponentNature(it.nature)) {
+      if (isWarehouseComponent(it)) {
         const code = String(it.id_warehouse_item || '').toUpperCase();
         if (code.startsWith(prefix + '-')) {
           const match = code.match(new RegExp(`^${prefix}-(\\d+)`, 'i'));
@@ -295,7 +298,7 @@ export default function EntrepotView({
 
     let maxIdx = 0;
     items.forEach((it) => {
-      if (isPartNature(it.nature)) {
+      if (isWarehousePart(it)) {
         const code = String(it.id_warehouse_item || it.ref || '').toUpperCase();
         if (code.startsWith(prefix + '-') || code.startsWith(prefix)) {
           const match = code.match(new RegExp(`^${prefix}[-_]?(\\d+)`, 'i'));
@@ -334,7 +337,7 @@ export default function EntrepotView({
     // 3. Cascade rename all existing components under this family
     if (onUpdateWarehouseItem) {
       const matchingComponents = warehouseItems.filter(
-        (it) => isComponentNature(it.nature) && it.id_family === familyId
+        (it) => isWarehouseComponent(it) && it.id_family === familyId
       );
 
       matchingComponents.forEach((item, index) => {
@@ -612,7 +615,7 @@ export default function EntrepotView({
   const handleSubmitAdd = (e) => {
     e.preventDefault();
     if (!addForm.id_warehouse_item || !addForm.designation) {
-      alert('Veuillez renseigner le code et la désignation.');
+      showToast?.('Veuillez renseigner le code et la désignation.', 'warning');
       return;
     }
 
@@ -631,7 +634,7 @@ export default function EntrepotView({
       onAddWarehouseItem({
         id_warehouse_item: addForm.id_warehouse_item.trim().toUpperCase(),
         designation: addForm.designation.trim(),
-        nature: addForm.nature,
+        nature: isComp ? 'COMPONENT' : 'PART',
         id_family: isComp ? addForm.id_family : '',
         id_templates: isComp ? addForm.id_templates : '',
         id_type: !isComp ? addForm.id_type : '',
@@ -655,7 +658,7 @@ export default function EntrepotView({
   const handleSubmitEdit = (e) => {
     e.preventDefault();
     if (!editForm.designation) {
-      alert('La désignation est obligatoire.');
+      showToast?.('La désignation est obligatoire.', 'warning');
       return;
     }
 
@@ -719,7 +722,7 @@ export default function EntrepotView({
     const map = {};
     (warehouseItems || []).forEach((item) => {
       const mId = item.id_machine_registered || item.id_machine;
-      if (mId && isComponentNature(item.nature)) {
+      if (mId && isWarehouseComponent(item)) {
         if (!map[mId]) {
           map[mId] = [];
         }
@@ -732,25 +735,28 @@ export default function EntrepotView({
   // Filter items
   const filteredItems = useMemo(() => {
     return warehouseItems.filter((item) => {
+      const itemIsComp = isWarehouseComponent(item);
+      const itemIsPart = !itemIsComp;
+
       // Tab filter (Strict isolation between Components and Parts)
-      if (activeWarehouseTab === 'COMPONENTS' && !isComponentNature(item.nature)) return false;
-      if (activeWarehouseTab === 'PARTS' && !isPartNature(item.nature)) return false;
+      if (activeWarehouseTab === 'COMPONENTS' && !itemIsComp) return false;
+      if (activeWarehouseTab === 'PARTS' && !itemIsPart) return false;
 
       // Nature filter
       if (currentNatureFilter !== 'ALL') {
-        if (isComponentNature(currentNatureFilter) && !isComponentNature(item.nature)) return false;
-        if (isPartNature(currentNatureFilter) && !isPartNature(item.nature)) return false;
+        if (isComponentNature(currentNatureFilter) && !itemIsComp) return false;
+        if (isPartNature(currentNatureFilter) && !itemIsPart) return false;
       }
 
       // KPI filter
-      if (isComponentNature(activeKpiFilter) && !isComponentNature(item.nature)) return false;
-      if (isPartNature(activeKpiFilter) && !isPartNature(item.nature)) return false;
+      if (isComponentNature(activeKpiFilter) && !itemIsComp) return false;
+      if (isPartNature(activeKpiFilter) && !itemIsPart) return false;
       if (activeKpiFilter === 'SERVICE' && !String(item.status || '').toLowerCase().includes('service')) return false;
       if (activeKpiFilter === 'RESERVE' && !String(item.status || '').toLowerCase().includes('stock') && !String(item.status || '').toLowerCase().includes('dispo')) return false;
 
       // Family filter (for components)
       if (
-        isComponentNature(item.nature) &&
+        itemIsComp &&
         currentFamilyFilter !== 'ALL' &&
         item.id_family !== currentFamilyFilter
       ) {
@@ -759,7 +765,7 @@ export default function EntrepotView({
 
       // Template filter (for components)
       if (
-        isComponentNature(item.nature) &&
+        itemIsComp &&
         currentTemplateFilter !== 'ALL' &&
         item.id_templates !== currentTemplateFilter
       ) {
@@ -768,7 +774,7 @@ export default function EntrepotView({
 
       // Type filter (for parts)
       if (
-        isPartNature(item.nature) &&
+        itemIsPart &&
         currentTypeFilter !== 'ALL' &&
         item.id_type !== currentTypeFilter
       ) {
@@ -926,7 +932,7 @@ export default function EntrepotView({
     let enRevision = 0;
 
     warehouseItems.forEach((item) => {
-      if (isComponentNature(item.nature)) components++;
+      if (isWarehouseComponent(item)) components++;
       else parts++;
 
       const st = String(item.status || '').toLowerCase();
@@ -2306,7 +2312,7 @@ export default function EntrepotView({
                 <div className="p-2.5 bg-slate-50 rounded-xl">
                   <div className="text-[10px] font-bold text-slate-400 uppercase">{t('entrepot.modal.nature')}</div>
                   <div className="font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
-                    {isComponentNature(selectedDetails.nature) ? (
+                    {isWarehouseComponent(selectedDetails) ? (
                       <span className="inline-flex items-center gap-1 text-blue-700">
                         <Layers className="w-3.5 h-3.5 text-blue-600" />
                         {t('entrepot.modal.nature_component')}
@@ -2325,7 +2331,7 @@ export default function EntrepotView({
                 </div>
               </div>
 
-              {isComponentNature(selectedDetails.nature) ? (
+              {isWarehouseComponent(selectedDetails) ? (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
                     <div className="text-[10px] font-bold text-blue-700 uppercase">{t('entrepot.modal.family')}</div>

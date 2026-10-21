@@ -16,13 +16,21 @@ export function useAppComplexHandlers({
   rawStock, setRawStock,
   setDesignations,
   setFamilies,
+  templates = [],
   setTemplates,
   setCompGroups,
+  compFamilies = [],
   setCompFamilies,
+  compTemplates = [],
   setCompTemplates,
+  partTypes: _partTypes = [],
   setPartTypes,
+  partDesignations = [],
   setPartDesignations,
+  warehouseItems = [],
   setWarehouseItems,
+  blueprints = [],
+  sortiesExterne = [],
   preventiveTasks = [],
   correctiveInterventions = [],
   machineElementsLedger = [],
@@ -140,7 +148,20 @@ export function useAppComplexHandlers({
       );
     }
   };
-  const handleDeleteType = (id) => setTypes((prev) => prev.filter((t) => t.id_type !== id));
+  const handleDeleteType = (id) => {
+    const linkedStockCount = (rawStock || []).filter(
+      (s) => s.type === id || s.id_type === id
+    ).length;
+    if (linkedStockCount > 0) {
+      showToast?.(
+        `Suppression refusée : le type "${id}" est lié à ${linkedStockCount} article(s) PDR en stock.`,
+        'warning'
+      );
+      return;
+    }
+    setTypes((prev) => prev.filter((t) => t.id_type !== id));
+    showToast?.(`Type "${id}" supprimé avec succès.`, 'info');
+  };
 
   const handleUpdateDesignation = (id, updatedDesig) => {
     const updater = (s) =>
@@ -181,7 +202,20 @@ export function useAppComplexHandlers({
       );
     }
   };
-  const handleDeleteFamily = (id) => setFamilies((prev) => prev.filter((f) => f.id_family !== id));
+  const handleDeleteFamily = (id) => {
+    const linkedTemplates = (templates || []).filter((t) => t.id_family === id).length;
+    const linkedMachines = activeMachines.filter((m) => m.id_family === id).length;
+    const linkedBlueprints = (blueprints || []).filter((b) => b.id_family === id).length;
+    if (linkedTemplates > 0 || linkedMachines > 0 || linkedBlueprints > 0) {
+      showToast?.(
+        `Suppression refusée : la famille "${id}" est utilisée (${linkedMachines} machine(s), ${linkedTemplates} modèle(s), ${linkedBlueprints} blueprint(s)).`,
+        'warning'
+      );
+      return;
+    }
+    setFamilies((prev) => prev.filter((f) => f.id_family !== id));
+    showToast?.(`Famille "${id}" supprimée.`, 'info');
+  };
 
   // COMPONENT GROUPS, FAMILIES & TEMPLATES CRUD
   const handleUpdateCompGroup = (id, updatedGroup) => {
@@ -198,8 +232,18 @@ export function useAppComplexHandlers({
   };
 
   const handleDeleteCompGroup = (id) => {
+    const linkedFamilies = (compFamilies || []).filter(
+      (f) => f.id_groupe === id || f.groupe === id
+    ).length;
+    if (linkedFamilies > 0) {
+      showToast?.(
+        `Suppression refusée : le groupe "${id}" contient ${linkedFamilies} famille(s) d'organes.`,
+        'warning'
+      );
+      return;
+    }
     setCompGroups((prev) => prev.filter((g) => g.id !== id && g.id_groupe !== id));
-    showToast(`Groupe supprimé avec succès !`, 'info');
+    showToast?.(`Groupe supprimé avec succès !`, 'info');
   };
 
   const handleUpdateCompFamily = (id, updatedFam) => {
@@ -214,7 +258,20 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeleteCompFamily = (id) => {
+    const linkedTemplates = (compTemplates || []).filter((t) => t.id_family === id).length;
+    const linkedWh = (warehouseItems || []).filter((w) => w.id_family === id).length;
+    const linkedBp = (blueprints || []).filter((b) =>
+      (b.components_theoriques || []).some((c) => c.id_family === id)
+    ).length;
+    if (linkedTemplates > 0 || linkedWh > 0 || linkedBp > 0) {
+      showToast?.(
+        `Suppression refusée : la famille "${id}" est liée à ${linkedWh} organe(s) Entrepôt, ${linkedTemplates} modèle(s) et ${linkedBp} blueprint(s).`,
+        'warning'
+      );
+      return;
+    }
     setCompFamilies((prev) => prev.filter((f) => f.id_family !== id));
+    showToast?.(`Famille d'organes "${id}" supprimée.`, 'info');
   };
 
   const handleUpdateCompTemplate = (id, updatedTpl) => {
@@ -228,7 +285,21 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeleteCompTemplate = (id) => {
+    const linkedWh = (warehouseItems || []).filter(
+      (w) => w.id_templates === id || w.id_template === id
+    ).length;
+    const linkedBp = (blueprints || []).filter((b) =>
+      (b.components_theoriques || []).some((c) => c.id_template === id || c.id_templates === id)
+    ).length;
+    if (linkedWh > 0 || linkedBp > 0) {
+      showToast?.(
+        `Suppression refusée : le modèle "${id}" est lié à ${linkedWh} organe(s) Entrepôt et ${linkedBp} blueprint(s).`,
+        'warning'
+      );
+      return;
+    }
     setCompTemplates((prev) => prev.filter((t) => t.id_templates !== id));
+    showToast?.(`Modèle d'organe "${id}" supprimé.`, 'info');
   };
 
   // PART TYPES & PART DESIGNATIONS CRUD
@@ -252,7 +323,24 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeletePartType = (id) => {
+    const linkedDesig = (partDesignations || []).filter(
+      (d) => d.id_type === id || d.type === id
+    ).length;
+    const linkedWh = (warehouseItems || []).filter(
+      (w) => w.id_type === id || w.type === id
+    ).length;
+    const linkedBp = (blueprints || []).filter((b) =>
+      (b.parts_theoriques || []).some((p) => p.id_type === id)
+    ).length;
+    if (linkedDesig > 0 || linkedWh > 0 || linkedBp > 0) {
+      showToast?.(
+        `Suppression refusée : le type "${id}" est lié à ${linkedDesig} désignation(s), ${linkedWh} élément(s) Entrepôt et ${linkedBp} blueprint(s).`,
+        'warning'
+      );
+      return;
+    }
     setPartTypes((prev) => prev.filter((t) => t.id_type !== id));
+    showToast?.(`Type de pièce "${id}" supprimé.`, 'info');
   };
 
   const handleUpdatePartDesignation = (id, updatedDesig) => {
@@ -274,7 +362,21 @@ export function useAppComplexHandlers({
     );
   };
   const handleDeletePartDesignation = (id) => {
+    const linkedWh = (warehouseItems || []).filter(
+      (w) => w.id_part_designation === id || w.id_diag === id || w.ref === id
+    ).length;
+    const linkedBp = (blueprints || []).filter((b) =>
+      (b.parts_theoriques || []).some((p) => p.id_part === id || p.ref === id)
+    ).length;
+    if (linkedWh > 0 || linkedBp > 0) {
+      showToast?.(
+        `Suppression refusée : la désignation "${id}" est liée à ${linkedWh} élément(s) Entrepôt et ${linkedBp} blueprint(s).`,
+        'warning'
+      );
+      return;
+    }
     setPartDesignations((prev) => prev.filter((d) => d.id !== id && d.ref !== id));
+    showToast?.(`Désignation "${id}" supprimée.`, 'info');
   };
 
   const handleUpdateTemplate = (id, updatedTpl) => {
@@ -287,8 +389,23 @@ export function useAppComplexHandlers({
       );
     }
   };
-  const handleDeleteTemplate = (id) =>
+  const handleDeleteTemplate = (id) => {
+    const linkedMachines = activeMachines.filter(
+      (m) => m.id_templates === id || m.id_template === id
+    ).length;
+    const linkedBp = (blueprints || []).filter(
+      (b) => b.id_templates === id || b.id_template === id
+    ).length;
+    if (linkedMachines > 0 || linkedBp > 0) {
+      showToast?.(
+        `Suppression refusée : le modèle "${id}" est lié à ${linkedMachines} machine(s) et ${linkedBp} blueprint(s).`,
+        'warning'
+      );
+      return;
+    }
     setTemplates((prev) => prev.filter((t) => t.id_templates !== id));
+    showToast?.(`Modèle "${id}" supprimé.`, 'info');
+  };
 
   const handleAddTechnician = (newTech) => {
     setTechnicians((prev) => [...prev, newTech]);
@@ -462,9 +579,59 @@ export function useAppComplexHandlers({
   };
 
   const handleDeleteWarehouseItem = (idOrCode) => {
+    const target = (warehouseItems || []).find(
+      (it) => it.id_warehouse_item === idOrCode || it.id === idOrCode || it.code === idOrCode
+    );
+    const attachedMachine =
+      target?.rattachement_type === 'MACHINE'
+        ? target?.id_machine_registered || target?.id_machine
+        : '';
+
+    if (attachedMachine) {
+      showToast?.(
+        `Suppression refusée : l'élément "${idOrCode}" est actuellement monté sur la machine ${attachedMachine}. Détachez-le vers l'Entrepôt d'abord.`,
+        'warning'
+      );
+      return;
+    }
+
+    const hasMovements = (mouvements || []).some(
+      (m) => m.ref === idOrCode || m.code_article === idOrCode
+    );
+    const hasInterventions = (correctiveInterventions || []).some(
+      (i) => i.id_composant === idOrCode || i.id_part === idOrCode
+    );
+    const hasSortieExterne = (sortiesExterne || []).some(
+      (s) => s.code_moteur === idOrCode || s.id_warehouse_item === idOrCode
+    );
+    const hasBobinageHistory = Array.isArray(target?.historique_bobinage) && target.historique_bobinage.length > 0;
+
+    if (hasMovements || hasInterventions || hasSortieExterne || hasBobinageHistory) {
+      setWarehouseItems((prev) =>
+        prev.map((it) =>
+          it.id_warehouse_item === idOrCode || it.id === idOrCode
+            ? {
+                ...it,
+                status: 'Hors service',
+                statut: 'Archivé',
+                is_active: false,
+                actif: false,
+                date_archivage: new Date().toISOString(),
+              }
+            : it
+        )
+      );
+      showToast?.(
+        `Élément "${idOrCode}" archivé (Hors service) pour préserver l'historique des interventions et mouvements.`,
+        'info'
+      );
+      return;
+    }
+
     setWarehouseItems((prev) =>
       prev.filter((it) => it.id_warehouse_item !== idOrCode && it.id !== idOrCode)
     );
+    showToast?.(`Élément "${idOrCode}" supprimé définitivement.`, 'success');
   };
 
   const handleDirectAdjustStock = (article, newTargetStock) => {

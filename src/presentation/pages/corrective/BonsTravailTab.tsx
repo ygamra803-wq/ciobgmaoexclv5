@@ -32,7 +32,7 @@ export default function BonsTravailTab({
   interventions = [],
   machines = [],
   onStartLive,
-  onUpdateIntervention: _onUpdateIntervention,
+  onUpdateIntervention,
   onNavigateToTab,
   stockItems = [],
   technicians = [],
@@ -159,11 +159,14 @@ export default function BonsTravailTab({
   // KPI Metrics
   const kpiStats = useMemo(() => {
     const total = bts.length;
-    const inProgress = bts.filter((b) => b.statut === 'EN_COURS' || b.statut === 'BT_PLANIFIE').length;
+    const inProgress = bts.filter(
+      (b) => b.statut === 'EN_COURS' || b.statut === 'BT_PLANIFIE' || b.statut === 'EN_ATTENTE_PDR'
+    ).length;
+    const waitingPdr = bts.filter((b) => b.statut === 'EN_ATTENTE_PDR').length;
     const closed = bts.filter((b) => b.statut === 'CLOTURE').length;
     const withPdr = bts.filter((b) => Boolean(b.pdr || b.pdr_ref)).length;
 
-    return { total, inProgress, closed, withPdr };
+    return { total, inProgress, waitingPdr, closed, withPdr };
   }, [bts]);
 
   // Filtered BTs
@@ -173,9 +176,11 @@ export default function BonsTravailTab({
         filterStatus === 'EN_COURS' &&
         bt.statut !== 'EN_COURS' &&
         bt.statut !== 'BT_PLANIFIE' &&
+        bt.statut !== 'EN_ATTENTE_PDR' &&
         bt.statut !== 'DEMANDE'
       )
         return false;
+      if (filterStatus === 'EN_ATTENTE_PDR' && bt.statut !== 'EN_ATTENTE_PDR') return false;
       if (filterStatus === 'CLOTURE' && bt.statut !== 'CLOTURE') return false;
       if (filterStatus === 'WITH_PDR' && !bt.pdr && !bt.pdr_ref) return false;
 
@@ -451,11 +456,22 @@ export default function BonsTravailTab({
         sortable: true,
         render: (bt) => {
           const isClosed = bt.statut === 'CLOTURE';
-          return isClosed ? (
-            <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
-              CLÔTURÉ
-            </span>
-          ) : (
+          const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
+          if (isClosed) {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
+                CLÔTURÉ
+              </span>
+            );
+          }
+          if (isWaitingPdr) {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-amber-100 text-amber-900 border border-amber-300 font-mono shadow-2xs">
+                ATTENTE PDR
+              </span>
+            );
+          }
+          return (
             <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-blue-100 text-blue-900 border border-blue-300 font-mono animate-pulse shadow-2xs">
               EN COURS
             </span>
@@ -467,18 +483,45 @@ export default function BonsTravailTab({
         label: 'Action Directe',
         icon: Play,
         align: 'center',
-        headerClassName: 'w-36 text-center whitespace-nowrap',
+        headerClassName: 'w-44 text-center whitespace-nowrap',
         render: (bt) => {
           const isClosed = bt.statut === 'CLOTURE';
+          const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
           return !isClosed ? (
-            <button
-              onClick={() => handleStartLiveIntervention(bt)}
-              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer shadow-2xs active:scale-95"
-              title="Lancer le Chrono Live et déduire automatiquement les pauses"
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Chrono Live</span>
-            </button>
+            <div className="flex items-center justify-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleStartLiveIntervention(bt)}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                title="Lancer ou reprendre le Chrono Live"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>{isWaitingPdr ? 'Reprendre' : 'Chrono Live'}</span>
+              </button>
+              {typeof onUpdateIntervention === 'function' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextStatus = isWaitingPdr ? 'EN_COURS' : 'EN_ATTENTE_PDR';
+                    onUpdateIntervention(bt.id, { statut: nextStatus });
+                    showToast?.(
+                      isWaitingPdr
+                        ? `BT ${bt.num_bt} remis EN COURS`
+                        : `BT ${bt.num_bt} placé EN ATTENTE PDR`,
+                      'info'
+                    );
+                  }}
+                  className={`px-2 py-1.5 rounded-xl border font-bold text-[10.5px] transition cursor-pointer ${
+                    isWaitingPdr
+                      ? 'bg-blue-50 hover:bg-blue-100 text-blue-800 border-blue-200'
+                      : 'bg-slate-100 hover:bg-amber-50 text-slate-700 hover:text-amber-900 border-slate-200'
+                  }`}
+                  title={isWaitingPdr ? 'Remettre en cours' : 'Suspendre en attente de pièce (EN_ATTENTE_PDR)'}
+                >
+                  {isWaitingPdr ? 'Activer' : 'Att. PDR'}
+                </button>
+              )}
+            </div>
           ) : (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono font-bold text-xs shadow-2xs">
               <CheckCircle className="w-3 h-3 text-emerald-600" />
@@ -488,7 +531,7 @@ export default function BonsTravailTab({
         },
       },
     ],
-    [technicians, stockItems]
+    [technicians, stockItems, onUpdateIntervention]
   );
 
   return (
@@ -717,6 +760,13 @@ export default function BonsTravailTab({
               count: kpiStats.inProgress,
               activeBg: 'bg-amber-600 text-white shadow-xs',
               colorDot: 'bg-amber-500',
+            },
+            {
+              key: 'EN_ATTENTE_PDR',
+              label: 'Attente PDR',
+              count: kpiStats.waitingPdr,
+              activeBg: 'bg-orange-600 text-white shadow-xs',
+              colorDot: 'bg-orange-500',
             },
             {
               key: 'CLOTURE',
