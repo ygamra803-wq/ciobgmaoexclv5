@@ -329,15 +329,7 @@ export default function DesignationView({
   const rawDisplayedData =
     pageSize === 0 ? sortedData : sortedData.slice(startIndex, startIndex + effectivePageSize);
 
-  const displayedData = useMemo(() => {
-    const minRows = 19;
-    if (rawDisplayedData.length >= minRows) return rawDisplayedData;
-    const padded = [...rawDisplayedData];
-    for (let i = 0; i < minRows - rawDisplayedData.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id_diag: `empty-${i}`, ref: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedData]);
+  const displayedData = rawDisplayedData;
 
   const handleExportExcel = () => {
     const headers = ['Référence', 'Désignation PDR', 'Type Parent', 'Stock Actuel', 'Seuil Alerte', 'Emplacement'];

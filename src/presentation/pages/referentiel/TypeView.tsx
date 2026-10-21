@@ -189,15 +189,7 @@ export default function TypeView({
   const startIndex = (currentPage - 1) * effectivePageSize;
   const rawDisplayedData =
     pageSize === 0 ? sortedData : sortedData.slice(startIndex, startIndex + effectivePageSize);
-  const displayedData = useMemo(() => {
-    const minRows = 19;
-    if (rawDisplayedData.length >= minRows) return rawDisplayedData;
-    const padded = [...rawDisplayedData];
-    for (let i = 0; i < minRows - rawDisplayedData.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id_type: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedData]);
+  const displayedData = rawDisplayedData;
 
   const handleExportExcel = () => {
     const headers = ['ID Type', 'Libellé Type PDR', 'Nb Désignations', 'Nb Articles Stock'];

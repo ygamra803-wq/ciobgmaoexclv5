@@ -200,15 +200,7 @@ export default function CompTemplateView({
   const startIndex = (currentPage - 1) * effectivePageSize;
   const rawDisplayedData =
     pageSize === 0 ? sortedData : sortedData.slice(startIndex, startIndex + effectivePageSize);
-  const displayedData = useMemo(() => {
-    const minRows = 19;
-    if (rawDisplayedData.length >= minRows) return rawDisplayedData;
-    const padded = [...rawDisplayedData];
-    for (let i = 0; i < minRows - rawDisplayedData.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id_templates: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedData]);
+  const displayedData = rawDisplayedData;
 
   const handleSort = (field) => {
     if (sortField === field) {

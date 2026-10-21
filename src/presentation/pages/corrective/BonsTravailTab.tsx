@@ -246,16 +246,7 @@ export default function BonsTravailTab({
   const rawDisplayedBts =
     pageSize === 0 ? sortedBts : sortedBts.slice(startIndex, startIndex + effectivePageSize);
 
-  // Table row padding (20-row standard)
-  const displayedBts = useMemo(() => {
-    const minRows = 20;
-    if (rawDisplayedBts.length >= minRows) return rawDisplayedBts;
-    const padded = [...rawDisplayedBts];
-    for (let i = 0; i < minRows - rawDisplayedBts.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedBts]);
+  const displayedBts = rawDisplayedBts;
 
   const toggleSort = (field) => {
     if (sortField === field) {

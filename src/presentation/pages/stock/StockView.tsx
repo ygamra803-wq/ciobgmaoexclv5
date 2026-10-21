@@ -260,15 +260,7 @@ export default function StockView({
   const startIndex = (currentPage - 1) * effectivePageSize;
   const rawDisplayedStock =
     pageSize === 0 ? sortedStock : sortedStock.slice(startIndex, startIndex + effectivePageSize);
-  const displayedStock = useMemo(() => {
-    const minRows = 20;
-    if (rawDisplayedStock.length >= minRows) return rawDisplayedStock;
-    const padded = [...rawDisplayedStock];
-    for (let i = 0; i < minRows - rawDisplayedStock.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, ref: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedStock]);
+  const displayedStock = rawDisplayedStock;
 
 
   const renderSortIcon = (field) => {

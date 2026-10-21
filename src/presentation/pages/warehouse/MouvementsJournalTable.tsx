@@ -1000,14 +1000,7 @@ export default function MouvementsJournalTable({
   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
   const startIndex = (currentPage - 1) * effectivePageSize;
   const displayedMouvements = useMemo(() => {
-    const raw = pageSize === 0 ? sortedMouvements : sortedMouvements.slice(startIndex, startIndex + effectivePageSize);
-    const minRows = 19;
-    if (raw.length >= minRows) return raw;
-    const padded = [...raw];
-    for (let i = 0; i < minRows - raw.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id: `empty-${i}` });
-    }
-    return padded;
+    return pageSize === 0 ? sortedMouvements : sortedMouvements.slice(startIndex, startIndex + effectivePageSize);
   }, [sortedMouvements, startIndex, effectivePageSize, pageSize]);
 
   // Reset to page 1 on filter/sort change

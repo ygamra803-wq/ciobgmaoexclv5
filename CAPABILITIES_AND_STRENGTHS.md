@@ -44,6 +44,12 @@
   - `src/tests/unit/PreventiveClearPersistence.test.ts`
   - `src/tests/unit/ThreeCriticalPaths.test.ts` (المسار الثاني)
 
+### د) نقاء الجداول الفارغة ومنع صفوف الحشو الوهمية (`Zero Fake Placeholder Rows`)
+- **الضمان التصميمي:** عندما تكون أي مجموعة بيانات فارغة (`0` سجل)، تعرض جميع جداول التطبيق حالة الفراغ الموحدة (`Empty State: Aucun enregistrement trouvé`) دون توليد صفوف وهمية (`empty-0..18`) أو نصوص احتياطية مضللة أو أزرار إجراءات لصفوف غير موجودة.
+- **المراجع البرمجية:**
+  - **الحارس المركزي (`Central DataGrid Guard`):** يقوم `src/presentation/components/common/GmaoIndustrialDataGrid.tsx` بتصفية أي عنصر يحمل الراية `__isEmptyPlaceholder` تلقائياً قبل حساب حالة الفراغ (`data.length === 0`) وقبل استدعاء دوال رسم الأعمدة (`col.render`).
+  - **تمرير الشرائح الفعلية مباشرة (`Unpadded Pagination Slices`):** تمرر جميع صفحات الصيانة التصحيحية (`DemandesInterventionTab.tsx`, `BonsTravailTab.tsx`, `ClotureRapportsTab.tsx`)، والمستخدمين (`UtilisateursView.tsx`)، والمرجعيات والمخزن (`TypeView.tsx`, `DesignationView.tsx`, `PartTypeView.tsx`, `PartDesignationView.tsx`, `CompGroupView.tsx`, `CompFamilyView.tsx`, `CompTemplateView.tsx`, `ZonesView.tsx`, `EntrepotView.tsx`, `StockView.tsx`, `MouvementsJournalTable.tsx`, `BlueprintMachineView.tsx`, `FamilyView.tsx`, `TemplatesView.tsx`, `SettingsView.tsx`) شريحة البيانات الحقيقية المفلترة دون حشو `empty-${i}`.
+
 ---
 
 ## 3. سلامة السجلات الصناعية (سلامة مرجعية)

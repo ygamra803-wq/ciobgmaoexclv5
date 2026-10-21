@@ -614,15 +614,7 @@ export default function SettingsView({
       : discoveredItems.slice(auditStartIndex, auditStartIndex + auditEffectivePageSize);
   }, [discoveredItems, auditPageSize, auditStartIndex, auditEffectivePageSize]);
 
-  const auditDisplayedItems = useMemo(() => {
-    const minRows = 19;
-    if (rawAuditDisplayedData.length >= minRows) return rawAuditDisplayedData;
-    const padded: any[] = [...rawAuditDisplayedData];
-    for (let i = 0; i < minRows - rawAuditDisplayedData.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, code: `empty-${i}` });
-    }
-    return padded;
-  }, [rawAuditDisplayedData]);
+  const auditDisplayedItems = rawAuditDisplayedData;
 
   // JSON Advanced Editor States
   const [jsonTarget, setJsonTarget] = useState('rawStock');

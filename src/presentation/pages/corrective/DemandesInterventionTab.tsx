@@ -403,16 +403,7 @@ export default function DemandesInterventionTab({
   const rawDisplayedDis =
     pageSize === 0 ? sortedDis : sortedDis.slice(startIndex, startIndex + effectivePageSize);
 
-  // Table row padding to guarantee crisp Excel layout
-  const displayedDis = useMemo(() => {
-    const minRows = 20;
-    if (rawDisplayedDis.length >= minRows) return rawDisplayedDis;
-    const padded = [...rawDisplayedDis];
-    for (let i = 0; i < minRows - rawDisplayedDis.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayedDis]);
+  const displayedDis = rawDisplayedDis;
 
   const toggleSort = (field) => {
     if (sortField === field) {

@@ -216,16 +216,7 @@ export default function ClotureRapportsTab({
   const rawDisplayed =
     pageSize === 0 ? sortedInterventions : sortedInterventions.slice(startIndex, startIndex + effectivePageSize);
 
-  // Table row padding (20-row standard)
-  const displayedInterventions = useMemo(() => {
-    const minRows = 20;
-    if (rawDisplayed.length >= minRows) return rawDisplayed;
-    const padded = [...rawDisplayed];
-    for (let i = 0; i < minRows - rawDisplayed.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id: `empty-${i}` });
-    }
-    return padded;
-  }, [rawDisplayed]);
+  const displayedInterventions = rawDisplayed;
 
   const toggleSort = (field) => {
     if (sortField === field) {

@@ -28,7 +28,7 @@ export default function GmaoIndustrialDataGrid({
   bannerColor = 'slate',
   headerRight = null,
   columns = [],
-  data = [],
+  data: rawData = [],
   isLoading = false,
   loadingRowsCount = 8,
   sortField = '',
@@ -57,6 +57,13 @@ export default function GmaoIndustrialDataGrid({
   const scrollContainerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(500);
+
+  // Strip synthetic __isEmptyPlaceholder objects so empty tables display Empty State cleanly
+  // and column renderers never receive fake "empty-0" records.
+  const data = useMemo(
+    () => (Array.isArray(rawData) ? rawData.filter((item) => !item?.__isEmptyPlaceholder) : []),
+    [rawData]
+  );
 
   // Automatic or explicit virtualization activation for large datasets (> virtualThreshold rows)
   const isVirtualized = useMemo(() => {

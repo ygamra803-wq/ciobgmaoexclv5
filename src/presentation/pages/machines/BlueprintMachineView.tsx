@@ -284,17 +284,7 @@ export default function BlueprintMachineView({
   const startIndex = (currentPage - 1) * effectivePageSize;
   
   const paginatedBlueprints = useMemo(() => {
-    const raw = pageSize === 0 ? sortedBlueprints : sortedBlueprints.slice(startIndex, startIndex + effectivePageSize);
-    
-    // Standard Excel Twin Table: minRows = 19 (1 header + 19 body rows = 20 total)
-    const minRows = 19;
-    if (raw.length >= minRows) return raw;
-    
-    const padded = [...raw];
-    for (let i = 0; i < minRows - raw.length; i++) {
-      padded.push({ __isEmptyPlaceholder: true, id_blueprint: `empty-${i}` });
-    }
-    return padded;
+    return pageSize === 0 ? sortedBlueprints : sortedBlueprints.slice(startIndex, startIndex + effectivePageSize);
   }, [sortedBlueprints, startIndex, effectivePageSize, pageSize]);
 
   // Map of machine counts per blueprint (using Domain model)
