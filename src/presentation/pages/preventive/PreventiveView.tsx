@@ -42,6 +42,7 @@ export default function PreventiveView({
   onResetToBaseline = null,
   onClearPreventiveForRealFactory = null,
   machines = [],
+  blueprints = [],
   zones = [],
   technicians = [],
   stockItems = [],
@@ -384,6 +385,7 @@ export default function PreventiveView({
             tasks={tasks}
             executions={executions}
             machines={machines}
+            blueprints={blueprints}
             zones={zones}
             technicians={technicians}
             actions={actions}

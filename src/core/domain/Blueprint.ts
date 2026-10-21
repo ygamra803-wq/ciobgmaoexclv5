@@ -142,6 +142,50 @@ export function applyBlueprintPlanToActiveMachines(
   };
 }
 
+export function doesTaskMatchBlueprint(
+  task: any,
+  blueprintId: string,
+  machines: any[] = []
+): boolean {
+  if (!blueprintId || blueprintId === 'ALL') return true;
+  if (!task) return false;
+
+  const targetBp = String(blueprintId).trim();
+  if (task.id_blueprint && String(task.id_blueprint).trim() === targetBp) {
+    return true;
+  }
+
+  const taskMachId = String(task.id_machine || task.code_machine || '')
+    .trim()
+    .toUpperCase();
+  if (!taskMachId || !Array.isArray(machines)) return false;
+
+  const norm = (s: any) =>
+    String(s || '')
+      .trim()
+      .toUpperCase()
+      .replace(/[-_\s]/g, '');
+  const taskMachNorm = norm(taskMachId);
+
+  const matchedMachine = machines.find((m) => {
+    if (!m) return false;
+    const mId = m.id_machine_registered || m.code_machine || m.id || m.id_machine || m.code;
+    return String(mId || '').trim().toUpperCase() === taskMachId || norm(mId) === taskMachNorm;
+  });
+
+  return Boolean(matchedMachine && String(matchedMachine.id_blueprint || '').trim() === targetBp);
+}
+
+export function filterTasksByBlueprint(
+  tasks: any[] = [],
+  blueprintId: string,
+  machines: any[] = []
+): any[] {
+  if (!Array.isArray(tasks)) return [];
+  if (!blueprintId || blueprintId === 'ALL') return tasks;
+  return tasks.filter((t) => doesTaskMatchBlueprint(t, blueprintId, machines));
+}
+
 export class Blueprint {
   id: any;
   specs: any;

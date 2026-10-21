@@ -23,6 +23,7 @@ import {
   Wrench,
   Filter,
   CalendarRange,
+  FingerprintPattern,
 } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { useI18n } from '../../../../i18n/I18nContext';
@@ -37,6 +38,7 @@ import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
+import { doesTaskMatchBlueprint } from '../../../../core/domain';
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -52,6 +54,7 @@ export default function TabMainView({
   tasks = [],
   executions = [],
   machines = [],
+  blueprints = [],
   zones = [],
   technicians = [],
   actions = [],
@@ -111,6 +114,7 @@ export default function TabMainView({
   // Filters
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedMachine, setSelectedMachine] = useState('ALL');
+  const [selectedBlueprint, setSelectedBlueprint] = useState('ALL');
   const [selectedAction, setSelectedAction] = useState('ALL');
   const [selectedFrequence, setSelectedFrequence] = useState('ALL');
   const [selectedWeek, setSelectedWeek] = useState('ALL');
@@ -272,6 +276,7 @@ export default function TabMainView({
       const effZone = m?.id_zone_default || m?.id_zone || t.id_zone;
       const matchZone = selectedZone === 'ALL' || norm(effZone) === norm(selectedZone) || norm(t.id_zone) === norm(selectedZone);
       const matchMach = selectedMachine === 'ALL' || norm(t.id_machine) === norm(selectedMachine);
+      const matchBlueprint = doesTaskMatchBlueprint(t, selectedBlueprint, machines);
       const matchAct = selectedAction === 'ALL' || (t.action_code || 'C').toUpperCase() === selectedAction.toUpperCase();
       const matchFreq = selectedFrequence === 'ALL' || norm(t.frequence) === norm(selectedFrequence);
       const matchStat = selectedStatus === 'ALL' || t.etat === selectedStatus;
@@ -281,9 +286,9 @@ export default function TabMainView({
       if (orphanFilter === 'ORPHAN_ONLY' && !t._isOrphan) return false;
       if (orphanFilter === 'LINKED_ONLY' && t._isOrphan) return false;
 
-      return matchSearch && matchZone && matchMach && matchAct && matchFreq && matchStat && matchTech && matchWeek;
+      return matchSearch && matchZone && matchMach && matchBlueprint && matchAct && matchFreq && matchStat && matchTech && matchWeek;
     });
-  }, [tasksWithOrphanFlag, deferredSearchQuery, selectedZone, selectedMachine, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
+  }, [tasksWithOrphanFlag, deferredSearchQuery, selectedZone, selectedMachine, selectedBlueprint, machines, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -301,13 +306,14 @@ export default function TabMainView({
     if (searchQuery.trim()) count++;
     if (selectedZone !== 'ALL') count++;
     if (selectedMachine !== 'ALL') count++;
+    if (selectedBlueprint !== 'ALL') count++;
     if (selectedAction !== 'ALL') count++;
     if (selectedFrequence !== 'ALL') count++;
     if (selectedWeek !== 'ALL') count++;
     if (selectedStatus !== 'ALL') count++;
     if (selectedTech !== 'ALL') count++;
     return count;
-  }, [searchQuery, selectedZone, selectedMachine, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech]);
+  }, [searchQuery, selectedZone, selectedMachine, selectedBlueprint, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech]);
 
   const hasActiveFilters = activeFiltersCount > 0;
 
@@ -315,6 +321,7 @@ export default function TabMainView({
     setSearchQuery('');
     setSelectedZone('ALL');
     setSelectedMachine('ALL');
+    setSelectedBlueprint('ALL');
     setSelectedAction('ALL');
     setSelectedFrequence('ALL');
     setSelectedWeek('ALL');
@@ -366,6 +373,26 @@ export default function TabMainView({
       };
     }),
   ], [machineList, machineMap, taskMachineMap, t]);
+
+  const blueprintOptions = useMemo(() => [
+    {
+      value: 'ALL',
+      label: `Tous (${Array.isArray(blueprints) ? blueprints.length : 0})`,
+      badge: 'Plan',
+      badgeColor: 'bg-slate-100 text-slate-700',
+    },
+    ...(Array.isArray(blueprints) ? blueprints : [])
+      .filter((bp) => bp && bp.id_blueprint)
+      .map((bp) => ({
+        value: bp.id_blueprint,
+        label: bp.libelle ? `${bp.id_blueprint} · ${bp.libelle}` : bp.id_blueprint,
+        sublabel: Array.isArray(bp.preventivePlanItems) && bp.preventivePlanItems.length > 0
+          ? `${bp.preventivePlanItems.length} opération(s) standard`
+          : undefined,
+        badge: 'BOM',
+        badgeColor: 'bg-teal-50 text-teal-800 border border-teal-200/80',
+      })),
+  ], [blueprints]);
 
   const actionOptions = useMemo(() => [
     { value: 'ALL', label: `${t('preventive.filters.all_actions', 'Toutes Actions')} (${actions.length})`, badge: 'AFNOR', badgeColor: 'bg-slate-100 text-slate-700' },
@@ -1007,8 +1034,8 @@ export default function TabMainView({
           )}
         </div>
 
-        {/* 6 Cascading Selector Dropdowns with CustomSelect & Expressive Icons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-3 border-t border-slate-100">
+        {/* 7 Cascading Selector Dropdowns with CustomSelect & Expressive Icons */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 pt-3 border-t border-slate-100">
           {/* 1. Zone Filter */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
@@ -1052,6 +1079,29 @@ export default function TabMainView({
               }}
               options={machineOptions}
               placeholder={t('preventive.filters.all_machines', 'Toutes Machines')}
+            />
+          </div>
+
+          {/* 2b. Blueprint / Plan machine Filter */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
+              <span>Blueprint / Plan machine</span>
+              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
+                BOM
+              </span>
+            </div>
+            <CustomSelect
+              value={selectedBlueprint}
+              prefixIcon={
+                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs">
+                  <FingerprintPattern className="w-3 h-3" />
+                </span>
+              }
+              onChange={(val) => {
+                setSelectedBlueprint(val);
+              }}
+              options={blueprintOptions}
+              placeholder="Tous Blueprints"
             />
           </div>
 
@@ -1180,6 +1230,16 @@ export default function TabMainView({
                 <Factory className="w-3 h-3 text-blue-600" />
                 <span>{t('common.machine', 'Machine')} : <b>{selectedMachine}</b></span>
                 <button type="button" onClick={() => setSelectedMachine('ALL')} className="text-blue-500 hover:text-blue-800 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedBlueprint !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-900 border border-teal-200 font-medium">
+                <FingerprintPattern className="w-3 h-3 text-teal-600" />
+                <span>Blueprint : <b>{selectedBlueprint}</b></span>
+                <button type="button" onClick={() => setSelectedBlueprint('ALL')} className="text-teal-500 hover:text-teal-800 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>

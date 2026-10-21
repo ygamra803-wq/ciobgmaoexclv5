@@ -238,6 +238,60 @@ describe('Domain Entities Unit Tests', () => {
       expect(secondRun.addedTasks.length).toBe(0);
       expect(secondRun.updatedTasks.length).toBe(2);
     });
+
+    it('filters preventive tasks by blueprint (BP-4: direct task.id_blueprint and fallback via machine.id_blueprint)', async () => {
+      const { doesTaskMatchBlueprint, filterTasksByBlueprint } = await import('../../core/domain');
+
+      const machines = [
+        {
+          id_machine_registered: 'TRP-01',
+          id_blueprint: 'BPT-TOURPARA',
+          status: 'En service',
+        },
+        {
+          id_machine_registered: 'FRM-01',
+          id_blueprint: 'BPT-FRAISEUSE',
+          status: 'En service',
+        },
+      ];
+
+      const tasks = [
+        // 1) Task with explicit id_blueprint
+        {
+          id: 'TSK-BP-1',
+          id_machine: 'TRP-01',
+          id_blueprint: 'BPT-TOURPARA',
+          composant: 'Broche',
+        },
+        // 2) Legacy task without id_blueprint on task, but machine TRP-01 is linked to BPT-TOURPARA
+        {
+          id: 'TSK-LEGACY-2',
+          id_machine: 'TRP-01',
+          composant: 'Glissières',
+        },
+        // 3) Task belonging to another blueprint
+        {
+          id: 'TSK-OTHER-3',
+          id_machine: 'FRM-01',
+          id_blueprint: 'BPT-FRAISEUSE',
+          composant: 'Table',
+        },
+      ];
+
+      expect(doesTaskMatchBlueprint(tasks[0], 'BPT-TOURPARA', machines)).toBe(true);
+      expect(doesTaskMatchBlueprint(tasks[1], 'BPT-TOURPARA', machines)).toBe(true);
+      expect(doesTaskMatchBlueprint(tasks[2], 'BPT-TOURPARA', machines)).toBe(false);
+
+      const filteredTour = filterTasksByBlueprint(tasks, 'BPT-TOURPARA', machines);
+      expect(filteredTour.map((t) => t.id)).toEqual(['TSK-BP-1', 'TSK-LEGACY-2']);
+
+      const filteredFraiseuse = filterTasksByBlueprint(tasks, 'BPT-FRAISEUSE', machines);
+      expect(filteredFraiseuse.map((t) => t.id)).toEqual(['TSK-OTHER-3']);
+
+      const filteredAll = filterTasksByBlueprint(tasks, 'ALL', machines);
+      expect(filteredAll.length).toBe(3);
+    });
   });
 });
+
 

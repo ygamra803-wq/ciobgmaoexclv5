@@ -75,6 +75,7 @@ export default function BlueprintMachineView({
   onDeleteBlueprint = () => {},
   onApplyBlueprintPreventivePlan = null,
   preventiveActions = [],
+  preventiveTasks = [],
   onOpenAddFamilyModal: _onOpenAddFamilyModal = () => {},
   onOpenAddTemplateModal: _onOpenAddTemplateModal = () => {},
   onNavigateToMachinesByTemplate: _onNavigateToMachinesByTemplate = () => {},
@@ -296,6 +297,42 @@ export default function BlueprintMachineView({
     });
     return counts;
   }, [blueprints, machines]);
+
+  // Map of ACTIVE linked machine counts per blueprint
+  const blueprintActiveMachineCountMap = useMemo(() => {
+    const counts = {};
+    const activeMachines = filterActiveMachines(machines);
+    blueprints.forEach((b) => {
+      counts[b.id_blueprint] = activeMachines.filter((m) => m.id_blueprint === b.id_blueprint).length;
+    });
+    return counts;
+  }, [blueprints, machines]);
+
+  // Fast O(M + T) map of derived preventive tasks count per blueprint
+  const blueprintDerivedTasksCountMap = useMemo(() => {
+    const counts = {};
+    const norm = (s) => String(s || '').trim().toUpperCase().replace(/[-_\s]/g, '');
+    const machToBp = new Map();
+    (machines || []).forEach((m) => {
+      if (!m?.id_blueprint) return;
+      const mId = m.id_machine_registered || m.code_machine || m.id || m.id_machine || m.code;
+      if (mId) {
+        machToBp.set(String(mId).trim().toUpperCase(), m.id_blueprint);
+        machToBp.set(norm(mId), m.id_blueprint);
+      }
+    });
+    (preventiveTasks || []).forEach((t) => {
+      if (!t) return;
+      const bpId =
+        t.id_blueprint ||
+        machToBp.get(String(t.id_machine || t.code_machine || '').trim().toUpperCase()) ||
+        machToBp.get(norm(t.id_machine || t.code_machine));
+      if (bpId) {
+        counts[bpId] = (counts[bpId] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [machines, preventiveTasks]);
 
   // Listen to quickCreateBlueprintPreset
   useEffect(() => {
@@ -1032,6 +1069,9 @@ export default function BlueprintMachineView({
           }
 
                 const mchCount = blueprintMachineCountMap[bp.id_blueprint] || 0;
+                const activeMchCount = blueprintActiveMachineCountMap[bp.id_blueprint] || 0;
+                const pmItemsCount = Array.isArray(bp.preventivePlanItems) ? bp.preventivePlanItems.length : 0;
+                const derivedTasksCount = blueprintDerivedTasksCountMap[bp.id_blueprint] || 0;
                 const compCount = bp.components_theoriques?.length || 0;
                 const partsCount = bp.parts_theoriques?.length || 0;
                 const pdrCount = bp.pdr_theoriques?.length || 0;
@@ -1114,18 +1154,45 @@ export default function BlueprintMachineView({
                       </span>
                     </td>
 
-                    {/* Col 8: Machines Liées (Flux) */}
+                    {/* Col 8: Machines Liées & Plan Préventif (Flux) */}
                     <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          mchCount > 0
-                            ? 'bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs'
-                            : 'text-slate-400'
-                        }`}
-                      >
-                        <Factory className="w-3 h-3 text-slate-500" />
-                        <span>{mchCount}</span>
-                      </span>
+                      <div className="inline-flex flex-col items-center gap-1">
+                        <div className="inline-flex items-center gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                              activeMchCount > 0
+                                ? 'bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs'
+                                : 'text-slate-400'
+                            }`}
+                            title={`${activeMchCount} machine(s) active(s) / ${mchCount} liée(s)`}
+                          >
+                            <Factory className="w-3 h-3 text-slate-500" />
+                            <span>
+                              {activeMchCount}
+                              {mchCount !== activeMchCount ? `/${mchCount}` : ''}
+                            </span>
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold ${
+                              pmItemsCount > 0
+                                ? 'bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs'
+                                : 'bg-slate-50 text-slate-400 border border-slate-100'
+                            }`}
+                            title={`Plan préventif du blueprint : ${pmItemsCount} opération(s)`}
+                          >
+                            <Calendar className="w-2.5 h-2.5 text-teal-600" />
+                            <span>{pmItemsCount}</span>
+                          </span>
+                        </div>
+                        {derivedTasksCount > 0 && (
+                          <span
+                            className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80"
+                            title={`${derivedTasksCount} tâche(s) préventive(s) active(s) dérivée(s) de ce Blueprint`}
+                          >
+                            {derivedTasksCount} tâche(s) PM
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Col 9: Statut (H) */}
@@ -1516,6 +1583,8 @@ export default function BlueprintMachineView({
                 const totalLinkedMachines = (machines || []).filter(
                   (m) => m.id_blueprint === selectedInspectBlueprint.id_blueprint
                 );
+                const derivedTasksCount =
+                  blueprintDerivedTasksCountMap[selectedInspectBlueprint.id_blueprint] || 0;
                 return (
                   <div className="space-y-4">
                     <div className="p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1537,6 +1606,28 @@ export default function BlueprintMachineView({
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>Appliquer aux machines actives liées ({activeLinkedMachines.length})</span>
                       </button>
+                    </div>
+
+                    {/* 3-KPI Summary Strip for Blueprint Preventive Status */}
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-slate-600">Machines actives liées</span>
+                        <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-900">
+                          {activeLinkedMachines.length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-teal-50/60 border border-teal-200/80 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-teal-900">Items du plan (BOM)</span>
+                        <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white border border-teal-200 text-teal-800">
+                          {currentItems.length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-200/80 flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-indigo-900">Tâches PM dérivées</span>
+                        <span className="font-mono font-bold text-xs px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-800">
+                          {derivedTasksCount}
+                        </span>
+                      </div>
                     </div>
 
                     {applyFeedback && (
