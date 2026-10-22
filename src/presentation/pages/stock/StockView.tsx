@@ -854,19 +854,7 @@ export default function StockView({
         }}
         renderRow={(item, idx) => {
           const rowNum = startIndex + idx + 1;
-          if (item.__isEmptyPlaceholder) {
-            return (
-              <tr key={`empty-stock-${rowNum}-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-                <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-300 bg-slate-100/40 border-r border-slate-200/80">
-                  {rowNum}
-                </td>
-                <td colSpan={11} className="py-3 px-3 text-center text-slate-300 font-mono text-[11px]">
-                  —
-                </td>
-              </tr>
-            );
-          }
-                  const domainItem = new StockItem(item);
+          const domainItem = new StockItem(item);
                   const typeObj = types.find(
                     (t) => t.id_type === item.id_type || t.libelle === item.type
                   );

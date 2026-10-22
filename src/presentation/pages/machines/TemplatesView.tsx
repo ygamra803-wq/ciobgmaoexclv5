@@ -583,18 +583,6 @@ export default function TemplatesView({
         showRowNumber={true}
         renderRow={(tItem, idx) => {
           const rowNum = startIndex + idx + 1;
-          if (tItem.__isEmptyPlaceholder) {
-            return (
-              <tr key={`empty-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-                <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-300 bg-slate-100/40 border-r border-slate-200/80">
-                  {rowNum}
-                </td>
-                <td colSpan={5} className="py-3 px-4 text-center text-slate-300 font-mono text-[11px]">
-                  —
-                </td>
-              </tr>
-            );
-          }
           const fam = families.find((f) => f.id_family === tItem.id_family);
           const mCount = machines.filter((m) => m.id_templates === tItem.id_templates).length;
 

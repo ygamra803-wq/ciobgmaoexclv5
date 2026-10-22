@@ -133,6 +133,69 @@ export class PreventiveService {
   static deleteGuide(id: string) {
     return GuideService.deleteGuide(id);
   }
+
+  static getMachinePreventiveProfile(machineId: string) {
+    const id = String(machineId || '').trim();
+    const allTasks = Array.isArray(this.getTasks()) ? this.getTasks() : [];
+    const allExecutions = Array.isArray(this.getExecutions()) ? this.getExecutions() : [];
+
+    const tasks = allTasks.filter(
+      (t: any) => String(t.id_machine || t.machine || '').trim() === id
+    );
+    const executions = allExecutions.filter(
+      (ex: any) => String(ex.id_machine || ex.machine || '').trim() === id
+    );
+
+    const total_tasks = tasks.length;
+    const fait_tasks = tasks.filter(
+      (t: any) => String(t.etat || '').toLowerCase() === 'fait'
+    ).length;
+    const retard_tasks = tasks.filter(
+      (t: any) => String(t.etat || '').toLowerCase().includes('retard')
+    ).length;
+
+    const compliance_rate =
+      total_tasks > 0 ? Math.round((fait_tasks / total_tasks) * 100) : 100;
+
+    const health_status =
+      retard_tasks === 0 && compliance_rate >= 80
+        ? 'Optimale'
+        : retard_tasks <= 2 && compliance_rate >= 50
+        ? 'Moyenne'
+        : 'Critique';
+
+    const pendingTask = tasks.find(
+      (t: any) => String(t.etat || '').toLowerCase() !== 'fait'
+    );
+    const prochaine_intervention = pendingTask
+      ? {
+          semaine: pendingTask.prochaine_echeance || pendingTask.frequence || 'Planifié',
+          date: pendingTask.derniere_execution
+            ? `Dernière: ${pendingTask.derniere_execution}`
+            : 'Calendrier annuel',
+        }
+      : null;
+
+    const tasksCost = tasks.reduce(
+      (sum: number, t: any) => sum + (Number(t.cout_total) || Number(t.cout_pdr) || 0),
+      0
+    );
+    const execsCost = executions.reduce(
+      (sum: number, ex: any) => sum + (Number(ex.cout_total) || Number(ex.cout_pdr) || 0),
+      0
+    );
+
+    return {
+      tasks,
+      total_tasks,
+      fait_tasks,
+      retard_tasks,
+      compliance_rate,
+      health_status,
+      prochaine_intervention,
+      cout_total_preventif: execsCost > 0 ? execsCost : tasksCost,
+    };
+  }
 }
 
 export default PreventiveService;

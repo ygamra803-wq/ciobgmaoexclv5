@@ -1550,18 +1550,6 @@ export default function MouvementsJournalTable({
         }}
         renderRow={(m, idx, rowNumber) => {
           const realIndex = startIndex + idx;
-          if (m.__isEmptyPlaceholder) {
-            return (
-              <tr key={`empty-mvt-${realIndex}-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-                <td className="py-2 px-3 text-center font-mono text-[10.5px] text-slate-300">
-                  {rowNumber}
-                </td>
-                <td colSpan={12} className="py-2 px-3 text-center text-slate-300 font-mono text-[11px]">
-                  —
-                </td>
-              </tr>
-            );
-          }
 
           // Smart Article Lookup (Type, Désignation, Réf, Source)
           const artInfo = resolveArticleInfo(m, { stockItems, warehouseItems });

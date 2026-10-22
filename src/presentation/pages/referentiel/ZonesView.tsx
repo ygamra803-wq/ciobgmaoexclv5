@@ -569,19 +569,6 @@ export default function ZonesView({
         emptyIcon={<MapPin className="w-8 h-8 text-slate-300" />}
         emptyMessage={t('zones.table.empty_msg')}
         renderRow={(z, idx, rowNum) => {
-          if (z.__isEmptyPlaceholder) {
-            return (
-              <tr key={`empty-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-                <td className="py-3 px-3 text-center text-slate-400 font-mono text-[10px] bg-slate-50/40 border-r border-slate-100 shrink-0 select-none">
-                  {rowNum}
-                </td>
-                <td colSpan={zoneColumns.length} className="py-3 px-4 text-center text-slate-300 font-mono text-[11px] h-12">
-                  —
-                </td>
-              </tr>
-            );
-          }
-
           return (
             <tr
               key={z.code_zone || z.id_zone || idx}

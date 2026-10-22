@@ -129,20 +129,6 @@ export default function SettingsMatchingTab({
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {auditDisplayedItems.map((dm, index) => {
-                    if (dm.__isEmptyPlaceholder) {
-                      return (
-                        <tr key={dm.code} className="h-10 border-b border-slate-100 bg-slate-50/30 text-slate-300 select-none">
-                          <td className="py-2.5 px-3 text-center text-[10px] font-mono border-r border-slate-100">
-                            —
-                          </td>
-                          <td className="py-2.5 px-3">—</td>
-                          <td className="py-2.5 px-3">—</td>
-                          <td className="py-2.5 px-3">—</td>
-                          <td className="py-2.5 px-3 text-right">—</td>
-                        </tr>
-                      );
-                    }
-
                     const rowIndex = auditStartIndex + index + 1;
                     const proposedId =
                       auditTarget === 'utilisateurs'

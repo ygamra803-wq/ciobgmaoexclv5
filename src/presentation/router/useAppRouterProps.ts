@@ -345,7 +345,9 @@ export function useAppRouterProps({
     machines: {
       machines,
       families: effectiveFamilies,
+      effectiveFamilies,
       templates: effectiveTemplates,
+      effectiveTemplates,
       blueprints,
       zones,
       technicians,
@@ -354,6 +356,8 @@ export function useAppRouterProps({
       mouvements,
       search: filters.mchSearch,
       setSearch: filters.setMchSearch,
+      mchSearch: filters.mchSearch,
+      setMchSearch: filters.setMchSearch,
       mchFamilyFilter: filters.mchFamilyFilter,
       setMchFamilyFilter: filters.setMchFamilyFilter,
       mchTemplateFilter: filters.mchTemplateFilter,

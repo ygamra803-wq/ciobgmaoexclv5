@@ -153,19 +153,7 @@ export default function PartsTable({
       }
       renderRow={(item, idx) => {
         const realIndex = startIndex + idx;
-        if (item.__isEmptyPlaceholder) {
-          return (
-            <tr key={`empty-part-${realIndex}-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-              <td className="py-2.5 px-3 text-center font-mono text-[10.5px] text-slate-300 bg-slate-100/30 border-r border-slate-200/60">
-                {realIndex + 1}
-              </td>
-              <td colSpan={8} className="py-2.5 px-3 text-center text-slate-300 font-mono text-[11px]">
-                —
-              </td>
-            </tr>
-          );
-        }
-                const domainItem = new EntrepotItem(item);
+        const domainItem = new EntrepotItem(item);
                 const typeObj = types.find((t) => t.id_type === item.id_type);
                 const diagObj = diagnostics.find((d) => d.id_diag === item.id_diag);
                 const isActionOpen = activeActionMenuId === item.id_warehouse_item;

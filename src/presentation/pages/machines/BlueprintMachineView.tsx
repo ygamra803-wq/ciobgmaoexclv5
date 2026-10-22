@@ -1057,20 +1057,7 @@ export default function BlueprintMachineView({
         }}
         renderRow={(bp, idx) => {
           const rowNum = startIndex + idx + 1;
-          if (bp.__isEmptyPlaceholder) {
-            return (
-              <tr key={`empty-${idx}`} className="border-b border-slate-100 bg-white/40 select-none">
-                <td className="py-3 px-3 text-center font-mono text-[11px] text-slate-300 bg-slate-100/40 border-r border-slate-200/80 shrink-0">
-                  {rowNum}
-                </td>
-                <td colSpan={10} className="py-3 px-4 text-center text-slate-300 font-mono text-[11px]">
-                  —
-                </td>
-              </tr>
-            );
-          }
-
-                const mchCount = blueprintMachineCountMap[bp.id_blueprint] || 0;
+          const mchCount = blueprintMachineCountMap[bp.id_blueprint] || 0;
                 const activeMchCount = blueprintActiveMachineCountMap[bp.id_blueprint] || 0;
                 const pmItemsCount = Array.isArray(bp.preventivePlanItems) ? bp.preventivePlanItems.length : 0;
                 const derivedTasksCount = blueprintDerivedTasksCountMap[bp.id_blueprint] || 0;
