@@ -17,7 +17,7 @@
 ```
 /src/data/zones/seedZones.json  (14 ورشة ومنطقة إنتاجية)
                │
-    /src/hooks/useMachineSubState.js
+    /src/store/useGmaoStore.ts (DataGateway SSOT)
                │
     /src/presentation/router/useAppRouterProps.js
                │

@@ -111,7 +111,7 @@ export class PerformanceMonitor {
   }
 
   // ============================================================================
-  // Instance compatibility API (used by PerformanceDashboardView.jsx)
+  // Instance compatibility API
   // ============================================================================
 
   get metrics(): Map<string, MetricEntry[]> {

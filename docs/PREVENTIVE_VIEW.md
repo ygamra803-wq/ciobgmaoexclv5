@@ -27,8 +27,8 @@
 /src/data/preventive/seedPreventiveActions.json (7 رموز إجراءات قياسية)
 /src/data/preventive/seedPreventiveGuides.json  (10 كتيبات وإرشادات فنية)
                       │
-           /src/hooks/usePreventiveSubState.js
-   (إدارة الحالة والتخزين gmao_preventive_tasks_v9 + معالجات CRUD)
+           /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
+   (إدارة مهام الصيانة وسجلات التنفيذ المؤرخة والمصدر الوحيد SSOT)
                       │
            /src/presentation/router/useAppRouterProps.js
                       │

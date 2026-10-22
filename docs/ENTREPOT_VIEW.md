@@ -18,8 +18,8 @@
 /src/data/warehouse/seedWarehouseItems.json     (185 مكوناً رئيسياً في المستودع والميدان)
 /src/data/warehouse/seedEntrepotComponents.json (سجل المكونات وبطاقات اللف)
                       │
-           /src/hooks/useWarehouseSubState.js
-   (إدارة الحالة والتخزين gmao_warehouse_items_v3 + gmao_entrepot_components_v3)
+           /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
+   (إدارة الكيانات المرجعية والمصدر الحقيقي الوحيد SSOT)
                       │
            /src/presentation/router/useAppRouterProps.js
                       │

@@ -127,12 +127,12 @@
 
 ## 💾 5. التخزين ومفاتيح الحفظ المحلي (Persistence Schema)
 
-| الكيان | مفتاح التخزين في LocalStorage | الـ Hook المسؤول |
+| الكيان | مفتاح التخزين في LocalStorage | آلية الإدارة والحفظ |
 | :--- | :--- | :--- |
-| **Groupes** | `gmao_comp_groups_v1` | `useWarehouseSubState.js` + `useAutoSave.js` |
-| **Familles** | `gmao_comp_families_v1` | `useWarehouseSubState.js` + `useAutoSave.js` |
-| **Templates** | `gmao_comp_templates_v1` | `useWarehouseSubState.js` + `useAutoSave.js` |
-| **Entrepôt Stock** | `gmao_entrepot_components_v1` | `useWarehouseSubState.js` + `useAutoSave.js` |
+| **Groupes** | `gmao_comp_groups_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Familles** | `gmao_comp_families_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Templates** | `gmao_comp_templates_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Entrepôt Stock** | `gmao_entrepot_components_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
 
 ---
 

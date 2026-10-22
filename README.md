@@ -64,7 +64,7 @@
 
 ### 3. التطوير وفق مبادئ التصميم الموجه بالنطاق (Domain-Driven Design & Clean Architecture)
 * فصل صارم للمسؤوليات بين طبقة النطاق المجرد (`Core Domain`)، طبقة التطبيق والتنسيق (`Application Use-Cases`)، طبقة البنية التحتية والتخزين (`Infrastructure & Persistence`)، وطبقة العرض التفاعلية (`Presentation Layer`).
-* إدارة حالة معيارية متطورة عبر خطافات متخصصة ومستقلة تمنع إعادة التصيير غير الضرورية (`useStockSubState`, `useMachineSubState`, `useMovementSubState`, `useWarehouseSubState`, `useUserSubState`).
+* إدارة حالة مركزية متطورة وموحدة عبر المصدر الحقيقي الوحيد (`useGmaoStore` المدعوم بـ `DataGateway`) مع محددات متخصصة تمنع إعادة التصيير غير الضرورية.
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -80,7 +80,7 @@
 │                                     │                                   │
 │                                     ▼                                   │
 │  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │ Modular Sub-State Hooks (useStock, useMachines, useMovements...) │  │
+│  │ Unified Store & Selectors (useGmaoStore, DataGateway, Persistence)│  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────┬───────────────────────────────────┘
                                       │

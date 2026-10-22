@@ -24,8 +24,8 @@
 /src/data/machines/seedMachines.json   (412 آلة مسجلة بروابطها)
 /src/data/machines/seedZones.json      (14 منطقة إنتاجية)
                       │
-           /src/hooks/useMachineSubState.js
-   (إدارة الحالة والتخزين gmao_machines_v2 + دوال التحقق)
+           /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
+   (إدارة الحالة والتخزين الموحد SSOT + دوال التحقق)
                       │
            /src/presentation/router/useAppRouterProps.js
                       │

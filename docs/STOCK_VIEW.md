@@ -16,18 +16,19 @@
 ## 💾 2. معمارية البيانات وتدفق الحالة (Data Architecture & State Flow)
 
 ```
-/src/data/stock/seedStockItems.json (873 مقال مرجعي نظيف)
+/src/data/stock/seedStockItems.json (بيانات مرجعية اختيارية للتحميل)
 /src/data/stock/seedStockTypes.json (فئات المقالات)
                       │
-           /src/hooks/useStockSubState.js
-   (إدارة الحالة والتخزين gmao_raw_stock_v7 + CRUD موحد)
+           /src/application/DataGateway.ts (تحميل وحفظ الكيانات المرجعية)
                       │
-           /src/hooks/useAppCalculations.js
+           /src/store/useGmaoStore.ts (المصدر الحقيقي الموحد للحالة SSOT)
+                      │
+           /src/application/IncrementalStockIndex.ts & StockCalculationService.ts
      (حساب Stock Actuel = Initial + Entrées - Sorties)
                       │
-           /src/presentation/router/useAppRouterProps.js
+           /src/presentation/router/useAppRouterProps.ts
                       │
-           /src/presentation/pages/stock/StockView.jsx
+           /src/presentation/pages/stock/StockView.tsx
 ```
 
 ---

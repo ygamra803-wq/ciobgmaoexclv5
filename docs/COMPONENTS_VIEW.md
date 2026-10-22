@@ -35,7 +35,7 @@
 /src/data/warehouse/seedPartTypes.json         (5 تصنيفات أجزاء)
 /src/data/warehouse/seedPartDesignations.json  (5 تسميات تفصيلية)
                       │
-           /src/hooks/useWarehouseSubState.js
+           /src/store/useGmaoStore.ts (DataGateway & Unified SSOT)
                       │
            /src/presentation/router/useAppRouterProps.js
                       │

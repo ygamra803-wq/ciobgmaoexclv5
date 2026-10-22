@@ -21,8 +21,8 @@
 ```
 /src/data/movements/seedSortiesExternes.json  (سجل أذونات الصرف الخارجي)
                      │
-      /src/hooks/useSortieExterneSubState.js
-   (إدارة الحالة والتخزين gmao_sortie_externe_bobinage_v2)
+      /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
+   (إدارة أذونات الصرف الخارجي والمصدر الحقيقي الوحيد SSOT)
                      │
       /src/presentation/router/useAppRouterProps.js
                      │

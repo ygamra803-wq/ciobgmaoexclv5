@@ -18,7 +18,7 @@
 /src/data/users/seedTechnicians.json (الفنيون الميدانيون والتخصصات)
 /src/data/users/seedOperations.json  (المشرفون، المسؤولون، والمشغلون)
                │
-    /src/hooks/useUserSubState.js
+    /src/store/useGmaoStore.ts (DataGateway SSOT)
                │
     /src/presentation/router/useAppRouterProps.js
                │
