@@ -23,6 +23,7 @@ import { alertThresholdManager } from '../../../services/alertThresholdManager';
 import { trendAnalysisService } from '../../../services/trendAnalysisService';
 import { MemoryOptimizer } from '../../../services/memoryOptimizer';
 import { FormulaEngineOptimizer } from '../../../utils/formulaEngineOptimizer';
+import { confirmAction } from '../../../utils/confirmAction';
 import { StockCalculationService } from '../../../domain/pdr/services/StockCalculationService';
 import SyncButtons from '../common/SyncButtons';
 
@@ -94,7 +95,13 @@ export default function PerformanceDashboardPanel({
 
   // Handle Clear All Caches
   const handleClearAllCaches = async () => {
-    if (window.confirm('Voulez-vous réinitialiser tous les niveaux de cache (L1, L2, L3) ?')) {
+    if (
+      await confirmAction({
+        title: 'Réinitialiser les caches',
+        message: 'Voulez-vous réinitialiser tous les niveaux de cache (L1, L2, L3) ?',
+        variant: 'warning',
+      })
+    ) {
       await multiLevelCacheManager.clearAll();
       StockCalculationService.clearCache();
       FormulaEngineOptimizer.clearMemoCache();

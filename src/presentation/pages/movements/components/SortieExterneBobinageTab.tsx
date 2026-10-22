@@ -24,6 +24,7 @@ import {
 import SortieExterneService from '../../../../application/services/SortieExterneService';
 import { Logger } from '../../../../core/logger/LoggerService';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
+import { confirmAction } from '../../../../utils/confirmAction';
 
 export default function SortieExterneBobinageTab({
   sorties = [],
@@ -269,8 +270,14 @@ export default function SortieExterneBobinageTab({
   };
 
   // Delete sortie
-  const handleDeleteSortie = (sortie) => {
-    if (window.confirm(`Confirmer la suppression de la fiche ${sortie.code} (${sortie.code_moteur_reel}) ?`)) {
+  const handleDeleteSortie = async (sortie) => {
+    if (
+      await confirmAction({
+        title: 'Supprimer la fiche de sortie',
+        message: `Confirmer la suppression de la fiche ${sortie.code} (${sortie.code_moteur_reel}) ?`,
+        variant: 'danger',
+      })
+    ) {
       if (onDeleteSortie) {
         onDeleteSortie(sortie.id);
       } else {

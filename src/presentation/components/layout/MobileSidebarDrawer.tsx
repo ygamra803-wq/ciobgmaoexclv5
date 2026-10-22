@@ -4,6 +4,7 @@ import SortieEntreeIcon from '../common/SortieEntreeIcon';
 import PWAInstallButton from '../common/PWAInstallButton';
 import {
   LayoutDashboard,
+  FileBarChart2,
   Package,
   Tag,
   BadgeCheck,
@@ -276,6 +277,20 @@ export default function MobileSidebarDrawer({
                 <span>Dashboard</span>
               </span>
               <span className={getBadgeClass('dashboard')}>KPI</span>
+            </button>
+
+            {/* Rapport Mensuel Exécutif (Direction) */}
+            <button
+              onClick={() => navTo('executive_report')}
+              className={getTabClass('executive_report', true)}
+            >
+              <span className="flex items-center gap-2">
+                <FileBarChart2
+                  className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                />
+                <span>Rapport Mensuel Exécutif</span>
+              </span>
+              <span className={getBadgeClass('executive_report')}>Direction</span>
             </button>
 
             {/* Sortie Rapide Tab */}

@@ -13,6 +13,7 @@ import { storageService } from '../utils/storageService';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 import { reactiveCalculationEngine } from '../services/reactiveCalculationEngine';
 import { loadBaselineCorrectiveData } from '../utils/baselineCorrective';
+import { confirmAction } from '../utils/confirmAction';
 
 import initialStockSeed from '../data/stock/seedStockItems.json';
 import initialStockTypes from '../data/stock/seedStockTypes.json';
@@ -731,7 +732,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         (impact.warnings?.length ? `\n${impact.warnings.join('\n')}` : '') +
         `\n\nLes machines ne seront PAS modifiées.`;
 
-      if (!skipConfirm && typeof window !== 'undefined' && !window.confirm(msg)) {
+      if (!skipConfirm && !(await confirmAction({ title: 'Réinitialiser le préventif', message: msg, variant: 'warning' }))) {
         return { cancelled: true };
       }
 
@@ -759,7 +760,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       };
     },
 
-    handleClearPreventiveForRealFactory: (ctx = {}) => {
+    handleClearPreventiveForRealFactory: async (ctx = {}) => {
       const { machines = [], skipConfirm = false } = ctx;
       const tasks = get().preventiveTasks;
       const impact = dataIntegrityService.previewClearImpact({
@@ -775,7 +776,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         `• Les machines et le correctif ne seront PAS touchés.\n` +
         `\nAction irréversible (sauf backup).`;
 
-      if (!skipConfirm && typeof window !== 'undefined' && !window.confirm(msg)) {
+      if (!skipConfirm && !(await confirmAction({ title: 'Vider le préventif', message: msg, variant: 'danger' }))) {
         return { cancelled: true };
       }
 
@@ -839,9 +840,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       return updated;
     },
 
-    handleClearSortiesForRealFactory: () => {
+    handleClearSortiesForRealFactory: async () => {
       const count = get().sortiesExterne.length;
-      if (count > 0 && typeof window !== 'undefined' && !window.confirm(`Supprimer les ${count} sorties externes pour usine réelle ?`)) {
+      if (count > 0 && !(await confirmAction({ title: 'Supprimer les sorties externes', message: `Supprimer les ${count} sorties externes pour usine réelle ?`, variant: 'danger' }))) {
         return { cancelled: true };
       }
       SortieExterneService.clearAll();
@@ -1501,7 +1502,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         `• Machines: ${impact.machineCount}\n` +
         `\nLes machines et le préventif ne seront PAS modifiés.`;
 
-      if (!skipConfirm && typeof window !== 'undefined' && !window.confirm(msg)) {
+      if (!skipConfirm && !(await confirmAction({ title: 'Réinitialiser le correctif', message: msg, variant: 'warning' }))) {
         return { cancelled: true };
       }
 

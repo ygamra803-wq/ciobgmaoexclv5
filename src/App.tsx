@@ -13,6 +13,7 @@ import { SplashScreen, LoginScreen } from './presentation/pages/auth';
 import OfflineIndicator from './presentation/components/common/OfflineIndicator';
 import ErrorBoundary from './presentation/components/common/ErrorBoundary';
 import RuntimeErrorModal from './presentation/components/common/RuntimeErrorModal';
+import ConfirmDialog from './presentation/components/common/ConfirmDialog';
 
 import { backupService } from './utils/BackupService';
 import { Logger } from './core/logger/LoggerService';
@@ -385,7 +386,12 @@ export default function App() {
   }
 
   if (!currentUser) {
-    return <LoginScreen />;
+    return (
+      <>
+        <LoginScreen />
+        <ConfirmDialog />
+      </>
+    );
   }
 
   return (
@@ -486,6 +492,9 @@ export default function App() {
 
         {/* Global Runtime Error System Modal */}
         <RuntimeErrorModal />
+
+        {/* Unified UI-Safe Confirmation Modal */}
+        <ConfirmDialog />
       </MainLayout>
     </ErrorBoundary>
   );

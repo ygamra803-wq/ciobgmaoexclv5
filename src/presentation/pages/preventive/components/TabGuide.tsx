@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import Action3DButton from '../../../components/common/Action3DButton';
+import { confirmAction } from '../../../../utils/confirmAction';
 
 const ACTION_COLORS = {
   C: 'bg-blue-500/10 text-blue-800 border-blue-200/80',
@@ -371,8 +372,14 @@ export default function TabGuide({
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Supprimer la fiche guide pour ${guide.composant_nom} ?`)) {
+                      onClick={async () => {
+                        if (
+                          await confirmAction({
+                            title: 'Supprimer la fiche guide',
+                            message: `Supprimer la fiche guide pour ${guide.composant_nom} ?`,
+                            variant: 'danger',
+                          })
+                        ) {
                           onDeleteGuide(guide.id);
                         }
                       }}

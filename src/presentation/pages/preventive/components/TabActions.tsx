@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import Action3DButton from '../../../components/common/Action3DButton';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
+import { confirmAction } from '../../../../utils/confirmAction';
 
 const ICON_MAP = {
   Eye: Eye,
@@ -293,8 +294,14 @@ export default function TabActions({
                         <Edit2 className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Supprimer l'action ${act.code} (${act.libelle}) ?`)) {
+                        onClick={async () => {
+                          if (
+                            await confirmAction({
+                              title: "Supprimer l'action",
+                              message: `Supprimer l'action ${act.code} (${act.libelle}) ?`,
+                              variant: 'danger',
+                            })
+                          ) {
                             onDeleteAction(act.id);
                           }
                         }}
@@ -448,8 +455,14 @@ export default function TabActions({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => {
-                                if (window.confirm(`Supprimer l'action ${act.code} ?`)) {
+                              onClick={async () => {
+                                if (
+                                  await confirmAction({
+                                    title: "Supprimer l'action",
+                                    message: `Supprimer l'action ${act.code} ?`,
+                                    variant: 'danger',
+                                  })
+                                ) {
                                   onDeleteAction(act.id);
                                 }
                               }}

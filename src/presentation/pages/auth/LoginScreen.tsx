@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
+import { confirmAction } from '../../../utils/confirmAction';
 
 export default function LoginScreen() {
   const { login, loginWithPin, getAvailableAccounts, isPinConfigured, getCurrentSessionUser, setupMasterPin } = useAuth();
@@ -116,8 +117,14 @@ export default function LoginScreen() {
     }
   };
 
-  const handleResetApp = () => {
-    if (window.confirm('Voulez-vous vraiment réinitialiser l\'application ? Toutes les données locales seront supprimées.')) {
+  const handleResetApp = async () => {
+    if (
+      await confirmAction({
+        title: "Réinitialiser l'application",
+        message: "Voulez-vous vraiment réinitialiser l'application ? Toutes les données locales seront supprimées.",
+        variant: 'danger',
+      })
+    ) {
       localStorage.clear();
       sessionStorage.clear();
       window.location.reload();

@@ -13,6 +13,7 @@ import type { PreventiveExecutionRecord } from '../../../../types/preventive';
 import PeriodFilterBar from '../../../components/common/PeriodFilterBar';
 import { type PeriodFilterState, isDateInPeriod } from '../../../../utils/datePeriodUtils';
 import { useI18n } from '../../../../i18n/I18nContext';
+import { confirmAction } from '../../../../utils/confirmAction';
 
 interface PreventiveExecutionsHistoryViewProps {
   executions: PreventiveExecutionRecord[];
@@ -66,8 +67,18 @@ export default function PreventiveExecutionsHistoryView({
     return { totalExecs, totalMinutes, hours, totalSparesCost, totalCost };
   }, [filteredExecutions]);
 
-  const handleDelete = (id: string) => {
-    if (window.confirm(language === 'ar' ? 'هل أنت متأكد من حذف سجل التنفيذ هذا؟' : 'Supprimer cet enregistrement d\'exécution ?')) {
+  const handleDelete = async (id: string) => {
+    const msg =
+      language === 'ar'
+        ? 'هل أنت متأكد من حذف سجل التنفيذ هذا؟'
+        : "Supprimer cet enregistrement d'exécution ?";
+    if (
+      await confirmAction({
+        title: language === 'ar' ? 'تأكيد الحذف' : 'Suppression de rapport',
+        message: msg,
+        variant: 'danger',
+      })
+    ) {
       onDeleteExecution?.(id);
       setDeletingId(null);
     }

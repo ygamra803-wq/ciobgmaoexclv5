@@ -136,6 +136,10 @@ describe('Round 6: Work Order FSM (M-03), Reliability Metrics MTTR/MTBF/OEE (M-0
       const routerContent = fs.readFileSync(routerPath, 'utf-8');
       expect(routerContent).toContain("currentTab === 'executive_report'");
       expect(routerContent).toContain('<MonthlyExecutiveReportView {...props.executiveReport} />');
+
+      const drawerPath = path.resolve(process.cwd(), 'src/presentation/components/layout/MobileSidebarDrawer.tsx');
+      const drawerContent = fs.readFileSync(drawerPath, 'utf-8');
+      expect(drawerContent).toContain("navTo('executive_report')");
     });
   });
 });

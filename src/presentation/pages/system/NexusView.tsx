@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { confirmAction } from '../../../utils/confirmAction';
 
 /**
  * NexusView — Registre Central des Éléments & BOM Machines
@@ -701,8 +702,14 @@ export default function NexusView({
                           {/* Suppression */}
                           <button
                             type="button"
-                            onClick={() => {
-                              if (window.confirm(`Détacher ${item.ref_element} de la machine ${activeMachine.id_machine_registered} ?`)) {
+                            onClick={async () => {
+                              if (
+                                await confirmAction({
+                                  title: "Détacher l'élément",
+                                  message: `Détacher ${item.ref_element} de la machine ${activeMachine.id_machine_registered} ?`,
+                                  variant: 'danger',
+                                })
+                              ) {
                                 onDeleteMachineElement?.(item.id);
                                 showToast?.(`Élément ${item.ref_element} détaché du registre.`, 'info');
                               }

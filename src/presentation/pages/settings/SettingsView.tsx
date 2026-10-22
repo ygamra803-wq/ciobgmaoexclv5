@@ -26,6 +26,7 @@ import { syncQueueService } from '../../../services/syncQueueService';
 import { errorTracker } from '../../../services/ErrorTrackingService';
 import { analytics } from '../../../services/AnalyticsService';
 import { useAuth } from '../../../context/AuthContext';
+import { confirmAction } from '../../../utils/confirmAction';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
 import PerformanceDashboardPanel from '../../components/settings/PerformanceDashboardPanel';
 import AppearanceLayoutSelector from '../../components/settings/AppearanceLayoutSelector';
@@ -190,7 +191,7 @@ export default function SettingsView({
   }, [getAvailableAccounts, isVaultUnlocked]);
 
   const handleResetAllAccounts = async () => {
-    if (window.confirm('Voulez-vous réinitialiser le coffre-fort et tous les comptes système ?')) {
+    if (await confirmAction({ title: 'Réinitialiser le coffre-fort', message: 'Voulez-vous réinitialiser le coffre-fort et tous les comptes système ?', variant: 'danger' })) {
       const pin = prompt('Veuillez saisir votre Master PIN pour autoriser la réinitialisation :');
       if (!pin) return;
       try {
@@ -762,11 +763,13 @@ export default function SettingsView({
   };
 
   // DATA INJECTION HUB HANDLERS
-  const handleResetToZero = () => {
+  const handleResetToZero = async () => {
     if (
-      window.confirm(
-        'Êtes-vous sûr de vouloir TOUT effacer ? Cette action videra toutes les tables locales de stockage (Mode Usine Réelle).'
-      )
+      await confirmAction({
+        title: 'Réinitialisation Mode Usine Réelle',
+        message: 'Êtes-vous sûr de vouloir TOUT effacer ? Cette action videra toutes les tables locales de stockage (Mode Usine Réelle).',
+        variant: 'danger',
+      })
     ) {
       if (typeof onClearAllForRealFactory === 'function') {
         onClearAllForRealFactory();
@@ -891,7 +894,7 @@ export default function SettingsView({
     [correctiveInterventions, machines]
   );
 
-  const handlePurgePreventiveOrphans = () => {
+  const handlePurgePreventiveOrphans = async () => {
     const impact = dataIntegrityService.previewClearImpact({
       action: 'CLEAR_PREVENTIVE',
       machines,
@@ -903,9 +906,11 @@ export default function SettingsView({
       return;
     }
     if (
-      window.confirm(
-        `Supprimer définitivement ${preventiveOrphans.length} tâche(s) préventive(s) orpheline(s) ?\n\n${impact.warnings[0] || ''}`
-      )
+      await confirmAction({
+        title: 'Purger les tâches orphelines',
+        message: `Supprimer définitivement ${preventiveOrphans.length} tâche(s) préventive(s) orpheline(s) ?\n\n${impact.warnings[0] || ''}`,
+        variant: 'danger',
+      })
     ) {
       const { kept } = dataIntegrityService.purgeOrphanPreventiveTasks(preventiveTasks, machines);
       setPreventiveTasks(kept);
@@ -913,7 +918,7 @@ export default function SettingsView({
     }
   };
 
-  const handlePurgeCorrectiveOrphans = () => {
+  const handlePurgeCorrectiveOrphans = async () => {
     const impact = dataIntegrityService.previewClearImpact({
       action: 'CLEAR_CORRECTIVE',
       machines,
@@ -925,9 +930,11 @@ export default function SettingsView({
       return;
     }
     if (
-      window.confirm(
-        `Supprimer définitivement ${correctiveOrphans.length} intervention(s) corrective(s) orpheline(s) ?\n\n${impact.warnings[0] || ''}`
-      )
+      await confirmAction({
+        title: 'Purger les interventions orphelines',
+        message: `Supprimer définitivement ${correctiveOrphans.length} intervention(s) corrective(s) orpheline(s) ?\n\n${impact.warnings[0] || ''}`,
+        variant: 'danger',
+      })
     ) {
       const { kept } = dataIntegrityService.purgeOrphanCorrectiveInterventions(
         correctiveInterventions,
@@ -1229,11 +1236,13 @@ export default function SettingsView({
     }, 120);
   };
 
-  const handleRepairData = () => {
+  const handleRepairData = async () => {
     if (
-      !window.confirm(
-        'Voulez-vous corriger automatiquement les anomalies de stocks négatifs, décalages de calculs Excel et valeurs manquantes ?'
-      )
+      !(await confirmAction({
+        title: 'Auto-réparation des anomalies',
+        message: 'Voulez-vous corriger automatiquement les anomalies de stocks négatifs, décalages de calculs Excel et valeurs manquantes ?',
+        variant: 'warning',
+      }))
     )
       return;
     const { repairedStock, fixedCount } = dataIntegrityService.autoHealData({
@@ -1290,8 +1299,14 @@ export default function SettingsView({
     setAccessLogs(logs || []);
   };
 
-  const handleClearAccessLogs = () => {
-    if (window.confirm('Êtes-vous sûr de vouloir vider le journal des connexions et sessions ?')) {
+  const handleClearAccessLogs = async () => {
+    if (
+      await confirmAction({
+        title: 'Vider le journal des accès',
+        message: 'Êtes-vous sûr de vouloir vider le journal des connexions et sessions ?',
+        variant: 'danger',
+      })
+    ) {
       accessLogService.clearLogs();
       setAccessLogs([]);
       showToast('Journal des accès réinitialisé.', 'info');
@@ -1331,7 +1346,11 @@ export default function SettingsView({
 
   const handleRestoreBackup = async (id: string) => {
     if (
-      !window.confirm('Attention : Cette action va écraser toutes vos données actuelles. Confirmer ?')
+      !(await confirmAction({
+        title: 'Restaurer une sauvegarde',
+        message: 'Attention : Cette action va écraser toutes vos données actuelles. Confirmer ?',
+        variant: 'danger',
+      }))
     )
       return;
     try {

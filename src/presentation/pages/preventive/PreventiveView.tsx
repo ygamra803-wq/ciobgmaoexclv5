@@ -27,6 +27,7 @@ import PreventiveService from '../../../application/services/PreventiveService';
 import TabMainView from './components/TabMainView';
 import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
+import { confirmAction } from '../../../utils/confirmAction';
 
 export default function PreventiveView({
   tasks = [],
@@ -80,8 +81,11 @@ export default function PreventiveView({
     }
 
     if (
-      typeof window !== 'undefined' &&
-      !window.confirm("Restaurer le planning d'usine de base (1 175 tâches) ?")
+      !(await confirmAction({
+        title: "Restauration du planning",
+        message: "Restaurer le planning d'usine de base (1 175 tâches) ?",
+        variant: "warning",
+      }))
     ) {
       return;
     }
@@ -92,8 +96,8 @@ export default function PreventiveView({
     showToast?.("Planning d'usine restauré (1 175 tâches) !", 'success');
   };
 
-  const runClearRealFactory = () => {
-    const result = onClearPreventiveForRealFactory?.({ machines });
+  const runClearRealFactory = async () => {
+    const result = await onClearPreventiveForRealFactory?.({ machines });
     if (!result || result.cancelled) return;
     showToast?.(`Préventif vidé (${result.clearedCount || 0} tâches).`, 'info');
   };
