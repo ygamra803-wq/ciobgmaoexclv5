@@ -117,6 +117,21 @@ export class ExecutionService {
       .trim()
       .toUpperCase();
 
+    const idComposant = String(validationData?.id_composant ?? task?.id_composant ?? '').trim() || undefined;
+    const nomComposant = String(validationData?.nom_composant ?? task?.nom_composant ?? '').trim() || undefined;
+    const idPart = String(validationData?.id_part ?? task?.id_part ?? '').trim() || undefined;
+    const nomPart = String(validationData?.nom_part ?? task?.nom_part ?? '').trim() || undefined;
+
+    const organeLabel = String(
+      task?.composant ||
+        nomComposant ||
+        nomPart ||
+        validationData?.organe ||
+        idComposant ||
+        idPart ||
+        'Machine entière'
+    ).trim();
+
     const execution: PreventiveExecutionRecord = {
       id:
         validationData?.id ||
@@ -126,7 +141,11 @@ export class ExecutionService {
       machineCode,
       machineName: String(task?.nom_machine || validationData?.machineName || machineCode),
       zone: String(task?.id_zone || task?.zone || validationData?.zone || ''),
-      organe: String(task?.composant || validationData?.organe || 'Machine entière'),
+      organe: organeLabel,
+      ...(idComposant ? { id_composant: idComposant } : {}),
+      ...(nomComposant ? { nom_composant: nomComposant } : {}),
+      ...(idPart ? { id_part: idPart } : {}),
+      ...(nomPart ? { nom_part: nomPart } : {}),
       actionCode: String(task?.action_code || validationData?.actionCode || 'C').toUpperCase(),
       taskDescription: String(
         task?.consigne || task?.type_intervention || task?.description || validationData?.taskDescription || ''

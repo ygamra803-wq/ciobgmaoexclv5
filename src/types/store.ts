@@ -25,7 +25,21 @@ export interface MachineElement {
 export interface PreventiveTaskItem {
   id: string | number;
   machine_id?: string;
+  id_machine?: string;
   id_machine_registered?: string;
+  composant?: string;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
+  pdr_requises?: Array<{
+    ref: string;
+    nom?: string;
+    designation?: string;
+    quantite: number;
+    unite?: string;
+    prix_unitaire?: number;
+  }>;
   titre?: string;
   periodicite?: string;
   dernier_releve?: number;

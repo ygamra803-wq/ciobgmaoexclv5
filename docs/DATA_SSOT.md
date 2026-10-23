@@ -32,12 +32,12 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **stockTypes** | `id_type` | — | `gmao_types_v5` | `src/data/stock/seedStockTypes.json` | `DataGateway.saveStockTypes` / `useGmaoStore` |
 | **designations** | `ref` (`id`) | → `stockTypes.id_type` | `gmao_designations_v3` | Dérivé de `seedStockItems.json` | `DataGateway.saveDesignations` / `useGmaoStore` |
 | **mouvements** | `id` (`code_bon`) | → `rawStock.ref`, `machines.id_machine_registered`, `zones.id_zone` | `gmao_mouvements_v2` | `src/data/movements/seedMouvements.json` | `DataGateway.saveMouvements` / `useGmaoStore` |
-| **preventiveTasks** | `id` (`code`) | → `machines.id_machine_registered`, `zones.id_zone` | `gmao_preventive_tasks_v9` | `src/data/preventive/seedPreventiveTasks.json` | `DataGateway.savePreventiveTasks` / `useGmaoStore` |
-| **preventiveExecutions** | `id` | → `preventiveTasks.id`, `machines.id_machine_registered` | `gmao_preventive_executions_v1` | `[]` | `ExecutionService.recordExecution` / `DataGateway.savePreventiveExecutions` |
+| **preventiveTasks** | `id` (`code`) | → `machines.id_machine_registered`, `zones.id_zone`, `warehouseItems.id` (`id_composant` / `id_part`) | `gmao_preventive_tasks_v9` | `src/data/preventive/seedPreventiveTasks.json` | `DataGateway.savePreventiveTasks` / `useGmaoStore` |
+| **preventiveExecutions** | `id` | → `preventiveTasks.id`, `machines.id_machine_registered`, `warehouseItems.id` (`id_composant` / `id_part`) | `gmao_preventive_executions_v1` | `[]` | `ExecutionService.recordExecution` / `DataGateway.savePreventiveExecutions` |
 | **preventiveActions** | `id` (`code`) | — | `gmao_preventive_actions_v3` | `src/data/preventive/seedPreventiveActions.json` | `DataGateway.savePreventiveActions` / `useGmaoStore` |
 | **preventiveGuides** | `id` (`code`) | → `preventiveActions.code` | `gmao_preventive_guides_v3` | `src/data/preventive/seedPreventiveGuides.json` | `DataGateway.savePreventiveGuides` / `useGmaoStore` |
 | **preventivePlans** | `id` (`code`) | → `machines.id_machine_registered` | `gmao_preventive_plans_v3` | `[]` | `DataGateway.savePreventivePlans` / `useGmaoStore` |
-| **correctiveInterventions** | `id` (`num_bt`) | → `machines.id_machine_registered` (`code_machine`), `rawStock.ref` (`pdr_ref`) | `gmao_corrective_interventions_v4` | `src/data/corrective/seedCorrectiveInterventions.json` | `DataGateway.saveCorrectiveInterventions` / `useGmaoStore` |
+| **correctiveInterventions** | `id` (`num_bt`) | → `machines.id_machine_registered` (`code_machine`), `warehouseItems.id` (`id_composant`, `id_part`), `rawStock.ref` (`pdr_ref`) | `gmao_corrective_interventions_v4` | `src/data/corrective/seedCorrectiveInterventions.json` | `DataGateway.saveCorrectiveInterventions` / `useGmaoStore` |
 | **correctiveActionsByPanne** | `panneKey` (Map) | → `correctivePanneCategories` | `gmao_corrective_actions_by_panne_v4` | `src/data/corrective/seedActionsByPanne.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **correctivePanneCategories**| `categoryKey` (Map)| — | `gmao_corrective_panne_categories_v4` | `src/data/corrective/seedPanneByCategory.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **correctiveTravauxAFaire** | `index` (String) | — | `gmao_corrective_travaux_v4` | `src/data/corrective/seedTravailAFaire.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
@@ -46,14 +46,14 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **users (Personnel Master)** | `id` | → `zones.id_zone` | `gmao_personnel_users_v2` | `src/data/users/seedUsers.json` | `DataGateway.savePersonnel` / `useGmaoStore` |
 | **technicians (Vue dérivée)**| `id_technician` | → `users.id`, `zones.id_zone` | `gmao_technicians_v2` | `src/data/users/seedTechnicians.json` | Dérivé de `users` (`useGmaoStore`) |
 | **operations (Vue dérivée)** | `id_operation` | → `users.id`, `zones.id_zone` | `gmao_operations_v2` | `src/data/users/seedOperations.json` | Dérivé de `users` (`useGmaoStore`) |
-| **warehouseItems** | `id` (`ref`) | → `compTemplates.id_templates` | `gmao_warehouse_items_v3` | `src/data/warehouse/seedWarehouseItems.json` | `DataGateway.saveWarehouseItems` / `useGmaoStore` |
+| **warehouseItems** | `id` (`ref`) | → `compTemplates.id_templates`, `machines.id_machine_registered` (`machineId`) | `gmao_warehouse_items_v3` | `src/data/warehouse/seedWarehouseItems.json` | `DataGateway.saveWarehouseItems` / `useGmaoStore` |
 | **entrepotComponents** | `id` (`ref`) | → `compFamilies.id_family` | `gmao_entrepot_components_v3` | `src/data/warehouse/seedEntrepotComponents.json` | `DataGateway.saveEntrepotComponents` / `useGmaoStore` |
 | **compGroups** | `id_group` | — | `gmao_comp_groups_v2` | `src/data/warehouse/seedCompGroups.json` | `DataGateway.saveCompGroups` / `useGmaoStore` |
 | **compFamilies** | `id_family` | → `compGroups.id_group` | `gmao_comp_families_v3` | `src/data/warehouse/seedCompFamilies.json` | `DataGateway.saveCompFamilies` / `useGmaoStore` |
 | **compTemplates** | `id_templates` | → `compFamilies.id_family` | `gmao_comp_templates_v3` | `src/data/warehouse/seedCompTemplates.json` | `DataGateway.saveCompTemplates` / `useGmaoStore` |
 | **partTypes** | `id_type` | — | `gmao_part_types_v2` | `src/data/warehouse/seedPartTypes.json` | `DataGateway.savePartTypes` / `useGmaoStore` |
 | **partDesignations** | `id` (`ref`) | → `partTypes.id_type` | `gmao_part_designations_v2` | `src/data/warehouse/seedPartDesignations.json` | `DataGateway.savePartDesignations` / `useGmaoStore` |
-| **sortiesExterne** | `id` (`code`) | → `machines.id_machine_registered` | `gmao_sortie_externe_bobinage_v1` | `src/data/movements/seedSortiesExternes.json` | `DataGateway.saveSortiesExterne` / `useGmaoStore` |
+| **sortiesExterne** | `id` (`code`) | → `machines.id_machine_registered`, `warehouseItems.id` (`id_composant`) | `gmao_sortie_externe_bobinage_v1` | `src/data/movements/seedSortiesExternes.json` | `DataGateway.saveSortiesExterne` / `useGmaoStore` |
 
 ---
 
@@ -73,3 +73,19 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 - **Suppression d'une machine (`machines`) ou d'un technicien (`users`)** : Vérification obligatoire des dépendances historiques. Si l'entité possède un historique (Préventif, Correctif, Mouvements, BOM), elle est archivée (`status: 'ARCHIVEE'` ou `is_active: false`) au lieu d'une suppression physique.
 - **Création d'interventions / tâches** : Les listes déroulantes de sélection d'équipements utilisent exclusivement `filterActiveMachines(machines)` (`src/utils/activeMachines.ts`), excluant les machines archivées et sans jamais injecter de machines fictives codées en dur.
 - **Détection et purge des orphelins** : Gérées via `src/services/dataIntegrityService.ts` dans `Paramètres > Intégrité` et persistées via `DataGateway` sur les clés canoniques.
+
+---
+
+## 5. Hiérarchie Industrielle des Équipements & Nomenclature (BOM Nexus)
+
+L'architecture métier distingue strictement quatre niveaux dans la chaîne `Blueprint ➔ Machine ➔ Component / Part ➔ PDR` :
+
+1. **`Blueprint` (`gmao_blueprints_v2`)** : Modèle d'ingénierie rattaché au `Template` de machine. Il définit la nomenclature théorique hiérarchisée :
+   - `components_theoriques` (Sous-ensembles réparables/rotatifs),
+   - `parts_theoriques` (Sous-parties mécaniques / emplacements fonctionnels),
+   - `pdr_theoriques` (Pièces de rechange consommables, pouvant référencer un `Component` ou `Part` parent),
+   - `preventivePlanItems` & `commonFailures` (liés aux `Component/Part` cibles et aux `pdr_ref` recommandées).
+2. **`Components` (`warehouseItems` avec `nature === 'COMPONENT'`)** : Sous-ensembles rotatifs suivis individuellement (`mot 01`, pompes, réducteurs, variateurs) gérés par **cycle de vie d'état** (`Actif / En service`, `En réserve`, `En bobinage`, `HS`), liés aux `Sorties Externes (Bobinage)` et aux interventions (`id_composant`).
+3. **`Parts` (`warehouseItems` avec `nature === 'PART'`)** : Éléments mécaniques ou fonctionnels localisés sur la machine (`Table croisée`, `Mandrin`, `Arbre`), liés aux tâches préventives et aux interventions correctives (`id_part`, `nom_part`) pour l'analyse de fiabilité par organe (`Pareto Organes`).
+4. **`PDR` (`rawStock` — `gmao_raw_stock_v8`)** : Pièces de rechange consommables (roulements, joints, courroies, contacteurs) gérées exclusivement par **quantité mathématique** (`stockActuel = stockInitial + entrées − sorties` via `IncrementalStockIndex`). Seuls les articles de `rawStock` génèrent des mouvements de déduction (`Sortie Interne`) lors de l'exécution préventive ou de la clôture corrective.
+

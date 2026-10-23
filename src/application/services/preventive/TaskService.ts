@@ -137,6 +137,10 @@ export class TaskService {
         observations_validation: execution.notes || '',
         duree_reelle: validationData?.duree_reelle || `${execution.durationMinutes} min`,
         cout_cumule: Number((prevCost + addedCost).toFixed(2)),
+        ...(execution.id_composant ? { id_composant: execution.id_composant } : {}),
+        ...(execution.nom_composant ? { nom_composant: execution.nom_composant } : {}),
+        ...(execution.id_part ? { id_part: execution.id_part } : {}),
+        ...(execution.nom_part ? { nom_part: execution.nom_part } : {}),
         ...(releveNum > 0
           ? { dernier_releve: releveNum, compteur_actuel: releveNum }
           : {}),

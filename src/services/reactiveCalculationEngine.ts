@@ -21,7 +21,6 @@ class ReactiveCalculationEngine {
     this._dirtyHyperFormula = false;
     this._latestComputedStock = [];
     this._kpiCache = new WeakMap();
-    this.initEngine();
   }
 
   /**
@@ -165,6 +164,9 @@ class ReactiveCalculationEngine {
    * Synchronise l'instance HyperFormula avec le modèle réactif
    */
   syncHyperFormulaStock(stockItems = []) {
+    if (!this.hf) {
+      this.initEngine();
+    }
     if (!this.hf) return;
     try {
       const sheetName = 'Stock_Reactive';
@@ -246,6 +248,9 @@ class ReactiveCalculationEngine {
    * Ex: evaluateFormula("=SUM(10, 20, 30)") -> 60
    */
   evaluateFormula(formulaString) {
+    if (!this.hf) {
+      this.initEngine();
+    }
     if (!this.hf) return null;
     try {
       if (this._dirtyHyperFormula && this._latestComputedStock.length > 0) {

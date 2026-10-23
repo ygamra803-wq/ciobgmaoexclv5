@@ -50,6 +50,50 @@ const ACTION_PILL_MAP = {
   L: { bg: 'bg-cyan-500/10 text-cyan-800 border-cyan-200/80', dot: 'bg-cyan-600', label: 'Lubrification' },
 };
 
+/**
+ * P7.1 ADR-09 Invariant: Consumable spare parts (PDR) deducted during maintenance
+ * come exclusively from `stockItems` (`rawStock` governed by `IncrementalStockIndex`),
+ * never from `warehouseItems` (`COMPONENT` / `PART`).
+ */
+export function buildConsumablePdrInventory(stockItems: any[] = []) {
+  const list: Array<{
+    id_article: string;
+    ref: string;
+    reference: string;
+    designation: string;
+    stockActuel: number;
+    unite: string;
+    prix_unitaire: number;
+    source: string;
+    emplacement: string;
+  }> = [];
+  const seen = new Set<string>();
+
+  (stockItems || []).forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const nature = String(item.nature || '').trim().toUpperCase();
+    if (nature === 'COMPONENT' || nature === 'PART') return;
+
+    const ref = String(item.ref || item.reference || item.code || '').trim();
+    if (ref && !seen.has(ref.toLowerCase())) {
+      list.push({
+        id_article: `PDR-${ref}`,
+        ref,
+        reference: ref,
+        designation: item.designation || item.nom || 'Pièce PDR',
+        stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? item.stockInitial ?? 0),
+        unite: item.unit || item.unite || 'pcs',
+        prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
+        source: 'PDR Magasin',
+        emplacement: item.emplacement || 'PDR',
+      });
+      seen.add(ref.toLowerCase());
+    }
+  });
+
+  return list;
+}
+
 export default function TabMainView({
   tasks = [],
   executions = [],
@@ -259,6 +303,10 @@ export default function TabMainView({
           'id_machine',
           'nom_machine',
           'composant',
+          'id_composant',
+          'nom_composant',
+          'id_part',
+          'nom_part',
           'code',
           'action_code',
           'action_libelle',
@@ -456,65 +504,40 @@ export default function TabMainView({
     }),
   ], [techList, technicians, t]);
 
-  // Unified available inventory combining Stock PDR Magasin and Entrepôt Réserve
-  const availableInventory = useMemo(() => {
-    const list = [];
-    const seen = new Set();
-
-    // 1. Stock PDR Magasin (Single Source of Truth)
-    (stockItems || []).forEach((item) => {
-      const ref = String(item.ref || item.reference || item.code || '').trim();
-      if (ref && !seen.has(ref.toLowerCase())) {
-        list.push({
-          id_article: `PDR-${ref}`,
-          ref,
-          reference: ref,
-          designation: item.designation || 'Pièce PDR',
-          stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? 0),
-          unite: item.unit || item.unite || 'pcs',
-          prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
-          source: 'PDR Magasin',
-          emplacement: item.emplacement || 'PDR',
-        });
-        seen.add(ref.toLowerCase());
-      }
-    });
-
-    // 2. Entrepôt Réserve & Composants
-    (warehouseItems || []).forEach((item) => {
-      const ref = String(item.ref || item.reference || item.id_warehouse_item || '').trim();
-      if (ref && !seen.has(ref.toLowerCase())) {
-        list.push({
-          id_article: `WH-${ref}`,
-          ref,
-          reference: ref,
-          designation: item.designation || 'Composant Entrepôt',
-          stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? 0),
-          unite: item.unit || item.unite || 'pcs',
-          prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
-          source: 'Entrepôt',
-          emplacement: item.emplacement || 'Entrepôt',
-        });
-        seen.add(ref.toLowerCase());
-      }
-    });
-
-    return list;
-  }, [stockItems, warehouseItems]);
+  // P7.1 ADR-09: Available consumable inventory comes exclusively from Stock PDR Magasin (`stockItems`)
+  const availableInventory = useMemo(() => buildConsumablePdrInventory(stockItems), [stockItems]);
 
   // Open Validation Modal with prefilled recommended PDR
   const handleOpenValidate = (task) => {
     setSelectedTaskForValidation(task);
-    const recommended = PreventiveService.getRecommendedPDRForAction(task.action_code, task.composant);
+    const rawRecommended = PreventiveService.getRecommendedPDRForAction(task.action_code, task.composant, task);
+    const enrichedRecommended = (rawRecommended || []).map((rec) => {
+      const ref = String(rec.reference || rec.ref || '').trim();
+      const stockMatch = availableInventory.find(
+        (item) => item.ref.toLowerCase() === ref.toLowerCase()
+      );
+      return {
+        id_article: stockMatch?.id_article || rec.id_article || `PDR-${ref || 'STD'}`,
+        designation: stockMatch?.designation || rec.designation || rec.nom || ref || 'Pièce PDR',
+        reference: stockMatch?.ref || ref || 'STD',
+        quantite: Math.max(1, Number(rec.quantite || rec.qty || 1)),
+        unite: stockMatch?.unite || rec.unite || 'Pièce',
+        prix_unitaire: Number(stockMatch?.prix_unitaire ?? rec.prix_unitaire ?? 0),
+      };
+    });
     setValidationData({
       date_realisation: new Date().toISOString().split('T')[0],
       technicien: task.responsable || '',
       duree_reelle: task.duree_estimee || '15 min',
       taux_horaire: 35,
-      observations: `Intervention préventive ${task.action_code} sur ${task.composant} (${task.id_machine}) exécutée conformément.`,
-      usedPDR: recommended,
+      observations: `Intervention préventive ${task.action_code} sur ${task.composant || task.nom_composant || task.nom_part || 'Machine'} (${task.id_machine}) exécutée conformément.`,
+      usedPDR: enrichedRecommended,
       mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
       compteur_releve: task.compteur_actuel || '',
+      ...(task.id_composant ? { id_composant: task.id_composant } : {}),
+      ...(task.nom_composant ? { nom_composant: task.nom_composant } : {}),
+      ...(task.id_part ? { id_part: task.id_part } : {}),
+      ...(task.nom_part ? { nom_part: task.nom_part } : {}),
     });
   };
 
@@ -1411,9 +1434,21 @@ export default function TabMainView({
                   <h3 className="text-base font-black text-slate-900">
                     Validation d'Intervention Préventive
                   </h3>
-                  <p className="text-xs text-slate-400">
-                    {selectedTaskForValidation.id_machine} • {selectedTaskForValidation.composant} ({selectedTaskForValidation.action_code})
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                    <p className="text-xs text-slate-400">
+                      {selectedTaskForValidation.id_machine} • {selectedTaskForValidation.composant} ({selectedTaskForValidation.action_code})
+                    </p>
+                    {(selectedTaskForValidation.id_composant || selectedTaskForValidation.nom_composant) && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                        Composant: {selectedTaskForValidation.nom_composant || selectedTaskForValidation.id_composant}
+                      </span>
+                    )}
+                    {(selectedTaskForValidation.id_part || selectedTaskForValidation.nom_part) && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                        Part: {selectedTaskForValidation.nom_part || selectedTaskForValidation.id_part}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -1478,7 +1513,7 @@ export default function TabMainView({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase">
                     <Package className="w-4 h-4 text-indigo-600" />
-                    <span>Pièces de rechange & consommables utilisés</span>
+                    <span>Pièces de rechange & consommables utilisés (Stock PDR)</span>
                   </span>
                   <span className="text-[11px] font-mono text-indigo-700 font-bold">
                     {validationData.usedPDR.length} pièce(s)
@@ -1529,7 +1564,7 @@ export default function TabMainView({
                       }}
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium"
                     >
-                      <option value="">Sélectionner une pièce du stock (PDR / Entrepôt)...</option>
+                      <option value="">Sélectionner une pièce consommable (Stock PDR Magasin)...</option>
                       {availableInventory.map((item, idx) => (
                         <option key={idx} value={item.reference}>
                           [{item.source}] {item.reference} - {item.designation} (Stock: {item.stockActuel})

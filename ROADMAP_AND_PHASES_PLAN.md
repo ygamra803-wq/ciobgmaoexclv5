@@ -37,6 +37,7 @@
 | **P4** | **واجهة وجودة (UX, i18n, Theme & RBAC)** | تحسين تجربة الاستخدام، التعريب، الثيم الموحد، وصلاحيات الأدوار الخفيفة | 🟡 **جزئي (مستمر بالتوازي الخفيف)** | بالتوازي دون كسر `P1–P3` |
 | **P5** | **منصات وأطراف (Mobile Field UI & Desktop Host)** | واجهة هاتف ميدانية مختزلة للمهام السريعة (`/m`) + تغليف سطح المكتب (`Windows/Mac`) | 🟡 **جزئي (`src/mobile` موجود للتهذيب)** | يعتمد على `P1` و `P3` |
 | **P6** | **إكسل الشبكي الناضج (Excel Mirror & Lock Discipline)** | تحويل ملف Excel الشبكي إلى مرآة رسمية يديرها المضيف حصراً دون تعارض أقفال (`EBUSY`) | 🟡 **جزئي (`excelSyncService` موجود)** | يعتمد على `P3` |
+| **P7** | **الترابط العضوي لشجرة الأصول والصيانة (Asset Tree, Smart BOM & Maintenance Nexus)** | توحيد السلسلة الهندسية `Blueprint ➔ Machine ➔ Component/Part ➔ PDR` وربطها عضوياً بالوقائي والتصحيحي وباريتو الأعضاء | 🔴 **مجدول (خطة معتمدة جاهزة للتنفيذ)** | يعتمد على `P1` و `ADR-09` |
 
 ---
 
@@ -139,6 +140,24 @@
 
 ---
 
+## ⚙️ المرحلة P7 — الترابط العضوي لشجرة الأصول والصيانة (`Industrial Asset Tree, Smart BOM & Maintenance Nexus`)
+
+> **الهدف:** تحويل العلاقة بين `Blueprint`، `Machine`، `Components` (`Entrepôt > Composants`)، `Parts` (`Entrepôt > Parts`)، و `PDR` (`Magasin > Stock PDR`) من قوائم متجاورة إلى **منظومة هندسية مترابطة عضوياً** تقود الصيانة الوقائية والتصحيحية بدقة مرجعية كاملة (`ADR-09`).
+
+| المعرف | البند التفصيلي | التوصيف الهندسي الدقيق (Data Models & Mechanics) | الملفات المستهدفة | الحالة |
+| :--- | :--- | :--- | :--- | :--- |
+| **P7.1** | **توحيد المرجعية وفصل `Component / Part` عن `PDR` الاستهلاكي** | 1. توسعة `PreventiveTask` و `PreventiveExecution` ليحملا مفاتيح مرجعية صريحة اختيارية: `id_composant?: string`, `nom_composant?: string`, `id_part?: string`, `nom_part?: string`, `pdr_requises?: { ref: string; nom: string; quantite: number }[]` مع الإبقاء على `composant: string` للتوافق الخلفي.<br>2. في `PreventiveView.tsx` و `TabMainView.tsx`: فصل قائمة قطع الغيار القابلة للصرف (`availableInventory` عبر `buildConsumablePdrInventory`) لتقرأ حصراً من `rawStock / stockItems` (`PDR` الخاضع لـ `IncrementalStockIndex`)، وعدم خلط عناصر `warehouseItems` (`COMPONENT / PART`) كقطع غيار تستهلك بالكمية. | `src/types/preventive.ts`<br>`src/types/store.ts`<br>`src/application/services/preventive/ExecutionService.ts`<br>`src/application/services/preventive/PlanService.ts`<br>`src/presentation/pages/preventive/components/TabMainView.tsx` | 🟢 **منجز ومُثبت** (`Phase7AssetBomNexus.test.ts`) |
+| **P7.2** | **الـ `Blueprint` الهرمي الذكي (`Hierarchical BOM & Templates`)** | 1. تطوير `Blueprint.ts` بحيث يدعم `pdr_theoriques` الربط الاختياري بعضو أب (`parent_nature?: 'COMPONENT' \| 'PART'`, `parent_ref?: string`, `parent_nom?: string`) لتحديد أي قطعة `PDR` تركب داخل أي `Component` أو `Part`.<br>2. دعم ربط `preventivePlanItems` و `commonFailures` في `Blueprint` بـ `target_organe_ref` (`Component` / `Part`) وبقائمة `recommended_pdr_refs` (`PDR`).<br>3. تحديث `BlueprintMachineView.tsx` لعرض وتعديل هذا الترابط الهرمي بوضوح. | `src/domain/Blueprint.ts`<br>`src/components/machines/BlueprintMachineView.tsx`<br>`src/data/machines/seedBlueprints.json` | 🔴 **مجدول** |
+| **P7.3** | **الصيانة الوقائية الذكية المرتبطة بالأعضاء والـ `BOM`** | 1. في `TabPlanBuilder.tsx` ونوافذ إنشاء المهام الوقائية: استبدال حقل النص الحر المعزول للعضو بقائمة ذكية تعرض `Components` و `Parts` المسجلة للآلة المختارة (أو في `Blueprint` الخاص بها) مع حفظ `id_composant` / `id_part`.<br>2. عند فتح نافذة تأكيد تنفيذ المهمة الوقائية (`Validation Modal` في `PreventiveView.tsx`): اقتراح قطع الـ `PDR` الموصى بها للمهمة أو الموجودة في `Blueprint` الآلة/العضو تلقائياً في أعلى القائمة مع حالة رصيدها الفعلي.<br>3. عرض سجل التنفيذات الوقائية المرتبطة بكل `Component` أو `Part` في شاشة المستودع (`EntrepotView.tsx`). | `src/components/preventive/TabPlanBuilder.tsx`<br>`src/components/PreventiveView.tsx`<br>`src/components/EntrepotView.tsx`<br>`src/store/useGmaoStore.ts` | 🔴 **مجدول** |
+| **P7.4** | **اكتمال سلسلة التصحيحي (`DI ➔ Live ➔ Clôture`) وباريتو الأعضاء (`Pareto Organes`)** | 1. في `InterventionLiveTab.tsx` و `useGmaoStore.ts`: تمرير وعرض وتحديث كل من `id_composant` / `nom_composant` **و** `id_part` / `nom_part` حتى الإغلاق النهائي لأمر العمل (`Clôture BT`) بدلاً من إسقاط `Part` بعد مرحلة `DI`.<br>2. في `DemandesInterventionTab.tsx` و `InterventionLiveTab.tsx`: ترتيب محدد قطع الغيار (`PDR Picker`) ليضع قطع `Blueprint BOM` الخاصة بالآلة والعضو المتعطل في قسم علوي مميز (`⭐ PDR du Blueprint / Organe`) قبل باقي مخزون المصنع.<br>3. في `CorrectiveCalculationService.ts`: إضافة حساب **باريتو الأعضاء (`paretoOrganes`)** (الأعطال، ساعات التوقف، والتكلفة لكل `Component` و `Part`) وعرضه في تحليلات الصيانة التصحيحية. | `src/components/corrective/DemandesInterventionTab.tsx`<br>`src/components/corrective/InterventionLiveTab.tsx`<br>`src/application/services/CorrectiveCalculationService.ts`<br>`src/store/useGmaoStore.ts` | 🔴 **مجدول** |
+
+> **معيار إغلاق المرحلة P7:**
+> 1. كل مهمة وقائية أو تدخل تصحيحي يمكن ربطه بمعرّف حقيقي لـ `Component` أو `Part` تابع للآلة.
+> 2. عند تنفيذ وقائي أو إغلاق عطل، يرى الفني قطع `PDR` الخاصة بـ `Blueprint` الآلة/العضو مقترحة أولاً، ولا يُخصم من المخزون إلا `PDR` الحقيقي عبر `IncrementalStockIndex`.
+> 3. شاشة التحليلات وشاشة `Entrepôt` تعرضان السجل الكامل (وقائي + تصحيحي + باريتو) لكل `Component` و `Part`.
+
+---
+
 ## 📝 سجل تحديثات خارطة الطريق (Roadmap Changelog)
 
 | التاريخ | المرحلة / البند | ملخص التحديث الهندسي | حالة البناء والاختبار |
@@ -152,6 +171,8 @@
 | `2026-10-19` | **الجولة 5 — الأمان المؤسسي وصلاحيات الأدوار (`RBAC` — `M-02`, `C-05`, `P4.3`)** | توحيد مصفوفة الصلاحيات والتبويبات في `AuthorizationService.tsx` (`canAccessTab`, `isReadOnly`)، تفعيل حارس الوصول في `AppRouter.tsx`، تمرير ترويسة `x-gmao-role` في `serverSyncService.ts`، وفرض صلاحيات الأدوار ورفض التوكن غير المطابق على الخادم في `server.ts`. | 🟢 اجتياز `Round5RbacAndSecurity.test.ts` و`PermissionGate.test.tsx` وبناء سليم (`compile_applet`) |
 | `2026-10-19` | **الجولة 6 — انضباط آلة الحالة `FSM`، مؤشرات `MTTR/MTBF/OEE`، وإغلاق المرحلة `P2` بالكامل (`M-03`, `M-04`, `P2.1..P2.3`)** | إنشاء `WorkOrderStateMachine.ts` وربطه بـ `useCorrectiveSubState.ts` لمنع إعادة الإغلاق أو الخصم المكرر للقطع، إصلاح حسابات `MTTR/MTBF/Availability` في `AvailabilityCalculationService.ts` و`MonthlyReportCalculationService.ts`، وبناء شاشة `MonthlyExecutiveReportView.tsx` وخدمة التصدير متعدد الأوراق `monthlyReportExportService.ts` وربطها بالمسار `executive_report`. | 🟢 اجتياز `Round6FsmAndMonthlyReport.test.ts` و`Phase1FactoryMemory.test.ts` وبناء سليم (`compile_applet`) |
 | `2026-10-20` | **الجولة 7 — تفكيك `SettingsView.tsx` وإغلاق المرحلة `P3` بالكامل (`M-05`, `P3.1..P3.4`)** | تفكيك `SettingsView.tsx` من 4,041 سطراً إلى منسق معياري رشيق يعتمد على 10 مكونات فرعية مفصولة، إنشاء `networkConfigService.ts` للتبديل الصريح بين وضع المضيف (`HOST`) ووضع العميل الشبكي (`LAN_CLIENT`)، إضافة نقاط `/api/network/info` و`/api/gmao/revision` و`/api/gmao/events` (`SSE`) في `server.ts`، وبناء لوحة بث الشبكة المحلية ومولد `QR Code` المحلي في `SettingsDirectoryTab.tsx`. | 🟢 اجتياز `Round7LanArchitectureAndRefactoring.test.ts` وبناء سليم (`compile_applet`) |
+| `2026-10-22` | **توثيق فلسفة الأصول والـ `BOM` واعتماد المرحلة `P7` (`ADR-09`, `P7.1..P7.4`)** | توثيق الهرمية الصناعية الرباعية (`Blueprint ➔ Machine ➔ Component/Part ➔ PDR`) في `ARCHITECTURE.md` (`ADR-09`) و`docs/DATA_SSOT.md`، وإدراج خطة التنفيذ المرحلية `P7` في `ROADMAP_AND_PHASES_PLAN.md`. | 🟢 موثق وجاهز للتنفيذ المرحلي |
+| `2026-10-22` | **تنفيذ الخطوة الأولى `P7.1` — توحيد المرجعية وفصل `Component / Part` عن `PDR` الاستهلاكي** | توسعة نماذج `IPreventiveTask` و`PreventiveTaskItem` و`PreventiveExecutionRecord` بالمفاتيح المرجعية (`id_composant`, `nom_composant`, `id_part`, `nom_part`, `pdr_requises`)، تمريرها عبر `ExecutionService` و`TaskService` و`PlanService`، وفصل قائمة الصرف `availableInventory` (`buildConsumablePdrInventory`) لتقرأ حصراً من `stockItems` (`PDR Magasin`) دون خلط `warehouseItems` (`COMPONENT / PART`). | 🟢 اجتياز `Phase7AssetBomNexus.test.ts` وبناء سليم (`compile_applet`) |
 
 
 

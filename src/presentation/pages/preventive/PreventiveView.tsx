@@ -120,7 +120,20 @@ export default function PreventiveView({
 
     // If PDR consumed, synchronize with stock via Sortie Interne movement (single source of truth for stock deduction)
     if (consumedPDR.length > 0 && onAddMouvement) {
+      const organeTarget =
+        targetTask?.composant ||
+        targetTask?.nom_composant ||
+        targetTask?.nom_part ||
+        validationData?.nom_composant ||
+        validationData?.nom_part ||
+        '';
+      const idComp = validationData?.id_composant || targetTask?.id_composant || '';
+      const idPart = validationData?.id_part || targetTask?.id_part || '';
+
       consumedPDR.forEach((pdr) => {
+        const nature = String(pdr?.nature || '').trim().toUpperCase();
+        if (nature === 'COMPONENT' || nature === 'PART') return;
+
         const pdrRef = pdr.reference || pdr.ref;
         if (!pdrRef) return;
         onAddMouvement({
@@ -136,8 +149,10 @@ export default function PreventiveView({
           action_id: 'PREVENTIVE',
           usage_type: 'technician',
           id_machine_registered: targetTask?.id_machine || '',
+          ...(idComp ? { id_composant: idComp } : {}),
+          ...(idPart ? { id_part: idPart } : {}),
           technicien: validationData.technicien || validationData.technicien_realisateur || targetTask?.responsable || targetTask?.id_technicien || '',
-          commentaire: `Consommation automatique sur maintenance préventive ${targetTask?.composant || ''} (${targetTask?.id_machine || ''})`,
+          commentaire: `Consommation automatique sur maintenance préventive ${organeTarget} (${targetTask?.id_machine || ''})`,
         });
       });
     }

@@ -10,6 +10,18 @@ import { swaggerSpec, swaggerUiOptions } from './src/config/swaggerConfig';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Prevent aborted pre-warm sockets or transient stream errors from killing the dev server process
+process.on('uncaughtException', (err: any) => {
+  if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.message?.includes('aborted')) {
+    return;
+  }
+  console.error('[Server] Uncaught Exception (process kept alive):', err);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  console.error('[Server] Unhandled Rejection (process kept alive):', reason);
+});
+
 const MAX_STATE_PAYLOAD_LIMIT = '10mb';
 
 export const ALLOWED_ENTITIES = [
@@ -747,13 +759,28 @@ async function startServer() {
 
   // Setup Vite or static serving
   if (!isProduction) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+    let viteInstance: any = null;
+    const viteReadyPromise = import('vite')
+      .then(({ createServer: createViteServer }) =>
+        createViteServer({
+          server: { middlewareMode: true },
+          appType: 'spa',
+        })
+      )
+      .then((vite) => {
+        viteInstance = vite;
+        console.log('[Server] Vite development middleware enabled');
+        return vite;
+      });
+
+    app.use(async (req, res, next) => {
+      try {
+        const vite = viteInstance || (await viteReadyPromise);
+        vite.middlewares(req, res, next);
+      } catch (err) {
+        next(err);
+      }
     });
-    app.use(vite.middlewares);
-    console.log('[Server] Vite development middleware enabled');
   } else {
     const DIST_DIR = path.join(__dirname, 'dist');
     app.use(express.static(DIST_DIR));

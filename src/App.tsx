@@ -26,7 +26,7 @@ import AppRouter from './presentation/router/AppRouter';
 import { useAppRouterProps } from './presentation/router/useAppRouterProps';
 
 import { useAppViewController } from './hooks/useAppViewController';
-import initialStockSeed from './data/stock/seedStockItems.json';
+import { DataGateway } from './application/DataGateway';
 
 export default function App() {
   const { user: currentUser } = useAuth();
@@ -152,9 +152,7 @@ export default function App() {
       demoFlag !== 'false' &&
       demoFlag === 'true'
     ) {
-      import('./application/DataGateway').then((dg) => {
-        dg.DataGateway.initRealStock({ setRawStock: gmaoState.setRawStock });
-      });
+      DataGateway.initRealStock({ setRawStock: gmaoState.setRawStock });
     }
   }, [rawStock, gmaoState.setRawStock]);
 

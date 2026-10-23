@@ -17,21 +17,31 @@ export type StatutPlan = 'ACTIF' | 'EN_PAUSE' | 'ARCHIVE' | 'BROUILLON';
 
 export type StatutTachePreventive = 'A_FAIRE' | 'EN_COURS' | 'REALISE' | 'REPORTE' | 'ANNULE' | 'EN_RETARD';
 
+export interface PreventiveRequiredPdrItem {
+  ref: string;
+  nom?: string;
+  designation?: string;
+  quantite: number;
+  unite?: string;
+  prix_unitaire?: number;
+}
+
 export interface IPreventiveTask {
   id_task: string | number;
   id_plan?: string;
   titre: string;
   description: string;
+  composant?: string;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
   ordre_execution?: number;
   duree_estimee_min: number;
   specialite?: 'MECANIQUE' | 'ELECTRIQUE' | 'HYDRAULIQUE' | 'PNEUMATIQUE' | 'AUTOMATISME' | 'GENERAL';
   consignes_securite?: string[];
   outillage_requis?: string[];
-  pdr_requises?: Array<{
-    ref: string;
-    designation: string;
-    quantite: number;
-  }>;
+  pdr_requises?: PreventiveRequiredPdrItem[];
 }
 
 export interface IPreventivePlan {
@@ -56,6 +66,10 @@ export interface IPreventivePlan {
 export interface IPreventiveExecution {
   id_execution: string | number;
   id_plan: string;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
   date_programmee: string;
   date_realisation?: string;
   statut: StatutTachePreventive;
@@ -75,7 +89,7 @@ export interface PreventiveExecutionSpareItem {
 }
 
 /**
- * Historical event record for a preventive maintenance execution (P1.1 Event Log)
+ * Historical event record for a preventive maintenance execution (P1.1 Event Log + P7.1 Organe FKs)
  */
 export interface PreventiveExecutionRecord {
   id: string;
@@ -85,6 +99,10 @@ export interface PreventiveExecutionRecord {
   machineName?: string;
   zone?: string;
   organe: string;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
   actionCode: string;
   taskDescription?: string;
   frequence?: string;
@@ -101,4 +119,5 @@ export interface PreventiveExecutionRecord {
   sparesUsed?: PreventiveExecutionSpareItem[];
   createdAt: string;
 }
+
 

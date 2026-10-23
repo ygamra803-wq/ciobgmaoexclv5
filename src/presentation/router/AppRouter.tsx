@@ -1,34 +1,35 @@
-import { Suspense } from 'react';
+import { Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import usePageOrchestrator from '../components/common/usePageOrchestrator';
 
 import DashboardView from '../pages/dashboard/DashboardView';
-import MonthlyExecutiveReportView from '../components/views/MonthlyExecutiveReportView';
-import StockView from '../pages/stock/StockView';
-import TypeView from '../pages/referentiel/TypeView';
-import DesignationView from '../pages/referentiel/DesignationView';
-import MachinesRegisteredView from '../pages/machines/MachinesRegisteredView';
-import EntrepotView from '../pages/warehouse/EntrepotView';
-import CompGroupView from '../pages/referentiel/CompGroupView';
-import CompFamilyView from '../pages/referentiel/CompFamilyView';
-import CompTemplateView from '../pages/referentiel/CompTemplateView';
-import PartTypeView from '../pages/referentiel/PartTypeView';
-import PartDesignationView from '../pages/referentiel/PartDesignationView';
-import FamilyView from '../pages/machines/FamilyView';
-import TemplatesView from '../pages/machines/TemplatesView';
-import BlueprintMachineView from '../pages/machines/BlueprintMachineView';
-import ZonesView from '../pages/referentiel/ZonesView';
-import UtilisateursView from '../pages/utilisateurs/UtilisateursView';
-import SortieRapideView from '../pages/movements/SortieRapideView';
-import SettingsView from '../pages/settings/SettingsView';
-import NexusView from '../pages/system/NexusView';
-import GuideView from '../pages/system/GuideView';
-import PreventiveView from '../pages/preventive/PreventiveView';
-import PreventiveSecondaryView from '../pages/preventive/PreventiveSecondaryView';
-import CorrectiveView from '../pages/corrective/CorrectiveView';
-import CatalogueDonneesView from '../pages/corrective/CatalogueDonneesView';
+
+const MonthlyExecutiveReportView = lazy(() => import('../components/views/MonthlyExecutiveReportView'));
+const StockView = lazy(() => import('../pages/stock/StockView'));
+const TypeView = lazy(() => import('../pages/referentiel/TypeView'));
+const DesignationView = lazy(() => import('../pages/referentiel/DesignationView'));
+const MachinesRegisteredView = lazy(() => import('../pages/machines/MachinesRegisteredView'));
+const EntrepotView = lazy(() => import('../pages/warehouse/EntrepotView'));
+const CompGroupView = lazy(() => import('../pages/referentiel/CompGroupView'));
+const CompFamilyView = lazy(() => import('../pages/referentiel/CompFamilyView'));
+const CompTemplateView = lazy(() => import('../pages/referentiel/CompTemplateView'));
+const PartTypeView = lazy(() => import('../pages/referentiel/PartTypeView'));
+const PartDesignationView = lazy(() => import('../pages/referentiel/PartDesignationView'));
+const FamilyView = lazy(() => import('../pages/machines/FamilyView'));
+const TemplatesView = lazy(() => import('../pages/machines/TemplatesView'));
+const BlueprintMachineView = lazy(() => import('../pages/machines/BlueprintMachineView'));
+const ZonesView = lazy(() => import('../pages/referentiel/ZonesView'));
+const UtilisateursView = lazy(() => import('../pages/utilisateurs/UtilisateursView'));
+const SortieRapideView = lazy(() => import('../pages/movements/SortieRapideView'));
+const SettingsView = lazy(() => import('../pages/settings/SettingsView'));
+const NexusView = lazy(() => import('../pages/system/NexusView'));
+const GuideView = lazy(() => import('../pages/system/GuideView'));
+const PreventiveView = lazy(() => import('../pages/preventive/PreventiveView'));
+const PreventiveSecondaryView = lazy(() => import('../pages/preventive/PreventiveSecondaryView'));
+const CorrectiveView = lazy(() => import('../pages/corrective/CorrectiveView'));
+const CatalogueDonneesView = lazy(() => import('../pages/corrective/CatalogueDonneesView'));
 
 import {
   PreventiveContext,

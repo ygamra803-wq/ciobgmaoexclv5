@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
+  define:
+    command === 'build'
+      ? {
+          'process.env.NODE_ENV': JSON.stringify('production'),
+        }
+      : undefined,
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -19,22 +25,10 @@ export default defineConfig({
       'react-dom/client',
       'react/jsx-runtime',
       'react/jsx-dev-runtime',
-      'react-router-dom',
       'zustand',
       'motion/react',
-      'react-window',
       'lucide-react',
-      'recharts',
-      'exceljs',
-      'xlsx',
-      'hyperformula',
       'zod',
-      'axios',
-      'crypto-js',
-      'date-fns',
-      'dompurify',
-      'lz-string',
-      '@tanstack/react-virtual',
     ],
   },
   plugins: [
@@ -158,13 +152,14 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: true,
+        enabled: false,
         type: 'module',
       },
     }),
   ],
   esbuild: {
     jsx: 'automatic',
+    jsxDev: command !== 'build',
   },
   build: {
     outDir: 'dist',
@@ -198,6 +193,15 @@ export default defineConfig({
             return 'data-movements';
           }
           if (id.includes('node_modules')) {
+            if (id.includes('exceljs')) {
+              return 'vendor-exceljs';
+            }
+            if (id.includes('hyperformula')) {
+              return 'vendor-hyperformula';
+            }
+            if (id.includes('recharts') || id.includes('d3-')) {
+              return 'vendor-recharts';
+            }
             if (id.includes('xlsx')) {
               return 'vendor-xlsx';
             }
@@ -231,7 +235,6 @@ export default defineConfig({
     headers: {
       'Content-Security-Policy': "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     },
@@ -241,7 +244,6 @@ export default defineConfig({
     headers: {
       'Content-Security-Policy': "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
       'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'SAMEORIGIN',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     },
@@ -258,4 +260,4 @@ export default defineConfig({
       exclude: ['node_modules/', 'src/tests/', 'e2e/', '**/*.d.ts'],
     },
   },
-});
+}));

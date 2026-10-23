@@ -48,6 +48,7 @@
 | **5. الحماية والمضيف (`Security & LAN Host`)** | حماية `/api/gmao/*` في `server.ts` بتوكن `X-GMAO-API-TOKEN`، قائمة كيانات بيضاء (`ALLOWED_ENTITIES`)، وفحص صلاحيات الأدوار (`x-gmao-role` / `AuthorizationService.tsx`). كتابة ذرية متسلسلة (`Write MutexQueue`: `.tmp` ➔ `rename`) مع رقم إصدار `version / ETag` وحماية `409 Conflict` ومزامنة `SSE` عبر `networkConfigService.ts`. | `Round4ServerSyncAndConcurrency.test.ts`<br>`Round5RbacAndSecurity.test.ts`<br>`Round7LanArchitectureAndRefactoring.test.ts` |
 | **6. التقرير الشهري (`Monthly Analytics`)** | محرك حساب شهري خالص (`MonthlyReportCalculationService.ts`) يشتق مؤشرات الشهر المختار (`YYYY-MM`) ومقارنة الشهر السابق (`MoM Delta`) من السجلات المؤرخة مباشرة، مع حساب `MTTR / MTBF / Availability` الفعلي (`AvailabilityCalculationService.ts`). | `Round6FsmAndMonthlyReport.test.ts`<br>`Phase1FactoryMemory.test.ts` |
 | **7. حدود صريحة (`Explicit Boundaries`)** | معمارية **Web & LAN-Host First** (`React 19 + Zustand + Express 5`). المكونات المقسمة بوضوح (مثل تفكيك `SettingsView.tsx` إلى 10 وحدات فرعية). لا تبعيات خارجية ثقيلة لقواعد بيانات خارجية أو سحابية إلزامية في صالة الإنتاج. | `Round7LanArchitectureAndRefactoring.test.ts` |
+| **8. شجرة الأصول والترابط العضوي (`Asset Tree & BOM Nexus`)** | هرمية صناعية صارمة (`Blueprint ➔ Machine ➔ Component / Part ➔ PDR`) تفصل بين الأعضاء القابلة للإصلاح والتدوير (`COMPONENT`)، الأجزاء الميكانيكية/البنيوية (`PART`)، وقطع الغيار الاستهلاكية (`PDR`)، وتربطها عضوياً بخطط الوقائي (`PreventiveTask / Execution`) وأوامر التصحيحي (`DI / BT / Pareto Organes`). | `ROADMAP_AND_PHASES_PLAN.md` (`P7`) |
 
 ---
 
@@ -65,3 +66,36 @@
 | **ADR-06**<br>*(Atomic Host & 409)* | **المشكلة:** كتابة أكثر من جهاز على `data/gmao_state.json` في نفس اللحظة قد تتلف ملف JSON أو تمسح تعديل زميل.<br>**القرار:** طابور كتابة متسلسل غير حاجب (`Write Mutex`) يكتب إلى ملف مؤقت `.tmp` ثم يبدله ذرياً (`rename`)، مع رقم إصدار `version` وفحص `expectedVersion` يرجع `409 Conflict` عند التعارض.<br>**لماذا:** لحماية ملف الدولة المركزي على المضيف (`Host`) في بيئة الشبكة المحلية متعددة الهواتف.<br>**ماذا لا نفعل:** لا نستخدم `fs.writeFileSync` المباشر على ملف الحالة الرئيسي ولا نقبل كتابة عمياء تتجاهل رقم الإصدار. |
 | **ADR-07**<br>*(Whitelist & RBAC)* | **المشكلة:** فتح نقاط نهاية `/api/gmao/:entity` لأي اسم كيان أو لأي مستخدم يعرض الخادم لحقن مفاتيح عشوائية أو تعديل غير مصرح.<br>**القرار:** فرض قائمة بيضاء صارمة (`ALLOWED_ENTITIES` — 32 مفتاحاً)، وتوكن `X-GMAO-API-TOKEN`، وفحص دور المستخدم (`x-gmao-role` + `AuthorizationService.tsx`).<br>**لماذا:** لتطبيق مبدأ الصلاحيات الدنيا (`Least Privilege`) على مستوى الواجهة والخادم معاً.<br>**ماذا لا نفعل:** لا نسمح لدور `VIEWER` بأي عملية كتابة (`403`)، ولا نسمح لغير المشرفين بتعديل المستخدمين أو المناطق. |
 | **ADR-08**<br>*(LAN Host Topology)* | **المشكلة:** تشغيل قواعد بيانات مستقلة على كل جهاز في المصنع يخلق جزر بيانات منعزلة.<br>**القرار:** معمارية المضيف والأطراف (`HOST` مقابل `LAN_CLIENT` عبر `networkConfigService.ts`) مع بث `QR Code` وإشعارات تحديث لحظية `SSE` (`/api/gmao/events`).<br>**لماذا:** ليعمل حاسوب الصيانة الرئيسي كعقل مركزي واحد تتصل به هواتف الفنيين عبر الـ Wi-Fi المحلي بدون إنترنت خارجي.<br>**ماذا لا نفعل:** لا نستخدم استقصاءً خلفياً صامتاً عشوائياً يرهق الشبكة أو يكتب فوق مسودات المستخدم. |
+| **ADR-09**<br>*(Asset & BOM Nexus)* | **المشكلة:** الخلط بين `Components` (أعضاء قابلة للتدوير)، `Parts` (أجزاء ميكانيكية موقعية)، و`PDR` (قطع غيار استهلاكية)، أو الاكتفاء بنص حر (`composant: string`) في الصيانة الوقائية وإهمال `id_part` عند إغلاق الأعطال يقطع السلسلة الهندسية بين `Blueprint` والمخزن والصيانة.<br>**القرار:** اعتماد شجرة أصول رباعية الطبقات (`Blueprint ➔ Machine ➔ Component/Part ➔ PDR`) بهويات مرجعية صريحة (`id_composant`, `id_part`, `pdr_ref`) عبر دورة حياة الوقائي والتصحيحي بالكامل.<br>**لماذا:** لتمكين التتبع الدقيق لتاريخ كل عضو (`Component/Part`)، واقتراح قطع `PDR` المعتمدة في `Blueprint` تلقائياً للفني، وحساب باريتو الأعطال والتكلفة على مستوى العضو (`Pareto par Organe`) وليس الآلة فقط.<br>**ماذا لا نفعل:** لا نخلط عناصر `warehouseItems` (`COMPONENT / PART`) داخل قوائم خصم المخزون الاستهلاكي (`rawStock / PDR`)، ولا نترك العضو مجرد نص حر معزول عن شجرة الآلة. |
+
+---
+
+## 4️⃣ الفلسفة الصناعية لترابط الأصول وقطع الغيار والصيانة (`Industrial Asset & BOM Philosophy`)
+
+> **القاعدة الذهبية في هندسة الصيانة (`CMMS / GMAO`):**
+> **الـ `Blueprint` يخطط ويهيكل ➔ الـ `Machine` تحتضن الأصول ➔ الـ `Component / Part` يتعرض للفحص أو العطل ➔ الـ `PDR` يُستهلك للإصلاح.**
+
+### 1. التفريق الصارم بين المستويات الثلاثة في المخزن والمستودع (`Component` vs `Part` vs `PDR`)
+
+| المستوى | الكيان في النظام | التعريف الصناعي الدقيق | كيف يُدار؟ (دورة الحياة) | علاقته بالصيانة (`PM` & `Corrective`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. الأعضاء القابلة للتدوير والإصلاح (`Rotatable Sub-Assemblies`)** | **`Components`**<br>(`warehouseItems` حيث `nature: 'COMPONENT'`) | وحدات رئيسية متكاملة لها هوية فردية ورقم تسلسلي أو كود تتبع (`mot 01`, `Pompe Hydraulique`, `Variateur`, `Réducteur`). **لا تُستهلك وتفنى** عند العطل، بل تُفك وتُصلح أو تُرسل للورشة الخارجية (`Sortie Externe / Bobinage`) وتُستبدل بعضو احتياطي. | تُدار **بالحالة الفردية (`Lifecycle Status`):**<br>`En service (Actif)` ➔ `En réserve` ➔ `En bobinage / Réparation` ➔ `HS`. | هدف مباشر لمهام الوقائي (فحص اهتزاز/حرارة/تشحيم) وللبلاغات التصحيحية (`id_composant`). عند إغلاق العطل تتحدث حالة العضو آلياً. |
+| **2. الأجزاء الميكانيكية والمواقع الوظيفية (`Functional & Structural Parts`)** | **`Parts`**<br>(`warehouseItems` حيث `nature: 'PART'`) | أجزاء بنيوية أو مجموعات ميكانيكية فرعية في الآلة (`Table croisée`, `Mandrin`, `Arbre principal`, `Carter`). تحدد **أين** وقع التدخل أو الفحص بدقة داخل الآلة حتى لو لم تكن وحدة دوارة تنتقل لللفّ (`Bobinage`). | تُدار **كمواقع/أجزاء وظيفية مرتبطة بالآلة (`Functional Location / Sub-Part`)** مع حالة صلاحيتها الفنية. | تُربط بمهام الوقائي وبلاغات وإغلاقات التصحيحي (`id_part`, `nom_part`) لبناء سجل أعطال وتكلفة دقيق لكل جزء في الآلة. |
+| **3. قطع الغيار الاستهلاكية (`Consumable Spare Parts`)** | **`PDR`**<br>(`rawStock` / `stockItems`) | المواد والقطع الاستهلاكية القياسية (`Roulement 6204`, `Courroie`, `Joint`, `Contacteur`, `Huile`). تُصرف من المخزن (`Magasin PDR`) وتركب **داخل** `Component` أو `Part` لإصلاحه أو صيانته. | تُدار **بالكمية والرصيد الرياضي الصارم:**<br>`stockActuel = stockInitial + entrées − sorties` عبر `IncrementalStockIndex`. | هي **الوحيدة** التي تُخصم كميتها بحركات `Sortie Interne` عند تنفيذ الوقائي أو إغلاق أمر العمل التصحيحي. |
+
+### 2. التسلسل الهرمي الذكي في المخطط المرجعي (`Hierarchical Blueprint BOM`)
+- الـ `Blueprint` ليس مجرد قوائم مسطحة منفصلة، بل هو **الحمض النووي الهندسي (`Engineering DNA`)** لطراز الآلة (`Template`):
+  1. يحدد الأعضاء النظرية (`components_theoriques`) والأجزاء الوظيفية (`parts_theoriques`).
+  2. يربط قطع الغيار الاستهلاكية (`pdr_theoriques`) إما بالآلة ككل أو بعضو/جزء محدد (`id_component_parent` / `organe`).
+  3. يربط بنود الخطة الوقائية (`preventivePlanItems`) والأعطال الشائعة (`commonFailures`) بالعضو المستهدف (`Component / Part`) وبقائمة قطع الغيار المرشحة (`recommended_pdr_refs`).
+
+### 3. الانعكاس التشغيلي المباشر في الوقائي والتصحيحي
+- **في الصيانة الوقائية (`Maintenance Préventive`):**
+  - المهمة الوقائية (`PreventiveTask`) ترتبط مرجعياً بـ `id_composant` أو `id_part` (إلى جانب اسم العضو النصي للتوافق)، وتحمل قائمة قطع الغيار القياسية اللازمة (`pdr_requises`).
+  - عند ضغط الفني على «تأكيد التنفيذ»، يقترح النظام أولاً قطع الـ `PDR` المحددة في المهمة أو في `Blueprint` الآلة، مع قراءة رصيدها الحقيقي من `rawStock` حصراً (دون خلط عناصر `warehouseItems` غير الاستهلاكية في قائمة الصرف).
+  - يُحفظ `id_composant` / `id_part` داخل حدث التنفيذ المؤرخ (`PreventiveExecution`) ليظهر في السجل التاريخي للعضو نفسه.
+- **في الصيانة التصحيحية (`Maintenance Corrective`):**
+  - ينتقل كل من `id_composant` و `id_part` بأمان من طلب التدخل (`DI`) إلى التنفيذ الحي (`InterventionLiveTab`) وصولاً إلى الإغلاق النهائي (`Clôture BT`).
+  - عند اختيار قطع الغيار المستهلكة للإصلاح، يعطي النظام الأولوية في أعلى القائمة لقطع `PDR` المعرّفة في `Blueprint` الآلة/العضو (`BOM-Prioritized Picker`) بدلاً من البحث الأعمى في مئات الأصناف.
+  - يحسب محرك التحليلات (`CorrectiveCalculationService`) مؤشر **باريتو الأعضاء (`Pareto par Organe / Composant & Part`)** لكشف العضو الأكثر استنزافاً للتكلفة والتوقف داخل الآلة الواحدة.
+

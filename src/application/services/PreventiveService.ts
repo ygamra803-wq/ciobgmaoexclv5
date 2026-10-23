@@ -108,14 +108,55 @@ export class PreventiveService {
     return TaskService.loadFromPublicJson();
   }
 
-  static getRecommendedPDRForAction(actionCode?: string, composant?: string) {
+  static getRecommendedPDRForAction(actionCode?: string, composant?: string, task?: any) {
+    const result: any[] = [];
+    const seenRefs = new Set<string>();
+
+    // 1. Explicit required PDRs attached to the PreventiveTask (P7.1 canonical link)
+    const explicitList = Array.isArray(task?.pdr_requises)
+      ? task.pdr_requises
+      : task?.pdr_ref && String(task.pdr_ref).trim()
+      ? [{ ref: String(task.pdr_ref).trim(), nom: task.pdr_designation || task.pdr_ref, quantite: 1 }]
+      : [];
+
+    explicitList.forEach((p: any) => {
+      const ref = String(p?.ref || p?.reference || p?.code || '').trim();
+      if (!ref) return;
+      const key = ref.toLowerCase();
+      if (seenRefs.has(key)) return;
+      seenRefs.add(key);
+      const label = String(p?.designation || p?.nom || ref).trim();
+      result.push({
+        id_article: `PDR-${ref}`,
+        ref,
+        reference: ref,
+        nom: label,
+        designation: label,
+        quantite: Math.max(1, Number(p?.quantite ?? p?.qty ?? 1)),
+        unite: String(p?.unite || p?.unit || 'Pièce'),
+        prix_unitaire: Number(p?.prix_unitaire ?? p?.unitPrice ?? 0) || 0,
+      });
+    });
+
+    // 2. Guide fallback recommendations
     const guides = GuideService.getGuides();
-    if (!Array.isArray(guides) || !composant) return [];
-    const compLower = String(composant).toLowerCase();
-    const match =
-      guides.find((g: any) => String(g.composant_nom || g.composant_type || '').toLowerCase() === compLower) ||
-      guides.find((g: any) => compLower.includes(String(g.composant_nom || g.composant_type || '').toLowerCase()));
-    return match?.pieces_rechange || [];
+    const targetComp = String(composant || task?.composant || task?.nom_composant || task?.nom_part || '').trim();
+    if (Array.isArray(guides) && targetComp) {
+      const compLower = targetComp.toLowerCase();
+      const match =
+        guides.find((g: any) => String(g.composant_nom || g.composant_type || '').toLowerCase() === compLower) ||
+        guides.find((g: any) => compLower.includes(String(g.composant_nom || g.composant_type || '').toLowerCase()));
+      const guidePieces = Array.isArray(match?.pieces_rechange) ? match.pieces_rechange : [];
+      guidePieces.forEach((gp: any) => {
+        const ref = String(gp?.reference || gp?.ref || gp?.code || '').trim();
+        const key = (ref || String(gp?.designation || '')).toLowerCase();
+        if (!key || seenRefs.has(key)) return;
+        seenRefs.add(key);
+        result.push(gp);
+      });
+    }
+
+    return result;
   }
 
   static createPlanWithTasks(planData: any, taskItems: any[]) {

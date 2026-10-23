@@ -1,10 +1,8 @@
 import { SwaggerOptions } from 'swagger-ui-express';
-import swaggerJsdoc from 'swagger-jsdoc';
 
-const options: swaggerJsdoc.Options = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
+export const swaggerSpec = {
+  openapi: '3.0.0',
+  info: {
       title: 'CIOB GMAO API',
       version: '4.0.0',
       description: `
@@ -217,13 +215,9 @@ const options: swaggerJsdoc.Options = {
         },
       },
     },
-  },
-  apis: [],
 };
 
-const swaggerSpec = swaggerJsdoc(options);
-
-const swaggerUiOptions: SwaggerOptions = {
+export const swaggerUiOptions: SwaggerOptions = {
   customCss: '.swagger-ui .topbar { display: none }',
   customSiteTitle: 'CIOB GMAO API Documentation',
   customfavIcon: '/pwa-192x192.png',
@@ -234,4 +228,3 @@ const swaggerUiOptions: SwaggerOptions = {
   },
 };
 
-export { swaggerSpec, swaggerUiOptions };

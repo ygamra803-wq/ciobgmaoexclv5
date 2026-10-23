@@ -50,6 +50,10 @@ export default function PreventiveExecutionsHistoryView({
           (item.machineName || '').toLowerCase().includes(q) ||
           (item.executorName || '').toLowerCase().includes(q) ||
           (item.organe || '').toLowerCase().includes(q) ||
+          (item.id_composant || '').toLowerCase().includes(q) ||
+          (item.nom_composant || '').toLowerCase().includes(q) ||
+          (item.id_part || '').toLowerCase().includes(q) ||
+          (item.nom_part || '').toLowerCase().includes(q) ||
           (item.notes || '').toLowerCase().includes(q);
         if (!match) return false;
       }
@@ -209,11 +213,21 @@ export default function PreventiveExecutionsHistoryView({
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono font-bold text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
                           {exec.actionCode}
                         </span>
                         <span className="font-semibold text-slate-800">{exec.organe}</span>
+                        {exec.id_composant && (
+                          <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono text-[10px] font-bold">
+                            {exec.id_composant}
+                          </span>
+                        )}
+                        {exec.id_part && (
+                          <span className="px-1.5 py-0.2 rounded bg-teal-50 text-teal-700 border border-teal-200 font-mono text-[10px] font-bold">
+                            {exec.id_part}
+                          </span>
+                        )}
                       </div>
                       {exec.notes && (
                         <div className="text-[11px] text-slate-500 italic mt-0.5 truncate max-w-[200px]" title={exec.notes}>

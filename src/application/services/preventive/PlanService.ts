@@ -64,13 +64,44 @@ export class PlanService {
     };
 
     const generatedTasks = taskItems.map((item, index) => {
-      const compName = item.is_global_machine ? 'Machine entière' : (item.composant || 'Composant');
+      const compName = item.is_global_machine
+        ? 'Machine entière'
+        : (item.composant || item.nom_composant || item.nom_part || 'Composant');
       const cleanComp = compName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
       const actCode = (item.action_code || 'C').toUpperCase();
       const freq = item.frequence || 'Mensuel';
       const taskSeq = String(currentTasks.length + index + 1).padStart(4, '0');
 
       const planning = item.planning || this.generatePlanningForFrequency(freq, item.target_week || planData.semaine_cible || 'S1', actCode);
+
+      const idComposant = String(item.id_composant || '').trim() || undefined;
+      const nomComposant = String(item.nom_composant || '').trim() || undefined;
+      const idPart = String(item.id_part || '').trim() || undefined;
+      const nomPart = String(item.nom_part || '').trim() || undefined;
+
+      const normalizedPdrRequises = Array.isArray(item.pdr_requises)
+        ? item.pdr_requises
+            .filter((p) => p && String(p.ref || p.reference || '').trim())
+            .map((p) => {
+              const ref = String(p.ref || p.reference).trim();
+              const label = String(p.nom || p.designation || ref).trim();
+              return {
+                ref,
+                nom: label,
+                designation: label,
+                quantite: Math.max(1, Number(p.quantite || p.qty || 1)),
+              };
+            })
+        : item.pdr_ref && String(item.pdr_ref).trim()
+        ? [
+            {
+              ref: String(item.pdr_ref).trim(),
+              nom: String(item.pdr_designation || item.pdr_ref).trim(),
+              designation: String(item.pdr_designation || item.pdr_ref).trim(),
+              quantite: Math.max(1, Number(item.pdr_quantite || 1)),
+            },
+          ]
+        : undefined;
 
       return {
         id: `ID-PREV-${cleanMach}-${cleanComp}-${freq.slice(0, 3).toUpperCase()}-${taskSeq}`,
@@ -82,6 +113,13 @@ export class PlanService {
         id_zone: zone,
         section: `Sections: ${zone}`,
         composant: compName,
+        ...(idComposant ? { id_composant: idComposant } : {}),
+        ...(nomComposant ? { nom_composant: nomComposant } : {}),
+        ...(idPart ? { id_part: idPart } : {}),
+        ...(nomPart ? { nom_part: nomPart } : {}),
+        ...(normalizedPdrRequises && normalizedPdrRequises.length > 0
+          ? { pdr_requises: normalizedPdrRequises, pdr_ref: normalizedPdrRequises[0].ref }
+          : {}),
         type_intervention: item.type_intervention || this.getActionLabel(actCode),
         action_code: actCode,
         frequence: freq,
