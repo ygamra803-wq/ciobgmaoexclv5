@@ -32,6 +32,7 @@ export interface BlueprintPdrItem {
   qte?: number;
   criticite?: string;
   parent_component_key?: string;
+  parent_component_code?: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -190,8 +191,9 @@ export function applyBlueprintPlanToActiveMachines(
         });
       }
       bpPdrList.forEach((pdr) => {
-        if (!pdr?.id_pdr || !pdr?.parent_component_key) return;
-        const parentNorm = normalizeToken(pdr.parent_component_key);
+        const parentKey = pdr?.parent_component_key || pdr?.parent_component_code;
+        if (!pdr?.id_pdr || !parentKey) return;
+        const parentNorm = normalizeToken(parentKey);
         if (
           parentNorm &&
           (parentNorm === normalizeToken(compName) ||
@@ -387,12 +389,12 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
         return false;
       };
 
-      // Blueprint pdr_theoriques (with optional parent_component_key)
+      // Blueprint pdr_theoriques (with optional parent_component_key / parent_component_code)
       if (Array.isArray(bp.pdr_theoriques)) {
         bp.pdr_theoriques.forEach((p: any) => {
           const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
           if (!r) return;
-          const parentNorm = normalizeToken(p?.parent_component_key);
+          const parentNorm = normalizeToken(p?.parent_component_key || p?.parent_component_code);
           if (matchesTargetComp(parentNorm)) {
             componentPdrRefs.add(r);
           } else {

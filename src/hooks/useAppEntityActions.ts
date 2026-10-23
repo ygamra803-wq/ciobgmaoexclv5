@@ -153,7 +153,8 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     const { addedTasks, updatedTasks, targetMachinesCount } = applyBlueprintPlanToActiveMachines(
       blueprint,
       machines,
-      preventiveTasks
+      preventiveTasks,
+      warehouseItems
     );
     if (targetMachinesCount === 0) {
       showToast(
@@ -216,6 +217,7 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     blueprints: gmaoState.blueprints || [],
     sortiesExterne: gmaoState.sortiesExterne || [],
     preventiveTasks,
+    preventiveExecutions: gmaoState.preventiveExecutions || [],
     correctiveInterventions,
     machineElementsLedger: machineElementsLedger || [],
     showToast,

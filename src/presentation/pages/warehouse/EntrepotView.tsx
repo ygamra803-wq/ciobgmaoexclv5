@@ -2422,15 +2422,27 @@ export default function EntrepotView({
                   const pId = String(pe.id_part || '').trim().toUpperCase();
                   if (itemId && (cId === itemId || pId === itemId)) return true;
                   if (itemCode && (cId === itemCode || pId === itemCode)) return true;
-                  const peComp = String(pe.nom_composant || pe.nom_part || pe.composant || '')
+                  const peComp = String(
+                    pe.nom_composant || pe.nom_part || pe.organe || pe.composant || ''
+                  )
                     .trim()
                     .toUpperCase();
-                  const peMach = String(pe.id_machine || '').trim().toUpperCase();
+                  const peMach = String(pe.machineCode || pe.id_machine || '')
+                    .trim()
+                    .toUpperCase();
                   return Boolean(itemDesig && peComp === itemDesig && (!itemMach || peMach === itemMach));
                 });
 
                 const linkedExterne = allSortiesExterne.filter((se: any) => {
-                  const sCompId = String(se.id_composant || se.code_composant || '').trim().toUpperCase();
+                  const sCompId = String(
+                    se.id_composant ||
+                      se.code_composant ||
+                      se.id_warehouse_item ||
+                      se.code_moteur ||
+                      ''
+                  )
+                    .trim()
+                    .toUpperCase();
                   if (itemId && sCompId === itemId) return true;
                   if (itemCode && sCompId === itemCode) return true;
                   const sDesig = String(se.designation || se.nom_composant || '').trim().toUpperCase();
@@ -2492,32 +2504,46 @@ export default function EntrepotView({
                           </div>
                         ))}
 
-                        {linkedPreventive.slice(0, 6).map((pe: any, idx: number) => (
-                          <div
-                            key={`cv-pe-${pe.id_execution || idx}`}
-                            className="p-2 rounded-lg bg-white border border-emerald-200/80 flex items-center justify-between gap-2 text-[11px]"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span className="font-mono font-bold text-emerald-900">
-                                  PM ({pe.action_code || 'C'})
-                                </span>
-                                <span className="font-semibold text-slate-800 truncate">
-                                  {pe.type_intervention || pe.observations || 'Exécution préventive'}
-                                </span>
-                              </div>
-                              {Array.isArray(pe.usedPDR) && pe.usedPDR.length > 0 && (
-                                <div className="text-[10px] text-indigo-700 font-mono truncate mt-0.5">
-                                  PDR: {pe.usedPDR.map((p: any) => p.reference || p.designation).join(', ')}
+                        {linkedPreventive.slice(0, 6).map((pe: any, idx: number) => {
+                          const spares = Array.isArray(pe.sparesUsed)
+                            ? pe.sparesUsed
+                            : Array.isArray(pe.usedPDR)
+                            ? pe.usedPDR
+                            : [];
+                          return (
+                            <div
+                              key={`cv-pe-${pe.id || pe.id_execution || idx}`}
+                              className="p-2 rounded-lg bg-white border border-emerald-200/80 flex items-center justify-between gap-2 text-[11px]"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  <span className="font-mono font-bold text-emerald-900">
+                                    PM ({pe.actionCode || pe.action_code || 'C'})
+                                  </span>
+                                  <span className="font-semibold text-slate-800 truncate">
+                                    {pe.taskDescription ||
+                                      pe.notes ||
+                                      pe.type_intervention ||
+                                      pe.observations ||
+                                      'Exécution préventive'}
+                                  </span>
                                 </div>
-                              )}
+                                {spares.length > 0 && (
+                                  <div className="text-[10px] text-indigo-700 font-mono truncate mt-0.5">
+                                    PDR:{' '}
+                                    {spares
+                                      .map((p: any) => p.ref || p.reference || p.designation)
+                                      .join(', ')}
+                                  </div>
+                                )}
+                              </div>
+                              <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                                {pe.executedAt || pe.periodMonth || '--'}
+                              </span>
                             </div>
-                            <span className="font-mono text-[10px] text-slate-500 shrink-0">
-                              {pe.executedAt || pe.periodMonth || '--'}
-                            </span>
-                          </div>
-                        ))}
+                          );
+                        })}
 
                         {linkedExterne.slice(0, 4).map((se: any, idx: number) => (
                           <div

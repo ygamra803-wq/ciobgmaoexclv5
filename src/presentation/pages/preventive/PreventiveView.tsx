@@ -28,6 +28,7 @@ import TabMainView from './components/TabMainView';
 import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
 import { confirmAction } from '../../../utils/confirmAction';
+import { isComponentNature, isPartNature } from '../../../core/domain/EntrepotItem';
 
 export default function PreventiveView({
   tasks = [],
@@ -131,8 +132,14 @@ export default function PreventiveView({
       const idPart = validationData?.id_part || targetTask?.id_part || '';
 
       consumedPDR.forEach((pdr) => {
-        const nature = String(pdr?.nature || '').trim().toUpperCase();
-        if (nature === 'COMPONENT' || nature === 'PART') return;
+        const explicitNature = String(pdr?.nature || pdr?.category || '').trim().toUpperCase();
+        if (
+          isComponentNature(explicitNature) ||
+          isPartNature(explicitNature) ||
+          Boolean(pdr?.id_warehouse_item)
+        ) {
+          return;
+        }
 
         const pdrRef = pdr.reference || pdr.ref;
         if (!pdrRef) return;
@@ -143,8 +150,8 @@ export default function PreventiveView({
           heure: '10:00',
           ref: pdrRef,
           designation: pdr.designation || 'Pièce consommée',
-          quantite: Number(pdr.quantite || 1),
-          unit: pdr.unite || 'pcs',
+          quantite: Number(pdr.quantite ?? pdr.qty ?? 1),
+          unit: pdr.unite || pdr.unit || 'pcs',
           type: 'Sortie Interne',
           action_id: 'PREVENTIVE',
           usage_type: 'technician',

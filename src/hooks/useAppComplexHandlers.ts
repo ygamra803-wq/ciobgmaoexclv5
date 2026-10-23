@@ -32,6 +32,7 @@ export function useAppComplexHandlers({
   blueprints = [],
   sortiesExterne = [],
   preventiveTasks = [],
+  preventiveExecutions = [],
   correctiveInterventions = [],
   machineElementsLedger = [],
   showToast,
@@ -601,12 +602,19 @@ export function useAppComplexHandlers({
     const hasInterventions = (correctiveInterventions || []).some(
       (i) => i.id_composant === idOrCode || i.id_part === idOrCode
     );
+    const hasPreventive =
+      (preventiveTasks || []).some(
+        (t) => t.id_composant === idOrCode || t.id_part === idOrCode
+      ) ||
+      (preventiveExecutions || []).some(
+        (e) => e.id_composant === idOrCode || e.id_part === idOrCode
+      );
     const hasSortieExterne = (sortiesExterne || []).some(
-      (s) => s.code_moteur === idOrCode || s.id_warehouse_item === idOrCode
+      (s) => s.code_moteur === idOrCode || s.id_warehouse_item === idOrCode || s.id_composant === idOrCode
     );
     const hasBobinageHistory = Array.isArray(target?.historique_bobinage) && target.historique_bobinage.length > 0;
 
-    if (hasMovements || hasInterventions || hasSortieExterne || hasBobinageHistory) {
+    if (hasMovements || hasInterventions || hasPreventive || hasSortieExterne || hasBobinageHistory) {
       setWarehouseItems((prev) =>
         prev.map((it) =>
           it.id_warehouse_item === idOrCode || it.id === idOrCode

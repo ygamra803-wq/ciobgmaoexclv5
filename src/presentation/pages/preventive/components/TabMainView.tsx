@@ -38,8 +38,14 @@ import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
-import { doesTaskMatchBlueprint, rankStockItemsByMachineBom } from '../../../../core/domain';
+import {
+  doesTaskMatchBlueprint,
+  rankStockItemsByMachineBom,
+  buildConsumablePdrInventory,
+} from '../../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../../core/domain/EntrepotItem';
+
+export { buildConsumablePdrInventory };
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -50,50 +56,6 @@ const ACTION_PILL_MAP = {
   S: { bg: 'bg-rose-500/10 text-rose-800 border-rose-200/80', dot: 'bg-rose-600', label: 'Sécurité' },
   L: { bg: 'bg-cyan-500/10 text-cyan-800 border-cyan-200/80', dot: 'bg-cyan-600', label: 'Lubrification' },
 };
-
-/**
- * P7.1 ADR-09 Invariant: Consumable spare parts (PDR) deducted during maintenance
- * come exclusively from `stockItems` (`rawStock` governed by `IncrementalStockIndex`),
- * never from `warehouseItems` (`COMPONENT` / `PART`).
- */
-export function buildConsumablePdrInventory(stockItems: any[] = []) {
-  const list: Array<{
-    id_article: string;
-    ref: string;
-    reference: string;
-    designation: string;
-    stockActuel: number;
-    unite: string;
-    prix_unitaire: number;
-    source: string;
-    emplacement: string;
-  }> = [];
-  const seen = new Set<string>();
-
-  (stockItems || []).forEach((item) => {
-    if (!item || typeof item !== 'object') return;
-    const nature = String(item.nature || '').trim().toUpperCase();
-    if (nature === 'COMPONENT' || nature === 'PART') return;
-
-    const ref = String(item.ref || item.reference || item.code || '').trim();
-    if (ref && !seen.has(ref.toLowerCase())) {
-      list.push({
-        id_article: `PDR-${ref}`,
-        ref,
-        reference: ref,
-        designation: item.designation || item.nom || 'Pièce PDR',
-        stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? item.stockInitial ?? 0),
-        unite: item.unit || item.unite || 'pcs',
-        prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
-        source: 'PDR Magasin',
-        emplacement: item.emplacement || 'PDR',
-      });
-      seen.add(ref.toLowerCase());
-    }
-  });
-
-  return list;
-}
 
 export default function TabMainView({
   tasks = [],

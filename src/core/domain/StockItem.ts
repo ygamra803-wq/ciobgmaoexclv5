@@ -12,6 +12,63 @@
  * - العمود I (Seuil d'Alerte): `seuil`
  * - العمود J (Alerte / Criticité): `=IF([@stockActuel]<=0, "RUPTURE", IF([@stockActuel]<=[@seuil], "ALERTE", "OK"))`
  */
+import { isComponentNature, isPartNature } from './EntrepotItem';
+
+export interface ConsumablePdrInventoryItem {
+  id_article: string;
+  ref: string;
+  reference: string;
+  designation: string;
+  stockActuel: number;
+  unite: string;
+  prix_unitaire: number;
+  source: string;
+  emplacement: string;
+}
+
+/**
+ * P0 Canonical Invariant (ADR-09):
+ * Consumable spare parts (PDR) deducted during maintenance come exclusively from
+ * `stockItems` (`rawStock` governed by `IncrementalStockIndex`), never from
+ * `warehouseItems` (`COMPONENT` / `COMPOSANT` / `PART` / `PARTIE`).
+ * Items without an explicit `nature` in `seedStockItems.json` or live `rawStock`
+ * are safely treated as consumable PDRs unless marked with warehouse component/part markers.
+ */
+export function buildConsumablePdrInventory(stockItems: any[] = []): ConsumablePdrInventoryItem[] {
+  const list: ConsumablePdrInventoryItem[] = [];
+  const seen = new Set<string>();
+
+  (stockItems || []).forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const explicitNature = String(item.nature || item.category || '').trim().toUpperCase();
+    if (
+      isComponentNature(explicitNature) ||
+      isPartNature(explicitNature) ||
+      Boolean(item.id_warehouse_item)
+    ) {
+      return;
+    }
+
+    const ref = String(item.ref || item.reference || item.code || '').trim();
+    if (ref && !seen.has(ref.toLowerCase())) {
+      list.push({
+        id_article: `PDR-${ref}`,
+        ref,
+        reference: ref,
+        designation: item.designation || item.nom || 'Pièce PDR',
+        stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? item.stockInitial ?? 0),
+        unite: item.unit || item.unite || 'pcs',
+        prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
+        source: 'PDR Magasin',
+        emplacement: item.emplacement || 'PDR',
+      });
+      seen.add(ref.toLowerCase());
+    }
+  });
+
+  return list;
+}
+
 export class StockItem {
   /**
    * بناء كائن المقال وتجهيز مقادير المخزون الافتتاحي والتراكمي
@@ -24,7 +81,7 @@ export class StockItem {
    * @param {number|string} [data.sorties] - مجموع كميات الإخراج المصروفة للحركات
    * @param {number|string} [data.seuil] - الحد الأدنى لتنبيه المخزون (Seuil d'alerte)
    */
-  constructor(data = {}) {
+  constructor(data: Record<string, any> = {}) {
     this.id = data.id_article || data.id || data.ref;
     this.ref = data.ref || String(this.id || '');
     this.designation = data.designation || '';
@@ -34,6 +91,15 @@ export class StockItem {
     this.seuil = Number(data.seuil) || 0;
     this.emplacement = data.emplacement || '';
   }
+
+  id: any;
+  ref: string;
+  designation: string;
+  initial: number;
+  entrees: number;
+  sorties: number;
+  seuil: number;
+  emplacement: string;
 
   /**
    * حساب الرصيد الفعلي الحالي في الوقت الحقيقي (Excel Twin Equation)
@@ -92,8 +158,8 @@ export class StockItem {
    * @param {Object} blueprint - كائن المخطط النمطي للآلة
    * @returns {boolean} true إذا كان المقال مسجلاً كقطعة نظرية للآلة
    */
-  isUsedInBlueprint(blueprint) {
+  isUsedInBlueprint(blueprint: any) {
     if (!blueprint || !blueprint.pdr_theoriques) return false;
-    return blueprint.pdr_theoriques.some(p => p.id_pdr === this.id || p.ref === this.ref); 
+    return blueprint.pdr_theoriques.some((p: any) => p.id_pdr === this.id || p.ref === this.ref); 
   }
 }

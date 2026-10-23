@@ -261,7 +261,21 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 
 ---
 
-## 9. سجل التحقق الآلي (`Automated Verification Matrix`)
+## 9. دستور ترابط الأصول وقوائم المكونات والصيانة (`P0–P5 Core — Asset, BOM & Maintenance Nexus` / `ADR-09`)
+
+> **توحيد المرجعية الاصطلاحية:** يُعتمد المسمى الهندسي **`P0–P5`** كمرجع وحيد للنواة المنجزة الخاصة بفصل أدوار المستودع والمخزون وربط القوالب (`Blueprints`) بالصيانة الوقائية والتصحيحية (وتُعد التسمية التاريخية `Phase P7` / `P7.1–P7.4` مجرد غلاف مرادف لنفس الحزمة المُثبتة في `src/tests/unit/Phase7AssetBomNexus.test.ts`).
+
+| البند | الضمان التصميمي المُنفَّذ | المراجع البرمجية في المستودع |
+|---|---|---|
+| **P0 — صدق الخصم المخزني (`Consumable PDR Only`)** | قوائم استهلاك قطع الغيار في الصيانة الوقائية والتصحيحية تسحب حصرياً من مخزون قطع الغيار الاستهلاكية (`stockItems` / `rawStock` المحكوم بـ `IncrementalStockIndex`) وتستبعد بشكل قاطع الأعضاء الدوارة (`COMPONENT` / `COMPOSANT`) والأجزاء الهيكلية (`PART` / `PARTIE` / `id_warehouse_item`) لمنع الخصم الكاذب. | `buildConsumablePdrInventory` في `src/core/domain/StockItem.ts` (ومُصدَّرة عبر `src/core/domain/index.ts` و `TabMainView.tsx`) + حارس الحركة في `src/presentation/pages/preventive/PreventiveView.tsx` |
+| **P1 — الهوية المرجعية للعضو في الوقائي (`id_composant` & `id_part`)** | تدعم المهام الوقائية (`PreventiveTask`) وسجلات التنفيذ المؤرخة (`PreventiveExecutionRecord`) المفاتيح المرجعية `id_composant` / `nom_composant` و `id_part` / `nom_part` إلى جانب النص `composant`، وتظهر تنفيذات الوقائي والتصحيحي والإرساليات الخارجية موحّدة في **بطاقة الحياة (`Carnet de Vie & Historique`)** داخل المستودع (`EntrepotView.tsx`). | `src/types/preventive.ts`, `src/application/services/preventive/ExecutionService.ts`, `src/application/services/preventive/TaskService.ts`, `src/application/services/preventive/PlanService.ts`, `src/presentation/pages/warehouse/EntrepotView.tsx` |
+| **P2 — الترشيح الذكي لقطع الغيار (`Smart BOM PDR Ranking`)** | تُرتَّب قطع الغيار في نوافذ التحقق الوقائي (`TabMainView`) والتدخل المباشر (`InterventionLiveTab`) وطلبات التدخل (`DemandesInterventionTab`) على ثلاث درجات دون حجب باقي المخزن: **(1)** قطع مرتبطة بالعضو أو المهمة (`bomPriority = 1` ★)، **(2)** قطع مرتبطة بقالب الآلة `Blueprint` (`bomPriority = 2` ★)، **(3)** باقي مخزن `PDR` العام (`bomPriority = 3`). | `rankStockItemsByMachineBom` في `src/core/domain/Blueprint.ts` |
+| **P3 — توطين الأعطال بالأجزاء الهيكلية (`Part as Structural Localization`)** | يُعامَل `Part` كموقع عطل هيكلي (`Localization`) بلا خصم كمي، ويُحفظ عبر كامل المسار (`DI` ← `InterventionLiveTab` ← `ClotureRapportsTab` ← `useGmaoStore`) ويُغذّي جدول **Pareto للأعضاء ومواقع الأعطال (`Organes & Pièces`)** في تحليلات الصيانة التصحيحية. | `src/domain/corrective/entities/CorrectiveIntervention.ts`, `src/store/useGmaoStore.ts`, `src/presentation/pages/corrective/InterventionLiveTab.tsx`, `src/presentation/pages/corrective/ClotureRapportsTab.tsx`, `src/presentation/pages/corrective/AnalyseCorrectiveTab.tsx` |
+| **P4 & P5 — BOM شبه الهرمي ووراثة القالب (`Semi-Hierarchical BOM & Blueprint Inheritance`)** | يدعم جدول `pdr_theoriques` في `Blueprint` الحقل الاختياري `parent_component_key` (أو `parent_component_code`) لربط القطعة الاستهلاكية بعضو أب داخل القالب. وعند تطبيق القالب (`applyBlueprintPlanToActiveMachines`)، يرث البند الوقائي قائمة `pdr_requises` ويرتبط تلقائياً بمعرف العضو الفعلي المركّب على الآلة (`id_composant` / `id_part`) من `warehouseItems`. | `applyBlueprintPlanToActiveMachines` في `src/core/domain/Blueprint.ts`, `src/hooks/useAppEntityActions.ts`, `src/presentation/pages/machines/BlueprintMachineView.tsx`, `src/application/services/PreventiveService.ts` |
+
+---
+
+## 10. سجل التحقق الآلي (`Automated Verification Matrix`)
 
 | المجال الهندسي | القدرة الموثّقة | ملف الاختبار الآلي (`Vitest`) |
 |---|---|---|
@@ -273,10 +287,11 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | **الأمن والصلاحيات (RBAC)** | مصفوفة صلاحيات `AuthorizationService`، منع `VIEWER` من الدفع، وفحص `x-gmao-role` و `x-gmao-api-token` | `src/tests/unit/Round5RbacAndSecurity.test.ts` |
 | **آلة الحالة والاعتمادية** | حراسة انتقالات `WorkOrderStateMachine`، حساب `MTTR / MTBF / OEE`، والمقارنة الشهرية (`MoM`) | `src/tests/unit/Round6FsmAndMonthlyReport.test.ts` |
 | **معمارية LAN وتفكيك الإعدادات** | أوضاع `HOST / LAN_CLIENT`، مصفوفة QR الحتمية `21x21`، مسارات `/api/network/info` و `/api/gmao/events`، وتفكيك `SettingsView.tsx` | `src/tests/unit/Round7LanArchitectureAndRefactoring.test.ts` |
+| **دستور ترابط الأصول و BOM (`P0–P5`)** | عزل مخزون `PDR` الاستهلاكي (`P0`)، انتشار `id_composant / id_part` إلى سجلات التنفيذ الوقائي (`P1`)، ترتيب `BOM` الذكي (`P2`)، توطين `Part` في التصحيحي (`P3`)، ووراثة `parent_component_key` و `pdr_requises` من القالب (`P4/P5`) | `src/tests/unit/Phase7AssetBomNexus.test.ts` |
 
 ---
 
-## 10. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
+## 11. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
 
 التزاماً بالشفافية الهندسية أمام المستثمرين والمطورين:
 1. **منصة ويب تشغيلية أولاً (`Web-First Operational Platform`):** يعمل النظام بكامل قدراته عبر المتصفح مع تخزين هجين (`Memory Cache + localStorage + IndexedDB`) وخادم Node/Express محلي (`server.ts`).

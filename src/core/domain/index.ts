@@ -1,5 +1,9 @@
 export { Zone } from './Zone';
-export { StockItem } from './StockItem';
+export {
+  StockItem,
+  buildConsumablePdrInventory,
+  type ConsumablePdrInventoryItem,
+} from './StockItem';
 export {
   Blueprint,
   applyBlueprintPlanToActiveMachines,

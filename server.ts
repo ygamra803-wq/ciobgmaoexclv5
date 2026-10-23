@@ -67,7 +67,9 @@ const OBJECT_ENTITY_SET = new Set<string>([
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const portArgIdx = process.argv.indexOf('--port');
+  const cliPort = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? Number(process.argv[portArgIdx + 1]) : null;
+  const PORT = cliPort || Number(process.env.GMAO_PORT) || 3000;
   const isProduction = process.env.NODE_ENV === 'production';
 
   app.use(cors());
@@ -763,7 +765,7 @@ async function startServer() {
     const viteReadyPromise = import('vite')
       .then(({ createServer: createViteServer }) =>
         createViteServer({
-          server: { middlewareMode: true },
+          server: { middlewareMode: true, hmr: false },
           appType: 'spa',
         })
       )

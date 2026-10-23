@@ -3,15 +3,16 @@ import { ExecutionService } from '../../application/services/preventive/Executio
 import { TaskService } from '../../application/services/preventive/TaskService';
 import { PlanService } from '../../application/services/preventive/PlanService';
 import { PreventiveService } from '../../application/services/PreventiveService';
-import { buildConsumablePdrInventory } from '../../presentation/pages/preventive/components/TabMainView';
 import {
+  buildConsumablePdrInventory,
   applyBlueprintPlanToActiveMachines,
   rankStockItemsByMachineBom,
-} from '../../core/domain/Blueprint';
+} from '../../core/domain';
+import { buildConsumablePdrInventory as reExportedBuildConsumablePdrInventory } from '../../presentation/pages/preventive/components/TabMainView';
 import { CorrectiveIntervention } from '../../domain/corrective/entities/CorrectiveIntervention';
 import { storageService } from '../../utils/storageService';
 
-describe('Phase P7 (P0–P5): Canonical Organe FKs, Part Localization, Semi-Hierarchical BOM & Smart PDR Ranking (ADR-09)', () => {
+describe('P0–P5 Core (alias Phase P7): Consumable PDR Truth, Organe FKs, Part Localization & Semi-Hierarchical BOM (ADR-09)', () => {
   beforeEach(() => {
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
@@ -162,15 +163,31 @@ describe('Phase P7 (P0–P5): Canonical Organe FKs, Part Localization, Semi-Hier
         nature: 'PART',
         stockActuel: 1,
       },
+      // Legacy French category markers & warehouse item without explicit nature (must ALSO be excluded)
+      {
+        ref: 'LEG-COMP-01',
+        designation: 'Réducteur Legacy',
+        category: 'COMPOSANT',
+        stockActuel: 1,
+      },
+      {
+        id_warehouse_item: 'WH-NO-NATURE-01',
+        ref: 'WH-NO-NATURE-01',
+        designation: 'Élément Entrepôt Sans Nature',
+        stockActuel: 1,
+      },
     ];
 
     const consumableInventory = buildConsumablePdrInventory(mixedInput);
+    expect(reExportedBuildConsumablePdrInventory).toBe(buildConsumablePdrInventory);
 
     expect(consumableInventory.length).toBe(2);
     expect(consumableInventory.map((i) => i.ref)).toEqual(['ROUL-6204', 'COUR-SPA-1250']);
     expect(consumableInventory.every((i) => i.source === 'PDR Magasin')).toBe(true);
     expect(consumableInventory.some((i) => i.ref === 'REF-10A111-NA')).toBe(false);
     expect(consumableInventory.some((i) => i.ref === 'PART-MANDRIN-01')).toBe(false);
+    expect(consumableInventory.some((i) => i.ref === 'LEG-COMP-01')).toBe(false);
+    expect(consumableInventory.some((i) => i.ref === 'WH-NO-NATURE-01')).toBe(false);
   });
 
   it('P2: rankStockItemsByMachineBom ranks Component BOM first, Machine/Blueprint BOM second, and general warehouse third without hiding items', () => {
