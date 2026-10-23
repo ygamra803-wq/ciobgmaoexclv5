@@ -14,6 +14,8 @@ import Action3DButton from '../../../components/common/Action3DButton';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { Logger } from '../../../../core/logger/LoggerService';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
+import { rankStockItemsByMachineBom } from '../../../../core/domain';
+import { isWarehousePart } from '../../../../core/domain/EntrepotItem';
 
 export default function TabPlanBuilder({
   machines = [],
@@ -79,18 +81,25 @@ export default function TabPlanBuilder({
       if (name) compMap.set(String(name).toLowerCase(), { nom: name, source: 'Machine Réelle', icon: 'wrench' });
     });
 
-    // 1b. Components in warehouseItems linked to this machine
+    // 1b. Components & Structural Parts in warehouseItems linked to this machine (with canonical IDs)
     (warehouseItems || []).forEach((w) => {
       const isTarget =
         w.id_machine_registered === mach.id_machine_registered ||
         w.code_machine === mach.code_machine ||
         w.machine === mach.code_machine ||
         w.id_machine === mach.id_machine_registered;
-      if (isTarget && w.designation) {
-        compMap.set(String(w.designation).toLowerCase(), {
-          nom: w.designation,
-          ref: w.ref,
-          source: 'Entrepôt Composant',
+      const desig = w.designation || w.designation_part || w.nom_composant || w.nom;
+      if (isTarget && desig) {
+        const wId = w.id_warehouse_item || w.id || '';
+        const isPart = isWarehousePart(w);
+        compMap.set(String(desig).toLowerCase(), {
+          nom: desig,
+          ref: w.ref || wId,
+          id_composant: isPart ? undefined : wId,
+          nom_composant: isPart ? undefined : desig,
+          id_part: isPart ? wId : undefined,
+          nom_part: isPart ? desig : undefined,
+          source: isPart ? 'Part Structurelle' : 'Entrepôt Composant',
           icon: 'package',
         });
       }
@@ -110,10 +119,12 @@ export default function TabPlanBuilder({
           if (Array.isArray(bp.components_theoriques)) {
             bp.components_theoriques.forEach((comp) => {
               const compName = comp.libelle || comp.id_component || comp.id;
-              if (compName) {
+              if (compName && !compMap.has(String(compName).toLowerCase())) {
                 compMap.set(String(compName).toLowerCase(), {
                   nom: compName,
                   ref: comp.id_component || comp.id || bp.id_blueprint,
+                  id_composant: comp.id_component || comp.id,
+                  nom_composant: compName,
                   source: 'Blueprint Modèle',
                   icon: 'blueprint',
                 });
@@ -121,7 +132,7 @@ export default function TabPlanBuilder({
             });
           } else {
             const bpName = bp.nom_organe || bp.composant || bp.designation;
-            if (bpName) {
+            if (bpName && !compMap.has(String(bpName).toLowerCase())) {
               compMap.set(String(bpName).toLowerCase(), {
                 nom: bpName,
                 ref: bp.ref || bp.id_blueprint,
@@ -137,7 +148,7 @@ export default function TabPlanBuilder({
     return Array.from(compMap.values());
   }, [selectedMachineId, machines, warehouseItems, blueprints]);
 
-  // 2. Strict Relational Lineage: Available PDR parts from Magasin Stock
+  // 2. Strict Relational Lineage: Available PDR parts from Magasin Stock ranked by Machine/Blueprint BOM (P2)
   const availablePdrList = useMemo(() => {
     const list = [];
     const seen = new Set();
@@ -154,8 +165,8 @@ export default function TabPlanBuilder({
         });
       }
     });
-    return list;
-  }, [stockItems]);
+    return rankStockItemsByMachineBom(selectedMachineId, list, machines, blueprints);
+  }, [stockItems, selectedMachineId, machines, blueprints]);
 
   const handleReset = () => {
     setSelectedMachineId('');
@@ -200,6 +211,9 @@ export default function TabPlanBuilder({
       : ['Roulement', 'Courroie', 'Niveau d\'huile', 'Glissière', 'Armoire électrique'];
 
     compsToAdd.slice(0, 6).forEach((compName) => {
+      const matchedCompObj = machineComponents.find(
+        (c) => String(c.nom).toLowerCase() === String(compName).toLowerCase()
+      );
       const guideObj = guides.find((g) => g.composant_nom.toLowerCase() === String(compName).toLowerCase()) 
         || guides.find((g) => String(compName).toLowerCase().includes(g.composant_nom.toLowerCase()));
 
@@ -211,6 +225,10 @@ export default function TabPlanBuilder({
         initialTasks.push({
           id_temp: `${compName}-${actCode}-${Date.now()}-${Math.random()}`,
           composant: compName,
+          id_composant: matchedCompObj?.id_composant,
+          nom_composant: matchedCompObj?.nom_composant,
+          id_part: matchedCompObj?.id_part,
+          nom_part: matchedCompObj?.nom_part,
           action_code: actCode,
           type_intervention: actObj?.libelle || 'Contrôle',
           frequence: 'Mensuel',
@@ -229,6 +247,9 @@ export default function TabPlanBuilder({
   // Handle adding a component with its guide actions
   const handleAddComponentWithGuide = (compName) => {
     if (!compName) return;
+    const matchedCompObj = machineComponents.find(
+      (c) => String(c.nom).toLowerCase() === String(compName).toLowerCase()
+    );
     const guideObj = guides.find((g) => g.composant_nom.toLowerCase() === compName.toLowerCase())
       || guides.find((g) => compName.toLowerCase().includes(g.composant_nom.toLowerCase()));
 
@@ -239,6 +260,10 @@ export default function TabPlanBuilder({
       return {
         id_temp: `${compName}-${actCode}-${Date.now()}-${Math.random()}`,
         composant: compName,
+        id_composant: matchedCompObj?.id_composant,
+        nom_composant: matchedCompObj?.nom_composant,
+        id_part: matchedCompObj?.id_part,
+        nom_part: matchedCompObj?.nom_part,
         action_code: actCode,
         type_intervention: actObj?.libelle || 'Contrôle',
         frequence: frequenceGlobale,

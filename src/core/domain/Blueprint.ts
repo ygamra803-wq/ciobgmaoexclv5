@@ -4,6 +4,10 @@ export interface BlueprintPreventivePlanItem {
   id: string;
   action_code?: string;
   composant?: string;
+  component_ref?: string;
+  id_composant?: string;
+  id_part?: string;
+  pdr_refs?: string[];
   frequence: string;
   description?: string;
   duree_min?: number;
@@ -17,6 +21,17 @@ export interface BlueprintCommonFailureItem {
   urgence?: string;
   recommended_action?: string;
   pdr_ref?: string;
+  pdr_refs?: string[];
+  component_ref?: string;
+  id_part?: string;
+}
+
+export interface BlueprintPdrItem {
+  id_pdr: string;
+  libelle?: string;
+  qte?: number;
+  criticite?: string;
+  parent_component_key?: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -33,7 +48,7 @@ function buildWeeklyPlanning(frequency: string, actionCode = 'C'): Record<string
   const planning: Record<string, string> = {};
   let step = 4;
   const f = String(frequency || 'Mensuel').toLowerCase();
-  if (f.includes('quotid') || f.includes('jour') || f.includes('hebdo') && !f.includes('bi')) step = 1;
+  if (f.includes('quotid') || f.includes('jour') || (f.includes('hebdo') && !f.includes('bi'))) step = 1;
   else if (f.includes('bi')) step = 2;
   else if (f.includes('mensuel') || f === '1m') step = 4;
   else if (f.includes('trimestr') || f === '3m') step = 12;
@@ -46,14 +61,25 @@ function buildWeeklyPlanning(frequency: string, actionCode = 'C'): Record<string
   return planning;
 }
 
+function normalizeToken(val: any): string {
+  return String(val || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-_\s]+/g, ' ');
+}
+
 export function applyBlueprintPlanToActiveMachines(
   blueprintData: any,
   machines: any[] = [],
-  existingTasks: any[] = []
+  existingTasks: any[] = [],
+  warehouseItems: any[] = []
 ) {
   const bpId = blueprintData?.id_blueprint || blueprintData?.id;
   const planItems: BlueprintPreventivePlanItem[] = Array.isArray(blueprintData?.preventivePlanItems)
     ? blueprintData.preventivePlanItems
+    : [];
+  const bpPdrList: BlueprintPdrItem[] = Array.isArray(blueprintData?.pdr_theoriques)
+    ? blueprintData.pdr_theoriques
     : [];
 
   const activeLinkedMachines = filterActiveMachines(machines).filter(
@@ -84,6 +110,15 @@ export function applyBlueprintPlanToActiveMachines(
     const tech = m.technician || m.technicien_responsable || m.technicien || 'Technicien';
     const machineName = m.designation || m.nom || `Machine ${machineId}`;
 
+    // Discover warehouse components & parts attached to this machine for automatic FK binding (P1 / P5)
+    const machineWhItems = (Array.isArray(warehouseItems) ? warehouseItems : []).filter((w) => {
+      if (!w) return false;
+      const wMach = String(w.id_machine_registered || w.id_machine || w.code_machine || '')
+        .trim()
+        .toUpperCase();
+      return wMach === machineId;
+    });
+
     planItems.forEach((item, idx) => {
       const itemId = item.id || `BP-ITEM-${idx + 1}`;
       const alreadyExists =
@@ -113,6 +148,72 @@ export function applyBlueprintPlanToActiveMachines(
         item.description?.trim() ||
         `Exécuter ${ACTION_LABELS[actCode] || actCode} sur ${compName}`;
 
+      // Resolve optional Component or Part on the target machine matching item.composant / item.component_ref
+      let resolvedIdComposant = item.id_composant || '';
+      let resolvedNomComposant = '';
+      let resolvedIdPart = item.id_part || '';
+      let resolvedNomPart = '';
+
+      if (compName.toLowerCase() !== 'machine entière') {
+        const compToken = normalizeToken(compName);
+        const refToken = normalizeToken(item.component_ref);
+
+        const matchedWh = machineWhItems.find((w) => {
+          const wId = normalizeToken(w.id_warehouse_item || w.id);
+          const wDes = normalizeToken(w.designation || w.nom_composant || w.nom);
+          const wTpl = normalizeToken(w.id_templates || w.id_comp_template);
+          return (
+            (refToken && (wId === refToken || wTpl === refToken || wDes.includes(refToken))) ||
+            (compToken && (wDes === compToken || wDes.includes(compToken) || compToken.includes(wDes)))
+          );
+        });
+
+        if (matchedWh) {
+          const whId = String(matchedWh.id_warehouse_item || matchedWh.id || '').trim();
+          const whName = String(matchedWh.designation || matchedWh.nom || compName).trim();
+          const nature = String(matchedWh.nature || '').trim().toUpperCase();
+          if (nature === 'PART') {
+            resolvedIdPart = resolvedIdPart || whId;
+            resolvedNomPart = whName;
+          } else {
+            resolvedIdComposant = resolvedIdComposant || whId;
+            resolvedNomComposant = whName;
+          }
+        }
+      }
+
+      // Resolve recommended PDRs from planItem.pdr_refs + Blueprint semi-hierarchical BOM (parent_component_key)
+      const pdrRefSet = new Set<string>();
+      if (Array.isArray(item.pdr_refs)) {
+        item.pdr_refs.forEach((r) => {
+          if (r && String(r).trim()) pdrRefSet.add(String(r).trim());
+        });
+      }
+      bpPdrList.forEach((pdr) => {
+        if (!pdr?.id_pdr || !pdr?.parent_component_key) return;
+        const parentNorm = normalizeToken(pdr.parent_component_key);
+        if (
+          parentNorm &&
+          (parentNorm === normalizeToken(compName) ||
+            parentNorm === normalizeToken(item.component_ref))
+        ) {
+          pdrRefSet.add(String(pdr.id_pdr).trim());
+        }
+      });
+
+      const pdrRequises = Array.from(pdrRefSet).map((ref) => {
+        const bpMatch = bpPdrList.find(
+          (p) => String(p.id_pdr || '').trim().toUpperCase() === ref.toUpperCase()
+        );
+        const designation = bpMatch?.libelle || ref;
+        return {
+          ref,
+          nom: designation,
+          designation,
+          quantite: Math.max(1, Number(bpMatch?.qte || 1)),
+        };
+      });
+
       addedTasks.push({
         id: `ID-PREV-${cleanMach}-${cleanComp}-${freq.slice(0, 3).toUpperCase()}-${taskSeq}`,
         id_plan: `ID-PLAN-${bpId}-${cleanMach}`,
@@ -125,6 +226,13 @@ export function applyBlueprintPlanToActiveMachines(
         id_zone: zone,
         section: `Sections: ${zone}`,
         composant: compName,
+        ...(resolvedIdComposant ? { id_composant: resolvedIdComposant } : {}),
+        ...(resolvedNomComposant ? { nom_composant: resolvedNomComposant } : {}),
+        ...(resolvedIdPart ? { id_part: resolvedIdPart } : {}),
+        ...(resolvedNomPart ? { nom_part: resolvedNomPart } : {}),
+        ...(pdrRequises.length > 0
+          ? { pdr_requises: pdrRequises, pdr_ref: pdrRequises[0].ref }
+          : {}),
         type_intervention: ACTION_LABELS[actCode] || 'Contrôle',
         action_code: actCode,
         frequence: freq,
@@ -146,10 +254,219 @@ export function applyBlueprintPlanToActiveMachines(
   });
 
   return {
+    addedCount: addedTasks.length,
     addedTasks,
     updatedTasks: [...addedTasks, ...currentTasks],
     targetMachinesCount: activeLinkedMachines.length,
   };
+}
+
+/**
+ * P2 & P4 Smart BOM PDR Ranking:
+ * Ranks consumable `stockItems` so that PDRs linked to the target Component or Machine/Blueprint BOM
+ * appear first (`isBomRecommended: true`, `bomPriority: 1 | 2`), while keeping the rest of the warehouse `stockItems`
+ * available right below (`isBomRecommended: false`, `bomPriority: 3`).
+ */
+export function rankStockItemsByMachineBom<T extends Record<string, any>>(
+  firstArg: string | T[] = '',
+  secondArg: T[] | string = [],
+  machines: any[] = [],
+  blueprints: any[] = [],
+  componentRefOrName: string = '',
+  taskOrExplicitPdrs?: any
+): Array<
+  T & {
+    isBomRecommended: boolean;
+    bomPriority: 1 | 2 | 3;
+    bomSourceLabel?: string;
+    bomReason?: string;
+  }
+> {
+  const stockItems: T[] = Array.isArray(firstArg)
+    ? firstArg
+    : Array.isArray(secondArg)
+    ? secondArg
+    : [];
+  const machineCodeOrId: string =
+    typeof firstArg === 'string'
+      ? firstArg
+      : typeof secondArg === 'string'
+      ? secondArg
+      : '';
+
+  if (!Array.isArray(stockItems) || stockItems.length === 0) return [];
+
+  const targetMachNorm = normalizeToken(machineCodeOrId);
+  const targetCompNorm = normalizeToken(componentRefOrName);
+
+  const componentPdrRefs = new Set<string>();
+  const blueprintPdrRefs = new Set<string>();
+
+  // 1. Explicit task-level PDRs (highest priority)
+  if (Array.isArray(taskOrExplicitPdrs)) {
+    taskOrExplicitPdrs.forEach((p: any) => {
+      const r = String(p?.reference || p?.ref || p || '').trim().toUpperCase();
+      if (r) componentPdrRefs.add(r);
+    });
+  } else if (taskOrExplicitPdrs && typeof taskOrExplicitPdrs === 'object') {
+    if (taskOrExplicitPdrs.pdr_ref) {
+      const r = String(taskOrExplicitPdrs.pdr_ref).trim().toUpperCase();
+      if (r) componentPdrRefs.add(r);
+    }
+    if (Array.isArray(taskOrExplicitPdrs.pdr_requises)) {
+      taskOrExplicitPdrs.pdr_requises.forEach((p: any) => {
+        const r = String(p?.reference || p?.ref || '').trim().toUpperCase();
+        if (r) componentPdrRefs.add(r);
+      });
+    }
+  }
+
+  // 2. Discover Machine & its linked Blueprint
+  if (targetMachNorm) {
+    const matchedMachine = (machines || []).find((m) => {
+      if (!m) return false;
+      const candidates = [
+        m.id_machine_registered,
+        m.code_machine,
+        m.code,
+        m.id,
+        m.id_machine,
+        m.nom,
+        m.designation,
+      ];
+      return candidates.some((c) => c && normalizeToken(c) === targetMachNorm);
+    });
+
+    // Machine-level historical/theoretical PDRs if present
+    const machPdrs = matchedMachine?.pdr_theoriques || matchedMachine?.pdr_historique || [];
+    if (Array.isArray(machPdrs)) {
+      machPdrs.forEach((p: any) => {
+        const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
+        if (r) blueprintPdrRefs.add(r);
+      });
+    }
+
+    const bpId = matchedMachine?.id_blueprint;
+    const tplId = matchedMachine?.id_templates || matchedMachine?.id_machine_template || matchedMachine?.template;
+
+    const matchedBlueprints = (blueprints || []).filter((b) => {
+      if (!b) return false;
+      if (bpId && String(b.id_blueprint || b.id || '').trim() === String(bpId).trim()) return true;
+      if (tplId && String(b.id_templates || '').trim() === String(tplId).trim()) return true;
+      return false;
+    });
+
+    matchedBlueprints.forEach((bp) => {
+      // Also allow matching component via Blueprint composants_lies (code_type -> nom_composant)
+      const bpCompAliases = new Set<string>();
+      if (targetCompNorm) {
+        bpCompAliases.add(targetCompNorm);
+        if (Array.isArray(bp.composants_lies)) {
+          bp.composants_lies.forEach((c: any) => {
+            const cCode = normalizeToken(c?.code_type || c?.id_comp_type);
+            const cName = normalizeToken(c?.nom_composant || c?.designation);
+            if (cCode === targetCompNorm || cName === targetCompNorm) {
+              if (cCode) bpCompAliases.add(cCode);
+              if (cName) bpCompAliases.add(cName);
+            }
+          });
+        }
+      }
+
+      const matchesTargetComp = (candidateNorm: string) => {
+        if (!targetCompNorm || !candidateNorm) return false;
+        for (const alias of bpCompAliases) {
+          if (
+            candidateNorm === alias ||
+            alias.includes(candidateNorm) ||
+            candidateNorm.includes(alias)
+          ) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Blueprint pdr_theoriques (with optional parent_component_key)
+      if (Array.isArray(bp.pdr_theoriques)) {
+        bp.pdr_theoriques.forEach((p: any) => {
+          const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
+          if (!r) return;
+          const parentNorm = normalizeToken(p?.parent_component_key);
+          if (matchesTargetComp(parentNorm)) {
+            componentPdrRefs.add(r);
+          } else {
+            blueprintPdrRefs.add(r);
+          }
+        });
+      }
+
+      // Blueprint preventivePlanItems pdr_refs
+      if (Array.isArray(bp.preventivePlanItems)) {
+        bp.preventivePlanItems.forEach((pi: any) => {
+          const refs = Array.isArray(pi?.pdr_refs) ? pi.pdr_refs : [];
+          const piCompNorm = normalizeToken(pi?.composant || pi?.component_ref);
+          refs.forEach((rawRef: any) => {
+            const r = String(rawRef || '').trim().toUpperCase();
+            if (!r) return;
+            if (matchesTargetComp(piCompNorm)) {
+              componentPdrRefs.add(r);
+            } else {
+              blueprintPdrRefs.add(r);
+            }
+          });
+        });
+      }
+
+      // Blueprint commonFailures pdr_ref
+      if (Array.isArray(bp.commonFailures)) {
+        bp.commonFailures.forEach((cf: any) => {
+          const r = String(cf?.pdr_ref || '').trim().toUpperCase();
+          if (!r) return;
+          const cfCompNorm = normalizeToken(cf?.component_ref);
+          if (matchesTargetComp(cfCompNorm)) {
+            componentPdrRefs.add(r);
+          } else {
+            blueprintPdrRefs.add(r);
+          }
+        });
+      }
+    });
+  }
+
+  const annotated = stockItems.map((item) => {
+    const refUpper = String(item.ref || item.reference || item.code_article || item.code || '')
+      .trim()
+      .toUpperCase();
+    if (refUpper && componentPdrRefs.has(refUpper)) {
+      return {
+        ...item,
+        isBomRecommended: true,
+        bomPriority: 1 as const,
+        bomSourceLabel: 'BOM Organe / Tâche',
+        bomReason: 'BOM Composant / Tâche',
+      };
+    }
+    if (refUpper && blueprintPdrRefs.has(refUpper)) {
+      return {
+        ...item,
+        isBomRecommended: true,
+        bomPriority: 2 as const,
+        bomSourceLabel: 'BOM Machine / Blueprint',
+        bomReason: 'BOM Machine / Blueprint',
+      };
+    }
+    return {
+      ...item,
+      isBomRecommended: false,
+      bomPriority: 3 as const,
+      bomSourceLabel: undefined,
+      bomReason: undefined,
+    };
+  });
+
+  // Stable sort: Component BOM (1) -> Blueprint BOM (2) -> General Stock (3)
+  return annotated.sort((a, b) => a.bomPriority - b.bomPriority);
 }
 
 export function doesTaskMatchBlueprint(

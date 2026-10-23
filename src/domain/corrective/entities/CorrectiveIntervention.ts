@@ -32,6 +32,11 @@ export class CorrectiveIntervention {
   pdr_prix?: number;
   pdr_unite?: string;
   pieces_utilisees?: Array<{ ref: string; quantite: number }>;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
+  statut_composant_cloture?: string;
   [key: string]: any;
 
   constructor(data: Record<string, any> = {}) {

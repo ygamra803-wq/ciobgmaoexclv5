@@ -185,6 +185,57 @@ export default function AnalyseCorrectiveTab({
       .sort((a, b) => b.count - a.count);
   }, [filteredInterventions]);
 
+  // Pareto Breakdown by Organe (Component) & Localisation Structurelle (Part) (P3)
+  const organeAndPartBreakdown = useMemo(() => {
+    const map = new Map<
+      string,
+      { key: string; label: string; kind: 'COMPONENT' | 'PART'; machine: string; count: number }
+    >();
+    filteredInterventions.forEach((item) => {
+      const compId = String(item.id_composant || '').trim();
+      const compName = String(item.nom_composant || compId).trim();
+      if (compId || compName) {
+        const k = `COMP:${(compId || compName).toUpperCase()}`;
+        const prev = map.get(k);
+        if (prev) {
+          prev.count += 1;
+        } else {
+          map.set(k, {
+            key: k,
+            label: compName && compId && compName !== compId ? `${compName} (${compId})` : compName || compId,
+            kind: 'COMPONENT',
+            machine: item.code_machine || '',
+            count: 1,
+          });
+        }
+      }
+      const partId = String(item.id_part || '').trim();
+      const partName = String(item.nom_part || partId).trim();
+      if (partId || partName) {
+        const k = `PART:${(partId || partName).toUpperCase()}`;
+        const prev = map.get(k);
+        if (prev) {
+          prev.count += 1;
+        } else {
+          map.set(k, {
+            key: k,
+            label: partName && partId && partName !== partId ? `${partName} (${partId})` : partName || partId,
+            kind: 'PART',
+            machine: item.code_machine || '',
+            count: 1,
+          });
+        }
+      }
+    });
+    const total = filteredInterventions.length || 1;
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        percentage: Math.round((entry.count / total) * 100),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredInterventions]);
+
   // Executive KPI Stats (Strict Industrial Excel Formulas)
   const executiveKpis = useMemo(() => {
     const totalInterventions = filteredInterventions.length;
@@ -654,6 +705,56 @@ export default function AnalyseCorrectiveTab({
           </div>
         </div>
       </div>
+
+      {/* 4b. Pareto par Organe (Composant) & Localisation Structurelle (Part) */}
+      {organeAndPartBreakdown.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-sm space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Factory className="w-4 h-4 text-indigo-600" />
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                  Pareto par Organe (Composant) & Localisation Structurelle (Part)
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  Traçabilité des organes suivis et des sites structurels les plus sollicités
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+              {organeAndPartBreakdown.length} éléments localisés
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {organeAndPartBreakdown.slice(0, 8).map((item) => (
+              <div
+                key={item.key}
+                className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5 flex flex-col justify-between"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold border ${
+                      item.kind === 'COMPONENT'
+                        ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                        : 'bg-amber-50 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    {item.kind === 'COMPONENT' ? 'COMPOSANT' : 'PART (SITE)'}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-slate-500">{item.machine}</span>
+                </div>
+                <div className="font-bold text-slate-900 text-xs truncate" title={item.label}>
+                  {item.label}
+                </div>
+                <div className="flex items-center justify-between text-[11px] font-mono pt-1 border-t border-slate-200/70">
+                  <span className="font-black text-indigo-700">{item.count} pannes</span>
+                  <span className="text-slate-400">{item.percentage}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 5. Intelligent Preventive Maintenance Generator */}
       <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent rounded-3xl border border-amber-200 p-6 shadow-sm space-y-4">

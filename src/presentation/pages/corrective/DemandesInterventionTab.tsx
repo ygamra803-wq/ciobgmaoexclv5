@@ -29,7 +29,7 @@ import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGr
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
-import { getBlueprintCommonFailuresForMachine } from '../../../core/domain';
+import { getBlueprintCommonFailuresForMachine, rankStockItemsByMachineBom } from '../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
 
 export default function DemandesInterventionTab({
@@ -197,7 +197,9 @@ export default function DemandesInterventionTab({
   const [newForm, setNewForm] = useState({
     code_machine: allMachineOptions[0]?.code || allMachineOptions[0]?.id_machine_registered || '',
     id_composant: '',
+    nom_composant: '',
     id_part: '',
+    nom_part: '',
     pdr_ref: '',
     pdr_quantite: 1,
     demandeur: 'Production',
@@ -214,11 +216,25 @@ export default function DemandesInterventionTab({
     );
     if (allMachineOptions.length === 0) {
       if (newForm.code_machine !== '') {
-        setNewForm((prev) => ({ ...prev, code_machine: '', id_composant: '', id_part: '' }));
+        setNewForm((prev) => ({
+          ...prev,
+          code_machine: '',
+          id_composant: '',
+          nom_composant: '',
+          id_part: '',
+          nom_part: '',
+        }));
       }
     } else if (!newForm.code_machine || !validCodes.has(String(newForm.code_machine).trim())) {
       const firstCode = allMachineOptions[0]?.code || allMachineOptions[0]?.id_machine_registered || '';
-      setNewForm((prev) => ({ ...prev, code_machine: firstCode, id_composant: '', id_part: '' }));
+      setNewForm((prev) => ({
+        ...prev,
+        code_machine: firstCode,
+        id_composant: '',
+        nom_composant: '',
+        id_part: '',
+        nom_part: '',
+      }));
     }
   }, [allMachineOptions, newForm.code_machine]);
 
@@ -232,7 +248,7 @@ export default function DemandesInterventionTab({
     });
   }, [newForm.code_machine, warehouseItems]);
 
-  // Available special parts for the selected machine from Entrepôt
+  // Available structural localization parts for the selected machine from Entrepôt
   const machineParts = useMemo(() => {
     if (!newForm.code_machine || !Array.isArray(warehouseItems)) return [];
     const code = String(newForm.code_machine).trim().toUpperCase();
@@ -241,6 +257,26 @@ export default function DemandesInterventionTab({
       return (wMach === code || wMach.includes(code)) && isWarehousePart(w);
     });
   }, [newForm.code_machine, warehouseItems]);
+
+  // Smart BOM-ranked consumable PDR list (P2: BOM recommended on top, rest of warehouse below)
+  const rankedStockItems = useMemo(() => {
+    return rankStockItemsByMachineBom(
+      newForm.code_machine,
+      stockItems,
+      machines,
+      blueprints,
+      newForm.id_composant || newForm.nom_composant || newForm.id_part || newForm.nom_part
+    );
+  }, [
+    newForm.code_machine,
+    stockItems,
+    machines,
+    blueprints,
+    newForm.id_composant,
+    newForm.nom_composant,
+    newForm.id_part,
+    newForm.nom_part,
+  ]);
 
   // Blueprint common failures for the currently selected active machine (BP-5)
   const selectedMachineBlueprintId = useMemo(() => {
@@ -256,28 +292,78 @@ export default function DemandesInterventionTab({
     return getBlueprintCommonFailuresForMachine(newForm.code_machine, machines, blueprints);
   }, [newForm.code_machine, machines, blueprints]);
 
-  const handleApplyBlueprintCommonFailure = useCallback((failure) => {
-    if (!failure) return;
-    setNewForm((prev) => {
-      const nextTypePanne = failure.type_panne || prev.type_panne || 'M';
-      const nextAnomalie = failure.title || prev.anomalie;
-      const nextUrgence = failure.urgence || prev.priorite || 'HAUTE';
-      const nextPdrRef = failure.pdr_ref !== undefined && failure.pdr_ref !== '' ? failure.pdr_ref : prev.pdr_ref;
-      const parts = [failure.recommended_action, failure.description].filter(
-        (x) => x && String(x).trim()
-      );
-      const nextTravail = parts.length > 0 ? parts.join(' — ') : failure.title || prev.travail_a_faire;
+  const handleApplyBlueprintCommonFailure = useCallback(
+    (failure) => {
+      if (!failure) return;
+      setNewForm((prev) => {
+        const nextTypePanne = failure.type_panne || prev.type_panne || 'M';
+        const nextAnomalie = failure.title || prev.anomalie;
+        const nextUrgence = failure.urgence || prev.priorite || 'HAUTE';
+        const nextPdrRef =
+          failure.pdr_ref !== undefined && failure.pdr_ref !== ''
+            ? failure.pdr_ref
+            : Array.isArray(failure.pdr_refs) && failure.pdr_refs.length > 0
+            ? failure.pdr_refs[0]
+            : prev.pdr_ref;
+        const parts = [failure.recommended_action, failure.description].filter(
+          (x) => x && String(x).trim()
+        );
+        const nextTravail =
+          parts.length > 0 ? parts.join(' — ') : failure.title || prev.travail_a_faire;
 
-      return {
-        ...prev,
-        type_panne: nextTypePanne,
-        anomalie: nextAnomalie,
-        priorite: nextUrgence,
-        pdr_ref: nextPdrRef,
-        travail_a_faire: nextTravail,
-      };
-    });
-  }, []);
+        // Resolve linked Component or Part on the active machine if specified in the Blueprint failure
+        const targetRef = String(
+          failure.id_composant || failure.component_ref || failure.id_part || ''
+        )
+          .trim()
+          .toUpperCase();
+        let nextIdComp = prev.id_composant;
+        let nextNomComp = prev.nom_composant;
+        let nextIdPart = prev.id_part;
+        let nextNomPart = prev.nom_part;
+
+        if (targetRef) {
+          const matchedComp = machineComponents.find((c) => {
+            const cId = String(c.id_warehouse_item || c.id || '').trim().toUpperCase();
+            const cName = String(c.designation || c.nom_composant || c.nom || '').trim().toUpperCase();
+            return cId === targetRef || cName === targetRef || cName.includes(targetRef);
+          });
+          if (matchedComp) {
+            nextIdComp = String(matchedComp.id_warehouse_item || matchedComp.id || '');
+            nextNomComp = String(
+              matchedComp.designation || matchedComp.nom_composant || matchedComp.nom || nextIdComp
+            );
+          } else {
+            const matchedPart = machineParts.find((p) => {
+              const pId = String(p.id_warehouse_item || p.id || '').trim().toUpperCase();
+              const pName = String(p.designation_part || p.designation || p.nom || '').trim().toUpperCase();
+              return pId === targetRef || pName === targetRef || pName.includes(targetRef);
+            });
+            if (matchedPart) {
+              nextIdPart = String(matchedPart.id_warehouse_item || matchedPart.id || '');
+              nextNomPart = String(
+                matchedPart.designation_part || matchedPart.designation || matchedPart.nom || nextIdPart
+              );
+            }
+          }
+        }
+
+        return {
+          ...prev,
+          type_panne: nextTypePanne,
+          anomalie: nextAnomalie,
+          priorite: nextUrgence,
+          pdr_ref: nextPdrRef,
+          travail_a_faire: nextTravail,
+          id_composant: nextIdComp,
+          nom_composant: nextNomComp,
+          id_part: nextIdPart,
+          nom_part: nextNomPart,
+        };
+      });
+    },
+    [machineComponents, machineParts]
+  );
 
   useEffect(() => {
     if (presetData) {
@@ -1462,18 +1548,30 @@ export default function DemandesInterventionTab({
                 </div>
               )}
 
-              {/* Entrepôt: Composants & Pièces Spéciales de la Machine */}
+              {/* Entrepôt: Composants (Cycle de Vie) & Localisation Part Structurelle (Sans déstockage) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-amber-50/50 border border-amber-200/60">
                 <div>
                   <label className="block text-[10.5px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span>Composant (Entrepôt)</span>
+                    <span>Organe / Composant (Cycle de vie)</span>
                     <span className="text-[10px] text-amber-700 font-mono font-bold">
                       {machineComponents.length} détectés
                     </span>
                   </label>
                   <select
                     value={newForm.id_composant}
-                    onChange={(e) => setNewForm({ ...newForm, id_composant: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const found = machineComponents.find(
+                        (c) => String(c.id_warehouse_item || c.id) === val
+                      );
+                      setNewForm({
+                        ...newForm,
+                        id_composant: val,
+                        nom_composant: found
+                          ? String(found.designation || found.nom_composant || found.nom || val)
+                          : '',
+                      });
+                    }}
                     className="w-full py-1.5 px-2.5 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-amber-400 focus:outline-hidden"
                   >
                     <option value="">-- Machine Globale / Sans composant --</option>
@@ -1491,17 +1589,29 @@ export default function DemandesInterventionTab({
 
                 <div>
                   <label className="block text-[10.5px] font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-                    <span>Part Spéciale (Entrepôt)</span>
+                    <span>Part / Localisation Structurelle</span>
                     <span className="text-[10px] text-amber-700 font-mono font-bold">
-                      {machineParts.length} pièces
+                      {machineParts.length} sites (Sans déstockage)
                     </span>
                   </label>
                   <select
                     value={newForm.id_part}
-                    onChange={(e) => setNewForm({ ...newForm, id_part: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const found = machineParts.find(
+                        (p) => String(p.id_warehouse_item || p.id) === val
+                      );
+                      setNewForm({
+                        ...newForm,
+                        id_part: val,
+                        nom_part: found
+                          ? String(found.designation_part || found.designation || found.nom || val)
+                          : '',
+                      });
+                    }}
                     className="w-full py-1.5 px-2.5 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-amber-400 focus:outline-hidden"
                   >
-                    <option value="">-- Aucune pièce spéciale --</option>
+                    <option value="">-- Aucune localisation structurelle --</option>
                     {machineParts.map((p) => {
                       const id = p.id_warehouse_item || p.id;
                       const name = p.designation_part || p.designation || id;
@@ -1515,13 +1625,17 @@ export default function DemandesInterventionTab({
                 </div>
               </div>
 
-              {/* Pièce Consommable PDR (Stock Actuel) */}
+              {/* Pièce Consommable PDR (Stock Actuel — Classée par BOM) */}
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider">
-                    Pièce PDR Consommable (Stock Actuel)
+                    Pièce PDR Consommable (Stock Actuel · Tri BOM)
                   </label>
-                  <span className="text-[10px] font-mono text-slate-500">Magasin Central</span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {rankedStockItems.some((s) => s.isBomRecommended)
+                      ? '★ BOM Recommandée en tête'
+                      : 'Magasin Central'}
+                  </span>
                 </div>
                 <div className="flex gap-2">
                   <select
@@ -1530,8 +1644,9 @@ export default function DemandesInterventionTab({
                     className="flex-1 py-1.5 px-2.5 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-amber-400 focus:outline-hidden"
                   >
                     <option value="">-- Aucune PDR consommable requise --</option>
-                    {stockItems.map((s) => (
+                    {rankedStockItems.map((s) => (
                       <option key={s.ref} value={s.ref}>
+                        {s.isBomRecommended ? `★ [${s.bomSourceLabel}] ` : ''}
                         {s.ref} - {s.designation} (Dispo: {s.stockActuel ?? s.stock_actuel ?? 0} {s.unite || 'U'})
                       </option>
                     ))}

@@ -1124,8 +1124,32 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleAddDemandeIntervention: (data) => {
       const now = new Date();
+      const warehouseList = get().warehouseItems || [];
+      const compId = String(data?.id_composant || '').trim();
+      const partId = String(data?.id_part || '').trim();
+      const matchedComp = compId
+        ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === compId)
+        : null;
+      const matchedPart = partId
+        ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === partId)
+        : null;
+
       const newDi = new CorrectiveIntervention({
         ...data,
+        id_composant: compId,
+        nom_composant:
+          data?.nom_composant ||
+          matchedComp?.designation ||
+          matchedComp?.nom_composant ||
+          matchedComp?.nom ||
+          '',
+        id_part: partId,
+        nom_part:
+          data?.nom_part ||
+          matchedPart?.designation_part ||
+          matchedPart?.designation ||
+          matchedPart?.nom ||
+          '',
         demande_date: data.demande_date || now.toISOString().split('T')[0],
         demande_heure: data.demande_heure || now.toTimeString().slice(0, 5),
         statut: 'DEMANDE',
@@ -1231,6 +1255,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         const r = String(s.ref || s.code_article || '').trim().toUpperCase();
         if (r) stockLookup.set(r, s);
       });
+      const warehouseList = get().warehouseItems || [];
 
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
@@ -1328,9 +1353,34 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           );
           const primaryPiece = normalizedPieces[0] || null;
 
+          const resolvedCompId = String(clotureData.id_composant ?? item.id_composant ?? '').trim();
+          const resolvedPartId = String(clotureData.id_part ?? item.id_part ?? '').trim();
+          const matchedComp = resolvedCompId
+            ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedCompId)
+            : null;
+          const matchedPart = resolvedPartId
+            ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedPartId)
+            : null;
+
           updated = new CorrectiveIntervention({
             ...item,
             ...clotureData,
+            id_composant: resolvedCompId,
+            nom_composant:
+              clotureData.nom_composant ||
+              item.nom_composant ||
+              matchedComp?.designation ||
+              matchedComp?.nom_composant ||
+              matchedComp?.nom ||
+              '',
+            id_part: resolvedPartId,
+            nom_part:
+              clotureData.nom_part ||
+              item.nom_part ||
+              matchedPart?.designation_part ||
+              matchedPart?.designation ||
+              matchedPart?.nom ||
+              '',
             pdr_ref: primaryPiece ? primaryPiece.ref : '',
             pdr_designation: primaryPiece
               ? normalizedPieces.length > 1

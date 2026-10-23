@@ -6,8 +6,10 @@ export {
   doesTaskMatchBlueprint,
   filterTasksByBlueprint,
   getBlueprintCommonFailuresForMachine,
+  rankStockItemsByMachineBom,
   type BlueprintPreventivePlanItem,
   type BlueprintCommonFailureItem,
+  type BlueprintPdrItem,
 } from './Blueprint';
 export { Machine } from './Machine';
 export { CompTemplate } from './CompTemplate';

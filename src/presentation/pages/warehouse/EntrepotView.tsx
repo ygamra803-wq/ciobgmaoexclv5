@@ -24,6 +24,9 @@ import {
   Zap,
   Copy,
   Calculator,
+  Wrench,
+  Calendar,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CubeIcon } from '../../components/common/icons/CubeIcon';
@@ -42,6 +45,7 @@ import {
   isWarehouseComponent,
   isWarehousePart,
 } from '../../../core/domain/EntrepotItem';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 export default function EntrepotView({
   warehouseItems = [],
@@ -2378,6 +2382,169 @@ export default function EntrepotView({
                   <div className="text-slate-700">{selectedDetails.remarques}</div>
                 </div>
               )}
+
+              {/* P1: Carnet de Vie & Historique d'Interventions (Correctif + Préventif + Externe) */}
+              {(() => {
+                const storeState = useGmaoStore.getState();
+                const allCorrective = storeState.correctiveInterventions || [];
+                const allPreventiveExecs = storeState.preventiveExecutions || [];
+                const allSortiesExterne = storeState.sortiesExterne || [];
+
+                const itemId = String(
+                  selectedDetails.id_warehouse_item || selectedDetails.id || selectedDetails.code || ''
+                )
+                  .trim()
+                  .toUpperCase();
+                const itemCode = String(selectedDetails.code || selectedDetails.ref || '').trim().toUpperCase();
+                const itemDesig = String(
+                  selectedDetails.designation || selectedDetails.designation_part || selectedDetails.nom || ''
+                )
+                  .trim()
+                  .toUpperCase();
+                const itemMach = String(
+                  selectedDetails.id_machine_registered || selectedDetails.id_machine || ''
+                )
+                  .trim()
+                  .toUpperCase();
+
+                const linkedCorrective = allCorrective.filter((ci: any) => {
+                  const cId = String(ci.id_composant || '').trim().toUpperCase();
+                  const pId = String(ci.id_part || '').trim().toUpperCase();
+                  if (itemId && (cId === itemId || pId === itemId)) return true;
+                  if (itemCode && (cId === itemCode || pId === itemCode)) return true;
+                  const cName = String(ci.nom_composant || ci.nom_part || '').trim().toUpperCase();
+                  const ciMach = String(ci.code_machine || '').trim().toUpperCase();
+                  return Boolean(itemDesig && cName === itemDesig && (!itemMach || ciMach === itemMach));
+                });
+
+                const linkedPreventive = allPreventiveExecs.filter((pe: any) => {
+                  const cId = String(pe.id_composant || '').trim().toUpperCase();
+                  const pId = String(pe.id_part || '').trim().toUpperCase();
+                  if (itemId && (cId === itemId || pId === itemId)) return true;
+                  if (itemCode && (cId === itemCode || pId === itemCode)) return true;
+                  const peComp = String(pe.nom_composant || pe.nom_part || pe.composant || '')
+                    .trim()
+                    .toUpperCase();
+                  const peMach = String(pe.id_machine || '').trim().toUpperCase();
+                  return Boolean(itemDesig && peComp === itemDesig && (!itemMach || peMach === itemMach));
+                });
+
+                const linkedExterne = allSortiesExterne.filter((se: any) => {
+                  const sCompId = String(se.id_composant || se.code_composant || '').trim().toUpperCase();
+                  if (itemId && sCompId === itemId) return true;
+                  if (itemCode && sCompId === itemCode) return true;
+                  const sDesig = String(se.designation || se.nom_composant || '').trim().toUpperCase();
+                  return Boolean(itemDesig && sDesig === itemDesig);
+                });
+
+                const totalEvents =
+                  linkedCorrective.length + linkedPreventive.length + linkedExterne.length;
+
+                return (
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10.5px] font-extrabold text-slate-800 uppercase tracking-wider">
+                        Carnet de Vie & Historique ({totalEvents})
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold">
+                        <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200">
+                          BT: {linkedCorrective.length}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          PM: {linkedPreventive.length}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                          Ext: {linkedExterne.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {totalEvents === 0 ? (
+                      <div className="text-[11px] text-slate-400 italic py-2 text-center bg-white rounded-lg border border-dashed border-slate-200">
+                        Aucune intervention (Corrective, Préventive ou Externe) rattachée à cet identifiant ({itemId}).
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                        {linkedCorrective.slice(0, 6).map((ci: any, idx: number) => (
+                          <div
+                            key={`cv-ci-${ci.id || idx}`}
+                            className="p-2 rounded-lg bg-white border border-rose-200/80 flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <Wrench className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span className="font-mono font-bold text-rose-900">
+                                  {ci.num_bt || ci.id}
+                                </span>
+                                <span className="font-semibold text-slate-800 truncate">
+                                  {ci.anomalie || 'Intervention corrective'}
+                                </span>
+                              </div>
+                              {ci.action_realisee && (
+                                <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                                  {ci.action_realisee}
+                                </div>
+                              )}
+                            </div>
+                            <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                              {ci.date_fin || ci.demande_date || '--'}
+                            </span>
+                          </div>
+                        ))}
+
+                        {linkedPreventive.slice(0, 6).map((pe: any, idx: number) => (
+                          <div
+                            key={`cv-pe-${pe.id_execution || idx}`}
+                            className="p-2 rounded-lg bg-white border border-emerald-200/80 flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span className="font-mono font-bold text-emerald-900">
+                                  PM ({pe.action_code || 'C'})
+                                </span>
+                                <span className="font-semibold text-slate-800 truncate">
+                                  {pe.type_intervention || pe.observations || 'Exécution préventive'}
+                                </span>
+                              </div>
+                              {Array.isArray(pe.usedPDR) && pe.usedPDR.length > 0 && (
+                                <div className="text-[10px] text-indigo-700 font-mono truncate mt-0.5">
+                                  PDR: {pe.usedPDR.map((p: any) => p.reference || p.designation).join(', ')}
+                                </div>
+                              )}
+                            </div>
+                            <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                              {pe.executedAt || pe.periodMonth || '--'}
+                            </span>
+                          </div>
+                        ))}
+
+                        {linkedExterne.slice(0, 4).map((se: any, idx: number) => (
+                          <div
+                            key={`cv-se-${se.id || idx}`}
+                            className="p-2 rounded-lg bg-white border border-amber-200/80 flex items-center justify-between gap-2 text-[11px]"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <ExternalLink className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span className="font-mono font-bold text-amber-900">
+                                  Externe ({se.prestataire || 'Atelier'})
+                                </span>
+                                <span className="font-semibold text-slate-800 truncate">
+                                  {se.nature_travaux || se.motif || 'Révision externe'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                              {se.date_sortie || '--'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="pt-2 flex justify-end">

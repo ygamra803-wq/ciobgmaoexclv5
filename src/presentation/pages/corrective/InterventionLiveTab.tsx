@@ -14,7 +14,9 @@ import {
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { stockIndexStore } from '../../../application/StockIndexStore';
-import { isWarehouseComponent } from '../../../core/domain/EntrepotItem';
+import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
+import { rankStockItemsByMachineBom } from '../../../core/domain';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import { useI18n } from '../../../i18n/I18nContext';
 
 export default function InterventionLiveTab({
@@ -36,6 +38,7 @@ export default function InterventionLiveTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const blueprints = useGmaoStore((s) => s.blueprints);
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
@@ -141,6 +144,9 @@ export default function InterventionLiveTab({
     temps_arret: '',
     pieces_utilisees: [],
     id_composant: '',
+    nom_composant: '',
+    id_part: '',
+    nom_part: '',
     statut_composant_cloture: 'En service',
   });
 
@@ -165,6 +171,9 @@ export default function InterventionLiveTab({
           ? activeIntervention.pieces_utilisees
           : [],
         id_composant: activeIntervention.id_composant || '',
+        nom_composant: activeIntervention.nom_composant || '',
+        id_part: activeIntervention.id_part || '',
+        nom_part: activeIntervention.nom_part || '',
         statut_composant_cloture: 'En service',
       });
       setTravailSearch(activeIntervention.travail_a_faire || '');
@@ -178,6 +187,16 @@ export default function InterventionLiveTab({
     return warehouseItems.filter((w) => {
       const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
       return (wMach === code || wMach.includes(code)) && isWarehouseComponent(w);
+    });
+  }, [activeIntervention?.code_machine, warehouseItems]);
+
+  // Machine structural parts (Localization sites — no stock deduction)
+  const machineParts = useMemo(() => {
+    if (!activeIntervention?.code_machine || !Array.isArray(warehouseItems)) return [];
+    const code = String(activeIntervention.code_machine).trim().toUpperCase();
+    return warehouseItems.filter((w) => {
+      const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
+      return (wMach === code || wMach.includes(code)) && isWarehousePart(w);
     });
   }, [activeIntervention?.code_machine, warehouseItems]);
 
@@ -217,14 +236,33 @@ export default function InterventionLiveTab({
     return [];
   }, [activeIntervention, actionsByPanne, getActionsForPanneProp]);
 
-  // Filtered Stock Items for PDR lookup
+  // Filtered & BOM-Ranked Stock Items for PDR lookup (P2)
   const [pdrSearch, setPdrSearch] = useState('');
   const [showPdrList, setShowPdrList] = useState(false);
 
+  const rankedMachineStockItems = useMemo(() => {
+    return rankStockItemsByMachineBom(
+      activeIntervention?.code_machine,
+      stockItems,
+      machines,
+      blueprints,
+      formState.id_composant || formState.nom_composant || formState.id_part || formState.nom_part
+    );
+  }, [
+    activeIntervention?.code_machine,
+    stockItems,
+    machines,
+    blueprints,
+    formState.id_composant,
+    formState.nom_composant,
+    formState.id_part,
+    formState.nom_part,
+  ]);
+
   const matchedStockItems = useMemo(() => {
-    if (!pdrSearch.trim()) return stockItems.slice(0, 10);
+    if (!pdrSearch.trim()) return rankedMachineStockItems.slice(0, 12);
     const term = pdrSearch.toLowerCase().trim();
-    return stockItems
+    return rankedMachineStockItems
       .filter(
         (s) =>
           String(s.ref || s.code_article || '').toLowerCase().includes(term) ||
@@ -233,7 +271,7 @@ export default function InterventionLiveTab({
           String(s.marque || '').toLowerCase().includes(term)
       )
       .slice(0, 15);
-  }, [stockItems, pdrSearch]);
+  }, [rankedMachineStockItems, pdrSearch]);
 
   // Handle Select PDR
   const handleSelectPdr = (item) => {
@@ -591,9 +629,14 @@ export default function InterventionLiveTab({
                         onClick={() => handleSelectPdr(item)}
                         className="p-2 text-xs rounded-lg hover:bg-cyan-50 text-slate-800 cursor-pointer font-medium transition flex items-center justify-between"
                       >
-                        <div className="min-w-0 pr-2">
+                        <div className="min-w-0 pr-2 flex items-center gap-1.5 flex-wrap">
+                          {item.isBomRecommended && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono font-bold text-[10px] shrink-0">
+                              ★ {item.bomSourceLabel || 'BOM'}
+                            </span>
+                          )}
                           <span className="font-mono font-bold text-cyan-900">{item.ref || item.code_article}</span>
-                          <span className="text-slate-600 ml-2 truncate">{item.designation || item.nom}</span>
+                          <span className="text-slate-600 truncate">{item.designation || item.nom}</span>
                         </div>
                         <span className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border shrink-0 ${
                           dispo > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
@@ -746,17 +789,32 @@ export default function InterventionLiveTab({
             </div>
           </div>
 
-          {/* Organe / Composant Entrepôt Lifecycle Update on Closure */}
-          {(machineComponents.length > 0 || formState.id_composant) && (
-            <div className="pt-3 border-t border-cyan-200/70 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Organe / Composant (Cycle de vie) & Part (Localisation Structurelle — Sans déstockage) */}
+          {(machineComponents.length > 0 ||
+            machineParts.length > 0 ||
+            formState.id_composant ||
+            formState.id_part) && (
+            <div className="pt-3 border-t border-cyan-200/70 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
                   <Cpu className="w-3.5 h-3.5 text-cyan-700" />
-                  <span>Organe / Composant concerné (Entrepôt)</span>
+                  <span>Organe / Composant (Cycle de vie)</span>
                 </label>
                 <select
                   value={formState.id_composant || ''}
-                  onChange={(e) => setFormState({ ...formState, id_composant: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const found = machineComponents.find(
+                      (c: any) => String(c.id_warehouse_item || c.id || c.id_item) === val
+                    );
+                    setFormState({
+                      ...formState,
+                      id_composant: val,
+                      nom_composant: found
+                        ? String(found.designation || found.nom_composant || found.nom || val)
+                        : '',
+                    });
+                  }}
                   className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
                 >
                   <option value="">— Aucun composant spécifique —</option>
@@ -788,6 +846,38 @@ export default function InterventionLiveTab({
                   </select>
                 </div>
               )}
+              <div>
+                <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+                  Localisation / Part Structurelle (Sans déstockage)
+                </label>
+                <select
+                  value={formState.id_part || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const found = machineParts.find(
+                      (p: any) => String(p.id_warehouse_item || p.id || p.id_item) === val
+                    );
+                    setFormState({
+                      ...formState,
+                      id_part: val,
+                      nom_part: found
+                        ? String(found.designation_part || found.designation || found.nom || val)
+                        : '',
+                    });
+                  }}
+                  className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+                >
+                  <option value="">— Aucun site structurel —</option>
+                  {machineParts.map((part: any) => {
+                    const pId = part.id_warehouse_item || part.id || part.id_item;
+                    return (
+                      <option key={pId} value={pId}>
+                        {pId} · {part.designation_part || part.designation || part.nom || 'Part'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
           )}
         </div>

@@ -62,7 +62,7 @@ export default function BlueprintMachineView({
   partTypes = [],
   partDesignations = [],
   stockItems = [],
-  warehouseItems: _warehouseItems = [],
+  warehouseItems = [],
   mouvements = [],
   blueprintFamilyFilter = 'ALL',
   setBlueprintFamilyFilter = () => {},
@@ -131,13 +131,20 @@ export default function BlueprintMachineView({
   // Helper inputs for adding items into Tab 2, 3, 4, 5, 6
   const [newCompItem, setNewCompItem] = useState({ id_component: '', libelle: '', qte: 1 });
   const [newPartItem, setNewPartItem] = useState({ id_part: '', libelle: '', qte: 1 });
-  const [newPdrItem, setNewPdrItem] = useState({ id_pdr: '', libelle: '', qte: 1, criticite: 'Haute' });
+  const [newPdrItem, setNewPdrItem] = useState({
+    id_pdr: '',
+    libelle: '',
+    qte: 1,
+    criticite: 'Haute',
+    parent_component_key: '',
+  });
   const [newPreventiveItem, setNewPreventiveItem] = useState({
     composant: '',
     action_code: 'C',
     frequence: 'Mensuel',
     duree_min: 15,
     description: '',
+    pdr_ref: '',
   });
   const [newCommonFailureItem, setNewCommonFailureItem] = useState({
     title: '',
@@ -450,10 +457,15 @@ export default function BlueprintMachineView({
 
     // Fallback store execution if prop not injected
     const storeState = useGmaoStore.getState();
+    const effectiveWarehouse =
+      Array.isArray(warehouseItems) && warehouseItems.length > 0
+        ? warehouseItems
+        : storeState.warehouseItems || [];
     const { addedTasks, updatedTasks, targetMachinesCount } = applyBlueprintPlanToActiveMachines(
       normalizedBp,
       machines,
-      storeState.preventiveTasks || []
+      storeState.preventiveTasks || [],
+      effectiveWarehouse
     );
     if (targetMachinesCount > 0 && addedTasks.length > 0) {
       storeState.setPreventiveTasks(updatedTasks);
@@ -2645,11 +2657,37 @@ export default function BlueprintMachineView({
                         <option value="Faible">Critique : Faible</option>
                       </select>
 
+                      <select
+                        value={newPdrItem.parent_component_key || ''}
+                        onChange={(e) =>
+                          setNewPdrItem({ ...newPdrItem, parent_component_key: e.target.value })
+                        }
+                        className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700"
+                        title="Rattacher cette PDR à un Composant parent du Blueprint (BOM semi-hiérarchique)"
+                      >
+                        <option value="">Organe parent (Machine globale)</option>
+                        {((toEdit ? toEdit.components_theoriques : form.components_theoriques) || []).map(
+                          (c, idx) => {
+                            const key = c.libelle || c.id_component || `comp-${idx}`;
+                            return (
+                              <option key={`pdr-parent-comp-${idx}`} value={key}>
+                                Organe : {key}
+                              </option>
+                            );
+                          }
+                        )}
+                      </select>
+
                       <button
                         type="button"
                         onClick={() => {
                           if (!newPdrItem.id_pdr) return;
-                          const item = { ...newPdrItem };
+                          const item = {
+                            ...newPdrItem,
+                            ...(newPdrItem.parent_component_key
+                              ? { parent_component_key: newPdrItem.parent_component_key }
+                              : {}),
+                          };
                           if (toEdit) {
                             setToEdit({
                               ...toEdit,
@@ -2661,7 +2699,13 @@ export default function BlueprintMachineView({
                               pdr_theoriques: [...form.pdr_theoriques, item],
                             });
                           }
-                          setNewPdrItem({ id_pdr: '', libelle: '', qte: 1, criticite: 'Haute' });
+                          setNewPdrItem({
+                            id_pdr: '',
+                            libelle: '',
+                            qte: 1,
+                            criticite: 'Haute',
+                            parent_component_key: '',
+                          });
                         }}
                         className="h-8 px-3 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition"
                       >
@@ -2673,11 +2717,16 @@ export default function BlueprintMachineView({
                     <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
                       {(toEdit ? toEdit.pdr_theoriques : form.pdr_theoriques)?.map((p, idx) => (
                         <div key={`form-pdr-${p.id_pdr || idx}-${idx}`} className="p-2.5 flex items-center justify-between hover:bg-slate-50">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">
                               {p.id_pdr}
                             </span>
                             <span className="font-semibold text-slate-800">{p.libelle}</span>
+                            {p.parent_component_key && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[10px] font-bold">
+                                ↳ Organe: {p.parent_component_key}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span
@@ -2825,8 +2874,21 @@ export default function BlueprintMachineView({
                             value={newPreventiveItem.description}
                             onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, description: e.target.value })}
                             placeholder="Consigne / Description de l'opération..."
-                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1 min-w-[180px]"
+                            className="h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs flex-1 min-w-[160px]"
                           />
+                          <select
+                            value={newPreventiveItem.pdr_ref || ''}
+                            onChange={(e) => setNewPreventiveItem({ ...newPreventiveItem, pdr_ref: e.target.value })}
+                            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 max-w-[180px]"
+                            title="PDR consommable recommandée lors de cette opération préventive"
+                          >
+                            <option value="">PDR suggérée (optionnel)</option>
+                            {stockItems.map((s, idx) => (
+                              <option key={`pm-pdr-opt-${s.ref || idx}-${idx}`} value={s.ref}>
+                                {s.ref} • {s.designation}
+                              </option>
+                            ))}
+                          </select>
                           <div className="flex items-center gap-1">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
                             <input
@@ -2848,13 +2910,19 @@ export default function BlueprintMachineView({
                             type="button"
                             onClick={() => {
                               if (!newPreventiveItem.frequence) return;
-                              const item = {
+                              const compText = newPreventiveItem.composant.trim() || 'Machine entière';
+                              const item: any = {
                                 id: `BPP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                                composant: newPreventiveItem.composant.trim() || 'Machine entière',
+                                composant: compText,
+                                component_ref:
+                                  compText !== 'Machine entière' ? compText : undefined,
                                 action_code: newPreventiveItem.action_code || 'C',
                                 frequence: newPreventiveItem.frequence || 'Mensuel',
                                 duree_min: Number(newPreventiveItem.duree_min) || 15,
                                 description: newPreventiveItem.description.trim(),
+                                ...(newPreventiveItem.pdr_ref
+                                  ? { pdr_refs: [newPreventiveItem.pdr_ref] }
+                                  : {}),
                               };
                               if (toEdit) {
                                 setToEdit({
@@ -2873,6 +2941,7 @@ export default function BlueprintMachineView({
                                 frequence: 'Mensuel',
                                 duree_min: 15,
                                 description: '',
+                                pdr_ref: '',
                               });
                             }}
                             className="h-8 px-3 rounded-lg bg-teal-600 text-white font-semibold text-xs hover:bg-teal-700 transition flex items-center gap-1"
@@ -2902,6 +2971,11 @@ export default function BlueprintMachineView({
                                   <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
                                     {item.frequence}
                                   </span>
+                                  {Array.isArray(item.pdr_refs) && item.pdr_refs.length > 0 && (
+                                    <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono text-[10px] font-bold">
+                                      PDR: {item.pdr_refs.join(', ')}
+                                    </span>
+                                  )}
                                   {item.duree_min && (
                                     <span className="font-mono text-[11px] text-slate-500">
                                       {item.duree_min} min

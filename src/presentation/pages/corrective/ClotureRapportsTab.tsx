@@ -1139,6 +1139,31 @@ export default function ClotureRapportsTab({
                       <div className="font-medium text-slate-900">
                         <b>Type {previewItem.type_panne || 'M'} :</b> {previewItem.anomalie || 'court_circuit'}
                       </div>
+                      {(previewItem.id_composant ||
+                        previewItem.nom_composant ||
+                        previewItem.id_part ||
+                        previewItem.nom_part) && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {(previewItem.id_composant || previewItem.nom_composant) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-200 text-[11px] font-mono font-bold">
+                              Organe / Composant :{' '}
+                              {previewItem.nom_composant || previewItem.id_composant}
+                              {previewItem.id_composant && previewItem.nom_composant
+                                ? ` (${previewItem.id_composant})`
+                                : ''}
+                            </span>
+                          )}
+                          {(previewItem.id_part || previewItem.nom_part) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-mono font-bold">
+                              Localisation / Part :{' '}
+                              {previewItem.nom_part || previewItem.id_part}
+                              {previewItem.id_part && previewItem.nom_part
+                                ? ` (${previewItem.id_part})`
+                                : ''}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <p className="text-[11px] text-slate-600 leading-relaxed">
                         <b>Travail Réalisé :</b> {previewItem.action_realisee || previewItem.travail_a_faire || 'Intervention standard'}
                       </p>

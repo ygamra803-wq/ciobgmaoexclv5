@@ -4,9 +4,14 @@ import { TaskService } from '../../application/services/preventive/TaskService';
 import { PlanService } from '../../application/services/preventive/PlanService';
 import { PreventiveService } from '../../application/services/PreventiveService';
 import { buildConsumablePdrInventory } from '../../presentation/pages/preventive/components/TabMainView';
+import {
+  applyBlueprintPlanToActiveMachines,
+  rankStockItemsByMachineBom,
+} from '../../core/domain/Blueprint';
+import { CorrectiveIntervention } from '../../domain/corrective/entities/CorrectiveIntervention';
 import { storageService } from '../../utils/storageService';
 
-describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (ADR-09)', () => {
+describe('Phase P7 (P0–P5): Canonical Organe FKs, Part Localization, Semi-Hierarchical BOM & Smart PDR Ranking (ADR-09)', () => {
   beforeEach(() => {
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
@@ -14,7 +19,7 @@ describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (A
     storageService.clearCache?.();
   });
 
-  it('propagates id_composant, nom_composant, id_part, and nom_part from PreventiveTask to PreventiveExecutionRecord', () => {
+  it('P1: propagates id_composant, nom_composant, id_part, and nom_part from PreventiveTask to PreventiveExecutionRecord', () => {
     const taskWithComponentAndPart = {
       id: 'TASK-P7-001',
       code: 'PRV-DET01-MOT01',
@@ -64,7 +69,7 @@ describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (A
     expect(exec.sparesCost).toBe(28);
   });
 
-  it('preserves id_composant, id_part, and pdr_requises when generating tasks via PlanService.createPlanWithTasks', () => {
+  it('P1: preserves id_composant, id_part, and pdr_requises when generating tasks via PlanService.createPlanWithTasks', () => {
     const result = PlanService.createPlanWithTasks(
       {
         id_machine: 'PRH-02',
@@ -108,7 +113,7 @@ describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (A
     expect(createdTask.pdr_ref).toBe('KIT-JOINT-PRH');
   });
 
-  it('prioritizes explicit task.pdr_requises in PreventiveService.getRecommendedPDRForAction', () => {
+  it('P5: prioritizes explicit task.pdr_requises in PreventiveService.getRecommendedPDRForAction', () => {
     const task = {
       id: 'TASK-P7-002',
       action_code: 'R',
@@ -125,7 +130,7 @@ describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (A
     expect(recommended[0].prix_unitaire).toBe(120);
   });
 
-  it('strictly filters availableInventory to consumable PDR stockItems and excludes COMPONENT / PART items', () => {
+  it('P0: strictly filters availableInventory to consumable PDR stockItems and excludes COMPONENT / PART items', () => {
     const mixedInput = [
       {
         ref: 'ROUL-6204',
@@ -167,4 +172,139 @@ describe('Phase P7.1: Canonical Organe FKs & Strict Consumable PDR Separation (A
     expect(consumableInventory.some((i) => i.ref === 'REF-10A111-NA')).toBe(false);
     expect(consumableInventory.some((i) => i.ref === 'PART-MANDRIN-01')).toBe(false);
   });
+
+  it('P2: rankStockItemsByMachineBom ranks Component BOM first, Machine/Blueprint BOM second, and general warehouse third without hiding items', () => {
+    const stockItems = [
+      { ref: 'GEN-VIS-M8', designation: 'Vis CHC M8', stockActuel: 100 },
+      { ref: 'BP-COUR-HTD', designation: 'Courroie HTD 8M', stockActuel: 4 },
+      { ref: 'COMP-ROUL-6306', designation: 'Roulement Broche 6306', stockActuel: 8 },
+    ];
+    const machines = [
+      {
+        id_machine_registered: 'CNC-01',
+        code_machine: 'CNC-01',
+        id_blueprint: 'BPT-CNC',
+      },
+    ];
+    const blueprints = [
+      {
+        id_blueprint: 'BPT-CNC',
+        pdr_theoriques: [
+          { id_pdr: 'BP-COUR-HTD', libelle: 'Courroie HTD 8M', qte: 1 },
+          {
+            id_pdr: 'COMP-ROUL-6306',
+            libelle: 'Roulement Broche 6306',
+            qte: 2,
+            parent_component_key: 'Broche Principale',
+          },
+        ],
+      },
+    ];
+
+    const ranked = rankStockItemsByMachineBom(
+      'CNC-01',
+      stockItems,
+      machines,
+      blueprints,
+      'Broche Principale'
+    );
+
+    expect(ranked.length).toBe(3);
+    expect(ranked[0].ref).toBe('COMP-ROUL-6306');
+    expect(ranked[0].bomPriority).toBe(1);
+    expect(ranked[0].isBomRecommended).toBe(true);
+
+    expect(ranked[1].ref).toBe('BP-COUR-HTD');
+    expect(ranked[1].bomPriority).toBe(2);
+    expect(ranked[1].isBomRecommended).toBe(true);
+
+    expect(ranked[2].ref).toBe('GEN-VIS-M8');
+    expect(ranked[2].bomPriority).toBe(3);
+    expect(ranked[2].isBomRecommended).toBe(false);
+  });
+
+  it('P3: CorrectiveIntervention preserves both id_composant / nom_composant and structural localization id_part / nom_part', () => {
+    const ci = new CorrectiveIntervention({
+      id: 'DI-901',
+      code_machine: 'TRR-11',
+      id_composant: 'COMP-MOT-11',
+      nom_composant: 'Moteur Broche 15kW',
+      id_part: 'PART-POUPEE-FIXE',
+      nom_part: 'Poupée Fixe',
+      statut_composant_cloture: 'En service',
+      anomalie: 'Échauffement palier',
+      statut: 'CLOTURE',
+      action_fermee: 'OUI',
+    }).toJSON();
+
+    expect(ci.id_composant).toBe('COMP-MOT-11');
+    expect(ci.nom_composant).toBe('Moteur Broche 15kW');
+    expect(ci.id_part).toBe('PART-POUPEE-FIXE');
+    expect(ci.nom_part).toBe('Poupée Fixe');
+    expect(ci.statut_composant_cloture).toBe('En service');
+  });
+
+  it('P4 & P5: applyBlueprintPlanToActiveMachines resolves installed id_composant from warehouseItems and inherits pdr_requises from semi-hierarchical BOM', () => {
+    const blueprint = {
+      id_blueprint: 'BPT-DET-100',
+      libelle: 'Plan Détoureuse CNC',
+      components_theoriques: [{ id_component: 'COMP-BROCHE', libelle: 'Broche Principale' }],
+      pdr_theoriques: [
+        {
+          id_pdr: 'ROUL-7006',
+          libelle: 'Roulement Céramique 7006',
+          qte: 2,
+          parent_component_key: 'Broche Principale',
+        },
+      ],
+      preventivePlanItems: [
+        {
+          id: 'PM-ITEM-1',
+          composant: 'Broche Principale',
+          component_ref: 'Broche Principale',
+          action_code: 'G',
+          frequence: 'Mensuel',
+          duree_min: 20,
+          description: 'Graissage roulements broche',
+        },
+      ],
+    };
+
+    const machines = [
+      {
+        id_machine_registered: 'DET-01',
+        code_machine: 'DET-01',
+        designation: 'Détoureuse 01',
+        id_blueprint: 'BPT-DET-100',
+        statut: 'Opérationnelle',
+      },
+    ];
+
+    const warehouseItems = [
+      {
+        id_warehouse_item: 'WH-COMP-BROCHE-01',
+        designation: 'Broche Principale',
+        nature: 'COMPONENT',
+        id_machine_registered: 'DET-01',
+        status: 'En service',
+      },
+    ];
+
+    const res = applyBlueprintPlanToActiveMachines(blueprint, machines, [], warehouseItems);
+    expect(res.addedCount).toBe(1);
+    const generatedTask = res.addedTasks[0];
+    expect(generatedTask.id_machine).toBe('DET-01');
+    expect(generatedTask.id_composant).toBe('WH-COMP-BROCHE-01');
+    expect(generatedTask.nom_composant).toBe('Broche Principale');
+    expect(generatedTask.pdr_requises).toEqual([
+      {
+        ref: 'ROUL-7006',
+        nom: 'Roulement Céramique 7006',
+        designation: 'Roulement Céramique 7006',
+        quantite: 2,
+      },
+    ]);
+    expect(generatedTask.pdr_ref).toBe('ROUL-7006');
+  });
 });
+

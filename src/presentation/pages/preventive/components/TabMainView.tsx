@@ -38,7 +38,8 @@ import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
-import { doesTaskMatchBlueprint } from '../../../../core/domain';
+import { doesTaskMatchBlueprint, rankStockItemsByMachineBom } from '../../../../core/domain';
+import { isWarehouseComponent, isWarehousePart } from '../../../../core/domain/EntrepotItem';
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -185,8 +186,8 @@ export default function TabMainView({
   const [selectedTaskForBT, setSelectedTaskForBT] = useState(null);
   const [selectedTaskForPrint, setSelectedTaskForPrint] = useState(null);
 
-  // Validation Form State with PDR & Labor
-  const [validationData, setValidationData] = useState({
+  // Validation Form State with PDR & Labor & Canonical Organ IDs (P1)
+  const [validationData, setValidationData] = useState<any>({
     date_realisation: new Date().toISOString().split('T')[0],
     technicien: '',
     duree_reelle: '20 min',
@@ -195,6 +196,10 @@ export default function TabMainView({
     usedPDR: [],
     mode_calcul_recurrence: 'FIXE',
     compteur_releve: '',
+    id_composant: '',
+    nom_composant: '',
+    id_part: '',
+    nom_part: '',
   });
 
   // Custom PDR item add form inside modal
@@ -507,7 +512,52 @@ export default function TabMainView({
   // P7.1 ADR-09: Available consumable inventory comes exclusively from Stock PDR Magasin (`stockItems`)
   const availableInventory = useMemo(() => buildConsumablePdrInventory(stockItems), [stockItems]);
 
-  // Open Validation Modal with prefilled recommended PDR
+  // Machine components & structural parts from Entrepôt for the task being validated (P1)
+  const validationMachineComponents = useMemo(() => {
+    if (!selectedTaskForValidation?.id_machine || !Array.isArray(warehouseItems)) return [];
+    const code = String(selectedTaskForValidation.id_machine).trim().toUpperCase();
+    return warehouseItems.filter((w) => {
+      const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
+      return (wMach === code || wMach.includes(code)) && isWarehouseComponent(w);
+    });
+  }, [selectedTaskForValidation?.id_machine, warehouseItems]);
+
+  const validationMachineParts = useMemo(() => {
+    if (!selectedTaskForValidation?.id_machine || !Array.isArray(warehouseItems)) return [];
+    const code = String(selectedTaskForValidation.id_machine).trim().toUpperCase();
+    return warehouseItems.filter((w) => {
+      const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
+      return (wMach === code || wMach.includes(code)) && isWarehousePart(w);
+    });
+  }, [selectedTaskForValidation?.id_machine, warehouseItems]);
+
+  // P2: Smart BOM-ranked inventory for the validation modal
+  const rankedValidationInventory = useMemo(() => {
+    if (!selectedTaskForValidation) return availableInventory;
+    return rankStockItemsByMachineBom(
+      selectedTaskForValidation.id_machine,
+      availableInventory,
+      machines,
+      blueprints,
+      validationData.id_composant ||
+        validationData.nom_composant ||
+        validationData.id_part ||
+        validationData.nom_part ||
+        selectedTaskForValidation.composant,
+      selectedTaskForValidation
+    );
+  }, [
+    selectedTaskForValidation,
+    availableInventory,
+    machines,
+    blueprints,
+    validationData.id_composant,
+    validationData.nom_composant,
+    validationData.id_part,
+    validationData.nom_part,
+  ]);
+
+  // Open Validation Modal with prefilled recommended PDR & auto-resolved id_composant / id_part
   const handleOpenValidate = (task) => {
     setSelectedTaskForValidation(task);
     const rawRecommended = PreventiveService.getRecommendedPDRForAction(task.action_code, task.composant, task);
@@ -525,19 +575,53 @@ export default function TabMainView({
         prix_unitaire: Number(stockMatch?.prix_unitaire ?? rec.prix_unitaire ?? 0),
       };
     });
+
+    // Auto-resolve canonical id_composant or id_part from warehouseItems if task only has text `composant`
+    let resolvedIdComp = task.id_composant || '';
+    let resolvedNomComp = task.nom_composant || '';
+    let resolvedIdPart = task.id_part || '';
+    let resolvedNomPart = task.nom_part || '';
+
+    if (!resolvedIdComp && !resolvedIdPart && task.composant && task.id_machine && Array.isArray(warehouseItems)) {
+      const mCode = String(task.id_machine).trim().toUpperCase();
+      const compText = String(task.composant).trim().toUpperCase();
+      if (compText && compText !== 'MACHINE ENTIÈRE' && compText !== 'MACHINE ENTIERE') {
+        const machItems = warehouseItems.filter((w) => {
+          const wMach = String(w.id_machine_registered || w.id_machine || w.machine_id || '').trim().toUpperCase();
+          return wMach === mCode || wMach.includes(mCode);
+        });
+        const matchedW = machItems.find((w) => {
+          const wId = String(w.id_warehouse_item || w.id || '').trim().toUpperCase();
+          const wDesig = String(w.designation || w.designation_part || w.nom_composant || w.nom || '').trim().toUpperCase();
+          return wId === compText || wDesig === compText || wDesig.includes(compText) || compText.includes(wDesig);
+        });
+        if (matchedW) {
+          const wId = String(matchedW.id_warehouse_item || matchedW.id || '');
+          const wName = String(matchedW.designation || matchedW.designation_part || matchedW.nom_composant || matchedW.nom || wId);
+          if (isWarehousePart(matchedW)) {
+            resolvedIdPart = wId;
+            resolvedNomPart = wName;
+          } else {
+            resolvedIdComp = wId;
+            resolvedNomComp = wName;
+          }
+        }
+      }
+    }
+
     setValidationData({
       date_realisation: new Date().toISOString().split('T')[0],
       technicien: task.responsable || '',
       duree_reelle: task.duree_estimee || '15 min',
       taux_horaire: 35,
-      observations: `Intervention préventive ${task.action_code} sur ${task.composant || task.nom_composant || task.nom_part || 'Machine'} (${task.id_machine}) exécutée conformément.`,
+      observations: `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`,
       usedPDR: enrichedRecommended,
       mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
       compteur_releve: task.compteur_actuel || '',
-      ...(task.id_composant ? { id_composant: task.id_composant } : {}),
-      ...(task.nom_composant ? { nom_composant: task.nom_composant } : {}),
-      ...(task.id_part ? { id_part: task.id_part } : {}),
-      ...(task.nom_part ? { nom_part: task.nom_part } : {}),
+      id_composant: resolvedIdComp,
+      nom_composant: resolvedNomComp,
+      id_part: resolvedIdPart,
+      nom_part: resolvedNomPart,
     });
   };
 
@@ -1508,12 +1592,87 @@ export default function TabMainView({
                 </div>
               </div>
 
+              {/* P1: Organe / Composant (Cycle de vie) & Localisation Part Structurelle */}
+              {(validationMachineComponents.length > 0 ||
+                validationMachineParts.length > 0 ||
+                validationData.id_composant ||
+                validationData.id_part) && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">
+                      Organe / Composant rattaché (Carnet de vie) :
+                    </label>
+                    <select
+                      value={validationData.id_composant || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const found = validationMachineComponents.find(
+                          (c) => String(c.id_warehouse_item || c.id) === val
+                        );
+                        setValidationData({
+                          ...validationData,
+                          id_composant: val,
+                          nom_composant: found
+                            ? String(found.designation || found.nom_composant || found.nom || val)
+                            : '',
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-medium text-slate-800"
+                    >
+                      <option value="">-- Machine entière / Sans composant spécifique --</option>
+                      {validationMachineComponents.map((c) => {
+                        const cId = c.id_warehouse_item || c.id;
+                        const cName = c.designation || c.nom_composant || c.nom || cId;
+                        return (
+                          <option key={cId} value={cId}>
+                            {cId} · {cName}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 uppercase mb-1">
+                      Part / Localisation Structurelle (Sans déstockage) :
+                    </label>
+                    <select
+                      value={validationData.id_part || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const found = validationMachineParts.find(
+                          (p) => String(p.id_warehouse_item || p.id) === val
+                        );
+                        setValidationData({
+                          ...validationData,
+                          id_part: val,
+                          nom_part: found
+                            ? String(found.designation_part || found.designation || found.nom || val)
+                            : '',
+                        });
+                      }}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-medium text-slate-800"
+                    >
+                      <option value="">-- Aucune localisation structurelle --</option>
+                      {validationMachineParts.map((p) => {
+                        const pId = p.id_warehouse_item || p.id;
+                        const pName = p.designation_part || p.designation || p.nom || pId;
+                        return (
+                          <option key={pId} value={pId}>
+                            {pId} · {pName}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              )}
+
               {/* PDR Consumables Section */}
               <div className="bg-indigo-50/50 border border-indigo-200/70 rounded-2xl p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase">
                     <Package className="w-4 h-4 text-indigo-600" />
-                    <span>Pièces de rechange & consommables utilisés (Stock PDR)</span>
+                    <span>Pièces de rechange & consommables utilisés (Stock PDR · Tri BOM)</span>
                   </span>
                   <span className="text-[11px] font-mono text-indigo-700 font-bold">
                     {validationData.usedPDR.length} pièce(s)
@@ -1543,13 +1702,13 @@ export default function TabMainView({
                   </div>
                 )}
 
-                {/* Add Quick PDR from inventory dropdown */}
+                {/* Add Quick PDR from BOM-ranked inventory dropdown */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100 text-xs">
                   <div className="sm:col-span-8">
                     <select
                       value={newPdrItem.reference}
                       onChange={(e) => {
-                        const it = availableInventory.find((i) => i.reference === e.target.value || i.ref === e.target.value);
+                        const it = rankedValidationInventory.find((i) => i.reference === e.target.value || i.ref === e.target.value);
                         if (it) {
                           setNewPdrItem({
                             id_article: it.id_article || `PDR-${it.reference}`,
@@ -1565,9 +1724,10 @@ export default function TabMainView({
                       className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl text-slate-800 font-medium"
                     >
                       <option value="">Sélectionner une pièce consommable (Stock PDR Magasin)...</option>
-                      {availableInventory.map((item, idx) => (
+                      {rankedValidationInventory.map((item, idx) => (
                         <option key={idx} value={item.reference}>
-                          [{item.source}] {item.reference} - {item.designation} (Stock: {item.stockActuel})
+                          {item.isBomRecommended ? `★ [${item.bomSourceLabel}] ` : `[${item.source}] `}
+                          {item.reference} - {item.designation} (Stock: {item.stockActuel})
                         </option>
                       ))}
                     </select>
