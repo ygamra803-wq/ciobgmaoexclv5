@@ -12,6 +12,8 @@ export {
   getBlueprintCommonFailuresForMachine,
   rankStockItemsByMachineBom,
   buildUnifiedMachineNexusElements,
+  buildLedgerEntriesFromBlueprint,
+  applyReplacementMovementToLedger,
   type BlueprintPreventivePlanItem,
   type BlueprintCommonFailureItem,
   type BlueprintPdrItem,

@@ -53,6 +53,7 @@ import SortieEntreeIcon from '../../components/common/SortieEntreeIcon';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import SortieExterneBobinageTab from './components/SortieExterneBobinageTab';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { applyReplacementMovementToLedger } from '../../../core/domain';
 
 // Custom Select Component with BDR Light styling and optional onAddNew
 function CustomSelect({
@@ -433,15 +434,20 @@ export default function SortieRapideView({
         ...(finalTech ? { technicien: finalTech } : {}),
       }));
 
+      if (viewMode === 'JOURNAL') {
+        setIsFloatingFormOpen(true);
+      }
+
       if (quickSortiePreset.ref || quickSortiePreset.designation) {
+        const presetQty = Math.max(1, Number(quickSortiePreset.quantite) || 1);
         setMouvementItems([
           {
             source: src,
             ref: quickSortiePreset.ref || '',
             designation: quickSortiePreset.designation || '',
             type: quickSortiePreset.type || '',
-            quantite: 1,
-            unit: 'pcs',
+            quantite: presetQty,
+            unit: quickSortiePreset.unit || 'pcs',
             emplacement: quickSortiePreset.emplacement || '',
           },
         ]);
@@ -460,7 +466,7 @@ export default function SortieRapideView({
         ]);
       }
     }
-  }, [quickSortiePreset, machines, zones]);
+  }, [quickSortiePreset, machines, zones, viewMode]);
 
   // Handle flow type change
   const handleTypeChange = (newType) => {
@@ -1277,21 +1283,20 @@ export default function SortieRapideView({
         onAddMouvement(mvtRecord);
       }
 
-      // If this is a Sortie destined for a Machine, auto-update the Machine BOM Ledger
+      // N4: If this is a Sortie destined for a Machine, auto-update the Machine BOM Ledger (reset hours, installation date, status)
       if (isSortie && form.id_machine_registered && machineElementsLedger && updateMachineElement) {
-        const matchingBom = machineElementsLedger.find(
-          (b) =>
-            String(b.id_machine_registered).trim() === String(form.id_machine_registered).trim() &&
-            (String(b.ref_element || b.ref).trim() === String(item.ref).trim())
-        );
-        if (matchingBom) {
-          updateMachineElement(matchingBom.id, {
-            ...matchingBom,
-            heures_actuelles: 0,
-            date_installation: form.date || new Date().toISOString().slice(0, 10),
-            technicien: mvtTech || matchingBom.technicien || 'Technicien',
-            statut: 'OPERATIONNEL',
-          });
+        const { updatedElement } = applyReplacementMovementToLedger(machineElementsLedger, {
+          id_machine_registered: form.id_machine_registered,
+          ref: item.ref,
+          date: form.date || new Date().toISOString().slice(0, 10),
+          technicien: mvtTech,
+          ledgerElementId:
+            quickSortiePreset && String(quickSortiePreset.ref || '').trim().toUpperCase() === String(item.ref || '').trim().toUpperCase()
+              ? quickSortiePreset.ledgerElementId
+              : undefined,
+        });
+        if (updatedElement) {
+          updateMachineElement(updatedElement.id, updatedElement);
         }
       }
 

@@ -115,6 +115,15 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('sortie'));
   };
 
+  const handleNavigateToQuickSortieFromNexus = (preset) => {
+    if (!preset) return;
+    setQuickSortiePreset({
+      source: 'STOCK_PDR',
+      ...preset,
+    });
+    startTransition(() => setCurrentTab('sortie'));
+  };
+
   const handleNavigateToDiagFiltered = handleNavigateToDesignationsFiltered;
 
   const handleNavigateToFamilyFiltered = (familyId) => {
@@ -297,6 +306,7 @@ export function useAppNavigation({ setCurrentTab }) {
       handleNavigateToCreateCompTemplateForFamily,
       handleNavigateToQuickSortieFromCompTemplate,
       handleNavigateToQuickSortieFromMachine,
+      handleNavigateToQuickSortieFromNexus,
       handleNavigateToDiagFiltered,
       handleNavigateToFamilyFiltered,
       handleNavigateToTemplatesFiltered,

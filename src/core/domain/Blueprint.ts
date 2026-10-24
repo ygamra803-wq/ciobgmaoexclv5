@@ -648,6 +648,261 @@ export function buildUnifiedMachineNexusElements(
   return unified;
 }
 
+/**
+ * N3 — Initialiser depuis Blueprint:
+ * Pure domain function that extracts missing theoretical PDRs, Components, and Parts from a Machine's Blueprint
+ * into new `machineElementsLedger` records without duplicating existing machine+ref entries and without touching `warehouseItems`.
+ */
+export function buildLedgerEntriesFromBlueprint(
+  machine: any,
+  blueprintOrBlueprints: any,
+  existingLedger: any[] = [],
+  stockItems: any[] = []
+): {
+  addedEntries: any[];
+  skippedCount: number;
+  blueprintId: string | null;
+} {
+  if (!machine) {
+    return { addedEntries: [], skippedCount: 0, blueprintId: null };
+  }
+
+  const machineId = String(
+    machine.id_machine_registered || machine.code_machine || machine.code || machine.id || ''
+  ).trim();
+  const targetMachNorm = normalizeToken(machineId);
+  if (!targetMachNorm) {
+    return { addedEntries: [], skippedCount: 0, blueprintId: null };
+  }
+
+  // Resolve target blueprint from either a single blueprint object or a blueprints array
+  let matchedBlueprint: any = null;
+  if (Array.isArray(blueprintOrBlueprints)) {
+    const bpId = String(machine.id_blueprint || '').trim();
+    const tplId = String(
+      machine.id_templates || machine.id_machine_template || machine.template || ''
+    ).trim();
+
+    if (bpId) {
+      matchedBlueprint = blueprintOrBlueprints.find(
+        (b) => b && String(b.id_blueprint || b.id || '').trim() === bpId
+      );
+    }
+    if (!matchedBlueprint && tplId) {
+      matchedBlueprint = blueprintOrBlueprints.find(
+        (b) => b && String(b.id_templates || '').trim() === tplId
+      );
+    }
+  } else if (blueprintOrBlueprints && typeof blueprintOrBlueprints === 'object') {
+    matchedBlueprint = blueprintOrBlueprints;
+  }
+
+  if (!matchedBlueprint) {
+    return { addedEntries: [], skippedCount: 0, blueprintId: null };
+  }
+
+  const bpId = String(matchedBlueprint.id_blueprint || matchedBlueprint.id || 'BP').trim();
+  const today = new Date().toISOString().split('T')[0];
+  const defaultTech = String(
+    machine.technician || machine.technicien_responsable || machine.technicien || 'tech'
+  ).trim();
+
+  // Existing normalized refs for this machine in machineElementsLedger
+  const existingRefsForMachine = new Set<string>();
+  if (Array.isArray(existingLedger)) {
+    existingLedger.forEach((item) => {
+      if (!item) return;
+      const itemMachNorm = normalizeToken(
+        item.id_machine_registered || item.id_machine || item.code_machine || item.machine
+      );
+      if (itemMachNorm === targetMachNorm) {
+        const refNorm = normalizeToken(item.ref_element || item.ref);
+        if (refNorm) existingRefsForMachine.add(refNorm);
+      }
+    });
+  }
+
+  const mapCriticite = (raw?: string): string => {
+    const c = String(raw || '').trim().toUpperCase();
+    if (c.includes('CRIT') || c.includes('HAUT')) return 'CRITIQUE';
+    if (c.includes('MIN') || c.includes('BASS') || c.includes('FAIB')) return 'MINEURE';
+    return 'MAJEURE';
+  };
+
+  const addedEntries: any[] = [];
+  let skippedCount = 0;
+
+  const tryAddEntry = (candidate: {
+    element_type: 'PDR' | 'COMPONENT' | 'PART';
+    ref_element: string;
+    designation: string;
+    qte_montee: number;
+    criticalite: string;
+    emplacement_machine: string;
+    parent_component_key?: string;
+  }) => {
+    const refClean = String(candidate.ref_element || '').trim();
+    const refNorm = normalizeToken(refClean);
+    if (!refNorm) return;
+
+    if (existingRefsForMachine.has(refNorm)) {
+      skippedCount++;
+      return;
+    }
+
+    existingRefsForMachine.add(refNorm);
+    const seqIdx = addedEntries.length + 1;
+    addedEntries.push({
+      id: `BOM-${machineId}-${refClean.replace(/[^a-zA-Z0-9]/g, '')}-${seqIdx}`,
+      id_machine_registered: machineId,
+      element_type: candidate.element_type,
+      ref_element: refClean,
+      designation: candidate.designation || refClean,
+      qte_montee: Math.max(1, Number(candidate.qte_montee) || 1),
+      unite: 'U',
+      criticalite: candidate.criticalite || 'CRITIQUE',
+      duree_vie_estimee_heures: 5000,
+      heures_actuelles: 0,
+      date_installation: today,
+      emplacement_machine: candidate.emplacement_machine || '',
+      ...(candidate.parent_component_key
+        ? { parent_component_key: candidate.parent_component_key }
+        : {}),
+      technicien: defaultTech,
+      statut: 'OPERATIONNEL',
+      remarques: `Initialisé depuis Blueprint ${bpId}`,
+    });
+  };
+
+  // 1. Theoretical PDRs from Blueprint
+  if (Array.isArray(matchedBlueprint.pdr_theoriques)) {
+    matchedBlueprint.pdr_theoriques.forEach((p: any) => {
+      if (!p) return;
+      const ref = String(p.id_pdr || p.ref || p.code || '').trim();
+      if (!ref) return;
+      const stockMatch = Array.isArray(stockItems)
+        ? stockItems.find(
+            (s) => s && normalizeToken(s.ref || s.id_article || s.code) === normalizeToken(ref)
+          )
+        : null;
+      const parentKey = String(p.parent_component_key || p.parent_component_code || '').trim();
+      tryAddEntry({
+        element_type: 'PDR',
+        ref_element: ref,
+        designation: String(
+          p.libelle || p.designation || stockMatch?.designation || stockMatch?.nom || ref
+        ).trim(),
+        qte_montee: Number(p.qte) || 1,
+        criticalite: mapCriticite(p.criticite || 'Haute'),
+        emplacement_machine: parentKey || String(p.emplacement || '').trim(),
+        parent_component_key: parentKey || undefined,
+      });
+    });
+  }
+
+  // 2. Theoretical Components from Blueprint (recorded as COMPONENT entries in ledger — zero warehouse stock mutation)
+  if (Array.isArray(matchedBlueprint.components_theoriques)) {
+    matchedBlueprint.components_theoriques.forEach((c: any) => {
+      if (!c) return;
+      const ref = String(c.id_component || c.ref || c.code || c.id || '').trim();
+      if (!ref) return;
+      tryAddEntry({
+        element_type: 'COMPONENT',
+        ref_element: ref,
+        designation: String(c.libelle || c.designation || c.nom || ref).trim(),
+        qte_montee: Number(c.qte) || 1,
+        criticalite: mapCriticite(c.criticite || 'Majeure'),
+        emplacement_machine: String(c.emplacement || c.libelle || '').trim(),
+      });
+    });
+  }
+
+  // 3. Theoretical Structural Parts from Blueprint (if defined)
+  if (Array.isArray(matchedBlueprint.parts_theoriques)) {
+    matchedBlueprint.parts_theoriques.forEach((pt: any) => {
+      if (!pt) return;
+      const ref = String(pt.id_part || pt.ref || pt.code || pt.id || '').trim();
+      if (!ref) return;
+      tryAddEntry({
+        element_type: 'PART',
+        ref_element: ref,
+        designation: String(pt.libelle || pt.designation || pt.nom || ref).trim(),
+        qte_montee: Number(pt.qte) || 1,
+        criticalite: mapCriticite(pt.criticite || 'Majeure'),
+        emplacement_machine: String(pt.emplacement || pt.libelle || '').trim(),
+      });
+    });
+  }
+
+  return {
+    addedEntries,
+    skippedCount,
+    blueprintId: bpId,
+  };
+}
+
+/**
+ * N4 — Post-Sortie Ledger Reset Helper:
+ * Finds the matching `machineElementsLedger` record for a completed `Sortie` movement on `id_machine_registered` + `ref`
+ * (or explicit `ledgerElementId`) and resets its wear counter (`heures_actuelles = 0`), `date_installation`, and `statut = 'OPERATIONNEL'`.
+ */
+export function applyReplacementMovementToLedger(
+  machineElementsLedger: any[] = [],
+  movementPayload: {
+    id_machine_registered?: string;
+    ref?: string;
+    date?: string;
+    technicien?: string;
+    ledgerElementId?: string;
+  } = {}
+): {
+  updatedLedger: any[];
+  updatedElement: any | null;
+} {
+  if (!Array.isArray(machineElementsLedger) || machineElementsLedger.length === 0) {
+    return { updatedLedger: [], updatedElement: null };
+  }
+
+  const targetMachNorm = normalizeToken(movementPayload.id_machine_registered);
+  const targetRefNorm = normalizeToken(movementPayload.ref);
+  const targetId = String(movementPayload.ledgerElementId || '').trim();
+
+  if (!targetId && (!targetMachNorm || !targetRefNorm)) {
+    return { updatedLedger: machineElementsLedger, updatedElement: null };
+  }
+
+  const installDate = movementPayload.date || new Date().toISOString().slice(0, 10);
+  let updatedElement: any | null = null;
+
+  const updatedLedger = machineElementsLedger.map((item) => {
+    if (!item || updatedElement) return item;
+
+    const matchById = targetId && String(item.id || '').trim() === targetId;
+    const itemMachNorm = normalizeToken(
+      item.id_machine_registered || item.id_machine || item.code_machine
+    );
+    const itemRefNorm = normalizeToken(item.ref_element || item.ref);
+    const matchByMachAndRef =
+      Boolean(targetMachNorm && targetRefNorm) &&
+      itemMachNorm === targetMachNorm &&
+      itemRefNorm === targetRefNorm;
+
+    if (matchById || matchByMachAndRef) {
+      updatedElement = {
+        ...item,
+        heures_actuelles: 0,
+        date_installation: installDate,
+        technicien: movementPayload.technicien || item.technicien || 'Technicien',
+        statut: 'OPERATIONNEL',
+      };
+      return updatedElement;
+    }
+    return item;
+  });
+
+  return { updatedLedger, updatedElement };
+}
+
 export function doesTaskMatchBlueprint(
   task: any,
   blueprintId: string,

@@ -17,10 +17,15 @@ import {
   Cpu,
   ShieldAlert,
   X,
+  Sparkles,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { confirmAction } from '../../../utils/confirmAction';
-import { buildUnifiedMachineNexusElements } from '../../../core/domain';
+import { filterActiveMachines } from '../../../utils/activeMachines';
+import {
+  buildUnifiedMachineNexusElements,
+  buildLedgerEntriesFromBlueprint,
+} from '../../../core/domain';
 
 /**
  * NexusView — Registre Central des Éléments & BOM Machines
@@ -31,6 +36,7 @@ export default function NexusView({
   zones = [],
   families = [],
   _templates = [],
+  blueprints = [],
   stockItems = [],
   warehouseItems = [],
   partTypes = [],
@@ -40,11 +46,18 @@ export default function NexusView({
   onUpdateMachineElement,
   onDeleteMachineElement,
   onDuplicateBOMToTwins,
+  onNavigateToQuickSortie,
+  setQuickSortiePreset,
   onNavigate = () => {},
   showToast,
 }) {
+  const activeMachines = useMemo(() => {
+    const active = filterActiveMachines(machines);
+    return active.length > 0 ? active : machines;
+  }, [machines]);
+
   const [selectedMachineId, setSelectedMachineId] = useState(() => {
-    return machines[0]?.id_machine_registered || 'DET-01';
+    return activeMachines[0]?.id_machine_registered || 'DET-01';
   });
 
   const [machineSearch, setMachineSearch] = useState('');
@@ -72,8 +85,27 @@ export default function NexusView({
 
   // Machine active sélectionnée
   const activeMachine = useMemo(() => {
-    return machines.find((m) => m.id_machine_registered === selectedMachineId) || machines[0] || null;
-  }, [selectedMachineId, machines]);
+    return (
+      activeMachines.find((m) => m.id_machine_registered === selectedMachineId) ||
+      activeMachines[0] ||
+      null
+    );
+  }, [selectedMachineId, activeMachines]);
+
+  // Blueprint associé à la machine active (par id_blueprint ou id_templates)
+  const activeBlueprint = useMemo(() => {
+    if (!activeMachine || !Array.isArray(blueprints)) return null;
+    const bpId = String(activeMachine.id_blueprint || '').trim();
+    const tplId = String(activeMachine.id_templates || '').trim();
+    if (bpId) {
+      const byBp = blueprints.find((b) => b && String(b.id_blueprint || b.id || '').trim() === bpId);
+      if (byBp) return byBp;
+    }
+    if (tplId) {
+      return blueprints.find((b) => b && String(b.id_templates || '').trim() === tplId) || null;
+    }
+    return null;
+  }, [activeMachine, blueprints]);
 
   // Zone et famille de la machine active
   const activeZone = useMemo(() => {
@@ -88,15 +120,15 @@ export default function NexusView({
 
   // Liste filtrée des machines pour le sélecteur
   const filteredMachinesList = useMemo(() => {
-    if (!machineSearch.trim()) return machines;
+    if (!machineSearch.trim()) return activeMachines;
     const q = machineSearch.toLowerCase();
-    return machines.filter(
+    return activeMachines.filter(
       (m) =>
         (m.id_machine_registered && m.id_machine_registered.toLowerCase().includes(q)) ||
         (m.designation && m.designation.toLowerCase().includes(q)) ||
         (m.id_zone_default && m.id_zone_default.toLowerCase().includes(q))
     );
-  }, [machines, machineSearch]);
+  }, [activeMachines, machineSearch]);
 
   // N2: Unified As-Built view combining explicit BOM Ledger entries + mounted Entrepôt items (MONTE / En service)
   const currentMachineElements = useMemo(() => {
@@ -260,6 +292,88 @@ export default function NexusView({
     showToast?.(`Nomenclature dupliquée avec succès vers ${twinIds.length} machines jumelles (${twinIds.join(', ')}).`, 'success');
   };
 
+  // N3: Initialiser la nomenclature As-Built de la machine depuis son Blueprint
+  const handleInitializeFromBlueprint = () => {
+    if (!activeMachine) {
+      showToast?.('Veuillez sélectionner une machine active.', 'warning');
+      return;
+    }
+    if (!activeBlueprint) {
+      showToast?.(
+        `Aucun Blueprint associé à la machine ${activeMachine.id_machine_registered}. Liez un Blueprint dans Parc Machines ou Blueprints.`,
+        'info'
+      );
+      return;
+    }
+
+    const { addedEntries, skippedCount, blueprintId } = buildLedgerEntriesFromBlueprint(
+      activeMachine,
+      activeBlueprint,
+      machineElementsLedger,
+      stockItems
+    );
+
+    if (addedEntries.length === 0) {
+      showToast?.(
+        skippedCount > 0
+          ? `Tous les éléments du Blueprint ${blueprintId} (${skippedCount}) sont déjà présents sur ${activeMachine.id_machine_registered}.`
+          : `Le Blueprint ${blueprintId} ne contient aucun élément théorique (PDR / Composant) à initialiser.`,
+        'info'
+      );
+      return;
+    }
+
+    addedEntries.forEach((entry) => {
+      onAddMachineElement?.(entry);
+    });
+
+    showToast?.(
+      `${addedEntries.length} élément(s) initialisé(s) depuis le Blueprint ${blueprintId} pour ${activeMachine.id_machine_registered}` +
+        (skippedCount > 0 ? ` (${skippedCount} déjà présent(s) ignoré(s)).` : '.'),
+      'success'
+    );
+  };
+
+  // N4: Remplacer un élément PDR via un mouvement de Sortie Interne pré-rempli
+  const handleReplaceElementViaMouvement = (item) => {
+    if (!activeMachine || !item) return;
+
+    if (item._source === 'ENTREPOT' || item.element_type === 'COMPONENT' || item.element_type === 'PART') {
+      onNavigate?.('entrepot');
+      showToast?.(
+        `Le remplacement d'un organe (${item.ref_element}) s'effectue via le cycle des Composants/Parts dans l'Entrepôt, et non par sortie PDR consommable.`,
+        'info'
+      );
+      return;
+    }
+
+    const preset = {
+      source: 'STOCK_PDR',
+      id_machine_registered: activeMachine.id_machine_registered,
+      id_zone: activeMachine.id_zone_default || activeMachine.id_zone || '',
+      technicien: item.technicien || activeMachine.technician || '',
+      ref: item.ref_element,
+      designation: item.designation || '',
+      quantite: Math.max(1, Number(item.qte_montee) || 1),
+      unit: item.unite || 'pcs',
+      emplacement: item.emplacement_machine || '',
+      ledgerElementId: item.id,
+      fromNexusReplacement: true,
+    };
+
+    if (typeof onNavigateToQuickSortie === 'function') {
+      onNavigateToQuickSortie(preset);
+    } else {
+      setQuickSortiePreset?.(preset);
+      onNavigate?.('sortie');
+    }
+
+    showToast?.(
+      `Sortie PDR pré-remplie pour remplacer ${item.ref_element} sur ${activeMachine.id_machine_registered}.`,
+      'info'
+    );
+  };
+
   // Exporter la nomenclature de la machine ou du registre entier en Excel
   const handleExportBOMExcel = () => {
     try {
@@ -338,6 +452,26 @@ export default function NexusView({
 
         {/* Boutons d'action globaux */}
         <div className="flex items-center gap-2 flex-wrap">
+          {activeMachine && (
+            <button
+              type="button"
+              onClick={handleInitializeFromBlueprint}
+              title={
+                activeBlueprint
+                  ? `Initialiser depuis Blueprint ${activeBlueprint.id_blueprint || activeBlueprint.id}`
+                  : 'Aucun Blueprint rattaché à cette machine'
+              }
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border shadow-2xs transition active:scale-95 cursor-pointer ${
+                activeBlueprint
+                  ? 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                  : 'bg-slate-50 hover:bg-slate-100 text-slate-500 border-slate-200'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>Initialiser depuis Blueprint</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleExportBOMExcel}
@@ -694,18 +828,17 @@ export default function NexusView({
                       {/* Actions */}
                       <td className="py-3 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Remplacer via Mouvement Rapide */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onNavigate?.('stock');
-                              showToast?.(`Aller au Stock PDR pour préparer la sortie de ${item.ref_element}.`, 'info');
-                            }}
-                            title="Remplacer cette pièce via Mouvement Rapide"
-                            className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 transition cursor-pointer"
-                          >
-                            <Zap className="w-3.5 h-3.5" />
-                          </button>
+                          {/* N4: Remplacer via Mouvement Rapide (uniquement pour les PDR consommables, jamais pour _source === 'ENTREPOT') */}
+                          {item._source !== 'ENTREPOT' && item.element_type === 'PDR' && (
+                            <button
+                              type="button"
+                              onClick={() => handleReplaceElementViaMouvement(item)}
+                              title="Remplacer cette pièce PDR via Mouvement de Sortie pré-rempli"
+                              className="p-1.5 rounded-lg text-emerald-700 hover:bg-emerald-50 border border-transparent hover:border-emerald-200 transition cursor-pointer"
+                            >
+                              <Zap className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
                           {/* Édition */}
                           <button

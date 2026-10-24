@@ -650,6 +650,8 @@ export function useAppRouterProps({
       onUpdateMachineElement: updateMachineElement,
       onDeleteMachineElement: deleteMachineElement,
       onDuplicateBOMToTwins: duplicateBOMToTwins,
+      onNavigateToQuickSortie: navigation.handleNavigateToQuickSortieFromNexus,
+      setQuickSortiePreset: filters.setQuickSortiePreset,
       onNavigate: navigateTo,
       showToast,
     },

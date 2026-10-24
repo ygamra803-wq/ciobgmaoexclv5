@@ -8,6 +8,8 @@ import {
   applyBlueprintPlanToActiveMachines,
   rankStockItemsByMachineBom,
   buildUnifiedMachineNexusElements,
+  buildLedgerEntriesFromBlueprint,
+  applyReplacementMovementToLedger,
 } from '../../core/domain';
 import { buildConsumablePdrInventory as reExportedBuildConsumablePdrInventory } from '../../presentation/pages/preventive/components/TabMainView';
 import { CorrectiveIntervention } from '../../domain/corrective/entities/CorrectiveIntervention';
@@ -446,6 +448,135 @@ describe('P0–P5 Core (alias Phase P7): Consumable PDR Truth, Organe FKs, Part 
     expect(partRow?._source).toBe('ENTREPOT');
     expect(partRow?.element_type).toBe('PART');
   });
+
+  it('N3: buildLedgerEntriesFromBlueprint generates missing COMPONENT, PART, and PDR entries from Blueprint without duplicating existing machine+ref rows', () => {
+    const machine = {
+      id_machine_registered: 'CNC-01',
+      code_machine: 'CNC-01',
+      designation: 'Fraiseuse CNC 01',
+      id_blueprint: 'BPT-CNC-01',
+    };
+    const blueprint = {
+      id_blueprint: 'BPT-CNC-01',
+      components_theoriques: [
+        { id_component: 'COMP-BROCHE', libelle: 'Broche UGV 18k', qte: 1, criticite: 'Critique' },
+      ],
+      parts_theoriques: [
+        { id_part: 'PART-BATI-Z', libelle: 'Colonne Axe Z', qte: 1 },
+      ],
+      pdr_theoriques: [
+        {
+          id_pdr: 'ROUL-7008C',
+          libelle: 'Roulement Céramique 7008C',
+          qte: 2,
+          parent_component_key: 'Broche UGV 18k',
+          duree_vie_heures: 4000,
+        },
+        {
+          id_pdr: 'COUR-HTD-8M',
+          libelle: 'Courroie Synchrone HTD 8M',
+          qte: 1,
+        },
+      ],
+    };
+
+    const existingLedger = [
+      {
+        id: 'EXISTING-1',
+        id_machine_registered: 'CNC-01',
+        element_type: 'PDR' as const,
+        ref_element: 'COUR-HTD-8M',
+        designation: 'Courroie Synchrone HTD 8M',
+        emplacement_machine: 'Axe Z',
+        qte_montee: 1,
+        date_installation: '2026-01-10',
+        heures_actuelles: 1200,
+        mtbf_cible_heures: 5000,
+        statut: 'OPERATIONNEL' as const,
+      },
+    ];
+
+    const res = buildLedgerEntriesFromBlueprint(machine, blueprint, existingLedger, []);
+    expect(res.skippedCount).toBe(1);
+    expect(res.addedEntries.length).toBe(3);
+    expect(res.blueprintId).toBe('BPT-CNC-01');
+
+    const compEntry = res.addedEntries.find((e) => e.ref_element === 'COMP-BROCHE');
+    expect(compEntry?.element_type).toBe('COMPONENT');
+    expect(compEntry?.designation).toBe('Broche UGV 18k');
+    expect(compEntry?.id_machine_registered).toBe('CNC-01');
+
+    const partEntry = res.addedEntries.find((e) => e.ref_element === 'PART-BATI-Z');
+    expect(partEntry?.element_type).toBe('PART');
+
+    const pdrEntry = res.addedEntries.find((e) => e.ref_element === 'ROUL-7008C');
+    expect(pdrEntry?.element_type).toBe('PDR');
+    expect(pdrEntry?.qte_montee).toBe(2);
+    expect(pdrEntry?.parent_component_key).toBe('Broche UGV 18k');
+    expect(pdrEntry?.emplacement_machine).toBe('Broche UGV 18k');
+    expect(pdrEntry?.duree_vie_estimee_heures).toBe(5000);
+
+    // Second invocation with merged ledger adds 0 entries
+    const secondRun = buildLedgerEntriesFromBlueprint(
+      machine,
+      blueprint,
+      [...existingLedger, ...res.addedEntries],
+      []
+    );
+    expect(secondRun.addedEntries.length).toBe(0);
+    expect(secondRun.skippedCount).toBe(4);
+  });
+
+  it('N4: applyReplacementMovementToLedger resets heures_actuelles, date_installation, and statut on matching machine PDR row after a Sortie movement', () => {
+    const ledger = [
+      {
+        id: 'BOM-ROUL-01',
+        id_machine_registered: 'CNC-01',
+        element_type: 'PDR' as const,
+        ref_element: 'ROUL-7008C',
+        designation: 'Roulement Céramique 7008C',
+        emplacement_machine: 'Broche UGV 18k',
+        qte_montee: 2,
+        date_installation: '2025-05-01',
+        heures_actuelles: 3950,
+        mtbf_cible_heures: 4000,
+        statut: 'A_REMPLACER' as const,
+      },
+      {
+        id: 'BOM-OTHER-MACHINE',
+        id_machine_registered: 'CNC-02',
+        element_type: 'PDR' as const,
+        ref_element: 'ROUL-7008C',
+        designation: 'Roulement Céramique 7008C',
+        emplacement_machine: 'Broche UGV 18k',
+        qte_montee: 2,
+        date_installation: '2025-05-01',
+        heures_actuelles: 1500,
+        mtbf_cible_heures: 4000,
+        statut: 'OPERATIONNEL' as const,
+      },
+    ];
+
+    const res = applyReplacementMovementToLedger(ledger, {
+      id_machine_registered: 'CNC-01',
+      ref: 'roul-7008c',
+      date: '2026-10-24',
+      technicien: 'Karim',
+    });
+
+    expect(res.updatedElement?.id).toBe('BOM-ROUL-01');
+    const updatedTarget = res.updatedLedger.find((e) => e.id === 'BOM-ROUL-01');
+    expect(updatedTarget?.heures_actuelles).toBe(0);
+    expect(updatedTarget?.date_installation).toBe('2026-10-24');
+    expect(updatedTarget?.technicien).toBe('Karim');
+    expect(updatedTarget?.statut).toBe('OPERATIONNEL');
+
+    // Other machine's row remains untouched
+    const otherMachineRow = res.updatedLedger.find((e) => e.id === 'BOM-OTHER-MACHINE');
+    expect(otherMachineRow?.heures_actuelles).toBe(1500);
+    expect(otherMachineRow?.date_installation).toBe('2025-05-01');
+  });
 });
+
 
 
