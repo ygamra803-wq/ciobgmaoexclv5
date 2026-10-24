@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { confirmAction } from '../../../utils/confirmAction';
+import { buildUnifiedMachineNexusElements } from '../../../core/domain';
 
 /**
  * NexusView — Registre Central des Éléments & BOM Machines
@@ -97,13 +98,15 @@ export default function NexusView({
     );
   }, [machines, machineSearch]);
 
-  // Éléments du BOM Ledger rattachés à la machine active
+  // N2: Unified As-Built view combining explicit BOM Ledger entries + mounted Entrepôt items (MONTE / En service)
   const currentMachineElements = useMemo(() => {
     if (!activeMachine) return [];
-    return machineElementsLedger.filter(
-      (item) => item.id_machine_registered === activeMachine.id_machine_registered
+    return buildUnifiedMachineNexusElements(
+      activeMachine.id_machine_registered,
+      machineElementsLedger,
+      warehouseItems
     );
-  }, [activeMachine, machineElementsLedger]);
+  }, [activeMachine, machineElementsLedger, warehouseItems]);
 
   // Filtrage selon le type et la recherche
   const displayedElements = useMemo(() => {
@@ -227,7 +230,7 @@ export default function NexusView({
       return;
     }
 
-    if (editingElement) {
+    if (editingElement && editingElement._source !== 'ENTREPOT') {
       onUpdateMachineElement?.(editingElement.id, formData);
       showToast?.(`Élément ${formData.ref_element} mis à jour avec succès.`, 'success');
     } else {
@@ -235,7 +238,12 @@ export default function NexusView({
         ...formData,
         id_machine_registered: activeMachine.id_machine_registered,
       });
-      showToast?.(`Élément ${formData.ref_element} rattaché à la machine ${activeMachine.id_machine_registered}.`, 'success');
+      showToast?.(
+        editingElement?._source === 'ENTREPOT'
+          ? `Paramètres d'usure de ${formData.ref_element} enregistrés dans le registre Nexus de ${activeMachine.id_machine_registered}.`
+          : `Élément ${formData.ref_element} rattaché à la machine ${activeMachine.id_machine_registered}.`,
+        'success'
+      );
     }
 
     setIsAddModalOpen(false);
@@ -593,7 +601,17 @@ export default function NexusView({
 
                       {/* Réf & Désignation */}
                       <td className="py-3 px-3 max-w-xs">
-                        <div className="font-mono font-bold text-slate-900">{item.ref_element}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-slate-900">{item.ref_element}</span>
+                          {item._source === 'ENTREPOT' && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                              title="Organe/Part monté en service depuis l'Entrepôt (vue unifiée N2)"
+                            >
+                              Sync Entrepôt · Monté
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-500 truncate">{item.designation}</div>
                       </td>
 
@@ -699,26 +717,43 @@ export default function NexusView({
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Suppression */}
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (
-                                await confirmAction({
-                                  title: "Détacher l'élément",
-                                  message: `Détacher ${item.ref_element} de la machine ${activeMachine.id_machine_registered} ?`,
-                                  variant: 'danger',
-                                })
-                              ) {
-                                onDeleteMachineElement?.(item.id);
-                                showToast?.(`Élément ${item.ref_element} détaché du registre.`, 'info');
-                              }
-                            }}
-                            title="Détacher de la machine"
-                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Suppression (Ledger) ou Navigation Entrepôt (Sync Entrepôt) */}
+                          {item._source === 'ENTREPOT' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onNavigate?.('entrepot');
+                                showToast?.(
+                                  `Organe ${item.ref_element} géré dans l'Entrepôt (statut: ${item._warehouseStatus || 'Monté'}).`,
+                                  'info'
+                                );
+                              }}
+                              title="Cet organe est rattaché depuis l'Entrepôt — cliquer pour gérer son statut"
+                              className="p-1.5 rounded-lg text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 transition cursor-pointer"
+                            >
+                              <Boxes className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (
+                                  await confirmAction({
+                                    title: "Détacher l'élément",
+                                    message: `Détacher ${item.ref_element} de la machine ${activeMachine.id_machine_registered} ?`,
+                                    variant: 'danger',
+                                  })
+                                ) {
+                                  onDeleteMachineElement?.(item.id);
+                                  showToast?.(`Élément ${item.ref_element} détaché du registre.`, 'info');
+                                }
+                              }}
+                              title="Détacher de la machine"
+                              className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

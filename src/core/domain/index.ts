@@ -11,6 +11,7 @@ export {
   filterTasksByBlueprint,
   getBlueprintCommonFailuresForMachine,
   rankStockItemsByMachineBom,
+  buildUnifiedMachineNexusElements,
   type BlueprintPreventivePlanItem,
   type BlueprintCommonFailureItem,
   type BlueprintPdrItem,

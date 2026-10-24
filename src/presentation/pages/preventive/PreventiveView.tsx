@@ -22,6 +22,7 @@ import {
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import PreventiveService from '../../../application/services/PreventiveService';
 import TabMainView from './components/TabMainView';
@@ -207,9 +208,7 @@ export default function PreventiveView({
 
           {/* Left Column: Title & Overview */}
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border border-indigo-200/90 shadow-[0_4px_12px_rgba(99,102,241,0.12)] flex items-center justify-center text-indigo-700 group-hover/header:scale-105 group-hover/header:border-indigo-400/80 transition-all duration-300 shrink-0">
-              <Calendar className="w-6 h-6 text-indigo-700 transition-transform duration-300 group-hover/header:scale-110" />
-            </div>
+            <PageHeaderIcon icon={Calendar} colorClass="text-indigo-700" />
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">

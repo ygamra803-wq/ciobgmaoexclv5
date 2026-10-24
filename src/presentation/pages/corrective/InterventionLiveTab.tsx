@@ -39,6 +39,7 @@ export default function InterventionLiveTab({
 }) {
   const { t } = useI18n();
   const blueprints = useGmaoStore((s) => s.blueprints);
+  const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
@@ -246,7 +247,9 @@ export default function InterventionLiveTab({
       stockItems,
       machines,
       blueprints,
-      formState.id_composant || formState.nom_composant || formState.id_part || formState.nom_part
+      formState.id_composant || formState.nom_composant || formState.id_part || formState.nom_part,
+      undefined,
+      machineElementsLedger
     );
   }, [
     activeIntervention?.code_machine,
@@ -257,6 +260,7 @@ export default function InterventionLiveTab({
     formState.nom_composant,
     formState.id_part,
     formState.nom_part,
+    machineElementsLedger,
   ]);
 
   const matchedStockItems = useMemo(() => {

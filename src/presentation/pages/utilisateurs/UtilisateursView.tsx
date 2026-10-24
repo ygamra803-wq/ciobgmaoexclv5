@@ -33,6 +33,7 @@ import SupervisorAccount from '../../components/common/icons/SupervisorAccount';
 import UserCodePicker from '../../components/common/UserCodePicker';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import {
   RESPONSABLE_TEMPLATES,
   normalizeTemplateIds,
@@ -667,10 +668,7 @@ export default function UtilisateursView({
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
           <div className="flex items-center gap-3 min-w-0 relative">
-            {/* 3D Elevated Page Badge Icon */}
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-indigo-500/5 to-transparent border border-indigo-200/90 shadow-[0_4px_12px_rgba(99,102,241,0.12)] flex items-center justify-center text-indigo-700 group-hover/header:scale-105 group-hover/header:border-indigo-400/80 transition-all duration-300 shrink-0">
-              <Users className="w-6 h-6 text-indigo-700 transition-transform duration-300 group-hover/header:scale-110" />
-            </div>
+            <PageHeaderIcon icon={Users} colorClass="text-indigo-700" />
             <div>
               <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                 {t('utilisateurs.title')}

@@ -31,6 +31,7 @@ import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { getBlueprintCommonFailuresForMachine, rankStockItemsByMachineBom } from '../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 export default function DemandesInterventionTab({
   interventions = [],
@@ -55,6 +56,7 @@ export default function DemandesInterventionTab({
   onClearPreset,
 }) {
   const { t } = useI18n();
+  const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(null); // holds selected DI
   const [showTravauxSelector, setShowTravauxSelector] = useState(false);
@@ -258,14 +260,16 @@ export default function DemandesInterventionTab({
     });
   }, [newForm.code_machine, warehouseItems]);
 
-  // Smart BOM-ranked consumable PDR list (P2: BOM recommended on top, rest of warehouse below)
+  // Smart BOM-ranked consumable PDR list (P2 & N1: BOM + Nexus recommended on top, rest of warehouse below)
   const rankedStockItems = useMemo(() => {
     return rankStockItemsByMachineBom(
       newForm.code_machine,
       stockItems,
       machines,
       blueprints,
-      newForm.id_composant || newForm.nom_composant || newForm.id_part || newForm.nom_part
+      newForm.id_composant || newForm.nom_composant || newForm.id_part || newForm.nom_part,
+      undefined,
+      machineElementsLedger
     );
   }, [
     newForm.code_machine,
@@ -276,6 +280,7 @@ export default function DemandesInterventionTab({
     newForm.nom_composant,
     newForm.id_part,
     newForm.nom_part,
+    machineElementsLedger,
   ]);
 
   // Blueprint common failures for the currently selected active machine (BP-5)

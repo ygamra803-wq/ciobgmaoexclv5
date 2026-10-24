@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import ReferentielPannesTravauxTab from './ReferentielPannesTravauxTab';
 import Action3DButton from '../../components/common/Action3DButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import { useI18n } from '../../../i18n/I18nContext';
 import * as XLSX from 'xlsx';
 
@@ -193,9 +194,7 @@ export default function CatalogueDonneesView({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 border-b border-slate-100/90 pb-5 relative">
           {/* Left Column: Icon, Title & Description */}
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300/80 shadow-[0_4px_12px_rgba(245,158,11,0.12)] flex items-center justify-center text-amber-700 shrink-0 group-hover/header:scale-105 transition-all duration-300">
-              <Database className="w-6 h-6 text-amber-700" />
-            </div>
+            <PageHeaderIcon icon={Database} colorClass="text-amber-700" />
 
             <div>
               <h2 className="text-xl font-black text-slate-900 tracking-tight">

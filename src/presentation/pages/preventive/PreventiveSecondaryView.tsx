@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import PreventiveService from '../../../application/services/PreventiveService';
 import TabPlanBuilder from './components/TabPlanBuilder';
@@ -139,9 +140,7 @@ export default function PreventiveSecondaryView({
 
           {/* Left Side: Title & Description */}
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/10 via-indigo-500/10 to-transparent border border-purple-200/90 shadow-[0_4px_12px_rgba(168,85,247,0.12)] flex items-center justify-center text-purple-700 shrink-0">
-              <Settings2 className="w-6 h-6 text-purple-700" />
-            </div>
+            <PageHeaderIcon icon={Settings2} colorClass="text-purple-700" />
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">

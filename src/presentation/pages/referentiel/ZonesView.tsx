@@ -3,6 +3,7 @@ import AnimatedPage from '../../components/common/AnimatedPage';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, Calculator, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from '../../../i18n/I18nContext';
@@ -351,10 +352,7 @@ export default function ZonesView({
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-purple-500/10 transition-colors duration-500" />
 
         <div className="flex items-center gap-3 min-w-0 relative">
-          {/* 3D Elevated Page Badge Icon */}
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-200/90 shadow-[0_4px_12px_rgba(147,51,234,0.12)] flex items-center justify-center text-purple-700 group-hover/header:scale-105 group-hover/header:border-purple-400/80 transition-all duration-300 shrink-0">
-            <MapPin className="w-6 h-6 text-purple-700 transition-transform duration-300 group-hover/header:scale-110" />
-          </div>
+          <PageHeaderIcon icon={MapPin} colorClass="text-purple-700" />
           <div>
             <h2 className="text-lg font-bold text-slate-900 tracking-tight">
               {t('zones.title')}

@@ -16,10 +16,7 @@ function SortieRapideSkeletonViewComponent() {
       {/* ─── 1. Top GMAO Header Banner (Mirroring lines 1228-1296) ─── */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.06),0_4px_12px_-2px_rgba(0,0,0,0.03)] flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          {/* 3D Elevated Page Badge Icon Placeholder */}
-          <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-200/90 shadow-2xs flex items-center justify-center shrink-0">
-            <div className="w-6 h-6 rounded-lg shimmer-wave" />
-          </div>
+          <div className="w-7 h-7 rounded-lg shimmer-wave shrink-0" />
           <div className="space-y-1.5 flex-1 max-w-3xl">
             {/* Title */}
             <div className="h-6 w-96 max-w-[85%] rounded-lg shimmer-wave" />

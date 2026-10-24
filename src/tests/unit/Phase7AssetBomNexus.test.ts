@@ -7,6 +7,7 @@ import {
   buildConsumablePdrInventory,
   applyBlueprintPlanToActiveMachines,
   rankStockItemsByMachineBom,
+  buildUnifiedMachineNexusElements,
 } from '../../core/domain';
 import { buildConsumablePdrInventory as reExportedBuildConsumablePdrInventory } from '../../presentation/pages/preventive/components/TabMainView';
 import { CorrectiveIntervention } from '../../domain/corrective/entities/CorrectiveIntervention';
@@ -323,5 +324,128 @@ describe('P0–P5 Core (alias Phase P7): Consumable PDR Truth, Organe FKs, Part 
     ]);
     expect(generatedTask.pdr_ref).toBe('ROUL-7006');
   });
+
+  it('N1: rankStockItemsByMachineBom promotes consumable PDRs from machineElementsLedger (Nexus) and ignores non-PDR ledger entries', () => {
+    const stockItems = [
+      { ref: 'GEN-BOULON-M10', designation: 'Boulon M10', stockActuel: 50 },
+      { ref: 'NEX-COURROIE-A42', designation: 'Courroie A42 Nexus', stockActuel: 5 },
+      { ref: 'NEX-ROUL-PALIER', designation: 'Roulement Palier Broche', stockActuel: 3 },
+      { ref: 'COMP-MOT-01', designation: 'Moteur Principal', stockActuel: 1 },
+    ];
+    const machines = [{ id_machine_registered: 'DET-01', code_machine: 'DET-01' }];
+    const machineElementsLedger = [
+      {
+        id: 'BOM-1',
+        id_machine_registered: 'DET-01',
+        element_type: 'PDR',
+        ref_element: 'NEX-COURROIE-A42',
+        emplacement_machine: 'Transmission générale',
+      },
+      {
+        id: 'BOM-2',
+        id_machine_registered: 'DET-01',
+        element_type: 'PDR',
+        ref_element: 'NEX-ROUL-PALIER',
+        emplacement_machine: 'Broche Principale',
+      },
+      {
+        id: 'BOM-3',
+        id_machine_registered: 'DET-01',
+        element_type: 'COMPONENT',
+        ref_element: 'COMP-MOT-01',
+        emplacement_machine: 'Broche Principale',
+      },
+    ];
+
+    const ranked = rankStockItemsByMachineBom(
+      'DET-01',
+      stockItems,
+      machines,
+      [],
+      'Broche Principale',
+      undefined,
+      machineElementsLedger
+    );
+
+    expect(ranked[0].ref).toBe('NEX-ROUL-PALIER');
+    expect(ranked[0].bomPriority).toBe(1);
+    expect(ranked[0].isBomRecommended).toBe(true);
+
+    expect(ranked[1].ref).toBe('NEX-COURROIE-A42');
+    expect(ranked[1].bomPriority).toBe(2);
+    expect(ranked[1].isBomRecommended).toBe(true);
+    expect(ranked[1].bomSourceLabel).toBe('BOM Machine / Nexus');
+
+    // COMPONENT entry in ledger is never promoted as consumable PDR
+    const compItem = ranked.find((i) => i.ref === 'COMP-MOT-01');
+    expect(compItem?.isBomRecommended).toBe(false);
+    expect(compItem?.bomPriority).toBe(3);
+  });
+
+  it('N2: buildUnifiedMachineNexusElements combines ledger items with mounted warehouseItems (MONTE / En service) without duplicating refs or including reserve items', () => {
+    const ledger = [
+      {
+        id: 'BOM-LEDGER-1',
+        id_machine_registered: 'DET-01',
+        element_type: 'PDR',
+        ref_element: 'ROUL-6204',
+        designation: 'Roulement SKF 6204',
+        qte_montee: 2,
+        statut: 'OPERATIONNEL',
+      },
+    ];
+    const warehouseItems = [
+      {
+        id_warehouse_item: 'MOT-01',
+        designation: 'Moteur Broche 10kW',
+        nature: 'COMPONENT',
+        rattachement_type: 'MACHINE',
+        id_machine_registered: 'DET-01',
+        status: 'En service',
+        emplacement: 'Tête de coupe',
+      },
+      {
+        id_warehouse_item: 'PART-MANDRIN-01',
+        designation: 'Mandrin Pneumatique',
+        nature: 'PART',
+        rattachement_type: 'MACHINE',
+        id_machine_registered: 'DET-01',
+        status: 'MONTE',
+      },
+      // Unmounted / in-reserve item on same machine code must NOT appear in As-Built live view
+      {
+        id_warehouse_item: 'MOT-RESERVE-02',
+        designation: 'Moteur de secours',
+        nature: 'COMPONENT',
+        id_machine_registered: 'DET-01',
+        status: 'En stock réserve',
+      },
+      // Duplicate ref already in ledger must NOT produce a second row
+      {
+        id_warehouse_item: 'ROUL-6204',
+        designation: 'Roulement SKF 6204 Duplicate',
+        nature: 'PART',
+        id_machine_registered: 'DET-01',
+        status: 'En service',
+      },
+    ];
+
+    const unified = buildUnifiedMachineNexusElements('DET-01', ledger, warehouseItems);
+    expect(unified.length).toBe(3);
+    expect(unified.map((u) => u.ref_element)).toEqual(['ROUL-6204', 'MOT-01', 'PART-MANDRIN-01']);
+
+    const ledgerRow = unified.find((u) => u.ref_element === 'ROUL-6204');
+    expect(ledgerRow?._source).toBe('LEDGER');
+
+    const compRow = unified.find((u) => u.ref_element === 'MOT-01');
+    expect(compRow?._source).toBe('ENTREPOT');
+    expect(compRow?.element_type).toBe('COMPONENT');
+    expect(compRow?.emplacement_machine).toBe('Tête de coupe');
+
+    const partRow = unified.find((u) => u.ref_element === 'PART-MANDRIN-01');
+    expect(partRow?._source).toBe('ENTREPOT');
+    expect(partRow?.element_type).toBe('PART');
+  });
 });
+
 

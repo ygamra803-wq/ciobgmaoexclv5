@@ -264,10 +264,10 @@ export function applyBlueprintPlanToActiveMachines(
 }
 
 /**
- * P2 & P4 Smart BOM PDR Ranking:
- * Ranks consumable `stockItems` so that PDRs linked to the target Component or Machine/Blueprint BOM
- * appear first (`isBomRecommended: true`, `bomPriority: 1 | 2`), while keeping the rest of the warehouse `stockItems`
- * available right below (`isBomRecommended: false`, `bomPriority: 3`).
+ * P2, P4 & N1 Smart BOM PDR Ranking:
+ * Ranks consumable `stockItems` so that PDRs linked to the target Component, Machine/Blueprint BOM,
+ * or Nexus As-Built Ledger (`machineElementsLedger`) appear first (`isBomRecommended: true`, `bomPriority: 1 | 2`),
+ * while keeping the rest of the warehouse `stockItems` available right below (`isBomRecommended: false`, `bomPriority: 3`).
  */
 export function rankStockItemsByMachineBom<T extends Record<string, any>>(
   firstArg: string | T[] = '',
@@ -275,7 +275,8 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
   machines: any[] = [],
   blueprints: any[] = [],
   componentRefOrName: string = '',
-  taskOrExplicitPdrs?: any
+  taskOrExplicitPdrs?: any,
+  machineElementsLedger: any[] = []
 ): Array<
   T & {
     isBomRecommended: boolean;
@@ -303,6 +304,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
   const componentPdrRefs = new Set<string>();
   const blueprintPdrRefs = new Set<string>();
+  const nexusPdrRefs = new Set<string>();
 
   // 1. Explicit task-level PDRs (highest priority)
   if (Array.isArray(taskOrExplicitPdrs)) {
@@ -323,7 +325,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
     }
   }
 
-  // 2. Discover Machine & its linked Blueprint
+  // 2. Discover Machine, its linked Blueprint, and its Nexus As-Built Ledger (N1)
   if (targetMachNorm) {
     const matchedMachine = (machines || []).find((m) => {
       if (!m) return false;
@@ -339,12 +341,71 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
       return candidates.some((c) => c && normalizeToken(c) === targetMachNorm);
     });
 
+    const machineAliases = new Set<string>([targetMachNorm]);
+    if (matchedMachine) {
+      [
+        matchedMachine.id_machine_registered,
+        matchedMachine.code_machine,
+        matchedMachine.code,
+        matchedMachine.id,
+        matchedMachine.id_machine,
+      ].forEach((c) => {
+        if (c) machineAliases.add(normalizeToken(c));
+      });
+    }
+
     // Machine-level historical/theoretical PDRs if present
     const machPdrs = matchedMachine?.pdr_theoriques || matchedMachine?.pdr_historique || [];
     if (Array.isArray(machPdrs)) {
       machPdrs.forEach((p: any) => {
         const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
         if (r) blueprintPdrRefs.add(r);
+      });
+    }
+
+    // N1: Read consumable PDR elements mounted on this machine in Nexus (machineElementsLedger)
+    if (Array.isArray(machineElementsLedger) && machineElementsLedger.length > 0) {
+      machineElementsLedger.forEach((entry: any) => {
+        if (!entry) return;
+        const entryMachNorm = normalizeToken(
+          entry.id_machine_registered || entry.id_machine || entry.code_machine || entry.machine
+        );
+        if (!entryMachNorm || !machineAliases.has(entryMachNorm)) return;
+
+        // Only rank consumable PDRs (never COMPONENT or PART)
+        const elType = String(entry.element_type || 'PDR').trim().toUpperCase();
+        if (elType === 'COMPONENT' || elType === 'COMPOSANT' || elType === 'PART' || elType === 'ORGANE') {
+          return;
+        }
+
+        const r = String(entry.ref_element || entry.ref || entry.id_pdr || '').trim().toUpperCase();
+        if (!r) return;
+
+        const locCandidates = [
+          entry.emplacement_machine,
+          entry.parent_component_key,
+          entry.id_composant,
+          entry.composant,
+          entry.id_part,
+        ]
+          .map((v) => normalizeToken(v))
+          .filter(Boolean);
+
+        const matchesOrgane =
+          Boolean(targetCompNorm) &&
+          locCandidates.some(
+            (loc) =>
+              loc === targetCompNorm ||
+              loc.includes(targetCompNorm) ||
+              targetCompNorm.includes(loc)
+          );
+
+        if (matchesOrgane) {
+          componentPdrRefs.add(r);
+        } else {
+          nexusPdrRefs.add(r);
+          blueprintPdrRefs.add(r);
+        }
       });
     }
 
@@ -450,12 +511,13 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
       };
     }
     if (refUpper && blueprintPdrRefs.has(refUpper)) {
+      const isNexusOnly = nexusPdrRefs.has(refUpper);
       return {
         ...item,
         isBomRecommended: true,
         bomPriority: 2 as const,
-        bomSourceLabel: 'BOM Machine / Blueprint',
-        bomReason: 'BOM Machine / Blueprint',
+        bomSourceLabel: isNexusOnly ? 'BOM Machine / Nexus' : 'BOM Machine / Blueprint',
+        bomReason: isNexusOnly ? 'BOM Machine / Nexus' : 'BOM Machine / Blueprint',
       };
     }
     return {
@@ -467,8 +529,123 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
     };
   });
 
-  // Stable sort: Component BOM (1) -> Blueprint BOM (2) -> General Stock (3)
+  // Stable sort: Component BOM (1) -> Blueprint/Nexus Machine BOM (2) -> General Stock (3)
   return annotated.sort((a, b) => a.bomPriority - b.bomPriority);
+}
+
+/**
+ * N2 Unified As-Built Machine View:
+ * Combines explicit `machineElementsLedger` records for `machineId` with mounted `warehouseItems`
+ * (`MONTE` / `En service` / `Opérationnel`) attached to the same machine, without merging underlying storage tables.
+ */
+export function buildUnifiedMachineNexusElements(
+  machineId: string,
+  machineElementsLedger: any[] = [],
+  warehouseItems: any[] = []
+): any[] {
+  const targetMachNorm = normalizeToken(machineId);
+  if (!targetMachNorm) return [];
+
+  const seenRefs = new Set<string>();
+  const unified: any[] = [];
+
+  // 1. Explicit As-Built ledger entries for this machine
+  if (Array.isArray(machineElementsLedger)) {
+    machineElementsLedger.forEach((item) => {
+      if (!item) return;
+      const itemMachNorm = normalizeToken(
+        item.id_machine_registered || item.id_machine || item.code_machine || item.machine
+      );
+      if (itemMachNorm !== targetMachNorm) return;
+
+      const refNorm = normalizeToken(item.ref_element || item.ref);
+      if (refNorm) seenRefs.add(refNorm);
+
+      unified.push({
+        ...item,
+        _source: item._source || 'LEDGER',
+      });
+    });
+  }
+
+  // 2. Mounted Entrepôt components & structural parts attached to this machine (MONTE / En service)
+  if (Array.isArray(warehouseItems)) {
+    warehouseItems.forEach((w) => {
+      if (!w) return;
+      const wMachRaw = w.id_machine_registered || w.id_machine || w.code_machine || w.machine || '';
+      if (normalizeToken(wMachRaw) !== targetMachNorm) return;
+
+      const rattach = String(w.rattachement_type || '').trim().toUpperCase();
+      if (rattach === 'ZONE' || rattach === 'RESERVE' || rattach === 'STOCK') return;
+
+      const rawStatus = String(w.status || w.statut || w.etat || '').trim().toLowerCase();
+      const isUnmountedStatus =
+        rawStatus.includes('stock') ||
+        rawStatus.includes('réserve') ||
+        rawStatus.includes('reserve') ||
+        rawStatus.includes('bobinage') ||
+        rawStatus.includes('réparation') ||
+        rawStatus.includes('reparation') ||
+        rawStatus.includes('hors service') ||
+        rawStatus.includes('archivé') ||
+        rawStatus.includes('archive') ||
+        rawStatus.includes('rebut');
+
+      if (isUnmountedStatus) return;
+
+      const whCode = String(w.id_warehouse_item || w.ref || w.code || w.id || '').trim();
+      const whRefAlt = String(w.ref || '').trim();
+      if (!whCode) return;
+
+      const codeNorm = normalizeToken(whCode);
+      const altNorm = normalizeToken(whRefAlt);
+      if ((codeNorm && seenRefs.has(codeNorm)) || (altNorm && seenRefs.has(altNorm))) {
+        return;
+      }
+
+      if (codeNorm) seenRefs.add(codeNorm);
+      if (altNorm) seenRefs.add(altNorm);
+
+      const natureRaw = String(w.nature || w.category || w.type || '').trim().toUpperCase();
+      const isPart =
+        natureRaw === 'PART' ||
+        natureRaw === 'PARTIE' ||
+        natureRaw === 'ORGANE' ||
+        Boolean(w.part_type || w.id_part || w.id_part_designation);
+
+      const mappedStatut =
+        rawStatus.includes('remplacer') || rawStatus.includes('alerte')
+          ? 'A_REMPLACER'
+          : rawStatus.includes('révision') || rawStatus.includes('revision') || rawStatus.includes('contrôle')
+          ? 'EN_REVISION'
+          : 'OPERATIONNEL';
+
+      unified.push({
+        id: `WH-MOUNTED-${whCode}`,
+        id_machine_registered: String(wMachRaw || machineId).trim(),
+        element_type: isPart ? 'PART' : 'COMPONENT',
+        ref_element: whCode,
+        designation: String(
+          w.designation || w.designation_part || w.nom_composant || w.nom || whCode
+        ).trim(),
+        qte_montee: Number(w.qte ?? w.quantite ?? w.stockActuel ?? w.stockInitial ?? 1) || 1,
+        unite: w.unite || 'U',
+        criticalite: w.criticalite || 'MAJEURE',
+        duree_vie_estimee_heures: Number(w.duree_vie_estimee_heures) || 5000,
+        heures_actuelles: Number(w.heures_actuelles) || 0,
+        date_installation: w.date_installation || w.date_montage || '',
+        emplacement_machine: w.emplacement || w.emplacement_machine || 'Monté (Entrepôt)',
+        technicien: w.technician || w.technicien || 'Entrepôt',
+        statut: mappedStatut,
+        remarques: w.remarques || '',
+        _source: 'ENTREPOT',
+        _warehouseItemId: w.id_warehouse_item || w.id || whCode,
+        _warehouseStatus: w.status || 'Monté / En service',
+      });
+    });
+  }
+
+  return unified;
 }
 
 export function doesTaskMatchBlueprint(

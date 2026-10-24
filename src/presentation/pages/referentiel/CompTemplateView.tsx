@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { Engine } from '../../components/common/icons/Engine';
@@ -484,9 +485,7 @@ export default function CompTemplateView({
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-purple-500/10 transition-colors duration-500" />
 
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500/10 via-purple-500/5 to-transparent border border-purple-200/90 shadow-[0_4px_12px_rgba(168,85,247,0.12)] flex items-center justify-center text-purple-700 group-hover/header:scale-105 group-hover/header:border-purple-400/80 transition-all duration-300 shrink-0">
-            <CubeIcon className="w-6 h-6 text-purple-700 transition-transform duration-300 group-hover/header:scale-110" />
-          </div>
+          <PageHeaderIcon icon={CubeIcon} colorClass="text-purple-700" />
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">
               {t('components.template.title', "Désignations de Composants d'Entrepôt")}

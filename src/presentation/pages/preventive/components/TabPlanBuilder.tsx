@@ -11,11 +11,13 @@ import {
   Loader2,
 } from 'lucide-react';
 import Action3DButton from '../../../components/common/Action3DButton';
+import PageHeaderIcon from '../../../components/common/PageHeaderIcon';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { Logger } from '../../../../core/logger/LoggerService';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
 import { rankStockItemsByMachineBom } from '../../../../core/domain';
 import { isWarehousePart } from '../../../../core/domain/EntrepotItem';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
 
 export default function TabPlanBuilder({
   machines = [],
@@ -29,6 +31,7 @@ export default function TabPlanBuilder({
   onCreatePlanWithTasks,
   onNavigateToMainView,
 }) {
+  const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   // Plan Builder State
   const [selectedMachineId, setSelectedMachineId] = useState('');
   const [targetZone, setTargetZone] = useState('');
@@ -165,8 +168,16 @@ export default function TabPlanBuilder({
         });
       }
     });
-    return rankStockItemsByMachineBom(selectedMachineId, list, machines, blueprints);
-  }, [stockItems, selectedMachineId, machines, blueprints]);
+    return rankStockItemsByMachineBom(
+      selectedMachineId,
+      list,
+      machines,
+      blueprints,
+      '',
+      undefined,
+      machineElementsLedger
+    );
+  }, [stockItems, selectedMachineId, machines, blueprints, machineElementsLedger]);
 
   const handleReset = () => {
     setSelectedMachineId('');
@@ -457,9 +468,7 @@ export default function TabPlanBuilder({
       {/* 3D TACTILE SUB-BANNER HEADER */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/gen">
         <div className="flex items-start sm:items-center gap-3.5 relative">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-200/90 shadow-[0_4px_12px_rgba(16,185,129,0.12)] flex items-center justify-center text-emerald-700 shrink-0">
-            <Sparkles className="w-6 h-6 text-emerald-700" />
-          </div>
+          <PageHeaderIcon icon={Sparkles} colorClass="text-emerald-700" />
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-lg font-black text-slate-900 tracking-tight">

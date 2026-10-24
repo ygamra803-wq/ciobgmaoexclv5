@@ -44,6 +44,7 @@ import {
   buildConsumablePdrInventory,
 } from '../../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../../core/domain/EntrepotItem';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
 
 export { buildConsumablePdrInventory };
 
@@ -80,6 +81,7 @@ export default function TabMainView({
   _onNavigateToMachine,
 }) {
   const { t } = useI18n();
+  const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [internalViewMode, setInternalViewMode] = useState('matrix'); // 'matrix' | 'calendar' | 'list' | 'analytics'
   const viewMode = controlledViewMode !== undefined ? controlledViewMode : internalViewMode;
   const setViewMode = useCallback(
@@ -493,7 +495,7 @@ export default function TabMainView({
     });
   }, [selectedTaskForValidation?.id_machine, warehouseItems]);
 
-  // P2: Smart BOM-ranked inventory for the validation modal
+  // P2 & N1: Smart BOM-ranked inventory for the validation modal
   const rankedValidationInventory = useMemo(() => {
     if (!selectedTaskForValidation) return availableInventory;
     return rankStockItemsByMachineBom(
@@ -506,7 +508,8 @@ export default function TabMainView({
         validationData.id_part ||
         validationData.nom_part ||
         selectedTaskForValidation.composant,
-      selectedTaskForValidation
+      selectedTaskForValidation,
+      machineElementsLedger
     );
   }, [
     selectedTaskForValidation,
@@ -517,6 +520,7 @@ export default function TabMainView({
     validationData.nom_composant,
     validationData.id_part,
     validationData.nom_part,
+    machineElementsLedger,
   ]);
 
   // Open Validation Modal with prefilled recommended PDR & auto-resolved id_composant / id_part

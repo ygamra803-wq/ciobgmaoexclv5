@@ -2,6 +2,7 @@ import {  useState, useRef, useMemo, useEffect  } from 'react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import CustomSelect from '../../components/common/CustomSelect';
 import PartInfoIcon from '../../components/common/icons/PartInfoIcon';
@@ -416,10 +417,7 @@ export default function PartDesignationView({
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-blue-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-blue-500/10 transition-colors duration-500" />
 
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          {/* 3D Elevated Page Badge Icon */}
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border border-blue-200/90 shadow-[0_4px_12px_rgba(59,130,246,0.12)] flex items-center justify-center text-blue-700 group-hover/header:scale-105 group-hover/header:border-blue-400/80 transition-all duration-300 shrink-0">
-            <PartInfoIcon className="w-6 h-6 text-blue-700 transition-transform duration-300 group-hover/header:scale-110" />
-          </div>
+          <PageHeaderIcon icon={PartInfoIcon} colorClass="text-blue-700" />
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">
               {t('nav.designation_pdr', 'Désignations de Parts d’Entrepôt')}
