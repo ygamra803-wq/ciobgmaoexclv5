@@ -133,3 +133,108 @@ export function matchesTechnicianRecord(
 
   return false;
 }
+
+export function getCurrentIsoWeekKey(date: Date = new Date()): string {
+  const start = new Date(date.getFullYear(), 0, 1);
+  const days = Math.floor((date.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  const weekNum = Math.min(52, Math.max(1, Math.ceil((days + start.getDay() + 1) / 7)));
+  return `S${weekNum}`;
+}
+
+export function buildTechnicianDashboardScope({
+  user,
+  technicians = [],
+  preventiveTasks = [],
+  preventiveExecutions = [],
+  correctiveInterventions = [],
+  mouvements = [],
+  currentWeekKey = getCurrentIsoWeekKey(),
+}: {
+  user: any;
+  technicians?: any[];
+  preventiveTasks?: any[];
+  preventiveExecutions?: any[];
+  correctiveInterventions?: any[];
+  mouvements?: any[];
+  currentWeekKey?: string;
+}) {
+  const isTechUser = isTechnicianRole(user);
+  const badgeLabel = getTechnicianBadgeLabel(user, technicians);
+  const displayName = getTechnicianDisplayName(user, technicians);
+
+  const myPreventiveTasks = isTechUser
+    ? (preventiveTasks || []).filter((t) => matchesTechnicianRecord(t, user, technicians))
+    : preventiveTasks || [];
+
+  const isScheduledThisWeek = (task: any) => {
+    if (!task) return false;
+    if (task.planning && Boolean(task.planning[currentWeekKey])) return true;
+    if (String(task.semaine_cible || '').trim().toUpperCase() === currentWeekKey.toUpperCase()) {
+      return true;
+    }
+    return false;
+  };
+
+  const overdueTasks = myPreventiveTasks.filter((t) => t?.etat === 'En retard');
+  const thisWeekTasks = myPreventiveTasks.filter(
+    (t) => t?.etat !== 'Fait' && isScheduledThisWeek(t)
+  );
+  const todoTasks = myPreventiveTasks.filter((t) => t?.etat === 'À faire');
+  const doneTasks = myPreventiveTasks.filter((t) => t?.etat === 'Fait');
+
+  const priorityTasks = [...myPreventiveTasks].sort((a, b) => {
+    const rank = (t: any) => {
+      if (t?.etat === 'En retard') return 0;
+      if (t?.etat !== 'Fait' && isScheduledThisWeek(t)) return 1;
+      if (t?.etat === 'À faire') return 2;
+      return 3;
+    };
+    return rank(a) - rank(b);
+  });
+
+  const myCorrectiveInterventions = isTechUser
+    ? (correctiveInterventions || []).filter((i) => matchesTechnicianRecord(i, user, technicians))
+    : correctiveInterventions || [];
+
+  const openCorrective = myCorrectiveInterventions.filter((i) => i?.statut !== 'CLOTURE');
+  const liveCorrective = myCorrectiveInterventions.filter((i) => i?.statut === 'EN_COURS');
+  const plannedBtCorrective = myCorrectiveInterventions.filter(
+    (i) => i?.statut === 'BT_PLANIFIE' || i?.statut === 'EN_ATTENTE_PDR'
+  );
+  const closedCorrective = myCorrectiveInterventions.filter((i) => i?.statut === 'CLOTURE');
+
+  const myPreventiveExecutions = isTechUser
+    ? (preventiveExecutions || []).filter((ex) => matchesTechnicianRecord(ex, user, technicians))
+    : preventiveExecutions || [];
+
+  const myMouvements = isTechUser
+    ? (mouvements || []).filter((m) => matchesTechnicianRecord(m, user, technicians))
+    : mouvements || [];
+
+  const totalMySortiePieces = myMouvements.reduce((acc, m) => {
+    const isSortie = String(m?.type || '').toLowerCase().includes('sort');
+    return isSortie ? acc + (Number(m?.quantite) || 0) : acc;
+  }, 0);
+
+  return {
+    isTechUser,
+    badgeLabel,
+    displayName,
+    currentWeekKey,
+    myPreventiveTasks,
+    overdueTasks,
+    thisWeekTasks,
+    todoTasks,
+    doneTasks,
+    priorityTasks,
+    myCorrectiveInterventions,
+    openCorrective,
+    liveCorrective,
+    plannedBtCorrective,
+    closedCorrective,
+    myPreventiveExecutions,
+    myMouvements,
+    totalMySortiePieces,
+  };
+}
+

@@ -36,8 +36,14 @@ import {
   Wrench,
   X,
   ShieldAlert,
+  Calendar,
+  BookOpen,
+  User,
 } from 'lucide-react';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { buildTechnicianDashboardScope } from '../../../core/security/technicianScope';
 
 export default function DashboardView({
   stockItems = [],
@@ -58,15 +64,18 @@ export default function DashboardView({
     alertes: 0,
     ok: 0,
   },
+  preventiveTasks = [],
+  preventiveExecutions = [],
   onNavigateToStock,
   onNavigateToMachines,
   onNavigateToWarehouse,
   onNavigateToSortie,
-  onNavigateToPreventive: _onNavigateToPreventive,
+  onNavigateToPreventive,
   onNavigateToCorrective,
   onNavigateToZones,
   onNavigateToUsers,
   onNavigateToSettings,
+  onNavigateToGuide,
   correctiveInterventions = [],
   correctiveKpis: _correctiveKpis = null,
   onQuickSortie,
@@ -74,7 +83,25 @@ export default function DashboardView({
   onUpdateMouvement,
   onDeleteMouvement,
   onExportExcel,
+  currentUser: currentUserProp = null,
 }) {
+  const { user: authUser } = useAuth();
+  const currentUser = currentUserProp || authUser;
+
+  const techScope = useMemo(
+    () =>
+      buildTechnicianDashboardScope({
+        user: currentUser,
+        technicians,
+        preventiveTasks,
+        preventiveExecutions,
+        correctiveInterventions,
+        mouvements,
+      }),
+    [currentUser, technicians, preventiveTasks, preventiveExecutions, correctiveInterventions, mouvements]
+  );
+  const isTechUser = techScope.isTechUser;
+
   // --- Modals State ---
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [formulaTab, setFormulaTab] = useState('stock'); // 'stock' | 'kpi'
@@ -412,41 +439,69 @@ export default function DashboardView({
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-                Tableau de Bord & Pilotage Opérationnel
+                {isTechUser
+                  ? 'Tableau de Bord & Poste Technicien'
+                  : 'Tableau de Bord & Pilotage Opérationnel'}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 flex items-center gap-1 shadow-2xs">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>CIOB GMAO Light Twin</span>
-              </span>
+              {isTechUser ? (
+                <span
+                  data-testid="tech-dashboard-badge"
+                  className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100/90 text-emerald-900 border border-emerald-300 flex items-center gap-1.5 shadow-2xs font-mono"
+                >
+                  <User className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Vue technicien · {techScope.badgeLabel}</span>
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 flex items-center gap-1 shadow-2xs">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>CIOB GMAO Light Twin</span>
+                </span>
+              )}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
                 100% Offline
               </span>
             </div>
             <p className="text-xs text-slate-500 max-w-3xl leading-relaxed">
-              Supervision en temps réel des flux de magasin, seuils critiques de réapprovisionnement,
-              état du parc machines et traçabilité intégrale des interventions.
+              {isTechUser
+                ? 'Suivi opérationnel de votre poste : vos tâches préventives planifiées, vos ordres de travail correctifs assignés et vos sorties de pièces magasin.'
+                : 'Supervision en temps réel des flux de magasin, seuils critiques de réapprovisionnement, état du parc machines et traçabilité intégrale des interventions.'}
             </p>
           </div>
         </div>
 
         {/* Action Buttons — 3D Circular Archetype */}
         <div className="flex items-center gap-2.5 shrink-0 relative self-end md:self-auto">
-          {/* 3D Formula Circular Trigger Button */}
-          <FormulasModalButton
-            onClick={() => setShowFormulasModal(true)}
-            title="Formules Excel (GMAO Twin)"
-          />
+          {!isTechUser && (
+            <>
+              {/* 3D Formula Circular Trigger Button */}
+              <FormulasModalButton
+                onClick={() => setShowFormulasModal(true)}
+                title="Formules Excel (GMAO Twin)"
+              />
 
-          {/* 3D Circular Nouvelle Commande Button */}
-          <Action3DButton
-            variant="circle"
-            color="amber"
-            icon={ShoppingCart}
-            showAddBadge={true}
-            onClick={handleOpenNewOrder}
-            title="Nouvelle Commande / Demande d'Achat"
-            ariaLabel="Nouvelle Commande"
-          />
+              {/* 3D Circular Nouvelle Commande Button */}
+              <Action3DButton
+                variant="circle"
+                color="amber"
+                icon={ShoppingCart}
+                showAddBadge={true}
+                onClick={handleOpenNewOrder}
+                title="Nouvelle Commande / Demande d'Achat"
+                ariaLabel="Nouvelle Commande"
+              />
+            </>
+          )}
+
+          {isTechUser && onNavigateToPreventive && (
+            <Action3DButton
+              variant="circle"
+              color="indigo"
+              icon={Calendar}
+              onClick={onNavigateToPreventive}
+              title="Mes Tâches Préventives"
+              ariaLabel="Maintenance Préventive"
+            />
+          )}
 
           {/* 3D Circular Correctif Nexus Button */}
           {onNavigateToCorrective && (
@@ -455,7 +510,7 @@ export default function DashboardView({
               color="amber"
               icon={Wrench}
               onClick={() => onNavigateToCorrective('corrective')}
-              title="Maintenance Corrective Nexus (DI · BT · Live · Clôture · Pareto)"
+              title="Maintenance Corrective Nexus (DI · BT · Live · Clôture)"
               ariaLabel="Maintenance Corrective"
             />
           )}
@@ -471,7 +526,7 @@ export default function DashboardView({
           />
 
           {/* 3D Circular Exporter Excel Button */}
-          {onExportExcel && (
+          {!isTechUser && onExportExcel && (
             <Action3DButton
               variant="circle"
               color="emerald"
@@ -484,154 +539,699 @@ export default function DashboardView({
         </div>
       </div>
 
-      {/* Referential Integrity Quick Health Banner */}
-      {referentialAudit?.summary && !referentialAudit.summary.isFullyAligned && (
-        <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-300/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-amber-950 shadow-xs animate-fade-in">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="font-black text-sm text-slate-900 flex items-center gap-2 flex-wrap">
-                <span>Écarts Référentiels Détectés ({referentialAudit.summary.totalOrphanErrors || 0} orphelin{(referentialAudit.summary.totalOrphanErrors || 0) > 1 ? 's' : ''})</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300">
-                  Santé {referentialAudit.healthScore ?? 100}% · Grade {referentialAudit.statusGrade || 'A+'}
-                </span>
-              </div>
-              <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
-                Des mouvements ou interventions font référence à des machines ou techniciens non enregistrés dans les listes maîtresses.
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => onNavigateToSettings?.('matching')}
-            className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
-          >
-            <Zap className="w-4 h-4" />
-            <span>Vérifier & Appairer (1 Clic)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* 2. Top Primary KPI Metrics Grid */}
-      <DashboardKPIs
-        stockKPIs={stockKPIs}
-        types={types}
-        machineHealth={machineHealth}
-        onNavigateToStock={onNavigateToStock}
-        onNavigateToMachines={onNavigateToMachines}
-      />
-
-      {/* 2.5 Hub Maintenance Corrective Industrielle Nexus */}
-      <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white rounded-3xl border border-amber-300/80 shadow-[0_8px_30px_rgba(245,158,11,0.08)] p-5 md:p-6 space-y-4 relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
-              <Wrench className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-base font-black text-slate-900 tracking-tight">
-                  Maintenance Corrective Nexus
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider font-mono">
-                  Hub Dédié
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-700 border border-amber-200">
-                  5 Sous-sections
-                </span>
-              </div>
-              <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                Pilotage complet des pannes : Demandes (DI), Ordres de Travail (BT), Chronomètre d’Atelier avec déduction automatique de pause, Clôture avec sortie PDR et Pareto 80/20.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap shrink-0">
-            <button
-              onClick={() => onNavigateToCorrective?.('corrective')}
-              className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/25 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+      {isTechUser ? (
+        <div className="space-y-6">
+          {/* Technician Shift KPIs (4 Scoped Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 1. Mes Tâches Préventives */}
+            <div
+              onClick={onNavigateToPreventive}
+              className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(79,70,229,0.12)] hover:-translate-y-1 hover:border-indigo-300/80 transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between"
             >
-              <Wrench className="w-3.5 h-3.5" />
-              <span>Ouvrir Correctif Nexus</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
+                    Mes Tâches Préventives
+                  </span>
+                  <Calendar className="w-6 h-6 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-indigo-600 transition-colors">
+                    {techScope.overdueTasks.length + techScope.todoTasks.length}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">à traiter</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
+                    {techScope.overdueTasks.length} en retard
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-bold text-[10px] font-mono border border-indigo-200/80">
+                    {techScope.thisWeekTasks.length} sem. {techScope.currentWeekKey}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-medium">Total assigné :</span>
+                <span className="font-mono font-bold text-indigo-700">
+                  {techScope.myPreventiveTasks.length} tâches ({techScope.doneTasks.length} faites)
+                </span>
+              </div>
+            </div>
+
+            {/* 2. Mes Ordres de Travail Correctifs Ouverts */}
+            <div
+              onClick={() => onNavigateToCorrective?.('corrective_bt')}
+              className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(245,158,11,0.12)] hover:-translate-y-1 hover:border-amber-300/80 transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
+                    Mes Interventions Ouvertes
+                  </span>
+                  <Wrench className="w-6 h-6 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-amber-600 transition-colors">
+                    {techScope.openCorrective.length}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">ouvertes</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] font-mono border border-emerald-200/80">
+                    {techScope.liveCorrective.length} en cours
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold text-[10px] font-mono border border-blue-200/80">
+                    {techScope.plannedBtCorrective.length} BT planifiés
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-medium">Clôturées par moi :</span>
+                <span className="font-mono font-bold text-amber-700">
+                  {techScope.closedCorrective.length} rapports
+                </span>
+              </div>
+            </div>
+
+            {/* 3. Mes Exécutions Préventives */}
+            <div
+              onClick={onNavigateToPreventive}
+              className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(16,185,129,0.12)] hover:-translate-y-1 hover:border-emerald-300/80 transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
+                    Mes Exécutions Validées
+                  </span>
+                  <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-emerald-600 transition-colors">
+                    {techScope.myPreventiveExecutions.length}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">historique</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold text-[10px] font-mono border border-emerald-200/80">
+                    {techScope.doneTasks.length} tâches marquées Fait
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-medium">Traçabilité :</span>
+                <span className="font-mono font-bold text-emerald-700">Registre personnel</span>
+              </div>
+            </div>
+
+            {/* 4. Mes Sorties PDR & Mouvements */}
+            <div
+              onClick={onNavigateToSortie}
+              className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(20,184,166,0.12)] hover:-translate-y-1 hover:border-teal-300/80 transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
+                    Mes Mouvements & Sorties PDR
+                  </span>
+                  <SortieEntreeIcon className="w-6 h-6 text-teal-600 shrink-0 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-teal-600 transition-colors">
+                    {techScope.myMouvements.length}
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">bons</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
+                    -{techScope.totalMySortiePieces} pcs sorties
+                  </span>
+                </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                <span className="text-slate-400 font-medium">Action directe :</span>
+                <span className="font-mono font-bold text-teal-700">Saisir une sortie →</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Scoped Maintenance Corrective Hub for Technician */}
+          <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white rounded-3xl border border-amber-300/80 shadow-[0_8px_30px_rgba(245,158,11,0.08)] p-5 md:p-6 space-y-4 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-base font-black text-slate-900 tracking-tight">
+                      Poste Correctif Terrain · {techScope.badgeLabel}
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider font-mono">
+                      Mes Interventions
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    Accès direct aux demandes d’intervention (DI), à vos bons de travail (BT), au chronomètre Live et à vos rapports clôturés.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  onClick={() => onNavigateToCorrective?.('corrective_bt')}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/25 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>Ouvrir Mes BT</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-amber-200/60">
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_di')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">1. Demandes</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Signaler / DI</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                    {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_bt')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">2. Mes Bons Travail</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>BT Assignés</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    {techScope.plannedBtCorrective.length}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_live')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">3. Chrono Live</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Mon Live</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {techScope.liveCorrective.length} en cours
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_cloture')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">4. Mes Rapports</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Clôturées</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                    {techScope.closedCorrective.length}
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Two-Column Technician Operational Workboard: Preventive Tasks & Open Corrective WOs */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Left: Mes Tâches Préventives Prioritaires */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <Calendar className="w-6 h-6 text-indigo-600 shrink-0" />
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Mes Tâches Préventives (Retard · Sem. {techScope.currentWeekKey} · À faire)
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Filtrées sur votre profil ({techScope.badgeLabel})
+                    </p>
+                  </div>
+                </div>
+                {onNavigateToPreventive && (
+                  <button
+                    onClick={onNavigateToPreventive}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Planning</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {techScope.priorityTasks.length > 0 ? (
+                <div className="space-y-2.5">
+                  {techScope.priorityTasks.slice(0, 8).map((task, idx) => {
+                    const isLate = task.etat === 'En retard';
+                    const isDone = task.etat === 'Fait';
+                    const isThisWeek =
+                      !isDone &&
+                      ((task.planning && Boolean(task.planning[techScope.currentWeekKey])) ||
+                        String(task.semaine_cible || '').toUpperCase() === techScope.currentWeekKey);
+
+                    return (
+                      <div
+                        key={`tech-prv-${task.id ?? idx}`}
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition ${
+                          isLate
+                            ? 'bg-rose-50/40 border-rose-200/90'
+                            : isThisWeek
+                            ? 'bg-indigo-50/40 border-indigo-200/90'
+                            : 'bg-slate-50/80 border-slate-200/80'
+                        }`}
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px]">
+                              {task.id_machine || 'MACHINE'}
+                            </span>
+                            {isLate ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                En retard
+                              </span>
+                            ) : isThisWeek ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                Semaine {techScope.currentWeekKey}
+                              </span>
+                            ) : isDone ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Fait
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                {task.etat || 'À faire'}
+                              </span>
+                            )}
+                            {task.frequence && (
+                              <span className="text-[10px] font-mono text-slate-500">
+                                • {task.frequence}
+                              </span>
+                            )}
+                          </div>
+                          <div className="font-bold text-slate-800 truncate">
+                            {task.composant || task.action_libelle || 'Contrôle préventif'}
+                          </div>
+                        </div>
+
+                        {onNavigateToPreventive && (
+                          <button
+                            onClick={onNavigateToPreventive}
+                            className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
+                          >
+                            Traiter
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-slate-50/80 border border-slate-200/80 text-center space-y-1.5">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                  <div className="text-xs font-bold text-slate-800">
+                    Aucune tâche préventive assignée
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Votre liste de maintenance préventive est à jour pour {techScope.badgeLabel}.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Right: Mes Ordres de Travail & Interventions Correctives Ouvertes */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <Wrench className="w-6 h-6 text-amber-600 shrink-0" />
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Mes Bons de Travail & Interventions Ouvertes ({techScope.openCorrective.length})
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Ordres de travail en cours ou planifiés à votre nom
+                    </p>
+                  </div>
+                </div>
+                {onNavigateToCorrective && (
+                  <button
+                    onClick={() => onNavigateToCorrective('corrective_bt')}
+                    className="text-xs font-bold text-amber-600 hover:text-amber-800 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Voir BT</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {techScope.openCorrective.length > 0 ? (
+                <div className="space-y-2.5">
+                  {techScope.openCorrective.slice(0, 8).map((bt, idx) => {
+                    const isLive = bt.statut === 'EN_COURS';
+                    return (
+                      <div
+                        key={`tech-bt-${bt.id ?? idx}`}
+                        className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition ${
+                          isLive
+                            ? 'bg-emerald-50/40 border-emerald-200/90'
+                            : 'bg-slate-50/80 border-slate-200/80'
+                        }`}
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px]">
+                              {bt.code_machine || 'MACHINE'}
+                            </span>
+                            {bt.num_bt && (
+                              <span className="font-mono text-[10.5px] font-bold text-amber-900 bg-amber-100/80 px-2 py-0.5 rounded border border-amber-200">
+                                {bt.num_bt}
+                              </span>
+                            )}
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                isLive
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              }`}
+                            >
+                              {bt.statut || 'OUVERT'}
+                            </span>
+                          </div>
+                          <div className="font-bold text-slate-800 truncate">
+                            {bt.anomalie || bt.travail_a_faire || 'Intervention corrective'}
+                          </div>
+                        </div>
+
+                        {onNavigateToCorrective && (
+                          <button
+                            onClick={() =>
+                              onNavigateToCorrective(isLive ? 'corrective_live' : 'corrective_bt')
+                            }
+                            className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
+                          >
+                            {isLive ? 'Chrono Live' : 'Ouvrir BT'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-6 rounded-2xl bg-slate-50/80 border border-slate-200/80 text-center space-y-1.5">
+                  <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                  <div className="text-xs font-bold text-slate-800">
+                    Aucune intervention corrective ouverte
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Aucun bon de travail en attente pour {techScope.badgeLabel}.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Two-Column Technician Recent Activity: Executions & Movements */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Left: Mes Dernières Exécutions Préventives */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Mes Dernières Exécutions Préventives
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Historique d’exécution enregistré à votre matricule
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {techScope.myPreventiveExecutions.length > 0 ? (
+                <div className="space-y-2">
+                  {techScope.myPreventiveExecutions.slice(0, 5).map((ex, idx) => (
+                    <div
+                      key={`tech-ex-${ex.id ?? idx}`}
+                      className="p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-center justify-between text-xs"
+                    >
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[10.5px]">
+                            {ex.id_machine || 'MACHINE'}
+                          </span>
+                          <span className="font-bold text-slate-800 truncate">
+                            {ex.composant || ex.action_libelle || 'Exécution préventive'}
+                          </span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 font-mono">
+                          {ex.date_execution || ex.date_realisation || ex.periodMonth || 'Date N/A'}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-mono font-bold text-[10px] border border-emerald-200 shrink-0">
+                        Validé
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 text-center py-5">
+                  Aucune exécution préventive enregistrée pour votre profil.
+                </div>
+              )}
+            </div>
+
+            {/* Right: Mes Derniers Mouvements Magasin */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <SortieEntreeIcon className="w-5 h-5 text-teal-600 shrink-0" />
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Mes Derniers Mouvements Magasin
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Vos sorties et mouvements PDR récents
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={onNavigateToSortie}
+                  className="text-xs font-bold text-teal-600 hover:text-teal-800 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Sortie</span>
+                </button>
+              </div>
+
+              {techScope.myMouvements.length > 0 ? (
+                <div className="space-y-2">
+                  {techScope.myMouvements.slice(0, 5).map((m, idx) => {
+                    const isSortie = String(m.type || '').toLowerCase().includes('sort');
+                    return (
+                      <div
+                        key={`tech-mvt-${m.id ?? idx}`}
+                        className="p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-center justify-between text-xs"
+                      >
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.2 rounded-full font-mono ${
+                                isSortie
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {m.type}
+                            </span>
+                            <span className="font-mono font-bold text-slate-900">{m.ref}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 truncate">
+                            {m.designation || 'Article'}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {m.code_bon || 'Bon'} • {m.date} {m.id_machine_registered ? `• ${m.id_machine_registered}` : ''}
+                          </div>
+                        </div>
+                        <div className="text-right font-mono font-black text-sm shrink-0">
+                          {isSortie ? (
+                            <span className="text-rose-600">-{m.quantite}</span>
+                          ) : (
+                            <span className="text-emerald-600">+{m.quantite}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 text-center py-5">
+                  Aucun mouvement de stock enregistré sous votre nom.
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      ) : (
+        <>
+          {/* Referential Integrity Quick Health Banner */}
+          {referentialAudit?.summary && !referentialAudit.summary.isFullyAligned && (
+            <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-300/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-amber-950 shadow-xs animate-fade-in">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-black text-sm text-slate-900 flex items-center gap-2 flex-wrap">
+                    <span>Écarts Référentiels Détectés ({referentialAudit.summary.totalOrphanErrors || 0} orphelin{(referentialAudit.summary.totalOrphanErrors || 0) > 1 ? 's' : ''})</span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300">
+                      Santé {referentialAudit.healthScore ?? 100}% · Grade {referentialAudit.statusGrade || 'A+'}
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
+                    Des mouvements ou interventions font référence à des machines ou techniciens non enregistrés dans les listes maîtresses.
+                  </p>
+                </div>
+              </div>
 
-        {/* Quick Tabs Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-amber-200/60">
-          <button
-            onClick={() => onNavigateToCorrective?.('corrective_di')}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
-          >
-            <div className="text-[10px] font-bold text-slate-400 uppercase">1. Demandes</div>
-            <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-              <span>DI Usine</span>
-              <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
-              </span>
+              <button
+                onClick={() => onNavigateToSettings?.('matching')}
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Vérifier & Appairer (1 Clic)</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-          </button>
+          )}
 
-          <button
-            onClick={() => onNavigateToCorrective?.('corrective_bt')}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
-          >
-            <div className="text-[10px] font-bold text-slate-400 uppercase">2. Bons Travail</div>
-            <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-              <span>BT Planifiés</span>
-              <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                {(correctiveInterventions || []).filter((i) => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR').length}
-              </span>
+          {/* 2. Top Primary KPI Metrics Grid */}
+          <DashboardKPIs
+            stockKPIs={stockKPIs}
+            types={types}
+            machineHealth={machineHealth}
+            onNavigateToStock={onNavigateToStock}
+            onNavigateToMachines={onNavigateToMachines}
+          />
+
+          {/* 2.5 Hub Maintenance Corrective Industrielle Nexus */}
+          <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white rounded-3xl border border-amber-300/80 shadow-[0_8px_30px_rgba(245,158,11,0.08)] p-5 md:p-6 space-y-4 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h2 className="text-base font-black text-slate-900 tracking-tight">
+                      Maintenance Corrective Nexus
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider font-mono">
+                      Hub Dédié
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-700 border border-amber-200">
+                      5 Sous-sections
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                    Pilotage complet des pannes : Demandes (DI), Ordres de Travail (BT), Chronomètre d’Atelier avec déduction automatique de pause, Clôture avec sortie PDR et Pareto 80/20.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                <button
+                  onClick={() => onNavigateToCorrective?.('corrective')}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/25 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  <span>Ouvrir Correctif Nexus</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
-          </button>
 
-          <button
-            onClick={() => onNavigateToCorrective?.('corrective_live')}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
-          >
-            <div className="text-[10px] font-bold text-slate-400 uppercase">3. Chrono Live</div>
-            <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-              <span>Intervention Live</span>
-              <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                {(correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length} en cours
-              </span>
+            {/* Quick Tabs Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-amber-200/60">
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_di')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">1. Demandes</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>DI Usine</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                    {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_bt')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">2. Bons Travail</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>BT Planifiés</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    {(correctiveInterventions || []).filter((i) => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR').length}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_live')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">3. Chrono Live</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Intervention Live</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {(correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length} en cours
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_cloture')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">4. Rapports</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Clôturées</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                    {(correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length}
+                  </span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => onNavigateToCorrective?.('corrective_analyse')}
+                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+              >
+                <div className="text-[10px] font-bold text-slate-400 uppercase">5. Décisionnel</div>
+                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                  <span>Pareto 80/20</span>
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                    MTTR
+                  </span>
+                </div>
+              </button>
             </div>
-          </button>
+          </div>
 
-          <button
-            onClick={() => onNavigateToCorrective?.('corrective_cloture')}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
-          >
-            <div className="text-[10px] font-bold text-slate-400 uppercase">4. Rapports</div>
-            <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-              <span>Clôturées</span>
-              <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                {(correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length}
-              </span>
-            </div>
-          </button>
-
-          <button
-            onClick={() => onNavigateToCorrective?.('corrective_analyse')}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
-          >
-            <div className="text-[10px] font-bold text-slate-400 uppercase">5. Décisionnel</div>
-            <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-              <span>Pareto 80/20</span>
-              <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
-                MTTR
-              </span>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* 3. Procurement & Purchase Orders Tracking Center */}
-      <div className="bg-white rounded-3xl border border-amber-200/90 shadow-[0_8px_30px_rgba(245,158,11,0.06)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.1)] transition-all duration-300 p-5 md:p-6 space-y-4 relative overflow-hidden">
+          {/* 3. Procurement & Purchase Orders Tracking Center */}
+          <div className="bg-white rounded-3xl border border-amber-200/90 shadow-[0_8px_30px_rgba(245,158,11,0.06)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.1)] transition-all duration-300 p-5 md:p-6 space-y-4 relative overflow-hidden">
         {/* Subtle Ambient Background Highlight */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -1413,6 +2013,8 @@ export default function DashboardView({
           </div>
         </div>
       </div>
+        </>
+      )}
 
       {/* 7. GMAO Shortcuts Hub */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] transition-all duration-300 space-y-3">
@@ -1421,83 +2023,136 @@ export default function DashboardView({
           <span>Accès Rapide aux Modules GMAO</span>
         </h3>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
-          <button
-            onClick={onNavigateToStock}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(59,130,246,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Package className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
-            <div className="text-[10px] text-slate-500">Gestion des articles</div>
-          </button>
+        <div className={`grid grid-cols-2 sm:grid-cols-3 ${isTechUser ? 'lg:grid-cols-6' : 'lg:grid-cols-7'} gap-3`}>
+          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'preventive')) && onNavigateToPreventive && (
+            <button
+              onClick={onNavigateToPreventive}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(79,70,229,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Maintenance Préventive</div>
+              <div className="text-[10px] text-slate-500">Mes tâches & planning</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToSortie}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <SortieEntreeIcon className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
-            <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
-          </button>
+          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective')) && onNavigateToCorrective && (
+            <button
+              onClick={() => onNavigateToCorrective('corrective')}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(245,158,11,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Maintenance Corrective</div>
+              <div className="text-[10px] text-slate-500">DI, BT & Chrono Live</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToMachines}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(168,85,247,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Factory className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
-            <div className="text-[10px] text-slate-500">Arborescence actifs</div>
-          </button>
+          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
+            <button
+              onClick={onNavigateToStock}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(59,130,246,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Package className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
+              <div className="text-[10px] text-slate-500">{isTechUser ? 'Consulter les PDR' : 'Gestion des articles'}</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToWarehouse}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(20,184,166,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Warehouse className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Entrepôt</div>
-            <div className="text-[10px] text-slate-500">Éléments & Moteurs</div>
-          </button>
+          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
+            <button
+              onClick={onNavigateToSortie}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <SortieEntreeIcon className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
+              <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToZones}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(245,158,11,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Zones & Ateliers</div>
-            <div className="text-[10px] text-slate-500">Emplacements usine</div>
-          </button>
+          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
+            <button
+              onClick={onNavigateToMachines}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(168,85,247,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Factory className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
+              <div className="text-[10px] text-slate-500">Arborescence actifs</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToUsers}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(99,102,241,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <UserCheck className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Personnel GMAO</div>
-            <div className="text-[10px] text-slate-500">Techniciens & Chefs</div>
-          </button>
+          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'entrepot')) && (
+            <button
+              onClick={onNavigateToWarehouse}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(20,184,166,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Warehouse className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Entrepôt</div>
+              <div className="text-[10px] text-slate-500">Éléments & Moteurs</div>
+            </button>
+          )}
 
-          <button
-            onClick={onNavigateToSettings}
-            className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 hover:border-slate-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-          >
-            <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-              <FileSpreadsheet className="w-5 h-5" />
-            </div>
-            <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">Excel Twin</div>
-            <div className="text-[10px] text-slate-500">Sauvegardes & Sync</div>
-          </button>
+          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'zones')) && (
+            <button
+              onClick={onNavigateToZones}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(245,158,11,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Zones & Ateliers</div>
+              <div className="text-[10px] text-slate-500">Emplacements usine</div>
+            </button>
+          )}
+
+          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'utilisateurs')) && (
+            <button
+              onClick={onNavigateToUsers}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(99,102,241,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Personnel GMAO</div>
+              <div className="text-[10px] text-slate-500">Techniciens & Chefs</div>
+            </button>
+          )}
+
+          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'settings')) && (
+            <button
+              onClick={onNavigateToSettings}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 hover:border-slate-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">Excel Twin</div>
+              <div className="text-[10px] text-slate-500">Sauvegardes & Sync</div>
+            </button>
+          )}
+
+          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'guide')) && onNavigateToGuide && (
+            <button
+              onClick={onNavigateToGuide}
+              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(20,184,166,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Guide Terrain</div>
+              <div className="text-[10px] text-slate-500">Manuel & Procédures</div>
+            </button>
+          )}
         </div>
       </div>
 
