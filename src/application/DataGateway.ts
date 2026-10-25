@@ -160,6 +160,12 @@ export const DataGateway = {
     return this.saveMouvements(list, options);
   },
 
+  saveSortieDemands(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.SORTIE_DEMANDS, clean);
+    return clean;
+  },
+
   // ==========================================
   // 3. PREVENTIVE MAINTENANCE
   // ==========================================
@@ -562,6 +568,7 @@ export const DataGateway = {
     this.saveStockTypes([]);
     this.saveDesignations([]);
     this.saveMouvements([]);
+    this.saveSortieDemands([]);
 
     this.savePreventiveTasks([]);
     this.savePreventiveActions([]);
@@ -603,6 +610,7 @@ export const DataGateway = {
     if (setters.setTypes) setters.setTypes([]);
     if (setters.setDesignations) setters.setDesignations([]);
     if (setters.setMouvements) setters.setMouvements([]);
+    if (setters.setSortieDemands) setters.setSortieDemands([]);
 
     if (setters.setPreventiveTasks) setters.setPreventiveTasks([]);
     if (setters.setPreventiveActions) setters.setPreventiveActions([]);

@@ -137,10 +137,26 @@ export interface GmaoStoreState {
   setOperations: (ops: IOperation[] | ((prev: IOperation[]) => IOperation[])) => void;
 
   // ==========================================
-  // 5. Movements Slice
+  // 5. Movements Slice & V3/V4 Sortie Demands
   // ==========================================
   mouvements: IMouvement[];
   setMouvements: (movements: IMouvement[] | ((prev: IMouvement[]) => IMouvement[])) => void;
+  sortieDemands: any[];
+  setSortieDemands: (demands: any[] | ((prev: any[]) => any[])) => void;
+  handleSubmitSortieDemand: (demandPayload: any) => any;
+  handleReviewSortieDemandValidation: (
+    demandId: string,
+    decisionData?: {
+      decision: 'APPROVED' | 'REJECTED' | 'NEEDS_CLARIFICATION';
+      code_bon_magasin?: string;
+      mergeWithMovementId?: string | null;
+      approvedItems?: any[];
+      validation_note?: string;
+      validated_by_id?: string;
+      validated_by_name?: string;
+    },
+    onAddMouvement?: ((mvt: any) => void) | null
+  ) => any;
 
   // ==========================================
   // 6. Preventive Maintenance Slice

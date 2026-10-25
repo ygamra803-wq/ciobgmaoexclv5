@@ -45,6 +45,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { buildTechnicianDashboardScope } from '../../../core/security/technicianScope';
 import { buildAdminValidationRadar } from '../../../core/security/validationReconciliation';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 export default function DashboardView({
   stockItems = [],
@@ -103,6 +104,8 @@ export default function DashboardView({
   );
   const isTechUser = techScope.isTechUser;
 
+  const storeSortieDemands = useGmaoStore((state) => state.sortieDemands);
+
   const validationRadar = useMemo(
     () =>
       buildAdminValidationRadar({
@@ -110,8 +113,9 @@ export default function DashboardView({
         mouvements,
         correctiveInterventions,
         preventiveExecutions,
+        sortieDemands: storeSortieDemands,
       }),
-    [stockItems, mouvements, correctiveInterventions, preventiveExecutions]
+    [stockItems, mouvements, correctiveInterventions, preventiveExecutions, storeSortieDemands]
   );
 
   // --- Modals State ---
@@ -1233,8 +1237,8 @@ export default function DashboardView({
                         </span>
                       )}
                     </div>
-                    <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
-                      Les déclarations des techniciens (BT correctifs et exécutions préventives) sont isolées du stock jusqu&apos;à votre approbation.
+                      <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
+                      Les déclarations des techniciens (BT correctifs, exécutions préventives et demandes de sortie rapide) sont isolées du stock jusqu&apos;à votre approbation.
                     </p>
                   </div>
                 </div>
@@ -1262,6 +1266,17 @@ export default function DashboardView({
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
+                  {validationRadar.pendingSortieCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToSortie?.()}
+                      className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <SortieEntreeIcon className="w-3.5 h-3.5" />
+                      <span>Sorties à valider ({validationRadar.pendingSortieCount})</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1284,10 +1299,16 @@ export default function DashboardView({
                             className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black ${
                               item.claimType === 'CORRECTIVE'
                                 ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                                : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                : item.claimType === 'PREVENTIVE'
+                                ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                : 'bg-teal-100 text-teal-900 border border-teal-200'
                             }`}
                           >
-                            {item.claimType === 'CORRECTIVE' ? 'BT' : 'PRÉV'}
+                            {item.claimType === 'CORRECTIVE'
+                              ? 'BT'
+                              : item.claimType === 'PREVENTIVE'
+                              ? 'PRÉV'
+                              : 'SORTIE'}
                           </span>
                           <span className="font-mono font-bold text-slate-900">{item.machineCode}</span>
                           <span className="text-[10.5px] text-slate-500 truncate">• {item.technicianName}</span>
@@ -1310,7 +1331,9 @@ export default function DashboardView({
                         onClick={() =>
                           item.claimType === 'CORRECTIVE'
                             ? onNavigateToCorrective?.('corrective_bt')
-                            : onNavigateToPreventive?.()
+                            : item.claimType === 'PREVENTIVE'
+                            ? onNavigateToPreventive?.()
+                            : onNavigateToSortie?.()
                         }
                         className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
                       >

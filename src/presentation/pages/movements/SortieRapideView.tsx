@@ -55,11 +55,14 @@ import SortieExterneBobinageTab from './components/SortieExterneBobinageTab';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { applyReplacementMovementToLedger } from '../../../core/domain';
 import { useAuth } from '../../../context/AuthContext';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   isTechnicianRole,
   matchesTechnicianRecord,
   getTechnicianBadgeLabel,
+  getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
+import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
 
 // Custom Select Component with BDR Light styling and optional onAddNew
 function CustomSelect({
@@ -304,25 +307,122 @@ export default function SortieRapideView({
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
   );
+  const techDisplayName = useMemo(
+    () => getTechnicianDisplayName(user, technicians),
+    [user, technicians]
+  );
 
-  // V3 Maker-Checker: Scope movements to logged-in technician & lock into read-only Journal consultation
+  // V3 + V4 Store SortieDemands & Reconciliation Context
+  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands || []);
+  const handleSubmitSortieDemand = useGmaoStore((s) => s.handleSubmitSortieDemand);
+  const handleReviewSortieDemandValidation = useGmaoStore(
+    (s) => s.handleReviewSortieDemandValidation
+  );
+  const storeCorrectiveInterventions = useGmaoStore((s) => s.correctiveInterventions || []);
+  const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions || []);
+
+  // Technician editing an existing demand returned for clarification
+  const [editingDemandId, setEditingDemandId] = useState<string | null>(null);
+
+  // Admin / Magasinier Review & Reconciliation Modal State
+  const [reviewDemand, setReviewDemand] = useState<any | null>(null);
+  const [reviewCodeBonMagasin, setReviewCodeBonMagasin] = useState('');
+  const [reviewMergeMovementId, setReviewMergeMovementId] = useState<string>('');
+  const [reviewDemandItems, setReviewDemandItems] = useState<any[]>([]);
+  const [reviewDemandNote, setReviewDemandNote] = useState('');
+
+  // Scope movements & sortie demands to logged-in technician when TECHNICIEN
   const scopedMouvements = useMemo(() => {
     if (!isTechUser) return mouvements;
     return (mouvements || []).filter((m) => matchesTechnicianRecord(m, user, technicians));
   }, [mouvements, isTechUser, user, technicians]);
 
-  // Navigation Sub-Tabs: 'JOURNAL' | 'COMMANDES' | 'REPARATION_EXTERNE'
+  const mySortieDemands = useMemo(() => {
+    if (!isTechUser) return storeSortieDemands;
+    return (storeSortieDemands || []).filter((d) => matchesTechnicianRecord(d, user, technicians));
+  }, [storeSortieDemands, isTechUser, user, technicians]);
+
+  const pendingSortieDemands = useMemo(
+    () =>
+      (storeSortieDemands || []).filter(
+        (d) =>
+          d.validation_status === 'PENDING_VALIDATION' ||
+          d.validation_status === 'NEEDS_CLARIFICATION'
+      ),
+    [storeSortieDemands]
+  );
+
+  const reviewDemandReconciliation = useMemo(() => {
+    if (!reviewDemand) return null;
+    return reconcileFieldClaim({
+      claimType: 'SORTIE',
+      claimId: String(reviewDemand.id),
+      numBonSaisi: reviewDemand.code_bon_tech,
+      machineCode: reviewDemand.id_machine_registered,
+      proposedSpares: reviewDemandItems,
+      stockItems,
+      mouvements,
+      correctiveInterventions: storeCorrectiveInterventions,
+      preventiveExecutions: storePreventiveExecutions,
+      sortieDemands: storeSortieDemands,
+    });
+  }, [
+    reviewDemand,
+    reviewDemandItems,
+    stockItems,
+    mouvements,
+    storeCorrectiveInterventions,
+    storePreventiveExecutions,
+    storeSortieDemands,
+  ]);
+
+  const handleOpenReviewDemandModal = (dem: any) => {
+    setReviewDemand(dem);
+    setReviewCodeBonMagasin(dem.code_bon_magasin || dem.code_bon_tech || '');
+    setReviewMergeMovementId('');
+    setReviewDemandItems(
+      Array.isArray(dem.items) ? dem.items.map((it: any) => ({ ...it })) : []
+    );
+    setReviewDemandNote(dem.validation_note || '');
+  };
+
+  const handleReviewDemandDecision = (
+    decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED'
+  ) => {
+    if (!reviewDemand) return;
+    if (
+      (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') &&
+      !String(reviewDemandNote || '').trim()
+    ) {
+      return;
+    }
+    handleReviewSortieDemandValidation(
+      reviewDemand.id,
+      {
+        decision,
+        code_bon_magasin: reviewCodeBonMagasin || reviewDemand.code_bon_tech,
+        mergeWithMovementId: reviewMergeMovementId || null,
+        approvedItems: reviewDemandItems,
+        validation_note: reviewDemandNote,
+        validated_by_id: user?.id || user?.code || 'admin',
+        validated_by_name: user?.name || 'Magasinier / Admin',
+      },
+      onAddMouvement
+    );
+    setReviewDemand(null);
+  };
+
+  // Navigation Sub-Tabs: 'JOURNAL' | 'VALIDATION_TERRAIN' | 'COMMANDES' | 'REPARATION_EXTERNE'
   const [activeSubTab, setActiveSubTab] = useState('JOURNAL');
   // Display Mode for Journal: 'SPLIT' (Vue Scindée) | 'JOURNAL' (Plein Écran Table)
   const [rawViewMode, setViewMode] = useState('SPLIT');
-  const viewMode = isTechUser ? 'JOURNAL' : rawViewMode;
+  const viewMode = rawViewMode;
   const effectiveSubTab = isTechUser ? 'JOURNAL' : activeSubTab;
   const [isFloatingFormOpen, setIsFloatingFormOpen] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // Toggle between Split view (Vue Scindée) and Full-Screen Table view (Vue Dédiée)
   const handleToggleSplitSolo = () => {
-    if (isTechUser) return;
     if (viewMode === 'SPLIT') {
       setViewMode('JOURNAL');
     } else {
@@ -1219,7 +1319,47 @@ export default function SortieRapideView({
     // Process valid submission
     const currentTime = form.heure && String(form.heure).trim() !== '' ? form.heure : getCurrentTimeStr();
 
-    // Submit movement records for each item in the bon
+    // V3 Maker-Checker: When TECHNICIEN submits on SortieRapide, record a SortieDemand (PENDING_VALIDATION) WITHOUT touching mouvements or deducting stock
+    if (isTechUser) {
+      handleSubmitSortieDemand({
+        ...(editingDemandId ? { id: editingDemandId } : {}),
+        code_bon_tech: form.code_bon,
+        num_commande: form.num_commande ? form.num_commande.trim() : 'SORTIE_TERRAIN',
+        date: form.date,
+        heure: currentTime,
+        type: 'Sortie Interne',
+        action_id: form.action_id || 'CORRECTIVE',
+        usage_type: 'technician',
+        id_zone: form.id_zone,
+        id_machine_registered: form.id_machine_registered,
+        technicien: techDisplayName || form.technicien || user?.name || 'Technicien',
+        id_technician: user?.personnelId || form.id_technician || user?.id || '',
+        operation: form.operation,
+        id_operation: form.id_operation,
+        commentaire: form.commentaire,
+        items: mouvementItems,
+        submitted_by_id: user?.personnelId || user?.id || form.id_technician || 'tech',
+        submitted_by_name: techDisplayName || user?.name || form.technicien || 'Technicien',
+      });
+
+      setEditingDemandId(null);
+      const nextCode = getNextBonCode(mouvements);
+      resetForm();
+      setForm((prev) => ({
+        ...prev,
+        code_bon: nextCode,
+      }));
+      if (isFloatingFormOpen) {
+        setIsFloatingFormOpen(false);
+      }
+      setShowSuccessAlert(true);
+      setTimeout(() => {
+        setShowSuccessAlert(false);
+      }, 3000);
+      return;
+    }
+
+    // Submit movement records for each item in the bon (Admin / Magasinier / Responsable)
     mouvementItems.forEach((item) => {
       const rawOt = form.num_commande ? form.num_commande.trim() : '';
       const finalNumCommande = rawOt !== '' ? rawOt : 'INCONNU';
@@ -1573,6 +1713,23 @@ export default function SortieRapideView({
 
               <button
                 type="button"
+                onClick={() => setActiveSubTab('VALIDATION_TERRAIN')}
+                className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  activeSubTab === 'VALIDATION_TERRAIN'
+                    ? 'bg-purple-700 text-white shadow-sm border border-purple-900'
+                    : 'text-purple-800 hover:bg-purple-100/70 border border-transparent'
+                }`}
+              >
+                <ShieldCheck
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    activeSubTab === 'VALIDATION_TERRAIN' ? 'text-purple-100' : 'text-purple-600'
+                  }`}
+                />
+                <span>À Valider Terrain ({pendingSortieDemands.length})</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveSubTab('COMMANDES')}
                 className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
                   activeSubTab === 'COMMANDES'
@@ -1602,6 +1759,33 @@ export default function SortieRapideView({
         )}
       </div>
 
+      {/* V3+V4 Admin Alert Banner when Technician Sortie Demands are waiting for approval */}
+      {!isTechUser && pendingSortieDemands.length > 0 && effectiveSubTab !== 'VALIDATION_TERRAIN' && (
+        <div
+          data-testid="admin-sortie-demands-banner"
+          className="mt-4 bg-purple-50/90 border border-purple-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-purple-950 shadow-2xs"
+        >
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-5 h-5 text-purple-600 shrink-0" />
+            <div>
+              <span className="font-black uppercase tracking-wider">
+                {pendingSortieDemands.length} Demande(s) de Sortie Terrain en attente de validation Magasin :
+              </span>{' '}
+              <span>
+                Contrôlez la concordance N° Bon Technicien × N° Bon Magasin avant d&apos;engager la déduction du stock.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('VALIDATION_TERRAIN')}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer transition"
+          >
+            Ouvrir la file d&apos;attente ({pendingSortieDemands.length})
+          </button>
+        </div>
+      )}
+
       {isTechUser && (
         <div
           data-testid="tech-movements-read-only-banner"
@@ -1610,10 +1794,10 @@ export default function SortieRapideView({
           <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
           <div>
             <span className="font-black uppercase tracking-wider">
-              Contrôle Magasin & Maker-Checker Actif :
+              Canal de Demande de Sortie PDR (Maker-Checker V3) :
             </span>{' '}
             <span>
-              La saisie directe de mouvements de stock est réservée au Responsable / Magasinier. En tant que technicien ({techBadgeLabel}), déclarez vos pièces consommées dans vos <b>Interventions Correctives (Live / Clôture)</b> ou vos <b>Exécutions Préventives</b> ; elles apparaîtront ici dès leur validation officielle.
+              En tant que technicien ({techBadgeLabel}), toute sortie saisie ici est enregistrée comme <b>Demande de Sortie Terrain (PENDING_VALIDATION)</b> sans déduction immédiate du stock. Le Magasinier / Responsable valide ou réconcilie votre N° de bon pour générer le mouvement officiel.
             </span>
           </div>
         </div>
@@ -1715,6 +1899,163 @@ export default function SortieRapideView({
           </motion.div>
         )}
 
+        {/* SUB-VIEW 0: VALIDATION TERRAIN (V3 + V4 SortieDemands Queue for Admin / Magasinier) */}
+        {effectiveSubTab === 'VALIDATION_TERRAIN' && (
+          <motion.div
+            key="subtab-validation-terrain"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            className="bg-white p-5 rounded-2xl border border-purple-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] space-y-4 mt-4"
+          >
+            <div className="flex items-center justify-between border-b border-purple-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    File d&apos;Attente des Demandes de Sortie Terrain (V3 + V4 Réconciliation Bon Tech × Bon Magasin)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Chaque demande ci-dessous a été saisie par un technicien sans déduction de stock. Approuvez ou fusionnez avec un bon magasin existant.
+                  </p>
+                </div>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                {storeSortieDemands.length} demande(s) totale(s)
+              </span>
+            </div>
+
+            {storeSortieDemands.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
+                <p className="text-xs font-medium">Aucune demande de sortie terrain enregistrée.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {storeSortieDemands.map((dem: any) => {
+                  const isPending = dem.validation_status === 'PENDING_VALIDATION';
+                  const isClarif = dem.validation_status === 'NEEDS_CLARIFICATION';
+                  const isApproved = dem.validation_status === 'APPROVED';
+                  const recon = reconcileFieldClaim({
+                    claimType: 'SORTIE',
+                    claimId: String(dem.id),
+                    numBonSaisi: dem.code_bon_tech,
+                    machineCode: dem.id_machine_registered,
+                    proposedSpares: dem.items || [],
+                    stockItems,
+                    mouvements,
+                    correctiveInterventions: storeCorrectiveInterventions,
+                    preventiveExecutions: storePreventiveExecutions,
+                    sortieDemands: storeSortieDemands,
+                  });
+
+                  return (
+                    <div
+                      key={dem.id}
+                      className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs ${
+                        isPending
+                          ? 'bg-purple-50/40 border-purple-200'
+                          : isClarif
+                          ? 'bg-rose-50/40 border-rose-200'
+                          : isApproved
+                          ? 'bg-emerald-50/30 border-emerald-200'
+                          : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono font-black text-purple-950 bg-white px-2 py-0.5 rounded border border-purple-200">
+                            Bon Tech: {dem.code_bon_tech}
+                          </span>
+                          {dem.code_bon_magasin && (
+                            <span className="font-mono font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
+                              Bon Magasin: {dem.code_bon_magasin}
+                            </span>
+                          )}
+                          <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                            {dem.id_machine_registered || dem.id_zone || 'ATELIER'}
+                          </span>
+                          <span className="font-semibold text-slate-700">
+                            Technicien: <b>{dem.technicien}</b>
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-400">
+                            {dem.date} • {dem.heure}
+                          </span>
+                          {isPending && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-100 text-purple-900 border border-purple-300">
+                              À VALIDER
+                            </span>
+                          )}
+                          {isClarif && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-rose-100 text-rose-900 border border-rose-300">
+                              ÉCART / À CLARIFIER
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+                              {dem.discrepancy_status === 'BON_MISMATCH_MERGED'
+                                ? 'APPROUVÉ & RÉCONCILIÉ'
+                                : 'APPROUVÉ & DÉDUIT'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {(dem.items || []).map((it: any, idx: number) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 rounded bg-white border border-slate-200 font-mono font-bold text-[11px] text-slate-800"
+                            >
+                              {it.ref} — {it.designation} (x{it.quantite} {it.unit || 'pcs'})
+                            </span>
+                          ))}
+                        </div>
+
+                        {!isApproved && recon.alerts.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {recon.alerts.map((al, i) => (
+                              <span
+                                key={i}
+                                className={`px-2 py-0.5 rounded text-[10.5px] font-bold flex items-center gap-1 ${
+                                  al.severity === 'critical'
+                                    ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                                    : 'bg-amber-100 text-amber-900 border border-amber-300'
+                                }`}
+                              >
+                                <AlertTriangle className="w-3 h-3 shrink-0" />
+                                {al.title}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {dem.validation_note && (
+                          <div className="text-[11px] font-semibold text-rose-800 pt-0.5">
+                            Note Magasin / Resp. : « {dem.validation_note} »
+                          </div>
+                        )}
+                      </div>
+
+                      {(isPending || isClarif) && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReviewDemandModal(dem)}
+                          className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer transition shadow-2xs"
+                        >
+                          Contrôler & Réconcilier
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {/* MAIN VIEW: FORM & JOURNAL TABLE ACCORDING TO VIEW MODE */}
         {effectiveSubTab === 'JOURNAL' && (
           <motion.div
@@ -1725,8 +2066,8 @@ export default function SortieRapideView({
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
             <div className={viewMode === 'SPLIT' ? 'grid grid-cols-1 lg:grid-cols-12 gap-4 items-start' : 'w-full'}>
-              {/* Form Container: Left Sticky Column in SPLIT mode, or Floating Card in JOURNAL mode (Hidden for TECHNICIEN) */}
-              {!isTechUser && (viewMode === 'SPLIT' || isFloatingFormOpen) && (
+              {/* Form Container: Left Sticky Column in SPLIT mode, or Floating Card in JOURNAL mode */}
+              {(viewMode === 'SPLIT' || isFloatingFormOpen) && (
                 <FormContainerWrapper
                   isFloating={viewMode === 'JOURNAL'}
                   onClose={() => setIsFloatingFormOpen(false)}
@@ -1735,8 +2076,18 @@ export default function SortieRapideView({
                       <div className="flex items-center gap-2.5">
                         <Receipt className="w-5 h-5 text-indigo-600 shrink-0" />
                         <div>
-                          <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">Émission de Bon de Mouvement</h3>
-                          <p className="text-[11px] text-slate-500">Sélectionnez le type de flux et les articles concernés</p>
+                          <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                            {isTechUser
+                              ? editingDemandId
+                                ? 'Correction de Demande de Sortie PDR'
+                                : 'Demande de Sortie PDR Terrain (Sans Déstockage Immédiat)'
+                              : 'Émission de Bon de Mouvement'}
+                          </h3>
+                          <p className="text-[11px] text-slate-500">
+                            {isTechUser
+                              ? 'Saisissez votre N° de bon terrain et les pièces demandées pour validation Magasin'
+                              : 'Sélectionnez le type de flux et les articles concernés'}
+                          </p>
                         </div>
                       </div>
                       <div className="w-full xl:w-56 shrink-0">
@@ -4725,12 +5076,20 @@ export default function SortieRapideView({
                 ) : getFormValidationState().isValid ? (
                   <>
                     <Check className="w-4 h-4" />
-                    <span>Valider et Enregistrer (Prêt)</span>
+                    <span>
+                      {isTechUser
+                        ? 'Soumettre Demande de Sortie (Validation Magasin)'
+                        : 'Valider et Enregistrer (Prêt)'}
+                    </span>
                   </>
                 ) : (
                   <>
                     <AlertTriangle className="w-4 h-4" />
-                    <span>Valider {form.type} ({mouvementItems.reduce((acc, i) => acc + (Number(i.quantite) || 0), 0)} pcs) • {form.code_bon}</span>
+                    <span>
+                      {isTechUser ? 'Soumettre Demande' : `Valider ${form.type}`} (
+                      {mouvementItems.reduce((acc, i) => acc + (Number(i.quantite) || 0), 0)} pcs) •{' '}
+                      {form.code_bon}
+                    </span>
                   </>
                 )}
               </button>
@@ -4740,7 +5099,107 @@ export default function SortieRapideView({
               )}
 
               {/* Right Table: Movements History & Excel Twin */}
-              <div className={viewMode === 'SPLIT' ? 'lg:col-span-7' : 'w-full'}>
+              <div className={viewMode === 'SPLIT' ? 'lg:col-span-7 space-y-4' : 'w-full space-y-4'}>
+                {/* V3/V4 Technician Sortie Demands Status Panel */}
+                {isTechUser && mySortieDemands.length > 0 && (
+                  <div
+                    data-testid="tech-sortie-demands-list"
+                    className="bg-white rounded-2xl border border-indigo-200/90 shadow-xs p-4 space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
+                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                          Mes Demandes de Sortie Terrain ({mySortieDemands.length})
+                        </h3>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        Aucune déduction stock avant approbation magasin
+                      </span>
+                    </div>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {mySortieDemands.slice(0, 8).map((dem) => {
+                        const isClarif = dem.validation_status === 'NEEDS_CLARIFICATION';
+                        const isPending = dem.validation_status === 'PENDING_VALIDATION';
+                        const isApproved = dem.validation_status === 'APPROVED';
+                        return (
+                          <div
+                            key={dem.id}
+                            className={`p-3 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                              isClarif
+                                ? 'bg-rose-50/60 border-rose-300'
+                                : isPending
+                                ? 'bg-purple-50/40 border-purple-200'
+                                : isApproved
+                                ? 'bg-emerald-50/40 border-emerald-200'
+                                : 'bg-slate-50 border-slate-200'
+                            }`}
+                          >
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-black text-slate-900">
+                                  {dem.code_bon_tech || dem.id}
+                                </span>
+                                {dem.code_bon_magasin && dem.code_bon_magasin !== dem.code_bon_tech && (
+                                  <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 font-mono text-[10px] font-bold">
+                                    → Bon Magasin: {dem.code_bon_magasin}
+                                  </span>
+                                )}
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                    isClarif
+                                      ? 'bg-rose-100 text-rose-900 border border-rose-300 animate-pulse'
+                                      : isPending
+                                      ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                                      : isApproved
+                                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                      : 'bg-slate-200 text-slate-700'
+                                  }`}
+                                >
+                                  {isClarif
+                                    ? 'À CLARIFIER (DISCREPANCY)'
+                                    : isPending
+                                    ? 'EN ATTENTE VALIDATION'
+                                    : isApproved
+                                    ? dem.discrepancy_status === 'BON_MISMATCH_MERGED'
+                                      ? 'VALIDÉ & FUSIONNÉ'
+                                      : 'APPROUVÉ & DÉDUIT'
+                                    : 'REJETÉ'}
+                                </span>
+                                {dem.id_machine_registered && (
+                                  <span className="text-[10.5px] font-mono text-slate-600">
+                                    • {dem.id_machine_registered}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[11px] text-slate-600 truncate">
+                                {(dem.items || [])
+                                  .map((it) => `${it.ref} (×${it.quantite})`)
+                                  .join(', ')}
+                              </div>
+                              {dem.validation_note && (
+                                <div className="text-[11px] font-bold text-rose-800">
+                                  Note Magasin/Admin : « {dem.validation_note} »
+                                </div>
+                              )}
+                            </div>
+
+                            {isClarif && (
+                              <button
+                                type="button"
+                                onClick={() => handleReloadClarificationDemand(dem)}
+                                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
+                              >
+                                Corriger & Resoumettre
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <MouvementsJournalTable
                   mouvements={scopedMouvements}
                   stockItems={stockItems}
@@ -4757,6 +5216,204 @@ export default function SortieRapideView({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* V3+V4 MODAL: MAGASINIER / ADMIN SORTIE DEMAND REVIEW & BON RECONCILIATION */}
+      {reviewDemand && (
+        <div
+          data-testid="sortie-demand-review-modal"
+          className="fixed inset-0 bg-slate-900/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in"
+        >
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    Contrôle & Réconciliation Demande Sortie Terrain (V3+V4)
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    Bon Tech: {reviewDemand.code_bon_tech} • Technicien: {reviewDemand.technicien} •{' '}
+                    {reviewDemand.date}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewDemand(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* V4 Reconciliation Alerts */}
+              {reviewDemandReconciliation && reviewDemandReconciliation.alerts.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
+                  <div className="font-black text-amber-950 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Diagnostic de Réconciliation V4 (Bon & Stock)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {reviewDemandReconciliation.alerts.map((al, i) => (
+                      <div
+                        key={i}
+                        className={`p-2 rounded-lg border text-[11px] ${
+                          al.severity === 'CRITICAL'
+                            ? 'bg-rose-50 border-rose-200 text-rose-900'
+                            : 'bg-white border-amber-200 text-amber-900'
+                        }`}
+                      >
+                        <div className="font-bold">{al.title}</div>
+                        <div className="text-[10.5px] opacity-90">{al.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* V4 Interactive Merge Option: BS-Tech × BS-Magasin */}
+              {reviewDemandReconciliation?.candidateStoreMovements?.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 space-y-2">
+                  <label className="font-black text-indigo-950 block">
+                    Appairage / Fusion V4 avec un Bon Magasin existant (sans double déduction) :
+                  </label>
+                  <p className="text-[11px] text-indigo-800">
+                    Si le magasinier a déjà saisi cette sortie sous un autre numéro de bon (ex:{' '}
+                    <span className="font-mono font-bold">BS-109</span> au lieu de{' '}
+                    <span className="font-mono font-bold">{reviewDemand.code_bon_tech}</span>),
+                    sélectionnez-le pour fusionner les deux enregistrements sans re-déduire le stock :
+                  </p>
+                  <select
+                    value={reviewMergeMovementId}
+                    onChange={(e) => setReviewMergeMovementId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-indigo-300 font-mono text-xs font-bold text-slate-900"
+                  >
+                    <option value="">
+                      — Ne pas fusionner (Créer un nouveau mouvement et déduire le stock) —
+                    </option>
+                    {reviewDemandReconciliation.candidateStoreMovements.map((cand) => (
+                      <option key={cand.id} value={cand.id}>
+                        Fusionner avec Bon Magasin {cand.code_bon} ({cand.ref} ×{cand.quantite} •{' '}
+                        {cand.date} • {cand.technicien}) — Zéro double déduction
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Official Store Bon Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    N° Bon Saisi par le Technicien (Terrain)
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={reviewDemand.code_bon_tech || ''}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 font-mono text-xs text-slate-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    N° Bon Officiel Magasin (Registre)
+                  </label>
+                  <input
+                    type="text"
+                    value={reviewCodeBonMagasin}
+                    onChange={(e) => setReviewCodeBonMagasin(e.target.value)}
+                    placeholder="Ex: BS-109"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-xs font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Editable Approved Quantities */}
+              <div className="space-y-2">
+                <div className="font-bold text-slate-800">
+                  Articles & Quantités à valider :
+                </div>
+                {reviewItems.map((it, idx) => (
+                  <div
+                    key={`${it.ref}-${idx}`}
+                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
+                  >
+                    <div>
+                      <div className="font-mono font-bold text-slate-900">{it.ref}</div>
+                      <div className="text-[11px] text-slate-600">{it.designation}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-500">Qté retenue :</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={it.quantite}
+                        onChange={(e) => {
+                          const val = Math.max(0, Number(e.target.value) || 0);
+                          setReviewItems((prev) =>
+                            prev.map((row, rIdx) => (rIdx === idx ? { ...row, quantite: val } : row))
+                          );
+                        }}
+                        className="w-20 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 font-mono font-bold text-right"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Validation / Discrepancy Note */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Note de validation ou motif d&apos;écart (obligatoire si À clarifier / Rejeté)
+                </label>
+                <textarea
+                  rows={2}
+                  value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                  placeholder="Ex: Bon BS-104 fusionné avec BS-109 du carnet magasin, ou préciser pourquoi la quantité diffère..."
+                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleConfirmReviewDemand('NEEDS_CLARIFICATION')}
+                  className="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs cursor-pointer transition"
+                >
+                  À Clarifier (Écart Bon/Qté)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmReviewDemand('REJECTED')}
+                  className="px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-bold text-xs cursor-pointer transition"
+                >
+                  Rejeter sans déduction
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConfirmReviewDemand('APPROVED')}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>
+                  {reviewMergeMovementId
+                    ? 'Approuver & Fusionner (Sans Double Déduction)'
+                    : 'Approuver & Déduire du Stock'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* UNIFIED ARTICLE & WAREHOUSE ITEM SEARCH MODAL */}
       {isArticleSearchOpen && (

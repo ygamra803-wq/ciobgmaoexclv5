@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   STOCK_TYPES: 'gmao_types_v5',
   DESIGNATIONS: 'gmao_designations_v3',
   MOUVEMENTS: 'gmao_mouvements_v2',
+  SORTIE_DEMANDS: 'gmao_sortie_demands_v1',
 
   // 3. Preventive Maintenance
   PREVENTIVE_TASKS: 'gmao_preventive_tasks_v9',

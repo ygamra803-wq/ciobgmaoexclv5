@@ -606,8 +606,116 @@ describe('V4 Smart Reconciliation & Admin Validation Radar', () => {
     expect(radar.items[1].id).toBe('BT-OK-1');
     expect(radar.items[1].reconciliation.hasCritical).toBe(false);
   });
+
+  it('completes V3 SortieDemand workflow (Submit -> Approve -> 1 movement) and V4 interactive BS-104 × BS-109 merge without double deduction', () => {
+    useGmaoStore.setState({
+      sortieDemands: [],
+      mouvements: [
+        {
+          id: 'MVT-STORE-109',
+          code_bon: 'BS-109',
+          type: 'Sortie Interne',
+          ref: 'RLM-6205',
+          designation: 'Roulement 6205 ZZ',
+          quantite: 2,
+          date: '2026-10-25',
+          technicien: 'Magasinier Hassan',
+          id_machine_registered: 'M-101',
+        },
+      ],
+    });
+
+    // Case A: Technician submits SortieDemand with BS-104 for RLM-6205 on M-101
+    useGmaoStore.getState().handleSubmitSortieDemand({
+      code_bon_tech: 'BS-104',
+      type: 'Sortie Interne',
+      date: '2026-10-25',
+      technicien: 'Rachid',
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Rachid',
+      id_machine_registered: 'M-101',
+      items: [{ ref: 'RLM-6205', designation: 'Roulement 6205 ZZ', quantite: 2 }],
+    });
+
+    const demandsAfterSubmit = useGmaoStore.getState().sortieDemands;
+    expect(demandsAfterSubmit).toHaveLength(1);
+    const demand1 = demandsAfterSubmit[0];
+    expect(demand1.validation_status).toBe('PENDING_VALIDATION');
+    expect(demand1.stock_deducted).toBe(false);
+    // No new movement added on technician submission
+    expect(useGmaoStore.getState().mouvements).toHaveLength(1);
+
+    // V4 Reconciliation detects BS-109 as a candidate store movement for BS-104
+    const rec = reconcileFieldClaim({
+      claimType: 'SORTIE',
+      claimId: demand1.id,
+      numBonSaisi: demand1.code_bon_tech,
+      machineCode: demand1.id_machine_registered,
+      proposedSpares: demand1.items,
+      stockItems,
+      mouvements: useGmaoStore.getState().mouvements,
+      sortieDemands: demandsAfterSubmit,
+    });
+    expect(rec.alerts.map((a) => a.code)).toContain('CANDIDATE_STORE_BON_MATCH');
+    expect(rec.candidateStoreMovements).toHaveLength(1);
+    expect(rec.candidateStoreMovements[0].code_bon).toBe('BS-109');
+
+    // Admin/Magasinier merges BS-104 with existing store movement MVT-STORE-109 (BS-109) -> ZERO double stock deduction
+    const emittedMovements: any[] = [];
+    useGmaoStore.getState().handleReviewSortieDemandValidation(
+      demand1.id,
+      {
+        decision: 'APPROVED',
+        mergeWithMovementId: 'MVT-STORE-109',
+        validation_note: 'Fusionné avec le bon magasin BS-109 déjà saisi',
+        validated_by_id: 'MAG-01',
+        validated_by_name: 'Hassan Magasinier',
+      },
+      (mv) => emittedMovements.push(mv)
+    );
+
+    expect(emittedMovements).toHaveLength(0); // Zero duplicate movement emitted
+    const mergedDemand = useGmaoStore.getState().sortieDemands.find((d) => d.id === demand1.id)!;
+    expect(mergedDemand.validation_status).toBe('APPROVED');
+    expect(mergedDemand.stock_deducted).toBe(true);
+    expect(mergedDemand.discrepancy_status).toBe('BON_MISMATCH_MERGED');
+    expect(mergedDemand.code_bon_magasin).toBe('BS-109');
+    expect(mergedDemand.merged_with_movement_id).toBe('MVT-STORE-109');
+
+    const linkedStoreMvt = useGmaoStore.getState().mouvements.find((m) => m.id === 'MVT-STORE-109')!;
+    expect(linkedStoreMvt.num_bon_saisi_par_tech).toBe('BS-104');
+    expect(linkedStoreMvt.merged_demand_id).toBe(demand1.id);
+
+    // Case B: Technician submits a brand-new SortieDemand (BS-205) -> Admin approves normally -> 1 movement emitted
+    useGmaoStore.getState().handleSubmitSortieDemand({
+      id: 'SD-NEW-205',
+      code_bon_tech: 'BS-205',
+      type: 'Sortie Interne',
+      date: '2026-10-25',
+      technicien: 'Rachid',
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Rachid',
+      id_machine_registered: 'M-202',
+      items: [{ ref: 'HUILE-ISO-220', designation: 'Huile Réducteur ISO VG 220', quantite: 3 }],
+    });
+
+    useGmaoStore.getState().handleReviewSortieDemandValidation(
+      'SD-NEW-205',
+      {
+        decision: 'APPROVED',
+        code_bon_magasin: 'BS-MAG-205',
+        approvedItems: [{ ref: 'HUILE-ISO-220', designation: 'Huile Réducteur ISO VG 220', quantite: 2 }],
+        validation_note: 'Quantité ajustée à 2L',
+        validated_by_id: 'MAG-01',
+        validated_by_name: 'Hassan Magasinier',
+      },
+      (mv) => emittedMovements.push(mv)
+    );
+
+    expect(emittedMovements).toHaveLength(1);
+    expect(emittedMovements[0].code_bon).toBe('BS-MAG-205');
+    expect(emittedMovements[0].num_bon_saisi_par_tech).toBe('BS-205');
+    expect(emittedMovements[0].quantite).toBe(2);
+    expect(emittedMovements[0].source_demand_id).toBe('SD-NEW-205');
+  });
 });
-
-
-
-

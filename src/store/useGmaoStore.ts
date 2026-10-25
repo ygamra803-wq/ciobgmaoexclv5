@@ -213,7 +213,11 @@ function getInitialMovements() {
     allowDemoFallback: true,
     demoSeed: initialMouvements,
   });
-  return { mouvements };
+  const sortieDemands = loadCollection(STORAGE_KEYS.SORTIE_DEMANDS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
+  return { mouvements, sortieDemands };
 }
 
 function getInitialPreventive() {
@@ -520,14 +524,300 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     // ==========================================
-    // 5. Movements Slice
+    // 5. Movements Slice & V3/V4 Sortie Demands
     // ==========================================
     mouvements: movementsInit.mouvements,
+    sortieDemands: movementsInit.sortieDemands,
 
     setMouvements: (updater) => {
       const next = resolveUpdate(updater, get().mouvements);
       set({ mouvements: next });
       DataGateway.saveMovements(next);
+    },
+
+    setSortieDemands: (updater) => {
+      const next = resolveUpdate(updater, get().sortieDemands || []);
+      set({ sortieDemands: next });
+      DataGateway.saveSortieDemands(next);
+    },
+
+    handleSubmitSortieDemand: (demandPayload) => {
+      if (!demandPayload || typeof demandPayload !== 'object') return null;
+      const nowIso = new Date().toISOString();
+      const rawItems = Array.isArray(demandPayload.items) ? demandPayload.items : [];
+      const cleanItems = rawItems
+        .map((it: any) => ({
+          source: String(it?.source || 'STOCK_PDR'),
+          ref: String(it?.ref || it?.code_article || '').trim(),
+          designation: String(it?.designation || it?.ref || 'PDR').trim(),
+          quantite: Math.max(1, Number(it?.quantite ?? it?.qty ?? 1) || 1),
+          unit: String(it?.unit || it?.unite || 'pcs'),
+          emplacement: String(it?.emplacement || ''),
+        }))
+        .filter((it: any) => Boolean(it.ref));
+
+      if (cleanItems.length === 0) return null;
+
+      const currentDemands = get().sortieDemands || [];
+      const existingIdx = demandPayload.id
+        ? currentDemands.findIndex((d: any) => String(d.id) === String(demandPayload.id))
+        : -1;
+
+      const codeBonTech = String(
+        demandPayload.code_bon_tech || demandPayload.code_bon || `BS-TECH-${Date.now().toString().slice(-4)}`
+      ).trim();
+
+      const record = {
+        ...(existingIdx >= 0 ? currentDemands[existingIdx] : {}),
+        id:
+          existingIdx >= 0
+            ? currentDemands[existingIdx].id
+            : String(demandPayload.id || `DEM-SRT-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`),
+        code_bon_tech: codeBonTech,
+        code_bon_magasin: '',
+        num_commande: String(demandPayload.num_commande || 'SORTIE_TERRAIN').trim(),
+        date: String(demandPayload.date || nowIso.split('T')[0]),
+        heure: String(demandPayload.heure || '10:00'),
+        type: String(demandPayload.type || 'Sortie Interne'),
+        action_id: String(demandPayload.action_id || 'CORRECTIVE'),
+        usage_type: String(demandPayload.usage_type || 'technician'),
+        id_zone: String(demandPayload.id_zone || ''),
+        id_machine_registered: String(demandPayload.id_machine_registered || ''),
+        technicien: String(demandPayload.technicien || demandPayload.submitted_by_name || 'Technicien'),
+        id_technician: String(demandPayload.id_technician || demandPayload.submitted_by_id || ''),
+        operation: String(demandPayload.operation || ''),
+        id_operation: String(demandPayload.id_operation || ''),
+        commentaire: String(demandPayload.commentaire || '').trim(),
+        items: cleanItems,
+        validation_status: 'PENDING_VALIDATION',
+        discrepancy_status: 'NONE',
+        submitted_by_id: String(demandPayload.submitted_by_id || demandPayload.id_technician || 'tech'),
+        submitted_by_name: String(demandPayload.submitted_by_name || demandPayload.technicien || 'Technicien'),
+        submitted_at: nowIso,
+        stock_deducted: false,
+      };
+
+      const nextDemands =
+        existingIdx >= 0
+          ? currentDemands.map((d: any, i: number) => (i === existingIdx ? record : d))
+          : [record, ...currentDemands];
+
+      set({ sortieDemands: nextDemands });
+      DataGateway.saveSortieDemands(nextDemands);
+      return record;
+    },
+
+    handleReviewSortieDemandValidation: (
+      demandId,
+      decisionData = { decision: 'APPROVED' },
+      onAddMouvement = null
+    ) => {
+      const currentDemands = get().sortieDemands || [];
+      const existing = currentDemands.find((d: any) => String(d.id) === String(demandId));
+      if (!existing) return null;
+
+      if (existing.validation_status === 'APPROVED' && existing.stock_deducted === true) {
+        console.warn(
+          `[useGmaoStore] handleReviewSortieDemandValidation blocked: demand ${demandId} is already approved and stock deducted.`
+        );
+        return null;
+      }
+
+      const decision = String(decisionData.decision || 'APPROVED').trim().toUpperCase();
+      const nowIso = new Date().toISOString();
+
+      if (decision === 'APPROVED') {
+        const rawItems = Array.isArray(decisionData.approvedItems)
+          ? decisionData.approvedItems
+          : Array.isArray(existing.items)
+          ? existing.items
+          : [];
+        const approvedItems = rawItems
+          .map((it: any) => ({
+            source: String(it?.source || 'STOCK_PDR'),
+            ref: String(it?.ref || it?.code_article || '').trim(),
+            designation: String(it?.designation || it?.ref || 'PDR').trim(),
+            quantite: Math.max(0, Number(it?.quantite ?? it?.qty ?? 0) || 0),
+            unit: String(it?.unit || it?.unite || 'pcs'),
+            emplacement: String(it?.emplacement || ''),
+          }))
+          .filter((it: any) => Boolean(it.ref && it.quantite > 0));
+
+        if (approvedItems.length === 0) return null;
+
+        const mergeTargetId = String(decisionData.mergeWithMovementId || '').trim();
+        const currentMouvements = get().mouvements || [];
+        const existingMvtToMerge = mergeTargetId
+          ? currentMouvements.find(
+              (m: any) =>
+                String(m.id || '') === mergeTargetId || String(m.code_bon || '') === mergeTargetId
+            )
+          : null;
+
+        const finalCodeBonMagasin = String(
+          existingMvtToMerge?.code_bon ||
+            decisionData.code_bon_magasin ||
+            existing.code_bon_tech ||
+            `BS-MAG-${Date.now().toString().slice(-4)}`
+        ).trim();
+
+        const isBonMismatch =
+          finalCodeBonMagasin.toUpperCase() !== String(existing.code_bon_tech || '').trim().toUpperCase();
+
+        const emittedIds: string[] = [];
+
+        if (existingMvtToMerge) {
+          // V4 Interactive Merge: link technician's demand (e.g. BS-104) to existing storekeeper movement (e.g. BS-109) WITHOUT double-deducting stock
+          const nextMouvements = currentMouvements.map((m: any) => {
+            if (
+              String(m.id || '') === String(existingMvtToMerge.id || '') &&
+              String(m.code_bon || '') === String(existingMvtToMerge.code_bon || '')
+            ) {
+              return {
+                ...m,
+                num_bon_saisi_par_tech: existing.code_bon_tech,
+                merged_demand_id: existing.id,
+                technicien: m.technicien || existing.technicien,
+                id_machine_registered: m.id_machine_registered || existing.id_machine_registered,
+              };
+            }
+            return m;
+          });
+          set({ mouvements: nextMouvements });
+          DataGateway.saveMovements(nextMouvements);
+          emittedIds.push(String(existingMvtToMerge.id || existingMvtToMerge.code_bon));
+        } else {
+          // Normal Approval: emit official movement(s) once and deduct stock
+          const stockList = get().rawStock || [];
+          const movementsToRecord: any[] = [];
+
+          approvedItems.forEach((item: any, idx: number) => {
+            const stockMatch = stockList.find(
+              (s: any) =>
+                String(s.ref || '').trim().toUpperCase() === String(item.ref || '').trim().toUpperCase()
+            );
+            const stockAvant = Number(stockMatch?.stockActuel ?? stockMatch?.stockInitial ?? 0);
+            const seuilMin = Number(stockMatch?.seuil ?? 5);
+            const qteNum = Number(item.quantite) || 1;
+            const stockApres = stockAvant - qteNum;
+            const mvtId = `MVT-SRT-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`;
+            emittedIds.push(mvtId);
+
+            movementsToRecord.push({
+              id: mvtId,
+              code_bon: finalCodeBonMagasin,
+              num_bon_saisi_par_tech: existing.code_bon_tech,
+              merged_demand_id: existing.id,
+              source_demand_id: existing.id,
+              num_commande: existing.num_commande || 'SORTIE_TERRAIN',
+              date: existing.date || nowIso.split('T')[0],
+              heure: existing.heure || '10:00',
+              timestamp: nowIso,
+              ref: item.ref,
+              code_article: item.ref,
+              designation: item.designation || stockMatch?.designation || item.ref,
+              quantite: qteNum,
+              stock_avant: stockAvant,
+              stock_apres: stockApres,
+              seuil_min: seuilMin,
+              unit: item.unit || 'pcs',
+              unite: item.unit || 'pcs',
+              source_category: item.source || 'STOCK_PDR',
+              destination_category: 'MACHINE',
+              type: existing.type || 'Sortie Interne',
+              action_id: existing.action_id || 'CORRECTIVE',
+              usage_type: existing.usage_type || 'technician',
+              id_zone: existing.id_zone || '',
+              id_machine_registered: existing.id_machine_registered || '',
+              machine: existing.id_machine_registered || '',
+              technicien: existing.technicien || existing.submitted_by_name || 'Technicien',
+              id_technician: existing.id_technician || existing.submitted_by_id || '',
+              operation: existing.operation || '',
+              id_operation: existing.id_operation || '',
+              demandeur: existing.technicien || existing.submitted_by_name || 'Technicien',
+              commentaire:
+                existing.commentaire ||
+                `Sortie PDR validée (Bon tech: ${existing.code_bon_tech} → Bon magasin: ${finalCodeBonMagasin})`,
+            });
+          });
+
+          if (typeof onAddMouvement === 'function') {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                onAddMouvement(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] onAddMouvement error in sortie demand approval:', err);
+              }
+            });
+          } else {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                movementRepository.add(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] movementRepository.add error in sortie demand approval:', err);
+              }
+            });
+            get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+          }
+        }
+
+        let updatedDemand: any = null;
+        const nextDemands = currentDemands.map((d: any) => {
+          if (String(d.id) === String(demandId)) {
+            updatedDemand = {
+              ...d,
+              items: approvedItems,
+              code_bon_magasin: finalCodeBonMagasin,
+              validation_status: 'APPROVED',
+              discrepancy_status: isBonMismatch || existingMvtToMerge ? 'BON_MISMATCH_MERGED' : 'NONE',
+              ...(existingMvtToMerge
+                ? { merged_with_movement_id: String(existingMvtToMerge.id || existingMvtToMerge.code_bon) }
+                : {}),
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Magasinier / Admin',
+              validated_at: nowIso,
+              validation_note: String(decisionData.validation_note ?? d.validation_note ?? '').trim(),
+              stock_deducted: true,
+              emitted_movement_ids: emittedIds,
+            };
+            return updatedDemand;
+          }
+          return d;
+        });
+
+        set({ sortieDemands: nextDemands });
+        DataGateway.saveSortieDemands(nextDemands);
+        return updatedDemand;
+      }
+
+      if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
+        let updatedDemand: any = null;
+        const nextDemands = currentDemands.map((d: any) => {
+          if (String(d.id) === String(demandId)) {
+            updatedDemand = {
+              ...d,
+              ...(decisionData.code_bon_magasin
+                ? { code_bon_magasin: String(decisionData.code_bon_magasin).trim() }
+                : {}),
+              validation_status: decision,
+              discrepancy_status: 'DISCREPANCY_FLAGGED',
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Magasinier / Admin',
+              validated_at: nowIso,
+              validation_note: String(decisionData.validation_note || '').trim(),
+              stock_deducted: false,
+            };
+            return updatedDemand;
+          }
+          return d;
+        });
+
+        set({ sortieDemands: nextDemands });
+        DataGateway.saveSortieDemands(nextDemands);
+        return updatedDemand;
+      }
+
+      return null;
     },
 
     // ==========================================
@@ -2425,6 +2715,10 @@ export const useMovementSlice = () =>
   useGmaoStore((state) => ({
     mouvements: state.mouvements,
     setMouvements: state.setMouvements,
+    sortieDemands: state.sortieDemands,
+    setSortieDemands: state.setSortieDemands,
+    handleSubmitSortieDemand: state.handleSubmitSortieDemand,
+    handleReviewSortieDemandValidation: state.handleReviewSortieDemandValidation,
   }));
 
 export const usePreventiveSlice = () =>

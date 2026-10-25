@@ -2,7 +2,8 @@ export type ReconciliationAlertCode =
   | 'STOCK_SHORTAGE'
   | 'CONCURRENT_CLAIM_OVERFLOW'
   | 'DUPLICATE_BON'
-  | 'MISSING_BON_WITH_PDR';
+  | 'MISSING_BON_WITH_PDR'
+  | 'CANDIDATE_STORE_BON_MATCH';
 
 export interface ReconciliationAlert {
   code: ReconciliationAlertCode;
@@ -12,21 +13,37 @@ export interface ReconciliationAlert {
   ref?: string;
 }
 
+export interface CandidateStoreMovementMatch {
+  movementId: string;
+  code_bon: string;
+  date: string;
+  ref: string;
+  designation: string;
+  quantite: number;
+  machine: string;
+  technicien: string;
+  exactQtyMatch: boolean;
+  bonNumberDiffers: boolean;
+}
+
 export interface ClaimReconciliationResult {
   alerts: ReconciliationAlert[];
   hasCritical: boolean;
   hasWarning: boolean;
+  candidateStoreMovements: CandidateStoreMovementMatch[];
 }
 
 export interface ReconcileFieldClaimParams {
-  claimType: 'CORRECTIVE' | 'PREVENTIVE';
+  claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
   claimId: string;
   numBonSaisi?: string | null;
+  machineCode?: string | null;
   proposedSpares?: any[];
   stockItems?: any[];
   mouvements?: any[];
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
+  sortieDemands?: any[];
 }
 
 function normalizeToken(value: unknown): string {
@@ -47,23 +64,28 @@ function extractSpareRefAndQty(raw: any): { ref: string; designation: string; qt
 }
 
 /**
- * V4: Evaluates a technician's field claim (Corrective BT or Preventive Execution)
- * before Admin approval to detect stock shortages, duplicate paper bon numbers,
- * missing bon references, and concurrent pending claim overflows.
+ * V4: Evaluates a technician's field claim (Corrective BT, Preventive Execution, or Sortie Demand)
+ * before Admin/Magasin approval to detect stock shortages, duplicate paper bon numbers,
+ * missing bon references, concurrent pending claim overflows, and candidate storekeeper movements
+ * for interactive BS-Tech × BS-Magasin merge/discrepancy resolution.
  */
 export function reconcileFieldClaim({
   claimType,
   claimId,
   numBonSaisi,
+  machineCode,
   proposedSpares = [],
   stockItems = [],
   mouvements = [],
   correctiveInterventions = [],
   preventiveExecutions = [],
+  sortieDemands = [],
 }: ReconcileFieldClaimParams): ClaimReconciliationResult {
   const alerts: ReconciliationAlert[] = [];
+  const candidateStoreMovements: CandidateStoreMovementMatch[] = [];
   const normClaimId = String(claimId ?? '').trim();
   const normBon = normalizeToken(numBonSaisi);
+  const normMachine = normalizeToken(machineCode);
 
   const normalizedSpares = (Array.isArray(proposedSpares) ? proposedSpares : [])
     .map(extractSpareRefAndQty)
@@ -79,7 +101,7 @@ export function reconcileFieldClaim({
     });
   }
 
-  // 2. Check DUPLICATE_BON across movements, corrective BTs, and preventive executions
+  // 2. Check DUPLICATE_BON across movements, corrective BTs, preventive executions, and sortie demands
   if (normBon) {
     const duplicateSources: string[] = [];
 
@@ -109,6 +131,18 @@ export function reconcileFieldClaim({
       const exBon = normalizeToken(ex?.num_bon_saisi_par_tech);
       if (exBon && exBon === normBon) {
         duplicateSources.push(`Exéc. Préventive ${ex?.taskCode || ex?.id}`);
+        break;
+      }
+    }
+
+    for (const dem of sortieDemands || []) {
+      const demId = String(dem?.id ?? '').trim();
+      if (claimType === 'SORTIE' && demId === normClaimId) continue;
+      if (dem?.validation_status === 'REJECTED') continue;
+      const demBonTech = normalizeToken(dem?.code_bon_tech);
+      const demBonMag = normalizeToken(dem?.code_bon_magasin);
+      if ((demBonTech && demBonTech === normBon) || (demBonMag && demBonMag === normBon)) {
+        duplicateSources.push(`Demande Sortie ${dem?.code_bon_tech || dem?.id}`);
         break;
       }
     }
@@ -162,6 +196,17 @@ export function reconcileFieldClaim({
     }
   }
 
+  for (const dem of sortieDemands || []) {
+    const demId = String(dem?.id ?? '').trim();
+    if (claimType === 'SORTIE' && demId === normClaimId) continue;
+    if (dem?.validation_status !== 'PENDING_VALIDATION') continue;
+    const items = Array.isArray(dem?.items) ? dem.items : [];
+    for (const it of items) {
+      const parsed = extractSpareRefAndQty(it);
+      addOtherPending(parsed.ref, parsed.qty, `Sortie ${dem?.code_bon_tech || dem?.id}`);
+    }
+  }
+
   // Aggregate requested qty by ref within this claim itself
   const requestedByRef = new Map<string, { ref: string; designation: string; qty: number }>();
   for (const sp of normalizedSpares) {
@@ -201,18 +246,61 @@ export function reconcileFieldClaim({
         } > Stock Actuel ${stockActuel}).`,
       });
     }
+
+    // 4. V4 Storekeeper Bon × Technician Bon Discrepancy / Candidate Merge Detection
+    for (const mvt of mouvements || []) {
+      if (mvt?.merged_demand_id) continue; // Already merged with a demand
+      const mvtType = String(mvt?.type || '').toLowerCase();
+      if (!mvtType.includes('sort')) continue;
+      const mvtRef = normalizeToken(mvt?.ref || mvt?.code_article);
+      if (mvtRef !== refKey) continue;
+
+      const mvtMachine = normalizeToken(mvt?.id_machine_registered || mvt?.machine);
+      if (normMachine && mvtMachine && mvtMachine !== normMachine) continue;
+
+      const mvtBon = String(mvt?.code_bon || mvt?.id || '').trim();
+      const mvtQty = Number(mvt?.quantite || 0);
+      const bonNumberDiffers = Boolean(normBon && normalizeToken(mvtBon) !== normBon);
+
+      candidateStoreMovements.push({
+        movementId: String(mvt?.id || mvt?.code_bon),
+        code_bon: mvtBon,
+        date: String(mvt?.date || ''),
+        ref: req.ref,
+        designation: String(mvt?.designation || req.designation),
+        quantite: mvtQty,
+        machine: String(mvt?.id_machine_registered || mvt?.machine || ''),
+        technicien: String(mvt?.technicien || ''),
+        exactQtyMatch: mvtQty === req.qty,
+        bonNumberDiffers,
+      });
+    }
+  }
+
+  if (claimType === 'SORTIE' && candidateStoreMovements.length > 0) {
+    const firstCand = candidateStoreMovements[0];
+    if (firstCand.bonNumberDiffers) {
+      alerts.push({
+        code: 'CANDIDATE_STORE_BON_MATCH',
+        severity: 'warning',
+        ref: firstCand.ref,
+        title: `Écart N° Bon Terrain (${numBonSaisi || '—'}) × Magasin (${firstCand.code_bon})`,
+        detail: `Un mouvement magasin existant (${firstCand.code_bon}, Qté: ${firstCand.quantite}) correspond à la même pièce (${firstCand.ref}). Vous pouvez les fusionner sans double déstockage ou signaler un écart.`,
+      });
+    }
   }
 
   return {
     alerts,
     hasCritical: alerts.some((a) => a.severity === 'critical'),
     hasWarning: alerts.length > 0,
+    candidateStoreMovements,
   };
 }
 
 export interface ValidationRadarItem {
   id: string;
-  claimType: 'CORRECTIVE' | 'PREVENTIVE';
+  claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
   code: string;
   machineCode: string;
   title: string;
@@ -226,8 +314,10 @@ export interface ValidationRadarItem {
 export interface AdminValidationRadarSummary {
   pendingCorrectiveCount: number;
   pendingPreventiveCount: number;
+  pendingSortieCount: number;
   clarificationCorrectiveCount: number;
   clarificationPreventiveCount: number;
+  clarificationSortieCount: number;
   totalPendingCount: number;
   totalClarificationCount: number;
   criticalAlertCount: number;
@@ -236,18 +326,20 @@ export interface AdminValidationRadarSummary {
 }
 
 /**
- * V4: Builds the unified Admin Validation Radar summary across Corrective & Preventive queues.
+ * V4: Builds the unified Admin Validation Radar summary across Corrective, Preventive & Sortie queues.
  */
 export function buildAdminValidationRadar({
   stockItems = [],
   mouvements = [],
   correctiveInterventions = [],
   preventiveExecutions = [],
+  sortieDemands = [],
 }: {
   stockItems?: any[];
   mouvements?: any[];
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
+  sortieDemands?: any[];
 }): AdminValidationRadarSummary {
   const pendingCorrective = (correctiveInterventions || []).filter(
     (bt) => bt?.validation_status === 'PENDING_VALIDATION'
@@ -263,6 +355,13 @@ export function buildAdminValidationRadar({
     (ex) => ex?.validation_status === 'NEEDS_CLARIFICATION'
   ).length;
 
+  const pendingSortie = (sortieDemands || []).filter(
+    (dem) => dem?.validation_status === 'PENDING_VALIDATION'
+  );
+  const clarificationSortieCount = (sortieDemands || []).filter(
+    (dem) => dem?.validation_status === 'NEEDS_CLARIFICATION'
+  ).length;
+
   const items: ValidationRadarItem[] = [];
 
   for (const bt of pendingCorrective) {
@@ -271,11 +370,13 @@ export function buildAdminValidationRadar({
       claimType: 'CORRECTIVE',
       claimId: String(bt.id),
       numBonSaisi: bt.num_bon_saisi_par_tech,
+      machineCode: bt.code_machine,
       proposedSpares: proposed,
       stockItems,
       mouvements,
       correctiveInterventions,
       preventiveExecutions,
+      sortieDemands,
     });
 
     items.push({
@@ -298,11 +399,13 @@ export function buildAdminValidationRadar({
       claimType: 'PREVENTIVE',
       claimId: String(ex.id),
       numBonSaisi: ex.num_bon_saisi_par_tech,
+      machineCode: ex.machineCode,
       proposedSpares: proposed,
       stockItems,
       mouvements,
       correctiveInterventions,
       preventiveExecutions,
+      sortieDemands,
     });
 
     items.push({
@@ -314,6 +417,36 @@ export function buildAdminValidationRadar({
       technicianName: String(ex.submitted_by_name || ex.executorName || 'Technicien'),
       submittedAt: String(ex.submitted_at || ex.executedAt || ''),
       numBonSaisi: String(ex.num_bon_saisi_par_tech || ''),
+      sparesCount: proposed.length,
+      reconciliation,
+    });
+  }
+
+  for (const dem of pendingSortie) {
+    const proposed = Array.isArray(dem?.items) ? dem.items : [];
+    const reconciliation = reconcileFieldClaim({
+      claimType: 'SORTIE',
+      claimId: String(dem.id),
+      numBonSaisi: dem.code_bon_tech,
+      machineCode: dem.id_machine_registered,
+      proposedSpares: proposed,
+      stockItems,
+      mouvements,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortieDemands,
+    });
+
+    const firstRef = proposed[0]?.ref ? `${proposed[0].ref} (x${proposed[0].quantite})` : 'Sortie PDR';
+    items.push({
+      id: String(dem.id),
+      claimType: 'SORTIE',
+      code: String(dem.code_bon_tech || dem.id),
+      machineCode: String(dem.id_machine_registered || dem.id_zone || 'MAGASIN'),
+      title: `Demande Sortie ${dem.code_bon_tech} • ${firstRef}`,
+      technicianName: String(dem.submitted_by_name || dem.technicien || 'Technicien'),
+      submittedAt: String(dem.submitted_at || dem.date || ''),
+      numBonSaisi: String(dem.code_bon_tech || ''),
       sparesCount: proposed.length,
       reconciliation,
     });
@@ -336,10 +469,13 @@ export function buildAdminValidationRadar({
   return {
     pendingCorrectiveCount: pendingCorrective.length,
     pendingPreventiveCount: pendingPreventive.length,
+    pendingSortieCount: pendingSortie.length,
     clarificationCorrectiveCount,
     clarificationPreventiveCount,
-    totalPendingCount: pendingCorrective.length + pendingPreventive.length,
-    totalClarificationCount: clarificationCorrectiveCount + clarificationPreventiveCount,
+    clarificationSortieCount,
+    totalPendingCount: pendingCorrective.length + pendingPreventive.length + pendingSortie.length,
+    totalClarificationCount:
+      clarificationCorrectiveCount + clarificationPreventiveCount + clarificationSortieCount,
     criticalAlertCount,
     warningAlertCount,
     items,
