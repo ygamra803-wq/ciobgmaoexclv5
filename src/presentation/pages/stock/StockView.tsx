@@ -153,6 +153,8 @@ export default function StockView({
   });
 
   const canEditStock = usePermission('stock.edit');
+  const canCreateStock = usePermission('stock.create');
+  const canCreateMovement = usePermission('movement.create');
 
   const sortMenuRef = useRef(null);
 
@@ -464,14 +466,16 @@ export default function StockView({
   };
 
   const handleRowContextMenu = (e, item) => {
-    contextMenu.show(
-      e,
-      [
-        {
-          id: 'edit',
-          label: t('stock.context.edit', 'Modifier l’article'),
-          onClick: () => handleOpenEditArticle(item),
-        },
+    const menuItems = [];
+    if (canEditStock) {
+      menuItems.push({
+        id: 'edit',
+        label: t('stock.context.edit', 'Modifier l’article'),
+        onClick: () => handleOpenEditArticle(item),
+      });
+    }
+    if (canCreateMovement) {
+      menuItems.push(
         {
           id: 'quick-sortie',
           label: t('stock.context.quick_sortie', 'Sortie directe (Sortie PDR)'),
@@ -481,20 +485,22 @@ export default function StockView({
           id: 'quick-entree',
           label: t('stock.context.quick_entree', 'Entrée directe (Réapprovisionnement)'),
           onClick: () => handleOpenQuickModal(item, 'Entrée', 'REAPPRO'),
-        },
-        { separator: true },
-        {
-          id: 'copy-ref',
-          label: t('stock.context.copy_ref', { ref: item.ref }),
-          onClick: () => {
-            if (navigator.clipboard) {
-              navigator.clipboard.writeText(item.ref);
-            }
-          },
-        },
-      ],
-      `Article: ${item.ref}`
-    );
+        }
+      );
+    }
+    if (menuItems.length > 0) {
+      menuItems.push({ separator: true });
+    }
+    menuItems.push({
+      id: 'copy-ref',
+      label: t('stock.context.copy_ref', { ref: item.ref }),
+      onClick: () => {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(item.ref);
+        }
+      },
+    });
+    contextMenu.show(e, menuItems, `Article: ${item.ref}`);
   };
 
   const stockColumns = useMemo(
@@ -611,14 +617,16 @@ export default function StockView({
           />
 
           {/* 3D Primary Add Article Button */}
-          <Action3DButton
-            variant="circle"
-            color="cyan"
-            icon={Package}
-            showAddBadge={true}
-            onClick={onOpenAddArticle}
-            title={t('stock.new_article_button', 'Nouvel Article')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="cyan"
+              icon={Package}
+              showAddBadge={true}
+              onClick={onOpenAddArticle}
+              title={t('stock.new_article_button', 'Nouvel Article')}
+            />
+          )}
         </div>
       </div>
 
@@ -956,124 +964,133 @@ export default function StockView({
 
                       {/* Quick Actions & Flux Menu (PDR Specialized) */}
                       <td className="py-3 px-3.5 text-center whitespace-nowrap action-menu-container relative">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Primary Fast Button: Quick Sortie */}
-                          <button
-                            onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
-                            title={t('stock.quick_sortie_title', 'Sortie Rapide / Intervention')}
-                          >
-                            <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
-                            <span>{t('stock.actions.quick_sortie', 'Sortie')}</span>
-                          </button>
-
-                          {/* Quick Dropdown Actions Button */}
-                          <div className="relative">
+                        {canCreateMovement ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Primary Fast Button: Quick Sortie */}
                             <button
-                              type="button"
-                              onClick={() =>
-                                setActiveActionMenuRef(isMenuOpen ? null : item.ref)
-                              }
-                              className={`w-8 h-8 rounded-xl border flex items-center justify-center transition cursor-pointer ${
-                                isMenuOpen
-                                  ? 'bg-cyan-100 text-cyan-900 border-cyan-400 shadow-2xs'
-                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                              }`}
-                              title={t('stock.actions_menu_title', 'Menu des Flux & Actions rapides')}
+                              onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
+                              title={t('stock.quick_sortie_title', 'Sortie Rapide / Intervention')}
                             >
-                              <MoreVertical className="w-3.5 h-3.5" />
+                              <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
+                              <span>{t('stock.actions.quick_sortie', 'Sortie')}</span>
                             </button>
 
-                            {/* Dropdown Menu */}
-                            {isMenuOpen && (
-                              <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 p-2 space-y-1 text-left animate-in fade-in slide-in-from-top-2 duration-150">
-                                <div className="px-2.5 py-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                                  <span>{t('stock.flux_menu_header', 'FLUX & ACTIONS PDR')}</span>
-                                  <span className="font-mono text-cyan-800">{item.ref}</span>
+                            {/* Quick Dropdown Actions Button */}
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setActiveActionMenuRef(isMenuOpen ? null : item.ref)
+                                }
+                                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition cursor-pointer ${
+                                  isMenuOpen
+                                    ? 'bg-cyan-100 text-cyan-900 border-cyan-400 shadow-2xs'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title={t('stock.actions_menu_title', 'Menu des Flux & Actions rapides')}
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Dropdown Menu */}
+                              {isMenuOpen && (
+                                <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 p-2 space-y-1 text-left animate-in fade-in slide-in-from-top-2 duration-150">
+                                  <div className="px-2.5 py-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                                    <span>{t('stock.flux_menu_header', 'FLUX & ACTIONS PDR')}</span>
+                                    <span className="font-mono text-cyan-800">{item.ref}</span>
+                                  </div>
+
+                                  {/* 1. Sortie Interne */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
+                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-950 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <div className="w-6 h-6 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                                      <TrendingDown className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div>
+                                      <div className="font-bold">{t('stock.actions.quick_sortie', 'Sortie Interne')}</div>
+                                      <div className="text-[10px] text-slate-400">{t('stock.actions.quick_sortie_sub', 'Corrective, Préventive, Usage')}</div>
+                                    </div>
+                                  </button>
+
+                                  {/* 2. Entrée Interne */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR')}
+                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-cyan-50 hover:text-cyan-950 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <div className="w-6 h-6 rounded-lg bg-cyan-100 flex items-center justify-center text-cyan-600 shrink-0">
+                                      <TrendingUp className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div>
+                                      <div className="font-bold">{t('stock.actions.quick_entree', 'Entrée Interne')}</div>
+                                      <div className="text-[10px] text-slate-400">{t('stock.actions.quick_entree_sub', 'Retour Atelier, Récupération')}</div>
+                                    </div>
+                                  </button>
+
+                                  {/* 3. Entrée Externe (Réapprovisionnement) */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Externe', 'REAPPRO')}
+                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-950 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
+                                      <Inbox className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div>
+                                      <div className="font-bold">{t('stock.actions.external_entree', 'Entrée Externe')}</div>
+                                      <div className="text-[10px] text-slate-400">{t('stock.actions.external_entree_sub', 'Réappro Fournisseur (+ Qté)')}</div>
+                                    </div>
+                                  </button>
+
+                                  {/* 4. Ajustement Inventaire & Recalibrage */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Ajustement', 'INVENTAIRE')}
+                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
+                                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                                    </div>
+                                    <div>
+                                      <div className="font-bold">{t('stock.actions.adjust_stock', 'Ajuster le Stock')}</div>
+                                      <div className="text-[10px] text-slate-400">{t('stock.actions.adjust_stock_sub', 'Corriger valeur réelle / écart')}</div>
+                                    </div>
+                                  </button>
+
+                                  {canEditStock && (
+                                    <div className="border-t border-slate-100 my-1 pt-1">
+                                      {/* 5. Modifier la fiche Article */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenEditArticle(item)}
+                                        className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition cursor-pointer"
+                                      >
+                                        <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+                                          <Edit className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-slate-800">{t('stock.actions.edit_article', 'Modifier l\'Article')}</div>
+                                          <div className="text-[10px] text-slate-400">{t('stock.actions.edit_article_sub', 'Désignation, Seuil, Emplacement')}</div>
+                                        </div>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-
-                                {/* 1. Sortie Interne */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                                  className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-950 flex items-center gap-2 transition cursor-pointer"
-                                >
-                                  <div className="w-6 h-6 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
-                                    <TrendingDown className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div>
-                                    <div className="font-bold">{t('stock.actions.quick_sortie', 'Sortie Interne')}</div>
-                                    <div className="text-[10px] text-slate-400">{t('stock.actions.quick_sortie_sub', 'Corrective, Préventive, Usage')}</div>
-                                  </div>
-                                </button>
-
-                                {/* 2. Entrée Interne */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR')}
-                                  className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-cyan-50 hover:text-cyan-950 flex items-center gap-2 transition cursor-pointer"
-                                >
-                                  <div className="w-6 h-6 rounded-lg bg-cyan-100 flex items-center justify-center text-cyan-600 shrink-0">
-                                    <TrendingUp className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div>
-                                    <div className="font-bold">{t('stock.actions.quick_entree', 'Entrée Interne')}</div>
-                                    <div className="text-[10px] text-slate-400">{t('stock.actions.quick_entree_sub', 'Retour Atelier, Récupération')}</div>
-                                  </div>
-                                </button>
-
-                                {/* 3. Entrée Externe (Réapprovisionnement) */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenQuickModal(item, 'Entrée Externe', 'REAPPRO')}
-                                  className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-950 flex items-center gap-2 transition cursor-pointer"
-                                >
-                                  <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                                    <Inbox className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div>
-                                    <div className="font-bold">{t('stock.actions.external_entree', 'Entrée Externe')}</div>
-                                    <div className="text-[10px] text-slate-400">{t('stock.actions.external_entree_sub', 'Réappro Fournisseur (+ Qté)')}</div>
-                                  </div>
-                                </button>
-
-                                {/* 4. Ajustement Inventaire & Recalibrage */}
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenQuickModal(item, 'Ajustement', 'INVENTAIRE')}
-                                  className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 transition cursor-pointer"
-                                >
-                                  <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                                  </div>
-                                  <div>
-                                    <div className="font-bold">{t('stock.actions.adjust_stock', 'Ajuster le Stock')}</div>
-                                    <div className="text-[10px] text-slate-400">{t('stock.actions.adjust_stock_sub', 'Corriger valeur réelle / écart')}</div>
-                                  </div>
-                                </button>
-
-                                {canEditStock && (
-                                  <div className="border-t border-slate-100 my-1 pt-1">
-                                    {/* 5. Modifier la fiche Article */}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleOpenEditArticle(item)}
-                                      className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition cursor-pointer"
-                                    >
-                                      <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-                                        <Edit className="w-3.5 h-3.5" />
-                                      </div>
-                                      <div>
-                                        <div className="font-bold text-slate-800">{t('stock.actions.edit_article', 'Modifier l\'Article')}</div>
-                                        <div className="text-[10px] text-slate-400">{t('stock.actions.edit_article_sub', 'Désignation, Seuil, Emplacement')}</div>
-                                      </div>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-[10.5px] font-mono font-bold select-none"
+                            title="Consultation uniquement — Déclarez vos consommations PDR dans vos Bons de Travail ou Tâches Préventives"
+                          >
+                            Consultation
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

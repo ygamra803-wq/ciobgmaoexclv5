@@ -88,8 +88,15 @@ export interface PreventiveExecutionSpareItem {
   unitPrice?: number;
 }
 
+export type PreventiveValidationStatus =
+  | 'NONE'
+  | 'PENDING_VALIDATION'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'NEEDS_CLARIFICATION';
+
 /**
- * Historical event record for a preventive maintenance execution (P1.1 Event Log + P7.1 Organe FKs)
+ * Historical event record for a preventive maintenance execution (P1.1 Event Log + P7.1 Organe FKs + V3 Maker-Checker)
  */
 export interface PreventiveExecutionRecord {
   id: string;
@@ -117,7 +124,19 @@ export interface PreventiveExecutionRecord {
   status: 'DONE' | 'SKIPPED' | 'PARTIAL';
   notes?: string;
   sparesUsed?: PreventiveExecutionSpareItem[];
+  sparesProposed?: PreventiveExecutionSpareItem[];
+  num_bon_saisi_par_tech?: string;
+  validation_status?: PreventiveValidationStatus;
+  submitted_by_id?: string;
+  submitted_by_name?: string;
+  submitted_at?: string;
+  validated_by_id?: string;
+  validated_by_name?: string;
+  validated_at?: string;
+  validation_note?: string;
+  stock_deducted?: boolean;
   createdAt: string;
 }
+
 
 

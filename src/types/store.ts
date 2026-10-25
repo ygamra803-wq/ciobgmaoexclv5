@@ -159,6 +159,19 @@ export interface GmaoStoreState {
   handleDeleteTask: (id: string | number) => void;
   handleUpdateTaskCounter: (id: string | number, newCounterValue: number | string) => void;
   handleMarkTaskDone: (id: string | number, validationData: any) => void;
+  handleReviewPreventiveExecutionValidation: (
+    executionId: string,
+    decisionData?: {
+      decision: 'APPROVED' | 'REJECTED' | 'NEEDS_CLARIFICATION';
+      validation_note?: string;
+      validated_by_id?: string;
+      validated_by_name?: string;
+      sparesUsed?: any[];
+      sparesProposed?: any[];
+      notes?: string;
+    },
+    onAddMouvement?: ((mvt: any) => void) | null
+  ) => any;
   handleDeletePreventiveExecution: (id: string) => void;
   handleCreatePlanWithTasks: (planData: any, taskItems: any[]) => any;
   handleAddAction: (actionData: any) => any;

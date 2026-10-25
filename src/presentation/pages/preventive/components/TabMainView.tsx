@@ -80,6 +80,8 @@ export default function TabMainView({
   viewMode: controlledViewMode,
   onViewModeChange,
   onMarkTaskDone,
+  onReviewPreventiveExecution = null,
+  showToast = null,
   onDeleteExecution,
   _onDeleteTask,
   _onUpdateTaskCounter,
@@ -110,6 +112,18 @@ export default function TabMainView({
     if (!isTechUser) return executions;
     return (executions || []).filter((ex) => matchesTechnicianRecord(ex, user, technicians));
   }, [executions, isTechUser, user, technicians]);
+
+  const pendingValidationExecutions = useMemo(
+    () => (scopedExecutions || []).filter((ex) => ex.validation_status === 'PENDING_VALIDATION'),
+    [scopedExecutions]
+  );
+  const needsClarificationTasks = useMemo(
+    () =>
+      (scopedTasks || []).filter(
+        (tk) => tk.validation_status === 'NEEDS_CLARIFICATION' || tk.etat === 'À clarifier'
+      ),
+    [scopedTasks]
+  );
 
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [internalViewMode, setInternalViewMode] = useState('matrix'); // 'matrix' | 'calendar' | 'list' | 'analytics'
@@ -180,7 +194,7 @@ export default function TabMainView({
   const [selectedTaskForBT, setSelectedTaskForBT] = useState(null);
   const [selectedTaskForPrint, setSelectedTaskForPrint] = useState(null);
 
-  // Validation Form State with PDR & Labor & Canonical Organ IDs (P1)
+  // Validation Form State with PDR & Labor & Canonical Organ IDs (P1 + V3 Maker-Checker)
   const [validationData, setValidationData] = useState<any>({
     date_realisation: new Date().toISOString().split('T')[0],
     technicien: '',
@@ -188,6 +202,7 @@ export default function TabMainView({
     taux_horaire: 35,
     observations: 'Intervention préventive réalisée avec succès et conforme aux normes constructeur.',
     usedPDR: [],
+    num_bon_saisi_par_tech: '',
     mode_calcul_recurrence: 'FIXE',
     compteur_releve: '',
     id_composant: '',
@@ -553,10 +568,20 @@ export default function TabMainView({
     machineElementsLedger,
   ]);
 
-  // Open Validation Modal with prefilled recommended PDR & auto-resolved id_composant / id_part
+  // Open Validation Modal with prefilled recommended PDR (or proposed PDR on clarification) & auto-resolved id_composant / id_part
   const handleOpenValidate = (task) => {
     setSelectedTaskForValidation(task);
-    const rawRecommended = PreventiveService.getRecommendedPDRForAction(task.action_code, task.composant, task);
+    const hasPriorProposed =
+      (task.validation_status === 'NEEDS_CLARIFICATION' ||
+        task.validation_status === 'REJECTED' ||
+        task.validation_status === 'PENDING_VALIDATION') &&
+      Array.isArray(task.pieces_proposees) &&
+      task.pieces_proposees.length > 0;
+
+    const rawRecommended = hasPriorProposed
+      ? task.pieces_proposees
+      : PreventiveService.getRecommendedPDRForAction(task.action_code, task.composant, task);
+
     const enrichedRecommended = (rawRecommended || []).map((rec) => {
       const ref = String(rec.reference || rec.ref || '').trim();
       const stockMatch = availableInventory.find(
@@ -567,8 +592,8 @@ export default function TabMainView({
         designation: stockMatch?.designation || rec.designation || rec.nom || ref || 'Pièce PDR',
         reference: stockMatch?.ref || ref || 'STD',
         quantite: Math.max(1, Number(rec.quantite || rec.qty || 1)),
-        unite: stockMatch?.unite || rec.unite || 'Pièce',
-        prix_unitaire: Number(stockMatch?.prix_unitaire ?? rec.prix_unitaire ?? 0),
+        unite: stockMatch?.unite || rec.unite || rec.unit || 'Pièce',
+        prix_unitaire: Number(stockMatch?.prix_unitaire ?? rec.prix_unitaire ?? rec.unitPrice ?? 0),
       };
     });
 
@@ -612,8 +637,11 @@ export default function TabMainView({
         : task.responsable || '',
       duree_reelle: task.duree_estimee || '15 min',
       taux_horaire: 35,
-      observations: `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`,
+      observations:
+        task.observations ||
+        `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`,
       usedPDR: enrichedRecommended,
+      num_bon_saisi_par_tech: task.num_bon_saisi_par_tech || '',
       mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
       compteur_releve: task.compteur_actuel || '',
       id_composant: resolvedIdComp,
@@ -737,6 +765,57 @@ export default function TabMainView({
 
   return (
     <div className="space-y-5">
+      {/* V3 MAKER-CHECKER ALERT BANNERS */}
+      {!isTechUser && pendingValidationExecutions.length > 0 && (
+        <div className="bg-purple-50/90 border border-purple-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 font-black font-mono text-sm">
+              {pendingValidationExecutions.length}
+            </div>
+            <div>
+              <div className="text-xs font-black text-purple-950 uppercase tracking-wider">
+                Exécutions préventives à valider (Maker-Checker)
+              </div>
+              <p className="text-[11.5px] text-purple-800 mt-0.5">
+                {pendingValidationExecutions.length} déclaration(s) terrain en attente de contrôle responsable avant validation finale et déstockage PDR.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode('executions')}
+            className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold shadow-xs cursor-pointer shrink-0 transition"
+          >
+            Ouvrir la file À valider ({pendingValidationExecutions.length})
+          </button>
+        </div>
+      )}
+
+      {isTechUser && needsClarificationTasks.length > 0 && (
+        <div className="bg-rose-50/90 border border-rose-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 font-black font-mono text-sm">
+              {needsClarificationTasks.length}
+            </div>
+            <div>
+              <div className="text-xs font-black text-rose-950 uppercase tracking-wider">
+                Tâche(s) préventive(s) à clarifier ({needsClarificationTasks.length})
+              </div>
+              <p className="text-[11.5px] text-rose-800 mt-0.5">
+                Le responsable a demandé une clarification sur vos pièces ou observations ({needsClarificationTasks.map((tk) => tk.id_machine).join(', ')}). Aucun stock n&apos;a été déduit.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenValidate(needsClarificationTasks[0])}
+            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer shrink-0 transition"
+          >
+            Corriger & Re-soumettre
+          </button>
+        </div>
+      )}
+
       {/* 3D TACTILE KPI CARDS BAR */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Total Tasks */}
@@ -1509,12 +1588,16 @@ export default function TabMainView({
         />
       )}
 
-      {/* VIEW 6: EXECUTIONS HISTORY (P1 Event-Sourced Factory Memory) */}
+      {/* VIEW 6: EXECUTIONS HISTORY (P1 Event-Sourced Factory Memory + V3 Maker-Checker Queue) */}
       {viewMode === 'executions' && (
         <PreventiveExecutionsHistoryView
           executions={scopedExecutions}
+          stockItems={stockItems}
+          isTechUser={isTechUser}
+          onReviewPreventiveExecution={onReviewPreventiveExecution}
+          showToast={showToast}
           onDeleteExecution={onDeleteExecution}
-          onNavigateToMachine={onNavigateToMachine}
+          onNavigateToMachine={_onNavigateToMachine}
         />
       )}
 
@@ -1531,7 +1614,9 @@ export default function TabMainView({
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    Validation d'Intervention Préventive
+                    {isTechUser
+                      ? "Déclaration d'Exécution Préventive (Terrain)"
+                      : "Validation d'Intervention Préventive"}
                   </h3>
                   <div className="flex items-center gap-2 flex-wrap mt-0.5">
                     <p className="text-xs text-slate-400">
@@ -1557,6 +1642,25 @@ export default function TabMainView({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {(selectedTaskForValidation.validation_status === 'NEEDS_CLARIFICATION' ||
+              selectedTaskForValidation.validation_status === 'REJECTED') && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs space-y-1">
+                <div className="font-black text-rose-900 uppercase flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600" />
+                  <span>
+                    {selectedTaskForValidation.validation_status === 'NEEDS_CLARIFICATION'
+                      ? 'Clarification demandée par le responsable'
+                      : 'Exécution rejetée par le responsable'}
+                  </span>
+                </div>
+                {selectedTaskForValidation.validation_note && (
+                  <p className="text-rose-800 font-medium">
+                    Motif : « {selectedTaskForValidation.validation_note} »
+                  </p>
+                )}
+              </div>
+            )}
 
             <form onSubmit={handleConfirmValidation} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -1696,7 +1800,11 @@ export default function TabMainView({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase">
                     <Package className="w-4 h-4 text-indigo-600" />
-                    <span>Pièces de rechange & consommables utilisés (Stock PDR · Tri BOM)</span>
+                    <span>
+                      {isTechUser
+                        ? 'Pièces proposées (Déclaration terrain · Sans déstockage immédiat)'
+                        : 'Pièces de rechange & consommables utilisés (Stock PDR · Tri BOM)'}
+                    </span>
                   </span>
                   <span className="text-[11px] font-mono text-indigo-700 font-bold">
                     {validationData.usedPDR.length} pièce(s)
@@ -1767,6 +1875,25 @@ export default function TabMainView({
                     </button>
                   </div>
                 </div>
+
+                {/* Optional N° Bon Magasin for field traceability */}
+                <div className="pt-2 border-t border-indigo-100/80 grid grid-cols-1 sm:grid-cols-2 gap-2 items-center text-xs">
+                  <label className="font-bold text-indigo-900">
+                    N° Bon Magasin (Optionnel · Terrain) :
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: BS-2026-042"
+                    value={validationData.num_bon_saisi_par_tech || ''}
+                    onChange={(e) =>
+                      setValidationData({
+                        ...validationData,
+                        num_bon_saisi_par_tech: e.target.value,
+                      })
+                    }
+                    className="w-full px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl font-mono text-slate-800"
+                  />
+                </div>
               </div>
 
               {/* Observations */}
@@ -1790,9 +1917,15 @@ export default function TabMainView({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs"
+                  className={`px-5 py-2 text-xs font-black text-white rounded-xl shadow-xs cursor-pointer ${
+                    isTechUser
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
                 >
-                  Confirmer la Réalisation & Auto-Reprogrammer
+                  {isTechUser
+                    ? 'Soumettre pour Validation Responsable (Sans déstockage)'
+                    : 'Confirmer la Réalisation & Auto-Reprogrammer'}
                 </button>
               </div>
             </form>

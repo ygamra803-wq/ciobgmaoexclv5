@@ -102,6 +102,8 @@ export class TaskService {
       date_realisation: dateRealisation,
     });
 
+    const isPending = execution.validation_status === 'PENDING_VALIDATION';
+
     const updated = current.map((t) => {
       const isTarget = String(t.id) === String(taskId);
       const isSameMachine =
@@ -119,6 +121,32 @@ export class TaskService {
         return t;
       }
 
+      if (isPending) {
+        return {
+          ...t,
+          etat: 'En attente validation',
+          validation_status: 'PENDING_VALIDATION',
+          last_pending_execution_id: execution.id,
+          pieces_proposees: execution.sparesProposed || [],
+          num_bon_saisi_par_tech: execution.num_bon_saisi_par_tech || '',
+          submitted_by_id: execution.submitted_by_id || '',
+          submitted_by_name: execution.submitted_by_name || execution.executorName || '',
+          submitted_at: execution.submitted_at || nowIso,
+          validation_note: '',
+          technicien_realisateur: execution.executorName || t.responsable,
+          observations_validation: execution.notes || '',
+          duree_reelle: validationData?.duree_reelle || `${execution.durationMinutes} min`,
+          ...(execution.id_composant ? { id_composant: execution.id_composant } : {}),
+          ...(execution.nom_composant ? { nom_composant: execution.nom_composant } : {}),
+          ...(execution.id_part ? { id_part: execution.id_part } : {}),
+          ...(execution.nom_part ? { nom_part: execution.nom_part } : {}),
+          ...(releveNum > 0
+            ? { dernier_releve: releveNum, compteur_actuel: releveNum }
+            : {}),
+          updated_at: nowIso,
+        };
+      }
+
       const nextDue = computeNextDueDate(dateRealisation, t.frequence);
       const prevCost = Number(t.cout_cumule || 0);
       const addedCost = Number(execution.totalCost || 0);
@@ -130,6 +158,13 @@ export class TaskService {
       return {
         ...t,
         etat: 'Fait',
+        validation_status: 'APPROVED',
+        last_pending_execution_id: '',
+        pieces_proposees: execution.sparesProposed || [],
+        validated_by_id: execution.validated_by_id || 'admin',
+        validated_by_name: execution.validated_by_name || 'Administrateur',
+        validated_at: execution.validated_at || nowIso,
+        validation_note: execution.validation_note || '',
         derniere_realisation: dateRealisation,
         lastExecutedAt: dateRealisation,
         prochaine_echeance: nextDue,

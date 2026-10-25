@@ -44,6 +44,7 @@ import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { buildTechnicianDashboardScope } from '../../../core/security/technicianScope';
+import { buildAdminValidationRadar } from '../../../core/security/validationReconciliation';
 
 export default function DashboardView({
   stockItems = [],
@@ -101,6 +102,17 @@ export default function DashboardView({
     [currentUser, technicians, preventiveTasks, preventiveExecutions, correctiveInterventions, mouvements]
   );
   const isTechUser = techScope.isTechUser;
+
+  const validationRadar = useMemo(
+    () =>
+      buildAdminValidationRadar({
+        stockItems,
+        mouvements,
+        correctiveInterventions,
+        preventiveExecutions,
+      }),
+    [stockItems, mouvements, correctiveInterventions, preventiveExecutions]
+  );
 
   // --- Modals State ---
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -568,6 +580,16 @@ export default function DashboardView({
                   <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-bold text-[10px] font-mono border border-indigo-200/80">
                     {techScope.thisWeekTasks.length} sem. {techScope.currentWeekKey}
                   </span>
+                  {techScope.needsClarificationPreventive?.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 font-bold text-[10px] font-mono border border-rose-200 animate-pulse">
+                      {techScope.needsClarificationPreventive.length} à clarifier
+                    </span>
+                  )}
+                  {techScope.pendingValidationPreventive?.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px] font-mono border border-purple-200">
+                      {techScope.pendingValidationPreventive.length} en attente val.
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
@@ -669,7 +691,7 @@ export default function DashboardView({
                   <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-teal-600 transition-colors">
                     {techScope.myMouvements.length}
                   </span>
-                  <span className="text-xs font-bold text-slate-400 font-mono">bons</span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">bons validés</span>
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
@@ -678,8 +700,8 @@ export default function DashboardView({
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Action directe :</span>
-                <span className="font-mono font-bold text-teal-700">Saisir une sortie →</span>
+                <span className="text-slate-400 font-medium">Registre magasin :</span>
+                <span className="font-mono font-bold text-teal-700">Consulter mes bons →</span>
               </div>
             </div>
           </div>
@@ -803,6 +825,12 @@ export default function DashboardView({
               {techScope.priorityTasks.length > 0 ? (
                 <div className="space-y-2.5">
                   {techScope.priorityTasks.slice(0, 8).map((task, idx) => {
+                    const isClarify =
+                      task.validation_status === 'NEEDS_CLARIFICATION' ||
+                      task.etat === 'À clarifier';
+                    const isPendingVal =
+                      task.validation_status === 'PENDING_VALIDATION' ||
+                      task.etat === 'En attente validation';
                     const isLate = task.etat === 'En retard';
                     const isDone = task.etat === 'Fait';
                     const isThisWeek =
@@ -814,8 +842,10 @@ export default function DashboardView({
                       <div
                         key={`tech-prv-${task.id ?? idx}`}
                         className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition ${
-                          isLate
+                          isClarify || isLate
                             ? 'bg-rose-50/40 border-rose-200/90'
+                            : isPendingVal
+                            ? 'bg-purple-50/40 border-purple-200/90'
                             : isThisWeek
                             ? 'bg-indigo-50/40 border-indigo-200/90'
                             : 'bg-slate-50/80 border-slate-200/80'
@@ -826,7 +856,15 @@ export default function DashboardView({
                             <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px]">
                               {task.id_machine || 'MACHINE'}
                             </span>
-                            {isLate ? (
+                            {isClarify ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-900 border border-rose-300 animate-pulse">
+                                À CLARIFIER
+                              </span>
+                            ) : isPendingVal ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                                À VALIDER
+                              </span>
+                            ) : isLate ? (
                               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
                                 En retard
                               </span>
@@ -852,6 +890,11 @@ export default function DashboardView({
                           <div className="font-bold text-slate-800 truncate">
                             {task.composant || task.action_libelle || 'Contrôle préventif'}
                           </div>
+                          {isClarify && task.validation_note && (
+                            <div className="text-[10.5px] text-rose-700 font-semibold truncate">
+                              Motif : « {task.validation_note} »
+                            </div>
+                          )}
                         </div>
 
                         {onNavigateToPreventive && (
@@ -859,7 +902,7 @@ export default function DashboardView({
                             onClick={onNavigateToPreventive}
                             className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
                           >
-                            Traiter
+                            {isClarify ? 'Corriger' : 'Traiter'}
                           </button>
                         )}
                       </div>
@@ -1151,6 +1194,132 @@ export default function DashboardView({
                 <span>Vérifier & Appairer (1 Clic)</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
+            </div>
+          )}
+
+          {/* V4 Admin Validation Radar (Unified Maker-Checker Queue & Smart Reconciliation) */}
+          {(validationRadar.totalPendingCount > 0 || validationRadar.totalClarificationCount > 0) && (
+            <div
+              data-testid="v4-admin-validation-radar"
+              className={`p-4 sm:p-5 rounded-3xl border shadow-xs space-y-3.5 animate-fade-in ${
+                validationRadar.criticalAlertCount > 0
+                  ? 'bg-gradient-to-r from-rose-500/10 via-purple-500/5 to-white border-rose-300/90'
+                  : 'bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-white border-purple-300/90'
+              }`}
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3.5">
+                  <div
+                    className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center font-bold shrink-0 shadow-xs ${
+                      validationRadar.criticalAlertCount > 0 ? 'bg-rose-600' : 'bg-purple-600'
+                    }`}
+                  >
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-black text-sm text-slate-900 flex items-center gap-2 flex-wrap">
+                      <span>
+                        Radar de Validation Terrain (Maker-Checker V4) : {validationRadar.totalPendingCount} à valider
+                      </span>
+                      {validationRadar.criticalAlertCount > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 font-mono text-[10.5px] font-extrabold border border-rose-300 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          {validationRadar.criticalAlertCount} anomalie(s) stock/bon
+                        </span>
+                      )}
+                      {validationRadar.totalClarificationCount > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono text-[10.5px] font-bold border border-amber-300">
+                          {validationRadar.totalClarificationCount} en clarification tech.
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
+                      Les déclarations des techniciens (BT correctifs et exécutions préventives) sont isolées du stock jusqu&apos;à votre approbation.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  {validationRadar.pendingCorrectiveCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToCorrective?.('corrective_bt')}
+                      className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Wrench className="w-3.5 h-3.5" />
+                      <span>BT à valider ({validationRadar.pendingCorrectiveCount})</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {validationRadar.pendingPreventiveCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToPreventive?.()}
+                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Préventif à valider ({validationRadar.pendingPreventiveCount})</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {validationRadar.items.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-purple-200/60">
+                  {validationRadar.items.slice(0, 6).map((item) => (
+                    <div
+                      key={`${item.claimType}-${item.id}`}
+                      className={`p-3 rounded-2xl bg-white/95 border flex items-center justify-between gap-2.5 text-xs ${
+                        item.reconciliation.hasCritical
+                          ? 'border-rose-300 shadow-2xs'
+                          : item.reconciliation.hasWarning
+                          ? 'border-amber-300'
+                          : 'border-slate-200/90'
+                      }`}
+                    >
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black ${
+                              item.claimType === 'CORRECTIVE'
+                                ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                : 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                            }`}
+                          >
+                            {item.claimType === 'CORRECTIVE' ? 'BT' : 'PRÉV'}
+                          </span>
+                          <span className="font-mono font-bold text-slate-900">{item.machineCode}</span>
+                          <span className="text-[10.5px] text-slate-500 truncate">• {item.technicianName}</span>
+                        </div>
+                        <div className="font-bold text-slate-800 truncate">{item.title}</div>
+                        {item.reconciliation.alerts.length > 0 ? (
+                          <div className="text-[10px] font-bold text-rose-700 flex items-center gap-1 truncate">
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{item.reconciliation.alerts[0].title}</span>
+                          </div>
+                        ) : (
+                          <div className="text-[10px] font-mono text-emerald-700">
+                            {item.sparesCount} PDR • Concordance OK
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          item.claimType === 'CORRECTIVE'
+                            ? onNavigateToCorrective?.('corrective_bt')
+                            : onNavigateToPreventive?.()
+                        }
+                        className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
+                      >
+                        Contrôler
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

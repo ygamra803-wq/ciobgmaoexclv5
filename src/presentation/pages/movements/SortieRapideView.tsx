@@ -54,6 +54,12 @@ import AnimatedPage from '../../components/common/AnimatedPage';
 import SortieExterneBobinageTab from './components/SortieExterneBobinageTab';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { applyReplacementMovementToLedger } from '../../../core/domain';
+import { useAuth } from '../../../context/AuthContext';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianBadgeLabel,
+} from '../../../core/security/technicianScope';
 
 // Custom Select Component with BDR Light styling and optional onAddNew
 function CustomSelect({
@@ -292,15 +298,31 @@ export default function SortieRapideView({
   onOpenAddOperator,
   _onNavigateToWarehouse,
 }) {
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
+  const techBadgeLabel = useMemo(
+    () => getTechnicianBadgeLabel(user, technicians),
+    [user, technicians]
+  );
+
+  // V3 Maker-Checker: Scope movements to logged-in technician & lock into read-only Journal consultation
+  const scopedMouvements = useMemo(() => {
+    if (!isTechUser) return mouvements;
+    return (mouvements || []).filter((m) => matchesTechnicianRecord(m, user, technicians));
+  }, [mouvements, isTechUser, user, technicians]);
+
   // Navigation Sub-Tabs: 'JOURNAL' | 'COMMANDES' | 'REPARATION_EXTERNE'
   const [activeSubTab, setActiveSubTab] = useState('JOURNAL');
   // Display Mode for Journal: 'SPLIT' (Vue Scindée) | 'JOURNAL' (Plein Écran Table)
-  const [viewMode, setViewMode] = useState('SPLIT');
+  const [rawViewMode, setViewMode] = useState('SPLIT');
+  const viewMode = isTechUser ? 'JOURNAL' : rawViewMode;
+  const effectiveSubTab = isTechUser ? 'JOURNAL' : activeSubTab;
   const [isFloatingFormOpen, setIsFloatingFormOpen] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // Toggle between Split view (Vue Scindée) and Full-Screen Table view (Vue Dédiée)
   const handleToggleSplitSolo = () => {
+    if (isTechUser) return;
     if (viewMode === 'SPLIT') {
       setViewMode('JOURNAL');
     } else {
@@ -1442,16 +1464,34 @@ export default function SortieRapideView({
           {/* Pure Header Icon */}
           <SortieEntreeIcon className="w-7 h-7 text-indigo-600 shrink-0 group-hover/header:scale-110 transition-transform duration-300" />
           <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              Gestion des Mouvements & Bons Industriels (3 Catégories & 5 Flux)
-            </h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                {isTechUser
+                  ? 'Mes Mouvements & Sorties PDR Validées'
+                  : 'Gestion des Mouvements & Bons Industriels (3 Catégories & 5 Flux)'}
+              </h2>
+              {isTechUser && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                  Registre Personnel · {techBadgeLabel}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-              <b>Interne</b> (PDR + Parties + Composants) • <b>Bon de Sortie</b> (Réparation Externe) • <b>Externe</b> (Achats & Réappro)
+              {isTechUser ? (
+                <span>
+                  Consultation des bons de sortie validés à votre nom ({scopedMouvements.length} bon(s)). Les déclarations de pièces PDR s&apos;effectuent directement dans vos <b>Bons de Travail (Correctif)</b> ou <b>Exécutions Préventives</b>.
+                </span>
+              ) : (
+                <>
+                  <b>Interne</b> (PDR + Parties + Composants) • <b>Bon de Sortie</b> (Réparation Externe) • <b>Externe</b> (Achats & Réappro)
+                </>
+              )}
             </p>
           </div>
         </div>
 
         {/* Right Column: Action Buttons at Top, Segmented Navigation SubTabs Below */}
+        {!isTechUser && (
         <div className="flex flex-col items-stretch sm:items-end gap-2.5 shrink-0 relative">
           {/* Top Row: Formulas Modal Button & Smart Circular 3D Switch Action Buttons */}
           <div className="flex items-center justify-end gap-2">
@@ -1461,7 +1501,7 @@ export default function SortieRapideView({
             />
 
             {/* Smart Circular 3D Action Switch Buttons */}
-            {activeSubTab === 'JOURNAL' && (
+            {effectiveSubTab === 'JOURNAL' && (
               <div className="flex items-center gap-2">
                 {/* 1. Toggle Split View <-> Full Table Dedicated View */}
                 <AnimatePresence mode="wait" initial={false}>
@@ -1559,12 +1599,30 @@ export default function SortieRapideView({
             </div>
           </div>
         </div>
+        )}
       </div>
+
+      {isTechUser && (
+        <div
+          data-testid="tech-movements-read-only-banner"
+          className="mt-4 bg-indigo-50/90 border border-indigo-200 rounded-2xl p-4 flex items-center gap-3 text-xs text-indigo-950 shadow-2xs"
+        >
+          <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0" />
+          <div>
+            <span className="font-black uppercase tracking-wider">
+              Contrôle Magasin & Maker-Checker Actif :
+            </span>{' '}
+            <span>
+              La saisie directe de mouvements de stock est réservée au Responsable / Magasinier. En tant que technicien ({techBadgeLabel}), déclarez vos pièces consommées dans vos <b>Interventions Correctives (Live / Clôture)</b> ou vos <b>Exécutions Préventives</b> ; elles apparaîtront ici dès leur validation officielle.
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* SUB-VIEWS & MAIN CONTENT WITH FLUID MOTION ANIMATIONS */}
       <AnimatePresence mode="wait">
         {/* SUB-VIEW 1: PENDING ORDERS / COMMANDES BACKLOG */}
-        {activeSubTab === 'COMMANDES' && (
+        {effectiveSubTab === 'COMMANDES' && (
           <motion.div
             key="subtab-commandes"
             initial={{ opacity: 0, y: 10 }}
@@ -1632,7 +1690,7 @@ export default function SortieRapideView({
         )}
 
         {/* SUB-VIEW 2: SORTIE EXTERNE BOBINAGE & RÉPARATION FLUX COMPLET */}
-        {activeSubTab === 'REPARATION_EXTERNE' && (
+        {effectiveSubTab === 'REPARATION_EXTERNE' && (
           <motion.div
             key="subtab-reparation"
             initial={{ opacity: 0, y: 10 }}
@@ -1658,7 +1716,7 @@ export default function SortieRapideView({
         )}
 
         {/* MAIN VIEW: FORM & JOURNAL TABLE ACCORDING TO VIEW MODE */}
-        {activeSubTab === 'JOURNAL' && (
+        {effectiveSubTab === 'JOURNAL' && (
           <motion.div
             key={`journal-view-mode-${viewMode}`}
             initial={{ opacity: 0, y: 10 }}
@@ -1667,8 +1725,8 @@ export default function SortieRapideView({
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
             <div className={viewMode === 'SPLIT' ? 'grid grid-cols-1 lg:grid-cols-12 gap-4 items-start' : 'w-full'}>
-              {/* Form Container: Left Sticky Column in SPLIT mode, or Floating Card in JOURNAL mode */}
-              {(viewMode === 'SPLIT' || isFloatingFormOpen) && (
+              {/* Form Container: Left Sticky Column in SPLIT mode, or Floating Card in JOURNAL mode (Hidden for TECHNICIEN) */}
+              {!isTechUser && (viewMode === 'SPLIT' || isFloatingFormOpen) && (
                 <FormContainerWrapper
                   isFloating={viewMode === 'JOURNAL'}
                   onClose={() => setIsFloatingFormOpen(false)}
@@ -4684,15 +4742,15 @@ export default function SortieRapideView({
               {/* Right Table: Movements History & Excel Twin */}
               <div className={viewMode === 'SPLIT' ? 'lg:col-span-7' : 'w-full'}>
                 <MouvementsJournalTable
-                  mouvements={mouvements}
+                  mouvements={scopedMouvements}
                   stockItems={stockItems}
                   warehouseItems={warehouseItems}
                   machines={machines}
                   zones={zones}
                   technicians={technicians}
                   operations={operations}
-                  onUpdateMouvement={onUpdateMouvement}
-                  onDeleteMouvement={onDeleteMouvement}
+                  onUpdateMouvement={isTechUser ? null : onUpdateMouvement}
+                  onDeleteMouvement={isTechUser ? null : onDeleteMouvement}
                 />
               </div>
             </div>

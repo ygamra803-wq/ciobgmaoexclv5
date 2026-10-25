@@ -31,7 +31,11 @@ import { useI18n } from '../../../i18n/I18nContext';
 import { confirmAction } from '../../../utils/confirmAction';
 import { isComponentNature, isPartNature } from '../../../core/domain/EntrepotItem';
 import { useAuth } from '../../../context/AuthContext';
-import { isTechnicianRole, getTechnicianBadgeLabel } from '../../../core/security/technicianScope';
+import {
+  isTechnicianRole,
+  getTechnicianBadgeLabel,
+  getTechnicianDisplayName,
+} from '../../../core/security/technicianScope';
 
 export default function PreventiveView({
   tasks = [],
@@ -43,6 +47,7 @@ export default function PreventiveView({
   onDeleteTask: onDeleteTaskProp = null,
   onUpdateTaskCounter: onUpdateTaskCounterProp = null,
   onMarkTaskDone: onMarkTaskDoneProp = null,
+  onReviewPreventiveExecution = null,
   onDeleteExecution = null,
   onResetToBaseline = null,
   onClearPreventiveForRealFactory = null,
@@ -71,6 +76,13 @@ export default function PreventiveView({
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [viewMode, setViewMode] = useState('matrix'); // 'matrix' | 'grouped' | 'calendar' | 'list' | 'analytics'
+
+  const pendingPreventiveValidationCount = (executions || []).filter(
+    (ex) => ex.validation_status === 'PENDING_VALIDATION'
+  ).length;
+  const needsClarificationPreventiveCount = (tasks || []).filter(
+    (tk) => tk.validation_status === 'NEEDS_CLARIFICATION' || tk.etat === 'À clarifier'
+  ).length;
 
   const handleRestoreBaseline = async () => {
     if (onResetToBaseline) {
@@ -113,18 +125,50 @@ export default function PreventiveView({
   // ==========================================
   const handleMarkTaskDone = (id, validationData) => {
     const targetTask = tasks.find((t) => t.id === id);
+    const shouldSubmitForValidation =
+      isTechUser || validationData?.submitForValidation === true;
+
+    const enrichedValidationData = shouldSubmitForValidation
+      ? {
+          ...validationData,
+          submitForValidation: true,
+          validation_status: 'PENDING_VALIDATION',
+          submitted_by_id: user?.personnelId || user?.id || '',
+          submitted_by_name:
+            getTechnicianDisplayName(user, technicians) ||
+            validationData?.technicien ||
+            '',
+        }
+      : {
+          ...validationData,
+          submitForValidation: false,
+          validation_status: 'APPROVED',
+          validated_by_id: user?.id || 'admin',
+          validated_by_name: user?.name || user?.nom || 'Administrateur',
+        };
 
     if (onMarkTaskDoneProp) {
-      onMarkTaskDoneProp(id, validationData);
+      onMarkTaskDoneProp(id, enrichedValidationData);
     } else {
-      PreventiveService.markTaskAsDone(id, validationData);
+      PreventiveService.markTaskAsDone(id, enrichedValidationData);
+    }
+
+    // V3 Maker-Checker: If submitted by Technician, DO NOT emit stock movement until Admin approval
+    if (shouldSubmitForValidation) {
+      if (showToast) {
+        showToast(
+          `Exécution de ${targetTask?.composant || 'la tâche'} soumise pour validation responsable (sans déstockage immédiat).`,
+          'info'
+        );
+      }
+      return;
     }
 
     const consumedPDR = (validationData?.usedPDR && validationData.usedPDR.length > 0)
       ? validationData.usedPDR
       : (Array.isArray(validationData?.pieces_utilisees) ? validationData.pieces_utilisees : []);
 
-    // If PDR consumed, synchronize with stock via Sortie Interne movement (single source of truth for stock deduction)
+    // If PDR consumed by Admin/Responsable directly, synchronize with stock via Sortie Interne movement
     if (consumedPDR.length > 0 && onAddMouvement) {
       const organeTarget =
         targetTask?.composant ||
@@ -224,6 +268,20 @@ export default function PreventiveView({
                 {isTechUser && (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                     Mes Tâches · {getTechnicianBadgeLabel(user, technicians)}
+                  </span>
+                )}
+                {!isTechUser && pendingPreventiveValidationCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('executions')}
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-100 text-purple-900 border border-purple-300 shadow-2xs animate-pulse cursor-pointer"
+                  >
+                    À valider : {pendingPreventiveValidationCount} exéc.
+                  </button>
+                )}
+                {isTechUser && needsClarificationPreventiveCount > 0 && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs animate-pulse">
+                    À clarifier : {needsClarificationPreventiveCount}
                   </span>
                 )}
               </div>
@@ -470,6 +528,8 @@ export default function PreventiveView({
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             onMarkTaskDone={handleMarkTaskDone}
+            onReviewPreventiveExecution={onReviewPreventiveExecution}
+            showToast={showToast}
             onDeleteExecution={isTechUser ? null : onDeleteExecution}
             onDeleteTask={handleDeleteTask}
             onUpdateTaskCounter={handleUpdateTaskCounter}

@@ -37,6 +37,7 @@ import {
   matchesTechnicianRecord,
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
+import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -59,6 +60,8 @@ export default function BonsTravailTab({
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
   const storeReviewValidation = useGmaoStore((s) => s.handleReviewInterventionValidation);
+  const storeMouvements = useGmaoStore((s) => s.mouvements);
+  const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
@@ -69,6 +72,27 @@ export default function BonsTravailTab({
   const [reviewActionRealisee, setReviewActionRealisee] = useState('');
   const [reviewPieces, setReviewPieces] = useState<any[]>([]);
   const [reviewNote, setReviewNote] = useState('');
+
+  const reviewReconciliation = useMemo(() => {
+    if (!reviewModalBt) return null;
+    return reconcileFieldClaim({
+      claimType: 'CORRECTIVE',
+      claimId: String(reviewModalBt.id),
+      numBonSaisi: reviewModalBt.num_bon_saisi_par_tech,
+      proposedSpares: reviewPieces,
+      stockItems,
+      mouvements: storeMouvements,
+      correctiveInterventions: interventions,
+      preventiveExecutions: storePreventiveExecutions,
+    });
+  }, [
+    reviewModalBt,
+    reviewPieces,
+    stockItems,
+    storeMouvements,
+    interventions,
+    storePreventiveExecutions,
+  ]);
 
   const openReviewModal = (bt: any) => {
     const initialPieces =
@@ -1588,6 +1612,73 @@ export default function BonsTravailTab({
                   <span className="text-[10.5px] text-emerald-700">À l’approbation</span>
                 </div>
               </div>
+
+              {/* V4 Smart Reconciliation Banner */}
+              {reviewReconciliation && (
+                <div
+                  data-testid="v4-reconciliation-panel"
+                  className={`p-3.5 rounded-2xl border space-y-2 ${
+                    reviewReconciliation.hasCritical
+                      ? 'bg-rose-50/90 border-rose-300 text-rose-950'
+                      : reviewReconciliation.hasWarning
+                      ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                      {reviewReconciliation.hasWarning ? (
+                        <AlertTriangle
+                          className={`w-4 h-4 shrink-0 ${
+                            reviewReconciliation.hasCritical ? 'text-rose-600' : 'text-amber-600'
+                          }`}
+                        />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                      Contrôle Automatique de Concordance (V4)
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white/80 border border-current/20">
+                      {reviewReconciliation.alerts.length === 0
+                        ? '0 anomalie détectée'
+                        : `${reviewReconciliation.alerts.length} alerte(s)`}
+                    </span>
+                  </div>
+
+                  {reviewReconciliation.alerts.length > 0 ? (
+                    <div className="space-y-1.5">
+                      {reviewReconciliation.alerts.map((alert, idx) => (
+                        <div
+                          key={`${alert.code}-${idx}`}
+                          className={`px-3 py-2 rounded-xl border text-[11px] flex items-start justify-between gap-2 ${
+                            alert.severity === 'critical'
+                              ? 'bg-white border-rose-200 text-rose-900'
+                              : 'bg-white border-amber-200 text-amber-900'
+                          }`}
+                        >
+                          <div>
+                            <span className="font-black mr-1.5">{alert.title} :</span>
+                            <span className="font-medium">{alert.detail}</span>
+                          </div>
+                          <span
+                            className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black shrink-0 ${
+                              alert.severity === 'critical'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {alert.code}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-emerald-800 font-medium">
+                      Aucune anomalie de stock, de doublon de bon magasin ou de réservation concurrente détectée.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Editable Travail Réalisé */}
               <div className="space-y-1.5">

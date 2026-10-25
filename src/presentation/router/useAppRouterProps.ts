@@ -119,6 +119,7 @@ export function useAppRouterProps({
     handleDeleteTask,
     handleUpdateTaskCounter,
     handleMarkTaskDone,
+    handleReviewPreventiveExecutionValidation,
     handleDeletePreventiveExecution,
     handleCreatePlanWithTasks,
     handleAddPreventiveAction,
@@ -671,6 +672,12 @@ export function useAppRouterProps({
       onDeleteTask: handleDeleteTask,
       onUpdateTaskCounter: handleUpdateTaskCounter,
       onMarkTaskDone: handleMarkTaskDone,
+      onReviewPreventiveExecution: (executionId, decisionData) =>
+        handleReviewPreventiveExecutionValidation?.(
+          executionId,
+          decisionData,
+          handleAddMouvement
+        ),
       onDeleteExecution: handleDeletePreventiveExecution,
       onCreatePlanWithTasks: handleCreatePlanWithTasks,
       onAddAction: handleAddPreventiveAction,
@@ -987,6 +994,7 @@ export function useAppRouterProps({
     preventiveExecutions,
     handleUpdateTask,
     handleMarkTaskDone,
+    handleReviewPreventiveExecutionValidation,
     handleDeletePreventiveExecution,
     handleCreatePlanWithTasks,
     handleAddPreventiveAction,

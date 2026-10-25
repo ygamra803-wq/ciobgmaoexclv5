@@ -626,7 +626,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleMarkTaskDone: (id, validationData) => {
-      const targetTask = get().preventiveTasks.find((t) => String(t.id) === String(id));
+      const currentTasks = get().preventiveTasks;
+      const currentExecs = get().preventiveExecutions;
+      PreventiveService.saveTasks(currentTasks);
+      PreventiveService.saveExecutions(currentExecs);
+
+      const targetTask = currentTasks.find((t) => String(t.id) === String(id));
       const targetMachine = String(targetTask?.id_machine || '').trim().toUpperCase();
       const releveNum = Number(
         validationData?.compteur_releve ?? validationData?.dernier_releve ?? 0
@@ -658,6 +663,240 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         set({ machines: nextMachines });
         DataGateway.saveMachines(nextMachines);
       }
+    },
+
+    handleReviewPreventiveExecutionValidation: (executionId, decisionData = { decision: 'APPROVED' }, onAddMouvement = null) => {
+      const currentExecs = get().preventiveExecutions || [];
+      const existingExec = currentExecs.find((e: any) => String(e.id) === String(executionId));
+      if (!existingExec) return null;
+
+      const decision = String(decisionData.decision || 'APPROVED').trim().toUpperCase();
+      const nowIso = new Date().toISOString();
+
+      if (
+        existingExec.validation_status === 'APPROVED' &&
+        existingExec.stock_deducted === true
+      ) {
+        console.warn(`[useGmaoStore] handleReviewPreventiveExecutionValidation blocked: execution ${executionId} is already approved and stock deducted.`);
+        return null;
+      }
+
+      if (decision === 'APPROVED') {
+        const rawSpares = Array.isArray((decisionData as any).approvedSpares)
+          ? (decisionData as any).approvedSpares
+          : Array.isArray(decisionData.sparesUsed)
+          ? decisionData.sparesUsed
+          : Array.isArray(decisionData.sparesProposed)
+          ? decisionData.sparesProposed
+          : Array.isArray(existingExec.sparesProposed)
+          ? existingExec.sparesProposed
+          : Array.isArray(existingExec.sparesUsed)
+          ? existingExec.sparesUsed
+          : [];
+
+        const stockList = get().rawStock || [];
+        const stockLookup = new Map<string, any>();
+        stockList.forEach((s: any) => {
+          const r = String(s.ref || s.code_article || '').trim().toUpperCase();
+          if (r) stockLookup.set(r, s);
+        });
+
+        const approvedSpares = rawSpares
+          .map((s: any) => {
+            const ref = String(s?.ref || s?.reference || s?.code || '').trim();
+            const qty = Number(s?.qty ?? s?.quantite ?? 0);
+            const stockMatch = ref ? stockLookup.get(ref.toUpperCase()) : null;
+            const unitPrice =
+              Number(
+                s?.unitPrice ??
+                  s?.prix_unitaire ??
+                  s?.prix ??
+                  stockMatch?.prix ??
+                  stockMatch?.prix_unitaire ??
+                  0
+              ) || 0;
+            return {
+              ref,
+              designation: String(s?.designation || stockMatch?.designation || ref || 'PDR').trim(),
+              qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
+              unit: String(s?.unit || s?.unite || stockMatch?.unite || 'pcs'),
+              unitPrice: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0,
+            };
+          })
+          .filter((s: any) => Boolean(s.ref && s.qty > 0));
+
+        const sparesCost = approvedSpares.reduce(
+          (sum: number, item: any) => sum + item.qty * (item.unitPrice || 0),
+          0
+        );
+        const durationMinutes = Number(existingExec.durationMinutes || 15);
+        const laborRate = Number(existingExec.laborRate ?? 35);
+        const laborCost = (durationMinutes / 60) * laborRate;
+        const totalCost = Number((sparesCost + laborCost).toFixed(2));
+
+        let updatedExec: any = null;
+        const nextExecs = currentExecs.map((e: any) => {
+          if (String(e.id) === String(executionId)) {
+            updatedExec = {
+              ...e,
+              ...(decisionData.notes !== undefined ? { notes: String(decisionData.notes).trim() } : {}),
+              sparesUsed: approvedSpares,
+              sparesProposed: approvedSpares,
+              sparesCost: Number(sparesCost.toFixed(2)),
+              totalCost,
+              status: 'DONE',
+              validation_status: 'APPROVED',
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Administrateur',
+              validated_at: nowIso,
+              validation_note: String(
+                decisionData.validation_note ?? e.validation_note ?? ''
+              ).trim(),
+              stock_deducted: true,
+            };
+            return updatedExec;
+          }
+          return e;
+        });
+
+        const nextTasks = (get().preventiveTasks || []).map((t: any) => {
+          if (String(t.id) === String(existingExec.taskId)) {
+            const prevCost = Number(t.cout_cumule || 0);
+            const nextPlanning =
+              t.planning &&
+              typeof t.planning === 'object' &&
+              existingExec.periodWeek &&
+              t.planning[existingExec.periodWeek]
+                ? { ...t.planning, [existingExec.periodWeek]: 'DONE' }
+                : t.planning;
+            return {
+              ...t,
+              etat: 'Fait',
+              validation_status: 'APPROVED',
+              last_pending_execution_id: '',
+              pieces_proposees: approvedSpares,
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Administrateur',
+              validated_at: nowIso,
+              validation_note: String(
+                decisionData.validation_note ?? t.validation_note ?? ''
+              ).trim(),
+              derniere_realisation: existingExec.executedAt,
+              lastExecutedAt: existingExec.executedAt,
+              cout_cumule: Number((prevCost + totalCost).toFixed(2)),
+              planning: nextPlanning,
+              updated_at: nowIso,
+            };
+          }
+          return t;
+        });
+
+        set({ preventiveExecutions: nextExecs, preventiveTasks: nextTasks });
+        PreventiveService.saveExecutions(nextExecs);
+        PreventiveService.saveTasks(nextTasks);
+        DataGateway.savePreventiveExecutions(nextExecs);
+        DataGateway.savePreventiveTasks(nextTasks);
+
+        if (approvedSpares.length > 0) {
+          const movementsToRecord: any[] = [];
+          approvedSpares.forEach((pdr: any, idx: number) => {
+            const suffix = approvedSpares.length > 1 ? `-${idx + 1}` : '';
+            movementsToRecord.push({
+              id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+              code_bon: `BS-PRV-${String(existingExec.id).slice(-6)}${suffix}`,
+              num_commande: existingExec.taskCode || 'PREVENTIF',
+              date: existingExec.executedAt || nowIso.split('T')[0],
+              heure: '10:00',
+              ref: pdr.ref,
+              code_article: pdr.ref,
+              designation: pdr.designation || pdr.ref,
+              quantite: Number(pdr.qty),
+              prix_unitaire: Number(pdr.unitPrice) || 0,
+              unit: pdr.unit || 'pcs',
+              unite: pdr.unit || 'pcs',
+              type: 'Sortie Interne',
+              action_id: 'PREVENTIVE',
+              usage_type: 'technician',
+              id_machine_registered: existingExec.machineCode || '',
+              machine: existingExec.machineCode || '',
+              ...(existingExec.id_composant ? { id_composant: existingExec.id_composant } : {}),
+              ...(existingExec.id_part ? { id_part: existingExec.id_part } : {}),
+              technicien: existingExec.executorName || 'Technicien',
+              demandeur: existingExec.executorName || 'Technicien GMAO',
+              commentaire: `Consommation validée sur maintenance préventive ${existingExec.organe || ''} (${existingExec.machineCode || ''})`,
+            });
+          });
+
+          if (typeof onAddMouvement === 'function') {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                onAddMouvement(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] onAddMouvement error in preventive approval:', err);
+              }
+            });
+          } else {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                movementRepository.add(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] movementRepository.add error in preventive approval:', err);
+              }
+            });
+            get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+          }
+        }
+
+        return updatedExec;
+      }
+
+      if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
+        let updatedExec: any = null;
+        const nextExecs = currentExecs.map((e: any) => {
+          if (String(e.id) === String(executionId)) {
+            updatedExec = {
+              ...e,
+              ...(Array.isArray(decisionData.sparesProposed)
+                ? { sparesProposed: decisionData.sparesProposed }
+                : {}),
+              status: decision === 'REJECTED' ? 'SKIPPED' : 'PARTIAL',
+              validation_status: decision,
+              validation_note: String(decisionData.validation_note || '').trim(),
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Administrateur',
+              validated_at: nowIso,
+              stock_deducted: false,
+            };
+            return updatedExec;
+          }
+          return e;
+        });
+
+        const nextTasks = (get().preventiveTasks || []).map((t: any) => {
+          if (String(t.id) === String(existingExec.taskId)) {
+            return {
+              ...t,
+              etat: decision === 'NEEDS_CLARIFICATION' ? 'À clarifier' : 'À faire',
+              validation_status: decision,
+              validation_note: String(decisionData.validation_note || '').trim(),
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Administrateur',
+              validated_at: nowIso,
+              updated_at: nowIso,
+            };
+          }
+          return t;
+        });
+
+        set({ preventiveExecutions: nextExecs, preventiveTasks: nextTasks });
+        PreventiveService.saveExecutions(nextExecs);
+        PreventiveService.saveTasks(nextTasks);
+        DataGateway.savePreventiveExecutions(nextExecs);
+        DataGateway.savePreventiveTasks(nextTasks);
+        return updatedExec;
+      }
+
+      return null;
     },
 
     handleDeletePreventiveExecution: (id) => {
@@ -2204,6 +2443,7 @@ export const usePreventiveSlice = () =>
     handleDeleteTask: state.handleDeleteTask,
     handleUpdateTaskCounter: state.handleUpdateTaskCounter,
     handleMarkTaskDone: state.handleMarkTaskDone,
+    handleReviewPreventiveExecutionValidation: state.handleReviewPreventiveExecutionValidation,
     handleDeletePreventiveExecution: state.handleDeletePreventiveExecution,
     handleCreatePlanWithTasks: state.handleCreatePlanWithTasks,
     handleAddAction: state.handleAddAction,

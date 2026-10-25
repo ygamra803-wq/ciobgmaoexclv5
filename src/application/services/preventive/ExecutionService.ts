@@ -78,15 +78,19 @@ export class ExecutionService {
     );
     const laborRate = Number(validationData?.taux_horaire ?? validationData?.laborRate ?? 35) || 0;
 
-    const rawSpares = Array.isArray(validationData?.usedPDR)
+    const rawSpares = Array.isArray(validationData?.sparesProposed)
+      ? validationData.sparesProposed
+      : Array.isArray(validationData?.usedPDR)
       ? validationData.usedPDR
       : Array.isArray(validationData?.sparesUsed)
       ? validationData.sparesUsed
       : Array.isArray(validationData?.pieces_utilisees)
       ? validationData.pieces_utilisees
+      : Array.isArray(validationData?.pieces_proposees)
+      ? validationData.pieces_proposees
       : [];
 
-    const sparesUsed: PreventiveExecutionSpareItem[] = rawSpares
+    const parsedSpares: PreventiveExecutionSpareItem[] = rawSpares
       .map((s: any) => {
         const ref = String(s?.ref || s?.reference || s?.code || '').trim();
         const qty = Number(s?.qty ?? s?.quantite ?? 1);
@@ -101,6 +105,13 @@ export class ExecutionService {
       })
       .filter((s: PreventiveExecutionSpareItem) => Boolean(s.ref || s.designation));
 
+    const isPendingValidation =
+      validationData?.submitForValidation === true ||
+      String(validationData?.validation_status || '').trim().toUpperCase() === 'PENDING_VALIDATION';
+
+    const sparesUsed: PreventiveExecutionSpareItem[] = isPendingValidation ? [] : parsedSpares;
+    const sparesProposed: PreventiveExecutionSpareItem[] = parsedSpares;
+
     const sparesCost = sparesUsed.reduce((sum, item) => sum + item.qty * (item.unitPrice || 0), 0);
     const laborCost = (durationMinutes / 60) * laborRate;
     const totalCost = Number((sparesCost + laborCost).toFixed(2));
@@ -109,6 +120,7 @@ export class ExecutionService {
       validationData?.technicien ||
         validationData?.technicien_realisateur ||
         validationData?.executorName ||
+        validationData?.submitted_by_name ||
         task?.responsable ||
         'Technicien'
     ).trim();
@@ -131,6 +143,8 @@ export class ExecutionService {
         idPart ||
         'Machine entière'
     ).trim();
+
+    const numBonTech = String(validationData?.num_bon_saisi_par_tech ?? '').trim();
 
     const execution: PreventiveExecutionRecord = {
       id:
@@ -165,14 +179,62 @@ export class ExecutionService {
           : 'DONE',
       notes: String(validationData?.observations ?? validationData?.notes ?? '').trim(),
       sparesUsed,
+      sparesProposed,
+      ...(numBonTech ? { num_bon_saisi_par_tech: numBonTech } : {}),
+      validation_status: isPendingValidation ? 'PENDING_VALIDATION' : 'APPROVED',
+      ...(isPendingValidation
+        ? {
+            submitted_by_id: String(validationData?.submitted_by_id || task?.id_technicien || executorName),
+            submitted_by_name: String(validationData?.submitted_by_name || executorName),
+            submitted_at: String(validationData?.submitted_at || nowIso),
+            stock_deducted: false,
+          }
+        : {
+            validated_by_id: String(validationData?.validated_by_id || 'admin'),
+            validated_by_name: String(validationData?.validated_by_name || 'Administrateur'),
+            validated_at: String(validationData?.validated_at || nowIso),
+            stock_deducted: sparesUsed.length > 0,
+          }),
       createdAt: nowIso,
     };
 
     const current = this.getExecutions();
-    const updated = [execution, ...current];
+    // If resubmitting a task that had a previous NEEDS_CLARIFICATION or PENDING_VALIDATION execution, replace it or prepend
+    const existingPendingId = validationData?.replaceExecutionId || task?.last_pending_execution_id;
+    const filteredCurrent = existingPendingId
+      ? current.filter(
+          (e) =>
+            !(
+              e.id === existingPendingId &&
+              (e.validation_status === 'PENDING_VALIDATION' || e.validation_status === 'NEEDS_CLARIFICATION')
+            )
+        )
+      : current;
+
+    const updated = [execution, ...filteredCurrent];
     this.saveExecutions(updated);
 
     return { execution, executions: updated };
+  }
+
+  static updateExecution(
+    executionId: string,
+    updates: Partial<PreventiveExecutionRecord>
+  ): {
+    execution: PreventiveExecutionRecord | null;
+    executions: PreventiveExecutionRecord[];
+  } {
+    const current = this.getExecutions();
+    let updatedItem: PreventiveExecutionRecord | null = null;
+    const updated = current.map((e) => {
+      if (e.id === executionId) {
+        updatedItem = { ...e, ...updates };
+        return updatedItem;
+      }
+      return e;
+    });
+    this.saveExecutions(updated);
+    return { execution: updatedItem, executions: updated };
   }
 
   static deleteExecution(executionId: string): PreventiveExecutionRecord[] {
@@ -187,3 +249,4 @@ export class ExecutionService {
 }
 
 export default ExecutionService;
+

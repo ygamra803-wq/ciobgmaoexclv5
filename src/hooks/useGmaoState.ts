@@ -189,6 +189,7 @@ export function useGmaoState() {
     handleDeleteTask: store.handleDeleteTask,
     handleUpdateTaskCounter: store.handleUpdateTaskCounter,
     handleMarkTaskDone: store.handleMarkTaskDone,
+    handleReviewPreventiveExecutionValidation: store.handleReviewPreventiveExecutionValidation,
     handleDeletePreventiveExecution: store.handleDeletePreventiveExecution,
     handleCreatePlanWithTasks: store.handleCreatePlanWithTasks,
     handleAddAction: store.handleAddAction,

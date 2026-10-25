@@ -122,6 +122,9 @@ export function matchesTechnicianRecord(
     record.intervenant,
     record.technicien,
     record.technicien_realisateur,
+    record.executorName,
+    record.submitted_by_id,
+    record.submitted_by_name,
   ];
 
   for (const val of candidateValues) {
@@ -176,6 +179,15 @@ export function buildTechnicianDashboardScope({
   };
 
   const overdueTasks = myPreventiveTasks.filter((t) => t?.etat === 'En retard');
+  const needsClarificationPreventive = myPreventiveTasks.filter(
+    (t) =>
+      t?.etat === 'À clarifier' ||
+      t?.validation_status === 'NEEDS_CLARIFICATION' ||
+      t?.validation_status === 'REJECTED'
+  );
+  const pendingValidationPreventive = myPreventiveTasks.filter(
+    (t) => t?.etat === 'En attente validation' || t?.validation_status === 'PENDING_VALIDATION'
+  );
   const thisWeekTasks = myPreventiveTasks.filter(
     (t) => t?.etat !== 'Fait' && isScheduledThisWeek(t)
   );
@@ -184,6 +196,7 @@ export function buildTechnicianDashboardScope({
 
   const priorityTasks = [...myPreventiveTasks].sort((a, b) => {
     const rank = (t: any) => {
+      if (t?.etat === 'À clarifier' || t?.validation_status === 'NEEDS_CLARIFICATION') return -1;
       if (t?.etat === 'En retard') return 0;
       if (t?.etat !== 'Fait' && isScheduledThisWeek(t)) return 1;
       if (t?.etat === 'À faire') return 2;
@@ -231,6 +244,8 @@ export function buildTechnicianDashboardScope({
     currentWeekKey,
     myPreventiveTasks,
     overdueTasks,
+    needsClarificationPreventive,
+    pendingValidationPreventive,
     thisWeekTasks,
     todoTasks,
     doneTasks,
