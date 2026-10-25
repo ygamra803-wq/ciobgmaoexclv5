@@ -30,6 +30,8 @@ import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
 import { confirmAction } from '../../../utils/confirmAction';
 import { isComponentNature, isPartNature } from '../../../core/domain/EntrepotItem';
+import { useAuth } from '../../../context/AuthContext';
+import { isTechnicianRole, getTechnicianBadgeLabel } from '../../../core/security/technicianScope';
 
 export default function PreventiveView({
   tasks = [],
@@ -63,6 +65,8 @@ export default function PreventiveView({
   onAdoptRecommendation = null,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -217,6 +221,11 @@ export default function PreventiveView({
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs">
                   {t('preventive.cycle')}
                 </span>
+                {isTechUser && (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                    Mes Tâches · {getTechnicianBadgeLabel(user, technicians)}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
                 {t('preventive.subtitle')}
@@ -255,24 +264,28 @@ export default function PreventiveView({
             />
 
             {/* 3D Switch Button: Analytics / Statistiques & Coûts */}
-            <Action3DButton
-              variant="circle"
-              color={viewMode === 'analytics' ? 'purple' : 'slate'}
-              icon={BarChart3}
-              onClick={() => setViewMode((prev) => (prev === 'analytics' ? 'matrix' : 'analytics'))}
-              title={
-                viewMode === 'analytics'
-                  ? 'Revenir aux Tableaux Préventifs'
-                  : 'Tableau de Bord & Statistiques (Santé & Coûts)'
-              }
-              className={viewMode === 'analytics' ? 'ring-2 ring-purple-400/80' : ''}
-            />
+            {!isTechUser && (
+              <Action3DButton
+                variant="circle"
+                color={viewMode === 'analytics' ? 'purple' : 'slate'}
+                icon={BarChart3}
+                onClick={() => setViewMode((prev) => (prev === 'analytics' ? 'matrix' : 'analytics'))}
+                title={
+                  viewMode === 'analytics'
+                    ? 'Revenir aux Tableaux Préventifs'
+                    : 'Tableau de Bord & Statistiques (Santé & Coûts)'
+                }
+                className={viewMode === 'analytics' ? 'ring-2 ring-purple-400/80' : ''}
+              />
+            )}
 
             {/* 3D Formula Circular Trigger Button */}
-            <FormulasModalButton
-              onClick={() => setShowFormulasModal(true)}
-              title="Formules Excel (Matrice Préventif S1→S52)"
-            />
+            {!isTechUser && (
+              <FormulasModalButton
+                onClick={() => setShowFormulasModal(true)}
+                title="Formules Excel (Matrice Préventif S1→S52)"
+              />
+            )}
 
             {/* 3D Guide & Philosophy Circular Trigger Button */}
             <Action3DButton
@@ -285,17 +298,19 @@ export default function PreventiveView({
             />
 
             {/* 3D Reset Baseline Button */}
-            <Action3DButton
-              variant="circle"
-              color="amber"
-              icon={RotateCcw}
-              onClick={handleRestoreBaseline}
-              title="Restaurer le planning d'usine de base (1 175 tâches)"
-              className="ring-2 ring-amber-400/60"
-            />
+            {!isTechUser && (
+              <Action3DButton
+                variant="circle"
+                color="amber"
+                icon={RotateCcw}
+                onClick={handleRestoreBaseline}
+                title="Restaurer le planning d'usine de base (1 175 tâches)"
+                className="ring-2 ring-amber-400/60"
+              />
+            )}
 
             {/* 3D Clear for Real Factory Button */}
-            {onClearPreventiveForRealFactory && (
+            {!isTechUser && onClearPreventiveForRealFactory && (
               <Action3DButton
                 variant="circle"
                 color="rose"
@@ -307,29 +322,33 @@ export default function PreventiveView({
             )}
 
             {/* 3D Import Tasks Button */}
-            <Action3DButton
-              variant="circle"
-              color="emerald"
-              icon={Upload}
-              onClick={() => setShowImportModal(true)}
-              title="Importer des tâches préventives (JSON / Fichier)"
-              className="ring-2 ring-emerald-400/60"
-            />
+            {!isTechUser && (
+              <Action3DButton
+                variant="circle"
+                color="emerald"
+                icon={Upload}
+                onClick={() => setShowImportModal(true)}
+                title="Importer des tâches préventives (JSON / Fichier)"
+                className="ring-2 ring-emerald-400/60"
+              />
+            )}
 
             {/* 3D Primary Add Plan / Action Button */}
-            <Action3DButton
-              variant="circle"
-              color="indigo"
-              icon={CalendarPlus}
-              showAddBadge={true}
-              onClick={onNavigateToReferentiel}
-              title="Nouveau Plan / Concepteur de Plan"
-            />
+            {!isTechUser && (
+              <Action3DButton
+                variant="circle"
+                color="indigo"
+                icon={CalendarPlus}
+                showAddBadge={true}
+                onClick={onNavigateToReferentiel}
+                title="Nouveau Plan / Concepteur de Plan"
+              />
+            )}
           </div>
         </div>
 
         {/* Empty State Warning Banner (1-Click Restore 1,175 Tasks) */}
-        {(!tasks || tasks.length === 0) && (
+        {!isTechUser && (!tasks || tasks.length === 0) && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -356,7 +375,7 @@ export default function PreventiveView({
         )}
 
         {/* Anti-Recurrence Predictive Suggestions from Corrective Nexus */}
-        {preventiveRecommendations && preventiveRecommendations.length > 0 && (
+        {!isTechUser && preventiveRecommendations && preventiveRecommendations.length > 0 && (
           <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -451,7 +470,7 @@ export default function PreventiveView({
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             onMarkTaskDone={handleMarkTaskDone}
-            onDeleteExecution={onDeleteExecution}
+            onDeleteExecution={isTechUser ? null : onDeleteExecution}
             onDeleteTask={handleDeleteTask}
             onUpdateTaskCounter={handleUpdateTaskCounter}
             onUpdateTaskStatus={handleUpdateTaskStatus}

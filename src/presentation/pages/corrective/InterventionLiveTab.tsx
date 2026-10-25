@@ -18,6 +18,8 @@ import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/Entr
 import { rankStockItemsByMachineBom } from '../../../core/domain';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { isTechnicianRole, matchesTechnicianRecord } from '../../../core/security/technicianScope';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -38,19 +40,30 @@ export default function InterventionLiveTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
   const blueprints = useGmaoStore((s) => s.blueprints);
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
+  const scopedInterventions = useMemo(() => {
+    if (!isTechUser) return interventions;
+    return (interventions || []).filter((i) => matchesTechnicianRecord(i, user, _technicians));
+  }, [interventions, isTechUser, user, _technicians]);
+
   // Active intervention object
   const activeIntervention = useMemo(() => {
     if (!activeLiveId) {
-      // Pick first in_progress BT if none explicitly active
-      return interventions.find((i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE') && i.num_bt) || null;
+      // Pick first in_progress BT if none explicitly active (within technician scope)
+      return (
+        scopedInterventions.find(
+          (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE') && i.num_bt
+        ) || null
+      );
     }
-    return interventions.find((i) => i.id === activeLiveId) || null;
-  }, [interventions, activeLiveId]);
+    return scopedInterventions.find((i) => i.id === activeLiveId) || null;
+  }, [scopedInterventions, activeLiveId]);
 
   // Fast Machine Lookup Map
   const machineMap = useMemo(() => {

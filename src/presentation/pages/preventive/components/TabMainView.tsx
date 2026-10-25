@@ -24,6 +24,7 @@ import {
   Filter,
   CalendarRange,
   FingerprintPattern,
+  Lock,
 } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { useI18n } from '../../../../i18n/I18nContext';
@@ -45,6 +46,13 @@ import {
 } from '../../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../../core/domain/EntrepotItem';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
+import { useAuth } from '../../../../context/AuthContext';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianDisplayName,
+  getTechnicianBadgeLabel,
+} from '../../../../core/security/technicianScope';
 
 export { buildConsumablePdrInventory };
 
@@ -81,6 +89,28 @@ export default function TabMainView({
   _onNavigateToMachine,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
+  const techDisplayName = useMemo(
+    () => getTechnicianDisplayName(user, technicians),
+    [user, technicians]
+  );
+  const techBadgeLabel = useMemo(
+    () => getTechnicianBadgeLabel(user, technicians),
+    [user, technicians]
+  );
+
+  // R4 Row-Level Technician Scope: lock base tasks & executions to the logged-in technician
+  const scopedTasks = useMemo(() => {
+    if (!isTechUser) return tasks;
+    return (tasks || []).filter((task) => matchesTechnicianRecord(task, user, technicians));
+  }, [tasks, isTechUser, user, technicians]);
+
+  const scopedExecutions = useMemo(() => {
+    if (!isTechUser) return executions;
+    return (executions || []).filter((ex) => matchesTechnicianRecord(ex, user, technicians));
+  }, [executions, isTechUser, user, technicians]);
+
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [internalViewMode, setInternalViewMode] = useState('matrix'); // 'matrix' | 'calendar' | 'list' | 'analytics'
   const viewMode = controlledViewMode !== undefined ? controlledViewMode : internalViewMode;
@@ -110,15 +140,15 @@ export default function TabMainView({
 
   const taskMachineMap = useMemo(() => {
     const map = new Map();
-    if (Array.isArray(tasks)) {
-      tasks.forEach((t) => {
+    if (Array.isArray(scopedTasks)) {
+      scopedTasks.forEach((t) => {
         if (t?.id_machine && !map.has(t.id_machine)) {
           map.set(t.id_machine, t);
         }
       });
     }
     return map;
-  }, [tasks]);
+  }, [scopedTasks]);
   
   // Filters
   const [selectedZone, setSelectedZone] = useState('ALL');
@@ -133,8 +163,8 @@ export default function TabMainView({
 
   // Annotate tasks with orphan status
   const tasksWithOrphanFlag = useMemo(
-    () => dataIntegrityService.annotatePreventiveOrphans(tasks, machines),
-    [tasks, machines]
+    () => dataIntegrityService.annotatePreventiveOrphans(scopedTasks, machines),
+    [scopedTasks, machines]
   );
 
   const orphanCount = useMemo(
@@ -308,15 +338,15 @@ export default function TabMainView({
   }, [tasksWithOrphanFlag, deferredSearchQuery, selectedZone, selectedMachine, selectedBlueprint, machines, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
 
   const stats = useMemo(() => {
-    const total = tasks.length;
-    const aFaire = tasks.filter((t) => t.etat === 'À faire').length;
-    const fait = tasks.filter((t) => t.etat === 'Fait').length;
-    const enRetard = tasks.filter((t) => t.etat === 'En retard').length;
+    const total = scopedTasks.length;
+    const aFaire = scopedTasks.filter((t) => t.etat === 'À faire').length;
+    const fait = scopedTasks.filter((t) => t.etat === 'Fait').length;
+    const enRetard = scopedTasks.filter((t) => t.etat === 'En retard').length;
     const complianceRate = total > 0 ? Math.round((fait / total) * 100) : 0;
-    const totalCost = tasks.reduce((acc, curr) => acc + Number(curr.cout_cumule || 0), 0);
+    const totalCost = scopedTasks.reduce((acc, curr) => acc + Number(curr.cout_cumule || 0), 0);
 
     return { total, aFaire, fait, enRetard, complianceRate, totalCost: Math.round(totalCost * 100) / 100 };
-  }, [tasks]);
+  }, [scopedTasks]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -577,7 +607,9 @@ export default function TabMainView({
 
     setValidationData({
       date_realisation: new Date().toISOString().split('T')[0],
-      technicien: task.responsable || '',
+      technicien: isTechUser
+        ? techDisplayName || task.responsable || ''
+        : task.responsable || '',
       duree_reelle: task.duree_estimee || '15 min',
       taux_horaire: 35,
       observations: `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`,
@@ -860,7 +892,7 @@ export default function TabMainView({
                   {t('common.filters.title')}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                  {filteredTasks.length} / {tasks.length}
+                  {filteredTasks.length} / {scopedTasks.length}
                 </span>
                 {activeFiltersCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-md text-[9.5px] font-bold bg-amber-100 text-amber-800 border border-amber-300 animate-pulse">
@@ -958,7 +990,7 @@ export default function TabMainView({
                 title="Historique des Exécutions Préventives"
               >
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Historique ({executions?.length || 0})</span>
+                <span className="hidden sm:inline">Historique ({scopedExecutions?.length || 0})</span>
               </button>
             </div>
 
@@ -1007,7 +1039,7 @@ export default function TabMainView({
             {t('common.filters.status', 'Statut :')}
           </span>
           {[
-            { key: 'ALL', label: t('preventive.filters.all_tasks', 'Toutes les Tâches'), count: tasks.length, colorDot: null },
+            { key: 'ALL', label: t('preventive.filters.all_tasks', 'Toutes les Tâches'), count: scopedTasks.length, colorDot: null },
             { key: 'À faire', label: t('preventive.filters.to_do', 'À réaliser'), count: stats.aFaire, colorDot: 'bg-blue-500' },
             { key: 'Fait', label: t('preventive.filters.done', 'Fait & Conforme'), count: stats.fait, colorDot: 'bg-emerald-500' },
             { key: 'En retard', label: t('preventive.filters.overdue', 'En retard'), count: stats.enRetard, colorDot: 'bg-rose-500' },
@@ -1048,36 +1080,38 @@ export default function TabMainView({
           })}
         </div>
 
-        {/* QUICK ORPHAN FILTER BAR */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
-            <AlertTriangle className="w-3 h-3 text-amber-500" />
-            Intégrité Machine :
-          </span>
-          {[
-            { key: 'ALL', label: 'Toutes', count: tasksWithOrphanFlag.length },
-            { key: 'LINKED_ONLY', label: 'Liées (Actives)', count: tasksWithOrphanFlag.length - orphanCount },
-            { key: 'ORPHAN_ONLY', label: `Orphelines (${orphanCount})`, count: orphanCount, highlight: orphanCount > 0 },
-          ].map((preset) => {
-            const isSelected = orphanFilter === preset.key;
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => setOrphanFilter(preset.key)}
-                className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? 'bg-amber-600 text-white shadow-xs font-bold'
-                    : preset.highlight
-                    ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold animate-pulse'
-                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 font-medium'
-                }`}
-              >
-                <span>{preset.label}</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* QUICK ORPHAN FILTER BAR (Admin / Engineering only) */}
+        {!isTechUser && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
+              <AlertTriangle className="w-3 h-3 text-amber-500" />
+              Intégrité Machine :
+            </span>
+            {[
+              { key: 'ALL', label: 'Toutes', count: tasksWithOrphanFlag.length },
+              { key: 'LINKED_ONLY', label: 'Liées (Actives)', count: tasksWithOrphanFlag.length - orphanCount },
+              { key: 'ORPHAN_ONLY', label: `Orphelines (${orphanCount})`, count: orphanCount, highlight: orphanCount > 0 },
+            ].map((preset) => {
+              const isSelected = orphanFilter === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => setOrphanFilter(preset.key)}
+                  className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    isSelected
+                      ? 'bg-amber-600 text-white shadow-xs font-bold'
+                      : preset.highlight
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold animate-pulse'
+                      : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 font-medium'
+                  }`}
+                >
+                  <span>{preset.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Search Input Bar (Full Width & Clean) */}
         <div className="relative w-full">
@@ -1252,22 +1286,37 @@ export default function TabMainView({
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>{t('common.technician', 'Technicien')}</span>
               <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200/80">
-                {t('preventive.filters.badges.assigned', 'Assigné')}
+                {isTechUser ? 'Verrouillé' : t('preventive.filters.badges.assigned', 'Assigné')}
               </span>
             </div>
-            <CustomSelect
-              value={selectedTech}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shadow-2xs">
-                  <User className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setSelectedTech(val);
-              }}
-              options={techOptions}
-              placeholder={t('preventive.filters.all_technicians', 'Tous Techniciens')}
-            />
+            {isTechUser ? (
+              <div
+                className="w-full h-9 px-2.5 rounded-xl bg-purple-50/70 border border-purple-200/90 flex items-center justify-between gap-2 text-xs font-bold text-purple-900 select-none"
+                title="Périmètre verrouillé sur votre session technicien"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shrink-0">
+                    <User className="w-3 h-3" />
+                  </span>
+                  <span className="truncate">{techBadgeLabel}</span>
+                </div>
+                <Lock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              </div>
+            ) : (
+              <CustomSelect
+                value={selectedTech}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shadow-2xs">
+                    <User className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  setSelectedTech(val);
+                }}
+                options={techOptions}
+                placeholder={t('preventive.filters.all_technicians', 'Tous Techniciens')}
+              />
+            )}
           </div>
         </div>
 
@@ -1452,7 +1501,7 @@ export default function TabMainView({
       {viewMode === 'analytics' && (
         <PreventiveAnalyticsView
           tasks={filteredTasks}
-          executions={executions}
+          executions={scopedExecutions}
           onDeleteExecution={onDeleteExecution}
           zones={zones}
           actions={actions}
@@ -1463,7 +1512,7 @@ export default function TabMainView({
       {/* VIEW 6: EXECUTIONS HISTORY (P1 Event-Sourced Factory Memory) */}
       {viewMode === 'executions' && (
         <PreventiveExecutionsHistoryView
-          executions={executions}
+          executions={scopedExecutions}
           onDeleteExecution={onDeleteExecution}
           onNavigateToMachine={onNavigateToMachine}
         />
@@ -1526,10 +1575,19 @@ export default function TabMainView({
                   <input
                     type="text"
                     required
+                    readOnly={isTechUser}
                     value={validationData.technicien}
-                    onChange={(e) => setValidationData({ ...validationData, technicien: e.target.value })}
+                    onChange={(e) => {
+                      if (!isTechUser) {
+                        setValidationData({ ...validationData, technicien: e.target.value });
+                      }
+                    }}
                     placeholder="Nom du technicien"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                    className={`w-full px-3 py-2 border rounded-xl ${
+                      isTechUser
+                        ? 'bg-purple-50/70 border-purple-200 text-purple-900 font-bold cursor-not-allowed'
+                        : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-emerald-500'
+                    }`}
                   />
                 </div>
               </div>

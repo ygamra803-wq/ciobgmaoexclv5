@@ -22,12 +22,19 @@ import {
   ChevronDown,
   Radio,
   Calendar,
+  Lock,
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianBadgeLabel,
+} from '../../../core/security/technicianScope';
 
 export default function ClotureRapportsTab({
   interventions = [],
@@ -38,6 +45,17 @@ export default function ClotureRapportsTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
+  const techBadgeLabel = useMemo(
+    () => getTechnicianBadgeLabel(user, technicians),
+    [user, technicians]
+  );
+  const scopedInterventions = useMemo(() => {
+    if (!isTechUser) return interventions;
+    return (interventions || []).filter((item) => matchesTechnicianRecord(item, user, technicians));
+  }, [interventions, isTechUser, user, technicians]);
+
   const resolveTechNom = (item) => {
     if (item.technicien_matricule) {
       const found = (technicians || []).find(
@@ -134,15 +152,15 @@ export default function ClotureRapportsTab({
 
   // KPI Metrics
   const kpiStats = useMemo(() => {
-    const total = interventions.length;
-    const closed = interventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
-    const arret = interventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
-    const withPdr = interventions.filter((i) => Boolean(i.pdr || i.pdr_ref)).length;
+    const total = scopedInterventions.length;
+    const closed = scopedInterventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
+    const arret = scopedInterventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
+    const withPdr = scopedInterventions.filter((i) => Boolean(i.pdr || i.pdr_ref)).length;
 
     // MTTR calculation
     let totalMinutes = 0;
     let countMinutes = 0;
-    interventions.forEach((i) => {
+    scopedInterventions.forEach((i) => {
       const minutes =
         i.temps_minutes ||
         (i.temps_intervention_calc ? CorrectiveCalculationService.timeStringToMinutes(i.temps_intervention_calc) : 0);
@@ -156,11 +174,11 @@ export default function ClotureRapportsTab({
     const mttrFormatted = CorrectiveCalculationService.minutesToTimeString(avgMinutes);
 
     return { total, closed, arret, withPdr, avgMinutes, mttrFormatted };
-  }, [interventions]);
+  }, [scopedInterventions]);
 
   // Filtered interventions
   const filteredInterventions = useMemo(() => {
-    return interventions.filter((item) => {
+    return scopedInterventions.filter((item) => {
       if (selectedStatus === 'CLOTURE' && item.statut !== 'CLOTURE') return false;
       if (selectedStatus === 'ARRET' && !item.arret_machine) return false;
       if (selectedStatus === 'PDR' && !item.pdr && !item.pdr_ref) return false;
@@ -190,7 +208,7 @@ export default function ClotureRapportsTab({
       }
       return true;
     });
-  }, [interventions, selectedStatus, selectedMachine, selectedTech, selectedTypePanne, searchTerm]);
+  }, [scopedInterventions, selectedStatus, selectedMachine, selectedTech, selectedTypePanne, searchTerm]);
 
   // Sorting
   const sortedInterventions = useMemo(() => {
@@ -622,7 +640,7 @@ export default function ClotureRapportsTab({
                   {t('common.filters.title')}
                 </span>
                 <span className="bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg text-xs font-bold border border-emerald-200/70 shadow-2xs">
-                  {filteredInterventions.length} rapport{filteredInterventions.length > 1 ? 's' : ''} affiché{filteredInterventions.length > 1 ? 's' : ''} / {interventions.length}
+                  {filteredInterventions.length} rapport{filteredInterventions.length > 1 ? 's' : ''} affiché{filteredInterventions.length > 1 ? 's' : ''} / {scopedInterventions.length}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
@@ -665,7 +683,7 @@ export default function ClotureRapportsTab({
             {
               key: 'ALL',
               label: 'Tous les Rapports',
-              count: interventions.length,
+              count: scopedInterventions.length,
               activeBg: 'bg-slate-900 text-white shadow-xs',
               colorDot: null,
             },
@@ -801,29 +819,44 @@ export default function ClotureRapportsTab({
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Intervenant</span>
               <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
-                Col. D
+                {isTechUser ? 'Verrouillé' : 'Col. D'}
               </span>
             </div>
-            <CustomSelect
-              value={selectedTech}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
-                  <User className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setSelectedTech(val);
-                setCurrentPage(1);
-              }}
-              searchable
-              options={[
-                { value: 'ALL', label: `Tous les Techniciens (${techs.length})` },
-                ...techs.map((t) => ({
-                  value: t,
-                  label: t,
-                })),
-              ]}
-            />
+            {isTechUser ? (
+              <div
+                className="w-full h-9 px-2.5 rounded-xl bg-blue-50/70 border border-blue-200/90 flex items-center justify-between gap-2 text-xs font-bold text-blue-900 select-none"
+                title="Périmètre verrouillé sur votre session technicien"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shrink-0">
+                    <User className="w-3 h-3" />
+                  </span>
+                  <span className="truncate">{techBadgeLabel}</span>
+                </div>
+                <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              </div>
+            ) : (
+              <CustomSelect
+                value={selectedTech}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
+                    <User className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  setSelectedTech(val);
+                  setCurrentPage(1);
+                }}
+                searchable
+                options={[
+                  { value: 'ALL', label: `Tous les Techniciens (${techs.length})` },
+                  ...techs.map((t) => ({
+                    value: t,
+                    label: t,
+                  })),
+                ]}
+              />
+            )}
           </div>
 
           {/* 4. Type Panne Filter (Col. I) */}

@@ -19,6 +19,13 @@ import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianBadgeLabel,
+} from '../../../core/security/technicianScope';
 import * as XLSX from 'xlsx';
 
 export default function CorrectiveView({
@@ -57,6 +64,8 @@ export default function CorrectiveView({
   onNavigateToTab: _onNavigateToTab,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
 
   // Local active tab fallback if not controlled from router
   const [activeTab, setActiveTab] = useState(subTab || 'corrective_di');
@@ -144,17 +153,21 @@ export default function CorrectiveView({
     }
   };
 
-  // Badge counts
+  // Badge counts (scoped to technician for BTs & closed reports when role is TECHNICIEN)
+  const techScopedInterventions = isTechUser
+    ? interventions.filter((i) => matchesTechnicianRecord(i, user, technicians))
+    : interventions;
+
   const pendingDiCount = interventions.filter(
     (i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION'
   ).length;
-  const inProgressBtCount = interventions.filter(
+  const inProgressBtCount = techScopedInterventions.filter(
     (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR') && i.num_bt
   ).length;
-  const closedCount = interventions.filter((i) => i.statut === 'CLOTURE').length;
+  const closedCount = techScopedInterventions.filter((i) => i.statut === 'CLOTURE').length;
   const isLiveRunning = Boolean(activeLiveId);
 
-  const tabs = [
+  const allTabs = [
     {
       id: 'corrective_di',
       label: t('corrective.tabs.di'),
@@ -189,6 +202,10 @@ export default function CorrectiveView({
     },
   ];
 
+  const tabs = allTabs.filter((tab) =>
+    AuthorizationService.canAccessTab(user?.role || 'VIEWER', tab.id)
+  );
+
   return (
     <div className="space-y-6 select-none font-sans max-w-[2200px] mx-auto pb-12">
       {/* 1. Top Executive Banner & Action Buttons + Integrated Sub-Tabs (BDR Light GMAO Header Card Archetype) */}
@@ -209,8 +226,13 @@ export default function CorrectiveView({
                 Feuilles Rapport & Base
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono">
-                {t('corrective.interventions_count', { count: interventions.length.toLocaleString() })}
+                {t('corrective.interventions_count', { count: techScopedInterventions.length.toLocaleString() })}
               </span>
+              {isTechUser && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 font-mono">
+                  Mes Interventions · {getTechnicianBadgeLabel(user, technicians)}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
               {t('corrective.subtitle')}
@@ -223,10 +245,12 @@ export default function CorrectiveView({
           {/* Top Row: Iconic 3D Circular Action Buttons */}
           <div className="flex items-center justify-end gap-2">
             {/* 3D Formula Circular Trigger Button */}
-            <FormulasModalButton
-              onClick={() => setShowFormulasModal(true)}
-              title={t('corrective.buttons.formulas')}
-            />
+            {!isTechUser && (
+              <FormulasModalButton
+                onClick={() => setShowFormulasModal(true)}
+                title={t('corrective.buttons.formulas')}
+              />
+            )}
 
             {/* 3D Circular Nouvelle Demande DI Button */}
             <Action3DButton
@@ -253,26 +277,28 @@ export default function CorrectiveView({
             />
 
             {/* 3D Circular Reset Seed Button */}
-            <Action3DButton
-              variant="circle"
-              color="slate"
-              icon={RefreshCw}
-              onClick={async () => {
-                const result = await onResetToSeed?.({ machines });
-                if (result?.cancelled) return;
-                // Dictionaries only if interventions reset succeeded
-                await onResetActionsToSeed?.();
-                showToast?.(
-                  `Correctif réinitialisé (${result?.restoredCount ?? (result?.items || []).length} interventions).` +
-                    (result?.orphanCountAfter
-                      ? ` ${result.orphanCountAfter} orpheline(s) possibles — Paramètres > Intégrité.`
-                      : ''),
-                  result?.orphanCountAfter ? 'warning' : 'success'
-                );
-              }}
-              title={t('corrective.buttons.reset_seed')}
-              ariaLabel="Réinitialiser données"
-            />
+            {!isTechUser && (
+              <Action3DButton
+                variant="circle"
+                color="slate"
+                icon={RefreshCw}
+                onClick={async () => {
+                  const result = await onResetToSeed?.({ machines });
+                  if (result?.cancelled) return;
+                  // Dictionaries only if interventions reset succeeded
+                  await onResetActionsToSeed?.();
+                  showToast?.(
+                    `Correctif réinitialisé (${result?.restoredCount ?? (result?.items || []).length} interventions).` +
+                      (result?.orphanCountAfter
+                        ? ` ${result.orphanCountAfter} orpheline(s) possibles — Paramètres > Intégrité.`
+                        : ''),
+                    result?.orphanCountAfter ? 'warning' : 'success'
+                  );
+                }}
+                title={t('corrective.buttons.reset_seed')}
+                ariaLabel="Réinitialiser données"
+              />
+            )}
           </div>
 
           {/* Bottom Row: Navigation SubTabs Container (5 Main Daily Operational Pages) */}

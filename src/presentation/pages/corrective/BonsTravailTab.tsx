@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   FileText,
   Radio,
+  Lock,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
@@ -27,6 +28,12 @@ import PeriodFilterBar from '../../components/common/PeriodFilterBar';
 import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePeriodUtils';
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
+import { useAuth } from '../../../context/AuthContext';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianBadgeLabel,
+} from '../../../core/security/technicianScope';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -43,6 +50,13 @@ export default function BonsTravailTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
+  const techBadgeLabel = useMemo(
+    () => getTechnicianBadgeLabel(user, technicians),
+    [user, technicians]
+  );
+
   const resolveTechNom = (bt) => {
     if (bt.technicien_matricule) {
       const found = (technicians || []).find(
@@ -88,10 +102,16 @@ export default function BonsTravailTab({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // BTs are interventions that have a num_bt
+  // BTs are interventions that have a num_bt (scoped to logged-in technician when role is TECHNICIEN)
   const bts = useMemo(() => {
-    return interventions.filter((item) => Boolean(item.num_bt));
-  }, [interventions]);
+    return interventions.filter((item) => {
+      if (!item.num_bt) return false;
+      if (isTechUser && !matchesTechnicianRecord(item, user, technicians)) {
+        return false;
+      }
+      return true;
+    });
+  }, [interventions, isTechUser, user, technicians]);
 
   // Annotate BTs with orphan status
   const btsWithOrphan = useMemo(
@@ -809,44 +829,46 @@ export default function BonsTravailTab({
           })}
         </div>
 
-        {/* Orphan Filter Bar */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar pt-2 border-t border-slate-100">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
-            <AlertTriangle className="w-3 h-3 text-amber-500" />
-            Intégrité Machine :
-          </span>
-          {[
-            { key: 'ALL', label: 'Toutes', count: btsWithOrphan.length },
-            { key: 'LINKED_ONLY', label: 'Liées (Actives)', count: btsWithOrphan.length - orphanCount },
-            { key: 'ORPHAN_ONLY', label: `Orphelines (${orphanCount})`, count: orphanCount, highlight: orphanCount > 0 },
-          ].map((preset) => {
-            const isSelected = orphanFilter === preset.key;
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => {
-                  setOrphanFilter(preset.key);
-                  setCurrentPage(1);
-                }}
-                className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? preset.highlight
-                      ? 'bg-amber-600 text-white font-bold shadow-xs'
-                      : 'bg-blue-600 text-white font-bold shadow-xs'
-                    : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700 border border-slate-200/60 font-medium'
-                }`}
-              >
-                <span>{preset.label}</span>
-                <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
-                  isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 border border-slate-200/60'
-                }`}>
-                  {preset.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Orphan Filter Bar (Admin / Engineering only) */}
+        {!isTechUser && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar pt-2 border-t border-slate-100">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
+              <AlertTriangle className="w-3 h-3 text-amber-500" />
+              Intégrité Machine :
+            </span>
+            {[
+              { key: 'ALL', label: 'Toutes', count: btsWithOrphan.length },
+              { key: 'LINKED_ONLY', label: 'Liées (Actives)', count: btsWithOrphan.length - orphanCount },
+              { key: 'ORPHAN_ONLY', label: `Orphelines (${orphanCount})`, count: orphanCount, highlight: orphanCount > 0 },
+            ].map((preset) => {
+              const isSelected = orphanFilter === preset.key;
+              return (
+                <button
+                  key={preset.key}
+                  type="button"
+                  onClick={() => {
+                    setOrphanFilter(preset.key);
+                    setCurrentPage(1);
+                  }}
+                  className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    isSelected
+                      ? preset.highlight
+                        ? 'bg-amber-600 text-white font-bold shadow-xs'
+                        : 'bg-blue-600 text-white font-bold shadow-xs'
+                      : 'bg-slate-100/80 hover:bg-slate-200 text-slate-700 border border-slate-200/60 font-medium'
+                  }`}
+                >
+                  <span>{preset.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-white text-slate-600 border border-slate-200/60'
+                  }`}>
+                    {preset.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* 5-Column Multi-Criteria Filter Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
@@ -893,29 +915,44 @@ export default function BonsTravailTab({
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Intervenant</span>
               <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200/80">
-                Col. D
+                {isTechUser ? 'Verrouillé' : 'Col. D'}
               </span>
             </div>
-            <CustomSelect
-              value={filterTech}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
-                  <User className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setFilterTech(val);
-                setCurrentPage(1);
-              }}
-              searchable
-              options={[
-                { value: 'ALL', label: `Tous les Techniciens (${availableTechs.length})` },
-                ...availableTechs.map((tech) => ({
-                  value: tech,
-                  label: tech,
-                })),
-              ]}
-            />
+            {isTechUser ? (
+              <div
+                className="w-full h-9 px-2.5 rounded-xl bg-blue-50/70 border border-blue-200/90 flex items-center justify-between gap-2 text-xs font-bold text-blue-900 select-none"
+                title="Périmètre BT verrouillé sur votre session technicien"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shrink-0">
+                    <User className="w-3 h-3" />
+                  </span>
+                  <span className="truncate">{techBadgeLabel}</span>
+                </div>
+                <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              </div>
+            ) : (
+              <CustomSelect
+                value={filterTech}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
+                    <User className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  setFilterTech(val);
+                  setCurrentPage(1);
+                }}
+                searchable
+                options={[
+                  { value: 'ALL', label: `Tous les Techniciens (${availableTechs.length})` },
+                  ...availableTechs.map((tech) => ({
+                    value: tech,
+                    label: tech,
+                  })),
+                ]}
+              />
+            )}
           </div>
 
           {/* 3. Machine Filter (Col. A) */}

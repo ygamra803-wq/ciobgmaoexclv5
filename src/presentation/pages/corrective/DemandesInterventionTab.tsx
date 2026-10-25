@@ -32,6 +32,11 @@ import { filterActiveMachines } from '../../../utils/activeMachines';
 import { getBlueprintCommonFailuresForMachine, rankStockItemsByMachineBom } from '../../../core/domain';
 import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { useAuth } from '../../../context/AuthContext';
+import {
+  isTechnicianRole,
+  getTechnicianDisplayName,
+} from '../../../core/security/technicianScope';
 
 export default function DemandesInterventionTab({
   interventions = [],
@@ -56,6 +61,12 @@ export default function DemandesInterventionTab({
   onClearPreset,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const isTechUser = isTechnicianRole(user);
+  const techDisplayName = useMemo(
+    () => getTechnicianDisplayName(user, technicians),
+    [user, technicians]
+  );
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState(null); // holds selected DI
@@ -600,7 +611,9 @@ export default function DemandesInterventionTab({
     const suffix = di.id ? String(di.id).replace(/\D/g, '').slice(-4) || '1001' : '1001';
     setConvertForm({
       num_bt: di.num_bt || `BT-${suffix}`,
-      intervenant: di.intervenant || allTechnicianOptions[0]?.nom || 'm_hammed',
+      intervenant:
+        di.intervenant ||
+        (isTechUser && techDisplayName ? techDisplayName : allTechnicianOptions[0]?.nom || 'm_hammed'),
       priorite: di.priorite || 'HAUTE',
       travail_a_faire: di.travail_a_faire || '',
     });
@@ -613,6 +626,7 @@ export default function DemandesInterventionTab({
 
     onConvertToBt(showConvertModal.id, {
       ...convertForm,
+      ...(isTechUser && user?.personnelId ? { technicien_matricule: user.personnelId } : {}),
     });
 
     showToast?.(`DI convertie en Bon de Travail ${convertForm.num_bt}`, 'success');
