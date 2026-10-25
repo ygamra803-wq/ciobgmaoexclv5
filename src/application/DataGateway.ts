@@ -4,6 +4,7 @@ import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 import { sanitizeObject } from '../utils/sanitize';
 import { ValidationService } from '../core/validation/ValidationService';
+import { AuthService } from '../core/security/AuthService';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedFamilies from '../data/machines/seedFamilies.json';
@@ -428,6 +429,13 @@ export const DataGateway = {
     this.saveCorrectiveIntervenants(seedIntervenants);
 
     this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
+    try {
+      new AuthService().syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+        activateByDefault: true,
+      });
+    } catch {
+      /* ignore auth sync error in headless tests */
+    }
 
     this.saveWarehouseItems(seedWarehouseItems);
     this.saveEntrepotComponents(seedEntrepotComponents);
@@ -568,6 +576,11 @@ export const DataGateway = {
     this.saveCorrectiveIntervenants([]);
 
     this.savePersonnel([], [], []);
+    try {
+      new AuthService().clearPersonnelAuthAccounts(true);
+    } catch {
+      /* ignore auth clear error in headless tests */
+    }
 
     this.saveWarehouseItems([]);
     this.saveEntrepotComponents([]);
@@ -761,6 +774,16 @@ export const DataGateway = {
     this.saveCorrectiveTravaux(correctiveTravauxAFaire);
     this.saveCorrectiveIntervenants(correctiveIntervenants);
     this.savePersonnel(users, technicians, operations);
+    try {
+      const authSvc = new AuthService();
+      if (technicians.length > 0) {
+        authSvc.syncTechnicianAccountsFromPersonnel(technicians, { activateByDefault: true });
+      } else if (!hasData) {
+        authSvc.clearPersonnelAuthAccounts(true);
+      }
+    } catch {
+      /* ignore */
+    }
     this.saveWarehouseItems(warehouseItems);
     this.saveEntrepotComponents(entrepotComponents);
     this.saveCompGroups(compGroups);
@@ -918,6 +941,13 @@ export const DataGateway = {
       case 'users':
         this.saveZones(seedZones);
         this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
+        try {
+          new AuthService().syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+            activateByDefault: true,
+          });
+        } catch {
+          /* ignore */
+        }
         if (setters.setZones) setters.setZones(seedZones);
         if (setters.setUsers) setters.setUsers(seedUsers);
         if (setters.setTechnicians) setters.setTechnicians(seedTechnicians);
@@ -1019,6 +1049,11 @@ export const DataGateway = {
       case 'users':
         this.saveZones([]);
         this.savePersonnel([], [], []);
+        try {
+          new AuthService().clearPersonnelAuthAccounts(true);
+        } catch {
+          /* ignore */
+        }
         if (setters.setZones) setters.setZones([]);
         if (setters.setUsers) setters.setUsers([]);
         if (setters.setTechnicians) setters.setTechnicians([]);

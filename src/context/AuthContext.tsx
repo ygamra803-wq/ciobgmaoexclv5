@@ -8,9 +8,21 @@ import { SecurityService } from '../core/security/SecurityService';
 const AuthContext = createContext(null);
 
 const LoginSchema = z.object({
-  username: z.string().min(3, "Nom d'utilisateur d'au moins 3 caractères requis").max(50, "Nom d'utilisateur trop long (max 50)").regex(/^[a-zA-Z0-9_-]+$/, "Le nom d'utilisateur contient des caractères invalides"),
-  password: z.string().min(3, "Le mot de passe doit comporter au moins 3 caractères").max(128, "Mot de passe trop long (max 128)"),
-  pin: z.string().min(3, "Le code PIN doit comporter au moins 3 caractères").max(10, "Le code PIN est trop long").regex(/^\d+$/, "Le code PIN doit comporter uniquement des chiffres").optional(),
+  username: z
+    .string()
+    .min(2, "Nom d'utilisateur requis")
+    .max(50, "Nom d'utilisateur trop long (max 50)")
+    .regex(/^[a-zA-Z0-9_.-]+$/, "Le nom d'utilisateur contient des caractères invalides"),
+  password: z
+    .string()
+    .min(3, 'Le mot de passe doit comporter au moins 3 caractères')
+    .max(128, 'Mot de passe trop long (max 128)'),
+  pin: z
+    .string()
+    .min(3, 'Le code PIN doit comporter au moins 3 caractères')
+    .max(10, 'Le code PIN est trop long')
+    .regex(/^\d+$/, 'Le code PIN doit comporter uniquement des chiffres')
+    .optional(),
 });
 
 function getStoredAttempts() {
@@ -47,7 +59,9 @@ function checkRateLimit(username) {
   if (!record) return;
   if (record.lockUntil && Date.now() < record.lockUntil) {
     const remainingMinutes = Math.ceil((record.lockUntil - Date.now()) / 60000);
-    throw new Error(`Compte temporairement verrouillé (${remainingMinutes} min restantes). Trop de tentatives.`);
+    throw new Error(
+      `Compte temporairement verrouillé (${remainingMinutes} min restantes). Trop de tentatives.`
+    );
   }
   if (record.lockUntil && Date.now() >= record.lockUntil) {
     loginAttemptsMap.delete(username);
@@ -71,340 +85,231 @@ function resetFailedAttempts(username) {
 }
 
 export const AuthProvider = ({ children }) => {
+  const authService = Container.resolve('auth');
+
   const [user, setUser] = useState(null);
   const [isVaultExists, setIsVaultExists] = useState(() => vaultService.isVaultExists());
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
-  const [accounts, setAccounts] = useState([]);
+  const [accounts, setAccounts] = useState(() => authService?.getAvailableAccounts(true) || []);
 
-  // Resolve AuthService for legacy/storage compatibility
-  const authService = Container.resolve('auth');
+  const refreshAccountsState = useCallback(() => {
+    if (authService?.getAvailableAccounts) {
+      setAccounts(authService.getAvailableAccounts(true));
+    }
+  }, [authService]);
 
-  // Check initial session
+  // Check initial session & subscribe to account updates
   useEffect(() => {
     const sessionUser = authService?.getCurrentUser();
     if (sessionUser) {
       setUser(sessionUser);
     }
     setIsVaultExists(vaultService.isVaultExists());
-  }, [authService]);
+    refreshAccountsState();
 
-  // Initialisation du Master PIN pour la première fois - crée le coffre chiffré AES-256-GCM
-  const setupMasterPin = useCallback(async (pin) => {
-    const cleanPin = (pin || '').trim();
-    if (!cleanPin || cleanPin.length < 4) {
-      throw new Error('Le Master PIN doit comporter au moins 4 chiffres.');
-    }
-
-    const [adminHash, magHash, techHash, viewHash] = await Promise.all([
-      SecurityService.hashPassword(cleanPin),
-      SecurityService.hashPassword(`${cleanPin}#mag`),
-      SecurityService.hashPassword(`${cleanPin}#tech`),
-      SecurityService.hashPassword(`${cleanPin}#view`),
-    ]);
-
-    const defaultAccounts = [
-      {
-        id: 'ID-ADMIN-001',
-        code: 'admin',
-        username: 'admin',
-        libelle: 'Administrateur Système',
-        name: 'Administrateur',
-        role: 'ADMIN',
-        titleFr: 'Administrateur Système',
-        avatar: 'AD',
-        badgeColor: 'emerald',
-        passwordHash: adminHash,
-        description: 'Supervision complète, paramétrage & sécurité'
-      },
-      {
-        id: 'ID-MAG-001',
-        code: 'magasinier',
-        username: 'magasinier',
-        libelle: 'Responsable Magasin (RMG)',
-        name: 'Responsable Magasin',
-        role: 'RESPONSABLE_MAGASIN',
-        titleFr: 'Responsable Magasin (RMG)',
-        avatar: 'RM',
-        badgeColor: 'amber',
-        passwordHash: magHash,
-        description: 'Gestion du stock, réapprovisionnement & PDR'
-      },
-      {
-        id: 'ID-TECH-001',
-        code: 'tech',
-        username: 'tech',
-        libelle: 'Technicien Maintenance (TC)',
-        name: 'Technicien Maintenance',
-        role: 'TECHNICIEN',
-        titleFr: 'Technicien Maintenance (TC)',
-        avatar: 'TC',
-        badgeColor: 'blue',
-        passwordHash: techHash,
-        description: 'Bons de sortie, pannes & interventions'
-      },
-      {
-        id: 'ID-VIEW-001',
-        code: 'viewer',
-        username: 'viewer',
-        libelle: 'Observateur / Consultation',
-        name: 'Observateur',
-        role: 'VIEWER',
-        titleFr: 'Observateur / Consultation',
-        avatar: 'OB',
-        badgeColor: 'slate',
-        passwordHash: viewHash,
-        description: 'Accès lecture seule aux KPIs et tables'
-      },
-    ];
-
-    const newVault = {
-      version: 2,
-      createdAt: new Date().toISOString(),
-      accounts: defaultAccounts,
+    const handleAccountsChange = () => {
+      refreshAccountsState();
+      const latestSession = authService?.getCurrentUser();
+      setUser(latestSession || null);
     };
 
-    await vaultService.encryptVault(newVault, cleanPin);
-    await vaultService.setPinHash(cleanPin);
-
-    // Clean up any legacy unencrypted pin from localStorage
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('gmao_admin_pin');
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gmao_auth_accounts_updated', handleAccountsChange);
+      window.addEventListener('storage', handleAccountsChange);
+      return () => {
+        window.removeEventListener('gmao_auth_accounts_updated', handleAccountsChange);
+        window.removeEventListener('storage', handleAccountsChange);
+      };
     }
+  }, [authService, refreshAccountsState]);
 
-    setIsVaultExists(true);
-    setIsVaultUnlocked(true);
-    setAccounts(defaultAccounts.map(({ passwordHash: _passwordHash, ...rest }) => rest));
+  // Initialisation du Master PIN pour la première fois - synchronise avec la source unique AuthService
+  const setupMasterPin = useCallback(
+    async (pin) => {
+      const cleanPin = (pin || '').trim();
+      if (!cleanPin || cleanPin.length < 4) {
+        throw new Error('Le Master PIN doit comporter au moins 4 chiffres.');
+      }
 
-    return true;
-  }, []);
+      const adminHash = await SecurityService.hashPassword(cleanPin);
+      const storedUsers = authService?.getStoredUsersList
+        ? [...authService.getStoredUsersList()]
+        : [];
+
+      const updatedUsers = storedUsers.map((u) => {
+        if (u.username === 'admin' || u.role === 'ADMIN') {
+          const nextAdmin = { ...u, passwordHash: adminHash };
+          delete nextAdmin.defaultPass;
+          return nextAdmin;
+        }
+        return u;
+      });
+
+      if (authService?.saveStoredUsersList) {
+        authService.saveStoredUsersList(updatedUsers, true);
+      }
+
+      const newVault = {
+        version: 2,
+        createdAt: new Date().toISOString(),
+        accounts: updatedUsers,
+      };
+
+      await vaultService.encryptVault(newVault, cleanPin);
+      await vaultService.setPinHash(cleanPin);
+
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('gmao_admin_pin');
+      }
+
+      setIsVaultExists(true);
+      setIsVaultUnlocked(true);
+      refreshAccountsState();
+
+      return true;
+    },
+    [authService, refreshAccountsState]
+  );
 
   // Déchiffrement du coffre-fort avec le Master PIN
-  const unlockVault = useCallback(async (pin) => {
-    const cleanPin = (pin || '').trim();
-    if (!cleanPin) throw new Error('Veuillez saisir le code Master PIN.');
-    const vault = await vaultService.decryptVault(cleanPin);
-    if (vault && Array.isArray(vault.accounts)) {
-      setAccounts(vault.accounts.map(({ passwordHash: _passwordHash, ...rest }) => rest));
-      setIsVaultUnlocked(true);
-      await vaultService.setPinHash(cleanPin);
-      return vault;
-    }
-    throw new Error('Structure du coffre-fort invalide.');
-  }, []);
+  const unlockVault = useCallback(
+    async (pin) => {
+      const cleanPin = (pin || '').trim();
+      if (!cleanPin) throw new Error('Veuillez saisir le code Master PIN.');
+      const vault = await vaultService.decryptVault(cleanPin);
+      if (vault) {
+        setIsVaultUnlocked(true);
+        await vaultService.setPinHash(cleanPin);
+        refreshAccountsState();
+        return vault;
+      }
+      throw new Error('Structure du coffre-fort invalide.');
+    },
+    [refreshAccountsState]
+  );
 
   // Verrouillage du coffre-fort
   const lockVault = useCallback(() => {
     vaultService.clearMasterPin?.();
     setIsVaultUnlocked(false);
-    setAccounts([]);
     authService?.logout();
     setUser(null);
   }, [authService]);
 
-  // Liste des comptes disponibles sans exposer les mots de passe
-  const getAvailableAccounts = useCallback(() => {
-    if (accounts.length > 0) {
-      return accounts.map((acc) => ({
+  // Liste canonique des comptes disponibles (par défaut uniquement les comptes actifs pour l'écran de connexion)
+  const getAvailableAccounts = useCallback(
+    (includeInactive = false) => {
+      const list = authService?.getAvailableAccounts
+        ? authService.getAvailableAccounts(includeInactive)
+        : accounts.filter((a) => (includeInactive ? true : a.isActive !== false));
+
+      return list.map((acc) => ({
         id: acc.id,
-        code: acc.code || acc.username,
+        code: acc.code || acc.personnelId || acc.username,
         username: acc.username || acc.code,
         name: acc.name || acc.libelle,
-        libelle: acc.libelle || acc.name,
+        libelle: acc.libelle || acc.titleFr || acc.name,
         role: acc.role,
         titleFr: acc.titleFr || acc.role,
-        avatar: acc.avatar || (acc.code || 'US').substring(0, 2).toUpperCase(),
+        avatar: acc.avatar || (acc.name || acc.username || 'US').substring(0, 2).toUpperCase(),
         badgeColor: acc.badgeColor || 'slate',
         description: acc.description || '',
+        personnelId: acc.personnelId || null,
+        personnelName: acc.personnelName || acc.name || null,
+        id_zone: acc.id_zone || null,
+        specialite: acc.specialite || null,
+        isActive: acc.isActive !== false,
       }));
-    }
-    const legacyUsers = authService?.getAvailableAccounts() || [];
-    return legacyUsers.map((acc) => ({
-      id: acc.id,
-      code: acc.username,
-      username: acc.username,
-      name: acc.name,
-      libelle: acc.titleFr || acc.name,
-      role: acc.role,
-      titleFr: acc.titleFr || acc.role,
-      avatar: acc.avatar || (acc.username || 'US').substring(0, 2).toUpperCase(),
-      badgeColor: acc.badgeColor || 'slate',
-      description: acc.description || '',
-    }));
-  }, [accounts, authService]);
+    },
+    [accounts, authService]
+  );
 
-  // Authentification système : supporte le 2FA (Code + Mot de passe + Master PIN)
-  const login = useCallback(async (usernameOrParams, passwordParam, pinParam) => {
-    const usernameRaw = (typeof usernameOrParams === 'object' && usernameOrParams !== null)
-      ? (usernameOrParams.code || usernameOrParams.username || '')
-      : (usernameOrParams || '');
-    const passwordRaw = (typeof usernameOrParams === 'object' && usernameOrParams !== null)
-      ? (usernameOrParams.password || '')
-      : (passwordParam || '');
-    const pinRaw = (typeof usernameOrParams === 'object' && usernameOrParams !== null)
-      ? (usernameOrParams.pin || usernameOrParams.pinCode || '')
-      : (pinParam || '');
+  // Authentification système unifiée (supporte compte individuel + mot de passe ou Master PIN)
+  const login = useCallback(
+    async (usernameOrParams, passwordParam, pinParam) => {
+      const usernameRaw =
+        typeof usernameOrParams === 'object' && usernameOrParams !== null
+          ? usernameOrParams.code || usernameOrParams.username || ''
+          : usernameOrParams || '';
+      const passwordRaw =
+        typeof usernameOrParams === 'object' && usernameOrParams !== null
+          ? usernameOrParams.password || ''
+          : passwordParam || '';
+      const pinRaw =
+        typeof usernameOrParams === 'object' && usernameOrParams !== null
+          ? usernameOrParams.pin || usernameOrParams.pinCode || ''
+          : pinParam || '';
 
-    // 1. Zod Input Validation
-    try {
-      LoginSchema.parse({
-        username: usernameRaw,
-        password: passwordRaw,
-        pin: pinRaw || undefined,
-      });
-    } catch (err) {
-      throw new Error(`Validation des données : ${err.errors?.[0]?.message || 'Entrées invalides'}`, { cause: err });
-    }
+      try {
+        LoginSchema.parse({
+          username: String(usernameRaw || '').trim(),
+          password: String(passwordRaw || '').trim(),
+          pin: pinRaw ? String(pinRaw).trim() : undefined,
+        });
+      } catch (err) {
+        throw new Error(
+          `Validation des données : ${err.errors?.[0]?.message || 'Entrées invalides'}`,
+          { cause: err }
+        );
+      }
 
-    const username = usernameRaw.trim().toLowerCase();
-    const password = (passwordRaw || '').trim();
-    const pin = (pinRaw || '').trim();
+      const username = String(usernameRaw || '').trim().toLowerCase();
+      const password = String(passwordRaw || '').trim();
+      const pin = String(pinRaw || '').trim();
 
-    // 2. Brute Force Rate Limiting Check
-    checkRateLimit(username);
+      checkRateLimit(username);
 
-    try {
-      // Case 1: Vault exists and PIN is provided -> 2FA Zero-Knowledge decryption
-      if (vaultService.isVaultExists()) {
-        let vault = null;
-
-        // If user supplied PIN, decrypt vault with PIN
-        if (pin) {
+      try {
+        if (pin && vaultService.isVaultExists()) {
           try {
-            vault = await vaultService.decryptVault(pin);
+            await vaultService.decryptVault(pin);
+            setIsVaultUnlocked(true);
           } catch {
             recordFailedAttempt(username);
-            throw new Error('Master PIN incorrect : échec du déchiffrement du coffre-fort (AES-GCM).');
+            throw new Error(
+              'Master PIN incorrect : échec du déchiffrement du coffre-fort (AES-GCM).'
+            );
           }
         }
 
-        if (vault && Array.isArray(vault.accounts)) {
-          // Look up account in decrypted vault
-          const acc = vault.accounts.find(
-            (a) =>
-              (a.code && a.code.toLowerCase() === username) ||
-              (a.username && a.username.toLowerCase() === username) ||
-              (username === 'rmg' && (a.code === 'magasinier' || a.username === 'magasinier'))
-          );
-
-          if (!acc) {
-            recordFailedAttempt(username);
-            throw new Error(`Le compte "${username}" est introuvable dans le coffre-fort.`);
-          }
-
-          // Verify password with modern Web Crypto PBKDF2 (and legacy fallback)
-          const isOk = acc.passwordHash && (await SecurityService.comparePassword(password, acc.passwordHash));
-          if (!isOk) {
-            recordFailedAttempt(username);
-            throw new Error('Mot de passe incorrect.');
-          }
-
-          // Automatic seamless background upgrade if password was stored with legacy hash
-          if (acc.passwordHash && SecurityService.isLegacyHash(acc.passwordHash) && pin) {
-            try {
-              const modernHash = await SecurityService.hashPassword(password);
-              acc.passwordHash = modernHash;
-              await vaultService.encryptVault(vault, pin);
-            } catch {
-              // Non-blocking background upgrade
-            }
-          }
-
-          resetFailedAttempts(username);
-
-          // Create session
-          const sessionUser = {
-            id: acc.id,
-            code: acc.code || acc.username,
-            username: acc.username || acc.code,
-            name: acc.name || acc.libelle,
-            role: acc.role,
-            titleFr: acc.titleFr || acc.role,
-            avatar: acc.avatar || (acc.code || 'US').substring(0, 2).toUpperCase(),
-            badgeColor: acc.badgeColor || 'emerald',
-            authMethod: 'VAULT_2FA',
-            loginTime: Date.now(),
-          };
-
-          setUser(sessionUser);
-          setIsVaultUnlocked(true);
-          setAccounts(vault.accounts.map(({ passwordHash: _passwordHash, ...rest }) => rest));
-          if (authService?.saveSignedSession) {
-            authService.saveSignedSession(sessionUser);
-          } else {
-            sessionStorage.setItem('gmao_session_v2', JSON.stringify(sessionUser));
-          }
-          await accessLogService.recordLogin(sessionUser);
-          return sessionUser;
-        }
+        const loggedInUser = await authService.login(username, password);
+        resetFailedAttempts(username);
+        setUser(loggedInUser);
+        refreshAccountsState();
+        await accessLogService.recordLogin(loggedInUser);
+        return loggedInUser;
+      } catch (err) {
+        recordFailedAttempt(username);
+        throw err;
       }
+    },
+    [authService, refreshAccountsState]
+  );
 
-      // Case 2: Standard authentication fallback
-      const loggedInUser = await authService.login(username, password);
-      resetFailedAttempts(username);
-      setUser(loggedInUser);
-      await accessLogService.recordLogin(loggedInUser);
-      return loggedInUser;
-    } catch (err) {
-      recordFailedAttempt(username);
-      throw err;
-    }
-  }, [authService]);
+  // Authentification rapide par code PIN (Administrateur)
+  const loginWithPin = useCallback(
+    async (pin) => {
+      const cleanPin = (pin || '').trim();
+      if (!cleanPin) throw new Error('Veuillez saisir le code PIN.');
 
-  // Authentification rapide par code PIN
-  const loginWithPin = useCallback(async (pin) => {
-    const cleanPin = (pin || '').trim();
-    if (!cleanPin) throw new Error('Veuillez saisir le code PIN.');
+      const rateLimitKey = '__pin_login_attempts__';
+      checkRateLimit(rateLimitKey);
 
-    // Enforce rate limiting on PIN attempts
-    const rateLimitKey = '__pin_login_attempts__';
-    checkRateLimit(rateLimitKey);
-
-    // If vault exists, try decrypting vault with PIN
-    if (vaultService.isVaultExists()) {
       try {
-        const vault = await vaultService.decryptVault(cleanPin);
-        const adminAcc = vault.accounts.find((a) => a.role === 'ADMIN') || vault.accounts[0];
-        const sessionUser = {
-          id: adminAcc?.id || 'admin',
-          code: adminAcc?.code || 'admin',
-          username: adminAcc?.username || 'admin',
-          name: adminAcc?.name || 'Administrateur',
-          role: adminAcc?.role || 'ADMIN',
-          titleFr: adminAcc?.titleFr || 'Administrateur Système',
-          avatar: adminAcc?.avatar || 'AD',
-          badgeColor: 'emerald',
-          authMethod: 'VAULT_MASTER_PIN',
-          loginTime: Date.now(),
-        };
-        setUser(sessionUser);
+        const loggedInUser = await authService.loginWithPin(cleanPin);
+        setUser(loggedInUser);
         setIsVaultUnlocked(true);
-        setAccounts(vault.accounts.map(({ passwordHash: _passwordHash, ...rest }) => rest));
-        if (authService?.saveSignedSession) {
-          authService.saveSignedSession(sessionUser);
-        } else {
-          sessionStorage.setItem('gmao_session_v2', JSON.stringify(sessionUser));
-        }
-        await accessLogService.recordLogin(sessionUser);
+        refreshAccountsState();
+        await accessLogService.recordLogin(loggedInUser);
         resetFailedAttempts(rateLimitKey);
-        return sessionUser;
-      } catch {
+        return loggedInUser;
+      } catch (err) {
         recordFailedAttempt(rateLimitKey);
-        throw new Error('Master PIN incorrect : échec du déchiffrement du coffre-fort.');
+        throw err;
       }
-    }
-
-    // Fallback to authService PIN login with rate limiting
-    try {
-      const loggedInUser = await authService.loginWithPin(cleanPin);
-      setUser(loggedInUser);
-      await accessLogService.recordLogin(loggedInUser);
-      resetFailedAttempts(rateLimitKey);
-      return loggedInUser;
-    } catch (err) {
-      recordFailedAttempt(rateLimitKey);
-      throw err;
-    }
-  }, [authService]);
+    },
+    [authService, refreshAccountsState]
+  );
 
   const logout = useCallback(() => {
     accessLogService.recordLogout();
@@ -412,97 +317,92 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   }, [authService]);
 
-  // Mise à jour du mot de passe d'un compte dans le coffre chiffré
-  const updateUserPassword = useCallback(async (username, newPass, masterPin) => {
-    const cleanPass = (newPass || '').trim();
-    if (cleanPass.length < 4) {
-      throw new Error('Le mot de passe doit comporter au moins 4 caractères.');
-    }
-
-    if (vaultService.isVaultExists()) {
-      if (!masterPin) {
-        throw new Error('Veuillez saisir le Master PIN pour déverrouiller et mettre à jour le coffre-fort.');
+  const updateUserPassword = useCallback(
+    async (username, newPass, masterPin) => {
+      const cleanPass = (newPass || '').trim();
+      if (cleanPass.length < 4) {
+        throw new Error('Le mot de passe doit comporter au moins 4 caractères.');
       }
-      const vault = await vaultService.decryptVault(masterPin);
-      const idx = vault.accounts.findIndex(
-        (a) => (a.code && a.code.toLowerCase() === username.toLowerCase()) ||
-               (a.username && a.username.toLowerCase() === username.toLowerCase()) ||
-               a.id === username
-      );
-      if (idx === -1) {
-        throw new Error(`Le compte "${username}" est introuvable dans le coffre-fort.`);
+
+      if (vaultService.isVaultExists() && masterPin) {
+        await vaultService.decryptVault(masterPin);
       }
-      vault.accounts[idx].passwordHash = await SecurityService.hashPassword(cleanPass);
-      await vaultService.encryptVault(vault, masterPin);
-      setAccounts(vault.accounts.map(({ passwordHash: _passwordHash, ...rest }) => rest));
-      return vault.accounts[idx];
-    }
 
-    // Fallback
-    return authService?.updateUserPassword(username, cleanPass);
-  }, [authService]);
+      const updated = await authService?.updateUserPassword(username, cleanPass);
+      refreshAccountsState();
+      return updated;
+    },
+    [authService, refreshAccountsState]
+  );
 
-  // Basculement de session 2FA
-  const switchSessionToUser = useCallback(async (username, masterPin) => {
-    if (vaultService.isVaultExists()) {
-      if (!masterPin) {
-        throw new Error('Veuillez saisir le Master PIN pour confirmer le basculement de session (2FA).');
+  const switchSessionToUser = useCallback(
+    async (username, masterPin) => {
+      if (vaultService.isVaultExists() && masterPin) {
+        await vaultService.decryptVault(masterPin);
       }
-      const vault = await vaultService.decryptVault(masterPin);
-      const acc = vault.accounts.find(
-        (a) => (a.code && a.code.toLowerCase() === username.toLowerCase()) ||
-               (a.username && a.username.toLowerCase() === username.toLowerCase()) ||
-               a.id === username
-      );
-      if (!acc) throw new Error(`Le compte "${username}" est introuvable.`);
+      const newSession = authService?.switchSessionToUser(username);
+      setUser(newSession);
+      return newSession;
+    },
+    [authService]
+  );
 
-      const session = {
-        id: acc.id,
-        code: acc.code || acc.username,
-        username: acc.username || acc.code,
-        name: acc.name || acc.libelle,
-        role: acc.role,
-        titleFr: acc.titleFr || acc.role,
-        avatar: acc.avatar || (acc.code || 'US').substring(0, 2).toUpperCase(),
-        badgeColor: acc.badgeColor || 'slate',
-        authMethod: 'VAULT_SWITCH_2FA',
-        loginTime: Date.now(),
-      };
-      setUser(session);
-      if (authService?.saveSignedSession) {
-        authService.saveSignedSession(session);
-      } else {
-        sessionStorage.setItem('gmao_session_v2', JSON.stringify(session));
+  const resetAllAccountsToDefaults = useCallback(
+    async (masterPin) => {
+      if (vaultService.isVaultExists()) {
+        if (!masterPin) {
+          throw new Error('Veuillez saisir le Master PIN pour autoriser la réinitialisation.');
+        }
+        await vaultService.decryptVault(masterPin);
       }
-      return session;
-    }
-
-    const newSession = authService?.switchSessionToUser(username);
-    setUser(newSession);
-    return newSession;
-  }, [authService]);
-
-  // Réinitialisation du coffre-fort et des comptes
-  const resetAllAccountsToDefaults = useCallback(async (masterPin) => {
-    if (vaultService.isVaultExists()) {
-      if (!masterPin) {
-        throw new Error('Veuillez saisir le Master PIN pour autoriser la réinitialisation.');
+      vaultService.clearMasterPin?.();
+      localStorage.removeItem('gmao_vault_cipher_v2');
+      localStorage.removeItem('gmao_vault_iv_v2');
+      localStorage.removeItem('gmao_vault_pin_hash_v2');
+      setIsVaultExists(false);
+      setIsVaultUnlocked(false);
+      if (authService?.resetAllAccountsToDefaults) {
+        authService.resetAllAccountsToDefaults();
       }
-      await vaultService.decryptVault(masterPin);
-    }
-    // Re-setup master pin or reset vault
-    vaultService.clearMasterPin?.();
-    localStorage.removeItem('gmao_vault_cipher_v2');
-    localStorage.removeItem('gmao_vault_iv_v2');
-    localStorage.removeItem('gmao_vault_pin_hash_v2');
-    setIsVaultExists(false);
-    setIsVaultUnlocked(false);
-    setAccounts([]);
-    if (authService?.resetAllAccountsToDefaults) {
-      authService.resetAllAccountsToDefaults();
-    }
-    return true;
-  }, [authService]);
+      refreshAccountsState();
+      return true;
+    },
+    [authService, refreshAccountsState]
+  );
+
+  const upsertPersonnelAuthAccount = useCallback(
+    async (params) => {
+      const res = await authService?.upsertPersonnelAuthAccount(params);
+      refreshAccountsState();
+      return res;
+    },
+    [authService, refreshAccountsState]
+  );
+
+  const toggleAccountActive = useCallback(
+    (usernameOrIdOrPersonnelId, isActive) => {
+      const res = authService?.toggleAccountActive(usernameOrIdOrPersonnelId, isActive);
+      refreshAccountsState();
+      return res;
+    },
+    [authService, refreshAccountsState]
+  );
+
+  const removePersonnelAuthAccount = useCallback(
+    (personnelId) => {
+      const res = authService?.removePersonnelAuthAccount(personnelId);
+      refreshAccountsState();
+      return res;
+    },
+    [authService, refreshAccountsState]
+  );
+
+  const getAccountForPersonnel = useCallback(
+    (personnelId) => {
+      return authService?.getAccountForPersonnel(personnelId) || null;
+    },
+    [authService, accounts]
+  );
 
   return (
     <AuthContext.Provider
@@ -519,10 +419,18 @@ export const AuthProvider = ({ children }) => {
         loginWithPin,
         logout,
         getAvailableAccounts,
+        getAccountForPersonnel,
+        upsertPersonnelAuthAccount,
+        toggleAccountActive,
+        removePersonnelAuthAccount,
         isPinConfigured: () => vaultService.isVaultExists() || authService?.isPinConfigured(),
         getCurrentSessionUser: () => user || authService?.getCurrentUser(),
         updateUserPassword,
-        updateUserProfile: (username, updates) => authService?.updateUserProfile(username, updates),
+        updateUserProfile: (username, updates) => {
+          const res = authService?.updateUserProfile(username, updates);
+          refreshAccountsState();
+          return res;
+        },
         resetAllAccountsToDefaults,
         switchSessionToUser,
         hashPassword: (pass) => SecurityService.hashPassword(pass || ''),
@@ -539,3 +447,4 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => useContext(AuthContext);
 
 export default AuthContext;
+

@@ -22,6 +22,7 @@ import { analytics } from '../../../services/AnalyticsService';
 import { notificationService } from '../../../services/NotificationService';
 import { getParentModuleForTab } from './navConfig';
 import { storageService } from '../../../utils/storageService';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 
 export default function Header({
   currentTab,
@@ -95,7 +96,11 @@ export default function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   const activeParent = getParentModuleForTab(currentTab);
-  const childTabs = activeParent.children || [];
+  const childTabs = useMemo(() => {
+    const rawChildren = activeParent.children || [];
+    if (!currentUser) return rawChildren;
+    return rawChildren.filter((c) => AuthorizationService.canAccessTab(currentUser, c.id));
+  }, [activeParent, currentUser]);
 
   // Smart Dynamic Breadcrumbs Calculation
   const breadcrumbs = useMemo(() => {
@@ -850,19 +855,35 @@ export default function Header({
           {/* User Profile Account Card Pill - Only in Floating Mode (Fixed sidebar already has User Card at bottom) */}
           {!isStandardFixed && (
             <button
-              onClick={() => setCurrentTab('settings')}
+              onClick={() => {
+                if (!currentUser || AuthorizationService.canAccessTab(currentUser, 'settings')) {
+                  setCurrentTab('settings');
+                }
+              }}
               className="flex items-center gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
-              title="Mon Compte / Paramètres"
-              aria-label={`Compte utilisateur de ${currentUser?.name || 'Achraf'} - Accéder aux paramètres`}
+              title={
+                currentUser?.personnelId
+                  ? `${currentUser.name} (${currentUser.personnelId})`
+                  : 'Mon Compte'
+              }
+              aria-label={`Compte utilisateur de ${currentUser?.name || 'Administrateur'}`}
             >
               {/* Rounded Emerald Avatar Icon matching sidebar */}
-              <div className="w-7 h-7 rounded-lg bg-emerald-700 text-white font-extrabold text-[10.5px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform" aria-hidden="true">
+              <div
+                className="w-7 h-7 rounded-lg bg-emerald-700 text-white font-extrabold text-[10.5px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform"
+                aria-hidden="true"
+              >
                 {currentUser?.avatar || 'RM'}
               </div>
               {/* User Name & Role matching sidebar typography */}
               <div className="hidden xl:block text-left leading-tight min-w-0 pr-0.5">
-                <div className="text-[11.5px] font-bold text-slate-900 truncate">
-                  {currentUser?.name || 'Achraf'}
+                <div className="text-[11.5px] font-bold text-slate-900 truncate flex items-center gap-1">
+                  <span>{currentUser?.name || 'Administrateur'}</span>
+                  {currentUser?.personnelId && (
+                    <span className="text-[9.5px] font-mono text-blue-700 bg-blue-50 px-1 rounded border border-blue-200">
+                      {currentUser.personnelId}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[9.5px] font-semibold text-emerald-700 truncate">
                   {currentUser?.titleFr || currentUser?.role || 'Administrateur'}

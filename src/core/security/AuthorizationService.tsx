@@ -154,9 +154,6 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'stock',
     'sortie',
     'machines',
-    'families',
-    'templates',
-    'blueprints',
     'preventive',
     'corrective',
     'corrective_di',
@@ -166,7 +163,6 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective_analytics',
     'corrective_history',
     'corrective_pieces',
-    'zones',
     'guide',
   ]),
   [ROLES.OPERATEUR]: new Set([

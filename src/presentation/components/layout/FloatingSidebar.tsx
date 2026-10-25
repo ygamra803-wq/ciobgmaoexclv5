@@ -1,9 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Settings, LogOut, Sun, Moon, LayoutDashboard } from 'lucide-react';
 import { PARENT_MODULES, getParentModuleForTab } from './navConfig';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { analytics } from '../../../services/AnalyticsService';
 import { storageService } from '../../../utils/storageService';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 
 const MODULE_THEME = {
   dashboard: {
@@ -168,6 +170,20 @@ export default function FloatingSidebar({
   onLogout,
 }) {
   const { t } = useTranslation();
+  const { user: currentUser } = useAuth();
+
+  const visibleModules = useMemo(() => {
+    if (!currentUser) return PARENT_MODULES;
+    return PARENT_MODULES.filter((mod) =>
+      (mod.children || [{ id: mod.id }]).some((child) =>
+        AuthorizationService.canAccessTab(currentUser, child.id)
+      )
+    );
+  }, [currentUser]);
+
+  const canAccessSettings =
+    !currentUser || AuthorizationService.canAccessTab(currentUser, 'settings');
+
   const [sidebarTheme, setSidebarTheme] = useState(() => {
     return storageService.getItem('gmao_sidebar_theme') || 'light';
   });
@@ -261,7 +277,11 @@ export default function FloatingSidebar({
     : (t(`nav.${activeParent?.id}`) !== `nav.${activeParent?.id}` ? t(`nav.${activeParent?.id}`) : activeParent?.label || 'Navigation');
 
   const handleSelectParent = (module) => {
-    const firstChild = module.children[0]?.id || module.id;
+    const allowedChild =
+      (module.children || []).find(
+        (c) => !currentUser || AuthorizationService.canAccessTab(currentUser, c.id)
+      ) || module.children?.[0];
+    const firstChild = allowedChild?.id || module.id;
     analytics.track('navigation_tab_changed', 'navigation', {
       fromTab: currentTab,
       toTab: firstChild,
@@ -273,16 +293,16 @@ export default function FloatingSidebar({
     }
   };
 
-
   const handleModuleKeyDown = (e, index) => {
+    if (visibleModules.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      const nextIdx = (index + 1) % PARENT_MODULES.length;
-      handleSelectParent(PARENT_MODULES[nextIdx]);
+      const nextIdx = (index + 1) % visibleModules.length;
+      handleSelectParent(visibleModules[nextIdx]);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      const prevIdx = (index - 1 + PARENT_MODULES.length) % PARENT_MODULES.length;
-      handleSelectParent(PARENT_MODULES[prevIdx]);
+      const prevIdx = (index - 1 + visibleModules.length) % visibleModules.length;
+      handleSelectParent(visibleModules[prevIdx]);
     }
   };
 
@@ -380,7 +400,7 @@ export default function FloatingSidebar({
                 : 'bg-white/95 border-slate-200/90 shadow-[0_16px_40px_-6px_rgba(0,0,0,0.12),0_6px_16px_-3px_rgba(0,0,0,0.06)] backdrop-blur-xl'
             }`}
           >
-            {PARENT_MODULES.map((module, index) => {
+            {visibleModules.map((module, index) => {
               const isActive = !isSettings && activeParent.id === module.id;
               const IconComponent = module.icon;
               const translatedLabel = t(`nav.${module.id}`) !== `nav.${module.id}` ? t(`nav.${module.id}`) : module.label;
@@ -468,30 +488,32 @@ export default function FloatingSidebar({
         }`}
       >
         {/* Settings button */}
-        <button
-          onClick={() => {
-            setCurrentTab('settings');
-            if (!isAlwaysOpen) {
-              setIsExpanded(false);
-            }
-          }}
-          className={`group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
-            isSettings
-              ? isDark
-                ? 'z-20 scale-105 bg-slate-700/90 border border-slate-600 shadow-xs text-amber-300'
-                : 'z-20 scale-105 bg-slate-100/95 border border-slate-300/80 shadow-xs text-amber-600'
-              : isDark
-              ? 'text-slate-400 hover:text-white hover:bg-slate-700/50 hover:scale-105 hover:-translate-y-0.5'
-              : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 hover:scale-105 hover:-translate-y-0.5'
-          }`}
-          title={t('nav.settings')}
-        >
-          <Settings
-            size={20}
-            strokeWidth={isSettings ? 2.5 : 1.9}
-            className="transition-transform group-hover:scale-110"
-          />
-        </button>
+        {canAccessSettings && (
+          <button
+            onClick={() => {
+              setCurrentTab('settings');
+              if (!isAlwaysOpen) {
+                setIsExpanded(false);
+              }
+            }}
+            className={`group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+              isSettings
+                ? isDark
+                  ? 'z-20 scale-105 bg-slate-700/90 border border-slate-600 shadow-xs text-amber-300'
+                  : 'z-20 scale-105 bg-slate-100/95 border border-slate-300/80 shadow-xs text-amber-600'
+                : isDark
+                  ? 'text-slate-400 hover:text-white hover:bg-slate-700/50 hover:scale-105 hover:-translate-y-0.5'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 hover:scale-105 hover:-translate-y-0.5'
+            }`}
+            title={t('nav.settings')}
+          >
+            <Settings
+              size={20}
+              strokeWidth={isSettings ? 2.5 : 1.9}
+              className="transition-transform group-hover:scale-110"
+            />
+          </button>
+        )}
 
         {/* Theme toggle button */}
         <button

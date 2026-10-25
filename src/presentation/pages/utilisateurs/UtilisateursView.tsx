@@ -28,6 +28,9 @@ import {
   RotateCcw,
   Calculator,
   FileSpreadsheet,
+  Key,
+  Lock,
+  Unlock,
 } from 'lucide-react';
 import SupervisorAccount from '../../components/common/icons/SupervisorAccount';
 import UserCodePicker from '../../components/common/UserCodePicker';
@@ -41,6 +44,7 @@ import {
   formatTemplateLabels,
 } from '../../../data/responsableTemplates';
 import { useTranslation } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
 
 export default function UtilisateursView({
   technicians,
@@ -55,6 +59,15 @@ export default function UtilisateursView({
   onOpenAddZoneModal,
 }) {
   const { t } = useTranslation();
+  const {
+    user: currentUser,
+    accounts: authAccounts,
+    getAccountForPersonnel,
+    upsertPersonnelAuthAccount,
+    removePersonnelAuthAccount,
+  } = useAuth();
+  const isAdmin = !currentUser || currentUser.role === 'ADMIN';
+
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -72,6 +85,62 @@ export default function UtilisateursView({
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [userToEdit, setUserToEdit] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
+
+  // Account Access Modal state (R1/R2 Individual Identity & Login Activation)
+  const [userForAccessModal, setUserForAccessModal] = useState(null);
+  const [accessForm, setAccessForm] = useState({
+    username: '',
+    role: 'TECHNICIEN',
+    plainPassword: '',
+    isActive: true,
+  });
+  const [accessError, setAccessError] = useState(null);
+  const [accessSavedMsg, setAccessSavedMsg] = useState(null);
+
+  const openAccessModal = (person) => {
+    const existingAcc = getAccountForPersonnel ? getAccountForPersonnel(person.id) : null;
+    const defaultRole =
+      person.type === 'TECHNICIEN'
+        ? 'TECHNICIEN'
+        : person.template_ids?.includes('RMG')
+          ? 'RESPONSABLE_MAGASIN'
+          : 'VIEWER';
+    setUserForAccessModal(person);
+    setAccessForm({
+      username: existingAcc?.username || String(person.id || '').toLowerCase(),
+      role: existingAcc?.role || defaultRole,
+      plainPassword: '',
+      isActive: existingAcc ? existingAcc.isActive !== false : true,
+    });
+    setAccessError(null);
+    setAccessSavedMsg(null);
+  };
+
+  const handleSaveAccessModal = async (e) => {
+    e.preventDefault();
+    if (!userForAccessModal || !upsertPersonnelAuthAccount) return;
+    setAccessError(null);
+    setAccessSavedMsg(null);
+    try {
+      await upsertPersonnelAuthAccount({
+        personnelId: userForAccessModal.id,
+        nom: userForAccessModal.nom,
+        id_zone: userForAccessModal.id_zone || null,
+        specialite: userForAccessModal.specialite || null,
+        role: accessForm.role,
+        username: accessForm.username,
+        plainPassword: accessForm.plainPassword,
+        isActive: accessForm.isActive,
+      });
+      setAccessSavedMsg('Accès GMAO mis à jour avec succès.');
+      setTimeout(() => {
+        setUserForAccessModal(null);
+        setAccessSavedMsg(null);
+      }, 650);
+    } catch (err) {
+      setAccessError(err.message || "Erreur lors de la mise à jour de l'accès");
+    }
+  };
 
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef(null);
@@ -326,6 +395,18 @@ export default function UtilisateursView({
           id_zone: form.id_zone,
           specialite: form.specialite,
         });
+        const existingAcc = getAccountForPersonnel ? getAccountForPersonnel(userToEdit.id) : null;
+        if (existingAcc && upsertPersonnelAuthAccount) {
+          upsertPersonnelAuthAccount({
+            personnelId: userToEdit.id,
+            nom: form.nom,
+            id_zone: form.id_zone,
+            specialite: form.specialite,
+            role: existingAcc.role,
+            username: existingAcc.username,
+            isActive: existingAcc.isActive,
+          }).catch(() => {});
+        }
       } else {
         const isResp = form.type === 'RESPONSABLE';
         const isAll = (form.zones || []).includes('ALL');
@@ -408,6 +489,9 @@ export default function UtilisateursView({
       onDeleteTechnician(userToDelete.id);
     } else {
       onDeleteOperation(userToDelete.id);
+    }
+    if (removePersonnelAuthAccount) {
+      removePersonnelAuthAccount(userToDelete.id);
     }
     setUserToDelete(null);
   };
@@ -607,12 +691,68 @@ export default function UtilisateursView({
         ),
       },
       {
+        key: 'acces_gmao',
+        label: 'Accès GMAO',
+        colLetter: 'G',
+        icon: Key,
+        render: (user) => {
+          const acc = getAccountForPersonnel ? getAccountForPersonnel(user.id) : null;
+          if (acc && acc.isActive !== false) {
+            return (
+              <button
+                type="button"
+                onClick={() => isAdmin && openAccessModal(user)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer shadow-2xs"
+                title={`Compte actif : @${acc.username} (${acc.role}) — Cliquer pour configurer`}
+              >
+                <Unlock className="w-3 h-3 text-emerald-600 shrink-0" />
+                <span className="font-mono">@{acc.username}</span>
+              </button>
+            );
+          }
+          if (acc && acc.isActive === false) {
+            return (
+              <button
+                type="button"
+                onClick={() => isAdmin && openAccessModal(user)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition cursor-pointer shadow-2xs"
+                title="Accès désactivé — Cliquer pour réactiver"
+              >
+                <Lock className="w-3 h-3 text-amber-600 shrink-0" />
+                <span>Désactivé</span>
+              </button>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={() => isAdmin && openAccessModal(user)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition cursor-pointer shadow-2xs"
+              title="Activer un compte de connexion pour ce membre"
+            >
+              <Key className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>Activer accès</span>
+            </button>
+          );
+        },
+      },
+      {
         key: 'actions',
         label: t('utilisateurs.columns.actions'),
         align: 'center',
-        headerClassName: 'w-24 text-center font-bold text-slate-400 tracking-widest select-none',
+        headerClassName: 'w-28 text-center font-bold text-slate-400 tracking-widest select-none',
         render: (user) => (
           <div className="flex items-center justify-center gap-1.5">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => openAccessModal(user)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-200 transition cursor-pointer shadow-2xs"
+                title="Configurer l'accès GMAO (Identifiant / Mot de passe / Activation)"
+              >
+                <Key className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -657,7 +797,7 @@ export default function UtilisateursView({
         ),
       },
     ],
-    [zones]
+    [zones, authAccounts, isAdmin, getAccountForPersonnel]
   );
 
   return (
@@ -1478,6 +1618,157 @@ export default function UtilisateursView({
                   {t('utilisateurs.buttons.confirm_delete')}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Account Access & Password Modal (R1/R2 Individual Identity) */}
+        {userForAccessModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
+                    <Key className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">
+                      Accès & Connexion GMAO
+                    </h3>
+                    <p className="text-[11px] text-slate-500 font-mono">
+                      {userForAccessModal.id} • {userForAccessModal.nom}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUserForAccessModal(null)}
+                  className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAccessModal} className="p-5 space-y-4">
+                {accessError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>{accessError}</span>
+                  </div>
+                )}
+                {accessSavedMsg && (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{accessSavedMsg}</span>
+                  </div>
+                )}
+
+                {/* Account Active Toggle */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">
+                      Autoriser la connexion à l'application
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 mt-0.5">
+                      Désactiver retire le compte de l'écran de connexion sans supprimer la fiche personnel.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAccessForm((prev) => ({ ...prev, isActive: !prev.isActive }))
+                    }
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer shrink-0 flex items-center gap-1.5 ${
+                      accessForm.isActive
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {accessForm.isActive ? (
+                      <>
+                        <Unlock className="w-3.5 h-3.5" />
+                        <span>Actif</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Désactivé</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Login Identifier */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Identifiant de connexion
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={accessForm.username}
+                    onChange={(e) =>
+                      setAccessForm((prev) => ({ ...prev, username: e.target.value }))
+                    }
+                    placeholder="Ex: tech-01, rachid..."
+                    className="w-full h-10 px-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                  />
+                </div>
+
+                {/* Role Lens */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Rôle applicatif (Lentille GMAO)
+                  </label>
+                  <select
+                    value={accessForm.role}
+                    onChange={(e) =>
+                      setAccessForm((prev) => ({ ...prev, role: e.target.value }))
+                    }
+                    className="w-full h-10 px-3 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                  >
+                    <option value="TECHNICIEN">Technicien (Exécution PM, Pannes & PDR)</option>
+                    <option value="RESPONSABLE_MAGASIN">Magasin / RMG (Stock & Mouvements)</option>
+                    <option value="VIEWER">Observateur (Lecture seule)</option>
+                    <option value="ADMIN">Administrateur</option>
+                  </select>
+                </div>
+
+                {/* Password / PIN */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Nouveau mot de passe / Code PIN
+                  </label>
+                  <input
+                    type="password"
+                    value={accessForm.plainPassword}
+                    onChange={(e) =>
+                      setAccessForm((prev) => ({ ...prev, plainPassword: e.target.value }))
+                    }
+                    placeholder="Laisser vide pour conserver le mot de passe actuel (ou saisir min. 4 car.)"
+                    className="w-full h-10 px-3 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Pour un nouveau compte sans mot de passe saisi, le code initial par défaut est <b>tech</b> (ou <b>1234</b>).
+                  </p>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUserForAccessModal(null)}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition cursor-pointer shadow-sm"
+                  >
+                    Enregistrer l'accès
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

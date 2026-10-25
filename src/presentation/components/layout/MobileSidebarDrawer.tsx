@@ -35,6 +35,7 @@ import PartInfoIcon from '../common/icons/PartInfoIcon';
 import { SpokeIcon } from '../common/icons/SpokeIcon';
 import { CubeIcon } from '../common/icons/CubeIcon';
 import { LayersIcon } from '../common/icons/LayersIcon';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 
 export default function MobileSidebarDrawer({
   isFixedDesktop = false,
@@ -53,6 +54,8 @@ export default function MobileSidebarDrawer({
   const [sidebarTheme, setSidebarTheme] = useState(() => {
     return storageService.getItem('gmao_sidebar_theme') || 'dark';
   });
+
+  const canAccess = (tabId) => !currentUser || AuthorizationService.canAccessTab(currentUser, tabId);
 
   useEffect(() => {
     const handleAppearanceChanged = (e) => {
@@ -269,367 +272,430 @@ export default function MobileSidebarDrawer({
           {/* Main Global Navigation */}
           <div className="space-y-1">
             {/* Dashboard Tab */}
-            <button onClick={() => navTo('dashboard')} className={getTabClass('dashboard')}>
-              <span className="flex items-center gap-2.5">
-                <LayoutDashboard
-                  className={`w-4 h-4 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
-                />
-                <span>Dashboard</span>
-              </span>
-              <span className={getBadgeClass('dashboard')}>KPI</span>
-            </button>
+            {canAccess('dashboard') && (
+              <button onClick={() => navTo('dashboard')} className={getTabClass('dashboard')}>
+                <span className="flex items-center gap-2.5">
+                  <LayoutDashboard
+                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                  />
+                  <span>Dashboard</span>
+                </span>
+                <span className={getBadgeClass('dashboard')}>KPI</span>
+              </button>
+            )}
 
             {/* Rapport Mensuel Exécutif (Direction) */}
-            <button
-              onClick={() => navTo('executive_report')}
-              className={getTabClass('executive_report', true)}
-            >
-              <span className="flex items-center gap-2">
-                <FileBarChart2
-                  className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
-                />
-                <span>Rapport Mensuel Exécutif</span>
-              </span>
-              <span className={getBadgeClass('executive_report')}>Direction</span>
-            </button>
+            {canAccess('executive_report') && (
+              <button
+                onClick={() => navTo('executive_report')}
+                className={getTabClass('executive_report', true)}
+              >
+                <span className="flex items-center gap-2">
+                  <FileBarChart2
+                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                  />
+                  <span>Rapport Mensuel Exécutif</span>
+                </span>
+                <span className={getBadgeClass('executive_report')}>Direction</span>
+              </button>
+            )}
 
             {/* Sortie Rapide Tab */}
-            <button onClick={() => navTo('sortie')} className={getTabClass('sortie')}>
-              <span className="flex items-center gap-2.5">
-                <SortieEntreeIcon className="w-4 h-4 shrink-0" />
-                <span>Sortie & Entrée Rapide</span>
-              </span>
-              <span className={getBadgeClass('sortie')}>Mvt</span>
-            </button>
+            {canAccess('sortie') && (
+              <button onClick={() => navTo('sortie')} className={getTabClass('sortie')}>
+                <span className="flex items-center gap-2.5">
+                  <SortieEntreeIcon className="w-4 h-4 shrink-0" />
+                  <span>Sortie & Entrée Rapide</span>
+                </span>
+                <span className={getBadgeClass('sortie')}>Mvt</span>
+              </button>
+            )}
           </div>
 
           {/* GROUPE 1: STOCK & COMPOSANTS */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <Database className="w-3.5 h-3.5 text-slate-400" />
-              <span>Stock & Articles</span>
-            </div>
-            <div className="space-y-1">
-              {/* Stock Actuel */}
-              <button onClick={() => navTo('stock')} className={getTabClass('stock')}>
-                <span className="flex items-center gap-2.5">
-                  <Package
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`}
-                  />
-                  <span>Stock (Articles)</span>
-                </span>
-                <span className={getBadgeClass('stock')}>{counts.stock || 0}</span>
-              </button>
+          {(canAccess('stock') || canAccess('types') || canAccess('designations')) && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <Database className="w-3.5 h-3.5 text-slate-400" />
+                <span>Stock & Articles</span>
+              </div>
+              <div className="space-y-1">
+                {/* Stock Actuel */}
+                {canAccess('stock') && (
+                  <button onClick={() => navTo('stock')} className={getTabClass('stock')}>
+                    <span className="flex items-center gap-2.5">
+                      <Package
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`}
+                      />
+                      <span>Stock (Articles)</span>
+                    </span>
+                    <span className={getBadgeClass('stock')}>{counts.stock || 0}</span>
+                  </button>
+                )}
 
-              {/* Types */}
-              <button onClick={() => navTo('types')} className={getTabClass('types', true)}>
-                <span className="flex items-center gap-2">
-                  <Tag
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
-                  />
-                  <span>Types</span>
-                </span>
-                <span className={getBadgeClass('types')}>{counts.types || 0}</span>
-              </button>
+                {/* Types */}
+                {canAccess('types') && (
+                  <button onClick={() => navTo('types')} className={getTabClass('types', true)}>
+                    <span className="flex items-center gap-2">
+                      <Tag
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
+                      />
+                      <span>Types</span>
+                    </span>
+                    <span className={getBadgeClass('types')}>{counts.types || 0}</span>
+                  </button>
+                )}
 
-              {/* Désignations */}
-              <button
-                onClick={() => navTo('designations')}
-                className={getTabClass('designations', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <BadgeCheck
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Désignations</span>
-                </span>
-                <span className={getBadgeClass('designations')}>
-                  {counts.designations || counts.diagnostics || 0}
-                </span>
-              </button>
+                {/* Désignations */}
+                {canAccess('designations') && (
+                  <button
+                    onClick={() => navTo('designations')}
+                    className={getTabClass('designations', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <BadgeCheck
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                      />
+                      <span>Désignations</span>
+                    </span>
+                    <span className={getBadgeClass('designations')}>
+                      {counts.designations || counts.diagnostics || 0}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* GROUPE 2: PARC MACHINES */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <Factory className="w-3.5 h-3.5 text-slate-400" />
-              <span>Parc Machines</span>
+          {(canAccess('machines') ||
+            canAccess('families') ||
+            canAccess('templates') ||
+            canAccess('blueprints')) && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <Factory className="w-3.5 h-3.5 text-slate-400" />
+                <span>Parc Machines</span>
+              </div>
+              <div className="space-y-1">
+                {/* Machines Registered */}
+                {canAccess('machines') && (
+                  <button onClick={() => navTo('machines')} className={getTabClass('machines')}>
+                    <span className="flex items-center gap-2.5">
+                      <Factory
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                      />
+                      <span>Machines Registered</span>
+                    </span>
+                    <span className={getBadgeClass('machines')}>{counts.machines || 0}</span>
+                  </button>
+                )}
+
+                {/* Families (Machines) */}
+                {canAccess('families') && (
+                  <button onClick={() => navTo('families')} className={getTabClass('families', true)}>
+                    <span className="flex items-center gap-2">
+                      <HubIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
+                      />
+                      <span>Familles Machines</span>
+                    </span>
+                    <span className={getBadgeClass('families')}>{counts.families || 0}</span>
+                  </button>
+                )}
+
+                {/* Templates (Machines) */}
+                {canAccess('templates') && (
+                  <button
+                    onClick={() => navTo('templates')}
+                    className={getTabClass('templates', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <CategoryIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                      />
+                      <span>Templates Machines</span>
+                    </span>
+                    <span className={getBadgeClass('templates')}>{counts.templates || 0}</span>
+                  </button>
+                )}
+
+                {/* Blueprint Machine (Level 3) */}
+                {canAccess('blueprints') && (
+                  <button
+                    onClick={() => navTo('blueprints')}
+                    className={getTabClass('blueprints', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <FingerprintPattern
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                      />
+                      <span>Blueprint Machine</span>
+                    </span>
+                    <span className={getBadgeClass('blueprints')}>{counts.blueprints || 0}</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="space-y-1">
-              {/* Machines Registered */}
-              <button onClick={() => navTo('machines')} className={getTabClass('machines')}>
-                <span className="flex items-center gap-2.5">
-                  <Factory
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
-                  />
-                  <span>Machines Registered</span>
-                </span>
-                <span className={getBadgeClass('machines')}>{counts.machines || 0}</span>
-              </button>
-
-              {/* Families (Machines) */}
-              <button onClick={() => navTo('families')} className={getTabClass('families', true)}>
-                <span className="flex items-center gap-2">
-                  <HubIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
-                  />
-                  <span>Familles Machines</span>
-                </span>
-                <span className={getBadgeClass('families')}>{counts.families || 0}</span>
-              </button>
-
-              {/* Templates (Machines) */}
-              <button onClick={() => navTo('templates')} className={getTabClass('templates', true)}>
-                <span className="flex items-center gap-2">
-                  <CategoryIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
-                  />
-                  <span>Templates Machines</span>
-                </span>
-                <span className={getBadgeClass('templates')}>{counts.templates || 0}</span>
-              </button>
-
-              {/* Blueprint Machine (Level 3) */}
-              <button onClick={() => navTo('blueprints')} className={getTabClass('blueprints', true)}>
-                <span className="flex items-center gap-2">
-                  <FingerprintPattern
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Blueprint Machine</span>
-                </span>
-                <span className={getBadgeClass('blueprints')}>{counts.blueprints || 0}</span>
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* GROUPE: MAINTENANCE PRÉVENTIVE */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Maintenance & Préventif</span>
-            </div>
-            <div className="space-y-1">
-              <button onClick={() => navTo('preventive')} className={getTabClass('preventive')}>
-                <span className="flex items-center gap-2.5">
-                  <Calendar
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Planning Préventif</span>
-                </span>
-                <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
-              </button>
+          {(canAccess('preventive') || canAccess('preventive_referentiel')) && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Maintenance & Préventif</span>
+              </div>
+              <div className="space-y-1">
+                {canAccess('preventive') && (
+                  <button onClick={() => navTo('preventive')} className={getTabClass('preventive')}>
+                    <span className="flex items-center gap-2.5">
+                      <Calendar
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                      />
+                      <span>Planning Préventif</span>
+                    </span>
+                    <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
+                  </button>
+                )}
 
-              {/* Référentiel, Guides, Actions & Concepteur de Plans */}
-              <button
-                onClick={() => navTo('preventive_referentiel')}
-                className={getTabClass('preventive_referentiel', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <Settings2
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
-                  />
-                  <span>Ingénierie & Référentiel</span>
-                </span>
-                <span className={getBadgeClass('preventive_referentiel')}>
-                  {(counts.preventiveGuides || 0) + (counts.preventiveActions || 0) || 'Guides'}
-                </span>
-              </button>
+                {/* Référentiel, Guides, Actions & Concepteur de Plans */}
+                {canAccess('preventive_referentiel') && (
+                  <button
+                    onClick={() => navTo('preventive_referentiel')}
+                    className={getTabClass('preventive_referentiel', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Settings2
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
+                      />
+                      <span>Ingénierie & Référentiel</span>
+                    </span>
+                    <span className={getBadgeClass('preventive_referentiel')}>
+                      {(counts.preventiveGuides || 0) + (counts.preventiveActions || 0) || 'Guides'}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* GROUPE: MAINTENANCE CORRECTIVE */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <Wrench className="w-3.5 h-3.5 text-amber-500" />
-              <span>Maintenance Corrective</span>
-            </div>
-            <div className="space-y-1">
-              {/* Item 1: Correctif Hub (Main page) */}
-              <button onClick={() => navTo('corrective')} className={getTabClass('corrective')}>
-                <span className="flex items-center gap-2.5">
-                  <Wrench
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
-                  />
-                  <span>Correctif Hub</span>
-                </span>
-                <span className={getBadgeClass('corrective')}>{counts.corrective || 'Live'}</span>
-              </button>
+          {(canAccess('corrective') || canAccess('corrective_referentiel')) && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <Wrench className="w-3.5 h-3.5 text-amber-500" />
+                <span>Maintenance Corrective</span>
+              </div>
+              <div className="space-y-1">
+                {/* Item 1: Correctif Hub (Main page) */}
+                {canAccess('corrective') && (
+                  <button onClick={() => navTo('corrective')} className={getTabClass('corrective')}>
+                    <span className="flex items-center gap-2.5">
+                      <Wrench
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                      />
+                      <span>Correctif Hub</span>
+                    </span>
+                    <span className={getBadgeClass('corrective')}>{counts.corrective || 'Live'}</span>
+                  </button>
+                )}
 
-              {/* Item 2: Catalogue & Données GMAO (Second position) */}
-              <button
-                onClick={() => navTo('corrective_referentiel')}
-                className={getTabClass('corrective_referentiel', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <Database
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
-                  />
-                  <span>Catalogue & Données GMAO</span>
-                </span>
-                <span className={getBadgeClass('corrective_referentiel')}>
-                  Catalogue
-                </span>
-              </button>
+                {/* Item 2: Catalogue & Données GMAO (Second position) */}
+                {canAccess('corrective_referentiel') && (
+                  <button
+                    onClick={() => navTo('corrective_referentiel')}
+                    className={getTabClass('corrective_referentiel', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Database
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                      />
+                      <span>Catalogue & Données GMAO</span>
+                    </span>
+                    <span className={getBadgeClass('corrective_referentiel')}>Catalogue</span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* GROUPE 3: GROUPE ENTREPÔT (COMPONENTS & PARTS) */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <Warehouse className="w-3.5 h-3.5 text-slate-400" />
-              <span>Groupe Entrepôt</span>
+          {canAccess('entrepot') && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <Warehouse className="w-3.5 h-3.5 text-slate-400" />
+                <span>Groupe Entrepôt</span>
+              </div>
+              <div className="space-y-1">
+                {/* Entrepôt Principal (Éléments, Composants & Parts) */}
+                <button onClick={() => navTo('entrepot')} className={getTabClass('entrepot')}>
+                  <span className="flex items-center gap-2.5">
+                    <Warehouse
+                      className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                    />
+                    <span>Entrepôt (Inventaire)</span>
+                  </span>
+                  <span className={getBadgeClass('entrepot')}>
+                    {counts.warehouse || counts.entrepot || 0}
+                  </span>
+                </button>
+
+                {/* Components section: Groupes -> Familles -> Templates */}
+                {canAccess('comp_groups') && (
+                  <button
+                    onClick={() => navTo('comp_groups')}
+                    className={getTabClass('comp_groups', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Boxes
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                      />
+                      <span>Groupes (Composants)</span>
+                    </span>
+                    <span className={getBadgeClass('comp_groups')}>{counts.compGroups || 0}</span>
+                  </button>
+                )}
+
+                {canAccess('comp_families') && (
+                  <button
+                    onClick={() => navTo('comp_families')}
+                    className={getTabClass('comp_families', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <SpokeIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                      />
+                      <span>Familles (Composants)</span>
+                    </span>
+                    <span className={getBadgeClass('comp_families')}>
+                      {counts.compFamilies || 0}
+                    </span>
+                  </button>
+                )}
+
+                {canAccess('comp_templates') && (
+                  <button
+                    onClick={() => navTo('comp_templates')}
+                    className={getTabClass('comp_templates', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <CubeIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
+                      />
+                      <span>Templates (Composants)</span>
+                    </span>
+                    <span className={getBadgeClass('comp_templates')}>
+                      {counts.compTemplates || 0}
+                    </span>
+                  </button>
+                )}
+
+                {/* Parts section sub-items */}
+                {canAccess('part_types') && (
+                  <button
+                    onClick={() => navTo('part_types')}
+                    className={getTabClass('part_types', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <LayersIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                      />
+                      <span>Types (Parts)</span>
+                    </span>
+                    <span className={getBadgeClass('part_types')}>{counts.partTypes || 0}</span>
+                  </button>
+                )}
+
+                {canAccess('part_designations') && (
+                  <button
+                    onClick={() => navTo('part_designations')}
+                    className={getTabClass('part_designations', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <PartInfoIcon
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                      />
+                      <span>Désignations (Parts)</span>
+                    </span>
+                    <span className={getBadgeClass('part_designations')}>
+                      {counts.partDesignations || 0}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="space-y-1">
-              {/* Entrepôt Principal (Éléments, Composants & Parts) */}
-              <button onClick={() => navTo('entrepot')} className={getTabClass('entrepot')}>
-                <span className="flex items-center gap-2.5">
-                  <Warehouse
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Entrepôt (Inventaire)</span>
-                </span>
-                <span className={getBadgeClass('entrepot')}>
-                  {counts.warehouse || counts.entrepot || 0}
-                </span>
-              </button>
-
-              {/* Components section: Groupes -> Familles -> Templates */}
-              <button
-                onClick={() => navTo('comp_groups')}
-                className={getTabClass('comp_groups', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <Boxes
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Groupes (Composants)</span>
-                </span>
-                <span className={getBadgeClass('comp_groups')}>
-                  {counts.compGroups || 0}
-                </span>
-              </button>
-
-              <button
-                onClick={() => navTo('comp_families')}
-                className={getTabClass('comp_families', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <SpokeIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
-                  />
-                  <span>Familles (Composants)</span>
-                </span>
-                <span className={getBadgeClass('comp_families')}>
-                  {counts.compFamilies || 0}
-                </span>
-              </button>
-
-              <button
-                onClick={() => navTo('comp_templates')}
-                className={getTabClass('comp_templates', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <CubeIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
-                  />
-                  <span>Templates (Composants)</span>
-                </span>
-                <span className={getBadgeClass('comp_templates')}>
-                  {counts.compTemplates || 0}
-                </span>
-              </button>
-
-              {/* Parts section sub-items */}
-              <button
-                onClick={() => navTo('part_types')}
-                className={getTabClass('part_types', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <LayersIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
-                  />
-                  <span>Types (Parts)</span>
-                </span>
-                <span className={getBadgeClass('part_types')}>
-                  {counts.partTypes || 0}
-                </span>
-              </button>
-
-              <button
-                onClick={() => navTo('part_designations')}
-                className={getTabClass('part_designations', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <PartInfoIcon
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
-                  />
-                  <span>Désignations (Parts)</span>
-                </span>
-                <span className={getBadgeClass('part_designations')}>
-                  {counts.partDesignations || 0}
-                </span>
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* GROUPE 4: ZONES & ÉQUIPES */}
-          <div>
-            <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span>Zones & Équipes</span>
-            </div>
-            <div className="space-y-1">
-              {/* Zones */}
-              <button onClick={() => navTo('zones')} className={getTabClass('zones')}>
-                <span className="flex items-center gap-2.5">
-                  <MapPin
-                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
-                  />
-                  <span>Zones & Ateliers</span>
-                </span>
-                <span className={getBadgeClass('zones')}>{counts.zones || 0}</span>
-              </button>
+          {(canAccess('zones') || canAccess('utilisateurs')) && (
+            <div>
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                <span>Zones & Équipes</span>
+              </div>
+              <div className="space-y-1">
+                {/* Zones */}
+                {canAccess('zones') && (
+                  <button onClick={() => navTo('zones')} className={getTabClass('zones')}>
+                    <span className="flex items-center gap-2.5">
+                      <MapPin
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
+                      />
+                      <span>Zones & Ateliers</span>
+                    </span>
+                    <span className={getBadgeClass('zones')}>{counts.zones || 0}</span>
+                  </button>
+                )}
 
-              {/* Utilisateurs */}
-              <button
-                onClick={() => navTo('utilisateurs')}
-                className={getTabClass('utilisateurs', true)}
-              >
-                <span className="flex items-center gap-2">
-                  <Users
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
-                  />
-                  <span>Utilisateurs (Membres)</span>
-                </span>
-                <span className={getBadgeClass('utilisateurs')}>
-                  {(counts.technicians || 0) + (counts.operations || 0)}
-                </span>
-              </button>
+                {/* Utilisateurs */}
+                {canAccess('utilisateurs') && (
+                  <button
+                    onClick={() => navTo('utilisateurs')}
+                    className={getTabClass('utilisateurs', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Users
+                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                      />
+                      <span>Utilisateurs (Membres)</span>
+                    </span>
+                    <span className={getBadgeClass('utilisateurs')}>
+                      {(counts.technicians || 0) + (counts.operations || 0)}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* GROUPE 5: OUTILS & RÉFÉRENTIEL */}
-          <div
-            className={`space-y-1 pt-2 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}
-          >
-            <button onClick={() => navTo('nexus')} className={getTabClass('nexus')}>
-              <span className="flex items-center gap-2.5">
-                <GitBranch
-                  className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
-                />
-                <span>Nexus Matrix</span>
-              </span>
-            </button>
-            <button onClick={() => navTo('guide')} className={getTabClass('guide')}>
-              <span className="flex items-center gap-2.5">
-                <BookOpen
-                  className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
-                />
-                <span>Guide d'utilisation</span>
-              </span>
-            </button>
-          </div>
+          {(canAccess('nexus') || canAccess('guide')) && (
+            <div
+              className={`space-y-1 pt-2 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'}`}
+            >
+              {canAccess('nexus') && (
+                <button onClick={() => navTo('nexus')} className={getTabClass('nexus')}>
+                  <span className="flex items-center gap-2.5">
+                    <GitBranch
+                      className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                    />
+                    <span>Nexus Matrix</span>
+                  </span>
+                </button>
+              )}
+              {canAccess('guide') && (
+                <button onClick={() => navTo('guide')} className={getTabClass('guide')}>
+                  <span className="flex items-center gap-2.5">
+                    <BookOpen
+                      className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                    />
+                    <span>Guide d'utilisation</span>
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Guided Tip Box */}
@@ -708,24 +774,26 @@ export default function MobileSidebarDrawer({
           }`}
         >
           {/* Settings Button */}
-          <button
-            onClick={() => navTo('settings')}
-            className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
-              currentTab === 'settings'
-                ? isDark
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'bg-slate-900 text-white shadow-sm'
-                : isDark
-                  ? 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
-            }`}
-            title="Paramètres du système"
-          >
-            <Settings
-              className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? (isDark ? 'text-slate-900' : 'text-white') : 'text-slate-400'}`}
-            />
-            <span>Paramètres</span>
-          </button>
+          {canAccess('settings') && (
+            <button
+              onClick={() => navTo('settings')}
+              className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 cursor-pointer ${
+                currentTab === 'settings'
+                  ? isDark
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'bg-slate-900 text-white shadow-sm'
+                  : isDark
+                    ? 'text-slate-300 hover:text-white hover:bg-slate-800'
+                    : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+              title="Paramètres du système"
+            >
+              <Settings
+                className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? (isDark ? 'text-slate-900' : 'text-white') : 'text-slate-400'}`}
+              />
+              <span>Paramètres</span>
+            </button>
+          )}
 
           {/* Light / Dark Mode Toggle Button */}
           <button
