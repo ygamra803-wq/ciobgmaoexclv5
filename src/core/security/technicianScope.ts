@@ -1,4 +1,4 @@
-import { AuthorizationService } from './AuthorizationService';
+import { ROLES } from './Roles';
 
 function normalizeToken(val: unknown): string {
   return String(val || '')
@@ -12,7 +12,7 @@ function normalizeToken(val: unknown): string {
 export function isTechnicianRole(user: any): boolean {
   if (!user) return false;
   const role = String(user.role || '').trim().toUpperCase();
-  return role === AuthorizationService.ROLES.TECHNICIEN || role === 'TECHNICIEN';
+  return role === ROLES.TECHNICIEN || role === 'TECHNICIEN';
 }
 
 export function resolveTechnicianFromDirectory(user: any, technicians: any[] = []): any | null {

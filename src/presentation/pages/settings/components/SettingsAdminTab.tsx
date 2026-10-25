@@ -4,6 +4,10 @@ import {
   KeyRound,
   Save,
   Users,
+  Wrench,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { vaultService } from '../../../../utils/vaultService';
 import { storageService } from '../../../../utils/storageService';
@@ -31,7 +35,30 @@ export default function SettingsAdminTab({
   accountsList = [],
   updateUserPassword,
   switchSessionToUser,
-}) {
+  technicians = [],
+  onNavigateToUsers,
+}: any) {
+  const systemAccounts = (accountsList || []).filter((acc: any) => {
+    const roleUpper = String(acc?.role || '').toUpperCase();
+    const codeLower = String(acc?.code || acc?.username || '').toLowerCase();
+    if (codeLower === 'tech' && !acc?.personnelId) return false;
+    return !acc?.personnelId && roleUpper !== 'TECHNICIEN';
+  });
+
+  const technicianAccounts = (accountsList || []).filter((acc: any) => {
+    const roleUpper = String(acc?.role || '').toUpperCase();
+    const codeLower = String(acc?.code || acc?.username || '').toLowerCase();
+    if (codeLower === 'tech' && !acc?.personnelId) return false;
+    return Boolean(acc?.personnelId) || roleUpper === 'TECHNICIEN';
+  });
+
+  const activeTechAccountsCount = technicianAccounts.filter(
+    (acc: any) => acc?.isActive !== false
+  ).length;
+  const inactiveTechAccountsCount = technicianAccounts.filter(
+    (acc: any) => acc?.isActive === false
+  ).length;
+
   return (
     <div className="space-y-6 max-w-full overflow-hidden animate-in fade-in duration-200">
       {/* 1. Header Card - Info & Active User Status */}
@@ -99,9 +126,9 @@ export default function SettingsAdminTab({
                     await setupMasterPin(masterPinSetup);
                     showToast('Master PIN configuré — Coffre-fort chiffré créé avec succès !', 'success');
                     setMasterPinSetup('');
-                    if (getAvailableAccounts) setAccountsList(getAvailableAccounts());
+                    if (getAvailableAccounts) setAccountsList(getAvailableAccounts(true));
                   }
-                } catch (err) {
+                } catch (err: any) {
                   showToast(err.message, 'error');
                 }
               }}
@@ -213,7 +240,7 @@ export default function SettingsAdminTab({
                   showToast(res.message || 'Master PIN modifié — Coffre-fort re-chiffré avec la nouvelle clé !', 'success');
                   setCurrentMasterPin('');
                   setTempPin('');
-                } catch (err) {
+                } catch (err: any) {
                   showToast(err.message, 'error');
                 }
               }}
@@ -225,99 +252,246 @@ export default function SettingsAdminTab({
           </div>
         </div>
 
-        {/* Box B: Comptes Système — 2FA */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-5">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                <Users className="w-5 h-5" />
+        {/* Box B: Comptes Portail Système — 2FA */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-5 flex flex-col justify-between">
+          <div className="space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800">Comptes Portail Système ({systemAccounts.length})</h4>
+                  <p className="text-xs text-slate-500">
+                    Rôles globaux : Administrateur, Magasinier PDR, Consultateur (Viewer)
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-800">Comptes Système — Coffre Protégé</h4>
-                <p className="text-xs text-slate-500">Authentification 2FA : Code d'accès + Mot de passe + Master PIN</p>
-              </div>
+              <button
+                onClick={handleResetAllAccounts}
+                className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition border border-rose-200 cursor-pointer"
+              >
+                Reset Vault
+              </button>
             </div>
-            <button
-              onClick={handleResetAllAccounts}
-              className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition border border-rose-200 cursor-pointer"
-            >
-              Reset Vault
-            </button>
+
+            <div className="space-y-3">
+              {systemAccounts.map((userAcc: any) => (
+                <div
+                  key={userAcc.id || userAcc.code || userAcc.username}
+                  className="p-3.5 rounded-2xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-xs">
+                      {(userAcc.code || userAcc.username || 'US').substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{userAcc.libelle || userAcc.name}</span>
+                        <span className="text-[10px] font-mono text-slate-500">@{userAcc.code || userAcc.username}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
+                          {userAcc.role}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                        Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                    <button
+                      onClick={async () => {
+                        const newPass = prompt(`Nouveau mot de passe pour @${userAcc.code || userAcc.username} (au moins 4 caractères) :`);
+                        if (!newPass || newPass.trim().length < 4) return;
+                        const pin = prompt('Master PIN requis pour déverrouiller et mettre à jour le coffre-fort :');
+                        if (!pin) return;
+                        try {
+                          if (updateUserPassword) {
+                            await updateUserPassword(userAcc.code || userAcc.username, newPass.trim(), pin.trim());
+                            showToast(`Mot de passe de @${userAcc.code || userAcc.username} mis à jour dans le coffre chiffré !`, 'success');
+                            if (getAvailableAccounts) setAccountsList(getAvailableAccounts(true));
+                          }
+                        } catch (err: any) {
+                          showToast(err.message, 'error');
+                        }
+                      }}
+                      className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-amber-500 hover:text-white text-slate-700 font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
+                    >
+                      Changer Pass
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const pin = prompt('Master PIN requis pour confirmer le basculement de session (2FA) :');
+                        if (!pin) return;
+                        try {
+                          if (switchSessionToUser) {
+                            await switchSessionToUser(userAcc.code || userAcc.username, pin.trim());
+                            showToast(`Session -> @${userAcc.code || userAcc.username} — 2FA: Code + PIN`, 'success');
+                          }
+                        } catch (err: any) {
+                          showToast(err.message, 'error');
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
+                    >
+                      Basculer (2FA)
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {systemAccounts.length === 0 && (
+                <div className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  Coffre-fort verrouillé — Veuillez saisir le Master PIN pour charger les comptes déchiffrés.
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-3">
-            {accountsList.map((userAcc) => (
-              <div
-                key={userAcc.id || userAcc.code || userAcc.username}
-                className="p-3.5 rounded-2xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          {/* Explicit Bridge Callout inside Box B */}
+          <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-purple-950">
+              <span className="font-bold block">Accès Techniciens Individuels ({activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''})</span>
+              <span className="text-[11px] text-purple-700">
+                Les comptes techniciens sont rattachés aux fiches matricules (<code className="font-mono font-bold">TECH-0X</code>).
+              </span>
+            </div>
+            {onNavigateToUsers && (
+              <button
+                type="button"
+                onClick={onNavigateToUsers}
+                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs transition"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-xs">
-                    {(userAcc.code || userAcc.username || 'US').substring(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
-                      <span className="truncate">{userAcc.libelle || userAcc.name}</span>
-                      <span className="text-[10px] font-mono text-slate-500">@{userAcc.code || userAcc.username}</span>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
-                        {userAcc.role}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
-                      Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                  <button
-                    onClick={async () => {
-                      const newPass = prompt(`Nouveau mot de passe pour @${userAcc.code || userAcc.username} (au moins 4 caractères) :`);
-                      if (!newPass || newPass.trim().length < 4) return;
-                      const pin = prompt('Master PIN requis pour déverrouiller et mettre à jour le coffre-fort :');
-                      if (!pin) return;
-                      try {
-                        if (updateUserPassword) {
-                          await updateUserPassword(userAcc.code || userAcc.username, newPass.trim(), pin.trim());
-                          showToast(`Mot de passe de @${userAcc.code || userAcc.username} mis à jour dans le coffre chiffré !`, 'success');
-                          if (getAvailableAccounts) setAccountsList(getAvailableAccounts());
-                        }
-                      } catch (err) {
-                        showToast(err.message, 'error');
-                      }
-                    }}
-                    className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-amber-500 hover:text-white text-slate-700 font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                  >
-                    Changer Pass
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const pin = prompt('Master PIN requis pour confirmer le basculement de session (2FA) :');
-                      if (!pin) return;
-                      try {
-                        if (switchSessionToUser) {
-                          await switchSessionToUser(userAcc.code || userAcc.username, pin.trim());
-                          showToast(`Session -> @${userAcc.code || userAcc.username} — 2FA: Code + PIN`, 'success');
-                        }
-                      } catch (err) {
-                        showToast(err.message, 'error');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                  >
-                    Basculer (2FA)
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            {accountsList.length === 0 && (
-              <div className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                Coffre-fort verrouillé — Veuillez saisir le Master PIN pour charger les comptes déchiffrés.
-              </div>
+                <span>Équipe & Utilisateurs</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
         </div>
+      </div>
+
+      {/* 4. Section C — Comptes Techniciens Terrain (Liés au Référentiel Personnel) */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-purple-200/80 flex items-center justify-center text-purple-700 shrink-0">
+              <Wrench className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-slate-800">
+                  Comptes Techniciens Terrain — Liés au Personnel (SSOT AuthService)
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  {activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''}
+                </span>
+                {inactiveTechAccountsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                    {inactiveTechAccountsCount} désactivé{inactiveTechAccountsCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                  {Array.isArray(technicians) ? technicians.length : 0} fiche(s) technicien
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                L&apos;activation, la désactivation et la définition du mot de passe d&apos;un technicien s&apos;effectuent depuis sa fiche dans <b>Équipe &amp; Utilisateurs</b> afin de préserver le lien <code className="font-mono">personnelId</code> (périmètre R4 « Mes Tâches »).
+              </p>
+            </div>
+          </div>
+
+          {onNavigateToUsers && (
+            <button
+              type="button"
+              onClick={onNavigateToUsers}
+              className="px-4 py-2 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 self-start md:self-auto shrink-0 cursor-pointer shadow-xs transition active:scale-95"
+            >
+              <span>Gérer les accès dans Équipe &amp; Utilisateurs</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {technicianAccounts.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {technicianAccounts.map((techAcc: any) => {
+              const isActive = techAcc.isActive !== false;
+              const code = techAcc.personnelId || techAcc.id || techAcc.code;
+              const loginId = techAcc.username || techAcc.code;
+              return (
+                <div
+                  key={techAcc.id || loginId}
+                  className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                    isActive
+                      ? 'bg-slate-50/60 border-slate-200/90 hover:border-purple-200'
+                      : 'bg-slate-100/60 border-slate-200/60 opacity-70'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-900 truncate">
+                        {techAcc.personnelName || techAcc.name}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                        {code}
+                      </span>
+                      {isActive ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                          Actif
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-slate-200 text-slate-700">
+                          <XCircle className="w-2.5 h-2.5 text-slate-500" />
+                          Désactivé
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 font-mono mt-0.5 truncate">
+                      Login: <b>@{loginId}</b>
+                      {techAcc.id_zone ? ` • Zone: ${techAcc.id_zone}` : ''}
+                    </div>
+                  </div>
+
+                  {isActive && switchSessionToUser && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const pin = prompt(
+                          `Master PIN requis pour basculer vers la session technicien @${loginId} (${code}) :`
+                        );
+                        if (!pin) return;
+                        try {
+                          await switchSessionToUser(loginId, pin.trim());
+                          showToast(
+                            `Session basculée vers ${techAcc.personnelName || loginId} (${code})`,
+                            'success'
+                          );
+                        } catch (err: any) {
+                          showToast(err.message, 'error');
+                        }
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white border border-purple-200 text-[11px] font-bold transition shrink-0 cursor-pointer"
+                      title="Tester la vue de ce technicien (2FA Master PIN)"
+                    >
+                      Basculer
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
+            <p className="text-xs font-bold text-slate-700">
+              Aucun compte de connexion technicien configuré (Mode Usine Vide ou accès non activés).
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Ouvrez <b>Équipe &amp; Utilisateurs</b> et cliquez sur l&apos;icône clé 🔑 d&apos;un technicien pour activer son compte individuel.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

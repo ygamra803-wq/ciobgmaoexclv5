@@ -26,6 +26,7 @@ import { syncQueueService } from '../../../services/syncQueueService';
 import { errorTracker } from '../../../services/ErrorTrackingService';
 import { analytics } from '../../../services/AnalyticsService';
 import { useAuth } from '../../../context/AuthContext';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import { confirmAction } from '../../../utils/confirmAction';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
 import PerformanceDashboardPanel from '../../components/settings/PerformanceDashboardPanel';
@@ -179,16 +180,16 @@ export default function SettingsView({
   } = (useAuth() || {}) as any;
 
   const [accountsList, setAccountsList] = useState(() => {
-    return getAvailableAccounts ? getAvailableAccounts() : [];
+    return getAvailableAccounts ? getAvailableAccounts(true) : [];
   });
   const [masterPinSetup, setMasterPinSetup] = useState('');
   const [currentMasterPin, setCurrentMasterPin] = useState('');
 
   useEffect(() => {
     if (getAvailableAccounts) {
-      setAccountsList(getAvailableAccounts());
+      setAccountsList(getAvailableAccounts(true));
     }
-  }, [getAvailableAccounts, isVaultUnlocked]);
+  }, [getAvailableAccounts, isVaultUnlocked, technicians]);
 
   const handleResetAllAccounts = async () => {
     if (await confirmAction({ title: 'Réinitialiser le coffre-fort', message: 'Voulez-vous réinitialiser le coffre-fort et tous les comptes système ?', variant: 'danger' })) {
@@ -197,7 +198,7 @@ export default function SettingsView({
       try {
         if (resetAllAccountsToDefaults) {
           await resetAllAccountsToDefaults(pin);
-          setAccountsList(getAvailableAccounts ? getAvailableAccounts() : []);
+          setAccountsList(getAvailableAccounts ? getAvailableAccounts(true) : []);
           showToast('Le coffre-fort a été réinitialisé. Définissez votre nouveau Master PIN.', 'info');
         }
       } catch (err: any) {
@@ -1619,6 +1620,8 @@ export default function SettingsView({
             accountsList={accountsList}
             updateUserPassword={updateUserPassword}
             switchSessionToUser={switchSessionToUser}
+            technicians={technicians}
+            onNavigateToUsers={() => useGmaoStore.getState().setCurrentTab('utilisateurs')}
           />
         )}
 
