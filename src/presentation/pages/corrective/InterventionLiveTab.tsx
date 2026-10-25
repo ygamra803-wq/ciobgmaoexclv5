@@ -11,6 +11,7 @@ import {
   Plus,
   Trash2,
   Cpu,
+  AlertTriangle,
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { stockIndexStore } from '../../../application/StockIndexStore';
@@ -19,7 +20,11 @@ import { rankStockItemsByMachineBom } from '../../../core/domain';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
-import { isTechnicianRole, matchesTechnicianRecord } from '../../../core/security/technicianScope';
+import {
+  isTechnicianRole,
+  matchesTechnicianRecord,
+  getTechnicianBadgeLabel,
+} from '../../../core/security/technicianScope';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -27,6 +32,7 @@ export default function InterventionLiveTab({
   technicians: _technicians = [],
   activeLiveId,
   setActiveLiveId,
+  onSubmitForValidation,
   onClotureIntervention,
   onUpdateIntervention,
   onNavigateToTab,
@@ -44,6 +50,7 @@ export default function InterventionLiveTab({
   const isTechUser = isTechnicianRole(user);
   const blueprints = useGmaoStore((s) => s.blueprints);
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
+  const storeSubmitForValidation = useGmaoStore((s) => s.handleSubmitInterventionForValidation);
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
@@ -55,11 +62,18 @@ export default function InterventionLiveTab({
   // Active intervention object
   const activeIntervention = useMemo(() => {
     if (!activeLiveId) {
-      // Pick first in_progress BT if none explicitly active (within technician scope)
+      // Pick first in_progress BT not already pending validation if none explicitly active
       return (
         scopedInterventions.find(
+          (i) =>
+            (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE') &&
+            i.num_bt &&
+            i.validation_status !== 'PENDING_VALIDATION'
+        ) ||
+        scopedInterventions.find(
           (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE') && i.num_bt
-        ) || null
+        ) ||
+        null
       );
     }
     return scopedInterventions.find((i) => i.id === activeLiveId) || null;
@@ -157,6 +171,7 @@ export default function InterventionLiveTab({
     arret_machine: true,
     temps_arret: '',
     pieces_utilisees: [],
+    num_bon_saisi_par_tech: '',
     id_composant: '',
     nom_composant: '',
     id_part: '',
@@ -171,6 +186,14 @@ export default function InterventionLiveTab({
   // Sync initial values when active intervention changes
   useEffect(() => {
     if (activeIntervention) {
+      const initialPieces =
+        Array.isArray(activeIntervention.pieces_utilisees) &&
+        activeIntervention.pieces_utilisees.length > 0
+          ? activeIntervention.pieces_utilisees
+          : Array.isArray(activeIntervention.pieces_proposees) &&
+            activeIntervention.pieces_proposees.length > 0
+          ? activeIntervention.pieces_proposees
+          : [];
       setFormState({
         travail_a_faire: activeIntervention.travail_a_faire || '',
         action_realisee: activeIntervention.action_realisee || '',
@@ -181,14 +204,13 @@ export default function InterventionLiveTab({
         etat_piece: activeIntervention.etat_piece || 'Neuve',
         arret_machine: Boolean(activeIntervention.arret_machine),
         temps_arret: activeIntervention.temps_arret || '',
-        pieces_utilisees: Array.isArray(activeIntervention.pieces_utilisees)
-          ? activeIntervention.pieces_utilisees
-          : [],
+        pieces_utilisees: initialPieces,
+        num_bon_saisi_par_tech: activeIntervention.num_bon_saisi_par_tech || '',
         id_composant: activeIntervention.id_composant || '',
         nom_composant: activeIntervention.nom_composant || '',
         id_part: activeIntervention.id_part || '',
         nom_part: activeIntervention.nom_part || '',
-        statut_composant_cloture: 'En service',
+        statut_composant_cloture: activeIntervention.statut_composant_cloture || 'En service',
       });
       setTravailSearch(activeIntervention.travail_a_faire || '');
     }
@@ -356,7 +378,7 @@ export default function InterventionLiveTab({
     }));
   };
 
-  // Handle Clôture Final Submit
+  // Handle Clôture / Validation Submit (Maker-Checker V1+V2)
   const handleClotureSubmit = (e) => {
     e.preventDefault();
     if (!activeIntervention) {
@@ -377,16 +399,79 @@ export default function InterventionLiveTab({
     const machineDesignation =
       targetMachine?.designation || activeIntervention.code_machine;
 
-    // Clôturer l'intervention via FSM (génère automatiquement l'unique mouvement de sortie PDR)
+    // 1. TECHNICIAN PATH: Submit field claim for validation WITHOUT closing or deducting stock
+    if (isTechUser) {
+      const submitFn = onSubmitForValidation || storeSubmitForValidation;
+      if (typeof submitFn === 'function') {
+        const submittedResult = submitFn(activeIntervention.id, {
+          ...formState,
+          pieces_proposees: formState.pieces_utilisees,
+          num_bon_saisi_par_tech: formState.num_bon_saisi_par_tech,
+          zone: machineZone,
+          machine_designation: machineDesignation,
+          date_fin_proposee: dateFin,
+          heure_fin_proposee: heureFin,
+          temps_intervention_propose: liveWorkingTime.formatted,
+          temps_intervention_mins_propose: liveWorkingTime.minutes,
+          submitted_by_id: user?.personnelId || user?.code || user?.id || '',
+          submitted_by_name: getTechnicianBadgeLabel(user, _technicians),
+          submitted_at: now.toISOString(),
+        });
+
+        if (submittedResult === null) {
+          showToast?.(
+            'Soumission refusée : vérifiez le travail réalisé ou le statut du Bon de Travail.',
+            'warning'
+          );
+          return;
+        }
+      } else if (typeof onUpdateIntervention === 'function') {
+        onUpdateIntervention(activeIntervention.id, {
+          ...formState,
+          pieces_proposees: formState.pieces_utilisees,
+          pieces_utilisees: [],
+          pdr_ref: '',
+          pdr_quantite: 0,
+          num_bon_saisi_par_tech: formState.num_bon_saisi_par_tech,
+          date_fin_proposee: dateFin,
+          heure_fin_proposee: heureFin,
+          temps_intervention_propose: liveWorkingTime.formatted,
+          temps_intervention_mins_propose: liveWorkingTime.minutes,
+          validation_status: 'PENDING_VALIDATION',
+          submitted_by_id: user?.personnelId || user?.code || user?.id || '',
+          submitted_by_name: getTechnicianBadgeLabel(user, _technicians),
+          submitted_at: now.toISOString(),
+          action_fermee: 'NON',
+          statut: 'EN_COURS',
+        });
+      }
+
+      showToast?.(
+        `Déclaration BT ${activeIntervention.num_bt || activeIntervention.code_machine} soumise pour validation responsable (aucun déstockage immédiat)`,
+        'info'
+      );
+
+      setActiveLiveId?.(null);
+      if (onNavigateToTab) {
+        onNavigateToTab('corrective_bt');
+      }
+      return;
+    }
+
+    // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
     const closedResult = onClotureIntervention(activeIntervention.id, {
       ...formState,
       zone: machineZone,
       machine_designation: machineDesignation,
-      date_fin: dateFin,
-      heure_fin: heureFin,
+      date_fin: activeIntervention.date_fin_proposee || dateFin,
+      heure_fin: activeIntervention.heure_fin_proposee || heureFin,
       temps_intervention_calc: liveWorkingTime.formatted,
       temps_intervention_mins: liveWorkingTime.minutes,
       temps_minutes: liveWorkingTime.minutes,
+      validation_status: 'APPROVED',
+      validated_by_id: user?.id || user?.code || 'admin',
+      validated_by_name: user?.name || 'Administrateur',
+      validated_at: now.toISOString(),
       statut: 'CLOTURE',
       action_fermee: 'OUI',
     });
@@ -400,11 +485,11 @@ export default function InterventionLiveTab({
     }
 
     showToast?.(
-      `Intervention ${activeIntervention.num_bt || activeIntervention.code_machine} clôturée (${liveWorkingTime.formatted} ouvré)`,
+      `Intervention ${activeIntervention.num_bt || activeIntervention.code_machine} validée et clôturée (${liveWorkingTime.formatted} ouvré)`,
       'success'
     );
 
-    setActiveLiveId(null);
+    setActiveLiveId?.(null);
     if (onNavigateToTab) {
       onNavigateToTab('corrective_cloture');
     }
@@ -540,6 +625,52 @@ export default function InterventionLiveTab({
         </div>
       </div>
 
+      {/* Clarification / Pending Validation Alert Banner */}
+      {(activeIntervention.validation_status === 'NEEDS_CLARIFICATION' ||
+        activeIntervention.validation_status === 'REJECTED') && (
+        <div
+          data-testid="live-clarification-banner"
+          className="bg-rose-50 border border-rose-300 rounded-2xl p-4 flex items-start gap-3 text-xs text-rose-950 shadow-xs"
+        >
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-black uppercase tracking-wider text-rose-900">
+              {activeIntervention.validation_status === 'REJECTED'
+                ? 'Déclaration Rejetée — Correction Requise'
+                : 'Clarification Demandée par le Responsable'}
+            </div>
+            <p className="font-semibold text-rose-800">
+              {activeIntervention.validation_note ||
+                'Veuillez vérifier les pièces proposées, le numéro de bon ou la description du travail réalisé.'}
+            </p>
+            {activeIntervention.validated_by_name && (
+              <p className="text-[11px] text-rose-700 font-mono">
+                Contrôlé par : {activeIntervention.validated_by_name}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeIntervention.validation_status === 'PENDING_VALIDATION' && (
+        <div
+          data-testid="live-pending-validation-banner"
+          className="bg-purple-50 border border-purple-300 rounded-2xl p-4 flex items-start gap-3 text-xs text-purple-950 shadow-xs"
+        >
+          <ShieldCheck className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-black uppercase tracking-wider text-purple-900">
+              En attente de validation responsable (Aucun déstockage effectué)
+            </div>
+            <p className="text-purple-800 font-medium">
+              {isTechUser
+                ? 'Votre déclaration a été transmise. Vous pouvez encore rectifier les informations ci-dessous et renvoyer.'
+                : `Déclaration soumise par ${activeIntervention.submitted_by_name || activeIntervention.intervenant || 'le technicien'}. Vérifiez les pièces proposées et validez pour clôturer et déduire le stock.`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 2. Clôture Form & PDR Consumption Card */}
       <form
         onSubmit={handleClotureSubmit}
@@ -552,10 +683,14 @@ export default function InterventionLiveTab({
             </div>
             <div>
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                Rapport de Clôture & Sortie Pièce de Rechange (PDR)
+                {isTechUser
+                  ? 'Déclaration d’Intervention & Proposition Pièce de Rechange (PDR)'
+                  : 'Rapport de Clôture & Sortie Pièce de Rechange (PDR)'}
               </h3>
               <p className="text-[11px] text-slate-400">
-                Liaisons Excel Colonnes K, L, M, N • Déstockage direct et traçabilité industrielle
+                {isTechUser
+                  ? 'Saisie terrain soumise à validation • Aucun déstockage magasin avant approbation Admin'
+                  : 'Liaisons Excel Colonnes K, L, M, N • Déstockage direct et traçabilité industrielle'}
               </p>
             </div>
           </div>
@@ -774,7 +909,7 @@ export default function InterventionLiveTab({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
             {/* Marque */}
             <div>
               <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
@@ -803,6 +938,22 @@ export default function InterventionLiveTab({
                 <option value="Occasion">Occasion (Reconditionnée)</option>
                 <option value="Réparée">Réparée sur place</option>
               </select>
+            </div>
+
+            {/* N° Bon Saisi par le Technicien (Optionnel — V2) */}
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+                N° Bon Magasin (Optionnel · Terrain)
+              </label>
+              <input
+                type="text"
+                value={formState.num_bon_saisi_par_tech || ''}
+                onChange={(e) =>
+                  setFormState({ ...formState, num_bon_saisi_par_tech: e.target.value })
+                }
+                placeholder="Ex: BS-2026-0412 (pour contrôle)"
+                className="w-full py-2 px-3 text-xs font-mono font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+              />
             </div>
           </div>
 
@@ -938,10 +1089,19 @@ export default function InterventionLiveTab({
 
           <button
             type="submit"
-            className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-lg shadow-emerald-600/25 active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto"
+            data-testid="live-submit-btn"
+            className={`px-6 py-3 rounded-xl text-white font-bold text-xs transition cursor-pointer shadow-lg active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto ${
+              isTechUser
+                ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/25'
+                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
+            }`}
           >
-            <CheckCircle className="w-4 h-4" />
-            <span>Clôturer l'Intervention & Valider le Rapport</span>
+            {isTechUser ? <ShieldCheck className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+            <span>
+              {isTechUser
+                ? 'Soumettre pour Validation Responsable (Sans déstockage)'
+                : "Clôturer l'Intervention & Valider le Rapport"}
+            </span>
           </button>
         </div>
       </form>

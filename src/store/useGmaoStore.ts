@@ -1227,6 +1227,290 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       DataGateway.saveCorrectiveInterventions(next);
     },
 
+    handleSubmitInterventionForValidation: (id, submissionData = {}) => {
+      const existing = get().correctiveInterventions.find((item) => item.id === id);
+      if (!existing) return null;
+
+      if (
+        String(existing.action_fermee || '').trim().toUpperCase() === 'OUI' ||
+        String(existing.statut || '').trim().toUpperCase() === 'CLOTURE'
+      ) {
+        console.warn(`[useGmaoStore] handleSubmitInterventionForValidation blocked: intervention ${id} is already closed.`);
+        return null;
+      }
+
+      const hasAction = Boolean(
+        String(
+          submissionData.action_realisee ||
+          submissionData.travail_a_faire ||
+          existing.action_realisee ||
+          existing.travail_a_faire ||
+          existing.anomalie ||
+          ''
+        ).trim()
+      );
+      if (!hasAction) {
+        console.warn('[useGmaoStore] handleSubmitInterventionForValidation blocked: missing work description.');
+        return null;
+      }
+
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const timeNow = now.toTimeString().slice(0, 5);
+      const stockList = get().rawStock || [];
+      const stockLookup = new Map<string, any>();
+      stockList.forEach((s: any) => {
+        const r = String(s.ref || s.code_article || '').trim().toUpperCase();
+        if (r) stockLookup.set(r, s);
+      });
+      const warehouseList = get().warehouseItems || [];
+
+      let updated: any = null;
+      const next = get().correctiveInterventions.map((item) => {
+        if (item.id === id) {
+          const dDebut = item.date_debut || submissionData.date_debut || today;
+          const hDebut = item.heure_debut || submissionData.heure_debut || '08:00';
+          const dFin = submissionData.date_fin_proposee || submissionData.date_fin || today;
+          const hFin = submissionData.heure_fin_proposee || submissionData.heure_fin || timeNow;
+          const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
+
+          const rawProposed = Array.isArray(submissionData.pieces_proposees)
+            ? submissionData.pieces_proposees
+            : Array.isArray(submissionData.pieces_utilisees)
+            ? submissionData.pieces_utilisees
+            : Array.isArray(item.pieces_proposees) && !submissionData.pdr_ref
+            ? item.pieces_proposees
+            : [];
+
+          const normalizedProposed: Array<{
+            ref: string;
+            designation: string;
+            quantite: number;
+            prix_unitaire: number;
+            unite: string;
+            marque?: string;
+            etat_piece?: string;
+          }> = [];
+
+          rawProposed.forEach((p: any) => {
+            const ref = String(p?.ref || p?.code_article || '').trim();
+            const quantite = Number(p?.quantite ?? p?.qte ?? 0);
+            if (!ref || !(quantite > 0)) return;
+            const stockMatch = stockLookup.get(ref.toUpperCase());
+            const existingIdx = normalizedProposed.findIndex(
+              (np) => np.ref.toUpperCase() === ref.toUpperCase()
+            );
+            const prix =
+              Number(p?.prix_unitaire ?? p?.prix ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
+            if (existingIdx >= 0) {
+              normalizedProposed[existingIdx].quantite += quantite;
+            } else {
+              normalizedProposed.push({
+                ref,
+                designation: String(
+                  p?.designation || stockMatch?.designation || stockMatch?.nom || ref
+                ).trim(),
+                quantite,
+                prix_unitaire: prix,
+                unite: String(p?.unite || stockMatch?.unite || 'Pièce'),
+                marque: p?.marque || stockMatch?.marque || submissionData.marque || item.marque || '',
+                etat_piece: p?.etat_piece || submissionData.etat_piece || item.etat_piece || 'Neuve',
+              });
+            }
+          });
+
+          const singleRef = String(submissionData.pdr_ref ?? '').trim();
+          const singleQty = Number(submissionData.pdr_quantite ?? 0);
+          if (singleRef && singleQty > 0) {
+            const alreadyIncluded = normalizedProposed.some(
+              (np) => np.ref.toUpperCase() === singleRef.toUpperCase()
+            );
+            if (!alreadyIncluded) {
+              const stockMatch = stockLookup.get(singleRef.toUpperCase());
+              normalizedProposed.push({
+                ref: singleRef,
+                designation: String(
+                  submissionData.pdr_designation ||
+                    stockMatch?.designation ||
+                    stockMatch?.nom ||
+                    singleRef
+                ).trim(),
+                quantite: singleQty,
+                prix_unitaire:
+                  Number(
+                    submissionData.pdr_prix ??
+                      stockMatch?.prix ??
+                      stockMatch?.prix_unitaire ??
+                      0
+                  ) || 0,
+                unite: String(submissionData.pdr_unite || stockMatch?.unite || 'Pièce'),
+                marque: submissionData.marque || item.marque || stockMatch?.marque || '',
+                etat_piece: submissionData.etat_piece || item.etat_piece || 'Neuve',
+              });
+            }
+          }
+
+          const resolvedCompId = String(submissionData.id_composant ?? item.id_composant ?? '').trim();
+          const resolvedPartId = String(submissionData.id_part ?? item.id_part ?? '').trim();
+          const matchedComp = resolvedCompId
+            ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedCompId)
+            : null;
+          const matchedPart = resolvedPartId
+            ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedPartId)
+            : null;
+
+          updated = new CorrectiveIntervention({
+            ...item,
+            travail_a_faire: submissionData.travail_a_faire ?? item.travail_a_faire ?? '',
+            action_realisee: submissionData.action_realisee ?? submissionData.travail_a_faire ?? item.action_realisee ?? '',
+            arret_machine: submissionData.arret_machine !== undefined ? Boolean(submissionData.arret_machine) : item.arret_machine,
+            temps_arret: submissionData.temps_arret ?? item.temps_arret ?? '',
+            marque: submissionData.marque ?? item.marque ?? '',
+            etat_piece: submissionData.etat_piece ?? item.etat_piece ?? 'Neuve',
+            id_composant: resolvedCompId,
+            nom_composant:
+              submissionData.nom_composant ||
+              item.nom_composant ||
+              matchedComp?.designation ||
+              matchedComp?.nom_composant ||
+              matchedComp?.nom ||
+              '',
+            id_part: resolvedPartId,
+            nom_part:
+              submissionData.nom_part ||
+              item.nom_part ||
+              matchedPart?.designation_part ||
+              matchedPart?.designation ||
+              matchedPart?.nom ||
+              '',
+            statut_composant_cloture:
+              submissionData.statut_composant_cloture || item.statut_composant_cloture || 'En service',
+            // Keep official consumed PDR fields empty until Admin validation
+            pdr_ref: '',
+            pdr_designation: '',
+            pdr_quantite: 0,
+            pieces_utilisees: [],
+            // Store Technician Field Claim in proposal layer
+            pieces_proposees: normalizedProposed,
+            num_bon_saisi_par_tech: String(
+              submissionData.num_bon_saisi_par_tech ?? item.num_bon_saisi_par_tech ?? ''
+            ).trim(),
+            date_debut: dDebut,
+            heure_debut: hDebut,
+            date_fin_proposee: dFin,
+            heure_fin_proposee: hFin,
+            temps_intervention_propose:
+              submissionData.temps_intervention_propose ||
+              submissionData.temps_intervention_calc ||
+              timeCalc.formatted,
+            temps_intervention_mins_propose:
+              submissionData.temps_intervention_mins_propose ??
+              submissionData.temps_intervention_mins ??
+              timeCalc.minutes,
+            validation_status: 'PENDING_VALIDATION',
+            submitted_by_id:
+              submissionData.submitted_by_id || item.submitted_by_id || item.technicien_matricule || '',
+            submitted_by_name:
+              submissionData.submitted_by_name || item.submitted_by_name || item.intervenant || 'Technicien',
+            submitted_at: submissionData.submitted_at || now.toISOString(),
+            action_fermee: 'NON',
+            statut: item.statut === 'DEMANDE' ? 'EN_COURS' : item.statut || 'EN_COURS',
+          }).toJSON();
+
+          return updated;
+        }
+        return item;
+      });
+
+      set({ correctiveInterventions: next });
+      DataGateway.saveCorrectiveInterventions(next);
+
+      if (get().activeLiveInterventionId === id) {
+        get().setActiveLiveInterventionId(null);
+      }
+
+      return updated;
+    },
+
+    handleReviewInterventionValidation: (id, decisionData = {}, onAddMouvement = null) => {
+      const existing = get().correctiveInterventions.find((item) => item.id === id);
+      if (!existing) return null;
+
+      const decision = String(decisionData.decision || 'APPROVED').trim().toUpperCase();
+
+      if (decision === 'APPROVED') {
+        const approvedPieces =
+          decisionData.pieces_utilisees !== undefined
+            ? decisionData.pieces_utilisees
+            : decisionData.pieces_proposees !== undefined
+            ? decisionData.pieces_proposees
+            : Array.isArray(existing.pieces_proposees)
+            ? existing.pieces_proposees
+            : existing.pieces_utilisees || [];
+
+        return get().handleClotureIntervention(
+          id,
+          {
+            ...decisionData,
+            pieces_utilisees: approvedPieces,
+            pieces_proposees: approvedPieces,
+            date_fin: decisionData.date_fin || existing.date_fin_proposee,
+            heure_fin: decisionData.heure_fin || existing.heure_fin_proposee,
+            validation_status: 'APPROVED',
+            validated_by_id: decisionData.validated_by_id || 'admin',
+            validated_by_name: decisionData.validated_by_name || 'Administrateur',
+            validated_at: decisionData.validated_at || new Date().toISOString(),
+            validation_note:
+              decisionData.validation_note !== undefined
+                ? String(decisionData.validation_note).trim()
+                : existing.validation_note || '',
+          },
+          onAddMouvement
+        );
+      }
+
+      if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
+        if (String(existing.action_fermee || '').trim().toUpperCase() === 'OUI') {
+          console.warn(`[useGmaoStore] handleReviewInterventionValidation blocked: intervention ${id} is already closed.`);
+          return null;
+        }
+
+        const nowIso = new Date().toISOString();
+        let updated: any = null;
+        const next = get().correctiveInterventions.map((item) => {
+          if (item.id === id) {
+            updated = new CorrectiveIntervention({
+              ...item,
+              ...(decisionData.action_realisee !== undefined
+                ? { action_realisee: decisionData.action_realisee }
+                : {}),
+              ...(decisionData.travail_a_faire !== undefined
+                ? { travail_a_faire: decisionData.travail_a_faire }
+                : {}),
+              ...(Array.isArray(decisionData.pieces_proposees)
+                ? { pieces_proposees: decisionData.pieces_proposees }
+                : {}),
+              validation_status: decision as any,
+              validation_note: String(decisionData.validation_note || '').trim(),
+              validated_by_id: decisionData.validated_by_id || 'admin',
+              validated_by_name: decisionData.validated_by_name || 'Administrateur',
+              validated_at: decisionData.validated_at || nowIso,
+              action_fermee: 'NON',
+              statut: item.statut === 'CLOTURE' ? 'EN_COURS' : item.statut || 'EN_COURS',
+            }).toJSON();
+            return updated;
+          }
+          return item;
+        });
+
+        set({ correctiveInterventions: next });
+        DataGateway.saveCorrectiveInterventions(next);
+        return updated;
+      }
+
+      return null;
+    },
+
     handleClotureIntervention: (id, clotureData = {}, onAddMouvement = null) => {
       const existing = get().correctiveInterventions.find((item) => item.id === id);
       if (!existing) return null;
@@ -1261,15 +1545,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         if (item.id === id) {
           const dDebut = item.date_debut || clotureData.date_debut || today;
           const hDebut = item.heure_debut || clotureData.heure_debut || '08:00';
-          const dFin = clotureData.date_fin || today;
-          const hFin = clotureData.heure_fin || timeNow;
+          const dFin = clotureData.date_fin || item.date_fin_proposee || today;
+          const hFin = clotureData.heure_fin || item.heure_fin_proposee || timeNow;
           const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
 
-          // Normalize multi-PDR consumption (pieces_utilisees + backward-compatible single pdr_ref)
+          // Normalize multi-PDR consumption (pieces_utilisees + fallback to pieces_proposees + backward-compatible single pdr_ref)
           const rawPieces = Array.isArray(clotureData.pieces_utilisees)
             ? clotureData.pieces_utilisees
-            : Array.isArray(item.pieces_utilisees) && !clotureData.pdr_ref
+            : Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0 && !clotureData.pdr_ref
             ? item.pieces_utilisees
+            : Array.isArray(item.pieces_proposees) && item.pieces_proposees.length > 0 && !clotureData.pdr_ref
+            ? item.pieces_proposees
             : [];
 
           const normalizedPieces: Array<{
@@ -1398,7 +1684,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             date_fin: dFin,
             heure_fin: hFin,
             temps_intervention: timeCalc.formatted,
+            temps_intervention_calc: timeCalc.formatted,
             temps_intervention_mins: timeCalc.minutes,
+            temps_minutes: timeCalc.minutes,
+            validation_status: 'APPROVED',
+            validated_by_id: clotureData.validated_by_id || item.validated_by_id || 'admin',
+            validated_by_name:
+              clotureData.validated_by_name || item.validated_by_name || 'Administrateur',
+            validated_at: clotureData.validated_at || item.validated_at || now.toISOString(),
             action_fermee: 'OUI',
             statut: 'CLOTURE',
             rapport_redige: 'OUI',
@@ -1460,7 +1753,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       // Optional linked component lifecycle update in Entrepôt (id_composant + statut_composant_cloture)
       const targetCompId = String(updated?.id_composant || '').trim();
-      const targetCompStatus = String(clotureData?.statut_composant_cloture || '').trim();
+      const targetCompStatus = String(
+        clotureData?.statut_composant_cloture || updated?.statut_composant_cloture || ''
+      ).trim();
       if (targetCompId && targetCompStatus) {
         const btRef = updated?.num_bt || updated?.id || '';
         const dFin = updated?.date_fin || today;
@@ -1963,6 +2258,8 @@ export const useCorrectiveSlice = () =>
     handleAddDemandeIntervention: state.handleAddDemandeIntervention,
     handleConvertToBt: state.handleConvertToBt,
     handleStartLiveIntervention: state.handleStartLiveIntervention,
+    handleSubmitInterventionForValidation: state.handleSubmitInterventionForValidation,
+    handleReviewInterventionValidation: state.handleReviewInterventionValidation,
     handleClotureIntervention: state.handleClotureIntervention,
     handleUpdateCorrectiveIntervention: state.handleUpdateCorrectiveIntervention,
     handleDeleteCorrectiveIntervention: state.handleDeleteCorrectiveIntervention,

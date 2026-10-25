@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   isTechnicianRole,
   getTechnicianDisplayName,
@@ -7,6 +7,7 @@ import {
   buildTechnicianDashboardScope,
 } from '../technicianScope';
 import { AuthorizationService } from '../AuthorizationService';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 const SAMPLE_TECHNICIANS = [
   { id_technician: 'TECH-01', nom: 'Rachid', id_zone: 'FM', specialite: 'Mécanique' },
@@ -161,4 +162,185 @@ describe('technicianScope (R4 Row-Level Identity Matching & R5 Dashboard Scope)'
     expect(AuthorizationService.canAccessTab(techUser, 'zones')).toBe(false);
   });
 });
+
+describe('V1+V2 Maker-Checker Validation Lifecycle on Corrective Maintenance', () => {
+  beforeEach(() => {
+    useGmaoStore.setState({
+      activeLiveInterventionId: 'BT-MC-01',
+      correctiveInterventions: [
+        {
+          id: 'BT-MC-01',
+          date: '2026-10-25',
+          semaine: 'S43',
+          mois: '10',
+          code_machine: 'M-101',
+          designation_machine: 'Presse Injection 1',
+          zone: 'FM',
+          criticite: 'Haute',
+          statut_equipement: 'En arrêt',
+          description_anomalie: 'Fuite vérin hydraulique',
+          type_panne: 'Hydraulique',
+          cause_racine: '',
+          action_realisee: '',
+          action_fermee: 'NON',
+          intervenant: 'Rachid',
+          technicien_matricule: 'TECH-01',
+          heure_demande: '08:00',
+          heure_debut: '08:30',
+          heure_fin: '',
+          temps_attente: '30m',
+          temps_intervention: '',
+          temps_arret_total: '',
+          pdr_ref: '',
+          pdr_designation: '',
+          pdr_quantite: 0,
+          pieces_utilisees: [],
+          statut: 'EN_COURS',
+        },
+      ],
+      mouvements: [],
+    });
+  });
+
+  it('Technician submission sets PENDING_VALIDATION & pieces_proposees WITHOUT deducting stock or closing BT', () => {
+    const store = useGmaoStore.getState();
+    store.handleSubmitInterventionForValidation('BT-MC-01', {
+      cause_racine: 'Joint torique usé',
+      action_realisee: 'Remplacement joint + purge',
+      pieces_proposees: [
+        { ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 2, unite: 'pcs' },
+      ],
+      num_bon_saisi_par_tech: 'BON-TERRAIN-77',
+      date_fin_proposee: '2026-10-25',
+      heure_fin_proposee: '10:00',
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Rachid',
+    });
+
+    const updatedState = useGmaoStore.getState();
+    const bt = updatedState.correctiveInterventions.find(i => i.id === 'BT-MC-01')!;
+
+    expect(bt.validation_status).toBe('PENDING_VALIDATION');
+    expect(bt.statut).toBe('EN_COURS');
+    expect(bt.action_fermee).toBe('NON');
+    expect(bt.pieces_proposees).toEqual([
+      expect.objectContaining({ ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 2, unite: 'pcs' }),
+    ]);
+    // Official approved pieces remain empty until Admin approval
+    expect(bt.pieces_utilisees).toEqual([]);
+    expect(bt.pdr_quantite).toBe(0);
+    expect(bt.num_bon_saisi_par_tech).toBe('BON-TERRAIN-77');
+    expect(bt.submitted_by_id).toBe('TECH-01');
+    expect(bt.submitted_by_name).toBe('Rachid');
+    expect(bt.temps_intervention_propose).toBe('1h 30m');
+    expect(updatedState.activeLiveInterventionId).toBeNull();
+    expect(updatedState.mouvements).toHaveLength(0);
+  });
+
+  it('Admin NEEDS_CLARIFICATION returns BT to technician with validation_note and zero stock deduction', () => {
+    const store = useGmaoStore.getState();
+    store.handleSubmitInterventionForValidation('BT-MC-01', {
+      cause_racine: 'Joint torique usé',
+      action_realisee: 'Remplacement joint',
+      pieces_proposees: [
+        { ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 5, unite: 'pcs' },
+      ],
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Rachid',
+    });
+
+    const emittedMovements: any[] = [];
+    useGmaoStore.getState().handleReviewInterventionValidation(
+      'BT-MC-01',
+      {
+        decision: 'NEEDS_CLARIFICATION',
+        validation_note: 'Vérifier la quantité: 2 joints au lieu de 5 ?',
+        validated_by_id: 'ADMIN-01',
+        validated_by_name: 'Responsable Maintenance',
+      },
+      mv => emittedMovements.push(mv)
+    );
+
+    const updatedBt = useGmaoStore.getState().correctiveInterventions.find(i => i.id === 'BT-MC-01')!;
+    expect(updatedBt.validation_status).toBe('NEEDS_CLARIFICATION');
+    expect(updatedBt.validation_note).toBe('Vérifier la quantité: 2 joints au lieu de 5 ?');
+    expect(updatedBt.statut).toBe('EN_COURS');
+    expect(updatedBt.action_fermee).toBe('NON');
+    expect(emittedMovements).toHaveLength(0);
+
+    // Verify technician dashboard scope surfaces needsClarificationCorrective
+    const scope = buildTechnicianDashboardScope({
+      user: { id: 'TECH-01', role: 'TECHNICIEN', personnelId: 'TECH-01', personnelName: 'Rachid' },
+      technicians: SAMPLE_TECHNICIANS,
+      preventiveTasks: [],
+      preventiveExecutions: [],
+      correctiveInterventions: useGmaoStore.getState().correctiveInterventions,
+      mouvements: [],
+      currentWeekKey: 'S43',
+    });
+    expect(scope.needsClarificationCorrective).toHaveLength(1);
+    expect(scope.needsClarificationCorrective[0].id).toBe('BT-MC-01');
+  });
+
+  it('Admin APPROVED closes BT officially, stamps validation metadata, and emits Sortie movement exactly once', () => {
+    const store = useGmaoStore.getState();
+    store.handleSubmitInterventionForValidation('BT-MC-01', {
+      cause_racine: 'Joint torique usé',
+      action_realisee: 'Remplacement joint + purge',
+      pieces_proposees: [
+        { ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 5, unite: 'pcs' },
+      ],
+      date_fin_proposee: '2026-10-25',
+      heure_fin_proposee: '10:00',
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Rachid',
+    });
+
+    const emittedMovements: any[] = [];
+    // Admin adjusts quantity from 5 to 2 during approval
+    useGmaoStore.getState().handleReviewInterventionValidation(
+      'BT-MC-01',
+      {
+        decision: 'APPROVED',
+        pieces_utilisees: [
+          { ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 2, unite: 'pcs' },
+        ],
+        validation_note: 'Quantité corrigée à 2 pcs après contrôle magasin',
+        validated_by_id: 'ADMIN-01',
+        validated_by_name: 'Responsable Maintenance',
+      },
+      mv => emittedMovements.push(mv)
+    );
+
+    const closedBt = useGmaoStore.getState().correctiveInterventions.find(i => i.id === 'BT-MC-01')!;
+    expect(closedBt.statut).toBe('CLOTURE');
+    expect(closedBt.action_fermee).toBe('OUI');
+    expect(closedBt.validation_status).toBe('APPROVED');
+    expect(closedBt.validated_by_name).toBe('Responsable Maintenance');
+    expect(closedBt.validation_note).toBe('Quantité corrigée à 2 pcs après contrôle magasin');
+    expect(closedBt.pieces_utilisees).toEqual([
+      expect.objectContaining({ ref: 'JNT-40', designation: 'Joint Torique 40mm', quantite: 2, unite: 'pcs' }),
+    ]);
+    expect(closedBt.temps_intervention).toBe('1h 30m');
+
+    // Exactly 1 Sortie movement emitted with the approved quantity (2)
+    expect(emittedMovements).toHaveLength(1);
+    expect(emittedMovements[0].ref).toBe('JNT-40');
+    expect(emittedMovements[0].quantite).toBe(2);
+    expect(emittedMovements[0].code_bon).toContain('BS-BT-BT-MC-01');
+
+    // Attempting a duplicate approval/closure is blocked by the terminal state guard
+    useGmaoStore.getState().handleReviewInterventionValidation(
+      'BT-MC-01',
+      {
+        decision: 'APPROVED',
+        validated_by_id: 'ADMIN-01',
+        validated_by_name: 'Responsable Maintenance',
+      },
+      mv => emittedMovements.push(mv)
+    );
+    expect(emittedMovements).toHaveLength(1);
+  });
+});
+
 

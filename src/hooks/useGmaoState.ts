@@ -243,6 +243,8 @@ export function useGmaoState() {
     handleAddDemandeIntervention: store.handleAddDemandeIntervention,
     handleConvertToBt: store.handleConvertToBt,
     handleStartLiveIntervention: store.handleStartLiveIntervention,
+    handleSubmitInterventionForValidation: store.handleSubmitInterventionForValidation,
+    handleReviewInterventionValidation: store.handleReviewInterventionValidation,
     handleClotureIntervention: store.handleClotureIntervention,
     handleUpdateCorrectiveIntervention: store.handleUpdateCorrectiveIntervention,
     handleDeleteCorrectiveIntervention: store.handleDeleteCorrectiveIntervention,

@@ -213,6 +213,8 @@ export interface GmaoStoreState {
   handleAddDemandeIntervention: (data: any) => any;
   handleConvertToBt: (id: string | number, btDetails?: any) => any;
   handleStartLiveIntervention: (id: string | number) => void;
+  handleSubmitInterventionForValidation: (id: string | number, submissionData?: any) => any;
+  handleReviewInterventionValidation: (id: string | number, decisionData?: any, onAddMouvement?: any) => any;
   handleClotureIntervention: (id: string | number, clotureData?: any, onAddMouvement?: any) => any;
   handleUpdateCorrectiveIntervention: (id: string | number, patch?: any) => void;
   handleDeleteCorrectiveIntervention: (id: string | number) => void;

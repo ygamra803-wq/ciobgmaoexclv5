@@ -1236,6 +1236,42 @@ export default function ClotureRapportsTab({
                         )}
                       </div>
                     </div>
+
+                    {(previewItem.submitted_by_name ||
+                      previewItem.validated_by_name ||
+                      previewItem.num_bon_saisi_par_tech ||
+                      previewItem.validation_note) && (
+                      <div className="p-4 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-1.5">
+                        <span className="text-[10.5px] font-extrabold text-purple-950 uppercase tracking-wider block">
+                          Traçabilité Validation & Contrôle Magasin (Maker-Checker)
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                          <div>
+                            <span className="text-slate-400 font-semibold">Soumis par : </span>
+                            <b className="text-slate-900">
+                              {previewItem.submitted_by_name || previewItem.intervenant || '—'}
+                            </b>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold">Validé par : </span>
+                            <b className="text-emerald-800">
+                              {previewItem.validated_by_name || 'Administrateur'}
+                            </b>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 font-semibold">Bon saisi terrain : </span>
+                            <b className="font-mono text-purple-900">
+                              {previewItem.num_bon_saisi_par_tech || '—'}
+                            </b>
+                          </div>
+                        </div>
+                        {previewItem.validation_note && (
+                          <p className="text-[11px] text-purple-900 pt-1 border-t border-purple-200/60">
+                            <b>Note de contrôle :</b> {previewItem.validation_note}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </>
                 );
               })()}

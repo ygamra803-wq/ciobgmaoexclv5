@@ -603,6 +603,16 @@ export default function DashboardView({
                   <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold text-[10px] font-mono border border-blue-200/80">
                     {techScope.plannedBtCorrective.length} BT planifiés
                   </span>
+                  {techScope.pendingValidationCorrective?.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px] font-mono border border-purple-200">
+                      {techScope.pendingValidationCorrective.length} en attente val.
+                    </span>
+                  )}
+                  {techScope.needsClarificationCorrective?.length > 0 && (
+                    <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 font-bold text-[10px] font-mono border border-rose-200 animate-pulse">
+                      {techScope.needsClarificationCorrective.length} à clarifier
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
@@ -898,11 +908,19 @@ export default function DashboardView({
                 <div className="space-y-2.5">
                   {techScope.openCorrective.slice(0, 8).map((bt, idx) => {
                     const isLive = bt.statut === 'EN_COURS';
+                    const isPendingVal = bt.validation_status === 'PENDING_VALIDATION';
+                    const isClarif =
+                      bt.validation_status === 'NEEDS_CLARIFICATION' ||
+                      bt.validation_status === 'REJECTED';
                     return (
                       <div
                         key={`tech-bt-${bt.id ?? idx}`}
                         className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs transition ${
-                          isLive
+                          isClarif
+                            ? 'bg-rose-50/50 border-rose-300/90'
+                            : isPendingVal
+                            ? 'bg-purple-50/40 border-purple-200/90'
+                            : isLive
                             ? 'bg-emerald-50/40 border-emerald-200/90'
                             : 'bg-slate-50/80 border-slate-200/80'
                         }`}
@@ -917,29 +935,50 @@ export default function DashboardView({
                                 {bt.num_bt}
                               </span>
                             )}
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                                isLive
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
-                              }`}
-                            >
-                              {bt.statut || 'OUVERT'}
-                            </span>
+                            {isClarif ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-100 text-rose-900 border border-rose-300">
+                                {bt.validation_status === 'REJECTED' ? 'REJETÉ' : 'À CLARIFIER'}
+                              </span>
+                            ) : isPendingVal ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-purple-100 text-purple-900 border border-purple-300">
+                                À VALIDER
+                              </span>
+                            ) : (
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                  isLive
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {bt.statut || 'OUVERT'}
+                              </span>
+                            )}
                           </div>
                           <div className="font-bold text-slate-800 truncate">
                             {bt.anomalie || bt.travail_a_faire || 'Intervention corrective'}
                           </div>
+                          {isClarif && bt.validation_note && (
+                            <div className="text-[11px] font-semibold text-rose-800 bg-white/80 px-2 py-1 rounded-lg border border-rose-200 mt-1">
+                              Note responsable : {bt.validation_note}
+                            </div>
+                          )}
                         </div>
 
                         {onNavigateToCorrective && (
                           <button
                             onClick={() =>
-                              onNavigateToCorrective(isLive ? 'corrective_live' : 'corrective_bt')
+                              onNavigateToCorrective(
+                                isClarif || isLive ? 'corrective_live' : 'corrective_bt'
+                              )
                             }
-                            className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
+                            className={`px-2.5 py-1.5 rounded-xl font-bold text-[11px] shrink-0 cursor-pointer transition ${
+                              isClarif
+                                ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                                : 'bg-white hover:bg-amber-50 text-amber-800 border border-amber-200'
+                            }`}
                           >
-                            {isLive ? 'Chrono Live' : 'Ouvrir BT'}
+                            {isClarif ? 'Corriger' : isLive ? 'Chrono Live' : 'Ouvrir BT'}
                           </button>
                         )}
                       </div>

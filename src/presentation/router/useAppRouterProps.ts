@@ -139,6 +139,8 @@ export function useAppRouterProps({
     handleAddDemandeIntervention,
     handleConvertToBt,
     handleStartLiveIntervention,
+    handleSubmitInterventionForValidation,
+    handleReviewInterventionValidation,
     handleClotureIntervention,
     handleUpdateCorrectiveIntervention,
     handleDeleteCorrectiveIntervention,
@@ -846,6 +848,9 @@ export function useAppRouterProps({
       onAddDemande: handleAddDemandeIntervention,
       onConvertToBt: handleConvertToBt,
       onStartLive: handleStartLiveIntervention,
+      onSubmitForValidation: handleSubmitInterventionForValidation,
+      onReviewValidation: (id, decisionData, customMvtHandler) =>
+        handleReviewInterventionValidation(id, decisionData, customMvtHandler || handleAddMouvement),
       onClotureIntervention: (id, clotureData, customMvtHandler) =>
         handleClotureIntervention(id, clotureData, customMvtHandler || handleAddMouvement),
       onUpdateIntervention: handleUpdateCorrectiveIntervention,

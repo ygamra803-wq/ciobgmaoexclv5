@@ -41,6 +41,8 @@ export default function CorrectiveView({
   onAddDemande,
   onConvertToBt,
   onStartLive,
+  onSubmitForValidation,
+  onReviewValidation,
   onClotureIntervention,
   onUpdateIntervention,
   onDeleteIntervention: _onDeleteIntervention,
@@ -164,6 +166,14 @@ export default function CorrectiveView({
   const inProgressBtCount = techScopedInterventions.filter(
     (i) => (i.statut === 'EN_COURS' || i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR') && i.num_bt
   ).length;
+  const pendingValidationCount = techScopedInterventions.filter(
+    (i) => i.statut !== 'CLOTURE' && i.validation_status === 'PENDING_VALIDATION'
+  ).length;
+  const needsClarificationCount = techScopedInterventions.filter(
+    (i) =>
+      i.statut !== 'CLOTURE' &&
+      (i.validation_status === 'NEEDS_CLARIFICATION' || i.validation_status === 'REJECTED')
+  ).length;
   const closedCount = techScopedInterventions.filter((i) => i.statut === 'CLOTURE').length;
   const isLiveRunning = Boolean(activeLiveId);
 
@@ -232,6 +242,24 @@ export default function CorrectiveView({
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200 font-mono">
                   Mes Interventions · {getTechnicianBadgeLabel(user, technicians)}
                 </span>
+              )}
+              {!isTechUser && pendingValidationCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('corrective_bt')}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300 font-mono cursor-pointer transition animate-pulse"
+                >
+                  À valider : {pendingValidationCount} BT
+                </button>
+              )}
+              {isTechUser && needsClarificationCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleTabChange('corrective_bt')}
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-mono cursor-pointer transition animate-pulse"
+                >
+                  À clarifier : {needsClarificationCount} BT
+                </button>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
@@ -393,6 +421,9 @@ export default function CorrectiveView({
               machines={machines}
               onStartLive={onStartLive}
               onUpdateIntervention={onUpdateIntervention}
+              onReviewValidation={onReviewValidation}
+              onClotureIntervention={onClotureIntervention}
+              onAddMouvement={onAddMouvement}
               onNavigateToTab={handleTabChange}
               stockItems={stockItems}
               warehouseItems={warehouseItems}
@@ -412,6 +443,7 @@ export default function CorrectiveView({
               technicians={technicians}
               activeLiveId={activeLiveId}
               setActiveLiveId={setActiveLiveId}
+              onSubmitForValidation={onSubmitForValidation}
               onClotureIntervention={onClotureIntervention}
               onUpdateIntervention={onUpdateIntervention}
               onNavigateToTab={handleTabChange}

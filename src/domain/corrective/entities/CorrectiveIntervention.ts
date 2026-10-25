@@ -1,3 +1,20 @@
+export type CorrectiveValidationStatus =
+  | 'NONE'
+  | 'PENDING_VALIDATION'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'NEEDS_CLARIFICATION';
+
+export interface ProposedPdrItem {
+  ref: string;
+  designation?: string;
+  quantite: number;
+  prix_unitaire?: number;
+  unite?: string;
+  marque?: string;
+  etat_piece?: string;
+}
+
 export class CorrectiveIntervention {
   id: string;
   code_bt?: string;
@@ -31,7 +48,21 @@ export class CorrectiveIntervention {
   pdr_quantite?: number;
   pdr_prix?: number;
   pdr_unite?: string;
-  pieces_utilisees?: Array<{ ref: string; quantite: number }>;
+  pieces_utilisees?: Array<{ ref: string; quantite: number; [key: string]: any }>;
+  pieces_proposees?: ProposedPdrItem[];
+  num_bon_saisi_par_tech?: string;
+  date_fin_proposee?: string;
+  heure_fin_proposee?: string;
+  temps_intervention_propose?: string;
+  temps_intervention_mins_propose?: number;
+  validation_status?: CorrectiveValidationStatus;
+  submitted_by_id?: string;
+  submitted_by_name?: string;
+  submitted_at?: string;
+  validated_by_id?: string;
+  validated_by_name?: string;
+  validated_at?: string;
+  validation_note?: string;
   id_composant?: string;
   nom_composant?: string;
   id_part?: string;
@@ -44,6 +75,10 @@ export class CorrectiveIntervention {
     Object.assign(this, data);
     if (!this.action_fermee) {
       this.action_fermee = data.action_fermee || 'NON';
+    }
+    if (!this.validation_status) {
+      this.validation_status =
+        this.action_fermee === 'OUI' || this.statut === 'CLOTURE' ? 'APPROVED' : 'NONE';
     }
     if (this.date_debut && this.heure_debut && this.date_fin && this.heure_fin && !this.temps_intervention_mins) {
       try {

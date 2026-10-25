@@ -20,6 +20,8 @@ import {
   FileText,
   Radio,
   Lock,
+  ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
@@ -29,6 +31,7 @@ import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePerio
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { useAuth } from '../../../context/AuthContext';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   isTechnicianRole,
   matchesTechnicianRecord,
@@ -40,6 +43,9 @@ export default function BonsTravailTab({
   machines = [],
   onStartLive,
   onUpdateIntervention,
+  onReviewValidation,
+  onClotureIntervention: _onClotureIntervention,
+  onAddMouvement,
   onNavigateToTab,
   stockItems = [],
   technicians = [],
@@ -52,10 +58,86 @@ export default function BonsTravailTab({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const storeReviewValidation = useGmaoStore((s) => s.handleReviewInterventionValidation);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
   );
+
+  // Maker-Checker Review Modal State (Admin / Supervisor)
+  const [reviewModalBt, setReviewModalBt] = useState<any | null>(null);
+  const [reviewActionRealisee, setReviewActionRealisee] = useState('');
+  const [reviewPieces, setReviewPieces] = useState<any[]>([]);
+  const [reviewNote, setReviewNote] = useState('');
+
+  const openReviewModal = (bt: any) => {
+    const initialPieces =
+      Array.isArray(bt?.pieces_proposees) && bt.pieces_proposees.length > 0
+        ? bt.pieces_proposees.map((p: any) => ({ ...p }))
+        : Array.isArray(bt?.pieces_utilisees) && bt.pieces_utilisees.length > 0
+        ? bt.pieces_utilisees.map((p: any) => ({ ...p }))
+        : [];
+    setReviewModalBt(bt);
+    setReviewActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
+    setReviewPieces(initialPieces);
+    setReviewNote(bt?.validation_note || '');
+  };
+
+  const handleReviewDecision = (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => {
+    if (!reviewModalBt) return;
+    if (
+      (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') &&
+      !String(reviewNote || '').trim()
+    ) {
+      showToast?.(
+        'Veuillez saisir une note pour expliquer au technicien la clarification ou le motif du rejet.',
+        'warning'
+      );
+      return;
+    }
+
+    const reviewFn = onReviewValidation || storeReviewValidation;
+    if (typeof reviewFn === 'function') {
+      const result = reviewFn(
+        reviewModalBt.id,
+        {
+          decision,
+          action_realisee: reviewActionRealisee,
+          travail_a_faire: reviewActionRealisee,
+          pieces_utilisees: reviewPieces,
+          pieces_proposees: reviewPieces,
+          validation_note: reviewNote,
+          validated_by_id: user?.id || user?.code || 'admin',
+          validated_by_name: user?.name || 'Administrateur',
+        },
+        onAddMouvement
+      );
+
+      if (result === null) {
+        showToast?.('Action impossible : vérifiez le statut du Bon de Travail.', 'warning');
+        return;
+      }
+    }
+
+    if (decision === 'APPROVED') {
+      showToast?.(
+        `BT ${reviewModalBt.num_bt || reviewModalBt.id} validé et clôturé (${reviewPieces.length} réf. déduite(s) du stock)`,
+        'success'
+      );
+    } else if (decision === 'NEEDS_CLARIFICATION') {
+      showToast?.(
+        `Demande de clarification envoyée au technicien pour ${reviewModalBt.num_bt || reviewModalBt.id} (aucun déstockage)`,
+        'warning'
+      );
+    } else {
+      showToast?.(
+        `Déclaration ${reviewModalBt.num_bt || reviewModalBt.id} rejetée (aucun déstockage)`,
+        'info'
+      );
+    }
+
+    setReviewModalBt(null);
+  };
 
   const resolveTechNom = (bt) => {
     if (bt.technicien_matricule) {
@@ -183,10 +265,24 @@ export default function BonsTravailTab({
       (b) => b.statut === 'EN_COURS' || b.statut === 'BT_PLANIFIE' || b.statut === 'EN_ATTENTE_PDR'
     ).length;
     const waitingPdr = bts.filter((b) => b.statut === 'EN_ATTENTE_PDR').length;
+    const pendingValidation = bts.filter(
+      (b) => b.statut !== 'CLOTURE' && b.validation_status === 'PENDING_VALIDATION'
+    ).length;
+    const needsClarification = bts.filter(
+      (b) =>
+        b.statut !== 'CLOTURE' &&
+        (b.validation_status === 'NEEDS_CLARIFICATION' || b.validation_status === 'REJECTED')
+    ).length;
     const closed = bts.filter((b) => b.statut === 'CLOTURE').length;
-    const withPdr = bts.filter((b) => Boolean(b.pdr || b.pdr_ref)).length;
+    const withPdr = bts.filter((b) =>
+      Boolean(
+        b.pdr ||
+          b.pdr_ref ||
+          (Array.isArray(b.pieces_proposees) && b.pieces_proposees.length > 0)
+      )
+    ).length;
 
-    return { total, inProgress, waitingPdr, closed, withPdr };
+    return { total, inProgress, waitingPdr, pendingValidation, needsClarification, closed, withPdr };
   }, [bts]);
 
   // Filtered BTs
@@ -201,8 +297,25 @@ export default function BonsTravailTab({
       )
         return false;
       if (filterStatus === 'EN_ATTENTE_PDR' && bt.statut !== 'EN_ATTENTE_PDR') return false;
+      if (
+        filterStatus === 'PENDING_VALIDATION' &&
+        (bt.statut === 'CLOTURE' || bt.validation_status !== 'PENDING_VALIDATION')
+      )
+        return false;
+      if (
+        filterStatus === 'NEEDS_CLARIFICATION' &&
+        (bt.statut === 'CLOTURE' ||
+          (bt.validation_status !== 'NEEDS_CLARIFICATION' && bt.validation_status !== 'REJECTED'))
+      )
+        return false;
       if (filterStatus === 'CLOTURE' && bt.statut !== 'CLOTURE') return false;
-      if (filterStatus === 'WITH_PDR' && !bt.pdr && !bt.pdr_ref) return false;
+      if (
+        filterStatus === 'WITH_PDR' &&
+        !bt.pdr &&
+        !bt.pdr_ref &&
+        !(Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0)
+      )
+        return false;
 
       if (filterTech !== 'ALL' && bt.intervenant !== filterTech) return false;
       if (filterMachine !== 'ALL' && bt.code_machine !== filterMachine) return false;
@@ -441,38 +554,109 @@ export default function BonsTravailTab({
       },
       {
         key: 'pdr',
-        label: 'PDR Prévue',
+        label: 'PDR Prévue / Proposée',
         colLetter: 'Col L',
         icon: Package,
         render: (bt) => {
           const pdrObj = resolvePdrDisplay(bt);
-          return pdrObj ? (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
-              title={pdrObj.designation}
-            >
-              <Package className="w-3 h-3 text-cyan-600 shrink-0" />
-              <span className="truncate">{pdrObj.ref}</span>
-            </span>
-          ) : (
-            <span className="text-slate-300 font-mono text-[11px]">—</span>
-          );
+          if (pdrObj) {
+            return (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
+                title={pdrObj.designation}
+              >
+                <Package className="w-3 h-3 text-cyan-600 shrink-0" />
+                <span className="truncate">{pdrObj.ref}</span>
+              </span>
+            );
+          }
+          if (Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0) {
+            const first = bt.pieces_proposees[0];
+            const extra = bt.pieces_proposees.length > 1 ? ` +${bt.pieces_proposees.length - 1}` : '';
+            return (
+              <div className="flex flex-col gap-0.5">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-900 border border-purple-200 text-[11px] font-mono font-bold shadow-2xs"
+                  title={`Proposition terrain: ${first.ref} × ${first.quantite}`}
+                >
+                  <Package className="w-3 h-3 text-purple-600 shrink-0" />
+                  <span className="truncate">
+                    Proposée: {first.ref} ×{first.quantite}
+                    {extra}
+                  </span>
+                </span>
+                {bt.num_bon_saisi_par_tech && (
+                  <span className="text-[10px] font-mono text-slate-500">
+                    Bon saisi: {bt.num_bon_saisi_par_tech}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          if (bt.num_bon_saisi_par_tech) {
+            return (
+              <span className="text-[10.5px] font-mono text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                Bon: {bt.num_bon_saisi_par_tech}
+              </span>
+            );
+          }
+          return <span className="text-slate-300 font-mono text-[11px]">—</span>;
         },
       },
       {
         key: 'statut',
-        label: 'Statut',
+        label: 'Statut & Validation',
         icon: Radio,
         align: 'center',
         sortable: true,
         render: (bt) => {
           const isClosed = bt.statut === 'CLOTURE';
           const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
+          const valStatus = bt.validation_status;
+
           if (isClosed) {
             return (
-              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
-                CLÔTURÉ
-              </span>
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
+                  CLÔTURÉ
+                </span>
+                {bt.validated_by_name && (
+                  <span className="text-[9.5px] font-mono text-emerald-700">
+                    Validé ({bt.validated_by_name})
+                  </span>
+                )}
+              </div>
+            );
+          }
+          if (valStatus === 'PENDING_VALIDATION') {
+            return (
+              <div className="flex flex-col items-center gap-0.5">
+                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-purple-100 text-purple-900 border border-purple-300 font-mono shadow-2xs animate-pulse">
+                  À VALIDER
+                </span>
+                {bt.submitted_by_name && (
+                  <span className="text-[9.5px] font-mono text-purple-700 truncate max-w-[120px]">
+                    Par {bt.submitted_by_name}
+                  </span>
+                )}
+              </div>
+            );
+          }
+          if (valStatus === 'NEEDS_CLARIFICATION' || valStatus === 'REJECTED') {
+            return (
+              <div
+                className="flex flex-col items-center gap-0.5"
+                title={bt.validation_note || 'Clarification demandée'}
+              >
+                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-rose-100 text-rose-900 border border-rose-300 font-mono shadow-2xs">
+                  {valStatus === 'REJECTED' ? 'REJETÉ' : 'À CLARIFIER'}
+                </span>
+                {bt.validation_note && (
+                  <span className="text-[9.5px] text-rose-700 font-semibold truncate max-w-[140px]">
+                    {bt.validation_note}
+                  </span>
+                )}
+              </div>
             );
           }
           if (isWaitingPdr) {
@@ -494,22 +678,54 @@ export default function BonsTravailTab({
         label: 'Action Directe',
         icon: Play,
         align: 'center',
-        headerClassName: 'w-44 text-center whitespace-nowrap',
+        headerClassName: 'w-52 text-center whitespace-nowrap',
         render: (bt) => {
           const isClosed = bt.statut === 'CLOTURE';
           const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
+          const isPendingVal = bt.validation_status === 'PENDING_VALIDATION';
+          const isClarif =
+            bt.validation_status === 'NEEDS_CLARIFICATION' || bt.validation_status === 'REJECTED';
+
           return !isClosed ? (
-            <div className="flex items-center justify-center gap-1.5">
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              {!isTechUser && isPendingVal && (
+                <button
+                  type="button"
+                  data-testid={`review-bt-${bt.id}`}
+                  onClick={() => openReviewModal(bt)}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                  title="Examiner la déclaration du technicien, ajuster si besoin et valider la clôture"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Valider</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => handleStartLiveIntervention(bt)}
-                className="px-2.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95"
+                className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 ${
+                  isClarif
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : isPendingVal && isTechUser
+                    ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                }`}
                 title="Lancer ou reprendre le Chrono Live"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>{isWaitingPdr ? 'Reprendre' : 'Chrono Live'}</span>
+                <span>
+                  {isClarif
+                    ? 'Corriger'
+                    : isPendingVal && isTechUser
+                    ? 'Modifier'
+                    : isWaitingPdr
+                    ? 'Reprendre'
+                    : 'Chrono Live'}
+                </span>
               </button>
-              {typeof onUpdateIntervention === 'function' && (
+
+              {typeof onUpdateIntervention === 'function' && !isPendingVal && (
                 <button
                   type="button"
                   onClick={() => {
@@ -542,7 +758,7 @@ export default function BonsTravailTab({
         },
       },
     ],
-    [technicians, stockItems, onUpdateIntervention]
+    [technicians, stockItems, onUpdateIntervention, isTechUser]
   );
 
   return (
@@ -692,6 +908,69 @@ export default function BonsTravailTab({
         </div>
       </div>
 
+      {/* Maker-Checker Validation Queue Banner (Admin) & Clarification Alert Banner (Technician) */}
+      {!isTechUser && kpiStats.pendingValidation > 0 && (
+        <div
+          data-testid="bt-admin-validation-queue-banner"
+          className="bg-purple-50/90 border border-purple-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-start sm:items-center gap-3 text-xs text-purple-950">
+            <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-black uppercase tracking-wider text-purple-900">
+                File d’attente de Validation Terrain ({kpiStats.pendingValidation} BT à valider)
+              </div>
+              <p className="text-purple-800 font-medium mt-0.5">
+                Des techniciens ont soumis leurs rapports et propositions PDR. Vérifiez et validez pour clôturer officiellement et déduire le stock.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterStatus('PENDING_VALIDATION');
+              setCurrentPage(1);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+          >
+            Afficher À Valider ({kpiStats.pendingValidation})
+          </button>
+        </div>
+      )}
+
+      {isTechUser && kpiStats.needsClarification > 0 && (
+        <div
+          data-testid="bt-tech-clarification-banner"
+          className="bg-rose-50/90 border border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+        >
+          <div className="flex items-start sm:items-center gap-3 text-xs text-rose-950">
+            <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="font-black uppercase tracking-wider text-rose-900">
+                Clarification Demandée par le Responsable ({kpiStats.needsClarification} BT)
+              </div>
+              <p className="text-rose-800 font-medium mt-0.5">
+                Cliquez sur « Corriger » dans la liste pour consulter la note du responsable, ajuster votre saisie et resoumettre.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterStatus('NEEDS_CLARIFICATION');
+              setCurrentPage(1);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+          >
+            Voir À Clarifier ({kpiStats.needsClarification})
+          </button>
+        </div>
+      )}
+
       {/* 1.5. Period Filter Bar (P1 Factory Memory) */}
       <PeriodFilterBar
         value={periodFilter}
@@ -771,6 +1050,20 @@ export default function BonsTravailTab({
               count: kpiStats.inProgress,
               activeBg: 'bg-amber-600 text-white shadow-xs',
               colorDot: 'bg-amber-500',
+            },
+            {
+              key: 'PENDING_VALIDATION',
+              label: 'À Valider',
+              count: kpiStats.pendingValidation,
+              activeBg: 'bg-purple-600 text-white shadow-xs',
+              colorDot: 'bg-purple-500',
+            },
+            {
+              key: 'NEEDS_CLARIFICATION',
+              label: 'À Clarifier',
+              count: kpiStats.needsClarification,
+              activeBg: 'bg-rose-600 text-white shadow-xs',
+              colorDot: 'bg-rose-500',
             },
             {
               key: 'EN_ATTENTE_PDR',
@@ -1217,6 +1510,234 @@ export default function BonsTravailTab({
           itemLabel: 'bons',
         }}
       />
+
+      {/* Admin Maker-Checker Review & Validation Modal */}
+      {reviewModalBt && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="maker-checker-review-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+        >
+          <div
+            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-purple-600/10 via-purple-500/5 to-transparent p-5 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">
+                    Contrôle & Validation de Clôture BT (Maker-Checker)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Bon de Travail : <b className="font-mono text-purple-900">{reviewModalBt.num_bt || reviewModalBt.id}</b> • Machine :{' '}
+                    <b className="font-mono text-slate-900">{reviewModalBt.code_machine}</b>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReviewModalBt(null)}
+                className="w-8 h-8 rounded-full border border-slate-200 bg-white hover:bg-slate-100 text-slate-500 flex items-center justify-center cursor-pointer shadow-2xs"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-5 overflow-y-auto text-xs text-slate-700">
+              {/* Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Soumis par</span>
+                  <span className="font-bold text-slate-900 block truncate">
+                    {reviewModalBt.submitted_by_name || resolveTechNom(reviewModalBt)}
+                  </span>
+                  <span className="text-[10.5px] text-slate-500 font-mono">
+                    {reviewModalBt.submitted_by_id || 'Technicien'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block">Temps Ouvré Proposé</span>
+                  <span className="font-mono font-bold text-emerald-700 text-sm block">
+                    {reviewModalBt.temps_intervention_propose ||
+                      reviewModalBt.temps_intervention_calc ||
+                      reviewModalBt.temps_intervention ||
+                      '00:45'}
+                  </span>
+                  <span className="text-[10.5px] text-slate-400 font-mono">
+                    Fin: {reviewModalBt.heure_fin_proposee || '—'}
+                  </span>
+                </div>
+                <div className="p-3 rounded-xl bg-purple-50/70 border border-purple-200">
+                  <span className="text-[10px] font-bold text-purple-700 uppercase block">N° Bon Saisi Terrain</span>
+                  <span className="font-mono font-bold text-purple-950 text-sm block">
+                    {reviewModalBt.num_bon_saisi_par_tech || 'Non renseigné'}
+                  </span>
+                  <span className="text-[10.5px] text-purple-600">Déclaration technicien</span>
+                </div>
+                <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200">
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase block">Bon Officiel Généré</span>
+                  <span className="font-mono font-bold text-emerald-950 text-sm block">
+                    BS-BT-{reviewModalBt.num_bt || reviewModalBt.id}
+                  </span>
+                  <span className="text-[10.5px] text-emerald-700">À l’approbation</span>
+                </div>
+              </div>
+
+              {/* Editable Travail Réalisé */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Travail Réalisé / Rapport Technique (Col K)
+                </label>
+                <input
+                  type="text"
+                  value={reviewActionRealisee}
+                  onChange={(e) => setReviewActionRealisee(e.target.value)}
+                  className="w-full py-2.5 px-3.5 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-purple-400 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Proposed PDR List & Stock Verification */}
+              <div className="p-4 rounded-2xl bg-cyan-50/50 border border-cyan-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-cyan-950 flex items-center gap-1.5">
+                    <Package className="w-4 h-4 text-cyan-700" />
+                    Pièces de Rechange Proposées ({reviewPieces.length})
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-900">
+                    Déstockage uniquement sur Approbation
+                  </span>
+                </div>
+
+                {reviewPieces.length > 0 ? (
+                  <div className="space-y-2">
+                    {reviewPieces.map((piece, idx) => {
+                      const stockMatch = (stockItems || []).find(
+                        (s: any) =>
+                          String(s.ref || s.code_article || '').trim().toUpperCase() ===
+                          String(piece.ref || '').trim().toUpperCase()
+                      );
+                      const dispo = stockMatch
+                        ? stockMatch.stockActuel ?? stockMatch.stock_actuel ?? stockMatch.quantite ?? 0
+                        : 0;
+                      const isShort = Number(piece.quantite || 0) > Number(dispo);
+
+                      return (
+                        <div
+                          key={`${piece.ref}-${idx}`}
+                          className="p-2.5 rounded-xl bg-white border border-cyan-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono font-bold text-cyan-950 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-300">
+                              {piece.ref}
+                            </span>
+                            <span className="font-semibold text-slate-800 truncate">
+                              {piece.designation || stockMatch?.designation || piece.ref}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span
+                              className={`font-mono text-[10.5px] font-bold px-2 py-0.5 rounded border ${
+                                isShort
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              }`}
+                            >
+                              Dispo: {dispo}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-bold text-slate-500">Qté:</span>
+                              <input
+                                type="number"
+                                min={1}
+                                value={piece.quantite}
+                                onChange={(e) => {
+                                  const nextQty = Math.max(1, Number(e.target.value) || 1);
+                                  setReviewPieces((prev) =>
+                                    prev.map((p, i) => (i === idx ? { ...p, quantite: nextQty } : p))
+                                  );
+                                }}
+                                className="w-16 py-1 px-2 text-xs font-mono font-bold rounded-lg border border-cyan-300 bg-white text-center"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setReviewPieces((prev) => prev.filter((_, i) => i !== idx))
+                              }
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              title="Retirer cette pièce de la validation"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">
+                    Aucune pièce de rechange déclarée sur cette intervention (clôture sans mouvement stock).
+                  </p>
+                )}
+              </div>
+
+              {/* Validation / Clarification Note */}
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Note du Responsable / Motif de Clarification (Visible par le technicien)
+                </label>
+                <input
+                  type="text"
+                  data-testid="review-validation-note-input"
+                  value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                  placeholder="Ex: Vérifier la quantité du roulement 6205 ou le N° de bon magasin..."
+                  className="w-full py-2.5 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-purple-400 focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            {/* Footer Decision Actions */}
+            <div className="bg-slate-50 p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  data-testid="review-clarify-btn"
+                  onClick={() => handleReviewDecision('NEEDS_CLARIFICATION')}
+                  className="px-3.5 py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs transition cursor-pointer flex-1 sm:flex-initial"
+                >
+                  Demander Clarification
+                </button>
+                <button
+                  type="button"
+                  data-testid="review-reject-btn"
+                  onClick={() => handleReviewDecision('REJECTED')}
+                  className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold text-xs transition cursor-pointer flex-1 sm:flex-initial"
+                >
+                  Rejeter
+                </button>
+              </div>
+
+              <button
+                type="button"
+                data-testid="review-approve-btn"
+                onClick={() => handleReviewDecision('APPROVED')}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 w-full sm:w-auto"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Approuver & Clôturer (Déduire Stock)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

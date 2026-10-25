@@ -201,6 +201,14 @@ export function buildTechnicianDashboardScope({
   const plannedBtCorrective = myCorrectiveInterventions.filter(
     (i) => i?.statut === 'BT_PLANIFIE' || i?.statut === 'EN_ATTENTE_PDR'
   );
+  const pendingValidationCorrective = myCorrectiveInterventions.filter(
+    (i) => i?.statut !== 'CLOTURE' && i?.validation_status === 'PENDING_VALIDATION'
+  );
+  const needsClarificationCorrective = myCorrectiveInterventions.filter(
+    (i) =>
+      i?.statut !== 'CLOTURE' &&
+      (i?.validation_status === 'NEEDS_CLARIFICATION' || i?.validation_status === 'REJECTED')
+  );
   const closedCorrective = myCorrectiveInterventions.filter((i) => i?.statut === 'CLOTURE');
 
   const myPreventiveExecutions = isTechUser
@@ -231,6 +239,8 @@ export function buildTechnicianDashboardScope({
     openCorrective,
     liveCorrective,
     plannedBtCorrective,
+    pendingValidationCorrective,
+    needsClarificationCorrective,
     closedCorrective,
     myPreventiveExecutions,
     myMouvements,
