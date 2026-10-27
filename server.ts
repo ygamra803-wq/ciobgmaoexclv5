@@ -30,6 +30,7 @@ export const ALLOWED_ENTITIES = [
   'types',
   'designations',
   'machines',
+  'generalSystemTypes',
   'families',
   'templates',
   'blueprints',
@@ -57,6 +58,7 @@ export const ALLOWED_ENTITIES = [
   'partTypes',
   'partDesignations',
   'sortiesExterne',
+  'sortieDemands',
 ] as const;
 
 const ALLOWED_ENTITY_SET = new Set<string>(ALLOWED_ENTITIES);
@@ -773,12 +775,20 @@ async function startServer() {
         viteInstance = vite;
         console.log('[Server] Vite development middleware enabled');
         return vite;
+      })
+      .catch((err) => {
+        console.error('[Server] Vite development middleware initialization failed:', err);
+        return null;
       });
 
     app.use(async (req, res, next) => {
       try {
         const vite = viteInstance || (await viteReadyPromise);
-        vite.middlewares(req, res, next);
+        if (vite && vite.middlewares) {
+          vite.middlewares(req, res, next);
+        } else {
+          next(new Error('Vite middleware is unavailable'));
+        }
       } catch (err) {
         next(err);
       }
@@ -792,8 +802,12 @@ async function startServer() {
     console.log('[Server] Production static serving enabled from dist/');
   }
 
-  app.listen(Number(PORT), '0.0.0.0', () => {
+  const httpServer = app.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🚀 GMAO Enterprise Server running on http://localhost:${PORT}`);
+  });
+
+  httpServer.on('error', (err) => {
+    console.error('[Server] HTTP server error:', err);
   });
 }
 

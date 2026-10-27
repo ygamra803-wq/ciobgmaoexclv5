@@ -46,6 +46,7 @@ import {
   isWarehouseComponent,
   isWarehousePart,
 } from '../../../core/domain/EntrepotItem';
+import { filterProductionMachines, filterActiveMachines } from '../../../utils/activeMachines';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 
 export default function EntrepotView({
@@ -1905,7 +1906,10 @@ export default function EntrepotView({
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-purple-800 focus:border-teal-500 outline-none"
                   >
                     <option value="">-- {t('entrepot.modal.machine')} --</option>
-                    {machines.map((m) => (
+                    {(isComponentNature(addForm.nature)
+                      ? filterProductionMachines(machines)
+                      : filterActiveMachines(machines)
+                    ).map((m) => (
                       <option key={m.id_machine_registered} value={m.id_machine_registered}>
                         {m.id_machine_registered} - {m.designation}
                       </option>
@@ -2099,7 +2103,10 @@ export default function EntrepotView({
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-purple-800 focus:border-blue-500 outline-none"
                   >
                     <option value="">-- {t('entrepot.modal.machine')} --</option>
-                    {machines.map((m) => (
+                    {(isComponentNature(toEdit?.nature || editForm.nature)
+                      ? filterProductionMachines(machines)
+                      : filterActiveMachines(machines)
+                    ).map((m) => (
                       <option key={m.id_machine_registered} value={m.id_machine_registered}>
                         {m.id_machine_registered} - {m.designation}
                       </option>

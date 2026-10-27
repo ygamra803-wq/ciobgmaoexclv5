@@ -21,6 +21,7 @@ import initialFamilies from '../data/machines/seedFamilies.json';
 import initialTemplates from '../data/machines/seedTemplates.json';
 import initialBlueprints from '../data/machines/seedBlueprints.json';
 import initialMachines from '../data/machines/seedMachines.json';
+import initialGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
 import initialZones from '../data/machines/seedZones.json';
 import initialMachineBomLedger from '../data/machines/seedMachineBomLedger.json';
 import initialWarehouseItems from '../data/warehouse/seedWarehouseItems.json';
@@ -123,6 +124,23 @@ function getInitialStock() {
   return { types, rawStock, designations };
 }
 
+function normalizeMachinesList(list: any[] = []) {
+  if (!Array.isArray(list)) return [];
+  return list.map((m) => {
+    if (!m || typeof m !== 'object') return m;
+    const assetClass =
+      String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
+        ? 'SYSTEM_GENERAL'
+        : 'PRODUCTION';
+    return {
+      ...m,
+      asset_class: assetClass,
+      id_general_system_type:
+        assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
+    };
+  });
+}
+
 function getInitialMachines() {
   const families = loadCollection(STORAGE_KEYS.FAMILIES, {
     allowDemoFallback: true,
@@ -136,9 +154,14 @@ function getInitialMachines() {
     allowDemoFallback: false,
     demoSeed: [],
   });
-  const machines = loadCollection(STORAGE_KEYS.MACHINES, {
+  const loadedMachines = loadCollection(STORAGE_KEYS.MACHINES, {
     allowDemoFallback: true,
     demoSeed: initialMachines,
+  });
+  const machines = normalizeMachinesList(loadedMachines);
+  const generalSystemTypes = loadCollection(STORAGE_KEYS.GENERAL_SYSTEM_TYPES, {
+    allowDemoFallback: true,
+    demoSeed: initialGeneralSystemTypes,
   });
   const loadedZones = loadCollection(STORAGE_KEYS.ZONES, {
     allowDemoFallback: true,
@@ -153,7 +176,7 @@ function getInitialMachines() {
     allowDemoFallback: true,
     demoSeed: initialMachineBomLedger,
   });
-  return { families, templates, blueprints, machines, zones, machineElementsLedger };
+  return { families, templates, blueprints, machines, generalSystemTypes, zones, machineElementsLedger };
 }
 
 function getInitialWarehouse() {
@@ -335,6 +358,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     templates: machinesInit.templates,
     blueprints: machinesInit.blueprints,
     machines: machinesInit.machines,
+    generalSystemTypes: machinesInit.generalSystemTypes,
     zones: machinesInit.zones,
     machineElementsLedger: machinesInit.machineElementsLedger,
 
@@ -357,9 +381,59 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setMachines: (updater) => {
-      const next = resolveUpdate(updater, get().machines);
+      const next = normalizeMachinesList(resolveUpdate(updater, get().machines));
       set({ machines: next });
       DataGateway.saveMachines(next);
+    },
+
+    setGeneralSystemTypes: (updater) => {
+      const next = resolveUpdate(updater, get().generalSystemTypes || []);
+      set({ generalSystemTypes: next });
+      DataGateway.saveGeneralSystemTypes(next);
+    },
+
+    handleAddGeneralSystemType: (payload) => {
+      const rawName = String(payload?.name || '').trim();
+      if (!rawName) return null;
+      const rawCode = String(payload?.code || rawName.substring(0, 3))
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '')
+        .slice(0, 8) || 'SYS';
+      const id = String(payload?.id || `SYS-${rawCode}`).toUpperCase();
+      const current = get().generalSystemTypes || [];
+      const existing = current.find(
+        (t) =>
+          String(t.id).toUpperCase() === id ||
+          String(t.code).toUpperCase() === rawCode ||
+          String(t.name).toLowerCase() === rawName.toLowerCase()
+      );
+      if (existing) {
+        if (!existing.is_active) {
+          get().handleToggleGeneralSystemType(existing.id, true);
+        }
+        return existing;
+      }
+      const created = {
+        id,
+        code: rawCode,
+        name: rawName,
+        is_active: true,
+      };
+      const next = [...current, created];
+      set({ generalSystemTypes: next });
+      DataGateway.saveGeneralSystemTypes(next);
+      return created;
+    },
+
+    handleToggleGeneralSystemType: (id, isActive) => {
+      const current = get().generalSystemTypes || [];
+      const next = current.map((t) =>
+        String(t.id) === String(id)
+          ? { ...t, is_active: isActive !== undefined ? Boolean(isActive) : !t.is_active }
+          : t
+      );
+      set({ generalSystemTypes: next });
+      DataGateway.saveGeneralSystemTypes(next);
     },
 
     setZones: (updater) => {
@@ -375,6 +449,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     addMachineElement: (element) => {
+      const targetMachineId = element?.id_machine_registered || element?.id_machine;
+      const targetMachine = (get().machines || []).find(
+        (m) => m.id_machine_registered === targetMachineId
+      );
+      if (targetMachine && String(targetMachine.asset_class || '').toUpperCase() === 'SYSTEM_GENERAL') {
+        console.warn('[useGmaoStore] Blocked adding production BOM element to SYSTEM_GENERAL asset:', targetMachine.id_machine_registered);
+        return;
+      }
       const id = element.id || `BOM-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
       const next = [{ ...element, id }, ...get().machineElementsLedger];
       set({ machineElementsLedger: next });
@@ -395,12 +477,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     duplicateBOMToTwins: (sourceMachineId, targetMachineIds = []) => {
       const prev = get().machineElementsLedger;
+      const machinesList = get().machines || [];
+      const prodTargetIds = (targetMachineIds || []).filter((targetId) => {
+        const m = machinesList.find((item) => item.id_machine_registered === targetId);
+        return !m || String(m.asset_class || '').toUpperCase() !== 'SYSTEM_GENERAL';
+      });
       const sourceElements = prev.filter((e) => e.id_machine_registered === sourceMachineId);
-      if (sourceElements.length === 0 || !Array.isArray(targetMachineIds) || targetMachineIds.length === 0) {
+      if (sourceElements.length === 0 || prodTargetIds.length === 0) {
         return;
       }
       const cloned: any[] = [];
-      targetMachineIds.forEach((targetId) => {
+      prodTargetIds.forEach((targetId) => {
         sourceElements.forEach((src) => {
           const exists = prev.some((e) => e.id_machine_registered === targetId && e.ref_element === src.ref_element);
           if (!exists) {
@@ -2445,6 +2532,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTemplates: get().setTemplates,
         setBlueprints: get().setBlueprints,
         setMachines: get().setMachines,
+        setGeneralSystemTypes: get().setGeneralSystemTypes,
         setZones: get().setZones,
         setMachineElementsLedger: get().setMachineElementsLedger,
         setWarehouseItems: get().setWarehouseItems,
@@ -2480,6 +2568,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTemplates: get().setTemplates,
         setBlueprints: get().setBlueprints,
         setMachines: get().setMachines,
+        setGeneralSystemTypes: get().setGeneralSystemTypes,
         setZones: get().setZones,
         setMachineElementsLedger: get().setMachineElementsLedger,
         setWarehouseItems: get().setWarehouseItems,
@@ -2515,6 +2604,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTemplates: get().setTemplates,
         setBlueprints: get().setBlueprints,
         setMachines: get().setMachines,
+        setGeneralSystemTypes: get().setGeneralSystemTypes,
         setZones: get().setZones,
         setMachineElementsLedger: get().setMachineElementsLedger,
         setWarehouseItems: get().setWarehouseItems,
@@ -2550,6 +2640,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTemplates: get().setTemplates,
         setBlueprints: get().setBlueprints,
         setMachines: get().setMachines,
+        setGeneralSystemTypes: get().setGeneralSystemTypes,
         setZones: get().setZones,
         setMachineElementsLedger: get().setMachineElementsLedger,
         setWarehouseItems: get().setWarehouseItems,
@@ -2589,7 +2680,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.families)) updates.families = remoteState.families;
       if (Array.isArray(remoteState.templates)) updates.templates = remoteState.templates;
       if (Array.isArray(remoteState.blueprints)) updates.blueprints = remoteState.blueprints;
-      if (Array.isArray(remoteState.machines)) updates.machines = remoteState.machines;
+      if (Array.isArray(remoteState.machines)) updates.machines = normalizeMachinesList(remoteState.machines);
+      if (Array.isArray(remoteState.generalSystemTypes)) updates.generalSystemTypes = remoteState.generalSystemTypes;
       if (Array.isArray(remoteState.zones)) updates.zones = remoteState.zones;
       if (Array.isArray(remoteState.machineElementsLedger)) updates.machineElementsLedger = remoteState.machineElementsLedger;
 
@@ -2671,6 +2763,10 @@ export const useMachineSlice = () =>
     setBlueprints: state.setBlueprints,
     machines: state.machines,
     setMachines: state.setMachines,
+    generalSystemTypes: state.generalSystemTypes,
+    setGeneralSystemTypes: state.setGeneralSystemTypes,
+    handleAddGeneralSystemType: state.handleAddGeneralSystemType,
+    handleToggleGeneralSystemType: state.handleToggleGeneralSystemType,
     zones: state.zones,
     setZones: state.setZones,
     machineElementsLedger: state.machineElementsLedger,

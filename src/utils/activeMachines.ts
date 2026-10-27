@@ -27,3 +27,25 @@ export function getActiveMachineCodes(machines: any[] = []) {
   );
 }
 
+/**
+ * Returns the canonical asset_class of a machine ('PRODUCTION' by default for backward compatibility).
+ */
+export function getMachineAssetClass(machine: any): 'PRODUCTION' | 'SYSTEM_GENERAL' {
+  if (!machine) return 'PRODUCTION';
+  return String(machine.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
+    ? 'SYSTEM_GENERAL'
+    : 'PRODUCTION';
+}
+
+export function isSystemGeneralMachine(machine: any): boolean {
+  return getMachineAssetClass(machine) === 'SYSTEM_GENERAL';
+}
+
+/**
+ * Filters machines to active PRODUCTION machines only (excludes SYSTEM_GENERAL assets from production organ/BOM attachment).
+ */
+export function filterProductionMachines(machines: any[] = []) {
+  return filterActiveMachines(machines).filter((m) => !isSystemGeneralMachine(m));
+}
+
+

@@ -2,6 +2,9 @@ import { useGmaoStore } from '../../store/useGmaoStore';
 
 export function useMachines() {
   const machines = useGmaoStore((state) => state.machines);
+  const generalSystemTypes = useGmaoStore((state) => state.generalSystemTypes);
+  const handleAddGeneralSystemType = useGmaoStore((state) => state.handleAddGeneralSystemType);
+  const handleToggleGeneralSystemType = useGmaoStore((state) => state.handleToggleGeneralSystemType);
   const handleUpdateMachine = useGmaoStore((state) => state.handleUpdateMachine);
   const handleDeleteMachine = useGmaoStore((state) => state.handleDeleteMachine);
 
@@ -19,6 +22,9 @@ export function useMachines() {
 
   return {
     machines: Array.isArray(machines) ? machines : [],
+    generalSystemTypes: Array.isArray(generalSystemTypes) ? generalSystemTypes : [],
+    addGeneralSystemType: handleAddGeneralSystemType,
+    toggleGeneralSystemType: handleToggleGeneralSystemType,
     updateMachine,
     deleteMachine,
   };

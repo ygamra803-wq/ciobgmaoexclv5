@@ -6,6 +6,7 @@
 import type {
   IStockItem,
   IMachine,
+  IGeneralSystemType,
   IMouvement,
   IZone,
   IOperation,
@@ -93,12 +94,16 @@ export interface GmaoStoreState {
   templates: any[];
   blueprints: any[];
   machines: IMachine[];
+  generalSystemTypes: IGeneralSystemType[];
   zones: IZone[];
   machineElementsLedger: MachineElement[];
   setFamilies: (families: any[] | ((prev: any[]) => any[])) => void;
   setTemplates: (templates: any[] | ((prev: any[]) => any[])) => void;
   setBlueprints: (blueprints: any[] | ((prev: any[]) => any[])) => void;
   setMachines: (machines: IMachine[] | ((prev: IMachine[]) => IMachine[])) => void;
+  setGeneralSystemTypes: (types: IGeneralSystemType[] | ((prev: IGeneralSystemType[]) => IGeneralSystemType[])) => void;
+  handleAddGeneralSystemType: (payload: { name: string; code?: string; id?: string }) => IGeneralSystemType | null;
+  handleToggleGeneralSystemType: (id: string, isActive?: boolean) => void;
   setZones: (zones: IZone[] | ((prev: IZone[]) => IZone[])) => void;
   setMachineElementsLedger: (ledger: MachineElement[] | ((prev: MachineElement[]) => MachineElement[])) => void;
   addMachineElement: (element: Partial<MachineElement>) => void;

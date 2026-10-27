@@ -7,6 +7,7 @@ import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 
 import seedMachines from '../data/machines/seedMachines.json';
+import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
 import seedFamilies from '../data/machines/seedFamilies.json';
 import seedTemplates from '../data/machines/seedTemplates.json';
 import seedBlueprints from '../data/machines/seedBlueprints.json';
@@ -76,11 +77,31 @@ export const DataGateway = {
   // 1. MACHINES & TOPOLOGY
   // ==========================================
   saveMachines(list = [], { validate = false } = {}) {
-    let clean = Array.isArray(list) ? list : [];
+    let clean = Array.isArray(list)
+      ? list.map((m) => {
+          if (!m || typeof m !== 'object') return m;
+          const assetClass =
+            String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
+              ? 'SYSTEM_GENERAL'
+              : 'PRODUCTION';
+          return {
+            ...m,
+            asset_class: assetClass,
+            id_general_system_type:
+              assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
+          };
+        })
+      : [];
     if (validate) {
       clean = clean.filter((m) => ValidationService.validateMachine(m).valid);
     }
     storageService.setItem(STORAGE_KEYS.MACHINES, clean);
+    return clean;
+  },
+
+  saveGeneralSystemTypes(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.GENERAL_SYSTEM_TYPES, clean);
     return clean;
   },
 
@@ -411,6 +432,7 @@ export const DataGateway = {
 
     // 2. Write all seeds to canonical STORAGE_KEYS only
     this.saveMachines(seedMachines);
+    this.saveGeneralSystemTypes(seedGeneralSystemTypes);
     this.saveFamilies(seedFamilies);
     this.saveTemplates(seedTemplates);
     this.saveBlueprints(seedBlueprints);
@@ -455,6 +477,7 @@ export const DataGateway = {
 
     // 3. Update React state setters if provided
     if (setters.setMachines) setters.setMachines(seedMachines);
+    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
     if (setters.setFamilies) setters.setFamilies(seedFamilies);
     if (setters.setTemplates) setters.setTemplates(seedTemplates);
     if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
@@ -558,6 +581,7 @@ export const DataGateway = {
     this.purgeLegacyKeysFor(null);
 
     this.saveMachines([]);
+    this.saveGeneralSystemTypes([]);
     this.saveFamilies([]);
     this.saveTemplates([]);
     this.saveBlueprints([]);
@@ -600,6 +624,7 @@ export const DataGateway = {
     this.saveSortiesExterne([]);
 
     if (setters.setMachines) setters.setMachines([]);
+    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes([]);
     if (setters.setFamilies) setters.setFamilies([]);
     if (setters.setTemplates) setters.setTemplates([]);
     if (setters.setBlueprints) setters.setBlueprints([]);
@@ -648,6 +673,7 @@ export const DataGateway = {
       [STORAGE_KEYS.DEMO_MODE]: false,
       [STORAGE_KEYS.START_MODE]: 'empty',
       [STORAGE_KEYS.MACHINES]: [],
+      [STORAGE_KEYS.GENERAL_SYSTEM_TYPES]: [],
       [STORAGE_KEYS.FAMILIES]: [],
       [STORAGE_KEYS.TEMPLATES]: [],
       [STORAGE_KEYS.BLUEPRINTS]: [],
@@ -707,6 +733,9 @@ export const DataGateway = {
     const types = Array.isArray(serverData.types) ? serverData.types : [];
     const designations = Array.isArray(serverData.designations) ? serverData.designations : [];
     const machines = Array.isArray(serverData.machines) ? serverData.machines : [];
+    const generalSystemTypes = Array.isArray(serverData.generalSystemTypes)
+      ? serverData.generalSystemTypes
+      : [];
     const families = Array.isArray(serverData.families) ? serverData.families : [];
     const templates = Array.isArray(serverData.templates) ? serverData.templates : [];
     const blueprints = Array.isArray(serverData.blueprints) ? serverData.blueprints : [];
@@ -765,6 +794,7 @@ export const DataGateway = {
     this.saveStockTypes(types);
     this.saveDesignations(designations);
     this.saveMachines(machines);
+    this.saveGeneralSystemTypes(generalSystemTypes);
     this.saveFamilies(families);
     this.saveTemplates(templates);
     this.saveBlueprints(blueprints);
@@ -807,6 +837,7 @@ export const DataGateway = {
         types,
         designations,
         machines,
+        generalSystemTypes,
         families,
         templates,
         blueprints,
@@ -841,6 +872,7 @@ export const DataGateway = {
     if (setters.setTypes) setters.setTypes(types);
     if (setters.setDesignations) setters.setDesignations(designations);
     if (setters.setMachines) setters.setMachines(machines);
+    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(generalSystemTypes);
     if (setters.setFamilies) setters.setFamilies(families);
     if (setters.setTemplates) setters.setTemplates(templates);
     if (setters.setBlueprints) setters.setBlueprints(blueprints);
@@ -916,11 +948,13 @@ export const DataGateway = {
       case 'parc':
       case 'machines':
         this.saveMachines(seedMachines);
+        this.saveGeneralSystemTypes(seedGeneralSystemTypes);
         this.saveFamilies(seedFamilies);
         this.saveTemplates(seedTemplates);
         this.saveBlueprints(seedBlueprints);
         this.saveMachineBom(seedMachineBomLedger);
         if (setters.setMachines) setters.setMachines(seedMachines);
+        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
         if (setters.setFamilies) setters.setFamilies(seedFamilies);
         if (setters.setTemplates) setters.setTemplates(seedTemplates);
         if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
@@ -1024,11 +1058,13 @@ export const DataGateway = {
       case 'parc':
       case 'machines':
         this.saveMachines([]);
+        this.saveGeneralSystemTypes([]);
         this.saveFamilies([]);
         this.saveTemplates([]);
         this.saveBlueprints([]);
         this.saveMachineBom([]);
         if (setters.setMachines) setters.setMachines([]);
+        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes([]);
         if (setters.setFamilies) setters.setFamilies([]);
         if (setters.setTemplates) setters.setTemplates([]);
         if (setters.setBlueprints) setters.setBlueprints([]);

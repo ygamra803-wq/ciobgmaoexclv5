@@ -1,0 +1,32 @@
+[
+  {
+    "id": "SYS-AIR",
+    "code": "AIR",
+    "name": "Air comprimé",
+    "is_active": true
+  },
+  {
+    "id": "SYS-SEC",
+    "code": "SEC",
+    "name": "Sécurité / Extinction",
+    "is_active": true
+  },
+  {
+    "id": "SYS-EAU",
+    "code": "EAU",
+    "name": "Eau & Pompage",
+    "is_active": true
+  },
+  {
+    "id": "SYS-ECL",
+    "code": "ECL",
+    "name": "Éclairage",
+    "is_active": true
+  },
+  {
+    "id": "SYS-ASC",
+    "code": "ASC",
+    "name": "Ascenseur / Monte-charge",
+    "is_active": true
+  }
+]

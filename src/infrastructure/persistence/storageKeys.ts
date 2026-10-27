@@ -5,6 +5,7 @@
 export const STORAGE_KEYS = {
   // 1. Machines & Topology Master
   MACHINES: 'gmao_machines_v2',
+  GENERAL_SYSTEM_TYPES: 'gmao_general_system_types_v1',
   FAMILIES: 'gmao_families_v2',
   TEMPLATES: 'gmao_templates_v2',
   BLUEPRINTS: 'gmao_blueprints_v2',

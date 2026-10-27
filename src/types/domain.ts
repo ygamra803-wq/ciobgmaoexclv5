@@ -17,6 +17,15 @@ export type ActionId =
 
 export type MachineStatus = 'En service' | 'En maintenance' | 'Arrêt';
 
+export type AssetClass = 'PRODUCTION' | 'SYSTEM_GENERAL';
+
+export interface IGeneralSystemType {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+}
+
 export type ProfileType = 'TECHNICIEN' | 'RESPONSABLE' | 'OPERATEUR' | 'CHEF';
 
 export interface IStockItem {
@@ -43,6 +52,10 @@ export interface IMachine {
   technician?: string;
   status: MachineStatus;
   id_blueprint?: string;
+  asset_class?: AssetClass;
+  id_general_system_type?: string | null;
+  serial_number?: string;
+  date_mise_en_service?: string;
   components_reels?: Array<{
     id_component: string;
     designation: string;
