@@ -77,8 +77,9 @@ export default function MainLayout({
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
   }, []);
 
-  // Effective Mobile detection: 'desktop' forces full PC suite, 'mobile' forces companion mode, 'auto' detects viewport
-  const isMobile = deviceMode === 'desktop' ? false : (deviceMode === 'mobile' ? true : autoIsMobile);
+  // MainLayout is rendered exclusively when ShellPolicy resolved === 'desktop'.
+  // Never wrap the desktop router in legacy fake-mobile chrome (BottomNavigation / MobileContainer).
+  const isMobile = false;
 
   // Mobile View Mode: 'compact' (focused industrial field companion) vs 'full' (desktop back-office on mobile)
   const [mobileViewMode, setMobileViewMode] = useState(() => {

@@ -24,6 +24,7 @@ import { getParentModuleForTab } from './navConfig';
 import { storageService } from '../../../utils/storageService';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
+import ShellModeSwitcher from '../common/ShellModeSwitcher';
 
 export default function Header({
   currentTab,
@@ -852,6 +853,11 @@ export default function Header({
               <Upload size={16} aria-hidden="true" />
             </button>
           )}
+
+          {/* 1-Click ShellPolicy Switcher (Auto / Desktop / Mobile) */}
+          <div className="hidden md:flex items-center">
+            <ShellModeSwitcher compact />
+          </div>
 
           <button
             onClick={onOpenShortcuts}

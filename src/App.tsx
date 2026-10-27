@@ -29,9 +29,12 @@ import { useAppRouterProps } from './presentation/router/useAppRouterProps';
 import { useAppViewController } from './hooks/useAppViewController';
 import { DataGateway } from './application/DataGateway';
 import MachineQrFieldModal from './presentation/pages/machines/components/MachineQrFieldModal';
+import { useAppShell } from './core/shell/shellPolicy';
+import MobileShell from './presentation/components/shell/MobileShell';
 
 export default function App() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
+  const shell = useAppShell();
 
   // App Controller containing splash screen, toast notifications, active tab persistence, and mobile drawer states
   const {
@@ -427,6 +430,67 @@ export default function App() {
         <LoginScreen />
         <ConfirmDialog />
       </>
+    );
+  }
+
+  if (shell.resolved === 'mobile') {
+    return (
+      <ErrorBoundary>
+        <MobileShell
+          currentUser={currentUser}
+          onLogout={() => {
+            try {
+              localStorage.setItem('gmao_active_tab', 'dashboard');
+            } catch {
+              /* ignore */
+            }
+            setCurrentTab('dashboard');
+            logout();
+          }}
+          setCurrentTab={setCurrentTab}
+          machines={machines}
+          zones={zones}
+          stockItems={stockItems}
+          technicians={technicians}
+          preventiveTasks={preventiveTasks}
+          preventiveExecutions={preventiveExecutions}
+          correctiveInterventions={correctiveInterventions}
+          sortieDemands={sortieDemands}
+          mouvements={mouvements}
+          onMarkTaskDone={handleMarkTaskDone}
+          onAddDemandeIntervention={handleAddDemandeIntervention}
+          onStartLiveIntervention={handleStartLiveIntervention}
+          onSubmitInterventionForValidation={handleSubmitInterventionForValidation}
+          onOpenMachineQrModal={(machineId) => {
+            const found = (machines || []).find(
+              (m) =>
+                String(m.id_machine_registered || '').toUpperCase() ===
+                String(machineId || '').toUpperCase()
+            );
+            if (found) {
+              setScannedQrMachine(found);
+            }
+          }}
+          showToast={showToast}
+        />
+
+        <OfflineIndicator />
+        <RuntimeErrorModal />
+        <ConfirmDialog />
+
+        {scannedQrMachine && (
+          <MachineQrFieldModal
+            machine={scannedQrMachine}
+            initialMode="FICHE_TERRAIN"
+            onClose={() => setScannedQrMachine(null)}
+            onNavigateToPreventive={() => setCurrentTab('preventive')}
+            onNavigateToQuickSortie={(m) => {
+              navigation?.handleNavigateToQuickSortieFromMachine?.(m);
+            }}
+            showToast={showToast}
+          />
+        )}
+      </ErrorBoundary>
     );
   }
 

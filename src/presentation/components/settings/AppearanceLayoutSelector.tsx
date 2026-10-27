@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
+import { setShellMode, SHELL_OVERRIDE_STORAGE_KEY } from '../../../core/shell/shellPolicy';
 
 /**
  * Composant de sélection et personnalisation de l'apparence
@@ -92,6 +93,8 @@ export function AppearanceLayoutSelector({
     newClock
   ) => {
     storageService.setItem(STORAGE_KEYS.DEVICE_MODE, newDeviceMode);
+    storageService.setItem(SHELL_OVERRIDE_STORAGE_KEY, newDeviceMode);
+    setShellMode(newDeviceMode);
     storageService.setItem(STORAGE_KEYS.THEME, newTheme);
     storageService.setItem(STORAGE_KEYS.SIDEBAR_THEME, newTheme);
     storageService.setItem(STORAGE_KEYS.SIDEBAR_STYLE, newStyle);
