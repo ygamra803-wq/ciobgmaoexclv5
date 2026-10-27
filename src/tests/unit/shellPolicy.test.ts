@@ -111,4 +111,117 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(window.localStorage.getItem(SHELL_OVERRIDE_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEYS.DEVICE_MODE)).toBe('auto');
   });
+
+  it('scopes technician preventive & corrective items strictly via buildTechnicianDashboardScope and preserves Maker-Checker PENDING_VALIDATION without stock deduction', async () => {
+    const { buildTechnicianDashboardScope } = await import('../../core/security/technicianScope');
+    const { ExecutionService } = await import('../../application/services/preventive/ExecutionService');
+
+    const techUser = {
+      id: 'TECH-01',
+      id_technician: 'TECH-01',
+      personnelId: 'TECH-01',
+      code: 'TECH-01',
+      personnelName: 'Karim Benali',
+      name: 'Karim Benali',
+      nom: 'Karim Benali',
+      role: 'TECHNICIEN',
+    };
+
+    const preventiveTasks = [
+      {
+        id: 'T-1',
+        id_machine: 'M-01',
+        tache: 'Graissage palier',
+        id_technicien: 'TECH-01',
+        responsable: 'Karim Benali',
+        etat: 'En retard',
+      },
+      {
+        id: 'T-2',
+        id_machine: 'M-02',
+        tache: 'Contrôle pression',
+        id_technicien: 'TECH-01',
+        responsable: 'Karim Benali',
+        etat: 'À clarifier',
+        validation_status: 'NEEDS_CLARIFICATION',
+        validation_note: 'Préciser la référence du filtre',
+      },
+      {
+        id: 'T-OTHER',
+        id_machine: 'M-03',
+        tache: 'Tâche autre technicien',
+        id_technicien: 'TECH-02',
+        responsable: 'Autre Tech',
+        etat: 'À faire',
+      },
+    ];
+
+    const correctiveInterventions = [
+      {
+        id: 'BT-1',
+        num_bt: 'BT-1001',
+        code_machine: 'M-01',
+        anomalie: 'Fuite huile',
+        id_technician: 'TECH-01',
+        intervenant: 'Karim Benali',
+        statut: 'EN_COURS',
+      },
+      {
+        id: 'BT-2',
+        num_bt: 'BT-1002',
+        code_machine: 'M-02',
+        anomalie: 'Capteur HS',
+        id_technician: 'TECH-01',
+        intervenant: 'Karim Benali',
+        statut: 'EN_COURS',
+        validation_status: 'NEEDS_CLARIFICATION',
+        validation_note: 'Vérifier quantité capteur',
+      },
+      {
+        id: 'BT-OTHER',
+        num_bt: 'BT-9999',
+        code_machine: 'M-09',
+        anomalie: 'Autre BT',
+        id_technician: 'TECH-02',
+        intervenant: 'Autre Tech',
+        statut: 'EN_COURS',
+      },
+    ];
+
+    const scope = buildTechnicianDashboardScope({
+      user: techUser,
+      technicians: [techUser],
+      preventiveTasks,
+      preventiveExecutions: [],
+      correctiveInterventions,
+      mouvements: [],
+    });
+
+    // R4/R5: Only TECH-01 records are included
+    expect(scope.myPreventiveTasks.map((t: any) => t.id)).toEqual(['T-1', 'T-2']);
+    expect(scope.overdueTasks.map((t: any) => t.id)).toEqual(['T-1']);
+    expect(scope.needsClarificationPreventive.map((t: any) => t.id)).toEqual(['T-2']);
+    expect(scope.myCorrectiveInterventions.map((b: any) => b.id)).toEqual(['BT-1', 'BT-2']);
+    expect(scope.openCorrective.map((b: any) => b.id)).toEqual(['BT-1', 'BT-2']);
+    expect(scope.needsClarificationCorrective.map((b: any) => b.id)).toEqual(['BT-2']);
+
+    // Maker-Checker Preventive submission: PENDING_VALIDATION, sparesProposed populated, sparesUsed empty, stock_deducted false
+    const { execution } = ExecutionService.recordExecution(preventiveTasks[0], {
+      submitForValidation: true,
+      validation_status: 'PENDING_VALIDATION',
+      submitted_by_id: 'TECH-01',
+      submitted_by_name: 'Karim Benali',
+      usedPDR: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', qty: 2, unitPrice: 15 }],
+      num_bon_saisi_par_tech: 'BS-2026-01',
+      observations: 'Remplacement préventif',
+    });
+
+    expect(execution.validation_status).toBe('PENDING_VALIDATION');
+    expect(execution.stock_deducted).toBe(false);
+    expect(execution.sparesUsed).toEqual([]);
+    expect(execution.sparesProposed.length).toBe(1);
+    expect(execution.sparesProposed[0].ref).toBe('ROUL-6204');
+    expect(execution.num_bon_saisi_par_tech).toBe('BS-2026-01');
+  });
 });
+

@@ -457,21 +457,26 @@ export default function App() {
           correctiveInterventions={correctiveInterventions}
           sortieDemands={sortieDemands}
           mouvements={mouvements}
+          activeLiveInterventionId={activeLiveInterventionId}
           onMarkTaskDone={handleMarkTaskDone}
           onAddDemandeIntervention={handleAddDemandeIntervention}
           onStartLiveIntervention={handleStartLiveIntervention}
           onSubmitInterventionForValidation={handleSubmitInterventionForValidation}
           onOpenMachineQrModal={(machineId) => {
+            const cleanTarget = String(machineId || '').trim().toUpperCase();
             const found = (machines || []).find(
-              (m) =>
-                String(m.id_machine_registered || '').toUpperCase() ===
-                String(machineId || '').toUpperCase()
+              (m: any) =>
+                String(m.id_machine_registered || m.id || m.code || '')
+                  .trim()
+                  .toUpperCase() === cleanTarget
             );
             if (found) {
               setScannedQrMachine(found);
             }
           }}
           showToast={showToast}
+          toast={toast}
+          setToast={setToast}
         />
 
         <OfflineIndicator />
