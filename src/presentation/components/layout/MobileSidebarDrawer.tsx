@@ -36,6 +36,7 @@ import { SpokeIcon } from '../common/icons/SpokeIcon';
 import { CubeIcon } from '../common/icons/CubeIcon';
 import { LayersIcon } from '../common/icons/LayersIcon';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { isTechnicianRole } from '../../../core/security/technicianScope';
 
 export default function MobileSidebarDrawer({
   isFixedDesktop = false,
@@ -56,6 +57,10 @@ export default function MobileSidebarDrawer({
   });
 
   const canAccess = (tabId) => !currentUser || AuthorizationService.canAccessTab(currentUser, tabId);
+  const isTechUser = isTechnicianRole(currentUser);
+  const pendingSortieDemands = !isTechUser ? Number(counts.pendingSortieDemands || 0) : 0;
+  const pendingPreventiveVal = !isTechUser ? Number(counts.pendingPreventiveValidation || 0) : 0;
+  const pendingCorrectiveVal = !isTechUser ? Number(counts.pendingCorrectiveValidation || 0) : 0;
 
   useEffect(() => {
     const handleAppearanceChanged = (e) => {
@@ -307,7 +312,17 @@ export default function MobileSidebarDrawer({
                   <SortieEntreeIcon className="w-4 h-4 shrink-0" />
                   <span>Sortie & Entrée Rapide</span>
                 </span>
-                <span className={getBadgeClass('sortie')}>Mvt</span>
+                <span className="flex items-center gap-1">
+                  {pendingSortieDemands > 0 && (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
+                      title={`${pendingSortieDemands} demande(s) de sortie à valider`}
+                    >
+                      {pendingSortieDemands} À valider
+                    </span>
+                  )}
+                  <span className={getBadgeClass('sortie')}>Mvt</span>
+                </span>
               </button>
             )}
           </div>
@@ -455,7 +470,17 @@ export default function MobileSidebarDrawer({
                       />
                       <span>Planning Préventif</span>
                     </span>
-                    <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
+                    <span className="flex items-center gap-1">
+                      {pendingPreventiveVal > 0 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-amber-500 text-slate-950 font-black shadow-2xs"
+                          title={`${pendingPreventiveVal} exécution(s) préventive(s) à valider`}
+                        >
+                          {pendingPreventiveVal} À valider
+                        </span>
+                      )}
+                      <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
+                    </span>
                   </button>
                 )}
 
@@ -497,7 +522,17 @@ export default function MobileSidebarDrawer({
                       />
                       <span>Correctif Hub</span>
                     </span>
-                    <span className={getBadgeClass('corrective')}>{counts.corrective || 'Live'}</span>
+                    <span className="flex items-center gap-1">
+                      {pendingCorrectiveVal > 0 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
+                          title={`${pendingCorrectiveVal} intervention(s) corrective(s) à valider`}
+                        >
+                          {pendingCorrectiveVal} À valider
+                        </span>
+                      )}
+                      <span className={getBadgeClass('corrective')}>{counts.corrective || 'Live'}</span>
+                    </span>
                   </button>
                 )}
 

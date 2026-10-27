@@ -481,3 +481,109 @@ export function buildAdminValidationRadar({
     items,
   };
 }
+
+export interface ReservedStockSource {
+  claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
+  claimId: string;
+  code: string;
+  machineCode: string;
+  technicianName: string;
+  qty: number;
+  status: string;
+}
+
+export interface ReservedStockEntry {
+  ref: string;
+  reservedQty: number;
+  sources: ReservedStockSource[];
+}
+
+/**
+ * Idea 3: Computes virtual reserved stock per article reference from unapproved Maker-Checker
+ * claims (Corrective BTs, Preventive Executions, and Sortie Demands in PENDING_VALIDATION or NEEDS_CLARIFICATION).
+ * Purely derived read-model — never mutates stockActuel or IncrementalStockIndex (AGENTS.md Rule #3).
+ */
+export function computeReservedStockMap({
+  correctiveInterventions = [],
+  preventiveExecutions = [],
+  sortieDemands = [],
+}: {
+  correctiveInterventions?: any[];
+  preventiveExecutions?: any[];
+  sortieDemands?: any[];
+}): Map<string, ReservedStockEntry> {
+  const map = new Map<string, ReservedStockEntry>();
+
+  const addReservation = (
+    rawRef: unknown,
+    rawQty: unknown,
+    source: Omit<ReservedStockSource, 'qty'>
+  ) => {
+    const key = normalizeToken(rawRef);
+    const qty = Number(rawQty ?? 0);
+    if (!key || !Number.isFinite(qty) || qty <= 0) return;
+
+    const existing = map.get(key) || {
+      ref: String(rawRef).trim(),
+      reservedQty: 0,
+      sources: [],
+    };
+    existing.reservedQty += qty;
+    existing.sources.push({ ...source, qty });
+    map.set(key, existing);
+  };
+
+  for (const bt of correctiveInterventions || []) {
+    const status = String(bt?.validation_status || '');
+    if (status !== 'PENDING_VALIDATION' && status !== 'NEEDS_CLARIFICATION') continue;
+    const pieces = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
+    for (const p of pieces) {
+      const parsed = extractSpareRefAndQty(p);
+      addReservation(parsed.ref, parsed.qty, {
+        claimType: 'CORRECTIVE',
+        claimId: String(bt?.id || ''),
+        code: String(bt?.num_bt || bt?.id || 'BT'),
+        machineCode: String(bt?.code_machine || ''),
+        technicianName: String(bt?.submitted_by_name || bt?.intervenant || 'Technicien'),
+        status,
+      });
+    }
+  }
+
+  for (const ex of preventiveExecutions || []) {
+    const status = String(ex?.validation_status || '');
+    if (status !== 'PENDING_VALIDATION' && status !== 'NEEDS_CLARIFICATION') continue;
+    const pieces = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
+    for (const p of pieces) {
+      const parsed = extractSpareRefAndQty(p);
+      addReservation(parsed.ref, parsed.qty, {
+        claimType: 'PREVENTIVE',
+        claimId: String(ex?.id || ''),
+        code: String(ex?.taskCode || ex?.actionCode || ex?.id || 'PM'),
+        machineCode: String(ex?.machineCode || ''),
+        technicianName: String(ex?.submitted_by_name || ex?.executorName || 'Technicien'),
+        status,
+      });
+    }
+  }
+
+  for (const dem of sortieDemands || []) {
+    const status = String(dem?.validation_status || '');
+    if (status !== 'PENDING_VALIDATION' && status !== 'NEEDS_CLARIFICATION') continue;
+    const items = Array.isArray(dem?.items) ? dem.items : [];
+    for (const it of items) {
+      const parsed = extractSpareRefAndQty(it);
+      addReservation(parsed.ref, parsed.qty, {
+        claimType: 'SORTIE',
+        claimId: String(dem?.id || ''),
+        code: String(dem?.code_bon_tech || dem?.id || 'BS'),
+        machineCode: String(dem?.id_machine_registered || dem?.id_zone || ''),
+        technicianName: String(dem?.submitted_by_name || dem?.technicien || 'Technicien'),
+        status,
+      });
+    }
+  }
+
+  return map;
+}
+

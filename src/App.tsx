@@ -1,4 +1,5 @@
 import {
+  useState,
   useRef,
   useEffect,
 } from 'react';
@@ -27,6 +28,7 @@ import { useAppRouterProps } from './presentation/router/useAppRouterProps';
 
 import { useAppViewController } from './hooks/useAppViewController';
 import { DataGateway } from './application/DataGateway';
+import MachineQrFieldModal from './presentation/pages/machines/components/MachineQrFieldModal';
 
 export default function App() {
   const { user: currentUser } = useAuth();
@@ -61,6 +63,7 @@ export default function App() {
     technicians,
     operations,
     mouvements,
+    sortieDemands,
     rawStock,
     compGroups,
     compFamilies,
@@ -143,6 +146,35 @@ export default function App() {
 
   // Auto Backup and Performance Monitor Initialization
   const backupDataRef = useRef({});
+  const [scannedQrMachine, setScannedQrMachine] = useState<any | null>(null);
+
+  // Detect ?machine_qr=<CODE> on LAN scan to open Fiche Terrain Mobile automatically
+  useEffect(() => {
+    if (typeof window === 'undefined' || !Array.isArray(machines) || machines.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const qrCode = params.get('machine_qr');
+    if (!qrCode) return;
+
+    const cleanCode = qrCode.trim().toUpperCase();
+    const matched = machines.find(
+      (m: any) =>
+        String(m.id_machine_registered || m.id || m.code || '')
+          .trim()
+          .toUpperCase() === cleanCode
+    );
+    if (matched) {
+      setScannedQrMachine(matched);
+      // Clean URL parameter without reloading so closing the modal doesn't re-trigger
+      try {
+        params.delete('machine_qr');
+        const nextQuery = params.toString();
+        const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', nextUrl);
+      } catch {
+        // ignore history error
+      }
+    }
+  }, [machines]);
 
   // Load real stock if empty ONLY when not in explicit empty factory mode
   useEffect(() => {
@@ -427,6 +459,24 @@ export default function App() {
           ).length,
           corrective_live: (correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length,
           corrective_cloture: (correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length,
+          pendingPreventiveValidation: (preventiveExecutions || []).filter(
+            (ex) => ex.validation_status === 'PENDING_VALIDATION'
+          ).length,
+          pendingCorrectiveValidation: (correctiveInterventions || []).filter(
+            (i) => i.validation_status === 'PENDING_VALIDATION' || i.statut === 'EN_ATTENTE_VALIDATION'
+          ).length,
+          pendingSortieDemands: (sortieDemands || []).filter(
+            (d) => d.validation_status === 'PENDING_VALIDATION'
+          ).length,
+          openBtCount: (correctiveInterventions || []).filter(
+            (i) => i.validation_status === 'PENDING_VALIDATION' || i.statut === 'EN_ATTENTE_VALIDATION' || i.statut === 'EN_COURS'
+          ).length,
+          pendingTasksCount: (preventiveExecutions || []).filter(
+            (ex) => ex.validation_status === 'PENDING_VALIDATION'
+          ).length,
+          ruptureCount: (sortieDemands || []).filter(
+            (d) => d.validation_status === 'PENDING_VALIDATION'
+          ).length,
           warehouse: warehouseItemsComputed.length,
           entrepot: (entrepotComponents || []).length,
           comp_groups: (compGroups || []).length,
@@ -499,6 +549,20 @@ export default function App() {
 
         {/* Unified UI-Safe Confirmation Modal */}
         <ConfirmDialog />
+
+        {/* Mobile QR Scan Field Card Modal (?machine_qr=<CODE>) */}
+        {scannedQrMachine && (
+          <MachineQrFieldModal
+            machine={scannedQrMachine}
+            initialMode="FICHE_TERRAIN"
+            onClose={() => setScannedQrMachine(null)}
+            onNavigateToPreventive={() => setCurrentTab('preventive')}
+            onNavigateToQuickSortie={(m) => {
+              navigation?.handleNavigateToQuickSortieFromMachine?.(m);
+            }}
+            showToast={showToast}
+          />
+        )}
       </MainLayout>
     </ErrorBoundary>
   );

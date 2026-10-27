@@ -27,6 +27,7 @@ import {
   Wrench,
   Calendar,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CubeIcon } from '../../components/common/icons/CubeIcon';
@@ -48,6 +49,7 @@ import {
 } from '../../../core/domain/EntrepotItem';
 import { filterProductionMachines, filterActiveMachines } from '../../../utils/activeMachines';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { evaluateComponentWearAndLifecycle } from '../../../utils/componentHealthScore';
 
 export default function EntrepotView({
   warehouseItems = [],
@@ -2457,8 +2459,14 @@ export default function EntrepotView({
                 const totalEvents =
                   linkedCorrective.length + linkedPreventive.length + linkedExterne.length;
 
+                const wearAnalysis = evaluateComponentWearAndLifecycle(selectedDetails, {
+                  correctiveInterventions: allCorrective,
+                  preventiveExecutions: allPreventiveExecs,
+                  sortiesExterne: allSortiesExterne,
+                });
+
                 return (
-                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
+                  <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-[10.5px] font-extrabold text-slate-800 uppercase tracking-wider">
                         Carnet de Vie & Historique ({totalEvents})
@@ -2475,6 +2483,119 @@ export default function EntrepotView({
                         </span>
                       </div>
                     </div>
+
+                    {/* Score d'Usure & Analyse Technico-Économique (BER) */}
+                    {isWarehouseComponent(selectedDetails) && (
+                      <div
+                        className={`p-3 rounded-xl border space-y-2 ${
+                          wearAnalysis.shouldReform
+                            ? 'bg-rose-50/90 border-rose-300'
+                            : wearAnalysis.statusLevel === 'WATCH'
+                            ? 'bg-amber-50/80 border-amber-300'
+                            : 'bg-white border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                            Score d&apos;Usure & Coût Cumulé (Seuil BER 70%)
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black border ${
+                              wearAnalysis.shouldReform
+                                ? 'bg-rose-600 text-white border-rose-700'
+                                : wearAnalysis.statusLevel === 'WATCH'
+                                ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            }`}
+                          >
+                            Santé : {wearAnalysis.wearScore}/100
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 text-[11px]">
+                          <div className="p-2 rounded-lg bg-white/90 border border-slate-200/80">
+                            <span className="text-[9.5px] text-slate-400 block font-bold uppercase">
+                              Coût Cumulé Répar.
+                            </span>
+                            <span className="font-mono font-black text-slate-900">
+                              {wearAnalysis.cumulativeRepairCost.toFixed(0)} DT
+                            </span>
+                            <span className="text-[9.5px] text-slate-500 block font-mono">
+                              ({wearAnalysis.costRatioPercent}% de {wearAnalysis.replacementValue.toFixed(0)} DT)
+                            </span>
+                          </div>
+
+                          <div className="p-2 rounded-lg bg-white/90 border border-slate-200/80">
+                            <span className="text-[9.5px] text-slate-400 block font-bold uppercase">
+                              Pannes (6 mois)
+                            </span>
+                            <span
+                              className={`font-mono font-black ${
+                                wearAnalysis.recentBreakdowns6Months >= 3
+                                  ? 'text-rose-700'
+                                  : 'text-slate-900'
+                              }`}
+                            >
+                              {wearAnalysis.recentBreakdowns6Months} panne(s)
+                            </span>
+                            <span className="text-[9.5px] text-slate-500 block">
+                              Seuil alerte: ≥ 3
+                            </span>
+                          </div>
+
+                          <div className="p-2 rounded-lg bg-white/90 border border-slate-200/80">
+                            <span className="text-[9.5px] text-slate-400 block font-bold uppercase">
+                              Rebobinages / Ext.
+                            </span>
+                            <span
+                              className={`font-mono font-black ${
+                                wearAnalysis.bobinageCount >= 3 ? 'text-rose-700' : 'text-slate-900'
+                              }`}
+                            >
+                              {wearAnalysis.bobinageCount} cycle(s)
+                            </span>
+                            <span className="text-[9.5px] text-slate-500 block">
+                              Coût Ext: {wearAnalysis.externalCost.toFixed(0)} DT
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Cost Ratio Progress Bar */}
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              wearAnalysis.costRatioPercent >= 70
+                                ? 'bg-rose-600'
+                                : wearAnalysis.costRatioPercent >= 45
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(100, wearAnalysis.costRatioPercent)}%` }}
+                          />
+                        </div>
+
+                        {/* Recommendation Banner */}
+                        <div
+                          className={`p-2 rounded-lg text-[11px] font-bold flex items-start gap-2 ${
+                            wearAnalysis.shouldReform
+                              ? 'bg-rose-600 text-white'
+                              : wearAnalysis.statusLevel === 'WATCH'
+                              ? 'bg-amber-100 text-amber-950'
+                              : 'bg-emerald-50 text-emerald-900'
+                          }`}
+                        >
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5">
+                            <div>{wearAnalysis.recommendation}</div>
+                            {wearAnalysis.reformReasons.length > 0 && (
+                              <div className="text-[10px] font-normal opacity-90">
+                                {wearAnalysis.reformReasons.join(' • ')}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {totalEvents === 0 ? (
                       <div className="text-[11px] text-slate-400 italic py-2 text-center bg-white rounded-lg border border-dashed border-slate-200">

@@ -46,9 +46,11 @@ import {
   Settings2,
   Plus,
   Check,
+  QrCode,
 } from 'lucide-react';
 import PreventiveService from '../../../application/services/PreventiveService';
 import { getMachineAssetClass } from '../../../utils/activeMachines';
+import MachineQrFieldModal from './components/MachineQrFieldModal';
 
 // Helper to retrieve machine serial number with smart fallback
 export const getMachineSerialNumber = (m) => {
@@ -198,6 +200,7 @@ export default function MachinesRegisteredView({
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
   const [preventiveMachine, setPreventiveMachine] = useState(null);
+  const [qrMachine, setQrMachine] = useState<{ machine: any; mode: 'ETIQUETTE' | 'FICHE_TERRAIN' } | null>(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | 'En Service' | 'En Maintenance' | 'Arrêt'
   const [assetClassFilter, setAssetClassFilter] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [sysTypeFilter, setSysTypeFilter] = useState('ALL');
@@ -1514,6 +1517,19 @@ export default function MachinesRegisteredView({
                               <Wrench className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
                             </button>
 
+                            {/* Quick Action Button: Étiquette QR & Fiche Terrain Offline */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrMachine({ machine: m, mode: 'ETIQUETTE' });
+                                setActiveActionMenuId(null);
+                              }}
+                              className="p-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 hover:text-cyan-950 transition flex items-center justify-center cursor-pointer border-r border-slate-200 group"
+                              title={`Étiquette QR Offline & Fiche Terrain Mobile pour ${m.id_machine_registered}`}
+                            >
+                              <QrCode className="w-3.5 h-3.5 text-cyan-700 group-hover:scale-110 transition-transform" />
+                            </button>
+
                             {/* 3-dots Toggle Button */}
                             <button
                               type="button"
@@ -1556,6 +1572,22 @@ export default function MachinesRegisteredView({
                                 <div className="flex flex-col items-start leading-tight">
                                   <span>Sortie Rapide / Intervention</span>
                                   <span className="text-[10px] text-emerald-600 font-normal">Pré-remplissage 1-clic</span>
+                                </div>
+                              </button>
+
+                              {/* Option 1b: Étiquette QR & Fiche Terrain Mobile */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  setQrMachine({ machine: m, mode: 'ETIQUETTE' });
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-cyan-900 bg-cyan-50/80 hover:bg-cyan-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer border border-cyan-200/70 shadow-2xs"
+                              >
+                                <QrCode className="w-3.5 h-3.5 text-cyan-700 shrink-0" />
+                                <div className="flex flex-col items-start leading-tight">
+                                  <span>Étiquette QR & Fiche Terrain</span>
+                                  <span className="text-[10px] text-cyan-700 font-normal">Impression QR & Actions Mobiles</span>
                                 </div>
                               </button>
 
@@ -2483,6 +2515,16 @@ export default function MachinesRegisteredView({
           </div>
         );
       })()}
+
+      {qrMachine && (
+        <MachineQrFieldModal
+          machine={qrMachine.machine}
+          initialMode={qrMachine.mode}
+          onClose={() => setQrMachine(null)}
+          onNavigateToPreventive={onNavigateToPreventive}
+          onNavigateToQuickSortie={onNavigateToQuickSortie}
+        />
+      )}
     </AnimatedPage>
   );
 }

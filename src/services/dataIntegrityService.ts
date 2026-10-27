@@ -1,3 +1,6 @@
+import { normalizeType } from '../application/IncrementalStockIndex';
+import { isSystemGeneralMachine } from '../utils/activeMachines';
+
 /**
  * Service de Vérification de l'Intégrité des Données & Moteur Auto-Guérison (Data Integrity & Self-Healing Service)
  * 🏛️ Conforme à la Constitution GMAO : Logique relationnelle stricte, formules jumelles Excel,
@@ -68,10 +71,11 @@ class DataIntegrityService {
         mvtsByRef.set(r, { entrees: 0, sorties: 0, count: 0 });
       }
       const agg = mvtsByRef.get(r);
-      const qte = Number(m.quantite) || 0;
-      if (m.type === 'Entrée') {
+      const qte = Number(m.quantite ?? m.quantity) || 0;
+      const normalized = normalizeType(m.type);
+      if (normalized === 'ENTREE') {
         agg.entrees += qte;
-      } else if (m.type === 'Sortie') {
+      } else if (normalized === 'SORTIE') {
         agg.sorties += qte;
       }
       agg.count++;
@@ -161,13 +165,13 @@ class DataIntegrityService {
         });
       }
 
-      // Contrôle Type
-      if (!['Entrée', 'Sortie'].includes(movement.type)) {
+      // Contrôle Type (aligné avec IncrementalStockIndex: Entrée*, Sortie*, Commande)
+      if (!normalizeType(movement.type)) {
         errors.push({
           type: 'INVALID_TYPE',
           row: rowNum,
           ref,
-          message: `Type de mouvement invalide ligne ${rowNum}: "${movement.type}". Doit être "Entrée" ou "Sortie".`,
+          message: `Type de mouvement invalide ligne ${rowNum}: "${movement.type}". Doit être de type Entrée, Sortie ou Commande.`,
         });
       }
 
@@ -213,6 +217,7 @@ class DataIntegrityService {
     operations = [],
     preventiveTasks = [],
     correctiveInterventions = [],
+    machineElementsLedger = [],
   } = {}) {
     const errors = [];
     const warnings = [];
@@ -222,7 +227,15 @@ class DataIntegrityService {
       (rawStock || []).map((s) => String(s.ref || '').toUpperCase().trim()).filter(Boolean)
     );
     const registeredMachines = new Set(
-      (machines || []).map((m) => String(m.id_machine_registered || '').toUpperCase().trim()).filter(Boolean)
+      (machines || [])
+        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').toUpperCase().trim())
+        .filter(Boolean)
+    );
+    const systemGeneralMachines = new Set(
+      (machines || [])
+        .filter((m) => isSystemGeneralMachine(m))
+        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').toUpperCase().trim())
+        .filter(Boolean)
     );
     const registeredZones = new Set([
       ...(zones || []).map((z) => String(z.id_zone || '').toUpperCase().trim()).filter(Boolean),
@@ -351,11 +364,52 @@ class DataIntegrityService {
       }
     });
 
+    // 6. Contrôle d'immunité Système Général : Aucun élément BOM de production (machineElementsLedger) ne doit être rattaché à un équipement SYSTEM_GENERAL
+    (machineElementsLedger || []).forEach((elem) => {
+      const mch = String(
+        elem.id_machine_registered || elem.id_machine || elem.code_machine || elem.machine_id || ''
+      ).trim();
+      if (!mch) return;
+      const mchUpper = mch.toUpperCase();
+      const elemLabel =
+        elem.designation_organe ||
+        elem.designation_element ||
+        elem.nom_composant ||
+        elem.designation ||
+        elem.id_element_instance ||
+        elem.id_element ||
+        elem.id ||
+        'Organe BOM';
+
+      if (systemGeneralMachines.has(mchUpper)) {
+        errors.push({
+          type: 'BOM_ON_SYSTEM_GENERAL_ASSET',
+          entity: 'BOM / Système Général',
+          key: mch,
+          id: elem.id_element_instance || elem.id_element || elem.id,
+          message: `Fuite BOM détectée : L'organe de production "${elemLabel}" est rattaché par erreur à l'équipement Système Général "${mch}" (interdit par le contrat d'isolation Système Général).`,
+        });
+      } else if (!registeredMachines.has(mchUpper)) {
+        warnings.push({
+          type: 'ORPHAN_MACHINE_IN_BOM',
+          entity: 'BOM Machine',
+          key: mch,
+          id: elem.id_element || elem.id,
+          message: `Élément BOM "${elemLabel}": Machine associée "${mch}" non répertoriée.`,
+        });
+      }
+    });
+
     return {
       valid: errors.length === 0,
       errors,
       warnings,
-      checkedCount: (mouvements || []).length + (correctiveInterventions || []).length + (preventiveTasks || []).length + (machines || []).length,
+      checkedCount:
+        (mouvements || []).length +
+        (correctiveInterventions || []).length +
+        (preventiveTasks || []).length +
+        (machines || []).length +
+        (machineElementsLedger || []).length,
     };
   }
 
@@ -371,6 +425,7 @@ class DataIntegrityService {
     const operations = params.operations || [];
     const preventiveTasks = params.preventiveTasks || [];
     const correctiveInterventions = params.correctiveInterventions || [];
+    const machineElementsLedger = params.machineElementsLedger || [];
 
     const refValidation = this.validateReferentialIntegrity({
       rawStock,
@@ -381,6 +436,7 @@ class DataIntegrityService {
       operations,
       preventiveTasks,
       correctiveInterventions,
+      machineElementsLedger,
     });
 
     const totalErrors = refValidation.errors.length;
@@ -430,9 +486,10 @@ class DataIntegrityService {
         mvtsByRef.set(r, { entrees: 0, sorties: 0 });
       }
       const agg = mvtsByRef.get(r);
-      const qte = Number(m.quantite) || 0;
-      if (m.type === 'Entrée') agg.entrees += qte;
-      else if (m.type === 'Sortie') agg.sorties += qte;
+      const qte = Number(m.quantite ?? m.quantity) || 0;
+      const normalized = normalizeType(m.type);
+      if (normalized === 'ENTREE') agg.entrees += qte;
+      else if (normalized === 'SORTIE') agg.sorties += qte;
     });
 
     const fixes = [];
@@ -642,6 +699,7 @@ class DataIntegrityService {
     operations = [],
     preventiveTasks = [],
     correctiveInterventions = [],
+    machineElementsLedger = [],
   } = {}) {
     const stockValidation = this.validateStockIntegrity(stock, movements);
     const movementValidation = this.validateMovementIntegrity(movements);
@@ -654,6 +712,7 @@ class DataIntegrityService {
       operations,
       preventiveTasks,
       correctiveInterventions,
+      machineElementsLedger,
     });
 
     const totalErrors = stockValidation.errors.length + movementValidation.errors.length + referentialValidation.errors.length;
@@ -920,7 +979,52 @@ class DataIntegrityService {
     });
     return { updated, changedCount, error: null };
   }
+
+  /**
+   * Detect machineElementsLedger (BOM) records erroneously linked to SYSTEM_GENERAL machines.
+   */
+  getSystemGeneralBomLeaks(machineElementsLedger = [], machines = []) {
+    const sysGenIds = new Set(
+      (machines || [])
+        .filter((m) => isSystemGeneralMachine(m))
+        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    return (machineElementsLedger || []).filter((e) => {
+      const mId = String(
+        e.id_machine_registered || e.id_machine || e.code_machine || e.machine_id || ''
+      )
+        .trim()
+        .toUpperCase();
+      return Boolean(mId && sysGenIds.has(mId));
+    });
+  }
+
+  /**
+   * Purge/detach machineElementsLedger records erroneously linked to SYSTEM_GENERAL machines.
+   */
+  purgeSystemGeneralBomLeaks(machineElementsLedger = [], machines = []) {
+    const sysGenIds = new Set(
+      (machines || [])
+        .filter((m) => isSystemGeneralMachine(m))
+        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    const kept = [];
+    const removed = [];
+    (machineElementsLedger || []).forEach((e) => {
+      const mId = String(
+        e.id_machine_registered || e.id_machine || e.code_machine || e.machine_id || ''
+      )
+        .trim()
+        .toUpperCase();
+      if (mId && sysGenIds.has(mId)) removed.push(e);
+      else kept.push(e);
+    });
+    return { kept, removed, removedCount: removed.length };
+  }
 }
 
 export const dataIntegrityService = new DataIntegrityService();
 export default dataIntegrityService;
+

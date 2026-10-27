@@ -25,10 +25,13 @@ import {
   CalendarRange,
   FingerprintPattern,
   Lock,
+  Layers,
+  ClipboardCheck,
 } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { useI18n } from '../../../../i18n/I18nContext';
 import PrintWorkOrderModal from './PrintWorkOrderModal';
+import SystemGeneralRoundModal from './SystemGeneralRoundModal';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import GroupedMachinesView from './GroupedMachinesView';
 import MatrixWeeksView from './MatrixWeeksView';
@@ -53,6 +56,7 @@ import {
   getTechnicianDisplayName,
   getTechnicianBadgeLabel,
 } from '../../../../core/security/technicianScope';
+import { getMachineAssetClass } from '../../../../utils/activeMachines';
 
 export { buildConsumablePdrInventory };
 
@@ -146,7 +150,10 @@ export default function TabMainView({
     if (Array.isArray(machines)) {
       machines.forEach((m) => {
         const id = m?.id_machine_registered || m?.id || m?.code || m?.id_machine;
-        if (id) map.set(id, m);
+        if (id) {
+          map.set(id, m);
+          map.set(String(id).trim().toUpperCase(), m);
+        }
       });
     }
     return map;
@@ -165,6 +172,7 @@ export default function TabMainView({
   }, [scopedTasks]);
   
   // Filters
+  const [selectedAssetClass, setSelectedAssetClass] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedMachine, setSelectedMachine] = useState('ALL');
   const [selectedBlueprint, setSelectedBlueprint] = useState('ALL');
@@ -186,6 +194,22 @@ export default function TabMainView({
     [tasksWithOrphanFlag]
   );
 
+  const assetClassCounts = useMemo(() => {
+    let prod = 0;
+    let sysGen = 0;
+    tasksWithOrphanFlag.forEach((t) => {
+      const m =
+        machineMap.get(t.id_machine) ||
+        machineMap.get(String(t.id_machine || '').trim().toUpperCase());
+      if (getMachineAssetClass(m) === 'SYSTEM_GENERAL') {
+        sysGen += 1;
+      } else {
+        prod += 1;
+      }
+    });
+    return { prod, sysGen };
+  }, [tasksWithOrphanFlag, machineMap]);
+
   // Matrix range selector
   const [weekRange, setWeekRange] = useState('S1-S16');
 
@@ -193,6 +217,7 @@ export default function TabMainView({
   const [selectedTaskForValidation, setSelectedTaskForValidation] = useState(null);
   const [selectedTaskForBT, setSelectedTaskForBT] = useState(null);
   const [selectedTaskForPrint, setSelectedTaskForPrint] = useState(null);
+  const [showSystemGeneralRoundModal, setShowSystemGeneralRoundModal] = useState(false);
 
   // Validation Form State with PDR & Labor & Canonical Organ IDs (P1 + V3 Maker-Checker)
   const [validationData, setValidationData] = useState<any>({
@@ -232,6 +257,7 @@ export default function TabMainView({
     const set = new Set();
     if (Array.isArray(machines)) {
       machines.forEach((m) => {
+        if (selectedAssetClass !== 'ALL' && getMachineAssetClass(m) !== selectedAssetClass) return;
         const id = m?.id_machine_registered || m?.id || m?.code || m?.id_machine;
         if (id && typeof id === 'string' && id.trim()) set.add(id.trim());
       });
@@ -239,12 +265,15 @@ export default function TabMainView({
     if (Array.isArray(tasksWithOrphanFlag)) {
       tasksWithOrphanFlag.forEach((t) => {
         const id = t?.id_machine;
-        if (id && typeof id === 'string' && id.trim()) set.add(id.trim());
+        if (!id || typeof id !== 'string' || !id.trim()) return;
+        const m = machineMap.get(id) || machineMap.get(id.trim().toUpperCase());
+        if (selectedAssetClass !== 'ALL' && getMachineAssetClass(m) !== selectedAssetClass) return;
+        set.add(id.trim());
       });
     }
-    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const sorted = Array.from(set).sort((a: any, b: any) => a.localeCompare(b, undefined, { numeric: true }));
     return ['ALL', ...sorted];
-  }, [machines, tasksWithOrphanFlag]);
+  }, [machines, tasksWithOrphanFlag, selectedAssetClass, machineMap]);
 
   const zoneList = useMemo(() => {
     const set = new Set();
@@ -334,7 +363,11 @@ export default function TabMainView({
         deferredSearchQuery
       );
 
-      const m = machineMap.get(t.id_machine);
+      const m =
+        machineMap.get(t.id_machine) ||
+        machineMap.get(String(t.id_machine || '').trim().toUpperCase());
+      const matchAssetClass =
+        selectedAssetClass === 'ALL' || getMachineAssetClass(m) === selectedAssetClass;
       const effZone = m?.id_zone_default || m?.id_zone || t.id_zone;
       const matchZone = selectedZone === 'ALL' || norm(effZone) === norm(selectedZone) || norm(t.id_zone) === norm(selectedZone);
       const matchMach = selectedMachine === 'ALL' || norm(t.id_machine) === norm(selectedMachine);
@@ -348,9 +381,9 @@ export default function TabMainView({
       if (orphanFilter === 'ORPHAN_ONLY' && !t._isOrphan) return false;
       if (orphanFilter === 'LINKED_ONLY' && t._isOrphan) return false;
 
-      return matchSearch && matchZone && matchMach && matchBlueprint && matchAct && matchFreq && matchStat && matchTech && matchWeek;
+      return matchSearch && matchAssetClass && matchZone && matchMach && matchBlueprint && matchAct && matchFreq && matchStat && matchTech && matchWeek;
     });
-  }, [tasksWithOrphanFlag, deferredSearchQuery, selectedZone, selectedMachine, selectedBlueprint, machines, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
+  }, [tasksWithOrphanFlag, deferredSearchQuery, selectedAssetClass, selectedZone, selectedMachine, selectedBlueprint, machines, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
 
   const stats = useMemo(() => {
     const total = scopedTasks.length;
@@ -366,6 +399,7 @@ export default function TabMainView({
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (searchQuery.trim()) count++;
+    if (selectedAssetClass !== 'ALL') count++;
     if (selectedZone !== 'ALL') count++;
     if (selectedMachine !== 'ALL') count++;
     if (selectedBlueprint !== 'ALL') count++;
@@ -375,12 +409,13 @@ export default function TabMainView({
     if (selectedStatus !== 'ALL') count++;
     if (selectedTech !== 'ALL') count++;
     return count;
-  }, [searchQuery, selectedZone, selectedMachine, selectedBlueprint, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech]);
+  }, [searchQuery, selectedAssetClass, selectedZone, selectedMachine, selectedBlueprint, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech]);
 
   const hasActiveFilters = activeFiltersCount > 0;
 
   const clearAllFilters = useCallback(() => {
     setSearchQuery('');
+    setSelectedAssetClass('ALL');
     setSelectedZone('ALL');
     setSelectedMachine('ALL');
     setSelectedBlueprint('ALL');
@@ -1111,6 +1146,76 @@ export default function TabMainView({
           </div>
         </div>
 
+        {/* QUICK CLASSE D'ÉQUIPEMENT FILTER BAR (Production vs Système Général) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
+            <Layers className="w-3 h-3 text-indigo-500" />
+            Classe d&apos;Équipement :
+          </span>
+          {[
+            {
+              key: 'ALL' as const,
+              label: 'Tous Équipements',
+              count: tasksWithOrphanFlag.length,
+              activeClass: 'bg-slate-900 text-white shadow-xs font-bold',
+            },
+            {
+              key: 'PRODUCTION' as const,
+              label: 'Machines Production',
+              count: assetClassCounts.prod,
+              activeClass: 'bg-emerald-700 text-white shadow-xs font-bold',
+            },
+            {
+              key: 'SYSTEM_GENERAL' as const,
+              label: 'Système Général (Sécurité / Utilités)',
+              count: assetClassCounts.sysGen,
+              activeClass: 'bg-indigo-700 text-white shadow-xs font-bold',
+            },
+          ].map((preset) => {
+            const isSelected = selectedAssetClass === preset.key;
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => {
+                  setSelectedAssetClass(preset.key);
+                  setSelectedMachine('ALL');
+                }}
+                className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                  isSelected
+                    ? preset.activeClass
+                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 font-medium'
+                }`}
+              >
+                <span>{preset.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200/60'
+                  }`}
+                >
+                  {preset.count}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* Mode Ronde d'Inspection Système Général Button */}
+          <button
+            type="button"
+            onClick={() => setShowSystemGeneralRoundModal(true)}
+            className="ml-auto h-7 px-3 rounded-lg text-xs font-black bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition active:scale-95"
+            title="Lancer une Ronde d'Inspection Groupée (Sécurité Incendie, Air Comprimé, Eau, Utilités)"
+          >
+            <ClipboardCheck className="w-3.5 h-3.5 text-indigo-100" />
+            <span>Mode Ronde (Système Général)</span>
+            <span className="px-1.5 py-0.2 rounded bg-white/20 text-white text-[10px] font-mono font-bold">
+              {assetClassCounts.sysGen}
+            </span>
+          </button>
+        </div>
+
         {/* QUICK STATUS PRESETS BAR (Bandeau Statut Rapide) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
@@ -1411,6 +1516,23 @@ export default function TabMainView({
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-200 font-medium">
                 <span>{t('common.filters.search', 'Recherche :')} <b>"{searchQuery}"</b></span>
                 <button type="button" onClick={() => setSearchQuery('')} className="text-indigo-500 hover:text-indigo-800 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedAssetClass !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-200 font-medium">
+                <Layers className="w-3 h-3 text-indigo-600" />
+                <span>
+                  Classe :{' '}
+                  <b>{selectedAssetClass === 'SYSTEM_GENERAL' ? 'Système Général' : 'Machines Production'}</b>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedAssetClass('ALL')}
+                  className="text-indigo-500 hover:text-indigo-800 cursor-pointer"
+                >
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -2016,6 +2138,24 @@ export default function TabMainView({
           onClose={() => setSelectedTaskForPrint(null)}
         />
       )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: MODE RONDE — INSPECTION GROUPÉE SYSTÈME GÉNÉRAL */}
+      {/* ========================================================================= */}
+      <SystemGeneralRoundModal
+        isOpen={showSystemGeneralRoundModal}
+        onClose={() => setShowSystemGeneralRoundModal(false)}
+        tasks={scopedTasks}
+        machines={machines}
+        zones={zones}
+        technicians={technicians}
+        stockItems={availableInventory}
+        isTechUser={isTechUser}
+        defaultTechName={techDisplayName}
+        onMarkTaskDone={onMarkTaskDone}
+        onCreateCorrective={onCreateCorrective}
+        showToast={showToast}
+      />
     </div>
   );
 }

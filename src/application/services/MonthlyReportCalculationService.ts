@@ -1,6 +1,18 @@
 import { normalizeDateToYMD } from '../../utils/datePeriodUtils';
 import { AvailabilityCalculationService } from '../../domain/services/AvailabilityCalculationService';
+import { filterActiveMachines, filterProductionMachines } from '../../utils/activeMachines';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
+
+const UNAPPROVED_VALIDATION_STATUSES = new Set([
+  'PENDING_VALIDATION',
+  'REJECTED',
+  'NEEDS_CLARIFICATION',
+]);
+
+function isUnapprovedFieldClaim(record: any): boolean {
+  const status = String(record?.validation_status || '').trim().toUpperCase();
+  return UNAPPROVED_VALIDATION_STATUSES.has(status);
+}
 
 export interface ConsumedPartSummary {
   ref: string;
@@ -237,6 +249,7 @@ export class MonthlyReportCalculationService {
     };
 
     (correctiveInterventions || []).forEach((ci) => {
+      if (!ci || isUnapprovedFieldClaim(ci)) return;
       const ciDate = normalizeDateToYMD(
         ci.date_demande ||
         ci.demande_date ||
@@ -338,7 +351,12 @@ export class MonthlyReportCalculationService {
       .sort((a, b) => b.failureCount - a.failureCount || b.totalDowntimeHours - a.totalDowntimeHours)
       .slice(0, 3);
 
-    const activeMachinesCount = Math.max(1, (machines || []).length || machineFailuresMap.size || 1);
+    const activeProductionMachines = filterProductionMachines(machines || []);
+    const activeMachinesList = filterActiveMachines(machines || []);
+    const activeMachinesCount = Math.max(
+      1,
+      activeProductionMachines.length || activeMachinesList.length || machineFailuresMap.size || 1
+    );
     const scheduledPlantHours = activeMachinesCount * 160;
     const mttrHours = AvailabilityCalculationService.calculateMTTR(monthCorrectiveList);
     const mttrFormatted = AvailabilityCalculationService.formatMTTR(monthCorrectiveList);
@@ -349,6 +367,7 @@ export class MonthlyReportCalculationService {
     // 4. Preventive Maintenance Discipline & Technician Distribution
     // =========================================================================
     const monthExecutions = (preventiveExecutions || []).filter((e) => {
+      if (!e || isUnapprovedFieldClaim(e)) return false;
       const eDate = normalizeDateToYMD(e.executedAt);
       return (e.periodMonth && e.periodMonth === targetMonth) || (eDate && eDate.startsWith(targetMonth));
     });
@@ -368,7 +387,48 @@ export class MonthlyReportCalculationService {
     const totalMinutes = monthExecutions.reduce((sum, e) => sum + (Number(e.durationMinutes) || 0), 0);
     const preventiveLaborHours = Number((totalMinutes / 60).toFixed(1));
 
-    const totalActiveTasks = (preventiveTasks || []).length;
+    const activeMachineCodes = new Set(
+      activeMachinesList
+        .map((m) => String(m?.id_machine_registered || m?.id || m?.code_machine || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+    const hasRegisteredMachines = (machines || []).length > 0;
+
+    const scheduledTasksForMonth = (preventiveTasks || []).filter((t) => {
+      if (!t) return false;
+      if (t.active === false || t.is_active === false) return false;
+      const st = String(t.statut || t.status || '').trim().toUpperCase();
+      if (st === 'ARCHIVE' || st === 'ARCHIVEE' || st === 'INACTIF' || st === 'ANNULE') return false;
+
+      if (hasRegisteredMachines && activeMachineCodes.size > 0) {
+        const mCode = String(t.code_machine || t.id_machine || t.machineCode || '').trim().toUpperCase();
+        if (mCode && !activeMachineCodes.has(mCode)) {
+          const existsInAll = (machines || []).some(
+            (m) => String(m?.id_machine_registered || m?.id || m?.code_machine || '').trim().toUpperCase() === mCode
+          );
+          if (existsInAll) return false;
+        }
+      }
+
+      if (t.periodMonth && String(t.periodMonth).trim() !== targetMonth) {
+        return false;
+      }
+
+      const rawDue =
+        t.nextDueDate ||
+        t.prochaine_echeance ||
+        t.date_prevue ||
+        t.date_planifiee ||
+        t.dueDate;
+      const dueYMD = normalizeDateToYMD(rawDue);
+      if (dueYMD) {
+        const dueMonth = dueYMD.slice(0, 7);
+        if (dueMonth > targetMonth) return false;
+      }
+      return true;
+    });
+
+    const totalActiveTasks = scheduledTasksForMonth.length;
     const preventiveScheduledCount = Math.max(preventiveExecutedCount, totalActiveTasks);
 
     const preventiveDisciplineRate = preventiveScheduledCount > 0
@@ -460,6 +520,7 @@ export class MonthlyReportCalculationService {
     correctiveInterventions?: any[];
     preventiveTasks?: any[];
     preventiveExecutions?: PreventiveExecutionRecord[];
+    machines?: any[];
   }): MonthOverMonthComparison {
     const currentMonth = params.month && /^\d{4}-\d{2}$/.test(params.month)
       ? params.month

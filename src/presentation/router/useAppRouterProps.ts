@@ -622,6 +622,8 @@ export function useAppRouterProps({
       setPreventiveTasks: setters.setPreventiveTasks,
       correctiveInterventions,
       setCorrectiveInterventions: setters.setCorrectiveInterventions,
+      machineElementsLedger,
+      setMachineElementsLedger: setters.setMachineElementsLedger,
       onResetCorrective: handleResetCorrectiveToSeed,
       onBulkImportCorrective: handleBulkImportCorrective,
       onLoadDemoData: handleLoadDemoData,

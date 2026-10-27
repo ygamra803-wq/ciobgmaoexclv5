@@ -20,11 +20,14 @@ import {
   Edit2,
   Trash2,
   Flame,
+  AlertTriangle,
 } from 'lucide-react';
 import { CubeIcon } from '../../../components/common/icons/CubeIcon';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { EntrepotItem } from '../../../../core/domain';
 import { useTranslation } from '../../../../i18n/I18nContext';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
+import { evaluateComponentWearAndLifecycle } from '../../../../utils/componentHealthScore';
 
 export default function ComponentsTable({
   displayedData = [],
@@ -55,6 +58,10 @@ export default function ComponentsTable({
   handleOpenAddModal,
 }) {
   const { t } = useTranslation();
+  const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
+  const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
+  const storeSortiesExterne = useGmaoStore((s) => s.sortiesExterne);
+
   const columns = useMemo(
     () => [
       {
@@ -250,22 +257,61 @@ export default function ComponentsTable({
                             {item.designation}
                           </div>
 
-                          {/* Historique Bobinage */}
-                          {item.historique_bobinage && item.historique_bobinage.length > 0 && (
-                            <div className="mt-1">
-                              {item.historique_bobinage.map((b, bIdx) => (
-                                <span
-                                  key={bIdx}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 font-medium text-[10px] shadow-2xs"
-                                  title={`Historique Rebobinage:\n- Cause: ${b.cause || 'grille'}\n- Démonté le: ${b.date_demontage || ''} par ${b.technicien_demontage || ''}\n- Société de bobinage: ${b.societe_bobinage || ''}\n- Réception le: ${b.date_reception || ''}\n- Observation: ${b.observation || ''}`}
-                                >
-                                  <Flame className="w-3 h-3 text-amber-600 shrink-0" />
-                                  <span className="font-bold">Rebobiné ({b.societe_bobinage || 'STE AMAL'})</span>
-                                  <span className="text-amber-700 text-[9px] font-mono">[{b.date_reception || b.date_demontage}]</span>
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {/* Historique Bobinage & Score d'Usure BER */}
+                          {(() => {
+                            const wearInfo = evaluateComponentWearAndLifecycle(item, {
+                              correctiveInterventions: storeCorrective,
+                              preventiveExecutions: storePreventiveExecs,
+                              sortiesExterne: storeSortiesExterne,
+                            });
+                            return (
+                              <div className="flex flex-wrap items-center gap-1 mt-1">
+                                {item.historique_bobinage &&
+                                  item.historique_bobinage.length > 0 &&
+                                  item.historique_bobinage.map((b, bIdx) => (
+                                    <span
+                                      key={bIdx}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 font-medium text-[10px] shadow-2xs"
+                                      title={`Historique Rebobinage:\n- Cause: ${b.cause || 'grille'}\n- Démonté le: ${b.date_demontage || ''} par ${b.technicien_demontage || ''}\n- Société de bobinage: ${b.societe_bobinage || ''}\n- Réception le: ${b.date_reception || ''}\n- Observation: ${b.observation || ''}`}
+                                    >
+                                      <Flame className="w-3 h-3 text-amber-600 shrink-0" />
+                                      <span className="font-bold">Rebobiné ({b.societe_bobinage || 'STE AMAL'})</span>
+                                      <span className="text-amber-700 text-[9px] font-mono">[{b.date_reception || b.date_demontage}]</span>
+                                    </span>
+                                  ))}
+
+                                {wearInfo.shouldReform && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDetails?.(item);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-black text-[10px] shadow-2xs transition cursor-pointer"
+                                    title={`${wearInfo.recommendation}\n• ${wearInfo.reformReasons.join('\n• ')}`}
+                                  >
+                                    <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                    <span>À réformer ({wearInfo.costRatioPercent}% neuf)</span>
+                                  </button>
+                                )}
+
+                                {!wearInfo.shouldReform && wearInfo.statusLevel === 'WATCH' && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedDetails?.(item);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[10px] transition cursor-pointer"
+                                    title={`${wearInfo.recommendation}\nCoût cumulé : ${wearInfo.cumulativeRepairCost.toFixed(0)} DT / ${wearInfo.replacementValue.toFixed(0)} DT (${wearInfo.costRatioPercent}%)`}
+                                  >
+                                    <Activity className="w-3 h-3 text-amber-600 shrink-0" />
+                                    <span>Usure {wearInfo.costRatioPercent}%</span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-slate-500 truncate">
                             {item.emplacement && (

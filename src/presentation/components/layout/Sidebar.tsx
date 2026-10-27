@@ -38,6 +38,7 @@ export default function Sidebar({
         <FloatingSidebar
           currentTab={currentTab}
           setCurrentTab={setCurrentTab}
+          counts={counts}
           onLogout={onLogout}
         />
       )}

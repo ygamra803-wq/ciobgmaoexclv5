@@ -6,6 +6,7 @@ import { analytics } from '../../../services/AnalyticsService';
 import { storageService } from '../../../utils/storageService';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { isTechnicianRole } from '../../../core/security/technicianScope';
 
 const MODULE_THEME = {
   dashboard: {
@@ -167,10 +168,26 @@ const MODULE_THEME = {
 export default function FloatingSidebar({
   currentTab,
   setCurrentTab,
+  counts = {},
   onLogout,
-}) {
+}: any) {
   const { t } = useTranslation();
   const { user: currentUser } = useAuth();
+  const isTechUser = isTechnicianRole(currentUser);
+
+  const getModulePendingCount = (moduleId: string): number => {
+    if (isTechUser) return 0;
+    if (moduleId === 'stock') return Number(counts?.pendingSortieDemands || 0);
+    if (moduleId === 'preventive') return Number(counts?.pendingPreventiveValidation || 0);
+    if (moduleId === 'corrective') return Number(counts?.pendingCorrectiveValidation || 0);
+    return 0;
+  };
+
+  const totalPendingMakerChecker = isTechUser
+    ? 0
+    : Number(counts?.pendingSortieDemands || 0) +
+      Number(counts?.pendingPreventiveValidation || 0) +
+      Number(counts?.pendingCorrectiveValidation || 0);
 
   const visibleModules = useMemo(() => {
     if (!currentUser) return PARENT_MODULES;
@@ -380,6 +397,16 @@ export default function FloatingSidebar({
               aria-hidden="true"
             />
 
+            {/* Live Maker-Checker total badge on collapsed dock bubble */}
+            {totalPendingMakerChecker > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-900 shadow-md z-20"
+                title={`${totalPendingMakerChecker} élément(s) en attente de validation (Maker-Checker)`}
+              >
+                {totalPendingMakerChecker > 99 ? '99+' : totalPendingMakerChecker}
+              </span>
+            )}
+
             {/* Floating tooltip on hover */}
             <div
               role="tooltip"
@@ -405,6 +432,7 @@ export default function FloatingSidebar({
               const IconComponent = module.icon;
               const translatedLabel = t(`nav.${module.id}`) !== `nav.${module.id}` ? t(`nav.${module.id}`) : module.label;
               const theme = MODULE_THEME[module.id] || MODULE_THEME.dashboard;
+              const pendingCount = getModulePendingCount(module.id);
 
               return (
                 <button
@@ -428,7 +456,11 @@ export default function FloatingSidebar({
                       ? 'hover:bg-slate-700/50 hover:scale-105 hover:-translate-y-0.5'
                       : 'hover:bg-zinc-100 hover:scale-105 hover:-translate-y-0.5 hover:shadow-xs'
                   }`}
-                  title={translatedLabel}
+                  title={
+                    pendingCount > 0
+                      ? `${translatedLabel} (${pendingCount} à valider)`
+                      : translatedLabel
+                  }
                 >
                   {/* Glass magnifying convex light reflection */}
                   {isActive && (
@@ -457,12 +489,27 @@ export default function FloatingSidebar({
                     }`}
                   />
 
+                  {/* Live Maker-Checker Badge on Module Icon */}
+                  {pendingCount > 0 && (
+                    <span
+                      className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[9.5px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-800 shadow-xs z-30"
+                      aria-label={`${pendingCount} à valider`}
+                    >
+                      {pendingCount > 99 ? '99+' : pendingCount}
+                    </span>
+                  )}
+
                   {/* Tooltip on hover with floating depth */}
                   <div
                     role="tooltip"
                     className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900/95 border border-slate-800 text-white text-[11px] font-bold rounded-xl opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-[0_8px_20px_rgba(0,0,0,0.25)]"
                   >
                     {translatedLabel}
+                    {pendingCount > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9.5px] font-mono">
+                        {pendingCount} à valider
+                      </span>
+                    )}
                   </div>
                 </button>
               );

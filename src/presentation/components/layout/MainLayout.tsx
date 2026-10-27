@@ -382,6 +382,7 @@ export default function MainLayout({
           setCurrentTab={setCurrentTab}
           filters={filters}
           navigation={navigation}
+          counts={counts}
           setMobileMenuOpen={setMobileMenuOpen}
           fileInputRef={fileInputRef}
           handleImportFile={handleImportFile}

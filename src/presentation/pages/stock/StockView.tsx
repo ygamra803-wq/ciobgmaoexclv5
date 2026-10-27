@@ -36,7 +36,10 @@ import {
   Edit,
   Inbox,
   Calculator,
+  Lock,
 } from 'lucide-react';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import { computeReservedStockMap } from '../../../core/security/validationReconciliation';
 
 const TYPE_STYLES = {
   Foret: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -82,7 +85,49 @@ export default function StockView({
 }) {
   const { t } = useI18n();
   const stockItems = propStockItems || [];
-  
+  const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
+  const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
+  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
+
+  const reservedStockMap = useMemo(
+    () =>
+      computeReservedStockMap({
+        correctiveInterventions: storeCorrective,
+        preventiveExecutions: storePreventiveExecs,
+        sortieDemands: storeSortieDemands,
+      }),
+    [storeCorrective, storePreventiveExecs, storeSortieDemands]
+  );
+
+  const getReservedEntry = useCallback(
+    (ref?: string) => {
+      const key = String(ref || '')
+        .trim()
+        .toUpperCase();
+      return key ? reservedStockMap.get(key) || null : null;
+    },
+    [reservedStockMap]
+  );
+
+  const reservedSummary = useMemo(() => {
+    let articlesCount = 0;
+    let totalUnits = 0;
+    let riskCount = 0;
+    for (const item of stockItems) {
+      const entry = getReservedEntry(item.ref);
+      if (entry && entry.reservedQty > 0) {
+        articlesCount += 1;
+        totalUnits += entry.reservedQty;
+        const domainItem = new StockItem(item);
+        const netDispo = domainItem.getActuel() - entry.reservedQty;
+        if (netDispo <= domainItem.getSeuilAlerte()) {
+          riskCount += 1;
+        }
+      }
+    }
+    return { articlesCount, totalUnits, riskCount };
+  }, [stockItems, getReservedEntry]);
+
   const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
 
   const emplacements = useMemo(() => {
@@ -204,8 +249,14 @@ export default function StockView({
   // Pre-filter with active KPI status card if clicked
   const effectiveFiltered = useMemo(() => {
     if (activeKpiFilter === 'ALL') return filteredStock;
+    if (activeKpiFilter === 'RESERVED') {
+      return filteredStock.filter((item) => {
+        const entry = getReservedEntry(item.ref);
+        return Boolean(entry && entry.reservedQty > 0);
+      });
+    }
     return filteredStock.filter((item) => item.alerte === activeKpiFilter);
-  }, [filteredStock, activeKpiFilter]);
+  }, [filteredStock, activeKpiFilter, getReservedEntry]);
 
   const sortStock = useCallback((items) => {
     if (!sortField || !items || items.length === 0) return items || [];
@@ -358,7 +409,19 @@ export default function StockView({
       },
       isActive: stockAlertOnly && activeKpiFilter === 'ALL',
     },
-  ], [stockItems.length, stockKPIs, activeKpiFilter, stockAlertOnly, setActiveKpiFilter, setStockAlertOnly, t]);
+    {
+      key: 'RESERVED',
+      label: 'Réservé (Maker-Checker)',
+      count: reservedSummary.articlesCount,
+      activeBg: 'bg-purple-700 text-white shadow-xs',
+      colorDot: 'bg-purple-500',
+      onClick: () => {
+        setActiveKpiFilter(activeKpiFilter === 'RESERVED' ? 'ALL' : 'RESERVED');
+        setStockAlertOnly(false);
+      },
+      isActive: activeKpiFilter === 'RESERVED',
+    },
+  ], [stockItems.length, stockKPIs, activeKpiFilter, stockAlertOnly, reservedSummary.articlesCount, setActiveKpiFilter, setStockAlertOnly, t]);
 
   const activeStockFilterChips = useMemo(() => {
     const chips = [];
@@ -641,6 +704,49 @@ export default function StockView({
         setStockAlertOnly={setStockAlertOnly}
       />
 
+      {/* Virtual Stock Reservation Banner (Maker-Checker) */}
+      {reservedSummary.articlesCount > 0 && (
+        <div className="bg-purple-50/90 border border-purple-300 rounded-2xl p-3.5 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-700 text-white flex items-center justify-center shrink-0">
+              <Lock className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-2">
+                <span>Stock Physique vs Stock Disponible (Réservation Virtuelle Maker-Checker)</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-200 text-purple-900">
+                  {reservedSummary.totalUnits} u. réservée(s)
+                </span>
+              </div>
+              <p className="text-[11px] text-purple-800 mt-0.5">
+                {reservedSummary.articlesCount} référence(s) ont des sorties déclarées par les techniciens en attente de validation responsable.
+                {reservedSummary.riskCount > 0 && (
+                  <span className="font-bold text-rose-700 ml-1">
+                    Attention : {reservedSummary.riskCount} article(s) passent sous le seuil ou en rupture après validation !
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveKpiFilter(activeKpiFilter === 'RESERVED' ? 'ALL' : 'RESERVED');
+              setStockAlertOnly(false);
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+              activeKpiFilter === 'RESERVED'
+                ? 'bg-slate-900 text-white'
+                : 'bg-purple-700 hover:bg-purple-800 text-white shadow-2xs'
+            }`}
+          >
+            {activeKpiFilter === 'RESERVED'
+              ? 'Afficher tout le stock'
+              : `Filtrer les réservations (${reservedSummary.articlesCount})`}
+          </button>
+        </div>
+      )}
+
       {/* 4. Central Unified Industrial Filter & Search Card */}
       <IndustrialFilterCard
         title={t('common.filters.title')}
@@ -920,11 +1026,50 @@ export default function StockView({
                         {item.sorties > 0 ? `-${item.sorties}` : '0'}
                       </td>
 
-                      {/* Actuel (H) */}
-                      <td className="py-3 px-2.5 text-right font-mono font-black text-slate-900 text-sm">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
-                          {domainItem.getActuel()}
-                        </span>
+                      {/* Actuel (H) + Réservé & Disponible Net */}
+                      <td className="py-3 px-2.5 text-right font-mono">
+                        {(() => {
+                          const actuel = domainItem.getActuel();
+                          const resEntry = getReservedEntry(item.ref);
+                          const reservedQty = resEntry?.reservedQty || 0;
+                          const netDispo = actuel - reservedQty;
+                          const isNetCrit = reservedQty > 0 && netDispo <= domainItem.getSeuilAlerte();
+                          const tooltipText =
+                            reservedQty > 0
+                              ? `Stock Physique : ${actuel}\nRéservé (En attente validation) : ${reservedQty}\nDisponible Net : ${netDispo}\nDétail : ${resEntry?.sources
+                                  .map((s) => `${s.code} (${s.machineCode || s.claimType}: ${s.qty})`)
+                                  .join(', ')}`
+                              : `Stock Physique Actuel : ${actuel}`;
+
+                          return (
+                            <div className="inline-flex flex-col items-end gap-1" title={tooltipText}>
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-black text-slate-900 text-sm">
+                                  {actuel}
+                                </span>
+                              </div>
+                              {reservedQty > 0 && (
+                                <div className="flex flex-col items-end gap-0.5 text-[10px] leading-tight">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
+                                    <Lock className="w-2.5 h-2.5 text-purple-600" />
+                                    <span>Réservé: -{reservedQty}</span>
+                                  </span>
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded font-bold border ${
+                                      netDispo <= 0
+                                        ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                        : isNetCrit
+                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    }`}
+                                  >
+                                    Dispo net: {netDispo}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Seuil (I) */}

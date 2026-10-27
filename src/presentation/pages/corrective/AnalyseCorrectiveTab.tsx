@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { AvailabilityCalculationService } from '../../../domain/services/AvailabilityCalculationService';
+import { filterActiveMachines, getMachineAssetClass } from '../../../utils/activeMachines';
 import { useI18n } from '../../../i18n/I18nContext';
 
 export default function AnalyseCorrectiveTab({
@@ -32,6 +33,7 @@ export default function AnalyseCorrectiveTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const [selectedAssetClass, setSelectedAssetClass] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedTypePanne, setSelectedTypePanne] = useState('ALL');
 
@@ -76,18 +78,49 @@ export default function AnalyseCorrectiveTab({
     return Array.from(set).sort();
   }, [interventions]);
 
+  // Scoped active machines for accurate OEE / MTBF scheduled hours
+  const scopedActiveMachines = useMemo(() => {
+    const active = filterActiveMachines(registeredMachines || []);
+    return active.filter((m) => {
+      if (selectedAssetClass !== 'ALL' && getMachineAssetClass(m) !== selectedAssetClass) {
+        return false;
+      }
+      if (selectedZone !== 'ALL') {
+        const z = m.id_zone_default || m.id_zone;
+        if (z !== selectedZone) return false;
+      }
+      return true;
+    });
+  }, [registeredMachines, selectedAssetClass, selectedZone]);
+
+  const activeMachinesForKpi = useMemo(() => {
+    if (selectedAssetClass === 'SYSTEM_GENERAL') {
+      return scopedActiveMachines;
+    }
+    const prodOnly = scopedActiveMachines.filter((m) => getMachineAssetClass(m) === 'PRODUCTION');
+    return prodOnly.length > 0 ? prodOnly : scopedActiveMachines;
+  }, [scopedActiveMachines, selectedAssetClass]);
+
   // Filtered interventions for deep analytics
   const filteredInterventions = useMemo(() => {
     return interventions.filter((item) => {
+      const m = machineMap.get(String(item.code_machine || item.id_machine || '').trim().toUpperCase());
+      if (selectedAssetClass !== 'ALL') {
+        const itemAssetClass = item.asset_class
+          ? String(item.asset_class).toUpperCase() === 'SYSTEM_GENERAL'
+            ? 'SYSTEM_GENERAL'
+            : 'PRODUCTION'
+          : getMachineAssetClass(m);
+        if (itemAssetClass !== selectedAssetClass) return false;
+      }
       if (selectedZone !== 'ALL') {
-        const m = machineMap.get(String(item.code_machine || '').trim().toUpperCase());
         const itemZone = item.zone || m?.id_zone_default || m?.id_zone || 'Atelier';
         if (itemZone !== selectedZone) return false;
       }
       if (selectedTypePanne !== 'ALL' && item.type_panne !== selectedTypePanne) return false;
       return true;
     });
-  }, [interventions, selectedZone, selectedTypePanne, machineMap]);
+  }, [interventions, selectedAssetClass, selectedZone, selectedTypePanne, machineMap]);
 
   // Recalculated Pareto Anomalies from filtered dataset
   const dynamicParetoAnomalies = useMemo(() => {
@@ -95,7 +128,7 @@ export default function AnalyseCorrectiveTab({
 
     const counts = {};
     filteredInterventions.forEach((item) => {
-      const anom = item.anomalie || 'court_circuit';
+      const anom = item.anomalie || 'Non spécifié';
       counts[anom] = (counts[anom] || 0) + 1;
     });
 
@@ -125,7 +158,7 @@ export default function AnalyseCorrectiveTab({
 
     const counts = {};
     filteredInterventions.forEach((item) => {
-      const m = item.code_machine || 'RCP-02';
+      const m = item.code_machine || 'Non spécifié';
       counts[m] = (counts[m] || 0) + 1;
     });
 
@@ -171,7 +204,7 @@ export default function AnalyseCorrectiveTab({
   const techBreakdown = useMemo(() => {
     const counts = {};
     filteredInterventions.forEach((item) => {
-      const t = item.intervenant || 'm_hammed';
+      const t = item.intervenant || 'Non assigné';
       counts[t] = (counts[t] || 0) + 1;
     });
 
@@ -275,7 +308,7 @@ export default function AnalyseCorrectiveTab({
     const mttrFormatted = AvailabilityCalculationService.formatMTTR(filteredInterventions);
 
     // 2. MTBF via AvailabilityCalculationService
-    const numMachines = Math.max(1, registeredMachines.length);
+    const numMachines = Math.max(1, activeMachinesForKpi.length);
     const totalScheduledHours = numMachines * 160; // 160h standard industrial monthly operating time
     const mtbfCalculatedHours = AvailabilityCalculationService.calculateMTBF(filteredInterventions, totalScheduledHours);
 
@@ -296,7 +329,7 @@ export default function AnalyseCorrectiveTab({
       downtime: downtimeFormatted,
       pdrCost: Math.round(totalPdrCost),
     };
-  }, [filteredInterventions, registeredMachines.length, stockMap]);
+  }, [filteredInterventions, activeMachinesForKpi.length, stockMap]);
 
   // Generate intelligent preventive task from recommendation
   const handleAdoptRecommendation = (rec) => {
@@ -357,7 +390,7 @@ export default function AnalyseCorrectiveTab({
             </div>
             <div className="mt-2 text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
               <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-mono">
-                {registeredMachines.length} Machines
+                {activeMachinesForKpi.length} Machines actives
               </span>
             </div>
           </div>
@@ -497,6 +530,18 @@ export default function AnalyseCorrectiveTab({
 
         {/* Filter Selects & Export */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Asset Class Filter (Production vs Système Général) */}
+          <select
+            value={selectedAssetClass}
+            onChange={(e) => setSelectedAssetClass(e.target.value as 'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL')}
+            aria-label="Filtrer par classe d'équipement"
+            className="h-8 px-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-xs text-slate-700 focus:outline-hidden focus:border-indigo-400 cursor-pointer shadow-2xs"
+          >
+            <option value="ALL">Toutes Classes (Prod + Sys. Gén.)</option>
+            <option value="PRODUCTION">Production uniquement</option>
+            <option value="SYSTEM_GENERAL">Système Général uniquement</option>
+          </select>
+
           {/* Zone Filter */}
           <select
             value={selectedZone}
@@ -522,10 +567,11 @@ export default function AnalyseCorrectiveTab({
           </select>
 
           {/* Reset Filters */}
-          {(selectedZone !== 'ALL' || selectedTypePanne !== 'ALL') && (
+          {(selectedAssetClass !== 'ALL' || selectedZone !== 'ALL' || selectedTypePanne !== 'ALL') && (
             <button
               type="button"
               onClick={() => {
+                setSelectedAssetClass('ALL');
                 setSelectedZone('ALL');
                 setSelectedTypePanne('ALL');
               }}

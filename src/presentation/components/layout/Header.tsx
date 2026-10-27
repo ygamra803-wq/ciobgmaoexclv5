@@ -23,12 +23,14 @@ import { notificationService } from '../../../services/NotificationService';
 import { getParentModuleForTab } from './navConfig';
 import { storageService } from '../../../utils/storageService';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { isTechnicianRole } from '../../../core/security/technicianScope';
 
 export default function Header({
   currentTab,
   setCurrentTab,
   filters,
   _navigation,
+  counts = {},
   setMobileMenuOpen,
   fileInputRef,
   handleImportFile,
@@ -42,7 +44,7 @@ export default function Header({
   currentUser,
   onOpenShortcuts,
   showToast,
-}) {
+}: any) {
   const [topologyMenuOpen, setTopologyMenuOpen] = useState(false);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
   const topologyMenuRef = useRef(null);
@@ -595,6 +597,16 @@ export default function Header({
             >
               {childTabs.map((child, index) => {
                 const isActive = currentTab === child.id;
+                const isTech = isTechnicianRole(currentUser);
+                const childPending = !isTech
+                  ? child.id === 'sortie'
+                    ? Number(counts?.pendingSortieDemands || 0)
+                    : child.id === 'preventive'
+                    ? Number(counts?.pendingPreventiveValidation || 0)
+                    : child.id === 'corrective'
+                    ? Number(counts?.pendingCorrectiveValidation || 0)
+                    : 0
+                  : 0;
                 return (
                   <button
                     key={child.id}
@@ -605,13 +617,21 @@ export default function Header({
                     tabIndex={isActive ? 0 : -1}
                     onKeyDown={(e) => handleChildTabKeyDown(e, index)}
                     onClick={() => setCurrentTab(child.id)}
-                    className={`whitespace-nowrap px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[11.5px] sm:text-[12.5px] font-semibold transition-all duration-200 cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+                    className={`whitespace-nowrap px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[11.5px] sm:text-[12.5px] font-semibold transition-all duration-200 cursor-pointer shrink-0 inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
                       isActive
                         ? 'bg-[#111111] text-white shadow-[0_4px_14px_rgba(0,0,0,0.25)] scale-[1.02]'
                         : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/60'
                     }`}
                   >
-                    {child.label}
+                    <span>{child.label}</span>
+                    {childPending > 0 && (
+                      <span
+                        className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black font-mono leading-tight"
+                        title={`${childPending} élément(s) à valider`}
+                      >
+                        {childPending}
+                      </span>
+                    )}
                   </button>
                 );
               })}

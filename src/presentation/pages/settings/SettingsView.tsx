@@ -73,6 +73,8 @@ export default function SettingsView({
   setPreventiveTasks,
   correctiveInterventions = [],
   setCorrectiveInterventions,
+  machineElementsLedger = [],
+  setMachineElementsLedger,
   onResetCorrective,
   onBulkImportCorrective,
   onLoadDemoData,
@@ -894,6 +896,39 @@ export default function SettingsView({
         .filter((i: any) => i._isOrphan),
     [correctiveInterventions, machines]
   );
+  const systemGeneralBomLeaks = useMemo(
+    () => dataIntegrityService.getSystemGeneralBomLeaks(machineElementsLedger, machines),
+    [machineElementsLedger, machines]
+  );
+
+  const handlePurgeSystemGeneralBomLeaks = async () => {
+    if (systemGeneralBomLeaks.length === 0) {
+      showToast?.('Aucune fuite BOM sur Système Général détectée.', 'info');
+      return;
+    }
+    if (
+      await confirmAction({
+        title: 'Détacher les éléments BOM de Système Général',
+        message: `Supprimer ${systemGeneralBomLeaks.length} liaison(s) BOM de production rattachée(s) par erreur à un équipement Système Général ?`,
+        variant: 'danger',
+      })
+    ) {
+      const { kept, removedCount } = dataIntegrityService.purgeSystemGeneralBomLeaks(
+        machineElementsLedger,
+        machines
+      );
+      if (setMachineElementsLedger) {
+        setMachineElementsLedger(kept);
+      } else {
+        useGmaoStore.getState().setMachineElementsLedger(kept);
+      }
+      runIntegrityCheck();
+      showToast?.(
+        `${removedCount} élément(s) BOM détaché(s) des équipements Système Général avec succès.`,
+        'success'
+      );
+    }
+  };
 
   const handlePurgePreventiveOrphans = async () => {
     const impact = dataIntegrityService.previewClearImpact({
@@ -1218,6 +1253,7 @@ export default function SettingsView({
           operations,
           preventiveTasks,
           correctiveInterventions,
+          machineElementsLedger,
         });
         const cs = dataIntegrityService.calculateChecksum({
           rawStock,
@@ -1583,8 +1619,10 @@ export default function SettingsView({
             currentChecksum={currentChecksum}
             preventiveOrphans={preventiveOrphans}
             correctiveOrphans={correctiveOrphans}
+            systemGeneralBomLeaks={systemGeneralBomLeaks}
             handlePurgePreventiveOrphans={handlePurgePreventiveOrphans}
             handlePurgeCorrectiveOrphans={handlePurgeCorrectiveOrphans}
+            handlePurgeSystemGeneralBomLeaks={handlePurgeSystemGeneralBomLeaks}
             handleBulkRelink={handleBulkRelink}
             refreshPerformanceMetrics={refreshPerformanceMetrics}
             runPerformanceBenchmark={runPerformanceBenchmark}
