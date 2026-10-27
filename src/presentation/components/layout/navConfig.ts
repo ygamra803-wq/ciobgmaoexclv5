@@ -21,6 +21,7 @@ export const PARENT_MODULES = [
     bgLight: 'bg-blue-50',
     children: [
       { id: 'dashboard', label: 'Dashboard Opérations' },
+      { id: 'validation_center', label: 'Centre de Validation (À valider)' },
       { id: 'executive_report', label: 'Rapport Mensuel Direction' }
     ]
   },

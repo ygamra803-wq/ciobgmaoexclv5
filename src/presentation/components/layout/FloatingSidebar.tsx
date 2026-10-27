@@ -400,8 +400,20 @@ export default function FloatingSidebar({
             {/* Live Maker-Checker total badge on collapsed dock bubble */}
             {totalPendingMakerChecker > 0 && (
               <span
-                className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-900 shadow-md z-20"
-                title={`${totalPendingMakerChecker} élément(s) en attente de validation (Maker-Checker)`}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentTab('validation_center');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.stopPropagation();
+                    setCurrentTab('validation_center');
+                  }
+                }}
+                className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-900 shadow-md z-20 cursor-pointer"
+                title={`${totalPendingMakerChecker} élément(s) à valider — Ouvrir le Centre de Validation`}
               >
                 {totalPendingMakerChecker > 99 ? '99+' : totalPendingMakerChecker}
               </span>

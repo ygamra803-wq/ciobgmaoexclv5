@@ -223,5 +223,77 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(execution.sparesProposed[0].ref).toBe('ROUL-6204');
     expect(execution.num_bon_saisi_par_tech).toBe('BS-2026-01');
   });
+
+  it('aggregates pending Maker-Checker items and reserved stock in selectValidationCenterQueues and enforces RBAC on validation_center', async () => {
+    const { selectValidationCenterQueues } = await import('../../core/security/validationReconciliation');
+    const { AuthorizationService } = await import('../../core/security/AuthorizationService');
+    const { ROLES } = await import('../../core/security/Roles');
+
+    // RBAC check: Supervisors & Storekeepers allowed; Technician denied
+    expect(AuthorizationService.canAccessTab({ role: ROLES.ADMIN } as any, 'validation_center')).toBe(true);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAINTENANCE } as any, 'validation_center')).toBe(true);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAGASIN } as any, 'validation_center')).toBe(true);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.TECHNICIEN } as any, 'validation_center')).toBe(false);
+
+    const queues = selectValidationCenterQueues({
+      correctiveInterventions: [
+        {
+          id: 'BT-PEND-1',
+          num_bt: 'BT-101',
+          statut: 'EN_ATTENTE_VALIDATION',
+          validation_status: 'PENDING_VALIDATION',
+          pieces_proposees: [{ ref: 'ROUL-6204', qty: 2 }],
+        },
+        {
+          id: 'BT-CLAR-1',
+          num_bt: 'BT-102',
+          statut: 'EN_COURS',
+          validation_status: 'NEEDS_CLARIFICATION',
+        },
+        {
+          id: 'BT-CLOSED',
+          num_bt: 'BT-103',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+        },
+      ],
+      preventiveExecutions: [
+        {
+          id: 'EX-PEND-1',
+          taskId: 'PM-01',
+          validation_status: 'PENDING_VALIDATION',
+          sparesProposed: [{ ref: 'ROUL-6204', qty: 1 }, { ref: 'COUR-A42', qty: 3 }],
+        },
+      ],
+      sortieDemands: [
+        {
+          id: 'SD-PEND-1',
+          validation_status: 'PENDING_VALIDATION',
+          items: [{ ref: 'COUR-A42', qty: 2 }],
+        },
+        {
+          id: 'SD-CLAR-1',
+          validation_status: 'NEEDS_CLARIFICATION',
+          items: [{ ref: 'FILT-10', qty: 1 }],
+        },
+      ],
+    });
+
+    expect(queues.pendingCorrective.map((x) => x.id)).toEqual(['BT-PEND-1']);
+    expect(queues.clarificationCorrective.map((x) => x.id)).toEqual(['BT-CLAR-1']);
+    expect(queues.pendingPreventive.map((x) => x.id)).toEqual(['EX-PEND-1']);
+    expect(queues.pendingSortieDemands.map((x) => x.id)).toEqual(['SD-PEND-1']);
+    expect(queues.clarificationSortieDemands.map((x) => x.id)).toEqual(['SD-CLAR-1']);
+    expect(queues.totalPending).toBe(3);
+    expect(queues.totalClarification).toBe(2);
+    // Reserved stock (includes PENDING_VALIDATION + NEEDS_CLARIFICATION):
+    // ROUL-6204 (2 + 1 = 3), COUR-A42 (3 + 2 = 5), FILT-10 (1) => 3 refs, 9 units total
+    expect(queues.reservedRefsCount).toBe(3);
+    expect(queues.totalReservedUnits).toBe(9);
+    expect(queues.reservedStockMap.get('ROUL-6204')?.reservedQty).toBe(3);
+    expect(queues.reservedStockMap.get('COUR-A42')?.reservedQty).toBe(5);
+    expect(queues.reservedStockMap.get('FILT-10')?.reservedQty).toBe(1);
+  });
 });
+
 

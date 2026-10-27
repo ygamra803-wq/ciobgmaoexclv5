@@ -587,3 +587,84 @@ export function computeReservedStockMap({
   return map;
 }
 
+export interface ValidationCenterQueuesResult {
+  pendingCorrective: any[];
+  clarificationCorrective: any[];
+  pendingPreventive: any[];
+  clarificationPreventive: any[];
+  pendingSortieDemands: any[];
+  clarificationSortieDemands: any[];
+  totalPending: number;
+  totalClarification: number;
+  reservedRefsCount: number;
+  totalReservedUnits: number;
+  reservedStockMap: Map<string, ReservedStockEntry>;
+}
+
+/**
+ * Pure selector aggregating all pending & clarification Maker-Checker queues
+ * for the unified desktop Validation Center (`Centre de validation / À valider`).
+ */
+export function selectValidationCenterQueues({
+  correctiveInterventions = [],
+  preventiveExecutions = [],
+  sortieDemands = [],
+}: {
+  correctiveInterventions?: any[];
+  preventiveExecutions?: any[];
+  sortieDemands?: any[];
+}): ValidationCenterQueuesResult {
+  const pendingCorrective = (correctiveInterventions || []).filter(
+    (bt) =>
+      bt?.validation_status === 'PENDING_VALIDATION' ||
+      bt?.statut === 'EN_ATTENTE_VALIDATION'
+  );
+  const clarificationCorrective = (correctiveInterventions || []).filter(
+    (bt) => bt?.validation_status === 'NEEDS_CLARIFICATION'
+  );
+
+  const pendingPreventive = (preventiveExecutions || []).filter(
+    (ex) => ex?.validation_status === 'PENDING_VALIDATION'
+  );
+  const clarificationPreventive = (preventiveExecutions || []).filter(
+    (ex) => ex?.validation_status === 'NEEDS_CLARIFICATION'
+  );
+
+  const pendingSortieDemands = (sortieDemands || []).filter(
+    (dem) => dem?.validation_status === 'PENDING_VALIDATION'
+  );
+  const clarificationSortieDemands = (sortieDemands || []).filter(
+    (dem) => dem?.validation_status === 'NEEDS_CLARIFICATION'
+  );
+
+  const reservedStockMap = computeReservedStockMap({
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+  });
+
+  let totalReservedUnits = 0;
+  for (const entry of reservedStockMap.values()) {
+    totalReservedUnits += entry.reservedQty;
+  }
+
+  return {
+    pendingCorrective,
+    clarificationCorrective,
+    pendingPreventive,
+    clarificationPreventive,
+    pendingSortieDemands,
+    clarificationSortieDemands,
+    totalPending:
+      pendingCorrective.length + pendingPreventive.length + pendingSortieDemands.length,
+    totalClarification:
+      clarificationCorrective.length +
+      clarificationPreventive.length +
+      clarificationSortieDemands.length,
+    reservedRefsCount: reservedStockMap.size,
+    totalReservedUnits,
+    reservedStockMap,
+  };
+}
+
+

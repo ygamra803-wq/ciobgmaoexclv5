@@ -6,6 +6,7 @@ import usePageOrchestrator from '../components/common/usePageOrchestrator';
 
 import DashboardView from '../pages/dashboard/DashboardView';
 
+const ValidationCenterView = lazy(() => import('../pages/validation/ValidationCenterView'));
 const MonthlyExecutiveReportView = lazy(() => import('../components/views/MonthlyExecutiveReportView'));
 const StockView = lazy(() => import('../pages/stock/StockView'));
 const TypeView = lazy(() => import('../pages/referentiel/TypeView'));
@@ -106,6 +107,12 @@ export default function AppRouter({
                       {currentTab === 'dashboard' && (
                         <ErrorBoundary sectionName="Tableau de Bord Operations">
                           <DashboardView {...props.dashboard} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'validation_center' && (
+                        <ErrorBoundary sectionName="Centre de Validation (À valider)">
+                          <ValidationCenterView {...props.validationCenter} />
                         </ErrorBoundary>
                       )}
 

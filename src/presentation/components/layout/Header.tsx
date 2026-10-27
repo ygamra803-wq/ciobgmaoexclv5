@@ -599,8 +599,14 @@ export default function Header({
               {childTabs.map((child, index) => {
                 const isActive = currentTab === child.id;
                 const isTech = isTechnicianRole(currentUser);
+                const totalPendingValidation =
+                  Number(counts?.pendingSortieDemands || 0) +
+                  Number(counts?.pendingPreventiveValidation || 0) +
+                  Number(counts?.pendingCorrectiveValidation || 0);
                 const childPending = !isTech
-                  ? child.id === 'sortie'
+                  ? child.id === 'validation_center'
+                    ? totalPendingValidation
+                    : child.id === 'sortie'
                     ? Number(counts?.pendingSortieDemands || 0)
                     : child.id === 'preventive'
                     ? Number(counts?.pendingPreventiveValidation || 0)
@@ -642,6 +648,49 @@ export default function Header({
 
         {/* Right: Actions & Tools (De-duplicated in fixed mode) */}
         <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {!isTechnicianRole(currentUser) &&
+            (!currentUser || AuthorizationService.canAccessTab(currentUser, 'validation_center')) && (() => {
+              const totalPending =
+                Number(counts?.pendingSortieDemands || 0) +
+                Number(counts?.pendingPreventiveValidation || 0) +
+                Number(counts?.pendingCorrectiveValidation || 0);
+              const isValidationCenterActive = currentTab === 'validation_center';
+              return (
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('validation_center')}
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+                    isValidationCenterActive
+                      ? 'bg-slate-900 text-white border border-slate-900 shadow-sm'
+                      : totalPending > 0
+                      ? 'bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 shadow-[0_2px_6px_rgba(225,29,72,0.12)]'
+                      : 'bg-slate-100 hover:bg-slate-200/80 border border-slate-200/90 text-slate-700'
+                  }`}
+                  title="Ouvrir le Centre de Validation unifié (Maker-Checker)"
+                  aria-label={`Centre de validation : ${totalPending} élément(s) à valider`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      totalPending > 0 ? 'bg-rose-600 animate-pulse' : 'bg-emerald-500'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="hidden sm:inline text-[11px] tracking-tight">À valider</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black font-mono leading-tight ${
+                      isValidationCenterActive
+                        ? 'bg-white/20 text-white'
+                        : totalPending > 0
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    {totalPending}
+                  </span>
+                </button>
+              );
+            })()}
+
           <input
             type="file"
             ref={fileInputRef}

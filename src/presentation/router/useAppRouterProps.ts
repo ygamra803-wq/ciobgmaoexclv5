@@ -213,6 +213,21 @@ export function useAppRouterProps({
       showToast: showToast || navigation?.showToast,
     },
 
+    validationCenter: {
+      stockItems,
+      machines,
+      mouvements,
+      correctiveInterventions,
+      preventiveExecutions,
+      onReviewCorrectiveValidation: (id, decisionData, customMvtHandler) =>
+        handleReviewInterventionValidation(id, decisionData, customMvtHandler || handleAddMouvement),
+      onReviewPreventiveValidation: (id, decisionData, customMvtHandler) =>
+        handleReviewPreventiveExecutionValidation(id, decisionData, customMvtHandler || handleAddMouvement),
+      onAddMouvement: handleAddMouvement,
+      onNavigateToTab: navigateTo,
+      showToast: showToast || navigation?.showToast,
+    },
+
     stock: {
       stockItems,
       mouvements,

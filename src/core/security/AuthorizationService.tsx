@@ -128,6 +128,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   [ROLES.RESPONSABLE_MAINTENANCE]: '*',
   [ROLES.RESPONSABLE_MAGASIN]: new Set([
     'dashboard',
+    'validation_center',
     'executive_report',
     'stock',
     'types',

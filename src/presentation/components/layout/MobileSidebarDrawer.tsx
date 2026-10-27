@@ -289,6 +289,32 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
+            {/* Centre de Validation Centralisé (Maker-Checker — Non-Technicians Only) */}
+            {!isTechUser && canAccess('validation_center') && (
+              <button
+                data-testid="sidebar-validation-center-btn"
+                onClick={() => navTo('validation_center')}
+                className={getTabClass('validation_center', true)}
+              >
+                <span className="flex items-center gap-2">
+                  <BadgeCheck
+                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-rose-400' : 'text-rose-600'}`}
+                  />
+                  <span>Centre de Validation</span>
+                </span>
+                {pendingSortieDemands + pendingPreventiveVal + pendingCorrectiveVal > 0 ? (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
+                    title="Total en attente de validation (Maker-Checker)"
+                  >
+                    {pendingSortieDemands + pendingPreventiveVal + pendingCorrectiveVal} À valider
+                  </span>
+                ) : (
+                  <span className={getBadgeClass('validation_center')}>À jour</span>
+                )}
+              </button>
+            )}
+
             {/* Rapport Mensuel Exécutif (Direction) */}
             {canAccess('executive_report') && (
               <button
