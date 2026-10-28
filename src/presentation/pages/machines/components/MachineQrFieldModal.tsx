@@ -23,6 +23,7 @@ import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { useAuth } from '../../../../context/AuthContext';
 import { isTechnicianRole, getTechnicianDisplayName } from '../../../../core/security/technicianScope';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
+import { computeMachineHealthPassport } from '../../../../application/services/MachineHealthPassportService';
 
 interface MachineQrFieldModalProps {
   machine: any | null;
@@ -46,6 +47,7 @@ export default function MachineQrFieldModal({
 
   const technicians = useGmaoStore((s) => s.technicians) || [];
   const preventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
+  const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
   const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
   const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
@@ -138,6 +140,17 @@ export default function MachineQrFieldModal({
       .filter((ci: any) => String(ci.code_machine || '').trim().toUpperCase() === codeUpper)
       .slice(0, 5);
   }, [correctiveInterventions, machineCode]);
+
+  // Idea 3: Passeport Santé Machine (12-Month TCO = Préventif + Correctif PDR, Downtime & Recurrent Organ BER Alerts)
+  const healthPassport = useMemo(
+    () =>
+      computeMachineHealthPassport({
+        machine,
+        correctiveInterventions,
+        preventiveExecutions,
+      }),
+    [machine, correctiveInterventions, preventiveExecutions]
+  );
 
   // Machine BOM & Attached Components/Parts
   const machineComponentsAndBom = useMemo(() => {
@@ -465,6 +478,97 @@ export default function MachineQrFieldModal({
 
             {/* Tab Content */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {/* IDEA 3: PASSEPORT SANTÉ MACHINE (12 MOIS) & ALERTE TCO / BER */}
+              <div
+                data-testid="machine-health-passport-banner"
+                className="p-3.5 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-2.5 shadow-sm"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10.5px] font-black uppercase tracking-wider text-cyan-300">
+                      Passeport Santé 12 Mois (TCO & BER)
+                    </span>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                      healthPassport.healthStatus === 'CRITIQUE_BER'
+                        ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                        : healthPassport.healthStatus === 'SURVEILLANCE'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    }`}
+                  >
+                    {healthPassport.healthStatus === 'CRITIQUE_BER'
+                      ? `ALERTE BER • ${healthPassport.healthScore}/100`
+                      : healthPassport.healthStatus === 'SURVEILLANCE'
+                      ? `SURVEILLANCE • ${healthPassport.healthScore}/100`
+                      : `ÉTAT SAIN • ${healthPassport.healthScore}/100`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-xl bg-slate-950/90 border border-slate-800">
+                    <div className="text-[9.5px] text-slate-400 font-bold uppercase">
+                      Coût Total 12M
+                    </div>
+                    <div className="text-xs sm:text-sm font-black font-mono text-emerald-400">
+                      {healthPassport.totalMaintenanceCost12m.toLocaleString('fr-FR')} DH
+                    </div>
+                    <div className="text-[9px] text-slate-500 font-mono">
+                      Corr: {healthPassport.correctivePdrCost12m} | Prév: {healthPassport.preventiveTotalCost12m}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-950/90 border border-slate-800">
+                    <div className="text-[9.5px] text-slate-400 font-bold uppercase">
+                      Arrêts Cumulés 12M
+                    </div>
+                    <div className="text-xs sm:text-sm font-black font-mono text-amber-400">
+                      {healthPassport.totalDowntimeHours12m} h
+                    </div>
+                    <div className="text-[9px] text-slate-500 font-mono">
+                      {healthPassport.correctiveCount12m} pannes / {healthPassport.preventiveCount12m} PM
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-950/90 border border-slate-800">
+                    <div className="text-[9.5px] text-slate-400 font-bold uppercase">
+                      Organes Récurrents
+                    </div>
+                    <div
+                      className={`text-xs sm:text-sm font-black font-mono ${
+                        healthPassport.recurrentOrganAlerts.length > 0
+                          ? 'text-rose-400'
+                          : 'text-slate-300'
+                      }`}
+                    >
+                      {healthPassport.recurrentOrganAlerts.length} alerte(s)
+                    </div>
+                    <div className="text-[9px] text-slate-500 font-mono">Seuil: ≥3 pannes</div>
+                  </div>
+                </div>
+
+                {healthPassport.recurrentOrganAlerts.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    {healthPassport.recurrentOrganAlerts.map((alert) => (
+                      <div
+                        key={alert.organKey}
+                        data-testid={`ber-organ-alert-${alert.organKey}`}
+                        className="p-2.5 rounded-xl bg-rose-950/70 border border-rose-700/80 text-[11px] text-rose-100 flex items-start gap-2"
+                      >
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <div className="font-black text-rose-200">
+                            Alerte Récurrence / BER : {alert.organLabel} ({alert.count12m}× sur 12m)
+                          </div>
+                          <div className="text-[10.5px] text-rose-100/90">
+                            {alert.recommendation}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* TAB 1: SIGNALER UNE PANNE (NOUVELLE DI) */}
               {activeFieldTab === 'SIGNALER_DI' && (
                 <form onSubmit={handleSubmitQuickDi} className="space-y-3.5">

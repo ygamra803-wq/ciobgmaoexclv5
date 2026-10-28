@@ -25,6 +25,8 @@ import {
   selectValidationCenterQueues,
   reconcileFieldClaim,
 } from '../../../../core/security/validationReconciliation';
+import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
+import { buildShiftOrWeeklyReport } from '../../../../application/services/MonthlyReportCalculationService';
 import ShellModeSwitcher from '../../common/ShellModeSwitcher';
 
 interface SupervisoryMobileCockpitProps {
@@ -107,6 +109,7 @@ export default function SupervisoryMobileCockpit({
   const [reviewNote, setReviewNote] = useState('');
   const [codeBonMagasin, setCodeBonMagasin] = useState('');
   const [skipStockDeduction, setSkipStockDeduction] = useState(false);
+  const [createFollowUpDi, setCreateFollowUpDi] = useState(false);
 
   // Operator quick DI modal state
   const [showOperatorDiModal, setShowOperatorDiModal] = useState(false);
@@ -134,6 +137,21 @@ export default function SupervisoryMobileCockpit({
       (t) => String(t.etat || '').toLowerCase() === 'en retard'
     ).length;
 
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const shiftReport7d = buildShiftOrWeeklyReport({
+      from: sevenDaysAgo,
+      to: todayIso,
+      assetClass: 'ALL',
+      machines,
+      correctiveInterventions,
+      preventiveExecutions,
+      mouvements,
+      sortieDemands,
+    });
+
     return {
       ruptureCount,
       alerteCount,
@@ -141,8 +159,20 @@ export default function SupervisoryMobileCockpit({
       overduePmCount,
       reservedRefsCount: queues.reservedRefsCount,
       totalReservedUnits: queues.totalReservedUnits,
+      shiftClosedBts7d: shiftReport7d.correctiveClosedInPeriodCount,
+      shiftValidatedPm7d: shiftReport7d.preventiveExecutedInPeriodCount,
+      shiftSorties7d: shiftReport7d.sortiesCount,
     };
-  }, [stockItems, correctiveInterventions, preventiveTasks, queues]);
+  }, [
+    stockItems,
+    correctiveInterventions,
+    preventiveTasks,
+    queues,
+    machines,
+    preventiveExecutions,
+    mouvements,
+    sortieDemands,
+  ]);
 
   const activeReconciliation = useMemo(() => {
     if (!selectedItem) return null;
@@ -218,6 +248,9 @@ export default function SupervisoryMobileCockpit({
           })
         : null;
     setSkipStockDeduction(Boolean(rec?.exactMovementMatch));
+    setCreateFollowUpDi(
+      kind === 'PREVENTIVE' && hasPreventiveExecutionAnomaly(record) && !record?.generated_di_id
+    );
     setSelectedItem({ kind, record });
   };
 
@@ -266,10 +299,13 @@ export default function SupervisoryMobileCockpit({
         validation_note: reviewNote.trim(),
         sparesUsed: spares,
         skipStockDeduction,
+        createFollowUpDi: decision === 'APPROVED' && createFollowUpDi,
       });
       showToast?.(
         decision === 'APPROVED'
-          ? `Exécution préventive ${record.taskCode || record.id} approuvée.`
+          ? `Exécution préventive ${record.taskCode || record.id} approuvée${
+              createFollowUpDi ? ' + DI corrective créée' : ''
+            }.`
           : `Décision enregistrée (${decision}).`,
         'success'
       );
@@ -718,6 +754,30 @@ export default function SupervisoryMobileCockpit({
                       </div>
                     </>
                   )}
+
+                  {/* Idea 4: Résumé Vitesse / Poste (7 derniers jours officiels) */}
+                  <div className="col-span-2 p-3 rounded-2xl bg-slate-950/95 border border-emerald-800/40 flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-[10px] text-emerald-400 font-black uppercase">
+                        Résumé Vitesse / Exploitation (7j validés)
+                      </div>
+                      <div className="text-xs font-mono text-slate-200 mt-0.5">
+                        BT clôturés: <b>{radarMetrics.shiftClosedBts7d}</b> • PM validés:{' '}
+                        <b>{radarMetrics.shiftValidatedPm7d}</b> • Sorties PDR:{' '}
+                        <b>{radarMetrics.shiftSorties7d}</b>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentTab('shift_weekly_report');
+                        setMode('desktop');
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10.5px] font-bold shrink-0 cursor-pointer"
+                    >
+                      Rapport Poste
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -820,8 +880,26 @@ export default function SupervisoryMobileCockpit({
                   className="mt-0.5 rounded border-slate-600"
                 />
                 <span>
-                  <strong className="text-white">Pièces déjà déduites au magasin</strong> — Conserver
-                  le coût PDR sur la machine sans déduire le stock en double.
+                  <strong className="text-white">✅ Bon de sortie déjà déstocké au magasin</strong>{' '}
+                  — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
+                </span>
+              </label>
+            )}
+
+            {/* Idea 1: Auto-DI on Preventive Anomaly in Mobile Supervisor Modal */}
+            {selectedItem.kind === 'PREVENTIVE' && (
+              <label className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-950/50 border border-amber-700/60 text-[11px] text-amber-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={createFollowUpDi}
+                  onChange={(e) => setCreateFollowUpDi(e.target.checked)}
+                  className="mt-0.5 rounded border-amber-500"
+                />
+                <span>
+                  <strong className="text-amber-100">
+                    🔄 Créer une DI corrective de suivi (Auto-DI)
+                  </strong>{' '}
+                  — Générer automatiquement une demande d&apos;intervention liée à cette anomalie préventive.
                 </span>
               </label>
             )}

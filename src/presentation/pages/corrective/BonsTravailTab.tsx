@@ -71,6 +71,7 @@ export default function BonsTravailTab({
   const [reviewModalBt, setReviewModalBt] = useState<any | null>(null);
   const [reviewActionRealisee, setReviewActionRealisee] = useState('');
   const [reviewPieces, setReviewPieces] = useState<any[]>([]);
+  const [reviewSkipStockDeduction, setReviewSkipStockDeduction] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
 
   const reviewReconciliation = useMemo(() => {
@@ -101,9 +102,20 @@ export default function BonsTravailTab({
         : Array.isArray(bt?.pieces_utilisees) && bt.pieces_utilisees.length > 0
         ? bt.pieces_utilisees.map((p: any) => ({ ...p }))
         : [];
+    const rec = reconcileFieldClaim({
+      claimType: 'CORRECTIVE',
+      claimId: String(bt?.id || ''),
+      numBonSaisi: bt?.num_bon_saisi_par_tech,
+      proposedSpares: initialPieces,
+      stockItems,
+      mouvements: storeMouvements,
+      correctiveInterventions: interventions,
+      preventiveExecutions: storePreventiveExecutions,
+    });
     setReviewModalBt(bt);
     setReviewActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
     setReviewPieces(initialPieces);
+    setReviewSkipStockDeduction(Boolean(rec?.exactMovementMatch));
     setReviewNote(bt?.validation_note || '');
   };
 
@@ -130,6 +142,7 @@ export default function BonsTravailTab({
           travail_a_faire: reviewActionRealisee,
           pieces_utilisees: reviewPieces,
           pieces_proposees: reviewPieces,
+          skipStockDeduction: reviewSkipStockDeduction,
           validation_note: reviewNote,
           validated_by_id: user?.id || user?.code || 'admin',
           validated_by_name: user?.name || 'Administrateur',
@@ -145,7 +158,9 @@ export default function BonsTravailTab({
 
     if (decision === 'APPROVED') {
       showToast?.(
-        `BT ${reviewModalBt.num_bt || reviewModalBt.id} validé et clôturé (${reviewPieces.length} réf. déduite(s) du stock)`,
+        reviewSkipStockDeduction
+          ? `BT ${reviewModalBt.num_bt || reviewModalBt.id} validé et clôturé (coût PDR imputé sur la machine sans 2e déstockage)`
+          : `BT ${reviewModalBt.num_bt || reviewModalBt.id} validé et clôturé (${reviewPieces.length} réf. déduite(s) du stock)`,
         'success'
       );
     } else if (decision === 'NEEDS_CLARIFICATION') {
@@ -1776,6 +1791,24 @@ export default function BonsTravailTab({
                   <p className="text-xs text-slate-500 italic">
                     Aucune pièce de rechange déclarée sur cette intervention (clôture sans mouvement stock).
                   </p>
+                )}
+
+                {reviewPieces.length > 0 && (
+                  <label className="flex items-start gap-2 pt-2 border-t border-cyan-200/80 text-xs text-cyan-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      data-testid="bt-review-skip-stock-checkbox"
+                      checked={reviewSkipStockDeduction}
+                      onChange={(e) => setReviewSkipStockDeduction(e.target.checked)}
+                      className="mt-0.5 rounded border-cyan-400 text-cyan-700 focus:ring-cyan-500"
+                    />
+                    <span>
+                      <strong className="font-black">
+                        ✅ Bon de sortie déjà déstocké au magasin
+                      </strong>{' '}
+                      — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
+                    </span>
+                  </label>
                 )}
               </div>
 

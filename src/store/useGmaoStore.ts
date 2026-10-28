@@ -1210,12 +1210,49 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         const laborCost = (durationMinutes / 60) * laborRate;
         const totalCost = Number((sparesCost + laborCost).toFixed(2));
 
+        // Optional Auto-DI on Preventive Anomaly (Idea 1: Boucle fermée Préventif -> Correctif)
+        let generatedDiId = existingExec.generated_di_id || '';
+        if (
+          Boolean((decisionData as any).createFollowUpDi) &&
+          !generatedDiId &&
+          existingExec.machineCode
+        ) {
+          const anomText = String(
+            (decisionData as any).followUpDiAnomalie ||
+              existingExec.notes ||
+              `Anomalie détectée lors du contrôle préventif (${existingExec.organe || existingExec.taskCode || 'PM'})`
+          ).trim();
+          const createdDi = get().handleAddDemandeIntervention({
+            code_machine: existingExec.machineCode,
+            nom_machine: existingExec.machineName || existingExec.machineCode,
+            anomalie: anomText,
+            travail_a_faire: `Diagnostic et remise en état suite à anomalie préventive sur ${
+              existingExec.organe || existingExec.machineCode
+            } (Réf PM: ${existingExec.id})`,
+            priorite: (decisionData as any).followUpDiPriorite || 'HAUTE',
+            urgence: (decisionData as any).followUpDiPriorite || 'Haute',
+            id_composant: existingExec.id_composant || '',
+            nom_composant: existingExec.organe || '',
+            demandeur:
+              decisionData.validated_by_name ||
+              existingExec.executorName ||
+              'Superviseur Maintenance',
+            source: 'AUTO_DI_PREVENTIF',
+            source_preventive_execution_id: existingExec.id,
+            source_preventive_task_id: existingExec.taskId || '',
+          });
+          if (createdDi?.id) {
+            generatedDiId = createdDi.id;
+          }
+        }
+
         let updatedExec: any = null;
         const nextExecs = currentExecs.map((e: any) => {
           if (String(e.id) === String(executionId)) {
             updatedExec = {
               ...e,
               ...(decisionData.notes !== undefined ? { notes: String(decisionData.notes).trim() } : {}),
+              ...(generatedDiId ? { generated_di_id: generatedDiId } : {}),
               sparesUsed: approvedSpares,
               sparesProposed: approvedSpares,
               sparesCost: Number(sparesCost.toFixed(2)),

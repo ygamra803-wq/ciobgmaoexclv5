@@ -549,7 +549,90 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(viewProfile.canReportBreakdown).toBe(false);
     expect(getRoleScopedPendingCounts(viewProfile, rawCounts).total).toBe(0);
   });
+
+  it('detects preventive anomalies for Auto-DI and computes 12-Month Machine Health Passport with BER Organ Recurrence Alerts', async () => {
+    const {
+      hasPreventiveExecutionAnomaly,
+      computeMachineHealthPassport,
+    } = await import('../../application/services/MachineHealthPassportService');
+
+    expect(
+      hasPreventiveExecutionAnomaly({ notes: '[RONDE: ANOMALIE] Fuite soupape compresseur' })
+    ).toBe(true);
+    expect(
+      hasPreventiveExecutionAnomaly({ notes: '[RONDE: CONFORME] Pression OK 8 bar' })
+    ).toBe(false);
+
+    const passport = computeMachineHealthPassport({
+      machine: { id_machine_registered: 'COMP-AIR-01', designation: 'Compresseur Vis 1' },
+      referenceDate: '2026-10-28T12:00:00Z',
+      correctiveInterventions: [
+        {
+          id: 'BT-1',
+          code_machine: 'COMP-AIR-01',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          date_cloture: '2026-10-05',
+          nom_composant: 'Electrovanne Purge',
+          cout_pdr: 120,
+          temps_arret_minutes: 60,
+        },
+        {
+          id: 'BT-2',
+          code_machine: 'COMP-AIR-01',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          date_cloture: '2026-10-15',
+          nom_composant: 'Electrovanne Purge',
+          cout_pdr: 150,
+          temps_arret_minutes: 90,
+        },
+        {
+          id: 'BT-3',
+          code_machine: 'COMP-AIR-01',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          date_cloture: '2026-10-25',
+          nom_composant: 'Electrovanne Purge',
+          cout_pdr: 130,
+          temps_arret_minutes: 90,
+        },
+        // Unapproved claim -> must be ignored in TCO & BER
+        {
+          id: 'BT-UNAPPROVED',
+          code_machine: 'COMP-AIR-01',
+          statut: 'EN_ATTENTE_VALIDATION',
+          validation_status: 'PENDING_VALIDATION',
+          date_demande: '2026-10-26',
+          nom_composant: 'Moteur Principal',
+          cout_pdr: 5000,
+          temps_arret_minutes: 600,
+        },
+      ],
+      preventiveExecutions: [
+        {
+          id: 'EX-1',
+          machineCode: 'COMP-AIR-01',
+          executedAt: '2026-09-10',
+          validation_status: 'APPROVED',
+          totalCost: 80,
+        },
+      ],
+    });
+
+    expect(passport.correctiveCount12m).toBe(3);
+    expect(passport.preventiveCount12m).toBe(1);
+    expect(passport.correctivePdrCost12m).toBe(400); // 120 + 150 + 130 (excludes 5000)
+    expect(passport.preventiveTotalCost12m).toBe(80);
+    expect(passport.totalMaintenanceCost12m).toBe(480);
+    expect(passport.totalDowntimeHours12m).toBe(4); // (60+90+90)/60 = 4.0h
+    expect(passport.recurrentOrganAlerts.length).toBe(1);
+    expect(passport.recurrentOrganAlerts[0].organLabel).toBe('Electrovanne Purge');
+    expect(passport.recurrentOrganAlerts[0].count60d).toBe(3);
+    expect(passport.healthStatus).toBe('CRITIQUE_BER');
+  });
 });
+
 
 
 

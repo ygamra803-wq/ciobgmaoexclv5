@@ -26,6 +26,7 @@ import {
   reconcileFieldClaim,
   selectValidationCenterQueues,
 } from '../../../core/security/validationReconciliation';
+import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
 
 interface ValidationCenterViewProps {
   stockItems?: any[];
@@ -94,6 +95,8 @@ export default function ValidationCenterView({
   const [reviewExec, setReviewExec] = useState<any | null>(null);
   const [execSpares, setReviewExecSpares] = useState<any[]>([]);
   const [execSkipStockDeduction, setExecSkipStockDeduction] = useState(false);
+  const [execCreateFollowUpDi, setExecCreateFollowUpDi] = useState(false);
+  const [execFollowUpDiAnomalie, setExecFollowUpDiAnomalie] = useState('');
   const [execNote, setExecNote] = useState('');
 
   // 3. SortieDemand Review Modal State
@@ -345,6 +348,12 @@ export default function ValidationCenterView({
     });
     setReviewExecSpares(mappedSpares);
     setExecSkipStockDeduction(Boolean(rec?.exactMovementMatch));
+    const hasAnom = hasPreventiveExecutionAnomaly(exec);
+    setExecCreateFollowUpDi(hasAnom && !exec?.generated_di_id);
+    setExecFollowUpDiAnomalie(
+      exec?.notes ||
+        `Anomalie constatée lors du contrôle préventif sur ${exec?.organe || exec?.machineCode || 'équipement'}`
+    );
     setExecNote(exec.validation_note || '');
   };
 
@@ -356,7 +365,7 @@ export default function ValidationCenterView({
     }
 
     const reviewFn = onReviewPreventiveValidation || storeReviewPreventive;
-    reviewFn(
+    const updated = reviewFn(
       reviewExec.id,
       {
         decision,
@@ -365,15 +374,21 @@ export default function ValidationCenterView({
         validated_by_name: user?.name || user?.nom || 'Administrateur',
         approvedSpares: execSpares,
         skipStockDeduction: execSkipStockDeduction,
+        createFollowUpDi: decision === 'APPROVED' && execCreateFollowUpDi,
+        followUpDiAnomalie: execFollowUpDiAnomalie.trim(),
       },
       onAddMouvement
     );
 
     if (decision === 'APPROVED') {
+      const diSuffix =
+        execCreateFollowUpDi || updated?.generated_di_id
+          ? ' + DI corrective de suivi générée automatiquement !'
+          : '.';
       showToast?.(
         execSkipStockDeduction
-          ? `Exécution préventive ${reviewExec.machineCode} approuvée (coût imputé sur machine sans 2e déstockage).`
-          : `Exécution préventive ${reviewExec.machineCode} approuvée (${execSpares.length} réf. déduite(s) du stock).`,
+          ? `Exécution préventive ${reviewExec.machineCode} approuvée (coût imputé sur machine sans 2e déstockage)${diSuffix}`
+          : `Exécution préventive ${reviewExec.machineCode} approuvée (${execSpares.length} réf. déduite(s) du stock)${diSuffix}`,
         'success'
       );
     } else if (decision === 'NEEDS_CLARIFICATION') {
@@ -1031,6 +1046,12 @@ export default function ValidationCenterView({
                             À VALIDER
                           </span>
                         )}
+                        {hasPreventiveExecutionAnomaly(ex) && (
+                          <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10px] font-black inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            <span>ANOMALIE SIGNALÉE (AUTO-DI PROPOSÉE)</span>
+                          </span>
+                        )}
                       </div>
 
                       <div className="text-xs font-bold text-slate-900">
@@ -1382,9 +1403,9 @@ export default function ValidationCenterView({
                     />
                     <span>
                       <strong className="font-bold text-slate-900">
-                        Pièces déjà déduites au magasin (Bon de sortie existant)
+                        ✅ Bon de sortie déjà déstocké au magasin
                       </strong>{' '}
-                      — Conserver le coût PDR sur la machine sans créer de mouvement Sortie en double.
+                      — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
                     </span>
                   </label>
                 )}
@@ -1552,11 +1573,46 @@ export default function ValidationCenterView({
                     />
                     <span>
                       <strong className="font-bold text-slate-900">
-                        Pièces déjà déduites au magasin (Bon de sortie existant)
+                        ✅ Bon de sortie déjà déstocké au magasin
                       </strong>{' '}
-                      — Conserver le coût PDR sur l'historique préventif sans déduire le stock en double.
+                      — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
                     </span>
                   </label>
+                )}
+              </div>
+
+              {/* Idea 1: Boucle fermée Préventif -> Correctif (Auto-DI sur Anomalie) */}
+              <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
+                <label className="flex items-start gap-2 text-xs text-amber-950 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    data-testid="vc-prev-auto-di-checkbox"
+                    checked={execCreateFollowUpDi}
+                    onChange={(e) => setExecCreateFollowUpDi(e.target.checked)}
+                    className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                  />
+                  <span>
+                    <strong className="font-black">
+                      Créer une DI corrective de suivi (Auto-DI sur anomalie préventive)
+                    </strong>{' '}
+                    — Génère automatiquement une Demande d&apos;Intervention liée à{' '}
+                    <code className="font-mono font-bold">{reviewExec.machineCode}</code> dès l&apos;approbation.
+                  </span>
+                </label>
+
+                {execCreateFollowUpDi && (
+                  <div className="pt-1">
+                    <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">
+                      Description de l&apos;anomalie pour la DI corrective :
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="vc-prev-auto-di-anomalie-input"
+                      value={execFollowUpDiAnomalie}
+                      onChange={(e) => setExecFollowUpDiAnomalie(e.target.value)}
+                      className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"
+                    />
+                  </div>
                 )}
               </div>
 
