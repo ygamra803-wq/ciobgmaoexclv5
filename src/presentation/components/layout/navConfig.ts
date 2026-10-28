@@ -22,6 +22,7 @@ export const PARENT_MODULES = [
     children: [
       { id: 'dashboard', label: 'Dashboard Opérations' },
       { id: 'validation_center', label: 'Centre de Validation (À valider)' },
+      { id: 'shift_weekly_report', label: 'Rapport Vacation / Hebdo' },
       { id: 'executive_report', label: 'Rapport Mensuel Direction' }
     ]
   },

@@ -315,6 +315,22 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
+            {/* Rapport de Vacation / Hebdo (Vue Exploitation) */}
+            {!isTechUser && canAccess('shift_weekly_report') && (
+              <button
+                onClick={() => navTo('shift_weekly_report')}
+                className={getTabClass('shift_weekly_report', true)}
+              >
+                <span className="flex items-center gap-2">
+                  <FileBarChart2
+                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                  />
+                  <span>Rapport Vacation / Hebdo</span>
+                </span>
+                <span className={getBadgeClass('shift_weekly_report')}>Exploit.</span>
+              </button>
+            )}
+
             {/* Rapport Mensuel Exécutif (Direction) */}
             {canAccess('executive_report') && (
               <button

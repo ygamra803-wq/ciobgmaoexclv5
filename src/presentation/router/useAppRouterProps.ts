@@ -213,6 +213,17 @@ export function useAppRouterProps({
       showToast: showToast || navigation?.showToast,
     },
 
+    shiftWeeklyReport: {
+      stockItems,
+      mouvements,
+      correctiveInterventions,
+      preventiveTasks,
+      preventiveExecutions,
+      machines,
+      onNavigateToTab: navigateTo,
+      showToast: showToast || navigation?.showToast,
+    },
+
     validationCenter: {
       stockItems,
       machines,

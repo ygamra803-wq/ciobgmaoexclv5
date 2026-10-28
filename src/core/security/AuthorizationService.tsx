@@ -129,6 +129,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   [ROLES.RESPONSABLE_MAGASIN]: new Set([
     'dashboard',
     'validation_center',
+    'shift_weekly_report',
     'executive_report',
     'stock',
     'types',
@@ -176,6 +177,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   ]),
   [ROLES.VIEWER]: new Set([
     'dashboard',
+    'shift_weekly_report',
     'executive_report',
     'stock',
     'machines',

@@ -7,6 +7,7 @@ import usePageOrchestrator from '../components/common/usePageOrchestrator';
 import DashboardView from '../pages/dashboard/DashboardView';
 
 const ValidationCenterView = lazy(() => import('../pages/validation/ValidationCenterView'));
+const ShiftWeeklyReportView = lazy(() => import('../components/views/ShiftWeeklyReportView'));
 const MonthlyExecutiveReportView = lazy(() => import('../components/views/MonthlyExecutiveReportView'));
 const StockView = lazy(() => import('../pages/stock/StockView'));
 const TypeView = lazy(() => import('../pages/referentiel/TypeView'));
@@ -113,6 +114,12 @@ export default function AppRouter({
                       {currentTab === 'validation_center' && (
                         <ErrorBoundary sectionName="Centre de Validation (À valider)">
                           <ValidationCenterView {...props.validationCenter} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'shift_weekly_report' && (
+                        <ErrorBoundary sectionName="Rapport de Vacation / Hebdo (Vue Exploitation)">
+                          <ShiftWeeklyReportView {...props.shiftWeeklyReport} />
                         </ErrorBoundary>
                       )}
 

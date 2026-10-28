@@ -294,6 +294,159 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(queues.reservedStockMap.get('COUR-A42')?.reservedQty).toBe(5);
     expect(queues.reservedStockMap.get('FILT-10')?.reservedQty).toBe(1);
   });
+
+  it('builds Shift/Weekly report excluding PENDING_VALIDATION from official totals, counting APPROVED records in window, and isolating SYSTEM_GENERAL from PRODUCTION', async () => {
+    const { buildShiftOrWeeklyReport } = await import('../../application/services/MonthlyReportCalculationService');
+
+    const machines = [
+      { id_machine_registered: 'PRESS-01', nom: 'Presse Hydraulique 1', asset_class: 'PRODUCTION' },
+      { id_machine_registered: 'SEC-EXT-01', nom: 'Extincteur CO2 Atelier', asset_class: 'SYSTEM_GENERAL', system_type_code: 'SYS-SEC' },
+    ];
+
+    const correctiveInterventions = [
+      // 1. Approved & Closed on PRODUCTION machine inside window -> counted
+      {
+        id: 'BT-OK-PROD',
+        num_bt: 'BT-2001',
+        code_machine: 'PRESS-01',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        date_cloture: '2026-10-25',
+        temps_arret_minutes: 120,
+        pdr_cost: 50,
+      },
+      // 2. Pending validation on PRODUCTION machine inside window -> MUST NOT be counted in closed/consumed
+      {
+        id: 'BT-PEND-PROD',
+        num_bt: 'BT-2002',
+        code_machine: 'PRESS-01',
+        statut: 'EN_ATTENTE_VALIDATION',
+        validation_status: 'PENDING_VALIDATION',
+        date_demande: '2026-10-26',
+        temps_arret_minutes: 180,
+        pdr_cost: 200,
+      },
+      // 3. Approved & Closed on SYSTEM_GENERAL asset inside window
+      {
+        id: 'BT-OK-SYS',
+        num_bt: 'BT-2003',
+        code_machine: 'SEC-EXT-01',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        date_cloture: '2026-10-26',
+        temps_arret_minutes: 30,
+        pdr_cost: 15,
+      },
+    ];
+
+    const preventiveExecutions = [
+      // Approved on PRODUCTION
+      {
+        id: 'EX-OK-PROD',
+        taskId: 'PM-1',
+        machineCode: 'PRESS-01',
+        executedAt: '2026-10-25T10:00:00Z',
+        validation_status: 'APPROVED',
+        durationMinutes: 60,
+        totalCost: 20,
+      },
+      // Pending on PRODUCTION -> excluded from official executed count
+      {
+        id: 'EX-PEND-PROD',
+        taskId: 'PM-2',
+        machineCode: 'PRESS-01',
+        executedAt: '2026-10-26T10:00:00Z',
+        validation_status: 'PENDING_VALIDATION',
+        durationMinutes: 45,
+        totalCost: 100,
+      },
+      // Approved on SYSTEM_GENERAL
+      {
+        id: 'EX-OK-SYS',
+        taskId: 'PM-3',
+        machineCode: 'SEC-EXT-01',
+        executedAt: '2026-10-26T14:00:00Z',
+        validation_status: 'APPROVED',
+        durationMinutes: 15,
+        totalCost: 0,
+      },
+    ];
+
+    const mouvements = [
+      {
+        id: 'MVT-1',
+        type: 'Sortie',
+        ref: 'ROUL-6204',
+        quantite: 2,
+        prix_unitaire: 25,
+        date: '2026-10-25',
+        id_machine_registered: 'PRESS-01',
+      },
+    ];
+
+    const sortieDemands = [
+      {
+        id: 'SD-PEND-1',
+        validation_status: 'PENDING_VALIDATION',
+        created_at: '2026-10-26',
+        id_machine_registered: 'PRESS-01',
+        items: [{ ref: 'ROUL-6204', qty: 4 }],
+      },
+    ];
+
+    // A) ALL asset classes
+    const reportAll = buildShiftOrWeeklyReport({
+      from: '2026-10-20',
+      to: '2026-10-26',
+      assetClass: 'ALL',
+      machines,
+      correctiveInterventions,
+      preventiveExecutions: preventiveExecutions as any,
+      mouvements,
+      sortieDemands,
+    });
+
+    // Only approved records are counted in official totals
+    expect(reportAll.correctiveClosedInPeriodCount).toBe(2); // BT-OK-PROD + BT-OK-SYS
+    expect(reportAll.correctiveSparesCost).toBe(65); // 50 + 15 (excludes 200 from BT-PEND-PROD)
+    expect(reportAll.preventiveExecutedInPeriodCount).toBe(2); // EX-OK-PROD + EX-OK-SYS
+    expect(reportAll.sortiesCount).toBe(1); // Only official mouvement MVT-1, not SD-PEND-1
+    expect(reportAll.pendingSortieDemandsWarningCount).toBe(1);
+    expect(reportAll.excludedUnapprovedInPeriod.totalExcludedCount).toBe(3); // 1 BT + 1 PM + 1 SortieDemand
+    expect(reportAll.productionMachinesCount).toBe(1); // Only PRESS-01, never SEC-EXT-01
+
+    // B) Filter PRODUCTION only
+    const reportProd = buildShiftOrWeeklyReport({
+      from: '2026-10-20',
+      to: '2026-10-26',
+      assetClass: 'PRODUCTION',
+      machines,
+      correctiveInterventions,
+      preventiveExecutions: preventiveExecutions as any,
+      mouvements,
+      sortieDemands,
+    });
+    expect(reportProd.correctiveClosedInPeriodCount).toBe(1); // Only BT-OK-PROD
+    expect(reportProd.preventiveExecutedInPeriodCount).toBe(1); // Only EX-OK-PROD
+
+    // C) Filter SYSTEM_GENERAL only
+    const reportSysGen = buildShiftOrWeeklyReport({
+      from: '2026-10-20',
+      to: '2026-10-26',
+      assetClass: 'SYSTEM_GENERAL',
+      machines,
+      correctiveInterventions,
+      preventiveExecutions: preventiveExecutions as any,
+      mouvements,
+      sortieDemands,
+    });
+    expect(reportSysGen.correctiveClosedInPeriodCount).toBe(1); // Only BT-OK-SYS
+    expect(reportSysGen.preventiveExecutedInPeriodCount).toBe(1); // Only EX-OK-SYS
+    expect(reportSysGen.systemGeneralSummary.totalAssetsCount).toBe(1);
+    expect(reportSysGen.systemGeneralSummary.correctiveInPeriodCount).toBe(1);
+    expect(reportSysGen.systemGeneralSummary.preventiveInPeriodCount).toBe(1);
+  });
 });
+
 
 
