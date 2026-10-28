@@ -508,7 +508,49 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     const pareto = CorrectiveCalculationService.computePareto(bts, 'type_panne');
     expect(pareto.find((t) => t.name === 'Hydraulique')).toBeUndefined();
   });
+
+  it('separates supervisory roles on mobile: Magasinier sees only SortieDemands, Supervisor sees all 3 Maker-Checker queues, Operator/Viewer see 0 approvals', async () => {
+    const {
+      resolveMobileSupervisoryProfile,
+      getRoleScopedPendingCounts,
+    } = await import('../../core/security/supervisoryMobileScope');
+
+    const rawCounts = { prevCount: 4, corrCount: 3, sortieCount: 2, total: 9 };
+
+    // 1. Storekeeper (RESPONSABLE_MAGASIN / MAGASINIER)
+    const magProfile = resolveMobileSupervisoryProfile({ role: 'MAGASINIER' });
+    expect(magProfile.persona).toBe('RESPONSABLE_MAGASIN');
+    expect(magProfile.canValidateSortieDemand).toBe(true);
+    expect(magProfile.canValidateCorrective).toBe(false);
+    expect(magProfile.canValidatePreventive).toBe(false);
+    const magCounts = getRoleScopedPendingCounts(magProfile, rawCounts);
+    expect(magCounts).toEqual({ prevCount: 0, corrCount: 0, sortieCount: 2, total: 2 });
+
+    // 2. Maintenance Supervisor (RESPONSABLE_MAINTENANCE)
+    const supProfile = resolveMobileSupervisoryProfile({ role: 'RESPONSABLE_MAINTENANCE' });
+    expect(supProfile.persona).toBe('SUPERVISEUR_MAINTENANCE');
+    expect(supProfile.roleBadge).toBe('RESP. MAINT');
+    expect(supProfile.canValidateSortieDemand).toBe(true);
+    expect(supProfile.canValidateCorrective).toBe(true);
+    expect(supProfile.canValidatePreventive).toBe(true);
+    const supCounts = getRoleScopedPendingCounts(supProfile, rawCounts);
+    expect(supCounts).toEqual({ prevCount: 4, corrCount: 3, sortieCount: 2, total: 9 });
+
+    // 3. Operator (OPERATEUR)
+    const opProfile = resolveMobileSupervisoryProfile({ role: 'OPERATEUR' });
+    expect(opProfile.persona).toBe('OPERATEUR_TERRAIN');
+    expect(opProfile.canReportBreakdown).toBe(true);
+    expect(opProfile.canValidateSortieDemand).toBe(false);
+    expect(getRoleScopedPendingCounts(opProfile, rawCounts).total).toBe(0);
+
+    // 4. Viewer (VIEWER)
+    const viewProfile = resolveMobileSupervisoryProfile({ role: 'VIEWER' });
+    expect(viewProfile.persona).toBe('OBSERVATEUR');
+    expect(viewProfile.canReportBreakdown).toBe(false);
+    expect(getRoleScopedPendingCounts(viewProfile, rawCounts).total).toBe(0);
+  });
 });
+
 
 
 

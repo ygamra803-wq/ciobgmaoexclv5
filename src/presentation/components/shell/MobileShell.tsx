@@ -25,6 +25,7 @@ import QRScannerModal from '../common/QRScannerModal';
 import TodayTab from './mobile/TodayTab';
 import PreventiveTab, { type MobilePrevFilter } from './mobile/PreventiveTab';
 import CorrectiveTab, { type MobileCorrFilter } from './mobile/CorrectiveTab';
+import SupervisoryMobileCockpit from './mobile/SupervisoryMobileCockpit';
 
 interface MobileShellProps {
   currentUser: any;
@@ -159,143 +160,38 @@ export default function MobileShell({
   };
 
   // ============================================================================
-  // CASE 1: ADMIN / NON-TECHNICIAN ON RESOLVED === 'mobile'
-  // Honest Mobile Gateway — Untouched in this round
+  // CASE 1: SUPERVISORY / NON-TECHNICIAN ROLES ON RESOLVED === 'mobile'
+  // Role-Separated Mobile Cockpit (Responsable Maintenance / Admin vs Magasinier vs Opérateur vs Observateur)
   // ============================================================================
   if (!isTech) {
     return (
-      <div
-        data-testid="mobile-shell-admin-gateway"
-        className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-5 font-sans select-none"
-      >
-        {/* Top Bar */}
-        <header className="flex items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black">
-              G4
-            </div>
-            <div>
-              <div className="text-sm font-black tracking-tight flex items-center gap-2">
-                <span>CIOB GMAO v4</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  Shell: {resolved}
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Session : {currentUser?.name || currentUser?.nom || 'Administrateur'} (ADMIN)
-              </div>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="p-2.5 rounded-xl bg-slate-900 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-slate-800 transition cursor-pointer"
-            title="Déconnexion"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </header>
+      <>
+        <SupervisoryMobileCockpit
+          currentUser={currentUser}
+          mode={mode}
+          resolved={resolved}
+          setMode={setMode}
+          setCurrentTab={setCurrentTab}
+          onLogout={onLogout}
+          onOpenQrScanner={() => setIsQrScannerOpen(true)}
+          machines={activeMachines}
+          stockItems={stockItems}
+          preventiveTasks={preventiveTasks}
+          preventiveExecutions={preventiveExecutions}
+          correctiveInterventions={correctiveInterventions}
+          sortieDemands={sortieDemands}
+          mouvements={mouvements}
+          onAddDemandeIntervention={onAddDemandeIntervention}
+          showToast={showToast}
+        />
 
-        {/* Center Honest Card */}
-        <main className="my-auto py-6 space-y-5 max-w-md mx-auto w-full">
-          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Smartphone className="w-6 h-6" />
-            </div>
-
-            <div className="space-y-2">
-              <h1 className="text-lg font-black tracking-tight text-white">
-                Interface Mobile dédiée au Terrain
-              </h1>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                L'interface téléphone est conçue pour les techniciens d'intervention sur le terrain.
-                Pour l'administration complète de l'usine (Parc Machines, Stock, Blueprints, Paramètres),
-                utilisez le mode Bureau (Desktop).
-              </p>
-              <p
-                dir="rtl"
-                className="text-xs text-emerald-300/90 font-semibold leading-relaxed bg-emerald-950/40 border border-emerald-800/50 rounded-xl p-3"
-              >
-                واجهة الهاتف مخصّصة للميدان — لإدارة المصنع الكاملة استخدم وضع سطح المكتب.
-              </p>
-            </div>
-
-            {/* Primary CTA: Force Desktop Mode */}
-            <button
-              type="button"
-              data-testid="force-desktop-mode-btn"
-              onClick={() => setMode('desktop')}
-              className="w-full py-3.5 px-4 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-emerald-500/20 transition cursor-pointer"
-            >
-              <Monitor className="w-5 h-5" />
-              <span>Forcer le mode Bureau (Desktop)</span>
-            </button>
-
-            {/* Quick Maker-Checker Radar Summary & Shortcuts */}
-            <div className="pt-3 border-t border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">
-                  File d'attente Maker-Checker (À valider)
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                  {adminPendingCounts.total} en attente
-                </span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentTab('preventive');
-                    setMode('desktop');
-                  }}
-                  className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
-                >
-                  <div className="text-base font-black font-mono text-indigo-400">
-                    {adminPendingCounts.prevCount}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-bold">Préventif</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentTab('corrective');
-                    setMode('desktop');
-                  }}
-                  className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
-                >
-                  <div className="text-base font-black font-mono text-amber-400">
-                    {adminPendingCounts.corrCount}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-bold">Correctif BT</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentTab('sortie');
-                    setMode('desktop');
-                  }}
-                  className="p-2.5 rounded-xl bg-slate-950/80 hover:bg-slate-800 border border-slate-800 transition cursor-pointer"
-                >
-                  <div className="text-base font-black font-mono text-teal-400">
-                    {adminPendingCounts.sortieCount}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-bold">Bons PDR</div>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* ShellPolicy Developer / Session Switcher */}
-          <div className="text-slate-900">
-            <ShellModeSwitcher />
-          </div>
-        </main>
-
-        <footer className="text-center text-[11px] text-slate-500 font-mono pt-2 border-t border-slate-900">
-          ShellPolicy • mode={mode} • resolved={resolved}
-        </footer>
-      </div>
+        {isQrScannerOpen && (
+          <QRScannerModal
+            onClose={() => setIsQrScannerOpen(false)}
+            onScan={handleQrScanResult}
+          />
+        )}
+      </>
     );
   }
 
