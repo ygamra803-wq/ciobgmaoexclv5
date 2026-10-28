@@ -9,7 +9,7 @@ import { ExecutionService } from './ExecutionService';
 export const STORAGE_KEY_TASKS = STORAGE_KEYS.PREVENTIVE_TASKS;
 export const INITIAL_TASKS = Array.isArray(initialTasks) ? initialTasks : [];
 
-function computeNextDueDate(dateRealisation: string, frequence?: string): string {
+export function computeNextDueDate(dateRealisation: string, frequence?: string): string {
   try {
     const base = new Date(dateRealisation);
     if (Number.isNaN(base.getTime())) return dateRealisation;

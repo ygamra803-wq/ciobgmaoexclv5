@@ -43,6 +43,7 @@ import initialTravauxAFaire from '../data/corrective/seedTravailAFaire.json';
 import initialIntervenants from '../data/corrective/seedIntervenants.json';
 
 import PreventiveService from '../application/services/PreventiveService';
+import { computeNextDueDate } from '../application/services/preventive/TaskService';
 import SortieExterneService, { INITIAL_SORTIES_BOBINAGE } from '../application/services/SortieExterneService';
 import { CorrectiveIntervention } from '../domain/corrective/entities/CorrectiveIntervention';
 import { CorrectiveCalculationService } from '../domain/corrective/services/CorrectiveCalculationService';
@@ -50,6 +51,26 @@ import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderSt
 import { movementRepository } from '../application/MovementRepository';
 
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
+
+function isPartAlreadyDeductedByStoreBon(
+  mouvements: any[],
+  numBonSaisi: unknown,
+  ref: unknown
+): boolean {
+  const cleanBon = String(numBonSaisi || '').trim().toUpperCase();
+  const cleanRef = String(ref || '').trim().toUpperCase();
+  if (!cleanBon || !cleanRef) return false;
+  return (mouvements || []).some((m: any) => {
+    if (!m) return false;
+    const mType = String(m.type || '').trim().toLowerCase();
+    if (!mType.includes('sortie') && mType !== 'out') return false;
+    const mBon = String(m.code_bon || '').trim().toUpperCase();
+    const mTechBon = String(m.num_bon_saisi_par_tech || '').trim().toUpperCase();
+    if (mBon !== cleanBon && mTechBon !== cleanBon) return false;
+    const mRef = String(m.ref || m.code_article || m.reference || '').trim().toUpperCase();
+    return mRef === cleanRef;
+  });
+}
 
 function resolveUpdate<T>(updater: T | ((prev: T) => T), current: T): T {
   return typeof updater === 'function' ? (updater as (prev: T) => T)(current) : updater;
@@ -1020,6 +1041,84 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       DataGateway.savePreventiveTasks(updated);
       DataGateway.savePreventiveExecutions(executions);
 
+      // Emit official stock movement(s) when an Admin/Supervisor executes a task directly (APPROVED) with sparesUsed
+      const newestExec = Array.isArray(executions) ? executions[0] : null;
+      if (
+        newestExec &&
+        String(newestExec.taskId) === String(id) &&
+        newestExec.validation_status === 'APPROVED' &&
+        Array.isArray(newestExec.sparesUsed) &&
+        newestExec.sparesUsed.length > 0 &&
+        validationData?.skipStockDeduction !== true
+      ) {
+        const currentMouvements = get().mouvements || [];
+        const stockList = get().rawStock || [];
+        const stockLookup = new Map<string, any>();
+        stockList.forEach((s: any) => {
+          const r = String(s.ref || s.code_article || '').trim().toUpperCase();
+          if (r) stockLookup.set(r, s);
+        });
+
+        const movementsToRecord: any[] = [];
+        newestExec.sparesUsed.forEach((pdr: any, idx: number) => {
+          const ref = String(pdr?.ref || '').trim();
+          const qty = Number(pdr?.qty ?? pdr?.quantite ?? 0);
+          if (!ref || !(qty > 0)) return;
+          if (isPartAlreadyDeductedByStoreBon(currentMouvements, newestExec.num_bon_saisi_par_tech, ref)) {
+            return;
+          }
+          const stockMatch = stockLookup.get(ref.toUpperCase());
+          const unitPrice =
+            Number(pdr?.unitPrice ?? pdr?.prix_unitaire ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
+          const suffix = newestExec.sparesUsed.length > 1 ? `-${idx + 1}` : '';
+          movementsToRecord.push({
+            id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+            code_bon: newestExec.num_bon_saisi_par_tech || `BS-PRV-${String(newestExec.id).slice(-6)}${suffix}`,
+            num_commande: newestExec.taskCode || 'PREVENTIF',
+            date: newestExec.executedAt || new Date().toISOString().split('T')[0],
+            heure: '10:00',
+            ref,
+            code_article: ref,
+            designation: pdr.designation || stockMatch?.designation || ref,
+            quantite: qty,
+            prix_unitaire: unitPrice,
+            unit: pdr.unit || stockMatch?.unite || 'pcs',
+            unite: pdr.unit || stockMatch?.unite || 'pcs',
+            type: 'Sortie Interne',
+            action_id: 'PREVENTIVE',
+            usage_type: 'technician',
+            id_machine_registered: newestExec.machineCode || '',
+            machine: newestExec.machineCode || '',
+            ...(newestExec.id_composant ? { id_composant: newestExec.id_composant } : {}),
+            ...(newestExec.id_part ? { id_part: newestExec.id_part } : {}),
+            technicien: newestExec.executorName || 'Technicien',
+            demandeur: newestExec.executorName || 'Technicien GMAO',
+            commentaire: `Consommation directe sur maintenance préventive ${newestExec.organe || ''} (${newestExec.machineCode || ''})`,
+          });
+        });
+
+        if (movementsToRecord.length > 0) {
+          if (typeof validationData?.onAddMouvement === 'function') {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                validationData.onAddMouvement(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] onAddMouvement error in direct preventive execution:', err);
+              }
+            });
+          } else {
+            movementsToRecord.forEach((mvt) => {
+              try {
+                movementRepository.add(mvt);
+              } catch (err) {
+                console.warn('[useGmaoStore] movementRepository.add error in direct preventive execution:', err);
+              }
+            });
+            get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+          }
+        }
+      }
+
       if (targetMachine && releveNum > 0) {
         const dateRealisation =
           validationData?.date_realisation ||
@@ -1138,6 +1237,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
         const nextTasks = (get().preventiveTasks || []).map((t: any) => {
           if (String(t.id) === String(existingExec.taskId)) {
+            const execDateYMD = String(existingExec.executedAt || nowIso).slice(0, 10);
+            const nextDue = computeNextDueDate(execDateYMD, t.frequence || existingExec.frequence);
             const prevCost = Number(t.cout_cumule || 0);
             const nextPlanning =
               t.planning &&
@@ -1158,8 +1259,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               validation_note: String(
                 decisionData.validation_note ?? t.validation_note ?? ''
               ).trim(),
-              derniere_realisation: existingExec.executedAt,
-              lastExecutedAt: existingExec.executedAt,
+              derniere_realisation: execDateYMD,
+              lastExecutedAt: execDateYMD,
+              prochaine_echeance: nextDue,
+              nextDueDate: nextDue,
               cout_cumule: Number((prevCost + totalCost).toFixed(2)),
               planning: nextPlanning,
               updated_at: nowIso,
@@ -1174,13 +1277,18 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         DataGateway.savePreventiveExecutions(nextExecs);
         DataGateway.savePreventiveTasks(nextTasks);
 
-        if (approvedSpares.length > 0) {
+        if (approvedSpares.length > 0 && (decisionData as any).skipStockDeduction !== true) {
+          const currentMouvements = get().mouvements || [];
           const movementsToRecord: any[] = [];
           approvedSpares.forEach((pdr: any, idx: number) => {
+            if (isPartAlreadyDeductedByStoreBon(currentMouvements, existingExec.num_bon_saisi_par_tech, pdr.ref)) {
+              return;
+            }
             const suffix = approvedSpares.length > 1 ? `-${idx + 1}` : '';
             movementsToRecord.push({
               id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
-              code_bon: `BS-PRV-${String(existingExec.id).slice(-6)}${suffix}`,
+              code_bon: existingExec.num_bon_saisi_par_tech || `BS-PRV-${String(existingExec.id).slice(-6)}${suffix}`,
+              num_bon_saisi_par_tech: existingExec.num_bon_saisi_par_tech || '',
               num_commande: existingExec.taskCode || 'PREVENTIF',
               date: existingExec.executedAt || nowIso.split('T')[0],
               heure: '10:00',
@@ -1204,23 +1312,25 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             });
           });
 
-          if (typeof onAddMouvement === 'function') {
-            movementsToRecord.forEach((mvt) => {
-              try {
-                onAddMouvement(mvt);
-              } catch (err) {
-                console.warn('[useGmaoStore] onAddMouvement error in preventive approval:', err);
-              }
-            });
-          } else {
-            movementsToRecord.forEach((mvt) => {
-              try {
-                movementRepository.add(mvt);
-              } catch (err) {
-                console.warn('[useGmaoStore] movementRepository.add error in preventive approval:', err);
-              }
-            });
-            get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+          if (movementsToRecord.length > 0) {
+            if (typeof onAddMouvement === 'function') {
+              movementsToRecord.forEach((mvt) => {
+                try {
+                  onAddMouvement(mvt);
+                } catch (err) {
+                  console.warn('[useGmaoStore] onAddMouvement error in preventive approval:', err);
+                }
+              });
+            } else {
+              movementsToRecord.forEach((mvt) => {
+                try {
+                  movementRepository.add(mvt);
+                } catch (err) {
+                  console.warn('[useGmaoStore] movementRepository.add error in preventive approval:', err);
+                }
+              });
+              get().setMouvements((prev) => [...movementsToRecord, ...prev]);
+            }
           }
         }
 
@@ -2313,13 +2423,24 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             rapport_redige: 'OUI',
           }).toJSON();
 
-          if (normalizedPieces.length > 0) {
+          if (normalizedPieces.length > 0 && clotureData.skipStockDeduction !== true) {
+            const currentMouvements = get().mouvements || [];
             const btIdentifier = updated.num_bt || updated.id;
             normalizedPieces.forEach((piece, idx) => {
+              if (
+                isPartAlreadyDeductedByStoreBon(
+                  currentMouvements,
+                  updated.num_bon_saisi_par_tech,
+                  piece.ref
+                )
+              ) {
+                return;
+              }
               const suffix = normalizedPieces.length > 1 ? `-${idx + 1}` : '';
               movementsToRecord.push({
                 id: `MVT-BT-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
-                code_bon: `BS-BT-${btIdentifier}${suffix}`,
+                code_bon: updated.num_bon_saisi_par_tech || `BS-BT-${btIdentifier}${suffix}`,
+                num_bon_saisi_par_tech: updated.num_bon_saisi_par_tech || '',
                 ref: piece.ref,
                 code_article: piece.ref,
                 designation: piece.designation || piece.ref,

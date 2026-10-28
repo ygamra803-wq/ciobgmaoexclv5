@@ -87,11 +87,13 @@ export default function ValidationCenterView({
   const [reviewBt, setReviewBt] = useState<any | null>(null);
   const [btActionRealisee, setBtActionRealisee] = useState('');
   const [btPieces, setBtPieces] = useState<any[]>([]);
+  const [btSkipStockDeduction, setBtSkipStockDeduction] = useState(false);
   const [btNote, setBtNote] = useState('');
 
   // 2. Preventive Review Modal State
   const [reviewExec, setReviewExec] = useState<any | null>(null);
   const [execSpares, setReviewExecSpares] = useState<any[]>([]);
+  const [execSkipStockDeduction, setExecSkipStockDeduction] = useState(false);
   const [execNote, setExecNote] = useState('');
 
   // 3. SortieDemand Review Modal State
@@ -240,9 +242,22 @@ export default function ValidationCenterView({
         : Array.isArray(bt?.pieces_utilisees) && bt.pieces_utilisees.length > 0
         ? bt.pieces_utilisees.map((p: any) => ({ ...p }))
         : [];
+    const rec = reconcileFieldClaim({
+      claimType: 'CORRECTIVE',
+      claimId: String(bt?.id || ''),
+      numBonSaisi: bt?.num_bon_saisi_par_tech,
+      machineCode: bt?.code_machine,
+      proposedSpares: initialPieces,
+      stockItems,
+      mouvements,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortieDemands,
+    });
     setReviewBt(bt);
     setBtActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
     setBtPieces(initialPieces);
+    setBtSkipStockDeduction(Boolean(rec?.exactMovementMatch));
     setBtNote(bt?.validation_note || '');
   };
 
@@ -268,6 +283,7 @@ export default function ValidationCenterView({
         travail_a_faire: btActionRealisee,
         pieces_utilisees: btPieces,
         pieces_proposees: btPieces,
+        skipStockDeduction: btSkipStockDeduction,
         validation_note: btNote.trim(),
         validated_by_id: user?.id || user?.code || 'admin',
         validated_by_name: user?.name || user?.nom || 'Administrateur',
@@ -282,7 +298,9 @@ export default function ValidationCenterView({
 
     if (decision === 'APPROVED') {
       showToast?.(
-        `BT ${reviewBt.num_bt || reviewBt.id} validé et clôturé (${btPieces.length} réf. déduite(s) du stock).`,
+        btSkipStockDeduction
+          ? `BT ${reviewBt.num_bt || reviewBt.id} validé et clôturé (coût imputé sur machine sans 2e déstockage).`
+          : `BT ${reviewBt.num_bt || reviewBt.id} validé et clôturé (${btPieces.length} réf. déduite(s) du stock).`,
         'success'
       );
     } else if (decision === 'NEEDS_CLARIFICATION') {
@@ -306,15 +324,27 @@ export default function ValidationCenterView({
         : Array.isArray(exec.sparesUsed)
         ? exec.sparesUsed
         : [];
-    setReviewExecSpares(
-      initialSpares.map((s: any) => ({
-        ref: s.ref || s.reference || '',
-        designation: s.designation || s.ref || 'Pièce PDR',
-        qty: Math.max(1, Number(s.qty ?? s.quantite ?? 1)),
-        unit: s.unit || s.unite || 'pcs',
-        unitPrice: Number(s.unitPrice ?? s.prix_unitaire ?? 0),
-      }))
-    );
+    const mappedSpares = initialSpares.map((s: any) => ({
+      ref: s.ref || s.reference || '',
+      designation: s.designation || s.ref || 'Pièce PDR',
+      qty: Math.max(1, Number(s.qty ?? s.quantite ?? 1)),
+      unit: s.unit || s.unite || 'pcs',
+      unitPrice: Number(s.unitPrice ?? s.prix_unitaire ?? 0),
+    }));
+    const rec = reconcileFieldClaim({
+      claimType: 'PREVENTIVE',
+      claimId: String(exec?.id || ''),
+      numBonSaisi: exec?.num_bon_saisi_par_tech,
+      machineCode: exec?.machineCode,
+      proposedSpares: mappedSpares,
+      stockItems,
+      mouvements,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortieDemands,
+    });
+    setReviewExecSpares(mappedSpares);
+    setExecSkipStockDeduction(Boolean(rec?.exactMovementMatch));
     setExecNote(exec.validation_note || '');
   };
 
@@ -334,13 +364,16 @@ export default function ValidationCenterView({
         validated_by_id: user?.id || user?.code || 'admin',
         validated_by_name: user?.name || user?.nom || 'Administrateur',
         approvedSpares: execSpares,
+        skipStockDeduction: execSkipStockDeduction,
       },
       onAddMouvement
     );
 
     if (decision === 'APPROVED') {
       showToast?.(
-        `Exécution préventive ${reviewExec.machineCode} approuvée (${execSpares.length} réf. déduite(s) du stock).`,
+        execSkipStockDeduction
+          ? `Exécution préventive ${reviewExec.machineCode} approuvée (coût imputé sur machine sans 2e déstockage).`
+          : `Exécution préventive ${reviewExec.machineCode} approuvée (${execSpares.length} réf. déduite(s) du stock).`,
         'success'
       );
     } else if (decision === 'NEEDS_CLARIFICATION') {
@@ -1339,6 +1372,22 @@ export default function ValidationCenterView({
                     ))}
                   </div>
                 )}
+                {btPieces.length > 0 && (
+                  <label className="flex items-start gap-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={btSkipStockDeduction}
+                      onChange={(e) => setBtSkipStockDeduction(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      <strong className="font-bold text-slate-900">
+                        Pièces déjà déduites au magasin (Bon de sortie existant)
+                      </strong>{' '}
+                      — Conserver le coût PDR sur la machine sans créer de mouvement Sortie en double.
+                    </span>
+                  </label>
+                )}
               </div>
 
               <div>
@@ -1492,6 +1541,22 @@ export default function ValidationCenterView({
                       </div>
                     ))}
                   </div>
+                )}
+                {execSpares.length > 0 && (
+                  <label className="flex items-start gap-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={execSkipStockDeduction}
+                      onChange={(e) => setExecSkipStockDeduction(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      <strong className="font-bold text-slate-900">
+                        Pièces déjà déduites au magasin (Bon de sortie existant)
+                      </strong>{' '}
+                      — Conserver le coût PDR sur l'historique préventif sans déduire le stock en double.
+                    </span>
+                  </label>
                 )}
               </div>
 

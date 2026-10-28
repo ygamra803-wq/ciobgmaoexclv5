@@ -1,3 +1,20 @@
+const UNAPPROVED_STATUSES = new Set([
+  'PENDING_VALIDATION',
+  'NEEDS_CLARIFICATION',
+  'REJECTED',
+]);
+
+function isOfficialIntervention(item: any): boolean {
+  if (!item) return false;
+  const valStatus = String(item.validation_status || '').trim().toUpperCase();
+  const wfStatus = String(item.statut || item.etat || '').trim().toUpperCase();
+  if (UNAPPROVED_STATUSES.has(valStatus)) return false;
+  if (wfStatus === 'EN_ATTENTE_VALIDATION' || wfStatus === 'ANNULE' || wfStatus === 'REJECTED') {
+    return false;
+  }
+  return true;
+}
+
 export class CorrectiveCalculationService {
   static calculateWorkingTime(dDebut: string, hDebut: string, dFin: string, hFin: string) {
     try {
@@ -25,15 +42,21 @@ export class CorrectiveCalculationService {
   }
 
   static computeKpis(interventions: any[] = []) {
-    const list = interventions || [];
+    const list = (interventions || []).filter(isOfficialIntervention);
     const total = list.length;
-    const clotures = list.filter((i) => i.statut === 'CLOTURE').length;
+    const closedItems = list.filter((i) => i.statut === 'CLOTURE');
+    const clotures = closedItems.length;
     const enCours = list.filter((i) => i.statut === 'EN_COURS').length;
     let totalDowntimeMinutes = 0;
+    let closedDowntimeMinutes = 0;
     for (const i of list) {
-      totalDowntimeMinutes += Number(i.temps_intervention_mins || i.temps_arret_minutes || i.dureeMinutes || 0);
+      const mins = Number(i.temps_intervention_mins || i.temps_arret_minutes || i.dureeMinutes || 0);
+      totalDowntimeMinutes += mins;
+      if (i.statut === 'CLOTURE') {
+        closedDowntimeMinutes += mins;
+      }
     }
-    const mttr = clotures > 0 ? (totalDowntimeMinutes / clotures).toFixed(1) : '0';
+    const mttr = clotures > 0 ? (closedDowntimeMinutes / clotures).toFixed(1) : '0';
     return {
       totalInterventions: total,
       cloturesCount: clotures,
@@ -46,7 +69,7 @@ export class CorrectiveCalculationService {
 
   static computePareto(interventions: any[] = [], field: string) {
     const counts: Record<string, number> = {};
-    for (const item of interventions || []) {
+    for (const item of (interventions || []).filter(isOfficialIntervention)) {
       const val = item[field] || item.panne || item.machine || 'AUTRE';
       counts[val] = (counts[val] || 0) + 1;
     }
@@ -68,7 +91,7 @@ export class CorrectiveCalculationService {
 
   static detectPreventiveRecommendations(interventions: any[] = []) {
     const byMachine: Record<string, { count: number; anomalies: Record<string, number>; zone?: string }> = {};
-    for (const item of interventions || []) {
+    for (const item of (interventions || []).filter(isOfficialIntervention)) {
       const mId = String(item.code_machine || item.id_machine_registered || item.machine || '').trim();
       if (!mId) continue;
       if (!byMachine[mId]) {
@@ -103,3 +126,4 @@ export class CorrectiveCalculationService {
 }
 
 export default CorrectiveCalculationService;
+

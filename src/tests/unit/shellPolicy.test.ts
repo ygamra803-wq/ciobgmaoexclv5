@@ -446,7 +446,70 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(reportSysGen.systemGeneralSummary.correctiveInPeriodCount).toBe(1);
     expect(reportSysGen.systemGeneralSummary.preventiveInPeriodCount).toBe(1);
   });
+
+  it('enforces the 4 accounting & lifecycle invariants: computeNextDueDate on approval, CorrectiveCalculationService excluding unapproved/rejected & accurate MTTR', async () => {
+    const { computeNextDueDate } = await import('../../application/services/preventive/TaskService');
+    const { CorrectiveCalculationService } = await import('../../domain/corrective/services/CorrectiveCalculationService');
+
+    // 1. Preventive prochaine_echeance advancement
+    expect(computeNextDueDate('2026-10-01', 'Mensuel')).toBe('2026-10-31');
+    expect(computeNextDueDate('2026-10-01', 'Hebdomadaire')).toBe('2026-10-08');
+
+    // 2. CorrectiveCalculationService must exclude PENDING_VALIDATION / REJECTED / NEEDS_CLARIFICATION
+    // and compute MTTR strictly on closed interventions' downtime
+    const bts: any[] = [
+      {
+        id: 'BT-1',
+        code_machine: 'M-01',
+        nom_machine: 'Machine 1',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        temps_arret_minutes: 120,
+        type_panne: 'Mécanique',
+        date_demande: '2026-10-10',
+      },
+      {
+        id: 'BT-2-OPEN',
+        code_machine: 'M-01',
+        nom_machine: 'Machine 1',
+        statut: 'EN_COURS',
+        validation_status: 'NONE',
+        temps_arret_minutes: 300, // open, should NOT inflate MTTR of closed BTs
+        type_panne: 'Électrique',
+        date_demande: '2026-10-12',
+      },
+      {
+        id: 'BT-3-PENDING',
+        code_machine: 'M-01',
+        nom_machine: 'Machine 1',
+        statut: 'EN_COURS',
+        validation_status: 'PENDING_VALIDATION',
+        temps_arret_minutes: 600, // unapproved claim -> must be excluded
+        type_panne: 'Hydraulique',
+        date_demande: '2026-10-15',
+      },
+      {
+        id: 'BT-4-REJECTED',
+        code_machine: 'M-01',
+        nom_machine: 'Machine 1',
+        statut: 'EN_COURS',
+        validation_status: 'REJECTED',
+        temps_arret_minutes: 480,
+        type_panne: 'Mécanique',
+        date_demande: '2026-10-16',
+      },
+    ];
+
+    const kpis = CorrectiveCalculationService.computeKpis(bts);
+    expect(kpis.totalInterventions).toBe(2); // Only BT-1 and BT-2-OPEN
+    expect(kpis.cloturesCount).toBe(1); // BT-1
+    expect(kpis.mttrMinutes).toBe('120.0'); // Only closed BT-1's 120 mins / 1 closed BT (not 420 / 1)
+
+    const pareto = CorrectiveCalculationService.computePareto(bts, 'type_panne');
+    expect(pareto.find((t) => t.name === 'Hydraulique')).toBeUndefined();
+  });
 });
+
 
 
 
