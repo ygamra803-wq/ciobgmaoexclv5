@@ -794,12 +794,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           set({ mouvements: nextMouvements });
           DataGateway.saveMovements(nextMouvements);
           emittedIds.push(String(existingMvtToMerge.id || existingMvtToMerge.code_bon));
-        } else {
+        } else if ((decisionData as any).skipStockDeduction !== true) {
           // Normal Approval: emit official movement(s) once and deduct stock
           const stockList = get().rawStock || [];
           const movementsToRecord: any[] = [];
 
           approvedItems.forEach((item: any, idx: number) => {
+            if (isPartAlreadyDeductedByStoreBon(currentMouvements, finalCodeBonMagasin, item.ref)) {
+              return;
+            }
             const stockMatch = stockList.find(
               (s: any) =>
                 String(s.ref || '').trim().toUpperCase() === String(item.ref || '').trim().toUpperCase()
@@ -2322,6 +2325,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               submissionData.temps_intervention_mins ??
               timeCalc.minutes,
             validation_status: 'PENDING_VALIDATION',
+            stock_deducted: false,
             submitted_by_id:
               submissionData.submitted_by_id || item.submitted_by_id || item.technicien_matricule || '',
             submitted_by_name:
@@ -2602,6 +2606,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             temps_intervention_mins: timeCalc.minutes,
             temps_minutes: timeCalc.minutes,
             validation_status: 'APPROVED',
+            stock_deducted: normalizedPieces.length > 0,
             validated_by_id: clotureData.validated_by_id || item.validated_by_id || 'admin',
             validated_by_name:
               clotureData.validated_by_name || item.validated_by_name || 'Administrateur',

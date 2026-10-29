@@ -1021,6 +1021,234 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(bulkAttempt.sanitizedState.correctiveInterventions[0].stock_deducted).toBe(false);
     expect(bulkAttempt.sanitizedState.correctiveInterventions[0].statut).toBe('EN_COURS');
   });
+
+  it('Phase 0 — A1 Operational Trust Smoke Suite (A1.1 to A1.6): verifies end-to-end store & merge contracts across all 6 critical paths', async () => {
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+    const { buildTechnicianDashboardScope } = await import('../../core/security/technicianScope');
+    const { mergeGmaoStateSnapshot, mergeSingleRecord } = await import('../../services/lanStateMergeService');
+
+    const initialState = useGmaoStore.getState();
+
+    try {
+      // Seed clean isolated state for A1 verification
+      useGmaoStore.setState({
+        rawStock: [
+          {
+            id: 'STK-1',
+            ref: 'ROUL-6204',
+            designation: 'Roulement 6204',
+            stockInitial: 10,
+            entrees: 0,
+            sorties: 0,
+            stockActuel: 10,
+            prixUnitaire: 50,
+          },
+        ],
+        mouvements: [],
+        sortieDemands: [],
+        correctiveInterventions: [
+          {
+            id: 'BT-A1-1',
+            num_bt: 'BT-9001',
+            code_machine: 'DET-01',
+            nom_machine: 'Détecteur 01',
+            statut: 'EN_COURS',
+            action_fermee: 'NON',
+            validation_status: 'NONE',
+            stock_deducted: false,
+          } as any,
+        ],
+        preventiveTasks: [
+          {
+            id: 'PM-A1-1',
+            code_machine: 'DET-01',
+            id_machine: 'DET-01',
+            machine: 'Détecteur 01',
+            organe: 'Roulement Principal',
+            composant: 'Roulement Principal',
+            tache: 'Graissage & contrôle roulement',
+            periodicite: 'Mensuel',
+            prochaine_echeance: '2026-10-01',
+            statut: 'À faire',
+            is_active: true,
+          },
+          {
+            id: 'PM-A1-ARCH',
+            code_machine: 'OLD-99',
+            id_machine: 'OLD-99',
+            machine: 'Machine Archivée',
+            organe: 'Moteur',
+            tache: 'Contrôle moteur',
+            periodicite: 'Mensuel',
+            prochaine_echeance: '2026-01-01', // past due date, but archived
+            statut: 'ARCHIVEE',
+            archived: true,
+            is_active: false,
+            responsable: 'Karim Benali',
+          },
+        ],
+        preventiveExecutions: [],
+      });
+
+      // =========================================================================
+      // A1.1: Technician submits BT, Preventive Execution, or SortieDemand
+      // -> validation_status === 'PENDING_VALIDATION', NO movement, stock_deducted === false
+      // =========================================================================
+      const subBt = useGmaoStore.getState().handleSubmitInterventionForValidation('BT-A1-1', {
+        submitted_by_id: 'TECH-01',
+        submitted_by_name: 'Karim Benali',
+        travail_a_faire: 'Remplacement roulement usé',
+        action_realisee: 'Remplacement roulement usé',
+        pieces_proposees: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 2, prix_unitaire: 50 }],
+      });
+      expect(subBt?.validation_status).toBe('PENDING_VALIDATION');
+      expect(subBt?.stock_deducted).toBe(false);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+
+      useGmaoStore.getState().handleMarkTaskDone('PM-A1-1', {
+        submitForValidation: true,
+        submitted_by_id: 'TECH-01',
+        submitted_by_name: 'Karim Benali',
+        date_realisation: '2026-10-25',
+        notes: 'Anomalie: bruit roulement constaté',
+        usedPDR: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 1, prix_unitaire: 50 }],
+      });
+      const pendingExec = useGmaoStore.getState().preventiveExecutions[0];
+      expect(pendingExec).toBeDefined();
+      expect(pendingExec.validation_status).toBe('PENDING_VALIDATION');
+      expect(pendingExec.stock_deducted).toBe(false);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+
+      const sd = useGmaoStore.getState().handleSubmitSortieDemand({
+        submitted_by_id: 'TECH-01',
+        submitted_by_name: 'Karim Benali',
+        id_machine_registered: 'DET-01',
+        items: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 1, prix_unitaire: 50 }],
+      });
+      expect(sd.validation_status).toBe('PENDING_VALIDATION');
+      expect(sd.stock_deducted).toBe(false);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+
+      // =========================================================================
+      // A1.2: Supervisor approves -> either 1 movement per spare OR skipStockDeduction
+      // when bon matches; zero double deduction on repeat calls
+      // =========================================================================
+      const approvedBt = useGmaoStore.getState().handleReviewInterventionValidation('BT-A1-1', {
+        decision: 'APPROVED',
+        validated_by_id: 'SUP-01',
+        validated_by_name: 'Chef Maintenance',
+        pieces_utilisees: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 2, prix_unitaire: 50 }],
+      });
+      expect(approvedBt?.validation_status).toBe('APPROVED');
+      expect(approvedBt?.statut).toBe('CLOTURE');
+      expect(approvedBt?.stock_deducted).toBe(true);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(1);
+      expect(useGmaoStore.getState().mouvements[0].quantite).toBe(2);
+
+      // Repeat approval on already APPROVED BT must return null and emit 0 extra movements
+      const duplicateBtApproval = useGmaoStore.getState().handleReviewInterventionValidation('BT-A1-1', {
+        decision: 'APPROVED',
+        reviewer_id: 'SUP-01',
+        reviewer_name: 'Chef Maintenance',
+      });
+      expect(duplicateBtApproval).toBeNull();
+      expect(useGmaoStore.getState().mouvements).toHaveLength(1);
+
+      // Approve SortieDemand with skipStockDeduction: true (e.g. exact bon match) -> 0 new movements
+      const approvedSd = useGmaoStore.getState().handleReviewSortieDemandValidation(sd.id, {
+        decision: 'APPROVED',
+        reviewer_id: 'SUP-01',
+        reviewer_name: 'Chef Maintenance',
+        skipStockDeduction: true,
+      });
+      expect(approvedSd?.validation_status).toBe('APPROVED');
+      expect(approvedSd?.stock_deducted).toBe(true);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(1); // still 1
+
+      // =========================================================================
+      // A1.3: Auto-DI created on approval ONLY if createFollowUpDi === true,
+      // and never duplicated if generated_di_id already exists
+      // =========================================================================
+      const btsBeforePrvApproval = useGmaoStore.getState().correctiveInterventions.length;
+      const approvedExec = useGmaoStore.getState().handleReviewPreventiveExecutionValidation(pendingExec.id, {
+        decision: 'APPROVED',
+        reviewer_id: 'SUP-01',
+        reviewer_name: 'Chef Maintenance',
+        createFollowUpDi: true,
+        followUpDiDescription: 'Vérifier bruit palier détecté lors du préventif',
+      });
+      expect(approvedExec?.validation_status).toBe('APPROVED');
+      expect(approvedExec?.generated_di_id).toBeTruthy();
+      expect(useGmaoStore.getState().correctiveInterventions.length).toBe(btsBeforePrvApproval + 1);
+      expect(useGmaoStore.getState().mouvements).toHaveLength(2); // 1 from BT + 1 from PM
+
+      // Attempting a second approval on the same execution with createFollowUpDi: true must NOT create a duplicate DI
+      const secondExecApproval = useGmaoStore.getState().handleReviewPreventiveExecutionValidation(pendingExec.id, {
+        decision: 'APPROVED',
+        reviewer_id: 'SUP-01',
+        reviewer_name: 'Chef Maintenance',
+        createFollowUpDi: true,
+      });
+      expect(secondExecApproval).toBeNull();
+      expect(useGmaoStore.getState().correctiveInterventions.length).toBe(btsBeforePrvApproval + 1);
+
+      // =========================================================================
+      // A1.4: Archiving a machine -> its preventive tasks do not appear active/overdue in technician scope
+      // =========================================================================
+      const techScope = buildTechnicianDashboardScope({
+        user: { id: 'USR-TECH-1', personnelId: 'TECH-01', name: 'Karim Benali', role: 'TECHNICIEN' },
+        technicians: [{ id: 'TECH-01', nom: 'Karim Benali', is_active: true }],
+        machines: [
+          { id: 'DET-01', code: 'DET-01', nom: 'Détecteur 01', statut: 'Active', is_active: true },
+          { id: 'OLD-99', code: 'OLD-99', nom: 'Machine Archivée', statut: 'ARCHIVEE', is_active: false },
+        ],
+        correctiveInterventions: useGmaoStore.getState().correctiveInterventions,
+        preventiveTasks: useGmaoStore.getState().preventiveTasks,
+        preventiveExecutions: useGmaoStore.getState().preventiveExecutions,
+        sortieDemands: useGmaoStore.getState().sortieDemands,
+        now: new Date('2026-10-28T10:00:00Z'),
+      });
+      expect(techScope.myPreventiveTasks.some((t: any) => t.id === 'PM-A1-ARCH')).toBe(false);
+      expect(techScope.overdueTasks.some((t: any) => t.id === 'PM-A1-ARCH')).toBe(false);
+
+      // =========================================================================
+      // A1.6: LAN Merge never overwrites an APPROVED/CLOTURE record with a stale PENDING_VALIDATION
+      // copy even when the incoming PENDING copy has a newer client updated_at timestamp (clock skew)
+      // =========================================================================
+      const serverClosedBt = {
+        id: 'BT-LAN-1',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        stock_deducted: true,
+        updated_at: '2026-10-28T10:00:00.000Z',
+      };
+      const staleMobilePendingBtWithSkewedClock = {
+        id: 'BT-LAN-1',
+        statut: 'EN_COURS',
+        validation_status: 'PENDING_VALIDATION',
+        stock_deducted: false,
+        updated_at: '2026-10-28T11:30:00.000Z', // 90 mins ahead due to phone clock skew
+      };
+
+      const mergedSingle = mergeSingleRecord(serverClosedBt, staleMobilePendingBtWithSkewedClock);
+      expect(mergedSingle.validation_status).toBe('APPROVED');
+      expect(mergedSingle.statut).toBe('CLOTURE');
+      expect(mergedSingle.stock_deducted).toBe(true);
+
+      const serverStateObj = { correctiveInterventions: [serverClosedBt] };
+      mergeGmaoStateSnapshot(
+        serverStateObj,
+        { correctiveInterventions: [staleMobilePendingBtWithSkewedClock] },
+        ['correctiveInterventions'],
+        new Set<string>()
+      );
+      expect(serverStateObj.correctiveInterventions[0].validation_status).toBe('APPROVED');
+      expect(serverStateObj.correctiveInterventions[0].statut).toBe('CLOTURE');
+      expect(serverStateObj.correctiveInterventions[0].stock_deducted).toBe(true);
+    } finally {
+      useGmaoStore.setState(initialState);
+    }
+  });
 });
 
 

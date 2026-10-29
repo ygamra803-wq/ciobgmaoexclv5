@@ -145,6 +145,7 @@ export default function PreventiveView({
           validation_status: 'APPROVED',
           validated_by_id: user?.id || 'admin',
           validated_by_name: user?.name || user?.nom || 'Administrateur',
+          ...(onAddMouvement ? { onAddMouvement } : {}),
         };
 
     if (onMarkTaskDoneProp) {
@@ -168,8 +169,14 @@ export default function PreventiveView({
       ? validationData.usedPDR
       : (Array.isArray(validationData?.pieces_utilisees) ? validationData.pieces_utilisees : []);
 
-    // If PDR consumed by Admin/Responsable directly, synchronize with stock via Sortie Interne movement
-    if (consumedPDR.length > 0 && onAddMouvement) {
+    // Fallback only when onMarkTaskDoneProp (useGmaoStore.handleMarkTaskDone) is absent,
+    // preventing double stock deduction since useGmaoStore.handleMarkTaskDone already emits MVT-PRV movements.
+    if (
+      !onMarkTaskDoneProp &&
+      validationData?.skipStockDeduction !== true &&
+      consumedPDR.length > 0 &&
+      onAddMouvement
+    ) {
       const organeTarget =
         targetTask?.composant ||
         targetTask?.nom_composant ||

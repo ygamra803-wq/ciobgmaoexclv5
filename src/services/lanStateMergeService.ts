@@ -165,12 +165,52 @@ export function getRecordLifecycleRank(item: any): number {
   return rank;
 }
 
+function isTerminalOrApprovedRecord(item: any): boolean {
+  if (!item || typeof item !== 'object') return false;
+  const valStatus = String(item.validation_status || item.validationStatus || '').trim().toUpperCase();
+  const status = String(item.statut || item.status || item.etat || '').trim().toUpperCase();
+  return (
+    valStatus === 'APPROVED' ||
+    status === 'CLOTURE' ||
+    status === 'CLÔTURÉ' ||
+    item.stock_deducted === true
+  );
+}
+
+function isPendingOrOpenDraftRecord(item: any): boolean {
+  if (!item || typeof item !== 'object') return false;
+  if (isTerminalOrApprovedRecord(item)) return false;
+  const valStatus = String(item.validation_status || item.validationStatus || '').trim().toUpperCase();
+  const status = String(item.statut || item.status || item.etat || '').trim().toUpperCase();
+  return (
+    valStatus === 'PENDING_VALIDATION' ||
+    valStatus === 'PENDING' ||
+    valStatus === 'NONE' ||
+    status === 'DEMANDE' ||
+    status === 'EN_COURS' ||
+    status === 'EN COURS' ||
+    status === 'A FAIRE' ||
+    status === 'À FAIRE' ||
+    status === 'EN RETARD'
+  );
+}
+
 /**
- * Merges two versions of the same record using timestamp priority and Maker-Checker lifecycle rank.
+ * Merges two versions of the same record using Maker-Checker lifecycle protection and timestamp priority.
+ * Never allows a pending/open draft to downgrade an already APPROVED/CLOTURE/stock_deducted record,
+ * even if the draft carries a newer client timestamp due to clock skew or offline touch.
  */
 export function mergeSingleRecord(serverItem: any, incomingItem: any): any {
   if (!serverItem || typeof serverItem !== 'object') return incomingItem;
   if (!incomingItem || typeof incomingItem !== 'object') return serverItem;
+
+  // A1.6 Lifecycle Guard: Never regress an APPROVED/CLOTURE record back to a PENDING/open copy
+  if (isTerminalOrApprovedRecord(serverItem) && isPendingOrOpenDraftRecord(incomingItem)) {
+    return { ...incomingItem, ...serverItem };
+  }
+  if (isTerminalOrApprovedRecord(incomingItem) && isPendingOrOpenDraftRecord(serverItem)) {
+    return { ...serverItem, ...incomingItem };
+  }
 
   const serverTime = getRecordTimestampMs(serverItem);
   const incomingTime = getRecordTimestampMs(incomingItem);
