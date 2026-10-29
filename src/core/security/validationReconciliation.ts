@@ -2,6 +2,7 @@ export type ReconciliationAlertCode =
   | 'STOCK_SHORTAGE'
   | 'CONCURRENT_CLAIM_OVERFLOW'
   | 'DUPLICATE_BON'
+  | 'EXACT_BON_MATCH'
   | 'MISSING_BON_WITH_PDR'
   | 'CANDIDATE_STORE_BON_MATCH';
 
@@ -31,6 +32,7 @@ export interface ClaimReconciliationResult {
   hasCritical: boolean;
   hasWarning: boolean;
   candidateStoreMovements: CandidateStoreMovementMatch[];
+  exactMovementMatch?: any | null;
 }
 
 export interface ReconcileFieldClaimParams {
@@ -83,6 +85,7 @@ export function reconcileFieldClaim({
 }: ReconcileFieldClaimParams): ClaimReconciliationResult {
   const alerts: ReconciliationAlert[] = [];
   const candidateStoreMovements: CandidateStoreMovementMatch[] = [];
+  let exactMovementMatch: any | null = null;
   const normClaimId = String(claimId ?? '').trim();
   const normBon = normalizeToken(numBonSaisi);
   const normMachine = normalizeToken(machineCode);
@@ -101,13 +104,14 @@ export function reconcileFieldClaim({
     });
   }
 
-  // 2. Check DUPLICATE_BON across movements, corrective BTs, preventive executions, and sortie demands
+  // 2. Check DUPLICATE_BON / EXACT_BON_MATCH across movements, corrective BTs, preventive executions, and sortie demands
   if (normBon) {
     const duplicateSources: string[] = [];
 
     for (const mvt of mouvements || []) {
       const mvtBon = normalizeToken(mvt?.code_bon || mvt?.num_bon_saisi_par_tech);
       if (mvtBon && mvtBon === normBon) {
+        exactMovementMatch = mvt;
         duplicateSources.push(`Mouvement ${mvt?.code_bon || mvt?.id || normBon}`);
         break;
       }
@@ -295,6 +299,7 @@ export function reconcileFieldClaim({
     hasCritical: alerts.some((a) => a.severity === 'critical'),
     hasWarning: alerts.length > 0,
     candidateStoreMovements,
+    exactMovementMatch,
   };
 }
 

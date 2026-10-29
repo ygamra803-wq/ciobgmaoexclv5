@@ -165,9 +165,17 @@ export function buildTechnicianDashboardScope({
   const badgeLabel = getTechnicianBadgeLabel(user, technicians);
   const displayName = getTechnicianDisplayName(user, technicians);
 
+  const activePreventiveTasks = (preventiveTasks || []).filter(
+    (t) =>
+      t?.is_active !== false &&
+      t?.active !== false &&
+      String(t?.statut || t?.status || '').trim().toUpperCase() !== 'ARCHIVEE' &&
+      t?._isOrphan !== true
+  );
+
   const myPreventiveTasks = isTechUser
-    ? (preventiveTasks || []).filter((t) => matchesTechnicianRecord(t, user, technicians))
-    : preventiveTasks || [];
+    ? activePreventiveTasks.filter((t) => matchesTechnicianRecord(t, user, technicians))
+    : activePreventiveTasks;
 
   const isScheduledThisWeek = (task: any) => {
     if (!task) return false;

@@ -162,11 +162,115 @@ class SortieExterneService {
   /**
    * Supprime une sortie
    */
-  static deleteSortie(id) {
-    const currentList = this.getSorties();
+  static deleteSortie(id, existingList?: any[]) {
+    const currentList = Array.isArray(existingList) ? existingList : this.getSorties();
     const filtered = currentList.filter((s) => s.id !== id);
     this.saveSorties(filtered);
     return filtered;
+  }
+
+  /**
+   * Vide toutes les sorties externes (pour usine réelle)
+   */
+  static clearAll() {
+    this.saveSorties([]);
+    return [];
+  }
+
+  /**
+   * Réinitialise les sorties externes avec l'archive de base
+   */
+  static resetToBaseline() {
+    const baseline = Array.isArray(INITIAL_SORTIES_BOBINAGE) ? [...INITIAL_SORTIES_BOBINAGE] : [];
+    this.saveSorties(baseline);
+    return baseline;
+  }
+
+  /**
+   * Synchronise automatiquement l'état du moteur/composant dans warehouseItems
+   * ainsi que son historique_bobinage lors d'une sortie externe, d'un retour ou d'un remontage.
+   */
+  static syncWarehouseItemsWithSortie(warehouseItems: any[] = [], sortieRecord: any): any[] {
+    if (!Array.isArray(warehouseItems) || !sortieRecord || typeof sortieRecord !== 'object') {
+      return warehouseItems;
+    }
+
+    const motorCode = String(sortieRecord.code_moteur_reel || '').trim().toLowerCase();
+    if (!motorCode) return warehouseItems;
+
+    let changed = false;
+    const nextList = warehouseItems.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const itemCode = String(item.id_warehouse_item || item.code || '').trim().toLowerCase();
+      if (itemCode !== motorCode) return item;
+
+      changed = true;
+      const existingHistory = Array.isArray(item.historique_bobinage) ? [...item.historique_bobinage] : [];
+      const historyEntry = {
+        id_sortie: sortieRecord.id,
+        code_sortie: sortieRecord.code,
+        bon_ref: sortieRecord.ref,
+        id_machine: sortieRecord.id_machine,
+        fournisseur: sortieRecord.fournisseur_externe,
+        type_probleme: sortieRecord.type_probleme,
+        date_expedition: sortieRecord.date_expedition,
+        date_arrivee_reelle: sortieRecord.date_arrivee_reelle || null,
+        date_montage: sortieRecord.date_montage || null,
+        etat: sortieRecord.etat,
+        cout_bobinage: Number(sortieRecord.cout_bobinage) || 0,
+        note: sortieRecord.note || '',
+      };
+
+      const histIdx = existingHistory.findIndex(
+        (h: any) => h && (h.id_sortie === sortieRecord.id || h.code_sortie === sortieRecord.code)
+      );
+      if (histIdx !== -1) {
+        existingHistory[histIdx] = { ...existingHistory[histIdx], ...historyEntry };
+      } else {
+        existingHistory.unshift(historyEntry);
+      }
+
+      const etatUpper = String(sortieRecord.etat || '').trim().toUpperCase();
+      if (etatUpper.includes('MONTE') || etatUpper.includes('MONTÉ')) {
+        const targetMachine = sortieRecord.id_machine || item.id_machine_registered || item.id_machine;
+        return {
+          ...item,
+          rattachement_type: 'MACHINE',
+          id_machine: targetMachine,
+          id_machine_registered: targetMachine,
+          emplacement: targetMachine,
+          status: 'Actif',
+          statut: 'Actif',
+          etat: 'Actif',
+          technician: sortieRecord.technicien_montage || item.technician,
+          historique_bobinage: existingHistory,
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      if (etatUpper.includes('RETOURNE') || etatUpper.includes('RETOURNÉ') || etatUpper.includes('STOCK')) {
+        return {
+          ...item,
+          rattachement_type: 'STOCK',
+          status: 'Retourné OK',
+          statut: 'Retourné OK',
+          etat: 'Retourné OK',
+          historique_bobinage: existingHistory,
+          updated_at: new Date().toISOString(),
+        };
+      }
+
+      return {
+        ...item,
+        status: 'En réparation externe',
+        statut: 'En réparation externe',
+        etat: 'En réparation externe',
+        historique_bobinage: existingHistory,
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    return changed ? nextList : warehouseItems;
   }
 
   /**

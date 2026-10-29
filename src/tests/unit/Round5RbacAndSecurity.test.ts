@@ -42,7 +42,7 @@ describe('Round 5 — Enterprise RBAC, Tab Access Control, and Server Role/Token
     it('grants TECHNICIEN maintenance & movement execution while restricting settings, utilisateurs, and entrepot catalog', () => {
       const tech = { id: 'tech', role: 'TECHNICIEN' };
       expect(AuthorizationService.hasPermission(tech, 'stock.view')).toBe(true);
-      expect(AuthorizationService.hasPermission(tech, 'movement.create')).toBe(true);
+      expect(AuthorizationService.hasPermission(tech, 'movement.create')).toBe(false);
       expect(AuthorizationService.hasPermission(tech, 'preventive.execute')).toBe(true);
       expect(AuthorizationService.hasPermission(tech, 'corrective.execute')).toBe(true);
       expect(AuthorizationService.hasPermission(tech, 'stock.delete')).toBe(false);

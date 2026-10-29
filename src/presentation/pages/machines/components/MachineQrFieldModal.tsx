@@ -49,6 +49,7 @@ export default function MachineQrFieldModal({
   const preventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
   const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
   const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
+  const sortiesExterne = useGmaoStore((s) => s.sortiesExterne) || [];
   const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
   const blueprints = useGmaoStore((s) => s.blueprints) || [];
@@ -141,15 +142,16 @@ export default function MachineQrFieldModal({
       .slice(0, 5);
   }, [correctiveInterventions, machineCode]);
 
-  // Idea 3: Passeport Santé Machine (12-Month TCO = Préventif + Correctif PDR, Downtime & Recurrent Organ BER Alerts)
+  // Idea 3: Passeport Santé Machine (12-Month TCO = Préventif + Correctif PDR + Bobinage Externe, Downtime & Recurrent Organ BER Alerts)
   const healthPassport = useMemo(
     () =>
       computeMachineHealthPassport({
         machine,
         correctiveInterventions,
         preventiveExecutions,
+        sortiesExterne,
       }),
-    [machine, correctiveInterventions, preventiveExecutions]
+    [machine, correctiveInterventions, preventiveExecutions, sortiesExterne]
   );
 
   // Machine BOM & Attached Components/Parts
@@ -516,6 +518,9 @@ export default function MachineQrFieldModal({
                     </div>
                     <div className="text-[9px] text-slate-500 font-mono">
                       Corr: {healthPassport.correctivePdrCost12m} | Prév: {healthPassport.preventiveTotalCost12m}
+                      {healthPassport.externalBobinageCost12m > 0
+                        ? ` | Bob: ${healthPassport.externalBobinageCost12m}`
+                        : ''}
                     </div>
                   </div>
                   <div className="p-2 rounded-xl bg-slate-950/90 border border-slate-800">

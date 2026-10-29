@@ -631,6 +631,396 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(passport.recurrentOrganAlerts[0].count60d).toBe(3);
     expect(passport.healthStatus).toBe('CRITIQUE_BER');
   });
+
+  it('Vulnerability 2 Fix: integrates SortieExterne (Bobinage) into Machine Health Passport TCO/BER and syncs warehouseItems motor status & history', async () => {
+    const { computeMachineHealthPassport } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+    const SortieExterneService = (
+      await import('../../application/services/SortieExterneService')
+    ).default;
+
+    // 1. Test MachineHealthPassport includes externalBobinageCost12m & triggers Rebobinages multiples BER alert
+    const passport = computeMachineHealthPassport({
+      machine: { id_machine_registered: 'DET-01', designation: 'Détoureuse CNC 1' },
+      referenceDate: '2026-10-29T12:00:00Z',
+      correctiveInterventions: [
+        {
+          id: 'BT-10',
+          code_machine: 'DET-01',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          date_cloture: '2026-08-10',
+          nom_composant: 'Courroie Axe X',
+          cout_pdr: 300,
+          temps_arret_minutes: 60,
+        },
+      ],
+      preventiveExecutions: [],
+      sortiesExterne: [
+        {
+          id: 'SE-1',
+          code: 'SORT-EXT-010',
+          id_machine: 'DET-01',
+          code_moteur_reel: 'mot 01',
+          date_expedition: '2026-05-10',
+          etat: 'Monté',
+          cout_bobinage: 1800,
+        },
+        {
+          id: 'SE-2',
+          code: 'SORT-EXT-011',
+          id_machine: 'DET-01',
+          code_moteur_reel: 'mot 01',
+          date_expedition: '2026-10-05',
+          etat: 'En réparation externe',
+          cout_bobinage: 2200,
+        },
+      ],
+    });
+
+    expect(passport.externalBobinageCount12m).toBe(2);
+    expect(passport.externalBobinageCost12m).toBe(4000); // 1800 + 2200
+    expect(passport.totalMaintenanceCost12m).toBe(4300); // 300 (corrective) + 4000 (bobinage)
+    expect(passport.healthStatus).toBe('CRITIQUE_BER');
+    expect(passport.recurrentOrganAlerts).toHaveLength(1);
+    expect(passport.recurrentOrganAlerts[0].organLabel).toBe('mot 01');
+    expect(passport.recurrentOrganAlerts[0].recommendation).toContain('Rebobinages multiples');
+
+    // 2. Test SortieExterneService.syncWarehouseItemsWithSortie updates motor status, attachment & historique_bobinage
+    const initialWarehouse = [
+      {
+        id: 'ID-MOT01',
+        id_warehouse_item: 'mot 01',
+        code: 'mot 01',
+        rattachement_type: 'MACHINE',
+        id_machine: 'DET-01',
+        id_machine_registered: 'DET-01',
+        status: 'Actif',
+        historique_bobinage: [],
+      },
+    ];
+
+    // Step A: Sent to external repair
+    const afterSend = SortieExterneService.syncWarehouseItemsWithSortie(initialWarehouse, {
+      id: 'SE-2',
+      code: 'SORT-EXT-011',
+      ref: 'BS-2026-99',
+      id_machine: 'DET-01',
+      code_moteur_reel: 'mot 01',
+      fournisseur_externe: 'Bobinage Casa',
+      type_probleme: 'grille',
+      date_expedition: '2026-10-05',
+      etat: 'En réparation externe',
+      cout_bobinage: 0,
+    });
+    expect(afterSend[0].status).toBe('En réparation externe');
+    expect(afterSend[0].historique_bobinage).toHaveLength(1);
+
+    // Step B: Returned OK to reserve stock with final cost
+    const afterReturn = SortieExterneService.syncWarehouseItemsWithSortie(afterSend, {
+      id: 'SE-2',
+      code: 'SORT-EXT-011',
+      ref: 'BS-2026-99',
+      id_machine: 'DET-01',
+      code_moteur_reel: 'mot 01',
+      fournisseur_externe: 'Bobinage Casa',
+      type_probleme: 'grille',
+      date_expedition: '2026-10-05',
+      date_arrivee_reelle: '2026-10-12',
+      etat: 'Retourné OK',
+      cout_bobinage: 2200,
+    });
+    expect(afterReturn[0].status).toBe('Retourné OK');
+    expect(afterReturn[0].rattachement_type).toBe('STOCK');
+    expect(afterReturn[0].historique_bobinage[0].cout_bobinage).toBe(2200);
+
+    // Step C: Remounted on target machine DET-02
+    const afterMount = SortieExterneService.syncWarehouseItemsWithSortie(afterReturn, {
+      id: 'SE-2',
+      code: 'SORT-EXT-011',
+      ref: 'BS-2026-99',
+      id_machine: 'DET-02',
+      code_moteur_reel: 'mot 01',
+      fournisseur_externe: 'Bobinage Casa',
+      type_probleme: 'grille',
+      date_expedition: '2026-10-05',
+      date_arrivee_reelle: '2026-10-12',
+      date_montage: '2026-10-14',
+      technicien_montage: 'Rachid',
+      etat: 'Monté',
+      cout_bobinage: 2200,
+    });
+    expect(afterMount[0].status).toBe('Actif');
+    expect(afterMount[0].rattachement_type).toBe('MACHINE');
+    expect(afterMount[0].id_machine_registered).toBe('DET-02');
+    expect(afterMount[0].historique_bobinage[0].etat).toBe('Monté');
+  });
+
+  it('Vulnerability 3 Fix: enforces referential cascades on rename and suspends preventive tasks when machines are soft-archived', async () => {
+    const { buildTechnicianDashboardScope } = await import('../../core/security/technicianScope');
+    const techUser = {
+      id: 'TECH-01',
+      id_technician: 'TECH-01',
+      personnelId: 'TECH-01',
+      code: 'TECH-01',
+      personnelName: 'Karim Benali',
+      name: 'Karim Benali',
+      nom: 'Karim Benali',
+      role: 'TECHNICIEN',
+    };
+
+    const preventiveTasks = [
+      {
+        id: 'PM-ACTIVE-1',
+        id_machine: 'M-ACTIVE',
+        tache: 'Graissage machine active',
+        id_technicien: 'TECH-01',
+        responsable: 'Karim Benali',
+        etat: 'En retard',
+        is_active: true,
+      },
+      {
+        id: 'PM-ARCHIVED-MCH',
+        id_machine: 'M-ARCHIVED',
+        tache: 'Graissage machine archivée',
+        id_technicien: 'TECH-01',
+        responsable: 'Karim Benali',
+        etat: 'En retard',
+        is_active: false,
+        active: false,
+        statut: 'ARCHIVEE',
+        archived_with_machine: true,
+      },
+    ];
+
+    const scope = buildTechnicianDashboardScope({
+      user: techUser,
+      technicians: [techUser],
+      preventiveTasks,
+      preventiveExecutions: [],
+      correctiveInterventions: [],
+      mouvements: [],
+    });
+
+    // Archived machine's preventive task must not appear in the technician's active or overdue queue
+    expect(scope.myPreventiveTasks.map((t: any) => t.id)).toEqual(['PM-ACTIVE-1']);
+    expect(scope.overdueTasks.map((t: any) => t.id)).toEqual(['PM-ACTIVE-1']);
+  });
+
+  it('Vulnerability 4 Fix: reconciles Corrective BTs, Preventive Executions/Tasks, and Sortie Demands when auto-generated movements are updated or deleted', async () => {
+    const {
+      reconcileMakerCheckerOnMovementDelete,
+      reconcileMakerCheckerOnMovementUpdate,
+    } = await import('../../core/security/auditLockReconciliation');
+
+    const initialBt = {
+      id: 'BT-500',
+      num_bt: 'BT-2026-500',
+      code_machine: 'DET-01',
+      statut: 'CLOTURE',
+      validation_status: 'APPROVED',
+      pieces_utilisees: [
+        { ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 2, prix_unitaire: 150 },
+      ],
+      cout_pdr: 300,
+      pdr_cost: 300,
+      emitted_movement_ids: ['MVT-BT-500-1'],
+    };
+
+    const mvtBt = {
+      id: 'MVT-BT-500-1',
+      source_bt_id: 'BT-500',
+      code_bon: 'BS-BT-BT-2026-500',
+      ref: 'ROUL-6204',
+      quantite: 2,
+      prix_unitaire: 150,
+    };
+
+    // 1. Updating movement quantity from 2 to 1 updates BT cout_pdr from 300 to 150
+    const afterUpdateBt = reconcileMakerCheckerOnMovementUpdate(
+      mvtBt,
+      { ...mvtBt, quantite: 1 },
+      {
+        correctiveInterventions: [initialBt],
+        preventiveExecutions: [],
+        preventiveTasks: [],
+        sortieDemands: [],
+      }
+    );
+    expect(afterUpdateBt.correctiveChanged).toBe(true);
+    expect(afterUpdateBt.correctiveInterventions[0].cout_pdr).toBe(150);
+    expect(afterUpdateBt.correctiveInterventions[0].pieces_utilisees[0].quantite).toBe(1);
+
+    // 2. Deleting movement zeroes out BT cout_pdr and records audit note
+    const afterDeleteBt = reconcileMakerCheckerOnMovementDelete(mvtBt, {
+      correctiveInterventions: [initialBt],
+      preventiveExecutions: [],
+      preventiveTasks: [],
+      sortieDemands: [],
+    });
+    expect(afterDeleteBt.correctiveChanged).toBe(true);
+    expect(afterDeleteBt.correctiveInterventions[0].cout_pdr).toBe(0);
+    expect(afterDeleteBt.correctiveInterventions[0].pieces_utilisees).toHaveLength(0);
+    expect(afterDeleteBt.correctiveInterventions[0].validation_note).toContain('[Audit Magasin]');
+
+    // 3. Deleting Preventive movement recalculates execution totalCost and decrements parent task cout_cumule
+    const initialExec = {
+      id: 'EXEC-9001',
+      taskId: 'TASK-90',
+      taskCode: 'PM-90',
+      durationMinutes: 60,
+      laborRate: 40,
+      sparesUsed: [{ ref: 'COURR-A42', designation: 'Courroie A42', qty: 2, unitPrice: 100 }],
+      sparesCost: 200,
+      totalCost: 240,
+      stock_deducted: true,
+      emitted_movement_ids: ['MVT-PRV-9001'],
+    };
+    const initialTask = {
+      id: 'TASK-90',
+      cout_cumule: 540,
+    };
+    const mvtPrv = {
+      id: 'MVT-PRV-9001',
+      source_execution_id: 'EXEC-9001',
+      code_bon: 'BS-PRV-C-9001',
+      ref: 'COURR-A42',
+      quantite: 2,
+      prix_unitaire: 100,
+    };
+
+    const afterDeletePrv = reconcileMakerCheckerOnMovementDelete(mvtPrv, {
+      correctiveInterventions: [],
+      preventiveExecutions: [initialExec],
+      preventiveTasks: [initialTask],
+      sortieDemands: [],
+    });
+    expect(afterDeletePrv.preventiveExecsChanged).toBe(true);
+    expect(afterDeletePrv.preventiveExecutions[0].sparesCost).toBe(0);
+    expect(afterDeletePrv.preventiveExecutions[0].totalCost).toBe(40); // labor only
+    expect(afterDeletePrv.preventiveExecutions[0].stock_deducted).toBe(false);
+    expect(afterDeletePrv.preventiveTasksChanged).toBe(true);
+    expect(afterDeletePrv.preventiveTasks[0].cout_cumule).toBe(340); // 540 - 200
+  });
+
+  it('Vulnerability 5 Fix: unifies Preventive execution review parity with exactMovementMatch (skipStockDeduction) and Auto-DI anomaly detection', async () => {
+    const { reconcileFieldClaim } = await import('../../core/security/validationReconciliation');
+    const { hasPreventiveExecutionAnomaly } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+
+    const existingMouvements = [
+      {
+        id: 'MVT-MAG-77',
+        code_bon: 'BS-2026-077',
+        ref: 'ROUL-6204',
+        quantite: 2,
+        machine: 'DET-01',
+        type: 'Sortie',
+      },
+    ];
+
+    const execWithExistingBonAndAnomaly = {
+      id: 'EXEC-77',
+      machineCode: 'DET-01',
+      organe: 'Palier Principal',
+      num_bon_saisi_par_tech: 'BS-2026-077',
+      notes: 'Anomalie: bruit et échauffement constaté sur le palier',
+      sparesProposed: [{ ref: 'ROUL-6204', designation: 'Roulement 6204', qty: 2, unitPrice: 120 }],
+    };
+
+    const rec = reconcileFieldClaim({
+      claimType: 'PREVENTIVE',
+      claimId: execWithExistingBonAndAnomaly.id,
+      numBonSaisi: execWithExistingBonAndAnomaly.num_bon_saisi_par_tech,
+      machineCode: execWithExistingBonAndAnomaly.machineCode,
+      proposedSpares: execWithExistingBonAndAnomaly.sparesProposed,
+      stockItems: [{ ref: 'ROUL-6204', stockActuel: 10 }],
+      mouvements: existingMouvements,
+      correctiveInterventions: [],
+      preventiveExecutions: [execWithExistingBonAndAnomaly],
+      sortieDemands: [],
+    });
+
+    // Both ValidationCenterView and PreventiveExecutionsHistoryView / TabMainView use exactMovementMatch & hasPreventiveExecutionAnomaly
+    expect(Boolean(rec.exactMovementMatch)).toBe(true);
+    expect(hasPreventiveExecutionAnomaly(execWithExistingBonAndAnomaly)).toBe(true);
+  });
+
+  it('Vulnerability 6 Fix: enforces server-side role spoof prevention, entity write guards, and Maker-Checker bulk state sanitization', async () => {
+    const {
+      resolveEffectiveServerRole,
+      canRoleMutateEntity,
+      sanitizeBulkStateForRole,
+    } = await import('../../core/security/serverRbacPolicy');
+
+    const dbUsers = [
+      { id: 'USR-TECH-1', username: 'karim', nom: 'Karim Benali', role: 'TECHNICIEN', is_active: true },
+      { id: 'USR-ARCH-1', username: 'ancien', nom: 'Ancien Tech', role: 'TECHNICIEN', is_active: false, statut: 'ARCHIVE' },
+    ];
+
+    // 1. Registered TECHNICIEN spoofing x-gmao-role: ADMIN is downgraded to TECHNICIEN
+    const spoofCheck = resolveEffectiveServerRole(
+      { 'x-gmao-role': 'ADMIN', 'x-gmao-actor': 'Karim Benali' },
+      dbUsers,
+      []
+    );
+    expect(spoofCheck.roleSpoofDetected).toBe(true);
+    expect(spoofCheck.effectiveRole).toBe('TECHNICIEN');
+
+    // 2. Archived user is downgraded to VIEWER (read-only)
+    const archivedCheck = resolveEffectiveServerRole(
+      { 'x-gmao-role': 'TECHNICIEN', 'x-gmao-actor': 'Ancien Tech' },
+      dbUsers,
+      []
+    );
+    expect(archivedCheck.isArchivedActor).toBe(true);
+    expect(archivedCheck.effectiveRole).toBe('VIEWER');
+
+    // 3. TECHNICIEN cannot directly mutate rawStock, mouvements, or users
+    expect(canRoleMutateEntity('TECHNICIEN', 'rawStock', 'PUT').allowed).toBe(false);
+    expect(canRoleMutateEntity('TECHNICIEN', 'mouvements', 'POST').allowed).toBe(false);
+    expect(canRoleMutateEntity('TECHNICIEN', 'users', 'PUT').allowed).toBe(false);
+    expect(canRoleMutateEntity('TECHNICIEN', 'sortieDemands', 'POST').allowed).toBe(true);
+
+    // 4. Bulk state sync from TECHNICIEN strips rawStock/mouvements/users, blocks replaceAll, and clamps unapproved self-approvals
+    const replaceAllAttempt = sanitizeBulkStateForRole(
+      'TECHNICIEN',
+      { replaceAll: true, machines: [] },
+      {}
+    );
+    expect(replaceAllAttempt.allowed).toBe(false);
+
+    const bulkAttempt = sanitizeBulkStateForRole(
+      'TECHNICIEN',
+      {
+        users: [{ id: 'hacked', role: 'ADMIN' }],
+        rawStock: [{ ref: 'ROUL-6204', stockActuel: 9999 }],
+        mouvements: [{ id: 'MVT-FAKE' }],
+        correctiveInterventions: [
+          {
+            id: 'BT-NEW-1',
+            code_machine: 'DET-01',
+            statut: 'CLOTURE',
+            action_fermee: 'OUI',
+            validation_status: 'APPROVED',
+            stock_deducted: true,
+          },
+        ],
+      },
+      { correctiveInterventions: [] }
+    );
+    expect(bulkAttempt.allowed).toBe(true);
+    expect(bulkAttempt.strippedKeys).toEqual(expect.arrayContaining(['users', 'rawStock', 'mouvements']));
+    expect(bulkAttempt.sanitizedState.users).toBeUndefined();
+    expect(bulkAttempt.sanitizedState.rawStock).toBeUndefined();
+    expect(bulkAttempt.sanitizedState.mouvements).toBeUndefined();
+    // Unapproved BT pushed by technician is clamped to PENDING_VALIDATION & EN_COURS
+    expect(bulkAttempt.sanitizedState.correctiveInterventions[0].validation_status).toBe('PENDING_VALIDATION');
+    expect(bulkAttempt.sanitizedState.correctiveInterventions[0].stock_deducted).toBe(false);
+    expect(bulkAttempt.sanitizedState.correctiveInterventions[0].statut).toBe('EN_COURS');
+  });
 });
 
 

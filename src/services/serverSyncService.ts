@@ -217,18 +217,27 @@ export const serverSyncService = {
       ? store.sortiesExterne
       : storageService.getItem(STORAGE_KEYS.SORTIE_EXTERNE) || [];
 
+    const generalSystemTypes = Array.isArray(store.generalSystemTypes)
+      ? store.generalSystemTypes
+      : storageService.getItem(STORAGE_KEYS.GENERAL_SYSTEM_TYPES) || [];
+    const sortieDemands = Array.isArray(store.sortieDemands)
+      ? store.sortieDemands
+      : storageService.getItem(STORAGE_KEYS.SORTIE_DEMANDS) || [];
+
     return {
       rawStock,
       stock: rawStock,
       types,
       designations,
       machines,
+      generalSystemTypes,
       families,
       templates,
       blueprints,
       zones,
       machineElementsLedger,
       mouvements,
+      sortieDemands,
       preventiveTasks,
       preventiveActions,
       preventiveGuides,
@@ -417,8 +426,14 @@ export const serverSyncService = {
    * Explicitly pushes local state to server gmao_state.json.
    * If force=false, checks for conflict first and sends expectedVersion for optimistic concurrency.
    */
-  async pushToServer(options: { force?: boolean; customState?: Record<string, any> } = {}): Promise<{
+  async pushToServer(options: {
+    force?: boolean;
+    merge?: boolean;
+    replaceAll?: boolean;
+    customState?: Record<string, any>;
+  } = {}): Promise<{
     success: boolean;
+    merged?: boolean;
     conflict?: ConflictDetectionResult;
     version?: number;
     updatedAt?: string;
@@ -428,7 +443,13 @@ export const serverSyncService = {
     const localPayload = this.buildLocalPayload(options.customState);
     const lastKnownVersion = this.getLastServerVersion();
 
-    if (!options.force) {
+    if (options.replaceAll) {
+      localPayload.replaceAll = true;
+    }
+
+    if (options.merge) {
+      localPayload.merge = true;
+    } else if (!options.force) {
       const serverCheck = await this.fetchServerState();
       if (!serverCheck.online) {
         return {
@@ -452,7 +473,7 @@ export const serverSyncService = {
       localPayload.force = true;
     }
 
-    if (localPayload.expectedVersion === undefined && lastKnownVersion !== null && !options.force) {
+    if (localPayload.expectedVersion === undefined && lastKnownVersion !== null && !options.force && !options.merge) {
       localPayload.expectedVersion = lastKnownVersion;
     }
 
@@ -509,19 +530,63 @@ export const serverSyncService = {
       this.setLastServerVersion(result?.version);
       storageService.setItem(LOCAL_MODIFIED_AT_KEY, updatedAt);
 
+      // If the server performed a cross-device smart merge and returned the unified state,
+      // apply it locally so this device also receives records created by other LAN devices.
+      const finalState = result?.data && typeof result.data === 'object' ? result.data : null;
+      if (finalState && !options.customState) {
+        const store = useGmaoStore.getState();
+        DataGateway.loadFullServerState(finalState, {
+          applyRemoteStateUpdate: store.applyRemoteStateUpdate,
+          setTypes: store.setTypes,
+          setDesignations: store.setDesignations,
+          setRawStock: store.setRawStock,
+          setFamilies: store.setFamilies,
+          setTemplates: store.setTemplates,
+          setBlueprints: store.setBlueprints,
+          setMachines: store.setMachines,
+          setGeneralSystemTypes: store.setGeneralSystemTypes,
+          setZones: store.setZones,
+          setMachineElementsLedger: store.setMachineElementsLedger,
+          setWarehouseItems: store.setWarehouseItems,
+          setEntrepotComponents: store.setEntrepotComponents,
+          setCompGroups: store.setCompGroups,
+          setCompFamilies: store.setCompFamilies,
+          setCompTemplates: store.setCompTemplates,
+          setPartTypes: store.setPartTypes,
+          setPartDesignations: store.setPartDesignations,
+          setUsers: store.setUsers,
+          setTechnicians: store.setTechnicians,
+          setOperations: store.setOperations,
+          setMouvements: store.setMouvements,
+          setSortieDemands: store.setSortieDemands,
+          setPreventiveTasks: store.setPreventiveTasks,
+          setPreventiveActions: store.setPreventiveActions,
+          setPreventiveGuides: store.setPreventiveGuides,
+          setPreventivePlans: store.setPreventivePlans,
+          setPreventiveExecutions: store.setPreventiveExecutions,
+          setSortiesExterne: store.setSortiesExterne,
+          setCorrectiveInterventions: store.setCorrectiveInterventions,
+          setCorrectiveActionsByPanne: store.setCorrectiveActionsByPanne,
+          setCorrectivePanneCategories: store.setCorrectivePanneCategories,
+          setCorrectiveTravauxAFaire: store.setCorrectiveTravauxAFaire,
+          setCorrectiveIntervenants: store.setCorrectiveIntervenants,
+        });
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('gmao:server_synced', {
-            detail: { version: result?.version, updatedAt },
+            detail: { version: result?.version, updatedAt, merged: Boolean(result?.merged) },
           })
         );
       }
 
       return {
         success: true,
+        merged: Boolean(result?.merged),
         version: result?.version,
         updatedAt,
-        summary: this.summarizeState(localPayload),
+        summary: this.summarizeState(finalState || localPayload),
       };
     } catch (err: any) {
       return {
@@ -529,6 +594,14 @@ export const serverSyncService = {
         error: err?.message || 'فشل الاتصال بالخادم أثناء الحفظ',
       };
     }
+  },
+
+  /**
+   * Non-destructively merges local and server states across devices by record ID, timestamp,
+   * and Maker-Checker lifecycle rank, then hydrates the unified state locally.
+   */
+  async mergeWithServer(options: { customState?: Record<string, any> } = {}) {
+    return this.pushToServer({ merge: true, customState: options.customState });
   },
 
   /**
@@ -608,6 +681,7 @@ export const serverSyncService = {
       setTemplates: store.setTemplates,
       setBlueprints: store.setBlueprints,
       setMachines: store.setMachines,
+      setGeneralSystemTypes: store.setGeneralSystemTypes,
       setZones: store.setZones,
       setMachineElementsLedger: store.setMachineElementsLedger,
       setWarehouseItems: store.setWarehouseItems,
@@ -621,6 +695,7 @@ export const serverSyncService = {
       setTechnicians: store.setTechnicians,
       setOperations: store.setOperations,
       setMouvements: store.setMouvements,
+      setSortieDemands: store.setSortieDemands,
       setPreventiveTasks: store.setPreventiveTasks,
       setPreventiveActions: store.setPreventiveActions,
       setPreventiveGuides: store.setPreventiveGuides,

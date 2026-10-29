@@ -1047,6 +1047,43 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         newestExec &&
         String(newestExec.taskId) === String(id) &&
         newestExec.validation_status === 'APPROVED' &&
+        Boolean(validationData?.createFollowUpDi) &&
+        !newestExec.generated_di_id &&
+        newestExec.machineCode
+      ) {
+        const anomText = String(
+          validationData?.followUpDiAnomalie ||
+            newestExec.notes ||
+            `Anomalie détectée lors du contrôle préventif (${newestExec.organe || newestExec.taskCode || 'PM'})`
+        ).trim();
+        const createdDi = get().handleAddDemandeIntervention({
+          code_machine: newestExec.machineCode,
+          nom_machine: newestExec.machineName || newestExec.machineCode,
+          anomalie: anomText,
+          travail_a_faire: `Diagnostic et remise en état suite à anomalie préventive sur ${
+            newestExec.organe || newestExec.machineCode
+          } (Réf PM: ${newestExec.id})`,
+          priorite: validationData?.followUpDiPriorite || 'HAUTE',
+          urgence: validationData?.followUpDiPriorite || 'Haute',
+          id_composant: newestExec.id_composant || '',
+          nom_composant: newestExec.organe || '',
+          demandeur: newestExec.executorName || 'Superviseur Maintenance',
+          source: 'AUTO_DI_PREVENTIF',
+          source_preventive_execution_id: newestExec.id,
+          source_preventive_task_id: newestExec.taskId || '',
+        });
+        if (createdDi?.id) {
+          newestExec.generated_di_id = createdDi.id;
+          set({ preventiveExecutions: executions });
+          PreventiveService.saveExecutions(executions);
+          DataGateway.savePreventiveExecutions(executions);
+        }
+      }
+
+      if (
+        newestExec &&
+        String(newestExec.taskId) === String(id) &&
+        newestExec.validation_status === 'APPROVED' &&
         Array.isArray(newestExec.sparesUsed) &&
         newestExec.sparesUsed.length > 0 &&
         validationData?.skipStockDeduction !== true
@@ -1073,6 +1110,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           const suffix = newestExec.sparesUsed.length > 1 ? `-${idx + 1}` : '';
           movementsToRecord.push({
             id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+            source_execution_id: String(newestExec.id || ''),
+            source_task_id: String(newestExec.taskId || id || ''),
             code_bon: newestExec.num_bon_saisi_par_tech || `BS-PRV-${String(newestExec.id).slice(-6)}${suffix}`,
             num_commande: newestExec.taskCode || 'PREVENTIF',
             date: newestExec.executedAt || new Date().toISOString().split('T')[0],
@@ -1314,16 +1353,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         DataGateway.savePreventiveExecutions(nextExecs);
         DataGateway.savePreventiveTasks(nextTasks);
 
+        const currentMouvements = get().mouvements || [];
+        const movementsToRecord: any[] = [];
+        const emittedIds: string[] = [];
         if (approvedSpares.length > 0 && (decisionData as any).skipStockDeduction !== true) {
-          const currentMouvements = get().mouvements || [];
-          const movementsToRecord: any[] = [];
           approvedSpares.forEach((pdr: any, idx: number) => {
             if (isPartAlreadyDeductedByStoreBon(currentMouvements, existingExec.num_bon_saisi_par_tech, pdr.ref)) {
               return;
             }
             const suffix = approvedSpares.length > 1 ? `-${idx + 1}` : '';
+            const mvtId = `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`;
+            emittedIds.push(mvtId);
             movementsToRecord.push({
-              id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+              id: mvtId,
+              source_execution_id: String(existingExec.id || ''),
+              source_task_id: String(existingExec.taskId || ''),
               code_bon: existingExec.num_bon_saisi_par_tech || `BS-PRV-${String(existingExec.id).slice(-6)}${suffix}`,
               num_bon_saisi_par_tech: existingExec.num_bon_saisi_par_tech || '',
               num_commande: existingExec.taskCode || 'PREVENTIF',
@@ -1348,8 +1392,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               commentaire: `Consommation validée sur maintenance préventive ${existingExec.organe || ''} (${existingExec.machineCode || ''})`,
             });
           });
+        }
 
-          if (movementsToRecord.length > 0) {
+        if (emittedIds.length > 0 && updatedExec) {
+          updatedExec.emitted_movement_ids = emittedIds;
+        }
+
+        if (movementsToRecord.length > 0) {
             if (typeof onAddMouvement === 'function') {
               movementsToRecord.forEach((mvt) => {
                 try {
@@ -1367,7 +1416,6 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
                 }
               });
               get().setMouvements((prev) => [...movementsToRecord, ...prev]);
-            }
           }
         }
 
@@ -1424,9 +1472,61 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleDeletePreventiveExecution: (id) => {
+      const targetExec = (get().preventiveExecutions || []).find(
+        (ex: any) => String(ex.id) === String(id)
+      );
       const updated = PreventiveService.deleteExecution(id);
       set({ preventiveExecutions: updated });
       DataGateway.savePreventiveExecutions(updated);
+
+      if (targetExec) {
+        const execIdStr = String(targetExec.id || id).trim();
+        const shortExecId = execIdStr.slice(-6).toUpperCase();
+        const emittedSet = new Set(
+          Array.isArray(targetExec.emitted_movement_ids) ? targetExec.emitted_movement_ids : []
+        );
+
+        const linkedMovements = (get().mouvements || []).filter((m: any) => {
+          if (!m) return false;
+          if (String(m.source_execution_id || '').trim() === execIdStr) return true;
+          if (emittedSet.has(String(m.id || ''))) return true;
+          const codeBon = String(m.code_bon || '').trim().toUpperCase();
+          return Boolean(
+            shortExecId &&
+              (codeBon === `BS-PRV-${shortExecId}` || codeBon.startsWith(`BS-PRV-${shortExecId}-`))
+          );
+        });
+
+        if (linkedMovements.length > 0) {
+          const removeIds = new Set(linkedMovements.map((m: any) => m.id));
+          linkedMovements.forEach((m: any) => {
+            try {
+              movementRepository.remove(m);
+            } catch (err) {
+              console.warn('[useGmaoStore] Failed to remove movement on preventive execution delete:', err);
+            }
+          });
+          get().setMouvements((prev) => (prev || []).filter((m: any) => !removeIds.has(m.id)));
+        }
+
+        const totalExecCost = Number(targetExec.totalCost || 0);
+        if (targetExec.taskId && totalExecCost > 0 && targetExec.validation_status === 'APPROVED') {
+          const nextTasks = (get().preventiveTasks || []).map((t: any) => {
+            if (String(t.id) === String(targetExec.taskId)) {
+              const prevCumul = Number(t.cout_cumule || 0);
+              return {
+                ...t,
+                cout_cumule: Number(Math.max(0, prevCumul - totalExecCost).toFixed(2)),
+                updated_at: new Date().toISOString(),
+              };
+            }
+            return t;
+          });
+          set({ preventiveTasks: nextTasks });
+          PreventiveService.saveTasks(nextTasks);
+          DataGateway.savePreventiveTasks(nextTasks);
+        }
+      }
     },
 
     handleCreatePlanWithTasks: (planData, taskItems) => {
@@ -1576,30 +1676,79 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleAddSortieExterne: (sortieData) => {
       const created = SortieExterneService.addSortie(sortieData);
-      set({ sortiesExterne: [created, ...get().sortiesExterne] });
+      const nextSorties = [created, ...get().sortiesExterne.filter((s) => s.id !== created.id)];
+      const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
+        get().warehouseItems,
+        created
+      );
+      set({
+        sortiesExterne: nextSorties,
+        warehouseItems: nextWarehouse,
+      });
+      DataGateway.saveSortiesExterne(nextSorties);
+      if (nextWarehouse !== get().warehouseItems) {
+        DataGateway.saveWarehouseItems(nextWarehouse);
+      } else {
+        DataGateway.saveWarehouseItems(nextWarehouse);
+      }
       return created;
     },
 
     handleUpdateSortieExterne: (id, sortieData) => {
       const updated = SortieExterneService.updateSortie(id, sortieData);
-      set({ sortiesExterne: get().sortiesExterne.map((s) => (s.id === id ? updated : s)) });
+      if (!updated) return null;
+      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
+        get().warehouseItems,
+        updated
+      );
+      set({
+        sortiesExterne: nextSorties,
+        warehouseItems: nextWarehouse,
+      });
+      DataGateway.saveSortiesExterne(nextSorties);
+      DataGateway.saveWarehouseItems(nextWarehouse);
       return updated;
     },
 
     handleDeleteSortieExterne: (id) => {
-      SortieExterneService.deleteSortie(id);
-      set({ sortiesExterne: get().sortiesExterne.filter((s) => s.id !== id) });
+      const nextSorties = get().sortiesExterne.filter((s) => s.id !== id);
+      SortieExterneService.deleteSortie(id, get().sortiesExterne);
+      set({ sortiesExterne: nextSorties });
+      DataGateway.saveSortiesExterne(nextSorties);
     },
 
     handleMarkSortieReturned: (id, returnData) => {
       const updated = SortieExterneService.markAsReturned(id, returnData);
-      set({ sortiesExterne: get().sortiesExterne.map((s) => (s.id === id ? updated : s)) });
+      if (!updated) return null;
+      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
+        get().warehouseItems,
+        updated
+      );
+      set({
+        sortiesExterne: nextSorties,
+        warehouseItems: nextWarehouse,
+      });
+      DataGateway.saveSortiesExterne(nextSorties);
+      DataGateway.saveWarehouseItems(nextWarehouse);
       return updated;
     },
 
     handleMarkSortieMounted: (id, mountData) => {
       const updated = SortieExterneService.markAsMounted(id, mountData);
-      set({ sortiesExterne: get().sortiesExterne.map((s) => (s.id === id ? updated : s)) });
+      if (!updated) return null;
+      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
+        get().warehouseItems,
+        updated
+      );
+      set({
+        sortiesExterne: nextSorties,
+        warehouseItems: nextWarehouse,
+      });
+      DataGateway.saveSortiesExterne(nextSorties);
+      DataGateway.saveWarehouseItems(nextWarehouse);
       return updated;
     },
 
@@ -1610,13 +1759,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       }
       SortieExterneService.clearAll();
       set({ sortiesExterne: [] });
+      DataGateway.saveSortiesExterne([]);
       return { cancelled: false, clearedCount: count };
     },
 
     handleResetSortiesToBaseline: () => {
-      SortieExterneService.resetToBaseline();
-      set({ sortiesExterne: INITIAL_SORTIES_BOBINAGE });
-      return { cancelled: false, count: INITIAL_SORTIES_BOBINAGE.length };
+      const baseline = SortieExterneService.resetToBaseline();
+      set({ sortiesExterne: baseline });
+      DataGateway.saveSortiesExterne(baseline);
+      return { cancelled: false, count: baseline.length };
     },
 
     // ==========================================
@@ -2463,6 +2614,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           if (normalizedPieces.length > 0 && clotureData.skipStockDeduction !== true) {
             const currentMouvements = get().mouvements || [];
             const btIdentifier = updated.num_bt || updated.id;
+            const emittedIds: string[] = [];
             normalizedPieces.forEach((piece, idx) => {
               if (
                 isPartAlreadyDeductedByStoreBon(
@@ -2474,8 +2626,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
                 return;
               }
               const suffix = normalizedPieces.length > 1 ? `-${idx + 1}` : '';
+              const mvtId = `MVT-BT-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`;
+              emittedIds.push(mvtId);
               movementsToRecord.push({
-                id: `MVT-BT-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
+                id: mvtId,
+                source_bt_id: String(updated.id || ''),
+                source_num_bt: String(btIdentifier || ''),
                 code_bon: updated.num_bon_saisi_par_tech || `BS-BT-${btIdentifier}${suffix}`,
                 num_bon_saisi_par_tech: updated.num_bon_saisi_par_tech || '',
                 ref: piece.ref,
@@ -2494,6 +2650,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
                 observation: `Sortie PDR automatique clôture BT ${btIdentifier} (${updated.anomalie || 'Correctif'})`,
               });
             });
+            if (emittedIds.length > 0) {
+              updated.emitted_movement_ids = emittedIds;
+            }
           }
 
           return updated;
@@ -2863,6 +3022,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       // Movements
       if (Array.isArray(remoteState.mouvements)) updates.mouvements = remoteState.mouvements;
+      if (Array.isArray(remoteState.sortieDemands)) updates.sortieDemands = remoteState.sortieDemands;
 
       // Preventive
       if (Array.isArray(remoteState.preventiveTasks)) updates.preventiveTasks = remoteState.preventiveTasks;

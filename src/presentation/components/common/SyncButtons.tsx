@@ -132,6 +132,28 @@ export default function SyncButtons({
     }
   };
 
+  const handleSmartMerge = async () => {
+    setActionLoading('push');
+    try {
+      const res = await serverSyncService.mergeWithServer({ customState: state });
+      if (!res.success) {
+        notify(res.error || t('server_sync.save_error'), 'error');
+        return;
+      }
+      setConflictModal(null);
+      setLastSyncAt(res.updatedAt || new Date().toISOString());
+      if (res.summary) setServerSummary(res.summary);
+      setServerOnline(true);
+      if (onApplyRemoteState) {
+        onApplyRemoteState(res.summary);
+      }
+      notify(t('server_sync.merge_success', 'Fusion intelligente réussie sans perte de données'), 'success');
+      if (onCloseDropdown) onCloseDropdown();
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const localeString = language === 'ar' ? 'ar-MA' : language === 'en' ? 'en-US' : 'fr-FR';
   const formattedLastSync = lastSyncAt
     ? new Date(lastSyncAt).toLocaleString(localeString, {
@@ -264,6 +286,7 @@ export default function SyncButtons({
           isOpen={Boolean(conflictModal)}
           conflict={conflictModal}
           isProcessing={actionLoading !== null}
+          onSmartMerge={handleSmartMerge}
           onForcePushLocal={() => handleSaveToServer(true)}
           onForcePullServer={() => handleRestoreFromServer(true)}
           onCancel={() => setConflictModal(null)}
@@ -381,6 +404,7 @@ export default function SyncButtons({
         isOpen={Boolean(conflictModal)}
         conflict={conflictModal}
         isProcessing={actionLoading !== null}
+        onSmartMerge={handleSmartMerge}
         onForcePushLocal={() => handleSaveToServer(true)}
         onForcePullServer={() => handleRestoreFromServer(true)}
         onCancel={() => setConflictModal(null)}

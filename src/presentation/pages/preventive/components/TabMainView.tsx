@@ -57,6 +57,8 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../../core/security/technicianScope';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
+import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
+import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
 
 export { buildConsumablePdrInventory };
 
@@ -130,6 +132,9 @@ export default function TabMainView({
   );
 
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
+  const storeMouvements = useGmaoStore((s) => s.mouvements);
+  const storeCorrectiveInterventions = useGmaoStore((s) => s.correctiveInterventions);
+  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
   const [internalViewMode, setInternalViewMode] = useState('matrix'); // 'matrix' | 'calendar' | 'list' | 'analytics'
   const viewMode = controlledViewMode !== undefined ? controlledViewMode : internalViewMode;
   const setViewMode = useCallback(
@@ -228,6 +233,9 @@ export default function TabMainView({
     observations: 'Intervention préventive réalisée avec succès et conforme aux normes constructeur.',
     usedPDR: [],
     num_bon_saisi_par_tech: '',
+    skipStockDeduction: false,
+    createFollowUpDi: false,
+    followUpDiAnomalie: '',
     mode_calcul_recurrence: 'FIXE',
     compteur_releve: '',
     id_composant: '',
@@ -665,6 +673,27 @@ export default function TabMainView({
       }
     }
 
+    const initialObs =
+      task.observations ||
+      `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`;
+    const rec = reconcileFieldClaim({
+      claimType: 'PREVENTIVE',
+      claimId: String(task.id || ''),
+      numBonSaisi: task.num_bon_saisi_par_tech || '',
+      machineCode: task.id_machine,
+      proposedSpares: enrichedRecommended.map((p) => ({
+        ref: p.reference,
+        designation: p.designation,
+        qty: p.quantite,
+      })),
+      stockItems,
+      mouvements: storeMouvements,
+      correctiveInterventions: storeCorrectiveInterventions,
+      preventiveExecutions: executions,
+      sortieDemands: storeSortieDemands,
+    });
+    const hasAnom = hasPreventiveExecutionAnomaly({ notes: initialObs });
+
     setValidationData({
       date_realisation: new Date().toISOString().split('T')[0],
       technicien: isTechUser
@@ -672,11 +701,12 @@ export default function TabMainView({
         : task.responsable || '',
       duree_reelle: task.duree_estimee || '15 min',
       taux_horaire: 35,
-      observations:
-        task.observations ||
-        `Intervention préventive ${task.action_code} sur ${task.composant || resolvedNomComp || resolvedNomPart || 'Machine'} (${task.id_machine}) exécutée conformément.`,
+      observations: initialObs,
       usedPDR: enrichedRecommended,
       num_bon_saisi_par_tech: task.num_bon_saisi_par_tech || '',
+      skipStockDeduction: Boolean(rec?.exactMovementMatch),
+      createFollowUpDi: !isTechUser && hasAnom,
+      followUpDiAnomalie: initialObs,
       mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
       compteur_releve: task.compteur_actuel || '',
       id_composant: resolvedIdComp,
@@ -2007,15 +2037,55 @@ export default function TabMainView({
                     type="text"
                     placeholder="Ex: BS-2026-042"
                     value={validationData.num_bon_saisi_par_tech || ''}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const nextBon = e.target.value;
+                      const rec = reconcileFieldClaim({
+                        claimType: 'PREVENTIVE',
+                        claimId: String(selectedTaskForValidation?.id || ''),
+                        numBonSaisi: nextBon,
+                        machineCode: selectedTaskForValidation?.id_machine,
+                        proposedSpares: (validationData.usedPDR || []).map((p: any) => ({
+                          ref: p.reference || p.ref,
+                          designation: p.designation,
+                          qty: p.quantite || p.qty,
+                        })),
+                        stockItems,
+                        mouvements: storeMouvements,
+                        correctiveInterventions: storeCorrectiveInterventions,
+                        preventiveExecutions: executions,
+                        sortieDemands: storeSortieDemands,
+                      });
                       setValidationData({
                         ...validationData,
-                        num_bon_saisi_par_tech: e.target.value,
-                      })
-                    }
+                        num_bon_saisi_par_tech: nextBon,
+                        skipStockDeduction: Boolean(rec?.exactMovementMatch),
+                      });
+                    }}
                     className="w-full px-2.5 py-1.5 bg-white border border-indigo-200 rounded-xl font-mono text-slate-800"
                   />
                 </div>
+
+                {!isTechUser && validationData.usedPDR.length > 0 && (
+                  <label className="flex items-start gap-2 pt-2 border-t border-indigo-200/70 text-[11px] text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(validationData.skipStockDeduction)}
+                      onChange={(e) =>
+                        setValidationData({
+                          ...validationData,
+                          skipStockDeduction: e.target.checked,
+                        })
+                      }
+                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      <strong className="font-bold text-slate-900">
+                        ✅ Bon de sortie déjà déstocké au magasin
+                      </strong>{' '}
+                      — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
+                    </span>
+                  </label>
+                )}
               </div>
 
               {/* Observations */}
@@ -2024,10 +2094,61 @@ export default function TabMainView({
                 <textarea
                   rows={3}
                   value={validationData.observations}
-                  onChange={(e) => setValidationData({ ...validationData, observations: e.target.value })}
+                  onChange={(e) => {
+                    const nextObs = e.target.value;
+                    const hasAnom = hasPreventiveExecutionAnomaly({ notes: nextObs });
+                    setValidationData({
+                      ...validationData,
+                      observations: nextObs,
+                      ...(hasAnom && !validationData.createFollowUpDi
+                        ? { createFollowUpDi: true, followUpDiAnomalie: nextObs }
+                        : {}),
+                    });
+                  }}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+
+              {!isTechUser && (
+                <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2 text-xs">
+                  <label className="flex items-start gap-2 text-amber-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(validationData.createFollowUpDi)}
+                      onChange={(e) =>
+                        setValidationData({
+                          ...validationData,
+                          createFollowUpDi: e.target.checked,
+                          followUpDiAnomalie:
+                            validationData.followUpDiAnomalie || validationData.observations || '',
+                        })
+                      }
+                      className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                      <strong className="font-black">
+                        Créer une DI corrective de suivi (Auto-DI sur anomalie préventive)
+                      </strong>{' '}
+                      — Génère automatiquement une Demande d&apos;Intervention liée à{' '}
+                      <code className="font-mono font-bold">{selectedTaskForValidation.id_machine}</code>.
+                    </span>
+                  </label>
+                  {validationData.createFollowUpDi && (
+                    <input
+                      type="text"
+                      value={validationData.followUpDiAnomalie || ''}
+                      onChange={(e) =>
+                        setValidationData({
+                          ...validationData,
+                          followUpDiAnomalie: e.target.value,
+                        })
+                      }
+                      placeholder="Description de l'anomalie corrective..."
+                      className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"
+                    />
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button

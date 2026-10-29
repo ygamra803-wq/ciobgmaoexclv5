@@ -6,6 +6,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec, swaggerUiOptions } from './src/config/swaggerConfig';
+import { mergeEntityCollection, mergeGmaoStateSnapshot } from './src/services/lanStateMergeService';
+import {
+  ADMIN_ONLY_ENTITIES,
+  CATALOG_PROTECTED_ENTITIES,
+  normalizeServerRole,
+  resolveEffectiveServerRole,
+  canRoleMutateEntity,
+  sanitizeBulkStateForRole,
+} from './src/core/security/serverRbacPolicy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -108,38 +117,8 @@ async function startServer() {
     next();
   });
 
-  const ADMIN_ONLY_ENTITIES = new Set<string>(['users', 'technicians', 'operations', 'zones']);
-  const CATALOG_PROTECTED_ENTITIES = new Set<string>([
-    'warehouseItems',
-    'entrepotComponents',
-    'compGroups',
-    'compFamilies',
-    'compTemplates',
-    'partTypes',
-    'partDesignations',
-    'types',
-    'designations',
-    'machines',
-    'families',
-    'templates',
-    'blueprints',
-  ]);
-
-  const normalizeServerRole = (rawRole: unknown): string => {
-    if (typeof rawRole !== 'string' || !rawRole.trim()) return 'ADMIN';
-    const upper = rawRole.trim().toUpperCase();
-    if (upper === 'ADMIN' || upper === 'ADMINISTRATEUR') return 'ADMIN';
-    if (upper === 'RESPONSABLE' || upper === 'RESPONSABLE_MAINTENANCE' || upper === 'CHEF' || upper === 'CHEF_EQUIPE') {
-      return 'RESPONSABLE_MAINTENANCE';
-    }
-    if (upper === 'MAGASINIER' || upper === 'RESPONSABLE_MAGASIN' || upper === 'RMG') {
-      return 'RESPONSABLE_MAGASIN';
-    }
-    if (upper === 'TECHNICIEN' || upper === 'TECHNICIAN' || upper === 'TECH') return 'TECHNICIEN';
-    if (upper === 'OPERATEUR' || upper === 'OPERATOR') return 'OPERATEUR';
-    if (upper === 'VIEWER' || upper === 'OBSERVATEUR' || upper === 'VISITEUR') return 'VIEWER';
-    return upper;
-  };
+  // Reference to dbState for RBAC cross-checks before dbState is populated below
+  let dbStateRef: Record<string, any> = {};
 
   // API Authentication & RBAC Middleware
   const authenticateApi = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -167,15 +146,28 @@ async function startServer() {
         });
       }
 
-      // Server-side RBAC enforcement when x-gmao-role header is supplied
+      // Server-side RBAC enforcement: cross-check x-gmao-role & x-gmao-actor against dbState.users / technicians
       const roleHeader = req.headers['x-gmao-role'];
-      if (typeof roleHeader === 'string' && roleHeader.trim().length > 0) {
-        const role = normalizeServerRole(roleHeader);
+      const actorHeader = req.headers['x-gmao-actor'] || req.headers['x-gmao-actor-id'];
+      if (
+        (typeof roleHeader === 'string' && roleHeader.trim().length > 0) ||
+        (typeof actorHeader === 'string' && actorHeader.trim().length > 0)
+      ) {
+        const resolvedActor = resolveEffectiveServerRole(
+          req.headers as Record<string, unknown>,
+          dbStateRef.users,
+          dbStateRef.technicians
+        );
+        const role = normalizeServerRole(resolvedActor.effectiveRole);
+        (req as any).resolvedServerActor = resolvedActor;
+
         if (role === 'VIEWER') {
           return res.status(403).json({
             success: false,
             error: 'Forbidden',
-            message: 'Role VIEWER is read-only and cannot modify server state.',
+            message: resolvedActor.isArchivedActor
+              ? 'Actor profile is archived/inactive and cannot modify server state.'
+              : 'Role VIEWER is read-only and cannot modify server state.',
           });
         }
 
@@ -198,6 +190,14 @@ async function startServer() {
               success: false,
               error: 'Forbidden',
               message: `Role '${role}' is not authorized to delete records from '${targetEntity}'.`,
+            });
+          }
+          const entityGuard = canRoleMutateEntity(role, targetEntity, req.method);
+          if (!entityGuard.allowed) {
+            return res.status(403).json({
+              success: false,
+              error: 'Forbidden',
+              message: entityGuard.reason || `Role '${role}' is not authorized to modify '${targetEntity}'.`,
             });
           }
         }
@@ -266,6 +266,7 @@ async function startServer() {
 
   // In-memory / file-backed state store for enterprise GMAO backend
   const dbState: Record<string, any> = createDefaultState();
+  dbStateRef = dbState;
 
   // Load initial state once at startup if exists (filtering only allowed keys)
   try {
@@ -542,10 +543,13 @@ async function startServer() {
         Array.isArray(dbState[k]) ? dbState[k].length > 0 : Object.keys(dbState[k] || {}).length > 0
       );
 
+      const isSmartMergeRequest = incomingState.merge === true;
+
       if (
         expectedVersion !== undefined &&
         !Number.isNaN(expectedVersion) &&
         incomingState.force !== true &&
+        !isSmartMergeRequest &&
         serverHasData &&
         expectedVersion < dbState.version
       ) {
@@ -559,41 +563,71 @@ async function startServer() {
         });
       }
 
-      const acceptedKeys: string[] = [];
-      for (const key of ALLOWED_ENTITIES) {
-        if (!Object.prototype.hasOwnProperty.call(incomingState, key)) continue;
-        const val = incomingState[key];
-        if (OBJECT_ENTITY_SET.has(key)) {
-          if (val && typeof val === 'object' && !Array.isArray(val)) {
-            dbState[key] = val;
-            acceptedKeys.push(key);
-          }
-        } else if (Array.isArray(val)) {
-          dbState[key] = val;
-          acceptedKeys.push(key);
-        }
+      const resolvedActor =
+        (req as any).resolvedServerActor ||
+        resolveEffectiveServerRole(
+          req.headers as Record<string, unknown>,
+          dbState.users,
+          dbState.technicians
+        );
+      const bulkCheck = sanitizeBulkStateForRole(
+        resolvedActor.effectiveRole,
+        incomingState,
+        dbState
+      );
+      if (!bulkCheck.allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: bulkCheck.reason || 'Role not authorized for this state operation.',
+        });
       }
 
-      if (acceptedKeys.includes('rawStock') && !acceptedKeys.includes('stock')) {
-        dbState.stock = dbState.rawStock;
-      } else if (acceptedKeys.includes('stock') && !acceptedKeys.includes('rawStock')) {
-        dbState.rawStock = dbState.stock;
-      }
+      const effectiveIncomingState = bulkCheck.sanitizedState;
+
+      // If client was synced with exact current server version (and not requesting union merge),
+      // intentional item deletions from this client are respected. Otherwise (cross-version force/merge),
+      // server-only records created by other LAN devices (e.g., mobile technicians) are preserved.
+      const baseVersionMatches =
+        expectedVersion !== undefined &&
+        !Number.isNaN(expectedVersion) &&
+        expectedVersion === dbState.version;
+
+      const preserveServerOnlyItems =
+        effectiveIncomingState.replaceAll === true
+          ? false
+          : isSmartMergeRequest
+          ? true
+          : !baseVersionMatches;
+
+      const { acceptedKeys } = mergeGmaoStateSnapshot(
+        dbState,
+        effectiveIncomingState,
+        ALLOWED_ENTITIES,
+        OBJECT_ENTITY_SET,
+        {
+          replaceAll: effectiveIncomingState.replaceAll === true,
+          preserveServerOnlyItems,
+          deletedIdsByEntity: effectiveIncomingState.deletedIdsByEntity,
+        }
+      );
 
       await persistState({
         actor: resolveActor(req),
-        action: 'SYNC_STATE',
+        action: isSmartMergeRequest ? 'MERGE_STATE' : 'SYNC_STATE',
         entity: 'state',
-        summary: `Updated ${acceptedKeys.length} collections (${acceptedKeys.slice(0, 6).join(', ')})`,
+        summary: `${isSmartMergeRequest ? 'Merged' : 'Updated'} ${acceptedKeys.length} collections (${acceptedKeys.slice(0, 6).join(', ')})`,
       });
 
       res.setHeader('ETag', `W/"v${dbState.version}"`);
       return res.json({
         success: true,
+        merged: isSmartMergeRequest || preserveServerOnlyItems,
         message: 'State synchronized successfully',
         version: dbState.version,
         updatedAt: dbState.updatedAt,
         acceptedKeys,
+        data: isSmartMergeRequest || preserveServerOnlyItems ? dbState : undefined,
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
@@ -685,14 +719,18 @@ async function startServer() {
         message: `PUT /api/gmao/${entity} requires an array payload or use /api/gmao/${entity}/:id.`,
       });
     }
-    dbState[entity] = payload;
+    const shouldMergeEntity = req.query.merge === 'true';
+    const currentList = Array.isArray(dbState[entity]) ? dbState[entity] : [];
+    dbState[entity] = shouldMergeEntity
+      ? mergeEntityCollection(entity, currentList, payload, { preserveServerOnlyItems: true })
+      : payload;
     if (entity === 'rawStock') dbState.stock = dbState.rawStock;
     if (entity === 'stock') dbState.rawStock = dbState.stock;
     await persistState({
       actor: resolveActor(req),
-      action: 'REPLACE_COLLECTION',
+      action: shouldMergeEntity ? 'MERGE_COLLECTION' : 'REPLACE_COLLECTION',
       entity,
-      summary: `Replaced collection ${entity} (${payload.length} items)`,
+      summary: `${shouldMergeEntity ? 'Merged' : 'Replaced'} collection ${entity} (${dbState[entity].length} items)`,
     });
     return res.json({ success: true, version: dbState.version, data: dbState[entity] });
   });

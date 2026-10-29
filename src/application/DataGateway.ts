@@ -779,13 +779,15 @@ export const DataGateway = {
     const partTypes = Array.isArray(serverData.partTypes) ? serverData.partTypes : [];
     const partDesignations = Array.isArray(serverData.partDesignations) ? serverData.partDesignations : [];
     const sortiesExterne = Array.isArray(serverData.sortiesExterne) ? serverData.sortiesExterne : [];
+    const sortieDemands = Array.isArray(serverData.sortieDemands) ? serverData.sortieDemands : [];
 
     const hasData =
       rawStock.length > 0 ||
       machines.length > 0 ||
       preventiveTasks.length > 0 ||
       correctiveInterventions.length > 0 ||
-      mouvements.length > 0;
+      mouvements.length > 0 ||
+      sortieDemands.length > 0;
 
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, hasData ? 'custom' : 'empty');
@@ -801,6 +803,7 @@ export const DataGateway = {
     this.saveZones(zones);
     this.saveMachineBom(machineElementsLedger);
     this.saveMouvements(mouvements);
+    this.saveSortieDemands(sortieDemands);
     this.savePreventiveTasks(preventiveTasks);
     this.savePreventiveActions(preventiveActions);
     this.savePreventiveGuides(preventiveGuides);
@@ -844,6 +847,7 @@ export const DataGateway = {
         zones,
         machineElementsLedger,
         mouvements,
+        sortieDemands,
         preventiveTasks,
         preventiveActions,
         preventiveGuides,
@@ -879,6 +883,7 @@ export const DataGateway = {
     if (setters.setZones) setters.setZones(zones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(machineElementsLedger);
     if (setters.setMouvements) setters.setMouvements(mouvements);
+    if (setters.setSortieDemands) setters.setSortieDemands(sortieDemands);
     if (setters.setPreventiveTasks) setters.setPreventiveTasks(preventiveTasks);
     if (setters.setPreventiveActions) setters.setPreventiveActions(preventiveActions);
     if (setters.setPreventiveGuides) setters.setPreventiveGuides(preventiveGuides);

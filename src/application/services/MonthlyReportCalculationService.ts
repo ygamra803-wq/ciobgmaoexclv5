@@ -82,6 +82,10 @@ export interface MonthlyFactoryReportData {
   preventiveTotalCost: number;
   preventiveLaborHours: number;
   technicianBreakdown: TechnicianMonthlySummary[];
+
+  // 5. External Subcontracting / Bobinage (Sorties Externe)
+  externalBobinageCount?: number;
+  externalBobinageCost?: number;
 }
 
 export interface MonthOverMonthDelta {
@@ -113,6 +117,7 @@ export class MonthlyReportCalculationService {
     correctiveInterventions = [],
     preventiveTasks = [],
     preventiveExecutions = [],
+    sortiesExterne = [],
     machines = [],
   }: {
     month: string;
@@ -121,6 +126,7 @@ export class MonthlyReportCalculationService {
     correctiveInterventions?: any[];
     preventiveTasks?: any[];
     preventiveExecutions?: PreventiveExecutionRecord[];
+    sortiesExterne?: any[];
     machines?: any[];
   }): MonthlyFactoryReportData {
     const targetMonth = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
@@ -441,6 +447,19 @@ export class MonthlyReportCalculationService {
       ? Math.min(100, Math.round((preventiveExecutedCount / preventiveScheduledCount) * 100))
       : 100;
 
+    let externalBobinageCount = 0;
+    let externalBobinageCost = 0;
+    (sortiesExterne || []).forEach((se) => {
+      if (!se) return;
+      const seDate = normalizeDateToYMD(
+        se.date_montage || se.date_arrivee_reelle || se.date_expedition || se.date_demontage || se.created_at
+      );
+      if (seDate && seDate.startsWith(targetMonth)) {
+        externalBobinageCount++;
+        externalBobinageCost += Number(se.cout_bobinage || 0) || 0;
+      }
+    });
+
     return {
       periodMonth: targetMonth,
       stockValuationTotal: Number(stockValuationTotal.toFixed(2)),
@@ -475,6 +494,9 @@ export class MonthlyReportCalculationService {
       preventiveTotalCost: Number(preventiveTotalCost.toFixed(2)),
       preventiveLaborHours,
       technicianBreakdown,
+
+      externalBobinageCount,
+      externalBobinageCost: Number(externalBobinageCost.toFixed(2)),
     };
   }
 
@@ -592,6 +614,7 @@ export interface ShiftOrWeeklyReportParams {
   preventiveTasks?: any[];
   preventiveExecutions?: PreventiveExecutionRecord[];
   sortieDemands?: any[];
+  sortiesExterne?: any[];
   machines?: any[];
 }
 
@@ -685,6 +708,10 @@ export interface ShiftOrWeeklyReportData {
 
   // Technician workload in period (Approved only)
   technicianBreakdown: TechnicianMonthlySummary[];
+
+  // External Subcontracting / Bobinage in period
+  externalBobinageCount?: number;
+  externalBobinageCost?: number;
 }
 
 export function buildShiftOrWeeklyReport({
@@ -697,6 +724,7 @@ export function buildShiftOrWeeklyReport({
   preventiveTasks = [],
   preventiveExecutions = [],
   sortieDemands = [],
+  sortiesExterne = [],
   machines = [],
 }: ShiftOrWeeklyReportParams): ShiftOrWeeklyReportData {
   const todayYMD = new Date().toISOString().slice(0, 10);
@@ -1215,6 +1243,20 @@ export function buildShiftOrWeeklyReport({
       b.assetsCount - a.assetsCount
   );
 
+  let externalBobinageCount = 0;
+  let externalBobinageCost = 0;
+  (sortiesExterne || []).forEach((se) => {
+    if (!se) return;
+    const seDate = normalizeDateToYMD(
+      se.date_montage || se.date_arrivee_reelle || se.date_expedition || se.date_demontage || se.created_at
+    );
+    if (!isWithinRange(seDate)) return;
+    const meta = resolveRecordAssetClass(se, 'id_machine');
+    if (!matchesClassFilter(meta.assetClass)) return;
+    externalBobinageCount++;
+    externalBobinageCost += Number(se.cout_bobinage || 0) || 0;
+  });
+
   return {
     fromYMD,
     toYMD,
@@ -1285,6 +1327,8 @@ export function buildShiftOrWeeklyReport({
     },
 
     technicianBreakdown,
+    externalBobinageCount,
+    externalBobinageCost: Number(externalBobinageCost.toFixed(2)),
   };
 }
 

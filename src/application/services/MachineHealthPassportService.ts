@@ -64,8 +64,10 @@ export interface MachineHealthPassport {
   windowMonths: number;
   correctiveCount12m: number;
   preventiveCount12m: number;
+  externalBobinageCount12m: number;
   correctivePdrCost12m: number;
   preventiveTotalCost12m: number;
+  externalBobinageCost12m: number;
   totalMaintenanceCost12m: number;
   totalDowntimeHours12m: number;
   recurrentOrganAlerts: RecurrentOrganAlert[];
@@ -85,6 +87,7 @@ export function computeMachineHealthPassport(params: {
   machine: any;
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
+  sortiesExterne?: any[];
   referenceDate?: string | Date;
   windowMonths?: number;
   recurrenceWindowDays?: number;
@@ -94,6 +97,7 @@ export function computeMachineHealthPassport(params: {
     machine,
     correctiveInterventions = [],
     preventiveExecutions = [],
+    sortiesExterne = [],
     referenceDate,
     windowMonths = 12,
     recurrenceWindowDays = 60,
@@ -116,7 +120,7 @@ export function computeMachineHealthPassport(params: {
 
   const byOrgan = new Map<
     string,
-    { label: string; count60d: number; count12m: number; cost12m: number }
+    { label: string; count60d: number; count12m: number; cost12m: number; bobinageCount12m: number }
   >();
 
   for (const ci of correctiveInterventions || []) {
@@ -167,6 +171,7 @@ export function computeMachineHealthPassport(params: {
       count60d: 0,
       count12m: 0,
       cost12m: 0,
+      bobinageCount12m: 0,
     };
     entry.count12m += 1;
     entry.cost12m += cost;
@@ -196,19 +201,69 @@ export function computeMachineHealthPassport(params: {
     preventiveTotalCost12m += cost;
   }
 
+  // External Subcontracting / Bobinage (Sorties Externe)
+  let externalBobinageCount12m = 0;
+  let externalBobinageCost12m = 0;
+
+  for (const se of sortiesExterne || []) {
+    const code = String(se?.id_machine || se?.code_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const d = parseDateSafe(
+      se?.date_montage ||
+        se?.date_arrivee_reelle ||
+        se?.date_expedition ||
+        se?.date_demontage ||
+        se?.created_at
+    );
+    if (d && d < cutoff12m) continue;
+
+    externalBobinageCount12m += 1;
+    const bobinageCost = Number(se?.cout_bobinage || 0) || 0;
+    externalBobinageCost12m += bobinageCost;
+
+    const motorRaw = String(
+      se?.code_moteur_reel || se?.designation_moteur || 'Moteur Externe'
+    ).trim();
+    const motorKey = motorRaw.toUpperCase();
+
+    const entry = byOrgan.get(motorKey) || {
+      label: motorRaw,
+      count60d: 0,
+      count12m: 0,
+      cost12m: 0,
+      bobinageCount12m: 0,
+    };
+    entry.count12m += 1;
+    entry.bobinageCount12m += 1;
+    entry.cost12m += bobinageCost;
+    if (!d || d >= cutoff60d) {
+      entry.count60d += 1;
+    }
+    byOrgan.set(motorKey, entry);
+  }
+
   const recurrentOrganAlerts: RecurrentOrganAlert[] = [];
   for (const [organKey, stats] of byOrgan.entries()) {
-    if (stats.count60d >= recurrenceThreshold || stats.count12m >= recurrenceThreshold) {
+    const isRepeatedBobinage = stats.bobinageCount12m >= 2;
+    if (
+      stats.count60d >= recurrenceThreshold ||
+      stats.count12m >= recurrenceThreshold ||
+      isRepeatedBobinage
+    ) {
       recurrentOrganAlerts.push({
         organKey,
         organLabel: stats.label,
         count60d: stats.count60d,
         count12m: stats.count12m,
         totalPdrCost12m: Number(stats.cost12m.toFixed(2)),
-        recommendation:
-          stats.count60d >= recurrenceThreshold
-            ? `Défaillance répétitive sur « ${stats.label} » (${stats.count60d}× en ${recurrenceWindowDays}j) — Convertir en gamme préventive ou analyser la réforme/remplacement de l'organe (BER).`
-            : `Récurrence annuelle sur « ${stats.label} » (${stats.count12m}× sur 12 mois) — Renforcer la fréquence préventive.`,
+        recommendation: isRepeatedBobinage
+          ? `Rebobinages multiples sur « ${stats.label} » (${stats.bobinageCount12m}× sur 12m, ${stats.cost12m.toFixed(0)} DH) — Évaluer le remplacement par un moteur neuf (BER).`
+          : stats.count60d >= recurrenceThreshold
+          ? `Défaillance répétitive sur « ${stats.label} » (${stats.count60d}× en ${recurrenceWindowDays}j) — Convertir en gamme préventive ou analyser la réforme/remplacement de l'organe (BER).`
+          : `Récurrence annuelle sur « ${stats.label} » (${stats.count12m}× sur 12 mois) — Renforcer la fréquence préventive.`,
       });
     }
   }
@@ -216,19 +271,24 @@ export function computeMachineHealthPassport(params: {
   recurrentOrganAlerts.sort((a, b) => b.count60d - a.count60d || b.count12m - a.count12m);
 
   const totalMaintenanceCost12m = Number(
-    (correctivePdrCost12m + preventiveTotalCost12m).toFixed(2)
+    (correctivePdrCost12m + preventiveTotalCost12m + externalBobinageCost12m).toFixed(2)
   );
   const totalDowntimeHours12m = Number((totalDowntimeMinutes12m / 60).toFixed(1));
 
   // Compute Health Score (0-100)
-  let penalty = correctiveCount12m * 8 + recurrentOrganAlerts.length * 20;
+  let penalty =
+    correctiveCount12m * 8 +
+    externalBobinageCount12m * 10 +
+    recurrentOrganAlerts.length * 20;
   if (totalDowntimeHours12m > 24) penalty += 15;
   const healthScore = Math.max(10, Math.min(100, 100 - penalty));
 
   const healthStatus: 'SAIN' | 'SURVEILLANCE' | 'CRITIQUE_BER' =
-    recurrentOrganAlerts.some((a) => a.count60d >= recurrenceThreshold) || healthScore < 50
+    recurrentOrganAlerts.some((a) => a.count60d >= recurrenceThreshold) ||
+    recurrentOrganAlerts.some((a) => a.recommendation.includes('Rebobinages multiples')) ||
+    healthScore < 50
       ? 'CRITIQUE_BER'
-      : recurrentOrganAlerts.length > 0 || correctiveCount12m >= 2
+      : recurrentOrganAlerts.length > 0 || correctiveCount12m >= 2 || externalBobinageCount12m >= 1
       ? 'SURVEILLANCE'
       : 'SAIN';
 
@@ -237,8 +297,10 @@ export function computeMachineHealthPassport(params: {
     windowMonths,
     correctiveCount12m,
     preventiveCount12m,
+    externalBobinageCount12m,
     correctivePdrCost12m: Number(correctivePdrCost12m.toFixed(2)),
     preventiveTotalCost12m: Number(preventiveTotalCost12m.toFixed(2)),
+    externalBobinageCost12m: Number(externalBobinageCost12m.toFixed(2)),
     totalMaintenanceCost12m,
     totalDowntimeHours12m,
     recurrentOrganAlerts,

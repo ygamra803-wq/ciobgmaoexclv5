@@ -20,6 +20,7 @@ import { confirmAction } from '../../../../utils/confirmAction';
 import { useAuth } from '../../../../context/AuthContext';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
+import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
 
 interface PreventiveExecutionsHistoryViewProps {
   executions: PreventiveExecutionRecord[];
@@ -51,9 +52,13 @@ export default function PreventiveExecutionsHistoryView({
   const [reviewExecution, setReviewExecution] = useState<PreventiveExecutionRecord | null>(null);
   const [reviewSpares, setReviewSpares] = useState<any[]>([]);
   const [reviewNote, setReviewNote] = useState<string>('');
+  const [skipStockDeduction, setSkipStockDeduction] = useState<boolean>(false);
+  const [createFollowUpDi, setCreateFollowUpDi] = useState<boolean>(false);
+  const [followUpDiAnomalie, setFollowUpDiAnomalie] = useState<string>('');
 
   const storeMouvements = useGmaoStore((s) => s.mouvements);
   const storeCorrectiveInterventions = useGmaoStore((s) => s.correctiveInterventions);
+  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
 
   const reviewReconciliation = useMemo(() => {
     if (!reviewExecution) return null;
@@ -61,11 +66,13 @@ export default function PreventiveExecutionsHistoryView({
       claimType: 'PREVENTIVE',
       claimId: String(reviewExecution.id),
       numBonSaisi: reviewExecution.num_bon_saisi_par_tech,
+      machineCode: reviewExecution.machineCode,
       proposedSpares: reviewSpares,
       stockItems,
       mouvements: storeMouvements,
       correctiveInterventions: storeCorrectiveInterventions,
       preventiveExecutions: executions,
+      sortieDemands: storeSortieDemands,
     });
   }, [
     reviewExecution,
@@ -74,6 +81,7 @@ export default function PreventiveExecutionsHistoryView({
     storeMouvements,
     storeCorrectiveInterventions,
     executions,
+    storeSortieDemands,
   ]);
 
   const availableDates = useMemo(() => {
@@ -143,14 +151,32 @@ export default function PreventiveExecutionsHistoryView({
         : Array.isArray(exec.sparesUsed)
         ? exec.sparesUsed
         : [];
-    setReviewSpares(
-      initialSpares.map((s) => ({
-        ref: s.ref || (s as any).reference || '',
-        designation: s.designation || s.ref || 'Pièce PDR',
-        qty: Math.max(1, Number(s.qty ?? (s as any).quantite ?? 1)),
-        unit: s.unit || (s as any).unite || 'pcs',
-        unitPrice: Number(s.unitPrice ?? (s as any).prix_unitaire ?? 0),
-      }))
+    const mappedSpares = initialSpares.map((s) => ({
+      ref: s.ref || (s as any).reference || '',
+      designation: s.designation || s.ref || 'Pièce PDR',
+      qty: Math.max(1, Number(s.qty ?? (s as any).quantite ?? 1)),
+      unit: s.unit || (s as any).unite || 'pcs',
+      unitPrice: Number(s.unitPrice ?? (s as any).prix_unitaire ?? 0),
+    }));
+    const rec = reconcileFieldClaim({
+      claimType: 'PREVENTIVE',
+      claimId: String(exec.id),
+      numBonSaisi: exec.num_bon_saisi_par_tech,
+      machineCode: exec.machineCode,
+      proposedSpares: mappedSpares,
+      stockItems,
+      mouvements: storeMouvements,
+      correctiveInterventions: storeCorrectiveInterventions,
+      preventiveExecutions: executions,
+      sortieDemands: storeSortieDemands,
+    });
+    setReviewSpares(mappedSpares);
+    setSkipStockDeduction(Boolean(rec?.exactMovementMatch));
+    const hasAnom = hasPreventiveExecutionAnomaly(exec);
+    setCreateFollowUpDi(hasAnom && !(exec as any)?.generated_di_id);
+    setFollowUpDiAnomalie(
+      exec.notes ||
+        `Anomalie constatée lors du contrôle préventif sur ${exec.organe || exec.machineCode || 'équipement'}`
     );
     setReviewNote(exec.validation_note || '');
   };
@@ -167,17 +193,26 @@ export default function PreventiveExecutionsHistoryView({
       return;
     }
 
-    onReviewPreventiveExecution(reviewExecution.id, {
+    const updated = onReviewPreventiveExecution(reviewExecution.id, {
       decision,
       validation_note: reviewNote.trim(),
       validated_by_id: user?.id || 'admin',
       validated_by_name: user?.name || user?.nom || 'Administrateur',
       approvedSpares: reviewSpares,
+      skipStockDeduction,
+      createFollowUpDi: decision === 'APPROVED' && createFollowUpDi,
+      followUpDiAnomalie: followUpDiAnomalie.trim(),
     });
 
     if (decision === 'APPROVED') {
+      const diSuffix =
+        createFollowUpDi || updated?.generated_di_id
+          ? ' + DI corrective de suivi générée automatiquement !'
+          : '.';
       showToast?.(
-        `Exécution ${reviewExecution.machineCode} approuvée et stock PDR déduit avec succès.`,
+        skipStockDeduction
+          ? `Exécution ${reviewExecution.machineCode} approuvée (coût imputé sur machine sans 2e déstockage)${diSuffix}`
+          : `Exécution ${reviewExecution.machineCode} approuvée et stock PDR déduit avec succès${diSuffix}`,
         'success'
       );
     } else if (decision === 'NEEDS_CLARIFICATION') {
@@ -693,6 +728,55 @@ export default function PreventiveExecutionsHistoryView({
                   })}
                 </div>
               )}
+                {reviewSpares.length > 0 && (
+                  <label className="flex items-start gap-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={skipStockDeduction}
+                      onChange={(e) => setSkipStockDeduction(e.target.checked)}
+                      className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      <strong className="font-bold text-slate-900">
+                        ✅ Bon de sortie déjà déstocké au magasin
+                      </strong>{' '}
+                      — Imputer le coût PDR sur la machine sans créer de 2e mouvement de stock.
+                    </span>
+                  </label>
+                )}
+            </div>
+
+            {/* Auto-DI sur Anomalie Préventive */}
+            <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2">
+              <label className="flex items-start gap-2 text-xs text-amber-950 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={createFollowUpDi}
+                  onChange={(e) => setCreateFollowUpDi(e.target.checked)}
+                  className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                />
+                <span>
+                  <strong className="font-black">
+                    Créer une DI corrective de suivi (Auto-DI sur anomalie préventive)
+                  </strong>{' '}
+                  — Génère automatiquement une Demande d&apos;Intervention liée à{' '}
+                  <code className="font-mono font-bold">{reviewExecution.machineCode}</code> dès l&apos;approbation.
+                </span>
+              </label>
+
+              {createFollowUpDi && (
+                <div className="pt-1">
+                  <label className="block text-[10px] font-bold text-amber-900 uppercase mb-1">
+                    Description de l&apos;anomalie pour la DI corrective :
+                  </label>
+                  <input
+                    type="text"
+                    value={followUpDiAnomalie}
+                    onChange={(e) => setFollowUpDiAnomalie(e.target.value)}
+                    className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Validation / Clarification Note */}
@@ -729,7 +813,7 @@ export default function PreventiveExecutionsHistoryView({
                 onClick={() => handleReviewDecision('APPROVED')}
                 className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-xs cursor-pointer transition"
               >
-                Approuver & Déduire Stock
+                {skipStockDeduction ? 'Approuver (Sans 2e déstockage)' : 'Approuver & Déduire Stock'}
               </button>
             </div>
           </div>

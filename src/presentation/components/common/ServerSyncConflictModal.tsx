@@ -5,6 +5,7 @@ import type { ConflictDetectionResult } from '../../../services/serverSyncServic
 interface ServerSyncConflictModalProps {
   isOpen: boolean;
   conflict: ConflictDetectionResult | null;
+  onSmartMerge?: () => void;
   onForcePushLocal: () => void;
   onForcePullServer: () => void;
   onCancel: () => void;
@@ -14,6 +15,7 @@ interface ServerSyncConflictModalProps {
 export default function ServerSyncConflictModal({
   isOpen,
   conflict,
+  onSmartMerge,
   onForcePushLocal,
   onForcePullServer,
   onCancel,
@@ -170,7 +172,7 @@ export default function ServerSyncConflictModal({
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+          <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={onCancel}
@@ -194,11 +196,23 @@ export default function ServerSyncConflictModal({
               type="button"
               onClick={onForcePushLocal}
               disabled={isProcessing}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className="px-4 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
               <UploadCloud className="w-4 h-4 shrink-0" />
               <span>{t('sync_conflict.push_local', 'Forcer local')}</span>
             </button>
+
+            {onSmartMerge && (
+              <button
+                type="button"
+                onClick={onSmartMerge}
+                disabled={isProcessing}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <ArrowRightLeft className="w-4 h-4 shrink-0" />
+                <span>{t('sync_conflict.smart_merge', 'Fusionner sans perte (Recommandé)')}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
