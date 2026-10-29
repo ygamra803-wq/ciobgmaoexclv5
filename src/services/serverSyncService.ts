@@ -34,12 +34,28 @@ export interface ConflictDetectionResult {
   serverState: Record<string, any>;
 }
 
+export interface OperationalSyncStatusSnapshot {
+  lastSyncAt: string | null;
+  lastServerVersion: number | null;
+  localModifiedAt: string | null;
+  lastSyncStatus: 'IDLE' | 'SUCCESS' | 'ERROR' | 'CONFLICT';
+  lastSyncError: string | null;
+  lastSyncAttemptAt: string | null;
+  hasUnresolvedConflict: boolean;
+  unresolvedConflict: ConflictDetectionResult | null;
+}
+
 const LAST_SYNC_AT_KEY = 'gmao_last_server_sync_at';
 const LAST_SERVER_VERSION_KEY = 'gmao_last_server_version';
 const LOCAL_MODIFIED_AT_KEY = 'gmao_local_modified_at';
 
 let autoPushTimer: ReturnType<typeof setTimeout> | null = null;
 let autoPushInFlight = false;
+
+let lastSyncStatusState: 'IDLE' | 'SUCCESS' | 'ERROR' | 'CONFLICT' = 'IDLE';
+let lastSyncErrorState: string | null = null;
+let lastSyncAttemptAtState: string | null = null;
+let lastUnresolvedConflictState: ConflictDetectionResult | null = null;
 
 const resolveSessionUser = (): Record<string, any> | null => {
   try {
@@ -108,6 +124,64 @@ export const serverSyncService = {
     const now = new Date().toISOString();
     storageService.setItem(LOCAL_MODIFIED_AT_KEY, now);
     return now;
+  },
+
+  recordSyncSuccess(isoTimestamp: string, version?: number): void {
+    lastSyncStatusState = 'SUCCESS';
+    lastSyncErrorState = null;
+    lastSyncAttemptAtState = isoTimestamp;
+    lastUnresolvedConflictState = null;
+    this.setLastSyncAt(isoTimestamp);
+    if (version !== undefined) {
+      this.setLastServerVersion(version);
+    }
+  },
+
+  recordSyncError(errorMessage: string): void {
+    const now = new Date().toISOString();
+    lastSyncStatusState = 'ERROR';
+    lastSyncErrorState = errorMessage;
+    lastSyncAttemptAtState = now;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('gmao:server_sync_error', {
+          detail: { error: errorMessage, timestamp: now },
+        })
+      );
+    }
+  },
+
+  recordSyncConflict(conflict: ConflictDetectionResult): void {
+    lastSyncStatusState = 'CONFLICT';
+    lastSyncAttemptAtState = new Date().toISOString();
+    lastUnresolvedConflictState = conflict;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('gmao:server_conflict', { detail: conflict })
+      );
+    }
+  },
+
+  clearUnresolvedConflict(): void {
+    lastUnresolvedConflictState = null;
+    if (lastSyncStatusState === 'CONFLICT') {
+      lastSyncStatusState = this.getLastSyncAt() ? 'SUCCESS' : 'IDLE';
+    }
+  },
+
+  getOperationalSyncStatus(): OperationalSyncStatusSnapshot {
+    const lastSyncAt = this.getLastSyncAt();
+    return {
+      lastSyncAt,
+      lastServerVersion: this.getLastServerVersion(),
+      localModifiedAt: this.getLocalModifiedAt(),
+      lastSyncStatus:
+        lastSyncStatusState === 'IDLE' && lastSyncAt ? 'SUCCESS' : lastSyncStatusState,
+      lastSyncError: lastSyncErrorState,
+      lastSyncAttemptAt: lastSyncAttemptAtState || lastSyncAt,
+      hasUnresolvedConflict: Boolean(lastUnresolvedConflictState?.hasConflict),
+      unresolvedConflict: lastUnresolvedConflictState,
+    };
   },
 
   /**
@@ -452,14 +526,17 @@ export const serverSyncService = {
     } else if (!options.force) {
       const serverCheck = await this.fetchServerState();
       if (!serverCheck.online) {
+        const offlineMsg = 'الخادم غير متصل حالياً (Server Offline)';
+        this.recordSyncError(offlineMsg);
         return {
           success: false,
-          error: 'الخادم غير متصل حالياً (Server Offline)',
+          error: offlineMsg,
         };
       }
       if (serverCheck.state) {
         const conflict = this.detectConflict(localPayload, serverCheck.state, 'push');
         if (conflict.hasConflict) {
+          this.recordSyncConflict(conflict);
           return {
             success: false,
             conflict,
@@ -480,9 +557,11 @@ export const serverSyncService = {
     try {
       const actorRole = getActiveActorRole();
       if (actorRole === 'VIEWER' || actorRole === 'OBSERVATEUR') {
+        const roleErr = 'Accès refusé : le profil Observateur (VIEWER) est en lecture seule.';
+        this.recordSyncError(roleErr);
         return {
           success: false,
-          error: 'Accès refusé : le profil Observateur (VIEWER) est en lecture seule.',
+          error: roleErr,
         };
       }
 
@@ -499,24 +578,28 @@ export const serverSyncService = {
 
       if (response.status === 403) {
         const forbiddenJson = await response.json().catch(() => ({}));
+        const forbiddenMsg = forbiddenJson?.message || 'Action non autorisée pour votre rôle (403 Forbidden).';
+        this.recordSyncError(forbiddenMsg);
         return {
           success: false,
-          error: forbiddenJson?.message || 'Action non autorisée pour votre rôle (403 Forbidden).',
+          error: forbiddenMsg,
         };
       }
 
       if (response.status === 409) {
         const conflictJson = await response.json();
         const serverState = conflictJson?.data || {};
+        const conflictObj: ConflictDetectionResult = {
+          hasConflict: true,
+          reason: 'SERVER_NEWER',
+          localSummary: this.summarizeState(localPayload),
+          serverSummary: this.summarizeState(serverState),
+          serverState,
+        };
+        this.recordSyncConflict(conflictObj);
         return {
           success: false,
-          conflict: {
-            hasConflict: true,
-            reason: 'SERVER_NEWER',
-            localSummary: this.summarizeState(localPayload),
-            serverSummary: this.summarizeState(serverState),
-            serverState,
-          },
+          conflict: conflictObj,
         };
       }
 
@@ -526,8 +609,7 @@ export const serverSyncService = {
 
       const result = await response.json();
       const updatedAt = result?.updatedAt || new Date().toISOString();
-      this.setLastSyncAt(updatedAt);
-      this.setLastServerVersion(result?.version);
+      this.recordSyncSuccess(updatedAt, result?.version);
       storageService.setItem(LOCAL_MODIFIED_AT_KEY, updatedAt);
 
       // If the server performed a cross-device smart merge and returned the unified state,
@@ -589,9 +671,11 @@ export const serverSyncService = {
         summary: this.summarizeState(finalState || localPayload),
       };
     } catch (err: any) {
+      const errMsg = err?.message || 'فشل الاتصال بالخادم أثناء الحفظ';
+      this.recordSyncError(errMsg);
       return {
         success: false,
-        error: err?.message || 'فشل الاتصال بالخادم أثناء الحفظ',
+        error: errMsg,
       };
     }
   },
@@ -622,12 +706,7 @@ export const serverSyncService = {
       if (autoPushInFlight) return;
       autoPushInFlight = true;
       try {
-        const res = await this.pushToServer({ force: false, customState });
-        if (!res.success && res.conflict) {
-          window.dispatchEvent(
-            new CustomEvent('gmao:server_conflict', { detail: res.conflict })
-          );
-        }
+        await this.pushToServer({ force: false, customState });
       } catch {
         // Silent background fallback when server is unreachable in offline/unit-test environments
       } finally {
@@ -653,9 +732,11 @@ export const serverSyncService = {
   }> {
     const serverCheck = await this.fetchServerState();
     if (!serverCheck.online || !serverCheck.state) {
+      const pullErr = 'تعذر الاتصال بالخادم لاستعادة البيانات';
+      this.recordSyncError(pullErr);
       return {
         success: false,
-        error: 'تعذر الاتصال بالخادم لاستعادة البيانات',
+        error: pullErr,
       };
     }
 
@@ -664,6 +745,7 @@ export const serverSyncService = {
     if (!options.force) {
       const conflict = this.detectConflict(localPayload, serverCheck.state, 'pull');
       if (conflict.hasConflict) {
+        this.recordSyncConflict(conflict);
         return {
           success: false,
           conflict,
@@ -711,8 +793,7 @@ export const serverSyncService = {
     });
 
     const syncTimestamp = serverCheck.state.updatedAt || new Date().toISOString();
-    this.setLastSyncAt(syncTimestamp);
-    this.setLastServerVersion(serverCheck.state.version);
+    this.recordSyncSuccess(syncTimestamp, serverCheck.state.version);
 
     return {
       success: true,

@@ -1249,6 +1249,61 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
       useGmaoStore.setState(initialState);
     }
   });
+
+  it('Phase 0 — A2 Lightweight Operational Sync & Queue Monitor: tracks LAN sync success/error/conflict and matches ValidationCenter queue counters', async () => {
+    const { serverSyncService } = await import('../../services/serverSyncService');
+    const { selectValidationCenterQueues } = await import('../../core/security/validationReconciliation');
+
+    // 1. Track sync error
+    serverSyncService.recordSyncError('Server Offline');
+    let snap = serverSyncService.getOperationalSyncStatus();
+    expect(snap.lastSyncStatus).toBe('ERROR');
+    expect(snap.lastSyncError).toBe('Server Offline');
+    expect(snap.hasUnresolvedConflict).toBe(false);
+
+    // 2. Track unresolved conflict
+    const fakeConflict: any = {
+      hasConflict: true,
+      reason: 'SERVER_NEWER',
+      localSummary: { totalItems: 10 },
+      serverSummary: { totalItems: 12 },
+      serverState: {},
+    };
+    serverSyncService.recordSyncConflict(fakeConflict);
+    snap = serverSyncService.getOperationalSyncStatus();
+    expect(snap.lastSyncStatus).toBe('CONFLICT');
+    expect(snap.hasUnresolvedConflict).toBe(true);
+    expect(snap.unresolvedConflict?.reason).toBe('SERVER_NEWER');
+
+    // 3. Track sync success clears error & unresolved conflict
+    serverSyncService.recordSyncSuccess('2026-10-29T15:00:00.000Z', 42);
+    snap = serverSyncService.getOperationalSyncStatus();
+    expect(snap.lastSyncStatus).toBe('SUCCESS');
+    expect(snap.lastSyncError).toBeNull();
+    expect(snap.hasUnresolvedConflict).toBe(false);
+    expect(snap.lastServerVersion).toBe(42);
+
+    // 4. Queue counters match ValidationCenterView sources (BT + PM + SortieDemands)
+    const queues = selectValidationCenterQueues({
+      correctiveInterventions: [
+        { id: 'BT-1', validation_status: 'PENDING_VALIDATION' },
+        { id: 'BT-2', validation_status: 'APPROVED' },
+        { id: 'BT-3', validation_status: 'NEEDS_CLARIFICATION' },
+      ],
+      preventiveExecutions: [
+        { id: 'PM-1', validation_status: 'PENDING_VALIDATION' },
+        { id: 'PM-2', validation_status: 'PENDING_VALIDATION' },
+      ],
+      sortieDemands: [
+        { id: 'SD-1', validation_status: 'PENDING_VALIDATION' },
+      ],
+    });
+    expect(queues.pendingCorrective).toHaveLength(1);
+    expect(queues.pendingPreventive).toHaveLength(2);
+    expect(queues.pendingSortieDemands).toHaveLength(1);
+    expect(queues.totalPending).toBe(4);
+    expect(queues.totalClarification).toBe(1);
+  });
 });
 
 

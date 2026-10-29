@@ -195,11 +195,13 @@ export function useAppRouterProps({
       onNavigateToUsers: () => navigateTo('utilisateurs'),
       onNavigateToSettings: () => navigateTo('settings'),
       onNavigateToGuide: () => navigateTo('guide'),
+      onNavigateToValidationCenter: () => navigateTo('validation_center'),
       onQuickSortie: handleQuickSortie,
       onAddMouvement: handleAddMouvement,
       onUpdateMouvement: handleUpdateMouvement,
       onDeleteMouvement: handleDeleteMouvement,
       onExportExcel: handleExportExcel,
+      showToast: showToast || navigation?.showToast,
     },
 
     executiveReport: {
