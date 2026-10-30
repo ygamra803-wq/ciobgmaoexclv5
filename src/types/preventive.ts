@@ -113,6 +113,7 @@ export interface PreventiveExecutionRecord {
   actionCode: string;
   taskDescription?: string;
   frequence?: string;
+  scheduledDueDate?: string; // YYYY-MM-DD target due date at time of execution
   executedAt: string; // ISO date or YYYY-MM-DD
   periodMonth: string; // YYYY-MM
   periodWeek?: string; // e.g., S14

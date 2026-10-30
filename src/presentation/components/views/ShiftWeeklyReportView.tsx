@@ -161,8 +161,12 @@ export default function ShiftWeeklyReportView({
         ['Temps Arret Correctif', String(report.totalDowntimeHours), 'heures', report.assetClassFilter],
         ['Cout PDR Correctif (Approuve)', String(report.correctiveSparesCost), 'EUR', report.assetClassFilter],
         ['Preventif Executes (Approuves)', String(report.preventiveExecutedInPeriodCount), 'executions', report.assetClassFilter],
-        ['Preventif Echus Fenetre', String(report.preventiveDueInWindowCount), 'taches', report.assetClassFilter],
-        ['Discipline Preventive', String(report.preventiveDisciplineRate), '%', report.assetClassFilter],
+        ['Preventif A Temps (ON_TIME)', String(report.pmCompliance.onTimeCount), 'taches', report.assetClassFilter],
+        ['Preventif Fait En Retard (LATE)', String(report.pmCompliance.lateCompletedCount), 'taches', report.assetClassFilter],
+        ['Preventif Non Realise / En Retard (OVERDUE)', String(report.pmCompliance.overdueCount), 'taches', report.assetClassFilter],
+        ['Preventif Denominateur Actif (Hors Archivees)', String(report.pmCompliance.totalEligibleCount), 'taches', report.assetClassFilter],
+        ['Taux Conformite A Temps (ON_TIME %)', String(report.pmCompliance.onTimeComplianceRate), '%', report.assetClassFilter],
+        ['Discipline Preventive Globale', String(report.preventiveDisciplineRate), '%', report.assetClassFilter],
         ['Preventif En Retard (Snapshot)', String(report.preventiveOverdueSnapshotCount), 'taches', report.assetClassFilter],
         ['Magasin Sorties Validees', String(report.sortiesCount), `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
         ['Magasin Cout Consommation', String(report.consumptionCost), 'EUR', report.assetClassFilter],
@@ -507,19 +511,24 @@ export default function ShiftWeeklyReportView({
                 exécution(s) validée(s) ({report.preventiveLaborHours} h)
               </span>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
               <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold">
-                Discipline : {report.preventiveDisciplineRate}% ({report.preventiveExecutedInPeriodCount}/{report.preventiveDueInWindowCount})
+                À temps (ON_TIME) : {report.pmCompliance.onTimeComplianceRate}% ({report.pmCompliance.onTimeCount}/{report.pmCompliance.totalEligibleCount})
               </span>
+              {report.pmCompliance.lateCompletedCount > 0 && (
+                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold">
+                  Fait en retard (LATE) : {report.pmCompliance.lateCompletedCount}
+                </span>
+              )}
               <span
                 className={`px-2 py-0.5 rounded-md font-mono font-bold border ${
-                  report.preventiveOverdueSnapshotCount > 0
+                  report.pmCompliance.overdueCount > 0
                     ? 'bg-rose-50 text-rose-800 border-rose-200'
                     : 'bg-slate-100 text-slate-600 border-slate-200'
                 }`}
                 title={report.overdueSnapshotDefinition}
               >
-                En retard (snapshot) : {report.preventiveOverdueSnapshotCount}
+                OVERDUE : {report.pmCompliance.overdueCount}
               </span>
             </div>
           </div>
@@ -692,7 +701,7 @@ export default function ShiftWeeklyReportView({
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-indigo-600" />
               <h3 className="text-sm font-black text-slate-900">
-                Snapshot des Tâches Préventives en Retard ({report.preventiveOverdueSnapshotCount})
+                Conformité Temporelle Préventive (B3) & Tâches en Retard ({report.pmCompliance.overdueCount})
               </h3>
             </div>
             {onNavigateToTab && (
@@ -707,13 +716,65 @@ export default function ShiftWeeklyReportView({
             )}
           </div>
 
-          <div className="p-5 space-y-3 flex-1">
+          <div className="p-5 space-y-3 flex-1" data-testid="b3-pm-compliance-section">
+            {/* B3 Temporal Compliance Summary Strip: ON_TIME | LATE | OVERDUE */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200">
+                <div className="text-[10px] font-extrabold uppercase text-emerald-800">À temps (ON_TIME)</div>
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-lg font-black font-mono text-emerald-900">{report.pmCompliance.onTimeCount}</span>
+                  <span className="text-[11px] font-mono font-bold text-emerald-700">{report.pmCompliance.onTimeComplianceRate}%</span>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200">
+                <div className="text-[10px] font-extrabold uppercase text-amber-800">Fait en retard (LATE)</div>
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-lg font-black font-mono text-amber-900">{report.pmCompliance.lateCompletedCount}</span>
+                  <span className="text-[10px] font-mono text-amber-700">Validé &gt; échéance</span>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-rose-50/80 border border-rose-200">
+                <div className="text-[10px] font-extrabold uppercase text-rose-800">En retard (OVERDUE)</div>
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-lg font-black font-mono text-rose-900">{report.pmCompliance.overdueCount}</span>
+                  <span className="text-[10px] font-mono text-rose-700">Non validé</span>
+                </div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="text-[10px] font-extrabold uppercase text-slate-600">Dénominateur actif</div>
+                <div className="mt-0.5 flex items-baseline justify-between">
+                  <span className="text-lg font-black font-mono text-slate-900">{report.pmCompliance.totalEligibleCount}</span>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    Réalisé: {report.pmCompliance.overallCompletionRate}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-2 text-[11px] text-slate-600">
               <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-              <span>
-                <strong>Définition du snapshot :</strong> {report.overdueSnapshotDefinition} Les tâches annuelles/futures au-delà du{' '}
-                <code className="font-mono font-bold">{report.toYMD}</code> sont exclues du dénominateur de discipline ({report.preventiveDisciplineRate}%).
-              </span>
+              <div className="space-y-1">
+                <p>
+                  <strong>Règle B3 (Vérité Validée) :</strong> Seules les exécutions <strong>approuvées</strong> (hors{' '}
+                  <code className="font-mono">PENDING_VALIDATION</code> / <code className="font-mono">REJECTED</code>) comptent comme réalisées (
+                  <code className="font-mono font-bold text-emerald-800">ON_TIME</code> si date réalisation ≤ échéance,{' '}
+                  <code className="font-mono font-bold text-amber-800">LATE</code> si &gt; échéance). Les tâches et machines archivées / inactives sont exclues du dénominateur.
+                </p>
+                {(report.pmCompliance.pendingClaimsExcludedCount > 0 || report.pmCompliance.archivedExcludedCount > 0) && (
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5 font-mono text-[10px]">
+                    {report.pmCompliance.pendingClaimsExcludedCount > 0 && (
+                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
+                        {report.pmCompliance.pendingClaimsExcludedCount} déclaration(s) PENDING non comptée(s) comme réalisée(s)
+                      </span>
+                    )}
+                    {report.pmCompliance.archivedExcludedCount > 0 && (
+                      <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-700 font-bold">
+                        {report.pmCompliance.archivedExcludedCount} tâche(s)/machine(s) archivée(s) hors dénominateur
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {report.overdueTasksSample.length === 0 ? (

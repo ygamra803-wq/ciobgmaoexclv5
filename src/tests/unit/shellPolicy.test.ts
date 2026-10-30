@@ -1403,3 +1403,161 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     }
   });
 });
+
+describe('Phase 1 — B3 Temporal Preventive Maintenance Compliance (PM Compliance)', () => {
+  it('classifies ON_TIME vs LATE vs OVERDUE from approved executions only, never counts PENDING/REJECTED as completed, and excludes archived tasks/machines from denominator', async () => {
+    const {
+      computePmWindowCompliance,
+      buildShiftOrWeeklyReport,
+    } = await import('../../application/services/MonthlyReportCalculationService');
+
+    const machines = [
+      { id_machine_registered: 'M-ACTIVE-01', designation: 'Presse Active 1', status: 'OPERATIONNELLE', is_active: true },
+      { id_machine_registered: 'M-ARCHIVED-02', designation: 'Ancienne Presse', status: 'ARCHIVEE', is_active: false, archived: true },
+    ];
+
+    const preventiveTasks = [
+      // 1) Active task executed ON_TIME (due 2026-10-20, approved execution on 2026-10-19)
+      {
+        id: 'PM-1-ONTIME',
+        code_machine: 'M-ACTIVE-01',
+        tache: 'Graissage paliers',
+        prochaine_echeance: '2026-11-19', // advanced after approval
+        echeance_precedente: '2026-10-20',
+        etat: 'Fait',
+        validation_status: 'APPROVED',
+        is_active: true,
+      },
+      // 2) Active task executed LATE (due 2026-10-18, approved execution on 2026-10-22)
+      {
+        id: 'PM-2-LATE',
+        code_machine: 'M-ACTIVE-01',
+        tache: 'Contrôle pression hydraulique',
+        prochaine_echeance: '2026-11-22',
+        echeance_precedente: '2026-10-18',
+        etat: 'Fait',
+        validation_status: 'APPROVED',
+        is_active: true,
+      },
+      // 3) Active task with a PENDING_VALIDATION field claim (due 2026-10-21) -> MUST NOT count as completed, stays OVERDUE
+      {
+        id: 'PM-3-PENDING',
+        code_machine: 'M-ACTIVE-01',
+        tache: 'Vérification capteurs sécurité',
+        prochaine_echeance: '2026-10-21',
+        etat: 'EN_ATTENTE_VALIDATION',
+        validation_status: 'PENDING_VALIDATION',
+        is_active: true,
+      },
+      // 4) Active task overdue with no execution (due 2026-10-17) -> OVERDUE
+      {
+        id: 'PM-4-OVERDUE',
+        code_machine: 'M-ACTIVE-01',
+        tache: 'Nettoyage filtre air',
+        prochaine_echeance: '2026-10-17',
+        etat: 'En retard',
+        is_active: true,
+      },
+      // 5) Archived task on active machine -> MUST BE EXCLUDED from compliance denominator
+      {
+        id: 'PM-5-ARCHIVED-TASK',
+        code_machine: 'M-ACTIVE-01',
+        tache: 'Tâche obsolète archivée',
+        prochaine_echeance: '2026-10-16',
+        statut: 'ARCHIVEE',
+        is_active: false,
+        archived: true,
+      },
+      // 6) Active task on ARCHIVED machine -> MUST BE EXCLUDED from compliance denominator
+      {
+        id: 'PM-6-ARCHIVED-MACHINE',
+        code_machine: 'M-ARCHIVED-02',
+        tache: 'Graissage machine archivée',
+        prochaine_echeance: '2026-10-16',
+        etat: 'En retard',
+        is_active: true,
+      },
+    ];
+
+    const preventiveExecutions = [
+      {
+        id: 'EX-1-ONTIME',
+        taskId: 'PM-1-ONTIME',
+        machineCode: 'M-ACTIVE-01',
+        executedAt: '2026-10-19T10:00:00Z',
+        scheduledDueDate: '2026-10-20',
+        status: 'COMPLETED',
+        validation_status: 'APPROVED',
+      },
+      {
+        id: 'EX-2-LATE',
+        taskId: 'PM-2-LATE',
+        machineCode: 'M-ACTIVE-01',
+        executedAt: '2026-10-22T14:30:00Z',
+        scheduledDueDate: '2026-10-18',
+        status: 'COMPLETED',
+        validation_status: 'APPROVED',
+      },
+      // Technician submitted field claim (PENDING_VALIDATION) -> NOT official completion
+      {
+        id: 'EX-3-PENDING',
+        taskId: 'PM-3-PENDING',
+        machineCode: 'M-ACTIVE-01',
+        executedAt: '2026-10-20T09:00:00Z',
+        scheduledDueDate: '2026-10-21',
+        status: 'PENDING_VALIDATION',
+        validation_status: 'PENDING_VALIDATION',
+      },
+    ];
+
+    const compliance = computePmWindowCompliance({
+      fromYMD: '2026-10-15',
+      toYMD: '2026-10-25',
+      preventiveTasks,
+      preventiveExecutions,
+      machines,
+    });
+
+    // Denominator must strictly include only the 4 active tasks on active machines (PM-1, PM-2, PM-3, PM-4)
+    // PM-5 (archived task) and PM-6 (task on archived machine) are excluded!
+    expect(compliance.archivedExcludedCount).toBe(2);
+    expect(compliance.totalEligibleCount).toBe(4);
+
+    // Approved completions: 1 ON_TIME + 1 LATE = 2 completed
+    expect(compliance.onTimeCount).toBe(1);
+    expect(compliance.lateCompletedCount).toBe(1);
+    expect(compliance.completedTotalCount).toBe(2);
+
+    // PENDING_VALIDATION task (PM-3) + unexecuted due task (PM-4) = 2 OVERDUE
+    expect(compliance.overdueCount).toBe(2);
+    expect(compliance.pendingClaimsExcludedCount).toBeGreaterThanOrEqual(1);
+
+    // Verify individual statuses
+    const itemById = new Map(compliance.items.map((i) => [i.taskId, i]));
+    expect(itemById.get('PM-1-ONTIME')?.status).toBe('ON_TIME');
+    expect(itemById.get('PM-2-LATE')?.status).toBe('LATE');
+    expect(itemById.get('PM-3-PENDING')?.status).toBe('OVERDUE');
+    expect(itemById.get('PM-3-PENDING')?.hasPendingClaim).toBe(true);
+    expect(itemById.get('PM-4-OVERDUE')?.status).toBe('OVERDUE');
+    expect(itemById.has('PM-5-ARCHIVED-TASK')).toBe(false);
+    expect(itemById.has('PM-6-ARCHIVED-MACHINE')).toBe(false);
+
+    // Rates: ON_TIME = 1/4 = 25%, Overall approved completion = 2/4 = 50%
+    expect(compliance.onTimeComplianceRate).toBe(25);
+    expect(compliance.overallCompletionRate).toBe(50);
+
+    // Also verify buildShiftOrWeeklyReport exposes pmCompliance consistently
+    const report = buildShiftOrWeeklyReport({
+      from: '2026-10-15',
+      to: '2026-10-25',
+      preventiveTasks,
+      preventiveExecutions,
+      machines,
+    });
+    expect(report.pmCompliance.totalEligibleCount).toBe(4);
+    expect(report.pmCompliance.onTimeCount).toBe(1);
+    expect(report.pmCompliance.lateCompletedCount).toBe(1);
+    expect(report.pmCompliance.overdueCount).toBe(2);
+  });
+});
+

@@ -1317,6 +1317,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         const nextTasks = (get().preventiveTasks || []).map((t: any) => {
           if (String(t.id) === String(existingExec.taskId)) {
             const execDateYMD = String(existingExec.executedAt || nowIso).slice(0, 10);
+            const previousDue =
+              existingExec.scheduledDueDate ||
+              t.prochaine_echeance ||
+              t.nextDueDate ||
+              t.date_prevue ||
+              t.date_planifiee ||
+              t.dueDate ||
+              '';
             const nextDue = computeNextDueDate(execDateYMD, t.frequence || existingExec.frequence);
             const prevCost = Number(t.cout_cumule || 0);
             const nextPlanning =
@@ -1340,6 +1348,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               ).trim(),
               derniere_realisation: execDateYMD,
               lastExecutedAt: execDateYMD,
+              ...(previousDue ? { echeance_precedente: previousDue } : {}),
               prochaine_echeance: nextDue,
               nextDueDate: nextDue,
               cout_cumule: Number((prevCost + totalCost).toFixed(2)),

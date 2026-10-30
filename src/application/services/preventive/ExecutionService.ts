@@ -146,6 +146,17 @@ export class ExecutionService {
 
     const numBonTech = String(validationData?.num_bon_saisi_par_tech ?? '').trim();
 
+    const rawScheduledDue =
+      validationData?.scheduledDueDate ||
+      validationData?.dueDate ||
+      task?.prochaine_echeance ||
+      task?.nextDueDate ||
+      task?.date_prevue ||
+      task?.date_planifiee ||
+      task?.dueDate ||
+      '';
+    const scheduledDueDate = String(rawScheduledDue).trim().slice(0, 10) || undefined;
+
     const execution: PreventiveExecutionRecord = {
       id:
         validationData?.id ||
@@ -165,6 +176,7 @@ export class ExecutionService {
         task?.consigne || task?.type_intervention || task?.description || validationData?.taskDescription || ''
       ),
       frequence: String(task?.frequence || validationData?.frequence || 'Mensuel'),
+      ...(scheduledDueDate ? { scheduledDueDate } : {}),
       executedAt: normalizedDate,
       periodMonth,
       periodWeek,

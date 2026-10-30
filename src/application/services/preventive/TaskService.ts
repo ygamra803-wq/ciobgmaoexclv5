@@ -147,6 +147,8 @@ export class TaskService {
         };
       }
 
+      const previousDue =
+        t.prochaine_echeance || t.nextDueDate || t.date_prevue || t.date_planifiee || t.dueDate || '';
       const nextDue = computeNextDueDate(dateRealisation, t.frequence);
       const prevCost = Number(t.cout_cumule || 0);
       const addedCost = Number(execution.totalCost || 0);
@@ -167,6 +169,7 @@ export class TaskService {
         validation_note: execution.validation_note || '',
         derniere_realisation: dateRealisation,
         lastExecutedAt: dateRealisation,
+        ...(previousDue ? { echeance_precedente: previousDue } : {}),
         prochaine_echeance: nextDue,
         technicien_realisateur: execution.executorName || t.responsable,
         observations_validation: execution.notes || '',

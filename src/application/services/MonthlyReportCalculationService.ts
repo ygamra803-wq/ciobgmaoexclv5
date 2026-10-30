@@ -412,7 +412,7 @@ export class MonthlyReportCalculationService {
       const st = String(t.statut || t.status || '').trim().toUpperCase();
       if (st === 'ARCHIVE' || st === 'ARCHIVEE' || st === 'INACTIF' || st === 'ANNULE') return false;
 
-      if (hasRegisteredMachines && activeMachineCodes.size > 0) {
+      if (hasRegisteredMachines) {
         const mCode = String(t.code_machine || t.id_machine || t.machineCode || '').trim().toUpperCase();
         if (mCode && !activeMachineCodes.has(mCode)) {
           const existsInAll = (machines || []).some(
@@ -658,7 +658,7 @@ export interface ShiftOrWeeklyReportData {
   mtbfHours: number;
   availabilityRate: number;
 
-  // 2. Préventif (Approved only)
+  // 2. Préventif (Approved only) & B3 Conformité Temporelle (ON_TIME | LATE | OVERDUE)
   preventiveExecutedInPeriodCount: number;
   preventiveDueInWindowCount: number;
   preventiveDisciplineRate: number;
@@ -667,6 +667,7 @@ export interface ShiftOrWeeklyReportData {
   overdueTasksSample: OverduePreventiveTaskSnapshotItem[];
   preventiveTotalCost: number;
   preventiveLaborHours: number;
+  pmCompliance: PmWindowComplianceSummary;
 
   // 3. Magasin (Official mouvements vs Pending SortieDemands)
   sortiesCount: number;
@@ -712,6 +713,355 @@ export interface ShiftOrWeeklyReportData {
   // External Subcontracting / Bobinage in period
   externalBobinageCount?: number;
   externalBobinageCost?: number;
+}
+
+export type PmComplianceStatus = 'ON_TIME' | 'LATE' | 'OVERDUE';
+
+export interface PmComplianceTaskItem {
+  taskId: string;
+  taskName: string;
+  machineCode: string;
+  machineName: string;
+  assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL';
+  dueDate: string;
+  approvedExecutedAt?: string;
+  status: PmComplianceStatus;
+  statusLabelFr: 'À temps' | 'Fait en retard' | 'En retard (Non réalisé)';
+  assignedTo: string;
+  hasPendingClaim?: boolean;
+}
+
+export interface PmWindowComplianceSummary {
+  onTimeCount: number;
+  lateCompletedCount: number;
+  overdueCount: number;
+  completedTotalCount: number;
+  totalEligibleCount: number;
+  onTimeComplianceRate: number;
+  overallCompletionRate: number;
+  pendingClaimsExcludedCount: number;
+  archivedExcludedCount: number;
+  items: PmComplianceTaskItem[];
+}
+
+export function computePmWindowCompliance({
+  fromYMD,
+  toYMD,
+  assetClass = 'ALL',
+  preventiveTasks = [],
+  preventiveExecutions = [],
+  machines = [],
+}: {
+  fromYMD: string;
+  toYMD: string;
+  assetClass?: ReportAssetClassFilter;
+  preventiveTasks?: any[];
+  preventiveExecutions?: any[];
+  machines?: any[];
+}): PmWindowComplianceSummary {
+  const activeMachinesList = filterActiveMachines(machines || []);
+  const activeMachineCodes = new Set<string>();
+  activeMachinesList.forEach((m) => {
+    [m?.id_machine_registered, m?.id, m?.code, m?.id_machine, m?.code_machine]
+      .map((c) => String(c || '').trim().toUpperCase())
+      .filter(Boolean)
+      .forEach((code) => activeMachineCodes.add(code));
+  });
+
+  const allRegisteredMachineCodes = new Set<string>();
+  const machineInfoMap = new Map<
+    string,
+    { code: string; name: string; assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL' }
+  >();
+  (machines || []).forEach((m) => {
+    if (!m) return;
+    const rawCodes = [m.id_machine_registered, m.id, m.code, m.id_machine, m.code_machine]
+      .map((c) => String(c || '').trim().toUpperCase())
+      .filter(Boolean);
+    if (rawCodes.length === 0) return;
+    const mClass = getMachineAssetClass(m);
+    const mName = String(m.nom || m.designation || m.name || rawCodes[0]).trim();
+    rawCodes.forEach((c) => {
+      allRegisteredMachineCodes.add(c);
+      machineInfoMap.set(c, { code: rawCodes[0], name: mName, assetClass: mClass });
+    });
+  });
+
+  const resolveTaskAssetMeta = (record: any) => {
+    const explicitClass = String(record?.asset_class || '').trim().toUpperCase();
+    const rawCode = String(
+      record?.code_machine ||
+        record?.id_machine ||
+        record?.machineCode ||
+        record?.id_machine_registered ||
+        record?.machine ||
+        ''
+    )
+      .trim()
+      .toUpperCase();
+    const info = rawCode ? machineInfoMap.get(rawCode) : undefined;
+    const resolvedClass: 'PRODUCTION' | 'SYSTEM_GENERAL' =
+      explicitClass === 'SYSTEM_GENERAL'
+        ? 'SYSTEM_GENERAL'
+        : explicitClass === 'PRODUCTION'
+        ? 'PRODUCTION'
+        : info?.assetClass || 'PRODUCTION';
+    return {
+      assetClass: resolvedClass,
+      machineCode: info?.code || rawCode || 'GLOBAL',
+      rawCode,
+      machineName: String(record?.nom_machine || record?.machineName || info?.name || rawCode || 'GLOBAL'),
+    };
+  };
+
+  const matchesClassFilter = (recClass: 'PRODUCTION' | 'SYSTEM_GENERAL'): boolean => {
+    if (!assetClass || assetClass === 'ALL') return true;
+    return recClass === assetClass;
+  };
+
+  const isTaskArchivedOrInactive = (t: any): boolean => {
+    if (!t) return true;
+    if (t.active === false || t.is_active === false || t.actif === false) return true;
+    if (t.archived === true || t.isArchived === true) return true;
+    const st = String(t.statut || t.status || t.etat || '').trim().toUpperCase();
+    if (
+      st === 'ARCHIVE' ||
+      st === 'ARCHIVEE' ||
+      st === 'ARCHIVÉE' ||
+      st === 'ARCHIVED' ||
+      st === 'INACTIF' ||
+      st === 'ANNULE' ||
+      st === 'SUSPENDU' ||
+      st === 'SUSPENDUE'
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const isMachineArchivedOrInactive = (rawCode: string, canonicalCode: string): boolean => {
+    if (allRegisteredMachineCodes.size === 0) return false;
+    const candidates = [rawCode, canonicalCode].filter((c) => c && c !== 'GLOBAL');
+    if (candidates.length === 0) return false;
+    const existsInRegistered = candidates.some((c) => allRegisteredMachineCodes.has(c));
+    if (!existsInRegistered) return false;
+    const isActive = candidates.some((c) => activeMachineCodes.has(c));
+    return !isActive;
+  };
+
+  const isWithinWindow = (ymd: string | null | undefined): boolean => {
+    if (!ymd) return false;
+    return ymd >= fromYMD && ymd <= toYMD;
+  };
+
+  let archivedExcludedCount = 0;
+  let pendingClaimsExcludedCount = 0;
+  const activeTaskById = new Map<string, any>();
+
+  (preventiveTasks || []).forEach((t) => {
+    if (!t) return;
+    const meta = resolveTaskAssetMeta(t);
+    if (!matchesClassFilter(meta.assetClass)) return;
+
+    if (isTaskArchivedOrInactive(t) || isMachineArchivedOrInactive(meta.rawCode, meta.machineCode)) {
+      archivedExcludedCount++;
+      return;
+    }
+
+    const tid = String(t.id || t.code_tache || '').trim();
+    if (tid) {
+      activeTaskById.set(tid, t);
+    }
+  });
+
+  // Group executions in window by taskId
+  const approvedExecByTask = new Map<string, any>();
+  const pendingClaimTaskIds = new Set<string>();
+
+  (preventiveExecutions || []).forEach((ex) => {
+    if (!ex) return;
+    const statusUpper = String(ex.status || '').trim().toUpperCase();
+    if (statusUpper === 'SKIPPED') return;
+
+    const tid = String(ex.taskId || ex.id_tache || ex.id || '').trim();
+    const linkedTask = tid ? (preventiveTasks || []).find((pt) => String(pt?.id || pt?.code_tache || '').trim() === tid) : null;
+
+    const meta = resolveTaskAssetMeta(linkedTask || ex);
+    if (!matchesClassFilter(meta.assetClass)) return;
+
+    // Exclude executions linked to archived tasks or archived machines from denominator
+    if (
+      (linkedTask && isTaskArchivedOrInactive(linkedTask)) ||
+      isMachineArchivedOrInactive(meta.rawCode, meta.machineCode)
+    ) {
+      return;
+    }
+
+    const execYMD = normalizeDateToYMD(ex.executedAt || ex.date || ex.created_at);
+    if (!isWithinWindow(execYMD)) return;
+
+    if (isUnapprovedFieldClaim(ex)) {
+      if (tid) pendingClaimTaskIds.add(tid);
+      pendingClaimsExcludedCount++;
+      return;
+    }
+
+    const key = tid || `EXEC-${String(ex.id || approvedExecByTask.size + 1)}`;
+    const prev = approvedExecByTask.get(key);
+    if (!prev) {
+      approvedExecByTask.set(key, ex);
+    } else {
+      const prevYMD = normalizeDateToYMD(prev.executedAt || prev.date) || '';
+      if ((execYMD || '') >= prevYMD) {
+        approvedExecByTask.set(key, ex);
+      }
+    }
+  });
+
+  const items: PmComplianceTaskItem[] = [];
+  const handledTaskIds = new Set<string>();
+
+  // 1) Process approved executions in window -> ON_TIME vs LATE
+  approvedExecByTask.forEach((ex, key) => {
+    const linkedTask = activeTaskById.get(key);
+    if (linkedTask) {
+      handledTaskIds.add(key);
+    }
+
+    const meta = resolveTaskAssetMeta(linkedTask || ex);
+    const execYMD = normalizeDateToYMD(ex.executedAt || ex.date || ex.created_at) || toYMD;
+
+    const rawScheduledDue =
+      ex.scheduledDueDate ||
+      ex.dueDate ||
+      ex.echeance ||
+      linkedTask?.echeance_precedente ||
+      linkedTask?.scheduledDueDate ||
+      linkedTask?.date_prevue ||
+      linkedTask?.date_planifiee ||
+      linkedTask?.dueDate;
+    let dueYMD = normalizeDateToYMD(rawScheduledDue);
+
+    if (!dueYMD && linkedTask) {
+      const candidateNext = normalizeDateToYMD(linkedTask.prochaine_echeance || linkedTask.nextDueDate);
+      if (candidateNext && candidateNext <= toYMD) {
+        dueYMD = candidateNext;
+      }
+    }
+
+    const isLateCompletion = Boolean(dueYMD && execYMD > dueYMD);
+    const status: PmComplianceStatus = isLateCompletion ? 'LATE' : 'ON_TIME';
+
+    items.push({
+      taskId: key,
+      taskName: String(
+        ex.taskName || linkedTask?.tache || linkedTask?.designation || linkedTask?.organe || 'Tâche préventive'
+      ),
+      machineCode: meta.machineCode,
+      machineName: meta.machineName,
+      assetClass: meta.assetClass,
+      dueDate: dueYMD || execYMD,
+      approvedExecutedAt: execYMD,
+      status,
+      statusLabelFr: status === 'ON_TIME' ? 'À temps' : 'Fait en retard',
+      assignedTo: String(ex.executorName || linkedTask?.responsable || linkedTask?.technicien || 'Technicien'),
+    });
+  });
+
+  // 2) Process remaining active tasks in activeTaskById
+  activeTaskById.forEach((t, tid) => {
+    if (handledTaskIds.has(tid)) return;
+
+    const meta = resolveTaskAssetMeta(t);
+    const etatNorm = String(t.etat || t.statut || '').trim().toUpperCase();
+    const isTaskMarkedDone = etatNorm === 'FAIT' || etatNorm === 'TERMINE' || etatNorm === 'EXECUTE';
+    const isTaskUnapprovedClaim = isUnapprovedFieldClaim(t);
+
+    if (isTaskUnapprovedClaim && !pendingClaimTaskIds.has(tid)) {
+      pendingClaimTaskIds.add(tid);
+      pendingClaimsExcludedCount++;
+    }
+
+    const rawDue =
+      t.scheduledDueDate ||
+      t.echeance_precedente ||
+      t.nextDueDate ||
+      t.prochaine_echeance ||
+      t.date_prevue ||
+      t.date_planifiee ||
+      t.dueDate;
+    const dueYMD = normalizeDateToYMD(rawDue);
+    const lastRealizedYMD = normalizeDateToYMD(t.derniere_realisation || t.date_realisation || t.executedAt);
+
+    // Support direct approved task completion within window when no separate PreventiveExecutionRecord was pushed
+    if (isTaskMarkedDone && !isTaskUnapprovedClaim && isWithinWindow(lastRealizedYMD)) {
+      const effectiveDue =
+        normalizeDateToYMD(t.echeance_precedente || t.scheduledDueDate || t.date_prevue || t.date_planifiee || t.dueDate) ||
+        (dueYMD && dueYMD <= toYMD ? dueYMD : null);
+      const isLate = Boolean(effectiveDue && lastRealizedYMD! > effectiveDue);
+      const status: PmComplianceStatus = isLate ? 'LATE' : 'ON_TIME';
+      items.push({
+        taskId: tid,
+        taskName: String(t.tache || t.designation || t.organe || 'Tâche préventive'),
+        machineCode: meta.machineCode,
+        machineName: meta.machineName,
+        assetClass: meta.assetClass,
+        dueDate: effectiveDue || lastRealizedYMD!,
+        approvedExecutedAt: lastRealizedYMD!,
+        status,
+        statusLabelFr: status === 'ON_TIME' ? 'À temps' : 'Fait en retard',
+        assignedTo: String(t.responsable || t.technicien || 'Technicien'),
+      });
+      return;
+    }
+
+    // If task is already approved-done and its next due date is in the future (> toYMD), it's not due in this window
+    if (isTaskMarkedDone && !isTaskUnapprovedClaim && (!dueYMD || dueYMD > toYMD)) {
+      return;
+    }
+
+    const isExplicitLate = etatNorm.includes('RETARD');
+    const isDueByEndOfWindow = Boolean(dueYMD && dueYMD <= toYMD);
+
+    if (isExplicitLate || isDueByEndOfWindow) {
+      items.push({
+        taskId: tid,
+        taskName: String(t.tache || t.designation || t.organe || 'Tâche préventive'),
+        machineCode: meta.machineCode,
+        machineName: meta.machineName,
+        assetClass: meta.assetClass,
+        dueDate: dueYMD || toYMD,
+        status: 'OVERDUE',
+        statusLabelFr: 'En retard (Non réalisé)',
+        assignedTo: String(t.responsable || t.technicien || 'Non assigné'),
+        hasPendingClaim: isTaskUnapprovedClaim || pendingClaimTaskIds.has(tid),
+      });
+    }
+  });
+
+  const onTimeCount = items.filter((i) => i.status === 'ON_TIME').length;
+  const lateCompletedCount = items.filter((i) => i.status === 'LATE').length;
+  const overdueCount = items.filter((i) => i.status === 'OVERDUE').length;
+  const completedTotalCount = onTimeCount + lateCompletedCount;
+  const totalEligibleCount = onTimeCount + lateCompletedCount + overdueCount;
+
+  const onTimeComplianceRate =
+    totalEligibleCount > 0 ? Math.min(100, Math.round((onTimeCount / totalEligibleCount) * 100)) : 100;
+  const overallCompletionRate =
+    totalEligibleCount > 0 ? Math.min(100, Math.round((completedTotalCount / totalEligibleCount) * 100)) : 100;
+
+  return {
+    onTimeCount,
+    lateCompletedCount,
+    overdueCount,
+    completedTotalCount,
+    totalEligibleCount,
+    onTimeComplianceRate,
+    overallCompletionRate,
+    pendingClaimsExcludedCount,
+    archivedExcludedCount,
+    items,
+  };
 }
 
 export function buildShiftOrWeeklyReport({
@@ -1103,7 +1453,7 @@ export function buildShiftOrWeeklyReport({
     const meta = resolveRecordAssetClass(t, 'code_machine');
     if (!matchesClassFilter(meta.assetClass)) return;
 
-    if (hasRegisteredMachines && activeMachineCodes.size > 0 && meta.machineCode !== 'GLOBAL') {
+    if (hasRegisteredMachines && meta.machineCode !== 'GLOBAL') {
       if (!activeMachineCodes.has(meta.machineCode)) {
         const existsInAll = (machines || []).some(
           (m) =>
@@ -1147,11 +1497,20 @@ export function buildShiftOrWeeklyReport({
     }
   });
 
+  const pmCompliance = computePmWindowCompliance({
+    fromYMD,
+    toYMD,
+    assetClass,
+    preventiveTasks,
+    preventiveExecutions,
+    machines,
+  });
+
   const preventiveOverdueSnapshotCount = overdueTasksList.length;
-  const preventiveDueInWindowCount = Math.max(
-    preventiveExecutedInPeriodCount + preventiveOverdueSnapshotCount,
-    dueInWindowTasksCount
-  );
+  const preventiveDueInWindowCount =
+    pmCompliance.totalEligibleCount > 0
+      ? pmCompliance.totalEligibleCount
+      : Math.max(preventiveExecutedInPeriodCount + preventiveOverdueSnapshotCount, dueInWindowTasksCount);
   const preventiveDisciplineRate =
     preventiveDueInWindowCount > 0
       ? Math.min(100, Math.round((preventiveExecutedInPeriodCount / preventiveDueInWindowCount) * 100))
@@ -1287,6 +1646,7 @@ export function buildShiftOrWeeklyReport({
     overdueTasksSample: overdueTasksList.slice(0, 5),
     preventiveTotalCost: Number(preventiveTotalCost.toFixed(2)),
     preventiveLaborHours,
+    pmCompliance,
 
     sortiesCount,
     sortiesTotalQuantity,
