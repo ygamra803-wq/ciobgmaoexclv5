@@ -1304,10 +1304,102 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(queues.totalPending).toBe(4);
     expect(queues.totalClarification).toBe(1);
   });
+
+  it('Phase 0 — A3 Operational Snapshot Export & Restore: exports all critical V4 entities without secrets, previews counts, and restores store + storage cleanly', async () => {
+    const { AutoBackupService } = await import('../../core/backup/AutoBackupService');
+    const { STORAGE_KEYS } = await import('../../infrastructure/persistence/storageKeys');
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+
+    const initialState = useGmaoStore.getState();
+    try {
+      localStorage.clear();
+
+      // Seed live store state with V4 entities + a secret field to verify stripping
+      useGmaoStore.setState({
+        machines: [{ id_machine_registered: 'M-A3-01', nom: 'Compresseur Atlas', id_zone: 'ZONE-01' }] as any,
+        generalSystemTypes: [{ id: 'SYS-AIR', label: 'Air Comprimé', is_active: true }] as any,
+        rawStock: [{ id: 'ART-A3', ref: 'PDR-A3-99', designation: 'Courroie Trapézoïdale', stockInitial: 10 }] as any,
+        mouvements: [{ id: 'MVT-A3-1', ref: 'PDR-A3-99', type: 'Sortie', quantite: 2 }] as any,
+        sortieDemands: [{ id: 'SD-A3-1', ref: 'PDR-A3-99', quantite: 1, validation_status: 'PENDING_VALIDATION' }] as any,
+        preventiveTasks: [{ id: 'PRV-A3-1', machineCode: 'M-A3-01', organe: 'Filtre' }] as any,
+        preventiveExecutions: [{ id: 'EXEC-A3-1', taskId: 'PRV-A3-1', periodMonth: '2026-10', validation_status: 'APPROVED' }] as any,
+        correctiveInterventions: [{ id: 'BT-A3-1', code_machine: 'M-A3-01', statut: 'CLOTURE', validation_status: 'APPROVED' }] as any,
+        users: [
+          {
+            id: 'TECH-01',
+            nom: 'Karim Tech',
+            role: 'TECHNICIEN',
+            passwordHash: 'SECRET_HASH_DO_NOT_EXPORT',
+            apiToken: 'SECRET_TOKEN_123',
+          },
+        ] as any,
+      });
+
+      // 1. Build full operational snapshot
+      const snapshotPayload = AutoBackupService.buildOperationalSnapshotPayload('full');
+      expect(snapshotPayload.version).toBe('4.0.0');
+      expect(snapshotPayload.counts.machines).toBe(1);
+      expect(snapshotPayload.counts.spare_parts).toBe(1);
+      expect(snapshotPayload.counts.movements).toBe(1);
+      expect(snapshotPayload.counts.sortie_demands).toBe(1);
+      expect(snapshotPayload.counts.preventive).toBe(1);
+      expect(snapshotPayload.counts.preventive_executions).toBe(1);
+      expect(snapshotPayload.counts.corrective).toBe(1);
+      expect(snapshotPayload.data[STORAGE_KEYS.GENERAL_SYSTEM_TYPES]).toHaveLength(1);
+      expect(snapshotPayload.data[STORAGE_KEYS.SORTIE_DEMANDS]).toHaveLength(1);
+      expect(snapshotPayload.data[STORAGE_KEYS.PREVENTIVE_EXECUTIONS]).toHaveLength(1);
+
+      // Verify secrets are stripped
+      const exportedJson = JSON.stringify(snapshotPayload);
+      expect(exportedJson).not.toContain('SECRET_HASH_DO_NOT_EXPORT');
+      expect(exportedJson).not.toContain('SECRET_TOKEN_123');
+      expect(exportedJson).not.toContain('passwordHash');
+
+      // 2. Preview validation before overwrite confirmation
+      const preview = AutoBackupService.parseAndNormalizeBackupJSON(exportedJson);
+      expect(preview.valid).toBe(true);
+      expect(preview.counts.machines).toBe(1);
+      expect(preview.counts.sortie_demands).toBe(1);
+
+      // Reject invalid JSON
+      const badPreview = AutoBackupService.parseAndNormalizeBackupJSON('{"invalid": true}');
+      expect(badPreview.valid).toBe(false);
+      expect(AutoBackupService.importFullBackupJSON('{"invalid": true}')).toBe(false);
+
+      // 3. Wipe store & storage, then restore from the exported JSON snapshot
+      localStorage.clear();
+      useGmaoStore.setState({
+        machines: [],
+        generalSystemTypes: [],
+        rawStock: [],
+        mouvements: [],
+        sortieDemands: [],
+        preventiveTasks: [],
+        preventiveExecutions: [],
+        correctiveInterventions: [],
+      });
+      expect(useGmaoStore.getState().machines).toHaveLength(0);
+
+      const importedOk = AutoBackupService.importFullBackupJSON(exportedJson);
+      expect(importedOk).toBe(true);
+
+      // Verify store and localStorage were both hydrated
+      const restoredStore = useGmaoStore.getState();
+      expect(restoredStore.machines).toHaveLength(1);
+      expect(restoredStore.machines[0].id_machine_registered).toBe('M-A3-01');
+      expect(restoredStore.generalSystemTypes).toHaveLength(1);
+      expect(restoredStore.rawStock).toHaveLength(1);
+      expect(restoredStore.mouvements).toHaveLength(1);
+      expect(restoredStore.sortieDemands).toHaveLength(1);
+      expect(restoredStore.preventiveTasks).toHaveLength(1);
+      expect(restoredStore.preventiveExecutions).toHaveLength(1);
+      expect(restoredStore.correctiveInterventions).toHaveLength(1);
+
+      // And a safety snapshot was created before import
+      const snapshots = AutoBackupService.listSnapshots();
+      expect(snapshots.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      useGmaoStore.setState(initialState);
+    }
+  });
 });
-
-
-
-
-
-

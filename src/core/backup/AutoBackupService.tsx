@@ -2,12 +2,15 @@ import { Logger } from '../logger/LoggerService';
 import { indexedDBService } from '../../utils/indexedDBService';
 import { storageService } from '../../utils/storageService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { DataGateway } from '../../application/DataGateway';
+import { useGmaoStore } from '../../store/useGmaoStore';
 
 export const BACKUP_STORAGE_KEY = 'gmao_snapshots_history';
 export const MAX_SNAPSHOTS = 12;
 
 export const MASTER_REFERENTIAL_KEYS = [
   STORAGE_KEYS.MACHINES,
+  STORAGE_KEYS.GENERAL_SYSTEM_TYPES,
   STORAGE_KEYS.ZONES,
   STORAGE_KEYS.FAMILIES,
   STORAGE_KEYS.TEMPLATES,
@@ -38,7 +41,9 @@ export const OPERATIONS_HISTORY_KEYS = [
   STORAGE_KEYS.CORRECTIVE_TRAVAUX,
   STORAGE_KEYS.CORRECTIVE_INTERVENANTS,
   STORAGE_KEYS.MOUVEMENTS,
+  STORAGE_KEYS.SORTIE_DEMANDS,
   STORAGE_KEYS.PREVENTIVE_TASKS,
+  STORAGE_KEYS.PREVENTIVE_EXECUTIONS,
   STORAGE_KEYS.SORTIE_EXTERNE,
   'gmao_access_logs',
 ];
@@ -48,6 +53,131 @@ const CRITICAL_KEYS = Array.from(new Set([
   ...MASTER_REFERENTIAL_KEYS,
   ...OPERATIONS_HISTORY_KEYS,
 ]));
+
+const CANONICAL_PROP_TO_STORAGE_KEY: Record<string, string> = {
+  machines: STORAGE_KEYS.MACHINES,
+  generalSystemTypes: STORAGE_KEYS.GENERAL_SYSTEM_TYPES,
+  zones: STORAGE_KEYS.ZONES,
+  families: STORAGE_KEYS.FAMILIES,
+  templates: STORAGE_KEYS.TEMPLATES,
+  blueprints: STORAGE_KEYS.BLUEPRINTS,
+  machineElementsLedger: STORAGE_KEYS.MACHINE_BOM,
+  types: STORAGE_KEYS.STOCK_TYPES,
+  designations: STORAGE_KEYS.DESIGNATIONS,
+  users: STORAGE_KEYS.PERSONNEL,
+  technicians: STORAGE_KEYS.TECHNICIANS,
+  operations: STORAGE_KEYS.OPERATIONS,
+  compGroups: STORAGE_KEYS.COMP_GROUPS,
+  compFamilies: STORAGE_KEYS.COMP_FAMILIES,
+  compTemplates: STORAGE_KEYS.COMP_TEMPLATES,
+  partTypes: STORAGE_KEYS.PART_TYPES,
+  partDesignations: STORAGE_KEYS.PART_DESIGNATIONS,
+  preventiveActions: STORAGE_KEYS.PREVENTIVE_ACTIONS,
+  preventiveGuides: STORAGE_KEYS.PREVENTIVE_GUIDES,
+  preventivePlans: STORAGE_KEYS.PREVENTIVE_PLANS,
+  rawStock: STORAGE_KEYS.RAW_STOCK,
+  warehouseItems: STORAGE_KEYS.WAREHOUSE_ITEMS,
+  entrepotComponents: STORAGE_KEYS.ENTREPOT_COMPONENTS,
+  correctiveInterventions: STORAGE_KEYS.CORRECTIVE_INTERVENTIONS,
+  correctiveActionsByPanne: STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE,
+  correctivePanneCategories: STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES,
+  correctiveTravauxAFaire: STORAGE_KEYS.CORRECTIVE_TRAVAUX,
+  correctiveIntervenants: STORAGE_KEYS.CORRECTIVE_INTERVENANTS,
+  mouvements: STORAGE_KEYS.MOUVEMENTS,
+  sortieDemands: STORAGE_KEYS.SORTIE_DEMANDS,
+  preventiveTasks: STORAGE_KEYS.PREVENTIVE_TASKS,
+  preventiveExecutions: STORAGE_KEYS.PREVENTIVE_EXECUTIONS,
+  sortiesExterne: STORAGE_KEYS.SORTIE_EXTERNE,
+};
+
+const STORAGE_KEY_TO_CANONICAL_PROP: Record<string, string> = Object.entries(
+  CANONICAL_PROP_TO_STORAGE_KEY
+).reduce((acc, [prop, storageKey]) => {
+  acc[storageKey] = prop;
+  return acc;
+}, {} as Record<string, string>);
+
+const FORBIDDEN_SECRET_FIELD_NAMES = new Set([
+  'password',
+  'passwordHash',
+  'pinHash',
+  'masterPin',
+  'apiToken',
+  'apiKey',
+  'secret',
+  'privateKey',
+  'X-GMAO-API-TOKEN',
+]);
+
+function stripSecretsDeep(value: any): any {
+  if (Array.isArray(value)) {
+    return value.map(stripSecretsDeep);
+  }
+  if (value && typeof value === 'object') {
+    const cleaned: Record<string, any> = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (FORBIDDEN_SECRET_FIELD_NAMES.has(k)) continue;
+      cleaned[k] = stripSecretsDeep(v);
+    }
+    return cleaned;
+  }
+  return value;
+}
+
+function hydrateStoreFromStorageMap(storageMap: Record<string, any>) {
+  const serverState: Record<string, any> = {};
+  for (const [key, val] of Object.entries(storageMap)) {
+    const canonicalProp = STORAGE_KEY_TO_CANONICAL_PROP[key];
+    if (canonicalProp) {
+      serverState[canonicalProp] = val;
+    } else if (CANONICAL_PROP_TO_STORAGE_KEY[key]) {
+      serverState[key] = val;
+    }
+  }
+  if (Object.keys(serverState).length === 0) return;
+
+  try {
+    const store = useGmaoStore.getState();
+    DataGateway.loadFullServerState(serverState, {
+      applyRemoteStateUpdate: store.applyRemoteStateUpdate,
+      setTypes: store.setTypes,
+      setDesignations: store.setDesignations,
+      setRawStock: store.setRawStock,
+      setFamilies: store.setFamilies,
+      setTemplates: store.setTemplates,
+      setBlueprints: store.setBlueprints,
+      setMachines: store.setMachines,
+      setGeneralSystemTypes: store.setGeneralSystemTypes,
+      setZones: store.setZones,
+      setMachineElementsLedger: store.setMachineElementsLedger,
+      setWarehouseItems: store.setWarehouseItems,
+      setEntrepotComponents: store.setEntrepotComponents,
+      setCompGroups: store.setCompGroups,
+      setCompFamilies: store.setCompFamilies,
+      setCompTemplates: store.setCompTemplates,
+      setPartTypes: store.setPartTypes,
+      setPartDesignations: store.setPartDesignations,
+      setUsers: store.setUsers,
+      setTechnicians: store.setTechnicians,
+      setOperations: store.setOperations,
+      setMouvements: store.setMouvements,
+      setSortieDemands: store.setSortieDemands,
+      setPreventiveTasks: store.setPreventiveTasks,
+      setPreventiveActions: store.setPreventiveActions,
+      setPreventiveGuides: store.setPreventiveGuides,
+      setPreventivePlans: store.setPreventivePlans,
+      setPreventiveExecutions: store.setPreventiveExecutions,
+      setSortiesExterne: store.setSortiesExterne,
+      setCorrectiveInterventions: store.setCorrectiveInterventions,
+      setCorrectiveActionsByPanne: store.setCorrectiveActionsByPanne,
+      setCorrectivePanneCategories: store.setCorrectivePanneCategories,
+      setCorrectiveTravauxAFaire: store.setCorrectiveTravauxAFaire,
+      setCorrectiveIntervenants: store.setCorrectiveIntervenants,
+    });
+  } catch (err) {
+    Logger.warn('[AutoBackupService] Store hydration warning on restore', err);
+  }
+}
 
 // In-memory cache for fast, synchronous retrieval of recent snapshot payloads
 const snapshotDataCache = new Map();
@@ -239,6 +369,72 @@ export class AutoBackupService {
   }
 
   /**
+   * Collects sanitized canonical storage data for target keys from localStorage and live Zustand store.
+   */
+  static collectStorageDataForKeys(targetKeys = CRITICAL_KEYS) {
+    const data: Record<string, any> = {};
+    let storeState: Record<string, any> = {};
+    try {
+      storeState = (useGmaoStore.getState() as unknown as Record<string, any>) || {};
+    } catch {
+      storeState = {};
+    }
+
+    for (const key of targetKeys) {
+      try {
+        let value: any = undefined;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          value = JSON.parse(raw);
+        }
+        const canonicalProp = STORAGE_KEY_TO_CANONICAL_PROP[key];
+        if (
+          canonicalProp &&
+          storeState[canonicalProp] !== undefined &&
+          (value === undefined ||
+            (Array.isArray(value) &&
+              value.length === 0 &&
+              Array.isArray(storeState[canonicalProp]) &&
+              storeState[canonicalProp].length > 0))
+        ) {
+          value = storeState[canonicalProp];
+        }
+        if (value !== undefined) {
+          data[key] = stripSecretsDeep(value);
+        }
+      } catch {
+        // ignore corrupted single key
+      }
+    }
+    return data;
+  }
+
+  /**
+   * Computes normalized entity counts from a storage or canonical state map.
+   */
+  static summarizeCounts(rawMap: Record<string, any> = {}) {
+    const counts: Record<string, number> = {};
+    for (const [key, val] of Object.entries(rawMap)) {
+      if (Array.isArray(val)) {
+        counts[key.replace('gmao_', '')] = val.length;
+      }
+    }
+    const getLen = (storageKey: string, propName: string) => {
+      if (Array.isArray(rawMap[storageKey])) return rawMap[storageKey].length;
+      if (Array.isArray(rawMap[propName])) return rawMap[propName].length;
+      return 0;
+    };
+    counts.machines = getLen(STORAGE_KEYS.MACHINES, 'machines');
+    counts.spare_parts = getLen(STORAGE_KEYS.RAW_STOCK, 'rawStock');
+    counts.movements = getLen(STORAGE_KEYS.MOUVEMENTS, 'mouvements');
+    counts.corrective = getLen(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS, 'correctiveInterventions');
+    counts.preventive = getLen(STORAGE_KEYS.PREVENTIVE_TASKS, 'preventiveTasks');
+    counts.preventive_executions = getLen(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, 'preventiveExecutions');
+    counts.sortie_demands = getLen(STORAGE_KEYS.SORTIE_DEMANDS, 'sortieDemands');
+    return counts;
+  }
+
+  /**
    * Captures the current snapshot of all application data
    * @param {string} reason - Cause of snapshot
    * @param {boolean} isManual - Whether triggered manually
@@ -249,23 +445,8 @@ export class AutoBackupService {
       this.sanitizeLegacyStorage();
       this.requestPersistentStorage();
 
-      const data = {};
-      const counts = {};
-
-      for (const key of CRITICAL_KEYS) {
-        try {
-          const raw = localStorage.getItem(key);
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            data[key] = parsed;
-            if (Array.isArray(parsed)) {
-              counts[key.replace('gmao_', '')] = parsed.length;
-            }
-          }
-        } catch {
-          // ignore corrupted single key
-        }
-      }
+      const data = this.collectStorageDataForKeys(CRITICAL_KEYS);
+      const counts = this.summarizeCounts(data);
 
       const timestamp = Date.now();
       const dateStr = new Date(timestamp).toLocaleString('fr-FR', {
@@ -287,7 +468,7 @@ export class AutoBackupService {
         isManual,
         counts,
         data,
-        version: '3.0.0',
+        version: '4.0.0',
       };
 
       snapshotDataCache.set(snapshotId, fullSnapshot);
@@ -305,7 +486,7 @@ export class AutoBackupService {
         reason,
         isManual,
         counts,
-        version: '3.0.0',
+        version: '4.0.0',
       };
 
       const history = this.listSnapshots();
@@ -415,6 +596,8 @@ export class AutoBackupService {
         }
       }
 
+      hydrateStoreFromStorageMap(snapshot.data);
+
       try {
         if (indexedDBService && typeof indexedDBService.setItemsBatch === 'function') {
           await indexedDBService.setItemsBatch(snapshot.data);
@@ -460,48 +643,131 @@ export class AutoBackupService {
   }
 
   /**
+   * Builds the operational JSON backup payload (without secrets or session tokens).
+   */
+  static buildOperationalSnapshotPayload(partitionType: 'master' | 'operations' | 'full' = 'full') {
+    let targetKeys = CRITICAL_KEYS;
+    if (partitionType === 'master') {
+      targetKeys = MASTER_REFERENTIAL_KEYS;
+    } else if (partitionType === 'operations') {
+      targetKeys = OPERATIONS_HISTORY_KEYS;
+    }
+
+    const data = this.collectStorageDataForKeys(targetKeys);
+    const counts = this.summarizeCounts(data);
+
+    return {
+      app: 'CIOB GMAO Enterprise',
+      partition: partitionType,
+      exportDate: new Date().toISOString(),
+      version: '4.0.0',
+      counts,
+      data,
+    };
+  }
+
+  /**
    * Export all current data as a standalone JSON backup file
    */
   static exportFullBackupJSON() {
-    this.exportPartitionJSON('full');
+    return this.exportPartitionJSON('full');
   }
 
   /**
    * Export specific partition
    * @param {'master'|'operations'|'full'} partitionType
    */
-  static exportPartitionJSON(partitionType = 'full') {
-    let targetKeys = CRITICAL_KEYS;
+  static exportPartitionJSON(partitionType: 'master' | 'operations' | 'full' = 'full') {
     let label = 'Full';
-
     if (partitionType === 'master') {
-      targetKeys = MASTER_REFERENTIAL_KEYS;
       label = 'Referentiel_Master';
     } else if (partitionType === 'operations') {
-      targetKeys = OPERATIONS_HISTORY_KEYS;
       label = 'Historique_Operations';
     }
 
-    const data = {};
-    for (const key of targetKeys) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) data[key] = JSON.parse(raw);
-      } catch {
-        // pass
-      }
-    }
-
-    const payload = {
-      app: 'CIOB GMAO Enterprise',
-      partition: partitionType,
-      exportDate: new Date().toISOString(),
-      version: '3.0.0',
-      data,
-    };
-
+    const payload = this.buildOperationalSnapshotPayload(partitionType);
     const fileName = `CIOB_GMAO_${label}_${new Date().toISOString().split('T')[0]}.json`;
     this.exportBackupToFileSystem(payload, fileName);
+    return payload;
+  }
+
+  /**
+   * Normalize any valid backup JSON (AutoBackupService format or gmao_state.json format)
+   * into a sanitized map of canonical STORAGE_KEYS.
+   */
+  static parseAndNormalizeBackupJSON(jsonText: string): {
+    valid: boolean;
+    partition: string;
+    exportDate: string | null;
+    storageMap: Record<string, any>;
+    counts: Record<string, number>;
+    error?: string;
+  } {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return {
+          valid: false,
+          partition: 'full',
+          exportDate: null,
+          storageMap: {},
+          counts: {},
+          error: 'Structure JSON invalide.',
+        };
+      }
+
+      const rawData =
+        parsed.data && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+          ? parsed.data
+          : parsed;
+      const partition = typeof parsed.partition === 'string' ? parsed.partition : 'full';
+      const exportDate =
+        typeof parsed.exportDate === 'string'
+          ? parsed.exportDate
+          : typeof parsed.updatedAt === 'string'
+          ? parsed.updatedAt
+          : null;
+
+      const storageMap: Record<string, any> = {};
+      for (const [key, value] of Object.entries(rawData)) {
+        if (value === undefined) continue;
+        if (CRITICAL_KEYS.includes(key)) {
+          storageMap[key] = stripSecretsDeep(value);
+        } else if (CANONICAL_PROP_TO_STORAGE_KEY[key]) {
+          storageMap[CANONICAL_PROP_TO_STORAGE_KEY[key]] = stripSecretsDeep(value);
+        }
+      }
+
+      const recognizedCount = Object.keys(storageMap).length;
+      if (recognizedCount === 0) {
+        return {
+          valid: false,
+          partition,
+          exportDate,
+          storageMap: {},
+          counts: {},
+          error: 'Aucune entité GMAO reconnue dans ce fichier JSON.',
+        };
+      }
+
+      const counts = this.summarizeCounts(storageMap);
+      return {
+        valid: true,
+        partition,
+        exportDate,
+        storageMap,
+        counts,
+      };
+    } catch {
+      return {
+        valid: false,
+        partition: 'full',
+        exportDate: null,
+        storageMap: {},
+        counts: {},
+        error: 'Fichier JSON illisible ou corrompu.',
+      };
+    }
   }
 
   /**
@@ -511,22 +777,29 @@ export class AutoBackupService {
    */
   static importFullBackupJSON(jsonText) {
     try {
-      const parsed = JSON.parse(jsonText);
-      const data = parsed.data || parsed;
-      const partition = parsed.partition || 'full';
+      const normalized = this.parseAndNormalizeBackupJSON(jsonText);
+      if (!normalized.valid) {
+        Logger.warn('[AutoBackupService] Rejected invalid backup JSON:', normalized.error);
+        return false;
+      }
 
+      const { storageMap, partition } = normalized;
       this.createSnapshot(`Sauvegarde avant import ${partition}`, false);
 
-      for (const [key, value] of Object.entries(data)) {
+      for (const [key, value] of Object.entries(storageMap)) {
         if (CRITICAL_KEYS.includes(key)) {
           this.safeSetLocalStorage(key, JSON.stringify(value));
         }
       }
 
-      indexedDBService.setItemsBatch(data).catch(() => {});
+      hydrateStoreFromStorageMap(storageMap);
+
+      if (indexedDBService && typeof indexedDBService.setItemsBatch === 'function') {
+        indexedDBService.setItemsBatch(storageMap).catch(() => {});
+      }
 
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('gmao:state_synced', { detail: data }));
+        window.dispatchEvent(new CustomEvent('gmao:state_synced', { detail: storageMap }));
       }
 
       Logger.info(`[AutoBackupService] Backup imported successfully (${partition})`);
@@ -545,13 +818,24 @@ export class AutoBackupService {
     try {
       this.createSnapshot('Sauvegarde avant réinitialisation des opérations', false);
 
+      const emptyOpsMap: Record<string, any> = {};
       for (const key of OPERATIONS_HISTORY_KEYS) {
         try {
           localStorage.removeItem(key);
+          if (
+            key === STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE ||
+            key === STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES
+          ) {
+            emptyOpsMap[key] = {};
+          } else if (key !== 'gmao_access_logs') {
+            emptyOpsMap[key] = [];
+          }
         } catch {
           // pass
         }
       }
+
+      hydrateStoreFromStorageMap(emptyOpsMap);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('gmao:state_synced', { detail: { action: 'reset_operations' } }));

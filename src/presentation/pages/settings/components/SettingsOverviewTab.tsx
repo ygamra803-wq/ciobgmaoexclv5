@@ -1,4 +1,5 @@
-import { HardDrive, Database, Activity, FileSpreadsheet, Download } from 'lucide-react';
+import { HardDrive, Database, Activity, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
+import { AutoBackupService } from '../../../../core/backup/AutoBackupService';
 
 /**
  * Overview & Storage System Supervision Panel.
@@ -25,6 +26,7 @@ export default function SettingsOverviewTab({
   linkedFileHandle,
   onDownloadBlankTemplate,
   onExportExcel,
+  onOpenBackupManager,
   showToast,
 }: any) {
   return (
@@ -138,6 +140,54 @@ export default function SettingsOverviewTab({
               {linkedFileHandle ? 'Connecté en Direct' : 'Simulation Active (Excel Twin)'}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* UNIFIED OPERATIONAL JSON SNAPSHOT BACKUP & RESTORE CARD (A3) */}
+      <div
+        data-testid="a3-operational-snapshot-card"
+        className="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+      >
+        <div className="flex items-start gap-3">
+          <span className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
+            <Database className="w-5 h-5" />
+          </span>
+          <div className="space-y-1">
+            <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 flex-wrap">
+              <span>Sauvegarde & Restauration Snapshot Opérationnel (.JSON)</span>
+              <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
+                SSOT Complet • Sans Secrets
+              </span>
+            </h4>
+            <p className="text-xs text-slate-600 font-medium">
+              Exportez l&apos;intégralité de l&apos;état de l&apos;usine en fichier JSON autonome ou restaurez un point/fichier avec confirmation explicite avant écrasement.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              AutoBackupService.exportFullBackupJSON();
+              showToast?.('Export du snapshot opérationnel JSON déclenché.', 'success');
+            }}
+            className="px-4 py-2.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-indigo-600" />
+            <span>Exporter Snapshot JSON</span>
+          </button>
+
+          {typeof onOpenBackupManager === 'function' && (
+            <button
+              type="button"
+              onClick={onOpenBackupManager}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Restaurer / Points de Sauvegarde</span>
+            </button>
+          )}
         </div>
       </div>
 

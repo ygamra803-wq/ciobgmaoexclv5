@@ -23,6 +23,13 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
   const [snapshots, setSnapshots] = useState([]);
   const [confirmRestoreId, setConfirmRestoreId] = useState(null);
   const [confirmResetOps, setConfirmResetOps] = useState(false);
+  const [pendingImport, setPendingImport] = useState<{
+    fileName: string;
+    jsonText: string;
+    partition: string;
+    exportDate: string | null;
+    counts: Record<string, number>;
+  } | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -42,6 +49,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
       setErrorMsg('');
       setConfirmRestoreId(null);
       setConfirmResetOps(false);
+      setPendingImport(null);
     }
   }, [isOpen]);
 
@@ -118,24 +126,53 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setErrorMsg('');
+    setSuccessMsg('');
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const text = evt.target?.result;
-        const ok = AutoBackupService.importFullBackupJSON(text);
-        if (ok) {
-          setSuccessMsg('Sauvegarde importée avec succès !');
-          refreshList();
-          if (onDataRestored) onDataRestored();
-        } else {
-          setErrorMsg('Fichier de sauvegarde invalide.');
+        const text = String(evt.target?.result || '');
+        const preview = AutoBackupService.parseAndNormalizeBackupJSON(text);
+        if (!preview.valid) {
+          setPendingImport(null);
+          setErrorMsg(preview.error || 'Fichier de sauvegarde invalide.');
+          return;
         }
+        setPendingImport({
+          fileName: file.name,
+          jsonText: text,
+          partition: preview.partition,
+          exportDate: preview.exportDate,
+          counts: preview.counts,
+        });
       } catch {
+        setPendingImport(null);
         setErrorMsg('Erreur de lecture du fichier JSON.');
       }
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  const handleConfirmFileImport = () => {
+    if (!pendingImport) return;
+    setIsRestoring(true);
+    try {
+      const ok = AutoBackupService.importFullBackupJSON(pendingImport.jsonText);
+      setIsRestoring(false);
+      setPendingImport(null);
+      if (ok) {
+        setSuccessMsg('Sauvegarde importée et restaurée avec succès !');
+        refreshList();
+        if (onDataRestored) onDataRestored();
+      } else {
+        setErrorMsg('Fichier de sauvegarde invalide.');
+      }
+    } catch {
+      setIsRestoring(false);
+      setPendingImport(null);
+      setErrorMsg("Erreur lors de l'importation de la sauvegarde.");
+    }
   };
 
   return (
@@ -203,6 +240,61 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
           <div className="mx-4 mt-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-bold text-rose-800 shrink-0 animate-in fade-in">
             <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Explicit Overwrite Confirmation Banner before JSON File Restore */}
+        {pendingImport && (
+          <div
+            data-testid="a3-confirm-import-banner"
+            className="mx-4 mt-3 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl space-y-2.5 shrink-0 animate-in fade-in"
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <h4 className="text-xs font-bold text-amber-950">
+                  Confirmation requise : Écrasement des données actuelles
+                </h4>
+                <p className="text-[11px] text-amber-900 leading-relaxed">
+                  Vous êtes sur le point de restaurer le fichier{' '}
+                  <span className="font-mono font-bold">{pendingImport.fileName}</span>
+                  {pendingImport.exportDate
+                    ? ` (exporté le ${new Date(pendingImport.exportDate).toLocaleString('fr-FR')})`
+                    : ''}
+                  . Cette opération remplacera les données actuelles de l&apos;usine (un point de sauvegarde de sécurité sera créé automatiquement avant l&apos;import).
+                </p>
+                <div className="flex flex-wrap gap-2 text-[10px] font-mono text-amber-900 pt-1">
+                  <span>Machines: <b>{pendingImport.counts?.machines ?? 0}</b></span>
+                  <span>•</span>
+                  <span>PDR: <b>{pendingImport.counts?.spare_parts ?? 0}</b></span>
+                  <span>•</span>
+                  <span>Mouvements: <b>{pendingImport.counts?.movements ?? 0}</b></span>
+                  <span>•</span>
+                  <span>Correctif: <b>{pendingImport.counts?.corrective ?? 0}</b></span>
+                  <span>•</span>
+                  <span>Préventif: <b>{pendingImport.counts?.preventive ?? 0}</b></span>
+                  <span>•</span>
+                  <span>Demandes Sortie: <b>{pendingImport.counts?.sortie_demands ?? 0}</b></span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setPendingImport(null)}
+                className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={isRestoring}
+                onClick={handleConfirmFileImport}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                {isRestoring ? 'Restauration...' : 'Oui, Écraser et Restaurer'}
+              </button>
+            </div>
           </div>
         )}
 

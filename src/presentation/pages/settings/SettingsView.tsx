@@ -1498,6 +1498,7 @@ export default function SettingsView({
             linkedFileHandle={linkedFileHandle}
             onDownloadBlankTemplate={onDownloadBlankTemplate}
             onExportExcel={onExportExcel}
+            onOpenBackupManager={() => setShowBackupManagerModal(true)}
             showToast={showToast}
           />
         )}
