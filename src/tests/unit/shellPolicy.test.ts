@@ -1771,19 +1771,33 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(deps.preventiveCount).toBe(1);
     expect(deps.correctiveCount).toBe(1);
 
-    // 3) Transition ACTIVE ➔ STOPPED ('Arrêt')
+    // 3) Transition ACTIVE ➔ STOPPED ('Arrêt'), including optional is_active === false:
+    // Must remain STOPPED (NOT ARCHIVED) and must NOT suspend PM tasks with archived_with_machine
     const stoppedTransition = transitionMachineLifecycle({
-      machine: initialMachine,
+      machine: { ...initialMachine, is_active: false, archived: false },
       targetStatus: 'Arrêt',
       preventiveTasks: initialTasks,
       timestamp: '2026-10-25T09:00:00Z',
       actor: 'Chef Maintenance',
       reason: 'Arrêt saisonnier ligne 1',
     });
-    expect(getMachineLifecycleState(stoppedTransition.updatedMachine)).toBe('STOPPED');
     expect(isArchivedMachine(stoppedTransition.updatedMachine)).toBe(false);
+    expect(getMachineLifecycleState(stoppedTransition.updatedMachine)).toBe('STOPPED');
+    expect(stoppedTransition.updatedMachine.is_active).toBe(false);
+    expect(stoppedTransition.updatedMachine.archived).toBe(false);
+    expect(stoppedTransition.suspendedTasksCount).toBe(0);
+    expect(stoppedTransition.updatedPreventiveTasks[0].archived_with_machine).toBeUndefined();
     expect(stoppedTransition.updatedMachine.lifecycle_events).toHaveLength(1);
     expect(stoppedTransition.updatedMachine.lifecycle_events[0].event_type).toBe('STATUS_CHANGED');
+    expect(stoppedTransition.updatedMachine.lifecycle_events[0].lifecycle_state).toBe('STOPPED');
+
+    // Direct check on raw record { status: 'Arrêt', is_active: false, archived: false }
+    expect(
+      isArchivedMachine({ id_machine_registered: 'M-STOP', status: 'Arrêt', is_active: false, archived: false })
+    ).toBe(false);
+    expect(
+      getMachineLifecycleState({ id_machine_registered: 'M-STOP', status: 'Arrêt', is_active: false, archived: false })
+    ).toBe('STOPPED');
 
     // 4) Transition STOPPED ➔ ARCHIVED ('ARCHIVEE'): suspends PM tasks & excludes from filterActiveMachines
     const archiveTransition = transitionMachineLifecycle({

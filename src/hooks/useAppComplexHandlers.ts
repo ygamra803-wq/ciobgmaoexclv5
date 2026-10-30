@@ -110,12 +110,11 @@ export function useAppComplexHandlers({
     const prevStatusStr = String(existingMachine?.status || existingMachine?.statut || 'En Service').trim();
     const nextStatusStr = String(updatedMch?.status || updatedMch?.statut || prevStatusStr).trim();
     const wasArchived = isArchivedMachine(existingMachine);
-    const targetArchived =
-      updatedMch?.is_active === false ||
-      updatedMch?.archived === true ||
-      nextStatusStr.toUpperCase() === 'ARCHIVEE' ||
-      nextStatusStr.toUpperCase() === 'ARCHIVÉE' ||
-      nextStatusStr.toUpperCase() === 'ARCHIVED';
+    const targetArchived = isArchivedMachine({
+      ...updatedMch,
+      status: nextStatusStr,
+      statut: nextStatusStr,
+    });
 
     const effectiveTargetStatus = targetArchived ? 'ARCHIVEE' : nextStatusStr;
     const statusOrLifecycleChanged =

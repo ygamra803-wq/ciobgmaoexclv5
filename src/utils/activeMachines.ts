@@ -14,45 +14,51 @@ export interface MachineLifecycleEvent {
 }
 
 /**
- * Returns true when a machine record is in the ARCHIVED lifecycle state.
+ * Returns true ONLY when a machine record is explicitly in the ARCHIVED lifecycle state
+ * (status/statut ARCHIVEE|ARCHIVED or archived===true / explicit archive timestamp).
+ * Note: is_active === false alone does NOT make a machine ARCHIVED (it may be STOPPED/INACTIVE).
  */
 export function isArchivedMachine(machine: any): boolean {
   if (!machine) return false;
   const statusNorm = String(machine.status || machine.statut || '').trim().toUpperCase();
+  const lifecycleNorm = String(machine.lifecycle_state || '').trim().toUpperCase();
   if (
     statusNorm === 'ARCHIVEE' ||
     statusNorm === 'ARCHIVÉE' ||
     statusNorm === 'ARCHIVED' ||
     statusNorm === 'ARCHIVE' ||
+    lifecycleNorm === 'ARCHIVED' ||
     machine.archived === true ||
     machine.isArchived === true
   ) {
     return true;
   }
-  if (machine.is_active === false || machine.actif === false) return true;
   return false;
 }
 
 /**
  * Returns the explicit canonical lifecycle state of a machine:
- * - 'ARCHIVED': Soft-archived asset (status 'ARCHIVEE' / is_active === false), excluded from new selections & active PM.
- * - 'STOPPED': Stopped / inactive operational state ('Arrêt', 'HORS_SERVICE', 'INACTIVE'), still registered.
+ * - 'ARCHIVED': Soft-archived asset (status 'ARCHIVEE' | 'ARCHIVED' or archived === true).
+ * - 'STOPPED': Stopped / inactive operational state ('Arrêt', 'HORS_SERVICE', 'INACTIVE', or is_active === false when not archived).
  * - 'ACTIVE': Operational state ('En Service', 'En Maintenance', 'En Panne').
  */
 export function getMachineLifecycleState(machine: any): MachineLifecycleState {
-  if (!machine || isArchivedMachine(machine)) return 'ARCHIVED';
+  if (!machine) return 'ARCHIVED';
+  if (isArchivedMachine(machine)) return 'ARCHIVED';
   const statusNorm = String(machine.status || machine.statut || 'En Service')
     .trim()
     .toUpperCase();
   if (
     statusNorm === 'ARRÊT' ||
     statusNorm === 'ARRET' ||
-    statusNorm === 'À L\'ARRÊT' ||
+    statusNorm === "À L'ARRÊT" ||
     statusNorm === 'HORS_SERVICE' ||
     statusNorm === 'HORS SERVICE' ||
     statusNorm === 'INACTIVE' ||
     statusNorm === 'INACTIF' ||
-    statusNorm === 'STOPPED'
+    statusNorm === 'STOPPED' ||
+    machine.is_active === false ||
+    machine.actif === false
   ) {
     return 'STOPPED';
   }
@@ -61,11 +67,12 @@ export function getMachineLifecycleState(machine: any): MachineLifecycleState {
 
 /**
  * Machines eligible for NEW links (create forms, bulk relink targets).
- * Archived / inactive machines must never appear in selectors.
+ * Archived or explicitly deactivated (is_active === false) machines must never appear in selectors.
  */
 export function filterActiveMachines(machines: any[] = []) {
   return (machines || []).filter((m) => {
     if (!m || isArchivedMachine(m)) return false;
+    if (m.is_active === false || m.actif === false) return false;
     return Boolean(m.id_machine_registered || m.id || m.code || m.id_machine || m.code_machine);
   });
 }
@@ -148,13 +155,19 @@ export function transitionMachineLifecycle({
       is_active: true,
       archived: false,
     });
+    const nextIsActive =
+      nextLifecycle === 'ACTIVE' || wasArchived
+        ? true
+        : machine?.is_active !== undefined
+        ? Boolean(machine.is_active)
+        : true;
     updatedMachine = {
       ...machine,
       status: cleanNextStatus,
       statut: cleanNextStatus,
       lifecycle_state: nextLifecycle,
-      is_active: true,
-      actif: true,
+      is_active: nextIsActive,
+      actif: nextIsActive,
       archived: false,
       status_changed_at: nowIso,
       ...(wasArchived ? { reactivated_at: nowIso } : {}),

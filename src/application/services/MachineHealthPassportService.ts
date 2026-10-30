@@ -673,12 +673,12 @@ export function buildMachineActivityLedger(params: {
       const statusUpper = statusStr.toUpperCase();
       const isArchived =
         resolvedMachine.archived === true ||
-        resolvedMachine.is_active === false ||
-        resolvedMachine.actif === false ||
+        resolvedMachine.isArchived === true ||
         statusUpper === 'ARCHIVEE' ||
         statusUpper === 'ARCHIVÉE' ||
+        statusUpper === 'ARCHIVED' ||
         statusUpper === 'ARCHIVE' ||
-        statusUpper === 'HORS_SERVICE' ||
+        String(resolvedMachine.lifecycle_state || '').trim().toUpperCase() === 'ARCHIVED' ||
         Boolean(
           resolvedMachine.date_archivage ||
             resolvedMachine.archived_at ||
