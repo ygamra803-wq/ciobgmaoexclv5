@@ -23,7 +23,10 @@ import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { useAuth } from '../../../../context/AuthContext';
 import { isTechnicianRole, getTechnicianDisplayName } from '../../../../core/security/technicianScope';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
-import { computeMachineHealthPassport } from '../../../../application/services/MachineHealthPassportService';
+import {
+  computeMachineHealthPassport,
+  buildMachineActivityLedger,
+} from '../../../../application/services/MachineHealthPassportService';
 
 interface MachineQrFieldModalProps {
   machine: any | null;
@@ -162,7 +165,8 @@ export default function MachineQrFieldModal({
         String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase() === codeUpper
     );
     const ledgerAttached = (machineElementsLedger || []).filter(
-      (el: any) => String(el.id_machine || '').trim().toUpperCase() === codeUpper
+      (el: any) =>
+        String(el.id_machine_registered || el.id_machine || '').trim().toUpperCase() === codeUpper
     );
     const bpMatch = (blueprints || []).find(
       (bp: any) =>
@@ -175,6 +179,27 @@ export default function MachineQrFieldModal({
       blueprint: bpMatch || null,
     };
   }, [warehouseItems, machineElementsLedger, blueprints, machine, machineCode]);
+
+  // B2: Unified Machine Activity & Audit Ledger (Official / Validated Truth Only)
+  const activityLedger = useMemo(
+    () =>
+      buildMachineActivityLedger({
+        machineOrId: machine,
+        correctiveInterventions,
+        preventiveExecutions,
+        sortiesExterne,
+        machineElementsLedger,
+        warehouseItems,
+      }),
+    [
+      machine,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortiesExterne,
+      machineElementsLedger,
+      warehouseItems,
+    ]
+  );
 
   const handleCopyUrl = () => {
     navigator.clipboard?.writeText(qrUrl);
@@ -474,7 +499,7 @@ export default function MachineQrFieldModal({
                 }`}
               >
                 <Layers className="w-4 h-4 shrink-0" />
-                <span>3. Pannes & BOM</span>
+                <span>3. Journal & BOM ({activityLedger.length})</span>
               </button>
             </div>
 
@@ -847,15 +872,15 @@ export default function MachineQrFieldModal({
 
                         {machineComponentsAndBom.ledgerAttached.map((el: any) => (
                           <div
-                            key={el.id_element_instance}
+                            key={el.id || el.id_element_instance}
                             className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-200/80 flex items-center justify-between gap-2"
                           >
                             <div className="min-w-0">
                               <div className="font-mono font-bold text-blue-900 text-[11px]">
-                                {el.code_element || el.id_element_instance}
+                                {el.ref_element || el.code_element || el.id_element_instance || el.id}
                               </div>
                               <div className="font-semibold text-slate-800 truncate">
-                                {el.designation_element}
+                                {el.designation || el.designation_element}
                               </div>
                             </div>
                             <span className="px-2 py-0.5 rounded bg-white text-blue-800 border border-blue-200 text-[10px] font-mono shrink-0">
@@ -863,6 +888,77 @@ export default function MachineQrFieldModal({
                             </span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* B2: Unified Chronological Machine Activity & Audit Ledger (Official Truth) */}
+                  <div
+                    className="space-y-2 pt-2 border-t border-slate-100"
+                    data-testid="b2-machine-activity-ledger"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>
+                          Journal d&apos;Activité & Audit Officiel ({activityLedger.length})
+                        </span>
+                      </h4>
+                      <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        Approuvé uniquement (hors PENDING)
+                      </span>
+                    </div>
+
+                    {activityLedger.length === 0 ? (
+                      <div className="p-4 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400">
+                        Aucun événement officiel validé enregistré pour {machineCode}.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {activityLedger.slice(0, 15).map((ev) => {
+                          const badgeStyle =
+                            ev.type === 'CORRECTIVE_BT'
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
+                              : ev.type === 'PREVENTIVE_EXECUTION'
+                              ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                              : ev.type === 'EXTERNAL_BOBINAGE'
+                              ? 'bg-amber-50 text-amber-900 border-amber-300'
+                              : ev.type === 'BOM_COMPONENT'
+                              ? 'bg-teal-50 text-teal-800 border-teal-200'
+                              : 'bg-slate-200 text-slate-800 border-slate-300';
+
+                          return (
+                            <div
+                              key={ev.id}
+                              className="p-2.5 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-1"
+                            >
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold border ${badgeStyle}`}
+                                  >
+                                    {ev.typeLabelFr}
+                                  </span>
+                                  <span className="font-bold text-slate-900 truncate">
+                                    {ev.title}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 font-mono text-[10px]">
+                                  {ev.cost !== undefined && ev.cost > 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                                      {ev.cost.toLocaleString('fr-FR')} DH
+                                    </span>
+                                  )}
+                                  <span className="text-slate-500">{ev.dateYMD}</span>
+                                </div>
+                              </div>
+                              <p className="text-[10.5px] text-slate-600 leading-snug">
+                                {ev.details}
+                                {ev.actor ? ` • Par: ${ev.actor}` : ''}
+                              </p>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

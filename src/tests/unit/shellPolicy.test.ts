@@ -1561,3 +1561,155 @@ describe('Phase 1 — B3 Temporal Preventive Maintenance Compliance (PM Complian
   });
 });
 
+describe('Phase 1 — B2 Machine Activity & Audit Ledger (buildMachineActivityLedger)', () => {
+  it('returns [] for a machine with no events, excludes PENDING/REJECTED claims from official ledger, and chronologically aggregates approved BT, PM, Bobinage, BOM, and Lifecycle events', async () => {
+    const { buildMachineActivityLedger } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+
+    // 1) Machine with zero events -> must return []
+    const emptyLedger = buildMachineActivityLedger({
+      machineOrId: { id_machine_registered: 'M-EMPTY-00', status: 'En Service', is_active: true },
+      correctiveInterventions: [],
+      preventiveExecutions: [],
+      sortiesExterne: [],
+      machineElementsLedger: [],
+      warehouseItems: [],
+    });
+    expect(emptyLedger).toEqual([]);
+
+    // 2) Machine with mixed official + PENDING events across all 5 sources
+    const machine = {
+      id_machine_registered: 'DET-01',
+      designation: 'Découpeuse Laser 01',
+      status: 'ARCHIVEE',
+      is_active: false,
+      archived: true,
+      archived_at: '2026-10-28T16:00:00Z',
+    };
+
+    const correctiveInterventions = [
+      // Approved BT with PDR cost
+      {
+        id: 'BT-APP-01',
+        num_bt: 'BT-2026-01',
+        code_machine: 'DET-01',
+        anomalie: 'Fuite vérin serrage',
+        action_realisee: 'Remplacement joint hydraulique',
+        nom_composant: 'Vérin Principal',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        validated_by_name: 'Resp. Maintenance',
+        date_cloture: '2026-10-20',
+        cout_pdr: 320,
+        temps_arret_minutes: 90,
+        pieces_utilisees: [{ ref: 'JNT-HYD-40', quantite: 2 }],
+      },
+      // PENDING BT field claim -> MUST NOT appear in official ledger
+      {
+        id: 'BT-PEND-02',
+        num_bt: 'BT-2026-02',
+        code_machine: 'DET-01',
+        anomalie: 'Bruit suspect',
+        statut: 'EN_COURS',
+        validation_status: 'PENDING_VALIDATION',
+        submitted_at: '2026-10-25T10:00:00Z',
+        cout_pdr: 999,
+      },
+      // REJECTED BT -> MUST NOT appear in official ledger
+      {
+        id: 'BT-REJ-03',
+        code_machine: 'DET-01',
+        anomalie: 'Fausse alerte',
+        statut: 'ANNULE',
+        validation_status: 'REJECTED',
+        date_demande: '2026-10-21',
+      },
+    ];
+
+    const preventiveExecutions = [
+      // Approved PM execution
+      {
+        id: 'EX-APP-01',
+        taskId: 'PM-DET-01',
+        taskName: 'Graissage glissières linéaires',
+        machineCode: 'DET-01',
+        executedAt: '2026-10-18T08:30:00Z',
+        status: 'COMPLETED',
+        validation_status: 'APPROVED',
+        executorName: 'Karim Tech',
+        totalCost: 45,
+        durationMinutes: 30,
+      },
+      // PENDING PM execution -> MUST NOT appear in official ledger
+      {
+        id: 'EX-PEND-02',
+        taskId: 'PM-DET-02',
+        taskName: 'Nettoyage optique',
+        machineCode: 'DET-01',
+        executedAt: '2026-10-26T11:00:00Z',
+        status: 'PENDING_VALIDATION',
+        validation_status: 'PENDING_VALIDATION',
+        totalCost: 150,
+      },
+    ];
+
+    const sortiesExterne = [
+      {
+        id: 'SE-01',
+        code: 'SORT-EXT-007',
+        id_machine: 'DET-01',
+        designation_moteur: 'Servomoteur Axe X 5kW',
+        fournisseur: 'Atelier Bobinage Nord',
+        statut: 'Monté',
+        date_montage: '2026-10-22',
+        cout_bobinage: 1200,
+      },
+    ];
+
+    const machineElementsLedger = [
+      {
+        id: 'BOM-DET01-01',
+        id_machine_registered: 'DET-01',
+        ref_element: 'ROUL-SKF-6204',
+        designation: 'Roulement SKF 6204',
+        qte_montee: 2,
+        unite: 'U',
+        date_installation: '2026-10-10',
+        emplacement_machine: 'Arbre principal',
+      },
+    ];
+
+    const ledger = buildMachineActivityLedger({
+      machineOrId: machine,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortiesExterne,
+      machineElementsLedger,
+    });
+
+    // Only the 5 official events should be present (BT-PEND-02, BT-REJ-03, EX-PEND-02 excluded)
+    expect(ledger).toHaveLength(5);
+    expect(ledger.every((ev) => ev.isOfficial)).toBe(true);
+    expect(ledger.some((ev) => ev.id.includes('PEND') || ev.id.includes('REJ'))).toBe(false);
+
+    // Check chronological descending order (newest first):
+    // 1) 2026-10-28: MACHINE_LIFECYCLE (Archive)
+    // 2) 2026-10-22: EXTERNAL_BOBINAGE
+    // 3) 2026-10-20: CORRECTIVE_BT (cost 320)
+    // 4) 2026-10-18: PREVENTIVE_EXECUTION (cost 45)
+    // 5) 2026-10-10: BOM_COMPONENT
+    expect(ledger.map((e) => e.type)).toEqual([
+      'MACHINE_LIFECYCLE',
+      'EXTERNAL_BOBINAGE',
+      'CORRECTIVE_BT',
+      'PREVENTIVE_EXECUTION',
+      'BOM_COMPONENT',
+    ]);
+    expect(ledger[2].cost).toBe(320);
+    expect(ledger[2].referenceCode).toBe('BT-2026-01');
+    expect(ledger[3].cost).toBe(45);
+  });
+});
+
+

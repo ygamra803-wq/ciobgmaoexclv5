@@ -51,6 +51,8 @@ import {
 import PreventiveService from '../../../application/services/PreventiveService';
 import { getMachineAssetClass } from '../../../utils/activeMachines';
 import MachineQrFieldModal from './components/MachineQrFieldModal';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
 
 // Helper to retrieve machine serial number with smart fallback
 export const getMachineSerialNumber = (m) => {
@@ -164,6 +166,12 @@ export default function MachinesRegisteredView({
     addGeneralSystemType,
     toggleGeneralSystemType,
   } = useMachines();
+
+  const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
+  const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
+  const sortiesExterne = useGmaoStore((s) => s.sortiesExterne) || [];
+  const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
+  const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
 
   const machines = useMemo(() => {
     if (Array.isArray(propMachines) && propMachines.length > 0) {
@@ -2339,6 +2347,15 @@ export default function MachinesRegisteredView({
       {/* MODAL: CARNET DE SANTÉ & PLAN PRÉVENTIF DE LA MACHINE */}
       {preventiveMachine && (() => {
         const profile = PreventiveService.getMachinePreventiveProfile(preventiveMachine.id_machine_registered);
+        const machineLedger = buildMachineActivityLedger({
+          machineOrId: preventiveMachine,
+          machines,
+          correctiveInterventions,
+          preventiveExecutions,
+          sortiesExterne,
+          machineElementsLedger,
+          warehouseItems,
+        });
         const healthColor =
           profile.health_status === 'Optimale'
             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
@@ -2481,6 +2498,68 @@ export default function MachinesRegisteredView({
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* B2: Unified Chronological Machine Activity & Audit Ledger */}
+                <div className="space-y-2 pt-3 border-t border-slate-200/80" data-testid="b2-carnet-activity-ledger">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <Activity className="w-4 h-4 text-emerald-600" />
+                      <span>Journal d&apos;Activité & Audit de la Machine ({machineLedger.length})</span>
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      Vérité validée (BT • Préventif • Bobinage • BOM • Cycle de vie)
+                    </span>
+                  </div>
+
+                  {machineLedger.length === 0 ? (
+                    <div className="p-5 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-500">
+                      Aucun événement officiel validé enregistré sur cet équipement.
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {machineLedger.slice(0, 15).map((ev) => {
+                        const badgeStyle =
+                          ev.type === 'CORRECTIVE_BT'
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : ev.type === 'PREVENTIVE_EXECUTION'
+                            ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
+                            : ev.type === 'EXTERNAL_BOBINAGE'
+                            ? 'bg-amber-50 text-amber-900 border-amber-300'
+                            : ev.type === 'BOM_COMPONENT'
+                            ? 'bg-teal-50 text-teal-800 border-teal-200'
+                            : 'bg-slate-200 text-slate-800 border-slate-300';
+
+                        return (
+                          <div
+                            key={ev.id}
+                            className="p-3 rounded-xl bg-slate-50/80 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${badgeStyle}`}>
+                                  {ev.typeLabelFr}
+                                </span>
+                                <span className="font-bold text-slate-900">{ev.title}</span>
+                              </div>
+                              <p className="text-[11px] text-slate-600">
+                                {ev.details}
+                                {ev.actor ? ` • Par: ${ev.actor}` : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                              {ev.cost !== undefined && ev.cost > 0 && (
+                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                                  {ev.cost.toLocaleString('fr-FR')} DH
+                                </span>
+                              )}
+                              <span className="text-slate-500 font-bold">{ev.dateYMD}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

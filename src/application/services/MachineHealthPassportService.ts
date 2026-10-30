@@ -308,3 +308,388 @@ export function computeMachineHealthPassport(params: {
     healthStatus,
   };
 }
+
+export type MachineActivityEventType =
+  | 'CORRECTIVE_BT'
+  | 'PREVENTIVE_EXECUTION'
+  | 'EXTERNAL_BOBINAGE'
+  | 'BOM_COMPONENT'
+  | 'MACHINE_LIFECYCLE';
+
+export interface MachineActivityLedgerEvent {
+  id: string;
+  machineCode: string;
+  type: MachineActivityEventType;
+  typeLabelFr: string;
+  timestamp: string;
+  dateYMD: string;
+  title: string;
+  details: string;
+  actor?: string;
+  cost?: number;
+  downtimeMinutes?: number;
+  referenceCode?: string;
+  validationStatus: 'APPROVED' | 'PENDING_VALIDATION' | 'NEEDS_CLARIFICATION' | 'REJECTED';
+  isOfficial: boolean;
+}
+
+function toYMD(raw: any): string {
+  const d = parseDateSafe(raw);
+  if (!d) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * B2 — Pure chronological activity & audit ledger for a single machine.
+ * Aggregates official (validated) events across existing SSOT collections without duplicate storage:
+ * - Approved Corrective BTs & official PDR costs
+ * - Approved Preventive Executions
+ * - External Bobinage / Subcontracting records
+ * - Attached BOM / Organ installation & lifecycle traces
+ * - Machine archiving / status change trace when present
+ *
+ * By default (`includePendingClaims = false`), unapproved field claims (`PENDING_VALIDATION`,
+ * `NEEDS_CLARIFICATION`, `REJECTED`) are strictly excluded from the official ledger.
+ */
+export function buildMachineActivityLedger(params: {
+  machineOrId: any;
+  machines?: any[];
+  correctiveInterventions?: any[];
+  preventiveExecutions?: any[];
+  sortiesExterne?: any[];
+  machineElementsLedger?: any[];
+  warehouseItems?: any[];
+  includePendingClaims?: boolean;
+}): MachineActivityLedgerEvent[] {
+  const {
+    machineOrId,
+    machines = [],
+    correctiveInterventions = [],
+    preventiveExecutions = [],
+    sortiesExterne = [],
+    machineElementsLedger = [],
+    warehouseItems = [],
+    includePendingClaims = false,
+  } = params || {};
+
+  const rawCode =
+    typeof machineOrId === 'string'
+      ? machineOrId
+      : machineOrId?.id_machine_registered ||
+        machineOrId?.id ||
+        machineOrId?.code ||
+        machineOrId?.code_machine ||
+        '';
+  const machineCode = String(rawCode || '').trim().toUpperCase();
+  if (!machineCode) return [];
+
+  const resolvedMachine =
+    typeof machineOrId === 'object' && machineOrId !== null
+      ? machineOrId
+      : (machines || []).find(
+          (m: any) =>
+            String(m?.id_machine_registered || m?.id || m?.code || m?.code_machine || '')
+              .trim()
+              .toUpperCase() === machineCode
+        ) || null;
+
+  const events: MachineActivityLedgerEvent[] = [];
+
+  // 1) Corrective Interventions (BT / Clôtures approuvées + Coûts PDR validés)
+  for (const ci of correctiveInterventions || []) {
+    if (!ci) continue;
+    const code = String(ci.code_machine || ci.id_machine_registered || ci.id_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const valSt = String(ci.validation_status || '').trim().toUpperCase();
+    const wfSt = String(ci.statut || '').trim().toUpperCase();
+
+    const isUnapproved =
+      UNAPPROVED_STATUSES.has(valSt) ||
+      wfSt === 'EN_ATTENTE_VALIDATION' ||
+      wfSt === 'ANNULE' ||
+      wfSt === 'REJECTED';
+
+    const isOfficial = !isUnapproved;
+    if (!isOfficial && !includePendingClaims) continue;
+
+    const rawTs =
+      ci.validated_at ||
+      ci.date_cloture ||
+      ci.date_fin ||
+      ci.submitted_at ||
+      ci.date_demande ||
+      ci.demande_date ||
+      ci.created_at;
+    const dateYMD = toYMD(rawTs);
+    if (!dateYMD) continue;
+
+    const cost = Number(ci.cout_pdr ?? ci.pdr_cost ?? 0) || 0;
+    const downtimeMinutes =
+      Number(
+        ci.temps_arret_minutes ??
+          ci.temps_intervention_mins ??
+          (ci.duree_arret_heures ? Number(ci.duree_arret_heures) * 60 : 0)
+      ) || 0;
+
+    const btRef = String(ci.num_bt || ci.id || 'BT').trim();
+    const organ = String(ci.nom_composant || ci.id_composant || '').trim();
+    const pdrList = Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0
+      ? ci.pieces_utilisees
+          .map((p: any) => `${p.ref || p.designation} (×${p.quantite || 1})`)
+          .join(', ')
+      : ci.pdr_ref
+      ? `${ci.pdr_ref} (×${ci.pdr_quantite || 1})`
+      : '';
+
+    const detailParts: string[] = [];
+    if (ci.action_realisee) detailParts.push(`Action: ${ci.action_realisee}`);
+    if (organ) detailParts.push(`Organe: ${organ}`);
+    if (pdrList && isOfficial) detailParts.push(`PDR validée: ${pdrList}`);
+    if (wfSt) detailParts.push(`Statut: ${wfSt}`);
+
+    events.push({
+      id: `LEDGER-BT-${String(ci.id || btRef)}`,
+      machineCode,
+      type: 'CORRECTIVE_BT',
+      typeLabelFr: isOfficial ? 'BT Correctif Approuvé' : 'BT (En attente validation)',
+      timestamp: String(rawTs),
+      dateYMD,
+      title: `${btRef} — ${ci.anomalie || ci.travail_a_faire || 'Intervention corrective'}`,
+      details: detailParts.join(' • ') || 'Intervention corrective enregistrée',
+      actor: String(
+        ci.validated_by_name || ci.intervenant || ci.technicien || ci.demandeur || ''
+      ).trim() || undefined,
+      cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
+      downtimeMinutes: downtimeMinutes > 0 ? downtimeMinutes : undefined,
+      referenceCode: btRef,
+      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      isOfficial,
+    });
+  }
+
+  // 2) Preventive Executions (Exécutions préventives approuvées)
+  for (const ex of preventiveExecutions || []) {
+    if (!ex) continue;
+    const code = String(ex.machineCode || ex.id_machine || ex.code_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const statusUpper = String(ex.status || '').trim().toUpperCase();
+    if (statusUpper === 'SKIPPED') continue;
+
+    const valSt = String(ex.validation_status || '').trim().toUpperCase();
+    const isUnapproved =
+      UNAPPROVED_STATUSES.has(valSt) || statusUpper === 'PENDING_VALIDATION';
+    const isOfficial = !isUnapproved;
+    if (!isOfficial && !includePendingClaims) continue;
+
+    const rawTs = ex.validated_at || ex.executedAt || ex.date_realisation || ex.created_at;
+    const dateYMD = toYMD(rawTs);
+    if (!dateYMD) continue;
+
+    const cost = Number(ex.totalCost ?? ex.sparesCost ?? 0) || 0;
+    const durationMinutes = Number(ex.durationMinutes || 0) || 0;
+    const sparesSummary =
+      Array.isArray(ex.sparesUsed) && ex.sparesUsed.length > 0
+        ? ex.sparesUsed.map((s: any) => `${s.ref || s.designation} (×${s.quantity || s.quantite || 1})`).join(', ')
+        : '';
+
+    const detailParts: string[] = [];
+    if (ex.notes || ex.observations) detailParts.push(String(ex.notes || ex.observations).trim());
+    if (sparesSummary && isOfficial) detailParts.push(`PDR: ${sparesSummary}`);
+    if (ex.scheduledDueDate) detailParts.push(`Échéance: ${ex.scheduledDueDate}`);
+
+    events.push({
+      id: `LEDGER-PM-${String(ex.id || ex.taskId || events.length + 1)}`,
+      machineCode,
+      type: 'PREVENTIVE_EXECUTION',
+      typeLabelFr: isOfficial ? 'Préventif Validé' : 'Préventif (En attente)',
+      timestamp: String(rawTs),
+      dateYMD,
+      title: String(ex.taskName || ex.designation || `Exécution préventive ${ex.taskId || ''}`).trim(),
+      details: detailParts.join(' • ') || 'Contrôle préventif exécuté et validé',
+      actor: String(ex.validated_by_name || ex.executorName || ex.technicien || '').trim() || undefined,
+      cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
+      downtimeMinutes: durationMinutes > 0 ? durationMinutes : undefined,
+      referenceCode: String(ex.taskId || ex.id || 'PM').trim(),
+      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      isOfficial,
+    });
+  }
+
+  // 3) External Subcontracting / Bobinage (Sorties Externe)
+  for (const se of sortiesExterne || []) {
+    if (!se) continue;
+    const code = String(se.id_machine || se.code_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const rawTs =
+      se.date_montage ||
+      se.date_arrivee_reelle ||
+      se.date_expedition ||
+      se.date_demontage ||
+      se.created_at;
+    const dateYMD = toYMD(rawTs);
+    if (!dateYMD) continue;
+
+    const cost = Number(se.cout_bobinage || 0) || 0;
+    const refCode = String(se.code || se.id || se.ref || 'SORT-EXT').trim();
+    const motorLabel = String(se.designation_moteur || se.code_moteur_reel || 'Moteur / Organe').trim();
+
+    events.push({
+      id: `LEDGER-EXT-${String(se.id || se.code || events.length + 1)}`,
+      machineCode,
+      type: 'EXTERNAL_BOBINAGE',
+      typeLabelFr: 'Bobinage / Prestataire Externe',
+      timestamp: String(rawTs),
+      dateYMD,
+      title: `${refCode} — ${motorLabel}`,
+      details: `Statut: ${se.statut || 'Enregistré'}${se.fournisseur ? ` • Prestataire: ${se.fournisseur}` : ''}${se.nature_travaux ? ` • Travaux: ${se.nature_travaux}` : ''}`,
+      actor: se.fournisseur || se.technicien_demontage || undefined,
+      cost: cost > 0 ? Number(cost.toFixed(2)) : undefined,
+      referenceCode: refCode,
+      validationStatus: 'APPROVED',
+      isOfficial: true,
+    });
+  }
+
+  // 4) BOM & Organ Events (machineElementsLedger & warehouseItems with installation / intervention trace)
+  for (const el of machineElementsLedger || []) {
+    if (!el) continue;
+    const code = String(el.id_machine_registered || el.id_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const rawTs = el.date_installation || el.updated_at || el.created_at;
+    const dateYMD = toYMD(rawTs);
+    if (!dateYMD) continue;
+
+    const refEl = String(el.ref_element || el.code_element || el.id_element || el.id || 'BOM').trim();
+    const desig = String(el.designation || el.designation_element || refEl).trim();
+
+    events.push({
+      id: `LEDGER-BOM-${String(el.id || el.id_element_instance || refEl)}`,
+      machineCode,
+      type: 'BOM_COMPONENT',
+      typeLabelFr: 'Organe / Nomenclature BOM',
+      timestamp: String(rawTs),
+      dateYMD,
+      title: `Montage BOM : ${desig}`,
+      details: `Réf: ${refEl} • Qté: ${el.qte_montee || 1} ${el.unite || 'U'}${el.emplacement_machine ? ` • Emplacement: ${el.emplacement_machine}` : ''}${el.statut ? ` • Statut: ${el.statut}` : ''}`,
+      actor: el.technicien || undefined,
+      referenceCode: refEl,
+      validationStatus: 'APPROVED',
+      isOfficial: true,
+    });
+  }
+
+  for (const w of warehouseItems || []) {
+    if (!w) continue;
+    const code = String(w.id_machine_registered || w.id_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!code || code !== machineCode) continue;
+
+    const rawTs = w.derniere_intervention_date || w.date_installation || w.updated_at;
+    const dateYMD = toYMD(rawTs);
+    if (!dateYMD) continue;
+
+    const wCode = String(w.code || w.id_warehouse_item || w.id || 'ORG').trim();
+    events.push({
+      id: `LEDGER-ORG-${wCode}`,
+      machineCode,
+      type: 'BOM_COMPONENT',
+      typeLabelFr: 'Organe Rattaché (Entrepôt)',
+      timestamp: String(rawTs),
+      dateYMD,
+      title: `Mouvement Organe : ${w.designation || wCode}`,
+      details: `Statut: ${w.status || w.statut || 'En service'}${w.derniere_intervention_bt ? ` • Lié au BT: ${w.derniere_intervention_bt}` : ''}`,
+      referenceCode: wCode,
+      validationStatus: 'APPROVED',
+      isOfficial: true,
+    });
+  }
+
+  // 5) Machine Lifecycle / Archive / Status Change trace (when present on the machine record)
+  if (resolvedMachine) {
+    const statusStr = String(resolvedMachine.status || resolvedMachine.statut || '').trim();
+    const statusUpper = statusStr.toUpperCase();
+    const isArchived =
+      resolvedMachine.archived === true ||
+      resolvedMachine.is_active === false ||
+      statusUpper === 'ARCHIVEE' ||
+      statusUpper === 'ARCHIVÉE' ||
+      statusUpper === 'ARCHIVE' ||
+      statusUpper === 'HORS_SERVICE' ||
+      Boolean(resolvedMachine.archived_at || resolvedMachine.archivedAt);
+
+    const archiveTs =
+      resolvedMachine.archived_at ||
+      resolvedMachine.archivedAt ||
+      resolvedMachine.status_changed_at ||
+      resolvedMachine.updated_at;
+
+    if (isArchived && archiveTs) {
+      const dateYMD = toYMD(archiveTs);
+      if (dateYMD) {
+        events.push({
+          id: `LEDGER-LIFE-ARCHIVE-${machineCode}`,
+          machineCode,
+          type: 'MACHINE_LIFECYCLE',
+          typeLabelFr: 'Cycle de Vie / Archivage',
+          timestamp: String(archiveTs),
+          dateYMD,
+          title: `Archivage / Mise hors service (${statusStr || 'ARCHIVEE'})`,
+          details: `La machine ${machineCode} a été placée en statut « ${statusStr || 'ARCHIVEE'} » (conservation historique sans tâches actives).`,
+          actor: resolvedMachine.archived_by || resolvedMachine.updated_by || undefined,
+          referenceCode: machineCode,
+          validationStatus: 'APPROVED',
+          isOfficial: true,
+        });
+      }
+    } else if (
+      resolvedMachine.status_changed_at ||
+      (resolvedMachine.updated_at &&
+        statusUpper &&
+        statusUpper !== 'EN SERVICE' &&
+        statusUpper !== 'OPERATIONNELLE')
+    ) {
+      const changeTs = resolvedMachine.status_changed_at || resolvedMachine.updated_at;
+      const dateYMD = toYMD(changeTs);
+      if (dateYMD) {
+        events.push({
+          id: `LEDGER-LIFE-STATUS-${machineCode}`,
+          machineCode,
+          type: 'MACHINE_LIFECYCLE',
+          typeLabelFr: 'Changement de Statut',
+          timestamp: String(changeTs),
+          dateYMD,
+          title: `Changement d'état machine : ${statusStr}`,
+          details: `Statut opérationnel mis à jour vers « ${statusStr} ».`,
+          actor: resolvedMachine.updated_by || undefined,
+          referenceCode: machineCode,
+          validationStatus: 'APPROVED',
+          isOfficial: true,
+        });
+      }
+    }
+  }
+
+  // Sort newest first (descending by timestamp / dateYMD)
+  events.sort((a, b) => {
+    const tA = parseDateSafe(a.timestamp)?.getTime() || 0;
+    const tB = parseDateSafe(b.timestamp)?.getTime() || 0;
+    if (tB !== tA) return tB - tA;
+    return b.dateYMD.localeCompare(a.dateYMD);
+  });
+
+  return events;
+}
+
