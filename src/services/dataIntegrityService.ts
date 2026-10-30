@@ -737,18 +737,24 @@ class DataIntegrityService {
    */
   getMachineDependencies(machineId, {
     preventiveTasks = [],
+    preventiveExecutions = [],
     correctiveInterventions = [],
     mouvements = [],
     machineElementsLedger = [],
+    sortiesExterne = [],
+    sortieDemands = [],
   } = {}) {
     const id = String(machineId || '').trim().toUpperCase();
     if (!id) {
       return {
         machineId,
         preventiveCount: 0,
+        preventiveExecutionsCount: 0,
         correctiveCount: 0,
         movementsCount: 0,
         bomCount: 0,
+        externalSortiesCount: 0,
+        sortieDemandsCount: 0,
         total: 0,
         canHardDelete: true,
         preventiveSample: [],
@@ -764,6 +770,14 @@ class DataIntegrityService {
         matchMachine(t.machine_id) ||
         matchMachine(t.code_machine) ||
         matchMachine(t.id_machine_registered)
+    );
+
+    const executionHits = (preventiveExecutions || []).filter(
+      (ex) =>
+        matchMachine(ex.machineCode) ||
+        matchMachine(ex.id_machine) ||
+        matchMachine(ex.code_machine) ||
+        matchMachine(ex.id_machine_registered)
     );
 
     const correctiveHits = (correctiveInterventions || []).filter(
@@ -789,15 +803,38 @@ class DataIntegrityService {
         matchMachine(e.code_machine)
     );
 
+    const externalHits = (sortiesExterne || []).filter(
+      (se) =>
+        matchMachine(se.id_machine) ||
+        matchMachine(se.code_machine) ||
+        matchMachine(se.id_machine_registered)
+    );
+
+    const demandHits = (sortieDemands || []).filter(
+      (sd) =>
+        matchMachine(sd.id_machine_registered) ||
+        matchMachine(sd.code_machine) ||
+        matchMachine(sd.id_machine)
+    );
+
     const total =
-      preventiveHits.length + correctiveHits.length + movementsHits.length + bomHits.length;
+      preventiveHits.length +
+      executionHits.length +
+      correctiveHits.length +
+      movementsHits.length +
+      bomHits.length +
+      externalHits.length +
+      demandHits.length;
 
     return {
       machineId,
       preventiveCount: preventiveHits.length,
+      preventiveExecutionsCount: executionHits.length,
       correctiveCount: correctiveHits.length,
       movementsCount: movementsHits.length,
       bomCount: bomHits.length,
+      externalSortiesCount: externalHits.length,
+      sortieDemandsCount: demandHits.length,
       total,
       canHardDelete: total === 0,
       preventiveSample: preventiveHits.slice(0, 5).map((t) => t.id || t.code),

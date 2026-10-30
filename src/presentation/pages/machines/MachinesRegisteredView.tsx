@@ -49,7 +49,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import PreventiveService from '../../../application/services/PreventiveService';
-import { getMachineAssetClass } from '../../../utils/activeMachines';
+import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
 import MachineQrFieldModal from './components/MachineQrFieldModal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
@@ -290,8 +290,13 @@ export default function MachinesRegisteredView({
     let enService = 0;
     let enMaintenance = 0;
     let enArret = 0;
+    let archivees = 0;
 
     machines.forEach((m) => {
+      if (isArchivedMachine(m)) {
+        archivees++;
+        return;
+      }
       const st = String(m.status || 'En Service').toLowerCase();
       if (st.includes('service')) enService++;
       else if (st.includes('maint') || st.includes('panne')) enMaintenance++;
@@ -306,6 +311,7 @@ export default function MachinesRegisteredView({
       enService,
       enMaintenance,
       enArret,
+      archivees,
       activeFamiliesCount,
       totalInterventions,
     };
@@ -321,10 +327,16 @@ export default function MachinesRegisteredView({
       if (mchTemplateFilter !== 'ALL' && m.id_templates !== mchTemplateFilter) return false;
       if (!matchesZoneFilter(m.id_zone_default, mchZoneFilter, zones)) return false;
       if (statusFilter !== 'ALL') {
-        const st = String(m.status || 'En Service').toLowerCase();
-        if (statusFilter === 'En Service' && !st.includes('service')) return false;
-        if (statusFilter === 'En Maintenance' && !st.includes('maint') && !st.includes('panne')) return false;
-        if (statusFilter === 'Arrêt' && (st.includes('service') || st.includes('maint') || st.includes('panne'))) return false;
+        const archived = isArchivedMachine(m);
+        if (statusFilter === 'ARCHIVEE') {
+          if (!archived) return false;
+        } else {
+          if (archived) return false;
+          const st = String(m.status || 'En Service').toLowerCase();
+          if (statusFilter === 'En Service' && !st.includes('service')) return false;
+          if (statusFilter === 'En Maintenance' && !st.includes('maint') && !st.includes('panne')) return false;
+          if (statusFilter === 'Arrêt' && (st.includes('service') || st.includes('maint') || st.includes('panne'))) return false;
+        }
       }
       if (mchSearch) {
         const q = String(mchSearch).trim().toLowerCase();
@@ -623,6 +635,7 @@ export default function MachinesRegisteredView({
             { key: 'En Service', label: 'En Service', count: kpis.enService, color: 'emerald' },
             { key: 'En Maintenance', label: 'En Maintenance', count: kpis.enMaintenance, color: 'amber' },
             { key: 'Arrêt', label: "À l'Arrêt", count: kpis.enArret, color: 'rose' },
+            { key: 'ARCHIVEE', label: 'Archivées', count: kpis.archivees, color: 'slate' },
           ].map((preset) => (
             <button
               key={preset.key}
@@ -1256,10 +1269,13 @@ export default function MachinesRegisteredView({
                   const sysType = generalSystemTypes.find((t) => t.id === m.id_general_system_type);
                   const isSysGeneral = getMachineAssetClass(m) === 'SYSTEM_GENERAL';
                   const sortiesCount = sortiesCountMap[m.id_machine_registered] || 0;
-                  const isService = String(m.status || 'En Service').toLowerCase().includes('service');
+                  const isArchived = isArchivedMachine(m);
+                  const isService =
+                    !isArchived && String(m.status || 'En Service').toLowerCase().includes('service');
                   const isMaintenance =
-                    String(m.status || '').toLowerCase().includes('maint') ||
-                    String(m.status || '').toLowerCase().includes('panne');
+                    !isArchived &&
+                    (String(m.status || '').toLowerCase().includes('maint') ||
+                      String(m.status || '').toLowerCase().includes('panne'));
 
                   return (
                     <tr
@@ -1476,21 +1492,25 @@ export default function MachinesRegisteredView({
                       <td className="py-3 px-3 text-center whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-2xs ${
-                            isService
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : isMaintenance
-                                ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                : 'bg-rose-50 text-rose-800 border-rose-300'
+                            isArchived
+                              ? 'bg-slate-200 text-slate-700 border-slate-300'
+                              : isService
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : isMaintenance
+                                  ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                  : 'bg-rose-50 text-rose-800 border-rose-300'
                           }`}
                         >
-                          {isService ? (
+                          {isArchived ? (
+                            <RotateCcw className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                          ) : isService ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           ) : isMaintenance ? (
                             <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                           ) : (
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                           )}
-                          <span>{m.status || 'En Service'}</span>
+                          <span>{isArchived ? 'ARCHIVEE' : m.status || 'En Service'}</span>
                         </span>
                       </td>
 
@@ -1643,18 +1663,39 @@ export default function MachinesRegisteredView({
                                 </button>
                               )}
 
-                              {/* Option 4: Supprimer la machine */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuId(null);
-                                  setToDelete(m);
-                                }}
-                                className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                <span>Supprimer cette machine</span>
-                              </button>
+                              {/* Option 4: Réactiver ou Archiver / Supprimer la machine */}
+                              {isArchived ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    onUpdateMachine(m.id_machine_registered, {
+                                      ...m,
+                                      status: 'En Service',
+                                      statut: 'En Service',
+                                      is_active: true,
+                                      actif: true,
+                                      archived: false,
+                                    });
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <span>Réactiver la machine (En Service)</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setToDelete(m);
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                  <span>Archiver / Supprimer la machine</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2039,16 +2080,25 @@ export default function MachinesRegisteredView({
 
               <div>
                 <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                  Statut Opérationnel (H)
+                  Statut Opérationnel / Cycle de Vie (H)
                 </label>
                 <CustomSelect
-                  value={toEdit.status || 'En Service'}
-                  onChange={(val) => setToEdit({ ...toEdit, status: val })}
+                  value={isArchivedMachine(toEdit) ? 'ARCHIVEE' : toEdit.status || 'En Service'}
+                  onChange={(val) =>
+                    setToEdit({
+                      ...toEdit,
+                      status: val,
+                      is_active: val !== 'ARCHIVEE',
+                      actif: val !== 'ARCHIVEE',
+                      archived: val === 'ARCHIVEE',
+                    })
+                  }
                   options={[
-                    { value: 'En Service', label: 'En Service (Opérationnel)' },
-                    { value: 'En Maintenance', label: 'En Maintenance' },
-                    { value: 'En Panne', label: 'En Panne' },
-                    { value: 'Arrêt', label: 'Arrêt Machine' },
+                    { value: 'En Service', label: 'En Service (ACTIVE — Opérationnel)' },
+                    { value: 'En Maintenance', label: 'En Maintenance (ACTIVE)' },
+                    { value: 'En Panne', label: 'En Panne (ACTIVE)' },
+                    { value: 'Arrêt', label: 'Arrêt Machine (STOPPED / INACTIVE)' },
+                    { value: 'ARCHIVEE', label: 'Archivée (ARCHIVED — Gammes PM suspendues)' },
                   ]}
                 />
               </div>
@@ -2192,10 +2242,13 @@ export default function MachinesRegisteredView({
               <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3">
                 <Trash2 className="w-6 h-6" />
               </div>
-              <h3 className="font-bold text-base text-slate-900">Supprimer la Machine ?</h3>
+              <h3 className="font-bold text-base text-slate-900">Archiver / Supprimer la Machine ?</h3>
               <p className="text-xs text-slate-500 mt-1">
-                Êtes-vous sûr de vouloir supprimer définitivement l'équipement{' '}
+                Confirmez-vous le retrait de l&apos;équipement{' '}
                 <b className="font-mono text-slate-900">{toDelete.id_machine_registered}</b> ({toDelete.designation}) ?
+                <span className="block mt-1.5 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2">
+                  Si la machine possède un historique (BT, préventif, mouvements, BOM), elle sera <b>archivée (ARCHIVEE)</b> avec suspension automatique de ses gammes préventives et conservation intégrale de son historique.
+                </span>
               </p>
             </div>
             <div className="flex gap-2 pt-2">

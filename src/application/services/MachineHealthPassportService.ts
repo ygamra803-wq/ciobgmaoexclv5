@@ -619,65 +619,122 @@ export function buildMachineActivityLedger(params: {
 
   // 5) Machine Lifecycle / Archive / Status Change trace (when present on the machine record)
   if (resolvedMachine) {
-    const statusStr = String(resolvedMachine.status || resolvedMachine.statut || '').trim();
-    const statusUpper = statusStr.toUpperCase();
-    const isArchived =
-      resolvedMachine.archived === true ||
-      resolvedMachine.is_active === false ||
-      statusUpper === 'ARCHIVEE' ||
-      statusUpper === 'ARCHIVÉE' ||
-      statusUpper === 'ARCHIVE' ||
-      statusUpper === 'HORS_SERVICE' ||
-      Boolean(resolvedMachine.archived_at || resolvedMachine.archivedAt);
+    const lifecycleEvents = Array.isArray(resolvedMachine.lifecycle_events)
+      ? resolvedMachine.lifecycle_events
+      : [];
 
-    const archiveTs =
-      resolvedMachine.archived_at ||
-      resolvedMachine.archivedAt ||
-      resolvedMachine.status_changed_at ||
-      resolvedMachine.updated_at;
+    if (lifecycleEvents.length > 0) {
+      for (const le of lifecycleEvents) {
+        if (!le) continue;
+        const leTs = le.timestamp || le.date || resolvedMachine.status_changed_at;
+        const dateYMD = toYMD(leTs);
+        if (!dateYMD) continue;
 
-    if (isArchived && archiveTs) {
-      const dateYMD = toYMD(archiveTs);
-      if (dateYMD) {
+        const evType = String(le.event_type || '').toUpperCase();
+        const toStatus = String(le.to_status || resolvedMachine.status || 'ARCHIVEE').trim();
+        const fromStatus = String(le.from_status || '').trim();
+
+        const title =
+          evType === 'ARCHIVED'
+            ? `Archivage / Mise hors service (${toStatus})`
+            : evType === 'REACTIVATED'
+            ? `Réactivation de l'équipement (${fromStatus ? `${fromStatus} → ` : ''}${toStatus})`
+            : `Changement d'état machine : ${fromStatus ? `${fromStatus} → ` : ''}${toStatus}`;
+
+        const taskNote =
+          Number(le.suspended_tasks_count) > 0
+            ? ` • ${le.suspended_tasks_count} gamme(s) préventive(s) suspendue(s)`
+            : Number(le.restored_tasks_count) > 0
+            ? ` • ${le.restored_tasks_count} gamme(s) préventive(s) réactivée(s)`
+            : '';
+
         events.push({
-          id: `LEDGER-LIFE-ARCHIVE-${machineCode}`,
+          id: String(le.id || `LEDGER-LIFE-${machineCode}-${events.length + 1}`),
           machineCode,
           type: 'MACHINE_LIFECYCLE',
-          typeLabelFr: 'Cycle de Vie / Archivage',
-          timestamp: String(archiveTs),
+          typeLabelFr:
+            evType === 'ARCHIVED'
+              ? 'Cycle de Vie / Archivage'
+              : evType === 'REACTIVATED'
+              ? 'Cycle de Vie / Réactivation'
+              : 'Changement de Statut',
+          timestamp: String(leTs),
           dateYMD,
-          title: `Archivage / Mise hors service (${statusStr || 'ARCHIVEE'})`,
-          details: `La machine ${machineCode} a été placée en statut « ${statusStr || 'ARCHIVEE'} » (conservation historique sans tâches actives).`,
-          actor: resolvedMachine.archived_by || resolvedMachine.updated_by || undefined,
+          title,
+          details: `${le.reason || `Transition vers « ${toStatus} »`}${taskNote}.`,
+          actor: le.actor || resolvedMachine.archived_by || resolvedMachine.updated_by || undefined,
           referenceCode: machineCode,
           validationStatus: 'APPROVED',
           isOfficial: true,
         });
       }
-    } else if (
-      resolvedMachine.status_changed_at ||
-      (resolvedMachine.updated_at &&
-        statusUpper &&
-        statusUpper !== 'EN SERVICE' &&
-        statusUpper !== 'OPERATIONNELLE')
-    ) {
-      const changeTs = resolvedMachine.status_changed_at || resolvedMachine.updated_at;
-      const dateYMD = toYMD(changeTs);
-      if (dateYMD) {
-        events.push({
-          id: `LEDGER-LIFE-STATUS-${machineCode}`,
-          machineCode,
-          type: 'MACHINE_LIFECYCLE',
-          typeLabelFr: 'Changement de Statut',
-          timestamp: String(changeTs),
-          dateYMD,
-          title: `Changement d'état machine : ${statusStr}`,
-          details: `Statut opérationnel mis à jour vers « ${statusStr} ».`,
-          actor: resolvedMachine.updated_by || undefined,
-          referenceCode: machineCode,
-          validationStatus: 'APPROVED',
-          isOfficial: true,
-        });
+    } else {
+      const statusStr = String(resolvedMachine.status || resolvedMachine.statut || '').trim();
+      const statusUpper = statusStr.toUpperCase();
+      const isArchived =
+        resolvedMachine.archived === true ||
+        resolvedMachine.is_active === false ||
+        resolvedMachine.actif === false ||
+        statusUpper === 'ARCHIVEE' ||
+        statusUpper === 'ARCHIVÉE' ||
+        statusUpper === 'ARCHIVE' ||
+        statusUpper === 'HORS_SERVICE' ||
+        Boolean(
+          resolvedMachine.date_archivage ||
+            resolvedMachine.archived_at ||
+            resolvedMachine.archivedAt
+        );
+
+      const archiveTs =
+        resolvedMachine.date_archivage ||
+        resolvedMachine.archived_at ||
+        resolvedMachine.archivedAt ||
+        resolvedMachine.status_changed_at ||
+        resolvedMachine.updated_at;
+
+      if (isArchived && archiveTs) {
+        const dateYMD = toYMD(archiveTs);
+        if (dateYMD) {
+          events.push({
+            id: `LEDGER-LIFE-ARCHIVE-${machineCode}`,
+            machineCode,
+            type: 'MACHINE_LIFECYCLE',
+            typeLabelFr: 'Cycle de Vie / Archivage',
+            timestamp: String(archiveTs),
+            dateYMD,
+            title: `Archivage / Mise hors service (${statusStr || 'ARCHIVEE'})`,
+            details: `La machine ${machineCode} a été placée en statut « ${statusStr || 'ARCHIVEE'} » (conservation historique sans tâches actives).`,
+            actor: resolvedMachine.archived_by || resolvedMachine.updated_by || undefined,
+            referenceCode: machineCode,
+            validationStatus: 'APPROVED',
+            isOfficial: true,
+          });
+        }
+      } else if (
+        resolvedMachine.status_changed_at ||
+        (resolvedMachine.updated_at &&
+          statusUpper &&
+          statusUpper !== 'EN SERVICE' &&
+          statusUpper !== 'OPERATIONNELLE')
+      ) {
+        const changeTs = resolvedMachine.status_changed_at || resolvedMachine.updated_at;
+        const dateYMD = toYMD(changeTs);
+        if (dateYMD) {
+          events.push({
+            id: `LEDGER-LIFE-STATUS-${machineCode}`,
+            machineCode,
+            type: 'MACHINE_LIFECYCLE',
+            typeLabelFr: 'Changement de Statut',
+            timestamp: String(changeTs),
+            dateYMD,
+            title: `Changement d'état machine : ${statusStr}`,
+            details: `Statut opérationnel mis à jour vers « ${statusStr} ».`,
+            actor: resolvedMachine.updated_by || undefined,
+            referenceCode: machineCode,
+            validationStatus: 'APPROVED',
+            isOfficial: true,
+          });
+        }
       }
     }
   }

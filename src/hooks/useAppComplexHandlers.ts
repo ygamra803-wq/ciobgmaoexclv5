@@ -9,6 +9,10 @@ import {
   reconcileMakerCheckerOnMovementDelete,
   reconcileMakerCheckerOnMovementUpdate,
 } from '../core/security/auditLockReconciliation';
+import {
+  isArchivedMachine,
+  transitionMachineLifecycle,
+} from '../utils/activeMachines';
 
 export function useAppComplexHandlers({
   zones, setZones,
@@ -99,7 +103,60 @@ export function useAppComplexHandlers({
     const newCodeNorm = String(newId || '').trim().toUpperCase();
     const newName = updatedMch?.designation || updatedMch?.nom;
 
-    setMachines((prev) => prev.map((m) => (m.id_machine_registered === id ? updatedMch : m)));
+    const existingMachine = (activeMachines || []).find(
+      (m) => String(m?.id_machine_registered || m?.id || '').trim().toUpperCase() === oldCodeNorm
+    );
+
+    const prevStatusStr = String(existingMachine?.status || existingMachine?.statut || 'En Service').trim();
+    const nextStatusStr = String(updatedMch?.status || updatedMch?.statut || prevStatusStr).trim();
+    const wasArchived = isArchivedMachine(existingMachine);
+    const targetArchived =
+      updatedMch?.is_active === false ||
+      updatedMch?.archived === true ||
+      nextStatusStr.toUpperCase() === 'ARCHIVEE' ||
+      nextStatusStr.toUpperCase() === 'ARCHIVÉE' ||
+      nextStatusStr.toUpperCase() === 'ARCHIVED';
+
+    const effectiveTargetStatus = targetArchived ? 'ARCHIVEE' : nextStatusStr;
+    const statusOrLifecycleChanged =
+      existingMachine &&
+      (wasArchived !== targetArchived ||
+        prevStatusStr.toUpperCase() !== effectiveTargetStatus.toUpperCase());
+
+    let finalMachinePayload = updatedMch;
+    if (statusOrLifecycleChanged) {
+      const transition = transitionMachineLifecycle({
+        machine: { ...existingMachine, ...updatedMch, status: prevStatusStr },
+        targetStatus: effectiveTargetStatus,
+        preventiveTasks,
+        reason: targetArchived
+          ? 'Archivage machine via fiche équipement'
+          : wasArchived
+          ? 'Réactivation machine via fiche équipement'
+          : `Changement de statut vers ${effectiveTargetStatus}`,
+      });
+      finalMachinePayload = transition.updatedMachine;
+
+      if (transition.suspendedTasksCount > 0 || transition.restoredTasksCount > 0) {
+        setPreventiveTasks?.(transition.updatedPreventiveTasks);
+      }
+
+      if (targetArchived) {
+        showToast?.(
+          `Machine ${newId} archivée (${transition.suspendedTasksCount} tâche(s) préventive(s) suspendue(s)).`,
+          'info'
+        );
+      } else if (wasArchived) {
+        showToast?.(
+          `Machine ${newId} réactivée en statut « ${effectiveTargetStatus} » (${transition.restoredTasksCount} tâche(s) préventive(s) réactivée(s)).`,
+          'success'
+        );
+      }
+    }
+
+    setMachines((prev) =>
+      prev.map((m) => (m.id_machine_registered === id ? finalMachinePayload : m))
+    );
 
     if (oldCodeNorm && newCodeNorm && oldCodeNorm !== newCodeNorm) {
       const matchesOldMachine = (val: unknown) =>
@@ -218,59 +275,60 @@ export function useAppComplexHandlers({
   const handleDeleteMachine = (id) => {
     const deps = dataIntegrityService.getMachineDependencies(id, {
       preventiveTasks,
+      preventiveExecutions,
       correctiveInterventions,
       mouvements,
       machineElementsLedger,
+      sortiesExterne,
+      sortieDemands,
     });
 
-    const hasExternalSorties = (sortiesExterne || []).some(
-      (se) => String(se?.id_machine || '').trim().toUpperCase() === String(id || '').trim().toUpperCase()
-    );
-
-    if (!deps.canHardDelete || hasExternalSorties) {
+    if (!deps.canHardDelete) {
       const targetCodeNorm = String(id || '').trim().toUpperCase();
       const archiveTimestamp = new Date().toISOString();
 
-      // Soft-archive machine to preserve Preventive / Corrective / Movements / External history
-      setMachines((prev) =>
-        prev.map((m) =>
-          m.id_machine_registered === id
-            ? {
-                ...m,
-                status: 'ARCHIVEE',
-                statut: 'Archivée',
-                is_active: false,
-                actif: false,
-                date_archivage: archiveTimestamp,
-              }
-            : m
-        )
-      );
-
-      // Suspend active/scheduled preventive tasks on this archived machine so they don't pollute technician mobile queues
-      setPreventiveTasks?.((prev) =>
-        (prev || []).map((t) => {
-          const tMach = String(t?.id_machine || t?.code_machine || t?.machineCode || '')
-            .trim()
-            .toUpperCase();
-          if (tMach !== targetCodeNorm) return t;
-          return {
-            ...t,
-            is_active: false,
-            active: false,
-            statut: 'ARCHIVEE',
-            archived_with_machine: true,
-            date_archivage: archiveTimestamp,
-          };
-        })
-      );
-
       const parts = [];
       if (deps.preventiveCount) parts.push(`${deps.preventiveCount} tâche(s) préventive(s)`);
+      if (deps.preventiveExecutionsCount) parts.push(`${deps.preventiveExecutionsCount} exécution(s) PM`);
       if (deps.correctiveCount) parts.push(`${deps.correctiveCount} intervention(s) corrective(s)`);
       if (deps.movementsCount) parts.push(`${deps.movementsCount} mouvement(s)`);
       if (deps.bomCount) parts.push(`${deps.bomCount} élément(s) BOM`);
-      if (hasExternalSorties) parts.push(`bobinage(s) externe(s)`);
+      if (deps.externalSortiesCount) parts.push(`${deps.externalSortiesCount} bobinage(s) externe(s)`);
+      if (deps.sortieDemandsCount) parts.push(`${deps.sortieDemandsCount} demande(s) PDR`);
+
+      const archiveReason = `Archivage automatique (historique protégé : ${parts.join(', ')})`;
+
+      // Soft-archive machine + record lifecycle event to preserve Preventive / Corrective / Movements / External history
+      setMachines((prev) =>
+        prev.map((m) => {
+          if (m.id_machine_registered !== id && String(m.id_machine_registered || '').trim().toUpperCase() !== targetCodeNorm) {
+            return m;
+          }
+          const { updatedMachine } = transitionMachineLifecycle({
+            machine: m,
+            targetStatus: 'ARCHIVEE',
+            preventiveTasks,
+            timestamp: archiveTimestamp,
+            reason: archiveReason,
+          });
+          return updatedMachine;
+        })
+      );
+
+      // Suspend active/scheduled preventive tasks on this archived machine so they don't pollute technician mobile queues
+      setPreventiveTasks?.((prev) => {
+        const targetMachine = (activeMachines || []).find(
+          (m) => String(m?.id_machine_registered || '').trim().toUpperCase() === targetCodeNorm
+        ) || { id_machine_registered: id };
+        const { updatedPreventiveTasks } = transitionMachineLifecycle({
+          machine: targetMachine,
+          targetStatus: 'ARCHIVEE',
+          preventiveTasks: prev || [],
+          timestamp: archiveTimestamp,
+          reason: archiveReason,
+        });
+        return updatedPreventiveTasks;
+      });
 
       showToast?.(
         `Machine ${id} archivée (et ses gammes suspendues) car liée à : ${parts.join(', ')}. L'historique est préservé.`,

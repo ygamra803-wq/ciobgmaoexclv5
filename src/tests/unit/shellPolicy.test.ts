@@ -1712,4 +1712,160 @@ describe('Phase 1 — B2 Machine Activity & Audit Ledger (buildMachineActivityLe
   });
 });
 
+describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reactivation)', () => {
+  it('enforces soft-archive for machines with history, suspends preventive tasks on archive, records MACHINE_LIFECYCLE audit events, and supports reactivation', async () => {
+    const {
+      filterActiveMachines,
+      getMachineLifecycleState,
+      isArchivedMachine,
+      transitionMachineLifecycle,
+    } = await import('../../utils/activeMachines');
+    const { dataIntegrityService } = await import('../../services/dataIntegrityService');
+    const { buildMachineActivityLedger } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+
+    const initialMachine = {
+      id_machine_registered: 'PRESSE-HYD-01',
+      designation: 'Presse Hydraulique 200T',
+      status: 'En Service',
+      is_active: true,
+    };
+
+    const initialTasks = [
+      {
+        id: 'PM-PH01-1',
+        code: 'PM-PH01-1',
+        id_machine: 'PRESSE-HYD-01',
+        composant: 'Centrale Hydraulique',
+        is_active: true,
+        active: true,
+        statut: 'ACTIF',
+        etat: 'Planifié',
+      },
+      {
+        id: 'PM-OTHER-1',
+        code: 'PM-OTHER-1',
+        id_machine: 'AUTRE-MCH-02',
+        composant: 'Moteur',
+        is_active: true,
+        active: true,
+        statut: 'ACTIF',
+        etat: 'Planifié',
+      },
+    ];
+
+    // 1) Initial state is ACTIVE and included in filterActiveMachines
+    expect(getMachineLifecycleState(initialMachine)).toBe('ACTIVE');
+    expect(isArchivedMachine(initialMachine)).toBe(false);
+    expect(filterActiveMachines([initialMachine])).toHaveLength(1);
+
+    // 2) Machine with historical records cannot be hard-deleted (must be soft-archived)
+    const deps = dataIntegrityService.getMachineDependencies('PRESSE-HYD-01', {
+      preventiveTasks: initialTasks,
+      correctiveInterventions: [{ id: 'BT-100', code_machine: 'PRESSE-HYD-01', statut: 'CLOTURE' }],
+      mouvements: [],
+      machineElementsLedger: [],
+    });
+    expect(deps.canHardDelete).toBe(false);
+    expect(deps.preventiveCount).toBe(1);
+    expect(deps.correctiveCount).toBe(1);
+
+    // 3) Transition ACTIVE ➔ STOPPED ('Arrêt')
+    const stoppedTransition = transitionMachineLifecycle({
+      machine: initialMachine,
+      targetStatus: 'Arrêt',
+      preventiveTasks: initialTasks,
+      timestamp: '2026-10-25T09:00:00Z',
+      actor: 'Chef Maintenance',
+      reason: 'Arrêt saisonnier ligne 1',
+    });
+    expect(getMachineLifecycleState(stoppedTransition.updatedMachine)).toBe('STOPPED');
+    expect(isArchivedMachine(stoppedTransition.updatedMachine)).toBe(false);
+    expect(stoppedTransition.updatedMachine.lifecycle_events).toHaveLength(1);
+    expect(stoppedTransition.updatedMachine.lifecycle_events[0].event_type).toBe('STATUS_CHANGED');
+
+    // 4) Transition STOPPED ➔ ARCHIVED ('ARCHIVEE'): suspends PM tasks & excludes from filterActiveMachines
+    const archiveTransition = transitionMachineLifecycle({
+      machine: stoppedTransition.updatedMachine,
+      targetStatus: 'ARCHIVEE',
+      preventiveTasks: stoppedTransition.updatedPreventiveTasks,
+      timestamp: '2026-10-28T14:30:00Z',
+      actor: 'Admin GMAO',
+      reason: 'Archivage équipement (historique protégé)',
+    });
+
+    const archivedMachine = archiveTransition.updatedMachine;
+    const tasksAfterArchive = archiveTransition.updatedPreventiveTasks;
+
+    expect(getMachineLifecycleState(archivedMachine)).toBe('ARCHIVED');
+    expect(isArchivedMachine(archivedMachine)).toBe(true);
+    expect(archivedMachine.status).toBe('ARCHIVEE');
+    expect(archivedMachine.is_active).toBe(false);
+    expect(filterActiveMachines([archivedMachine])).toHaveLength(0);
+
+    // PM task for PRESSE-HYD-01 is suspended; other machine's task is untouched
+    expect(archiveTransition.suspendedTasksCount).toBe(1);
+    expect(tasksAfterArchive[0].is_active).toBe(false);
+    expect(tasksAfterArchive[0].statut).toBe('ARCHIVEE');
+    expect(tasksAfterArchive[0].archived_with_machine).toBe(true);
+    expect(tasksAfterArchive[1].is_active).toBe(true);
+    expect(tasksAfterArchive[1].statut).toBe('ACTIF');
+
+    // 5) buildMachineActivityLedger includes the MACHINE_LIFECYCLE events (status change + archive)
+    const ledgerAfterArchive = buildMachineActivityLedger({
+      machineOrId: archivedMachine,
+      correctiveInterventions: [
+        {
+          id: 'BT-100',
+          num_bt: 'BT-100',
+          code_machine: 'PRESSE-HYD-01',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          date_cloture: '2026-10-12',
+          cout_pdr: 200,
+        },
+      ],
+    });
+    const lifecycleEventsInLedger = ledgerAfterArchive.filter(
+      (ev) => ev.type === 'MACHINE_LIFECYCLE'
+    );
+    expect(lifecycleEventsInLedger).toHaveLength(2);
+    expect(lifecycleEventsInLedger[0].title).toContain('Archivage');
+    expect(lifecycleEventsInLedger[0].details).toContain('1 gamme(s) préventive(s) suspendue(s)');
+
+    // 6) Reactivation (ARCHIVED ➔ ACTIVE 'En Service'): restores machine & its suspended PM tasks
+    const reactivateTransition = transitionMachineLifecycle({
+      machine: archivedMachine,
+      targetStatus: 'En Service',
+      preventiveTasks: tasksAfterArchive,
+      timestamp: '2026-10-30T08:00:00Z',
+      actor: 'Admin GMAO',
+      reason: 'Remise en service ligne 1',
+    });
+
+    const reactivatedMachine = reactivateTransition.updatedMachine;
+    const tasksAfterReactivate = reactivateTransition.updatedPreventiveTasks;
+
+    expect(getMachineLifecycleState(reactivatedMachine)).toBe('ACTIVE');
+    expect(isArchivedMachine(reactivatedMachine)).toBe(false);
+    expect(reactivatedMachine.status).toBe('En Service');
+    expect(reactivatedMachine.is_active).toBe(true);
+    expect(filterActiveMachines([reactivatedMachine])).toHaveLength(1);
+    expect(reactivateTransition.restoredTasksCount).toBe(1);
+    expect(tasksAfterReactivate[0].is_active).toBe(true);
+    expect(tasksAfterReactivate[0].statut).toBe('ACTIF');
+
+    const ledgerAfterReactivate = buildMachineActivityLedger({
+      machineOrId: reactivatedMachine,
+    });
+    expect(
+      ledgerAfterReactivate.some(
+        (ev) => ev.type === 'MACHINE_LIFECYCLE' && ev.title.includes('Réactivation')
+      )
+    ).toBe(true);
+  });
+});
+
+
 
