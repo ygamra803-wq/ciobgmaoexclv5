@@ -850,7 +850,7 @@ export const DataGateway = {
     this.savePartDesignations(partDesignations);
     this.saveSortiesExterne(sortiesExterne);
 
-    if (setters.applyRemoteStateUpdate) {
+    if (typeof setters.applyRemoteStateUpdate === 'function') {
       setters.applyRemoteStateUpdate({
         rawStock,
         types,
@@ -886,41 +886,41 @@ export const DataGateway = {
         partDesignations,
         sortiesExterne,
       });
+    } else {
+      if (setters.setRawStock) setters.setRawStock(rawStock);
+      if (setters.setTypes) setters.setTypes(types);
+      if (setters.setDesignations) setters.setDesignations(designations);
+      if (setters.setMachines) setters.setMachines(machines);
+      if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(generalSystemTypes);
+      if (setters.setFamilies) setters.setFamilies(families);
+      if (setters.setTemplates) setters.setTemplates(templates);
+      if (setters.setBlueprints) setters.setBlueprints(blueprints);
+      if (setters.setZones) setters.setZones(zones);
+      if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(machineElementsLedger);
+      if (setters.setMouvements) setters.setMouvements(mouvements);
+      if (setters.setSortieDemands) setters.setSortieDemands(sortieDemands);
+      if (setters.setPreventiveTasks) setters.setPreventiveTasks(preventiveTasks);
+      if (setters.setPreventiveActions) setters.setPreventiveActions(preventiveActions);
+      if (setters.setPreventiveGuides) setters.setPreventiveGuides(preventiveGuides);
+      if (setters.setPreventivePlans) setters.setPreventivePlans(preventivePlans);
+      if (setters.setPreventiveExecutions) setters.setPreventiveExecutions(preventiveExecutions);
+      if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(correctiveInterventions);
+      if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(correctiveActionsByPanne);
+      if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(correctivePanneCategories);
+      if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(correctiveTravauxAFaire);
+      if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(correctiveIntervenants);
+      if (setters.setUsers) setters.setUsers(users);
+      if (setters.setTechnicians) setters.setTechnicians(technicians);
+      if (setters.setOperations) setters.setOperations(operations);
+      if (setters.setWarehouseItems) setters.setWarehouseItems(warehouseItems);
+      if (setters.setEntrepotComponents) setters.setEntrepotComponents(entrepotComponents);
+      if (setters.setCompGroups) setters.setCompGroups(compGroups);
+      if (setters.setCompFamilies) setters.setCompFamilies(compFamilies);
+      if (setters.setCompTemplates) setters.setCompTemplates(compTemplates);
+      if (setters.setPartTypes) setters.setPartTypes(partTypes);
+      if (setters.setPartDesignations) setters.setPartDesignations(partDesignations);
+      if (setters.setSortiesExterne) setters.setSortiesExterne(sortiesExterne);
     }
-
-    if (setters.setRawStock) setters.setRawStock(rawStock);
-    if (setters.setTypes) setters.setTypes(types);
-    if (setters.setDesignations) setters.setDesignations(designations);
-    if (setters.setMachines) setters.setMachines(machines);
-    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(generalSystemTypes);
-    if (setters.setFamilies) setters.setFamilies(families);
-    if (setters.setTemplates) setters.setTemplates(templates);
-    if (setters.setBlueprints) setters.setBlueprints(blueprints);
-    if (setters.setZones) setters.setZones(zones);
-    if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(machineElementsLedger);
-    if (setters.setMouvements) setters.setMouvements(mouvements);
-    if (setters.setSortieDemands) setters.setSortieDemands(sortieDemands);
-    if (setters.setPreventiveTasks) setters.setPreventiveTasks(preventiveTasks);
-    if (setters.setPreventiveActions) setters.setPreventiveActions(preventiveActions);
-    if (setters.setPreventiveGuides) setters.setPreventiveGuides(preventiveGuides);
-    if (setters.setPreventivePlans) setters.setPreventivePlans(preventivePlans);
-    if (setters.setPreventiveExecutions) setters.setPreventiveExecutions(preventiveExecutions);
-    if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(correctiveInterventions);
-    if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(correctiveActionsByPanne);
-    if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(correctivePanneCategories);
-    if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(correctiveTravauxAFaire);
-    if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(correctiveIntervenants);
-    if (setters.setUsers) setters.setUsers(users);
-    if (setters.setTechnicians) setters.setTechnicians(technicians);
-    if (setters.setOperations) setters.setOperations(operations);
-    if (setters.setWarehouseItems) setters.setWarehouseItems(warehouseItems);
-    if (setters.setEntrepotComponents) setters.setEntrepotComponents(entrepotComponents);
-    if (setters.setCompGroups) setters.setCompGroups(compGroups);
-    if (setters.setCompFamilies) setters.setCompFamilies(compFamilies);
-    if (setters.setCompTemplates) setters.setCompTemplates(compTemplates);
-    if (setters.setPartTypes) setters.setPartTypes(partTypes);
-    if (setters.setPartDesignations) setters.setPartDesignations(partDesignations);
-    if (setters.setSortiesExterne) setters.setSortiesExterne(sortiesExterne);
 
     return {
       machinesCount: machines.length,

@@ -31,6 +31,9 @@ export interface MergeStateOptions {
  * Extracts a deterministic primary key for any GMAO entity record.
  */
 export function getEntityRecordId(entity: string, item: any): string {
+  if (typeof item === 'string' || typeof item === 'number') {
+    return String(item).trim();
+  }
   if (!item || typeof item !== 'object') return '';
 
   if (entity === 'machines') {
@@ -232,8 +235,18 @@ export function mergeSingleRecord(serverItem: any, incomingItem: any): any {
   return { ...serverItem, ...incomingItem };
 }
 
+function serializeUnkeyedItem(item: any): string {
+  try {
+    return JSON.stringify(item);
+  } catch {
+    return String(item);
+  }
+}
+
 /**
  * Merges an entity collection by primary key without losing concurrent records from other devices.
+ * Unkeyed server records (records without an extractable primary key) are also preserved
+ * (deduplicated by content signature) when `preserveServerOnlyItems` is active.
  */
 export function mergeEntityCollection(
   entity: string,
@@ -260,17 +273,19 @@ export function mergeEntityCollection(
     const key = getEntityRecordId(entity, sItem);
     if (key) {
       serverMap.set(key, sItem);
-    } else {
+    } else if (sItem !== null && sItem !== undefined) {
       unkeyedServerItems.push(sItem);
     }
   }
 
   const seenKeys = new Set<string>();
+  const seenUnkeyedSignatures = new Set<string>();
   const mergedResult: any[] = [];
 
   for (const incItem of incomingList) {
     const key = getEntityRecordId(entity, incItem);
     if (!key) {
+      seenUnkeyedSignatures.add(serializeUnkeyedItem(incItem));
       mergedResult.push(incItem);
       continue;
     }
@@ -290,6 +305,13 @@ export function mergeEntityCollection(
     for (const [key, sItem] of serverMap.entries()) {
       if (!seenKeys.has(key) && !deletedSet.has(key)) {
         mergedResult.push(sItem);
+      }
+    }
+    for (const unkeyedItem of unkeyedServerItems) {
+      const sig = serializeUnkeyedItem(unkeyedItem);
+      if (!seenUnkeyedSignatures.has(sig)) {
+        seenUnkeyedSignatures.add(sig);
+        mergedResult.push(unkeyedItem);
       }
     }
   }

@@ -48,6 +48,7 @@ export interface OperationalSyncStatusSnapshot {
 const LAST_SYNC_AT_KEY = 'gmao_last_server_sync_at';
 const LAST_SERVER_VERSION_KEY = 'gmao_last_server_version';
 const LOCAL_MODIFIED_AT_KEY = 'gmao_local_modified_at';
+export const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
 
 let autoPushTimer: ReturnType<typeof setTimeout> | null = null;
 let autoPushInFlight = false;
@@ -124,6 +125,44 @@ export const serverSyncService = {
     const now = new Date().toISOString();
     storageService.setItem(LOCAL_MODIFIED_AT_KEY, now);
     return now;
+  },
+
+  getPendingDeletedIdsByEntity(): Record<string, string[]> {
+    const raw = storageService.getItem(PENDING_DELETED_IDS_KEY);
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return {};
+    }
+    const clean: Record<string, string[]> = {};
+    for (const [entity, ids] of Object.entries(raw)) {
+      if (Array.isArray(ids) && ids.length > 0) {
+        const filtered = Array.from(
+          new Set(ids.map((id) => String(id ?? '').trim()).filter(Boolean))
+        );
+        if (filtered.length > 0) {
+          clean[entity] = filtered;
+        }
+      }
+    }
+    return clean;
+  },
+
+  recordDeletedEntityIds(entity: string, ids: Array<string | number>): void {
+    const cleanEntity = String(entity || '').trim();
+    if (!cleanEntity || !Array.isArray(ids) || ids.length === 0) return;
+    const incoming = ids.map((id) => String(id ?? '').trim()).filter(Boolean);
+    if (incoming.length === 0) return;
+    const current = this.getPendingDeletedIdsByEntity();
+    const existing = Array.isArray(current[cleanEntity]) ? current[cleanEntity] : [];
+    current[cleanEntity] = Array.from(new Set([...existing, ...incoming]));
+    storageService.setItem(PENDING_DELETED_IDS_KEY, current);
+  },
+
+  recordDeletedEntityId(entity: string, id: string | number): void {
+    this.recordDeletedEntityIds(entity, [id]);
+  },
+
+  clearPendingDeletedIds(): void {
+    storageService.removeItem(PENDING_DELETED_IDS_KEY);
   },
 
   recordSyncSuccess(isoTimestamp: string, version?: number): void {
@@ -298,6 +337,12 @@ export const serverSyncService = {
       ? store.sortieDemands
       : storageService.getItem(STORAGE_KEYS.SORTIE_DEMANDS) || [];
 
+    const pendingDeletedIds =
+      customState?.deletedIdsByEntity && typeof customState.deletedIdsByEntity === 'object'
+        ? customState.deletedIdsByEntity
+        : this.getPendingDeletedIdsByEntity();
+    const hasDeletedIds = Object.keys(pendingDeletedIds).length > 0;
+
     return {
       rawStock,
       stock: rawStock,
@@ -333,6 +378,7 @@ export const serverSyncService = {
       partTypes,
       partDesignations,
       sortiesExterne,
+      ...(hasDeletedIds ? { deletedIdsByEntity: pendingDeletedIds } : {}),
       updatedAt: this.getLocalModifiedAt() || new Date().toISOString(),
     };
   },
@@ -610,6 +656,7 @@ export const serverSyncService = {
       const result = await response.json();
       const updatedAt = result?.updatedAt || new Date().toISOString();
       this.recordSyncSuccess(updatedAt, result?.version);
+      this.clearPendingDeletedIds();
       storageService.setItem(LOCAL_MODIFIED_AT_KEY, updatedAt);
 
       // If the server performed a cross-device smart merge and returned the unified state,
@@ -619,39 +666,6 @@ export const serverSyncService = {
         const store = useGmaoStore.getState();
         DataGateway.loadFullServerState(finalState, {
           applyRemoteStateUpdate: store.applyRemoteStateUpdate,
-          setTypes: store.setTypes,
-          setDesignations: store.setDesignations,
-          setRawStock: store.setRawStock,
-          setFamilies: store.setFamilies,
-          setTemplates: store.setTemplates,
-          setBlueprints: store.setBlueprints,
-          setMachines: store.setMachines,
-          setGeneralSystemTypes: store.setGeneralSystemTypes,
-          setZones: store.setZones,
-          setMachineElementsLedger: store.setMachineElementsLedger,
-          setWarehouseItems: store.setWarehouseItems,
-          setEntrepotComponents: store.setEntrepotComponents,
-          setCompGroups: store.setCompGroups,
-          setCompFamilies: store.setCompFamilies,
-          setCompTemplates: store.setCompTemplates,
-          setPartTypes: store.setPartTypes,
-          setPartDesignations: store.setPartDesignations,
-          setUsers: store.setUsers,
-          setTechnicians: store.setTechnicians,
-          setOperations: store.setOperations,
-          setMouvements: store.setMouvements,
-          setSortieDemands: store.setSortieDemands,
-          setPreventiveTasks: store.setPreventiveTasks,
-          setPreventiveActions: store.setPreventiveActions,
-          setPreventiveGuides: store.setPreventiveGuides,
-          setPreventivePlans: store.setPreventivePlans,
-          setPreventiveExecutions: store.setPreventiveExecutions,
-          setSortiesExterne: store.setSortiesExterne,
-          setCorrectiveInterventions: store.setCorrectiveInterventions,
-          setCorrectiveActionsByPanne: store.setCorrectiveActionsByPanne,
-          setCorrectivePanneCategories: store.setCorrectivePanneCategories,
-          setCorrectiveTravauxAFaire: store.setCorrectiveTravauxAFaire,
-          setCorrectiveIntervenants: store.setCorrectiveIntervenants,
         });
       }
 
@@ -756,41 +770,9 @@ export const serverSyncService = {
     const store = useGmaoStore.getState();
     DataGateway.loadFullServerState(serverCheck.state, {
       applyRemoteStateUpdate: store.applyRemoteStateUpdate,
-      setTypes: store.setTypes,
-      setDesignations: store.setDesignations,
-      setRawStock: store.setRawStock,
-      setFamilies: store.setFamilies,
-      setTemplates: store.setTemplates,
-      setBlueprints: store.setBlueprints,
-      setMachines: store.setMachines,
-      setGeneralSystemTypes: store.setGeneralSystemTypes,
-      setZones: store.setZones,
-      setMachineElementsLedger: store.setMachineElementsLedger,
-      setWarehouseItems: store.setWarehouseItems,
-      setEntrepotComponents: store.setEntrepotComponents,
-      setCompGroups: store.setCompGroups,
-      setCompFamilies: store.setCompFamilies,
-      setCompTemplates: store.setCompTemplates,
-      setPartTypes: store.setPartTypes,
-      setPartDesignations: store.setPartDesignations,
-      setUsers: store.setUsers,
-      setTechnicians: store.setTechnicians,
-      setOperations: store.setOperations,
-      setMouvements: store.setMouvements,
-      setSortieDemands: store.setSortieDemands,
-      setPreventiveTasks: store.setPreventiveTasks,
-      setPreventiveActions: store.setPreventiveActions,
-      setPreventiveGuides: store.setPreventiveGuides,
-      setPreventivePlans: store.setPreventivePlans,
-      setPreventiveExecutions: store.setPreventiveExecutions,
-      setSortiesExterne: store.setSortiesExterne,
-      setCorrectiveInterventions: store.setCorrectiveInterventions,
-      setCorrectiveActionsByPanne: store.setCorrectiveActionsByPanne,
-      setCorrectivePanneCategories: store.setCorrectivePanneCategories,
-      setCorrectiveTravauxAFaire: store.setCorrectiveTravauxAFaire,
-      setCorrectiveIntervenants: store.setCorrectiveIntervenants,
       ...(options.setters || {}),
     });
+    this.clearPendingDeletedIds();
 
     const syncTimestamp = serverCheck.state.updatedAt || new Date().toISOString();
     this.recordSyncSuccess(syncTimestamp, serverCheck.state.version);

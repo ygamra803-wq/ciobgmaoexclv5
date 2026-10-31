@@ -2618,8 +2618,106 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(readyStatus.isMinimumComplete).toBe(true);
     expect(readyStatus.shouldAutoShow).toBe(false);
   });
+
+  it('Batch S4 — LAN Merge Unkeyed Preservation, DeletedIds Tracking & Single-Pass loadFullServerState', async () => {
+    const { mergeEntityCollection, mergeGmaoStateSnapshot } = await import(
+      '../../services/lanStateMergeService'
+    );
+    const { serverSyncService } = await import('../../services/serverSyncService');
+    const { DataGateway } = await import('../../application/DataGateway');
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+
+    // 1) Unkeyed server items are preserved during merge without silent data loss or duplication
+    const serverWithUnkeyed = [
+      { id: 'K-1', label: 'Keyed Server Item' },
+      { note: 'Unkeyed server legacy note A', qty: 3 },
+    ];
+    const incomingWithUnkeyed = [
+      { id: 'K-1', label: 'Keyed Client Updated' },
+      { note: 'Unkeyed server legacy note A', qty: 3 }, // duplicate of server unkeyed
+      { note: 'Unkeyed client new note B', qty: 1 },
+    ];
+
+    const mergedUnkeyed = mergeEntityCollection(
+      'customNotes',
+      serverWithUnkeyed,
+      incomingWithUnkeyed,
+      { preserveServerOnly: true }
+    );
+    expect(mergedUnkeyed).toHaveLength(3);
+    expect(mergedUnkeyed).toEqual([
+      { id: 'K-1', label: 'Keyed Client Updated' },
+      { note: 'Unkeyed server legacy note A', qty: 3 },
+      { note: 'Unkeyed client new note B', qty: 1 },
+    ]);
+
+    // Also verifies server-only unkeyed item is retained even when incoming has only keyed items
+    const mergedRetained = mergeEntityCollection(
+      'customNotes',
+      serverWithUnkeyed,
+      [{ id: 'K-1', label: 'Keyed Client Updated' }],
+      { preserveServerOnly: true }
+    );
+    expect(mergedRetained).toHaveLength(2);
+    expect(mergedRetained[1]).toEqual({ note: 'Unkeyed server legacy note A', qty: 3 });
+
+    // 2) Client deletion tracking populates deletedIdsByEntity in buildLocalPayload and removes deleted item on server merge
+    serverSyncService.clearPendingDeletedIds();
+    useGmaoStore.getState().setPreventiveTasks([
+      { id: 'PM-KEEP-1', id_machine: 'M-01', tache: 'Graissage' } as any,
+      { id: 'PM-DEL-2', id_machine: 'M-01', tache: 'Nettoyage filtre' } as any,
+    ]);
+    // Delete PM-DEL-2 via store handler
+    useGmaoStore.getState().handleDeleteTask('PM-DEL-2');
+
+    const pendingDeleted = serverSyncService.getPendingDeletedIdsByEntity();
+    expect(pendingDeleted.preventiveTasks).toContain('PM-DEL-2');
+
+    const payload = serverSyncService.buildLocalPayload();
+    expect(payload.deletedIdsByEntity?.preventiveTasks).toContain('PM-DEL-2');
+
+    const serverSnapshot = {
+      preventiveTasks: [
+        { id: 'PM-KEEP-1', id_machine: 'M-01', tache: 'Graissage' },
+        { id: 'PM-DEL-2', id_machine: 'M-01', tache: 'Nettoyage filtre' },
+      ],
+    };
+    const mergeStats = mergeGmaoStateSnapshot(
+      serverSnapshot,
+      payload,
+      ['preventiveTasks'],
+      new Set(),
+      {
+        deletedIdsByEntity: payload.deletedIdsByEntity,
+        preserveServerOnlyItems: true,
+      }
+    );
+    expect(mergeStats.acceptedKeys).toContain('preventiveTasks');
+    expect(serverSnapshot.preventiveTasks.map((t: any) => t.id)).toEqual(['PM-KEEP-1']);
+    serverSyncService.clearPendingDeletedIds();
+
+    // 3) DataGateway.loadFullServerState uses applyRemoteStateUpdate in a single pass without invoking redundant individual setters
+    let applyRemoteCalled = 0;
+    let redundantSetterCalled = 0;
+    const loadedOk = DataGateway.loadFullServerState(
+      {
+        rawStock: [{ ref: 'PDR-S4', designation: 'Roulement S4', stockInitial: 5 }],
+        machines: [{ id_machine_registered: 'M-S4', nom: 'Machine S4' }],
+      },
+      {
+        applyRemoteStateUpdate: () => {
+          applyRemoteCalled += 1;
+        },
+        setRawStock: () => {
+          redundantSetterCalled += 1;
+        },
+        setMachines: () => {
+          redundantSetterCalled += 1;
+        },
+      }
+    );
+    expect(loadedOk).toMatchObject({ machinesCount: 1, stockCount: 1 });
+    expect(applyRemoteCalled).toBe(1);
+    expect(redundantSetterCalled).toBe(0);
+  });
 });
-
-
-
-

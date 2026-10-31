@@ -49,8 +49,68 @@ import { CorrectiveIntervention } from '../domain/corrective/entities/Corrective
 import { CorrectiveCalculationService } from '../domain/corrective/services/CorrectiveCalculationService';
 import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderStateMachine';
 import { movementRepository } from '../application/MovementRepository';
+import { getEntityRecordId } from '../services/lanStateMergeService';
 
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
+const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
+
+function recordLocalDeletedIds(entity: string, removedIds: unknown[]): void {
+  const cleanEntity = String(entity || '').trim();
+  if (!cleanEntity || !Array.isArray(removedIds) || removedIds.length === 0) return;
+  const cleanIds = removedIds
+    .map((id) => String(id ?? '').trim())
+    .filter(Boolean);
+  if (cleanIds.length === 0) return;
+  try {
+    const raw = storageService.getItem(PENDING_DELETED_IDS_KEY);
+    const current =
+      typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw && typeof raw === 'object'
+        ? raw
+        : {};
+    const parsed = current && typeof current === 'object' && !Array.isArray(current) ? { ...current } : {};
+    const existing = new Set<string>(Array.isArray(parsed[cleanEntity]) ? parsed[cleanEntity] : []);
+    for (const id of cleanIds) existing.add(id);
+    parsed[cleanEntity] = Array.from(existing);
+    storageService.setItem(PENDING_DELETED_IDS_KEY, parsed);
+  } catch {}
+}
+
+function trackRemovedEntityIds(entity: string, prevList: any[], nextList: any[]): void {
+  if (!Array.isArray(prevList) || prevList.length === 0) return;
+  const nextArr = Array.isArray(nextList) ? nextList : [];
+  if (nextArr.length >= prevList.length) {
+    // Quick check if any IDs were replaced/removed even when length didn't shrink
+    const nextIds = new Set<string>();
+    for (const item of nextArr) {
+      const id = getEntityRecordId(entity, item);
+      if (id) nextIds.add(id);
+    }
+    const removed: string[] = [];
+    for (const prevItem of prevList) {
+      const prevId = getEntityRecordId(entity, prevItem);
+      if (prevId && !nextIds.has(prevId)) removed.push(prevId);
+    }
+    if (removed.length > 0) recordLocalDeletedIds(entity, removed);
+    return;
+  }
+  const nextIds = new Set<string>();
+  for (const item of nextArr) {
+    const id = getEntityRecordId(entity, item);
+    if (id) nextIds.add(id);
+  }
+  const removed: string[] = [];
+  for (const prevItem of prevList) {
+    const prevId = getEntityRecordId(entity, prevItem);
+    if (prevId && !nextIds.has(prevId)) {
+      removed.push(prevId);
+    }
+  }
+  if (removed.length > 0) {
+    recordLocalDeletedIds(entity, removed);
+  }
+}
 
 function isPartAlreadyDeductedByStoreBon(
   mouvements: any[],
@@ -373,7 +433,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setRawStock: (updater) => {
-      const next = resolveUpdate(updater, get().rawStock);
+      const prev = get().rawStock;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('rawStock', prev, next);
       set({ rawStock: next });
       DataGateway.saveStock(next);
     },
@@ -414,7 +476,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setMachines: (updater) => {
-      const next = normalizeMachinesList(resolveUpdate(updater, get().machines));
+      const prev = get().machines;
+      const next = normalizeMachinesList(resolveUpdate(updater, prev));
+      trackRemovedEntityIds('machines', prev, next);
       set({ machines: next });
       DataGateway.saveMachines(next);
     },
@@ -470,13 +534,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setZones: (updater) => {
-      const next = resolveUpdate(updater, get().zones);
+      const prev = get().zones;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('zones', prev, next);
       set({ zones: next });
       DataGateway.saveZones(next);
     },
 
     setMachineElementsLedger: (updater) => {
-      const next = resolveUpdate(updater, get().machineElementsLedger);
+      const prev = get().machineElementsLedger;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('machineElementsLedger', prev, next);
       set({ machineElementsLedger: next });
       DataGateway.saveMachineBom(next);
     },
@@ -503,6 +571,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     deleteMachineElement: (id) => {
+      recordLocalDeletedIds('machineElementsLedger', [id]);
       const next = get().machineElementsLedger.filter((item) => item.id !== id);
       set({ machineElementsLedger: next });
       DataGateway.saveMachineBom(next);
@@ -561,7 +630,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     partDesignations: warehouseInit.partDesignations,
 
     setWarehouseItems: (updater) => {
-      const next = resolveUpdate(updater, get().warehouseItems);
+      const prev = get().warehouseItems;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('warehouseItems', prev, next);
       set({ warehouseItems: next });
       DataGateway.saveWarehouseItems(next);
     },
@@ -610,7 +681,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     operations: personnelInit.operations,
 
     setUsers: (updater) => {
-      const next = resolveUpdate(updater, get().users).filter(isRealPersonnelUser);
+      const prev = get().users;
+      const next = resolveUpdate(updater, prev).filter(isRealPersonnelUser);
+      trackRemovedEntityIds('users', prev, next);
       set({
         users: next,
         technicians: deriveTechnicians(next),
@@ -627,6 +700,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         id_technician: t.id_technician || t.id,
         role: t.role || 'Technicien',
       }));
+      trackRemovedEntityIds('technicians', currentTechs, cleanNext);
       set({ technicians: cleanNext });
       DataGateway.saveTechnicians(cleanNext);
     },
@@ -639,6 +713,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         id_operation: o.id_operation || o.id,
         role: o.role || 'Opérateur',
       }));
+      trackRemovedEntityIds('operations', currentOps, cleanNext);
       set({ operations: cleanNext });
       DataGateway.saveOperations(cleanNext);
     },
@@ -650,14 +725,18 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     sortieDemands: movementsInit.sortieDemands,
 
     setMouvements: (updater) => {
-      const next = resolveUpdate(updater, get().mouvements);
+      const prev = get().mouvements;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('mouvements', prev, next);
       set({ mouvements: next });
       DataGateway.saveMovements(next);
       movementRepository.bulkReplace(next as any[], buildInitialStockMapFromList(get().rawStock));
     },
 
     setSortieDemands: (updater) => {
-      const next = resolveUpdate(updater, get().sortieDemands || []);
+      const prev = get().sortieDemands || [];
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('sortieDemands', prev, next);
       set({ sortieDemands: next });
       DataGateway.saveSortieDemands(next);
     },
@@ -954,7 +1033,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     preventiveExecutions: preventiveInit.executions,
 
     setPreventiveTasks: (updater) => {
-      const next = resolveUpdate(updater, get().preventiveTasks);
+      const prev = get().preventiveTasks;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('preventiveTasks', prev, next);
       set({ preventiveTasks: next });
       DataGateway.savePreventiveTasks(next);
     },
@@ -972,13 +1053,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setPreventivePlans: (updater) => {
-      const next = resolveUpdate(updater, get().preventivePlans);
+      const prev = get().preventivePlans;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('preventivePlans', prev, next);
       set({ preventivePlans: next });
       DataGateway.savePreventivePlans(next);
     },
 
     setPreventiveExecutions: (updater) => {
-      const next = resolveUpdate(updater, get().preventiveExecutions);
+      const prev = get().preventiveExecutions;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('preventiveExecutions', prev, next);
       set({ preventiveExecutions: next });
       DataGateway.savePreventiveExecutions(next);
     },
@@ -992,6 +1077,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleDeleteTask: (id) => {
+      recordLocalDeletedIds('preventiveTasks', [id]);
       const next = get().preventiveTasks.filter((t) => t.id !== id);
       set({ preventiveTasks: next });
       DataGateway.savePreventiveTasks(next);
@@ -1532,6 +1618,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleDeletePreventiveExecution: (id) => {
+      recordLocalDeletedIds('preventiveExecutions', [id]);
       const targetExec = (get().preventiveExecutions || []).find(
         (ex: any) => String(ex.id) === String(id)
       );
@@ -1729,7 +1816,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     sortiesExterne: sortiesInit.sorties,
 
     setSortiesExterne: (updater) => {
-      const next = resolveUpdate(updater, get().sortiesExterne);
+      const prev = get().sortiesExterne;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('sortiesExterne', prev, next);
       set({ sortiesExterne: next });
       DataGateway.saveSortiesExterne(next);
     },
@@ -1772,6 +1861,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleDeleteSortieExterne: (id) => {
+      recordLocalDeletedIds('sortiesExterne', [id]);
       const nextSorties = get().sortiesExterne.filter((s) => s.id !== id);
       SortieExterneService.deleteSortie(id, get().sortiesExterne);
       set({ sortiesExterne: nextSorties });
@@ -1845,7 +1935,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     activeLiveInterventionId: correctiveInit.activeLiveId,
 
     setCorrectiveInterventions: (updater) => {
-      const next = resolveUpdate(updater, get().correctiveInterventions);
+      const prev = get().correctiveInterventions;
+      const next = resolveUpdate(updater, prev);
+      trackRemovedEntityIds('correctiveInterventions', prev, next);
       set({ correctiveInterventions: next });
       DataGateway.saveCorrectiveInterventions(next);
     },
@@ -2805,6 +2897,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleDeleteCorrectiveIntervention: (id) => {
+      recordLocalDeletedIds('correctiveInterventions', [id]);
       const next = get().correctiveInterventions.filter((item) => item.id !== id);
       set({ correctiveInterventions: next });
       DataGateway.saveCorrectiveInterventions(next);
