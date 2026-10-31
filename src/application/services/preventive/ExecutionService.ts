@@ -190,6 +190,18 @@ export class ExecutionService {
           ? validationData.status
           : 'DONE',
       notes: String(validationData?.observations ?? validationData?.notes ?? '').trim(),
+      ...(validationData?.hasAnomaly === true ||
+      validationData?.anomalie_detectee === true ||
+      validationData?.createFollowUpDi === true ||
+      validationData?.request_followup_di === true
+        ? { hasAnomaly: true }
+        : {}),
+      ...(validationData?.followUpDiAnomalie
+        ? { followUpDiAnomalie: String(validationData.followUpDiAnomalie).trim() }
+        : {}),
+      ...(validationData?.followUpDiPriorite
+        ? { followUpDiPriorite: String(validationData.followUpDiPriorite).trim() }
+        : {}),
       sparesUsed,
       sparesProposed,
       ...(numBonTech ? { num_bon_saisi_par_tech: numBonTech } : {}),

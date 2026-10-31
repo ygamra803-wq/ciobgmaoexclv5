@@ -351,7 +351,8 @@ export default function ValidationCenterView({
     const hasAnom = hasPreventiveExecutionAnomaly(exec);
     setExecCreateFollowUpDi(hasAnom && !exec?.generated_di_id);
     setExecFollowUpDiAnomalie(
-      exec?.notes ||
+      exec?.followUpDiAnomalie ||
+        exec?.notes ||
         `Anomalie constatée lors du contrôle préventif sur ${exec?.organe || exec?.machineCode || 'équipement'}`
     );
     setExecNote(exec.validation_note || '');
@@ -877,6 +878,16 @@ export default function ValidationCenterView({
                         ) : (
                           <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono text-[10px] font-black">
                             À VALIDER
+                          </span>
+                        )}
+                        {(bt.source === 'AUTO_DI_PREVENTIF' || bt.source_preventive_execution_id) && (
+                          <span
+                            data-testid={`vc-bt-auto-di-badge-${bt.id}`}
+                            className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-300 font-mono text-[10px] font-black inline-flex items-center gap-1"
+                            title={`Origine préventive : ${bt.source_preventive_execution_id || 'Auto-DI'}`}
+                          >
+                            <Calendar className="w-3 h-3 text-indigo-700" />
+                            <span>AUTO-DI PRÉVENTIF</span>
                           </span>
                         )}
                       </div>

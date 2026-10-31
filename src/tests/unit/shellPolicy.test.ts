@@ -1879,7 +1879,130 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
       )
     ).toBe(true);
   });
+
+  it('Phase 1 — B4 Preventive-to-Corrective Auto-DI Loop: no silent DI on PENDING/REJECTED, single DI on APPROVED with createFollowUpDi, and re-approval blocked', async () => {
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+    const { hasPreventiveExecutionAnomaly } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+    const initialState = useGmaoStore.getState();
+
+    try {
+      useGmaoStore.setState({
+        machines: [
+          {
+            id_machine_registered: 'PRESSE-01',
+            id: 'PRESSE-01',
+            code: 'PRESSE-01',
+            nom: 'Presse Injection 01',
+            status: 'En Service',
+            is_active: true,
+          } as any,
+        ],
+        preventiveTasks: [
+          {
+            id: 'PM-B4-1',
+            code: 'PM-B4-001',
+            id_machine: 'PRESSE-01',
+            nom_machine: 'Presse Injection 01',
+            organe: 'Vérin Hydraulique',
+            id_composant: 'COMP-VERIN-01',
+            frequence: 'Mensuel',
+            prochaine_echeance: '2026-10-15',
+            etat: 'À faire',
+            is_active: true,
+          } as any,
+        ],
+        preventiveExecutions: [],
+        correctiveInterventions: [],
+      });
+
+      // 1) Technician submits preventive execution (PENDING_VALIDATION) with anomaly & createFollowUpDi flag
+      useGmaoStore.getState().handleMarkTaskDone('PM-B4-1', {
+        submitForValidation: true,
+        validation_status: 'PENDING_VALIDATION',
+        executedAt: '2026-10-14',
+        executorName: 'Karim Tech',
+        notes: 'Anomalie: fuite huile importante sur joint de tige vérin',
+        createFollowUpDi: true,
+      });
+
+      const pendingExecs = useGmaoStore.getState().preventiveExecutions;
+      expect(pendingExecs).toHaveLength(1);
+      expect(pendingExecs[0].validation_status).toBe('PENDING_VALIDATION');
+      expect(hasPreventiveExecutionAnomaly(pendingExecs[0])).toBe(true);
+      // Strictly NO silent Auto-DI while PENDING_VALIDATION
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+      expect(pendingExecs[0].generated_di_id).toBeUndefined();
+
+      // 2) Supervisor rejects a pending execution -> NO Auto-DI even if createFollowUpDi is passed
+      const rejectedExecId = pendingExecs[0].id;
+      const rejectedResult = useGmaoStore
+        .getState()
+        .handleReviewPreventiveExecutionValidation(rejectedExecId, {
+          decision: 'REJECTED',
+          validation_note: 'Photo manquante',
+          createFollowUpDi: true,
+        } as any);
+      expect(rejectedResult?.validation_status).toBe('REJECTED');
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+
+      // 3) Technician resubmits -> Supervisor approves with createFollowUpDi: true (and 0 spares)
+      useGmaoStore.getState().handleMarkTaskDone('PM-B4-1', {
+        submitForValidation: true,
+        validation_status: 'PENDING_VALIDATION',
+        executedAt: '2026-10-15',
+        executorName: 'Karim Tech',
+        notes: 'Anomalie: fuite huile confirmée sur vérin hydraulique',
+      });
+      const secondExec = useGmaoStore.getState().preventiveExecutions[0];
+      expect(secondExec.validation_status).toBe('PENDING_VALIDATION');
+
+      const approvedResult = useGmaoStore
+        .getState()
+        .handleReviewPreventiveExecutionValidation(secondExec.id, {
+          decision: 'APPROVED',
+          validated_by_name: 'Chef Maintenance',
+          createFollowUpDi: true,
+          followUpDiAnomalie: secondExec.notes,
+        } as any);
+
+      expect(approvedResult).not.toBeNull();
+      expect(approvedResult.validation_status).toBe('APPROVED');
+      expect(Boolean(approvedResult.generated_di_id)).toBe(true);
+
+      const disAfterApprove = useGmaoStore.getState().correctiveInterventions;
+      expect(disAfterApprove).toHaveLength(1);
+      const createdDi = disAfterApprove[0];
+      expect(createdDi.id).toBe(approvedResult.generated_di_id);
+      expect(createdDi.source).toBe('AUTO_DI_PREVENTIF');
+      expect(createdDi.source_preventive_execution_id).toBe(secondExec.id);
+      expect(createdDi.source_preventive_task_id).toBe('PM-B4-1');
+      expect(createdDi.code_machine).toBe('PRESSE-01');
+      expect(createdDi.anomalie).toContain('fuite huile confirmée');
+      expect(createdDi.priorite).toBe('HAUTE');
+      expect(createdDi.statut).toBe('DEMANDE');
+
+      // 4) Re-approval attempt on the same execution (even with 0 spares) is strictly blocked & creates NO 2nd DI
+      const secondApprovalAttempt = useGmaoStore
+        .getState()
+        .handleReviewPreventiveExecutionValidation(secondExec.id, {
+          decision: 'APPROVED',
+          createFollowUpDi: true,
+        } as any);
+      expect(secondApprovalAttempt).toBeNull();
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(1);
+    } finally {
+      useGmaoStore.setState({
+        machines: initialState.machines,
+        preventiveTasks: initialState.preventiveTasks,
+        preventiveExecutions: initialState.preventiveExecutions,
+        correctiveInterventions: initialState.correctiveInterventions,
+      });
+    }
+  });
 });
+
 
 
 

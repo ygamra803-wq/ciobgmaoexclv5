@@ -427,8 +427,11 @@ export default function DemandesInterventionTab({
     ).length;
     const converted = interventions.filter((i) => i.statut === 'EN_COURS' || Boolean(i.num_bt)).length;
     const arret = interventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
+    const fromPreventive = interventions.filter(
+      (i) => i.source === 'AUTO_DI_PREVENTIF' || Boolean(i.source_preventive_execution_id)
+    ).length;
 
-    return { total, pending, converted, arret };
+    return { total, pending, converted, arret, fromPreventive };
   }, [interventions]);
 
   // Filtered DIs
@@ -445,6 +448,12 @@ export default function DemandesInterventionTab({
       if (filterStatus === 'EN_COURS' && item.statut !== 'EN_COURS' && item.statut !== 'BT_PLANIFIE') return false;
       if (filterStatus === 'CLOTURE' && item.statut !== 'CLOTURE') return false;
       if (filterStatus === 'ARRET' && !item.arret_machine) return false;
+      if (
+        filterStatus === 'AUTO_DI_PREVENTIF' &&
+        item.source !== 'AUTO_DI_PREVENTIF' &&
+        !item.source_preventive_execution_id
+      )
+        return false;
 
       // Urgence filter
       if (filterUrgence !== 'ALL' && item.priorite !== filterUrgence) return false;
@@ -690,9 +699,20 @@ export default function DemandesInterventionTab({
         icon: AlertTriangle,
         sortable: true,
         render: (di) => (
-          <span className="font-bold text-slate-900 max-w-xs truncate block" title={di.anomalie}>
-            {di.anomalie || 'court_circuit'}
-          </span>
+          <div className="space-y-1 max-w-xs">
+            <span className="font-bold text-slate-900 truncate block" title={di.anomalie}>
+              {di.anomalie || 'court_circuit'}
+            </span>
+            {(di.source === 'AUTO_DI_PREVENTIF' || di.source_preventive_execution_id) && (
+              <span
+                data-testid={`di-auto-prev-badge-${di.id}`}
+                className="px-1.5 py-0.5 rounded text-[9.5px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1 font-mono"
+                title={`Origine préventive : ${di.source_preventive_execution_id || 'Auto-DI'}`}
+              >
+                Auto-DI Préventif
+              </span>
+            )}
+          </div>
         ),
       },
       {
@@ -1050,6 +1070,13 @@ export default function DemandesInterventionTab({
               count: kpiStats.arret,
               activeBg: 'bg-purple-600 text-white shadow-xs',
               colorDot: 'bg-purple-500',
+            },
+            {
+              key: 'AUTO_DI_PREVENTIF',
+              label: 'Auto-DI Préventif',
+              count: kpiStats.fromPreventive,
+              activeBg: 'bg-indigo-600 text-white shadow-xs',
+              colorDot: 'bg-indigo-500',
             },
           ].map((preset) => {
             const isActive = filterStatus === preset.key;

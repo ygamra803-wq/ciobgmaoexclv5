@@ -1046,25 +1046,39 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       // Emit official stock movement(s) when an Admin/Supervisor executes a task directly (APPROVED) with sparesUsed
       const newestExec = Array.isArray(executions) ? executions[0] : null;
+      const existingLinkedDiForNewest =
+        newestExec?.id
+          ? (get().correctiveInterventions || []).find(
+              (ci: any) =>
+                String(ci?.source_preventive_execution_id || '').trim() ===
+                String(newestExec.id).trim()
+            )
+          : null;
+      const resolvedNewestMachineCode = String(
+        newestExec?.machineCode || targetMachine || validationData?.machineCode || ''
+      ).trim();
+
       if (
         newestExec &&
         String(newestExec.taskId) === String(id) &&
         newestExec.validation_status === 'APPROVED' &&
         Boolean(validationData?.createFollowUpDi) &&
         !newestExec.generated_di_id &&
-        newestExec.machineCode
+        !existingLinkedDiForNewest &&
+        resolvedNewestMachineCode
       ) {
         const anomText = String(
           validationData?.followUpDiAnomalie ||
+            newestExec.followUpDiAnomalie ||
             newestExec.notes ||
             `Anomalie détectée lors du contrôle préventif (${newestExec.organe || newestExec.taskCode || 'PM'})`
         ).trim();
         const createdDi = get().handleAddDemandeIntervention({
-          code_machine: newestExec.machineCode,
-          nom_machine: newestExec.machineName || newestExec.machineCode,
+          code_machine: resolvedNewestMachineCode,
+          nom_machine: newestExec.machineName || resolvedNewestMachineCode,
           anomalie: anomText,
           travail_a_faire: `Diagnostic et remise en état suite à anomalie préventive sur ${
-            newestExec.organe || newestExec.machineCode
+            newestExec.organe || resolvedNewestMachineCode
           } (Réf PM: ${newestExec.id})`,
           priorite: validationData?.followUpDiPriorite || 'HAUTE',
           urgence: validationData?.followUpDiPriorite || 'Haute',
@@ -1081,6 +1095,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           PreventiveService.saveExecutions(executions);
           DataGateway.savePreventiveExecutions(executions);
         }
+      } else if (newestExec && existingLinkedDiForNewest?.id && !newestExec.generated_di_id) {
+        newestExec.generated_di_id = existingLinkedDiForNewest.id;
+        set({ preventiveExecutions: executions });
+        PreventiveService.saveExecutions(executions);
+        DataGateway.savePreventiveExecutions(executions);
       }
 
       if (
@@ -1191,11 +1210,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const decision = String(decisionData.decision || 'APPROVED').trim().toUpperCase();
       const nowIso = new Date().toISOString();
 
-      if (
-        existingExec.validation_status === 'APPROVED' &&
-        existingExec.stock_deducted === true
-      ) {
-        console.warn(`[useGmaoStore] handleReviewPreventiveExecutionValidation blocked: execution ${executionId} is already approved and stock deducted.`);
+      if (existingExec.validation_status === 'APPROVED') {
+        console.warn(`[useGmaoStore] handleReviewPreventiveExecutionValidation blocked: execution ${executionId} is already approved.`);
         return null;
       }
 
@@ -1253,30 +1269,49 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         const totalCost = Number((sparesCost + laborCost).toFixed(2));
 
         // Optional Auto-DI on Preventive Anomaly (Idea 1: Boucle fermée Préventif -> Correctif)
-        let generatedDiId = existingExec.generated_di_id || '';
+        const existingLinkedDi = (get().correctiveInterventions || []).find(
+          (ci: any) =>
+            String(ci?.source_preventive_execution_id || '').trim() ===
+            String(existingExec.id).trim()
+        );
+        let generatedDiId = String(
+          existingExec.generated_di_id || existingLinkedDi?.id || ''
+        ).trim();
+        const linkedTask = (get().preventiveTasks || []).find(
+          (t: any) => String(t.id) === String(existingExec.taskId)
+        );
+        const resolvedMachineCode = String(
+          existingExec.machineCode ||
+            existingExec.id_machine ||
+            linkedTask?.id_machine ||
+            ''
+        ).trim();
+
         if (
           Boolean((decisionData as any).createFollowUpDi) &&
           !generatedDiId &&
-          existingExec.machineCode
+          resolvedMachineCode
         ) {
           const anomText = String(
             (decisionData as any).followUpDiAnomalie ||
+              existingExec.followUpDiAnomalie ||
               existingExec.notes ||
               `Anomalie détectée lors du contrôle préventif (${existingExec.organe || existingExec.taskCode || 'PM'})`
           ).trim();
           const createdDi = get().handleAddDemandeIntervention({
-            code_machine: existingExec.machineCode,
-            nom_machine: existingExec.machineName || existingExec.machineCode,
+            code_machine: resolvedMachineCode,
+            nom_machine: existingExec.machineName || resolvedMachineCode,
             anomalie: anomText,
             travail_a_faire: `Diagnostic et remise en état suite à anomalie préventive sur ${
-              existingExec.organe || existingExec.machineCode
+              existingExec.organe || resolvedMachineCode
             } (Réf PM: ${existingExec.id})`,
-            priorite: (decisionData as any).followUpDiPriorite || 'HAUTE',
-            urgence: (decisionData as any).followUpDiPriorite || 'Haute',
+            priorite: (decisionData as any).followUpDiPriorite || existingExec.followUpDiPriorite || 'HAUTE',
+            urgence: (decisionData as any).followUpDiPriorite || existingExec.followUpDiPriorite || 'Haute',
             id_composant: existingExec.id_composant || '',
             nom_composant: existingExec.organe || '',
             demandeur:
               decisionData.validated_by_name ||
+              (decisionData as any).reviewer_name ||
               existingExec.executorName ||
               'Superviseur Maintenance',
             source: 'AUTO_DI_PREVENTIF',
