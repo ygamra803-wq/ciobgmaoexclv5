@@ -70,7 +70,7 @@ const ROLE_PRIVILEGE_RANK: Record<string, number> = {
 };
 
 export function normalizeServerRole(rawRole: unknown): string {
-  if (typeof rawRole !== 'string' || !rawRole.trim()) return 'ADMIN';
+  if (typeof rawRole !== 'string' || !rawRole.trim()) return 'VIEWER';
   const upper = rawRole.trim().toUpperCase();
   if (upper === 'ADMIN' || upper === 'ADMINISTRATEUR') return 'ADMIN';
   if (
@@ -87,7 +87,7 @@ export function normalizeServerRole(rawRole: unknown): string {
   if (upper === 'TECHNICIEN' || upper === 'TECHNICIAN' || upper === 'TECH') return 'TECHNICIEN';
   if (upper === 'OPERATEUR' || upper === 'OPERATOR') return 'OPERATEUR';
   if (upper === 'VIEWER' || upper === 'OBSERVATEUR' || upper === 'VISITEUR') return 'VIEWER';
-  return upper;
+  return 'VIEWER';
 }
 
 export interface ResolvedServerActor {
@@ -99,25 +99,37 @@ export interface ResolvedServerActor {
   isArchivedActor: boolean;
 }
 
+const UNTRUSTED_GENERIC_ACTORS = new Set<string>([
+  'WEB-OPERATOR',
+  'ANONYMOUS',
+  'UNKNOWN',
+  'GUEST',
+]);
+
 /**
  * Resolves the effective server role by cross-checking the claimed `x-gmao-role`
  * against registered users and technicians in `dbState`.
+ * Missing role or missing/untrusted actor identity always resolves to `VIEWER`.
  */
 export function resolveEffectiveServerRole(
   headers: Record<string, unknown>,
   dbUsers: any[] = [],
   dbTechnicians: any[] = []
 ): ResolvedServerActor {
-  const rawRole = headers['x-gmao-role'];
+  const rawRole = headers?.['x-gmao-role'];
   const claimedRole = normalizeServerRole(rawRole);
-  const actorId = String(headers['x-gmao-actor-id'] || '').trim();
-  const actorName = String(headers['x-gmao-actor'] || '').trim();
+  const actorId = String(headers?.['x-gmao-actor-id'] || '').trim();
+  const actorName = String(headers?.['x-gmao-actor'] || '').trim();
 
   const normId = actorId.toUpperCase();
   const normName = actorName.toUpperCase();
 
-  let effectiveRole = claimedRole;
-  let roleSpoofDetected = false;
+  const hasTrustedActorIdentity =
+    (normId.length > 0 && !UNTRUSTED_GENERIC_ACTORS.has(normId)) ||
+    (normName.length > 0 && !UNTRUSTED_GENERIC_ACTORS.has(normName));
+
+  let effectiveRole = hasTrustedActorIdentity ? claimedRole : 'VIEWER';
+  let roleSpoofDetected = !hasTrustedActorIdentity && claimedRole !== 'VIEWER';
   let isArchivedActor = false;
 
   // 1. Check against registered users in dbState.users

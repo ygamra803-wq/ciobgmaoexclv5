@@ -33,16 +33,6 @@ export class AuthService {
     let users = null;
     try {
       users = SecurityService.getSecure(USERS_KEY);
-      if (!users || !Array.isArray(users)) {
-        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(USERS_KEY) : null;
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            users = parsed;
-            SecurityService.saveSecure(USERS_KEY, users);
-          }
-        }
-      }
     } catch {
       users = null;
     }
@@ -204,10 +194,6 @@ export class AuthService {
     let users = null;
     try {
       users = SecurityService.getSecure(USERS_KEY);
-      if (!users || !Array.isArray(users)) {
-        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(USERS_KEY) : null;
-        if (raw) users = JSON.parse(raw);
-      }
     } catch {
       users = null;
     }

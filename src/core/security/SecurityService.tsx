@@ -208,13 +208,10 @@ export class SecurityService {
     }
 
     const trimmed = encrypted.trim();
-    // 1. If the stored payload is already plain JSON (legacy or unencrypted write), parse directly without AES decryption
+    // Security hardening (Batch S1): Do NOT accept raw plaintext JSON ('[' or '{') as valid ciphertext.
     if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-      try {
-        return JSON.parse(trimmed);
-      } catch {
-        // Not valid plain JSON; proceed to AES decryption attempt
-      }
+      Logger.warn('[SecurityService] Rejected unencrypted plaintext JSON in decrypt()');
+      throw new Error('Unencrypted plaintext JSON is not accepted by SecurityService.decrypt');
     }
 
     try {
@@ -347,18 +344,6 @@ export class SecurityService {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
-
-      const trimmed = raw.trim();
-      // Auto-migrate legacy plain JSON to encrypted storage
-      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          this.saveSecure(key, parsed);
-          return parsed;
-        } catch {
-          // Proceed to normal decrypt
-        }
-      }
 
       return this.decrypt(raw);
     } catch {

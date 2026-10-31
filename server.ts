@@ -126,7 +126,9 @@ async function startServer() {
       const token = req.headers['x-gmao-api-token'];
       const clientOrigin = req.headers['x-gmao-client-origin'];
       const expectedToken = process.env.GMAO_API_TOKEN;
-      const strictToken = process.env.GMAO_STRICT_TOKEN === 'true';
+      // Strict token policy: in production or when GMAO_API_TOKEN is configured, gmao-web-client
+      // does NOT bypass token verification unless GMAO_STRICT_TOKEN is explicitly set to 'false' in non-prod.
+      const strictToken = isProduction || process.env.GMAO_STRICT_TOKEN !== 'false';
 
       // Reject immediately if an explicit token header is provided and does not match expectedToken
       if (expectedToken && token !== undefined && token !== expectedToken) {
@@ -146,60 +148,53 @@ async function startServer() {
         });
       }
 
-      // Server-side RBAC enforcement: cross-check x-gmao-role & x-gmao-actor against dbState.users / technicians
-      const roleHeader = req.headers['x-gmao-role'];
-      const actorHeader = req.headers['x-gmao-actor'] || req.headers['x-gmao-actor-id'];
-      if (
-        (typeof roleHeader === 'string' && roleHeader.trim().length > 0) ||
-        (typeof actorHeader === 'string' && actorHeader.trim().length > 0)
-      ) {
-        const resolvedActor = resolveEffectiveServerRole(
-          req.headers as Record<string, unknown>,
-          dbStateRef.users,
-          dbStateRef.technicians
-        );
-        const role = normalizeServerRole(resolvedActor.effectiveRole);
-        (req as any).resolvedServerActor = resolvedActor;
+      // Server-side RBAC enforcement: ALL write requests (POST/PUT/DELETE) unconditionally pass through resolveEffectiveServerRole
+      const resolvedActor = resolveEffectiveServerRole(
+        req.headers as Record<string, unknown>,
+        dbStateRef.users,
+        dbStateRef.technicians
+      );
+      const role = normalizeServerRole(resolvedActor.effectiveRole);
+      (req as any).resolvedServerActor = resolvedActor;
 
-        if (role === 'VIEWER') {
+      if (role === 'VIEWER') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: resolvedActor.isArchivedActor
+            ? 'Actor profile is archived/inactive and cannot modify server state.'
+            : 'Role VIEWER or unauthenticated actor is read-only and cannot modify server state.',
+        });
+      }
+
+      const pathParts = req.path.split('/').filter(Boolean);
+      const targetEntity = pathParts[0] || '';
+      if (targetEntity && targetEntity !== 'state' && targetEntity !== 'audit') {
+        if (ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {
           return res.status(403).json({
             success: false,
             error: 'Forbidden',
-            message: resolvedActor.isArchivedActor
-              ? 'Actor profile is archived/inactive and cannot modify server state.'
-              : 'Role VIEWER is read-only and cannot modify server state.',
+            message: `Role '${role}' is not authorized to modify administrative entity '${targetEntity}'.`,
           });
         }
-
-        const pathParts = req.path.split('/').filter(Boolean);
-        const targetEntity = pathParts[0] || '';
-        if (targetEntity && targetEntity !== 'state' && targetEntity !== 'audit') {
-          if (ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {
-            return res.status(403).json({
-              success: false,
-              error: 'Forbidden',
-              message: `Role '${role}' is not authorized to modify administrative entity '${targetEntity}'.`,
-            });
-          }
-          if (
-            req.method === 'DELETE' &&
-            CATALOG_PROTECTED_ENTITIES.has(targetEntity) &&
-            (role === 'TECHNICIEN' || role === 'OPERATEUR')
-          ) {
-            return res.status(403).json({
-              success: false,
-              error: 'Forbidden',
-              message: `Role '${role}' is not authorized to delete records from '${targetEntity}'.`,
-            });
-          }
-          const entityGuard = canRoleMutateEntity(role, targetEntity, req.method);
-          if (!entityGuard.allowed) {
-            return res.status(403).json({
-              success: false,
-              error: 'Forbidden',
-              message: entityGuard.reason || `Role '${role}' is not authorized to modify '${targetEntity}'.`,
-            });
-          }
+        if (
+          req.method === 'DELETE' &&
+          CATALOG_PROTECTED_ENTITIES.has(targetEntity) &&
+          (role === 'TECHNICIEN' || role === 'OPERATEUR')
+        ) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Role '${role}' is not authorized to delete records from '${targetEntity}'.`,
+          });
+        }
+        const entityGuard = canRoleMutateEntity(role, targetEntity, req.method);
+        if (!entityGuard.allowed) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: entityGuard.reason || `Role '${role}' is not authorized to modify '${targetEntity}'.`,
+          });
         }
       }
     }
@@ -371,7 +366,7 @@ async function startServer() {
   };
 
   // API Routes
-  app.get('/api/health', (req, res) => {
+  const healthHandler = (_req: express.Request, res: express.Response) => {
     res.json({
       status: 'healthy',
       service: 'GMAO Enterprise Backend API',
@@ -379,7 +374,9 @@ async function startServer() {
       version: dbState.version,
       storage: 'Atomic JSON File + Serialized Memory Engine',
     });
-  });
+  };
+  app.get('/api/health', healthHandler);
+  app.get('/api/gmao/health', healthHandler);
 
   // LAN Host Network Discovery Endpoint (P3.1 & P3.2)
   app.get('/api/network/info', (req, res) => {
@@ -805,7 +802,13 @@ async function startServer() {
     const viteReadyPromise = import('vite')
       .then(({ createServer: createViteServer }) =>
         createViteServer({
-          server: { middlewareMode: true, hmr: false },
+          server: {
+            middlewareMode: true,
+            hmr: false,
+            watch: {
+              ignored: ['**/dist/**', '**/coverage/**', '**/data/**', '**/node_modules/**', '**/.git/**'],
+            },
+          },
           appType: 'spa',
         })
       )

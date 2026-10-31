@@ -78,20 +78,20 @@ const resolveSessionUser = (): Record<string, any> | null => {
   return null;
 };
 
-const getActiveActorName = (): string => {
+export const getActiveActorName = (): string => {
   const user = resolveSessionUser();
   if (user) {
     return user.nom || user.name || user.username || user.role || 'operator';
   }
-  return 'web-operator';
+  return '';
 };
 
-const getActiveActorRole = (): string => {
+export const getActiveActorRole = (): string => {
   const user = resolveSessionUser();
   if (user && typeof user.role === 'string' && user.role.trim()) {
     return user.role.trim().toUpperCase();
   }
-  return 'ADMIN';
+  return 'VIEWER';
 };
 
 

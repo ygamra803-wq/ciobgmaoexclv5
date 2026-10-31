@@ -37,6 +37,7 @@ describe('Round 4 — Server-Authoritative Persistence, Version Concurrency & Au
   });
 
   it('C-01b: should handle HTTP 409 Conflict from POST /api/gmao/state without overwriting', async () => {
+    storageService.setItem('gmao_active_user', { nom: 'Ing. Karim', role: 'admin' });
     serverSyncService.setLastServerVersion(2);
 
     const mockFetch = vi.fn()

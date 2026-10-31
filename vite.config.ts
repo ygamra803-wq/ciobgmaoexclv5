@@ -232,6 +232,9 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 3000,
     hmr: false,
+    watch: {
+      ignored: ['**/dist/**', '**/coverage/**', '**/data/**', '**/node_modules/**', '**/.git/**'],
+    },
     headers: {
       'Content-Security-Policy': "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
       'X-Content-Type-Options': 'nosniff',

@@ -1022,6 +1022,62 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(bulkAttempt.sanitizedState.correctiveInterventions[0].statut).toBe('EN_COURS');
   });
 
+  it('Batch S1 — P0 Security Hardening: headerless spoof rejected, normalizeServerRole empty/unknown -> VIEWER, getActiveActorRole without session !== ADMIN, and SecurityService.decrypt rejects plaintext JSON ADMIN injection', async () => {
+    const {
+      normalizeServerRole,
+      resolveEffectiveServerRole,
+      canRoleMutateEntity,
+      sanitizeBulkStateForRole,
+    } = await import('../../core/security/serverRbacPolicy');
+    const { getActiveActorRole, serverSyncService } = await import('../../services/serverSyncService');
+    const { SecurityService } = await import('../../core/security/SecurityService');
+    const { AuthService } = await import('../../core/security/AuthService');
+
+    // 1. normalizeServerRole: empty / whitespace / unknown -> VIEWER (never ADMIN)
+    expect(normalizeServerRole('')).toBe('VIEWER');
+    expect(normalizeServerRole('   ')).toBe('VIEWER');
+    expect(normalizeServerRole(undefined)).toBe('VIEWER');
+    expect(normalizeServerRole(null)).toBe('VIEWER');
+    expect(normalizeServerRole('SUPER_HACKER_ROLE')).toBe('VIEWER');
+
+    // 2. Spoof / write request without headers or without trusted actor is downgraded to VIEWER and rejected
+    const noHeadersCheck = resolveEffectiveServerRole({}, [], []);
+    expect(noHeadersCheck.effectiveRole).toBe('VIEWER');
+    expect(canRoleMutateEntity(noHeadersCheck.effectiveRole, 'machines', 'POST').allowed).toBe(false);
+    expect(sanitizeBulkStateForRole(noHeadersCheck.effectiveRole, { machines: [] }, {}).allowed).toBe(false);
+
+    const roleOnlyWithoutActor = resolveEffectiveServerRole({ 'x-gmao-role': 'ADMIN' }, [], []);
+    expect(roleOnlyWithoutActor.roleSpoofDetected).toBe(true);
+    expect(roleOnlyWithoutActor.effectiveRole).toBe('VIEWER');
+    expect(canRoleMutateEntity(roleOnlyWithoutActor.effectiveRole, 'users', 'PUT').allowed).toBe(false);
+
+    // 3. getActiveActorRole without valid session !== ADMIN (returns VIEWER and blocks pushToServer)
+    localStorage.clear();
+    sessionStorage.clear();
+    const roleWithoutSession = getActiveActorRole();
+    expect(roleWithoutSession).not.toBe('ADMIN');
+    expect(roleWithoutSession).toBe('VIEWER');
+
+    const unauthPush = await serverSyncService.pushToServer({
+      force: true,
+      customState: { machines: [] },
+    });
+    expect(unauthPush.success).toBe(false);
+
+    // 4. SecurityService.decrypt & AuthService reject raw plaintext JSON ADMIN account injection from localStorage
+    const injectedPlaintextAccounts = JSON.stringify([
+      { id: 'injected-admin', username: 'attacker', role: 'ADMIN', isActive: true },
+    ]);
+    expect(() => SecurityService.decrypt(injectedPlaintextAccounts)).toThrow();
+
+    localStorage.setItem('gmao_auth_accounts_v2', injectedPlaintextAccounts);
+    expect(SecurityService.getSecure('gmao_auth_accounts_v2')).toBeNull();
+
+    const authService = new AuthService();
+    const storedUsers = authService.getStoredUsersList();
+    expect(storedUsers.some((u: any) => u.username === 'attacker')).toBe(false);
+  });
+
   it('Phase 0 — A1 Operational Trust Smoke Suite (A1.1 to A1.6): verifies end-to-end store & merge contracts across all 6 critical paths', async () => {
     const { useGmaoStore } = await import('../../store/useGmaoStore');
     const { buildTechnicianDashboardScope } = await import('../../core/security/technicianScope');
