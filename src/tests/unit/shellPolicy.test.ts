@@ -1078,6 +1078,67 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(storedUsers.some((u: any) => u.username === 'attacker')).toBe(false);
   });
 
+  it('Batch S2 — Stock Index Rebuild after Server Sync / Clear / Demo & MovementRepository REBUILD SSOT', async () => {
+    const { DataGateway } = await import('../../application/DataGateway');
+    const { movementRepository } = await import('../../application/MovementRepository');
+    const { stockIndexStore } = await import('../../application/StockIndexStore');
+    const { reactiveCalculationEngine } = await import('../../services/reactiveCalculationEngine');
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+    const { STORAGE_KEYS } = await import('../../infrastructure/persistence/storageKeys');
+    const { storageService } = await import('../../utils/storageService');
+
+    // 1. Seed old session state in memory: ROUL-6204 has stockInitial=20 and an old Sortie of 15 -> stockActuel=5
+    const oldRawStock = [{ id: 'S-1', ref: 'ROUL-6204', designation: 'Roulement 6204', stockInitial: 20, seuil: 3 }];
+    const oldMouvements = [{ id: 'MVT-OLD-1', ref: 'ROUL-6204', type: 'Sortie Interne', quantite: 15 }];
+    movementRepository.bulkReplace(oldMouvements, new Map([['ROUL-6204', 20]]));
+    expect(stockIndexStore.index.getStock('ROUL-6204')).toBe(5);
+    const oldComputed = reactiveCalculationEngine.recalculateStockReactive(oldRawStock, oldMouvements);
+    expect(oldComputed[0].stockActuel).toBe(5);
+
+    // 2. Apply loadFullServerState (e.g. after LAN merge/pull) with new official movements:
+    // Entrée=8, Sortie=3 -> stockActuel must be 20 + 8 - 3 = 25 (NOT contaminated by old Sortie=15)
+    const syncedRawStock = [{ id: 'S-1', ref: 'ROUL-6204', designation: 'Roulement 6204', stockInitial: 20, seuil: 3 }];
+    const syncedMouvements = [
+      { id: 'MVT-SYNC-1', ref: 'ROUL-6204', type: 'Entrée Externe', quantite: 8 },
+      { id: 'MVT-SYNC-2', ref: 'ROUL-6204', type: 'Sortie Interne', quantite: 3 },
+    ];
+    const store = useGmaoStore.getState();
+    DataGateway.loadFullServerState(
+      { rawStock: syncedRawStock, mouvements: syncedMouvements },
+      {
+        applyRemoteStateUpdate: store.applyRemoteStateUpdate,
+        setRawStock: store.setRawStock,
+        setMouvements: store.setMouvements,
+      }
+    );
+
+    expect(stockIndexStore.index.getTotals('ROUL-6204')).toMatchObject({ entrees: 8, sorties: 3 });
+    expect(stockIndexStore.index.getStock('ROUL-6204')).toBe(25);
+    const syncedComputed = reactiveCalculationEngine.recalculateStockReactive(syncedRawStock, syncedMouvements);
+    expect(syncedComputed[0].entrees).toBe(8);
+    expect(syncedComputed[0].sorties).toBe(3);
+    expect(syncedComputed[0].stockActuel).toBe(25);
+
+    // 3. Verify clearAllForRealFactory wipes the in-memory index completely
+    await DataGateway.clearAllForRealFactory({
+      setRawStock: store.setRawStock,
+      setMouvements: store.setMouvements,
+    });
+    expect(stockIndexStore.index.getTotals('ROUL-6204')).toMatchObject({ entrees: 0, sorties: 0 });
+    expect(stockIndexStore.index.getStock('ROUL-6204')).toBe(0);
+
+    // 4. Verify MovementRepository REBUILD handler reads strictly from STORAGE_KEYS.MOUVEMENTS
+    storageService.setItem(STORAGE_KEYS.RAW_STOCK, [
+      { id: 'S-2', ref: 'COUR-A42', designation: 'Courroie A42', stockInitial: 10, seuil: 2 },
+    ]);
+    storageService.setItem(STORAGE_KEYS.MOUVEMENTS, [
+      { id: 'MVT-REB-1', ref: 'COUR-A42', type: 'Sortie Interne', quantite: 4 },
+    ]);
+    await (movementRepository as any).onRemoteDelta({ data: { kind: 'REBUILD' } } as MessageEvent);
+    expect(stockIndexStore.index.getTotals('COUR-A42')).toMatchObject({ entrees: 0, sorties: 4 });
+    expect(stockIndexStore.index.getStock('COUR-A42')).toBe(6);
+  });
+
   it('Phase 0 — A1 Operational Trust Smoke Suite (A1.1 to A1.6): verifies end-to-end store & merge contracts across all 6 critical paths', async () => {
     const { useGmaoStore } = await import('../../store/useGmaoStore');
     const { buildTechnicianDashboardScope } = await import('../../core/security/technicianScope');

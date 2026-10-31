@@ -2,7 +2,6 @@ import { stockIndexStore } from './StockIndexStore';
 import type { MovementDelta } from './IncrementalStockIndex';
 import { storageService } from '../utils/storageService';
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
-import { TaskApplicationService } from './services/TaskApplicationService';
 
 export interface MovementEntity {
   id?: string | number;
@@ -121,10 +120,11 @@ export class MovementRepository {
   }
 
   bulkReplace(movements: MovementEntity[], initialStocks?: Map<string, number>): void {
-    const deltas: MovementDelta[] = movements.map((m) => ({
-      ref: m.ref,
-      type: m.type,
-      quantity: Number(m.quantite) || 0,
+    const list = Array.isArray(movements) ? movements : [];
+    const deltas: MovementDelta[] = list.map((m: any) => ({
+      ref: m?.ref || m?.code_article || m?.['Référence'] || m?.['Reference'] || '',
+      type: m?.type || m?.['Type (Entrée/Sortie)'] || '',
+      quantity: Number(m?.quantite != null ? m.quantite : m?.quantity != null ? m.quantity : m?.['Quantité']) || 0,
     }));
     stockIndexStore.index.rebuild(deltas, initialStocks);
     stockIndexStore.markHydrated();
@@ -168,15 +168,26 @@ export class MovementRepository {
       stockIndexStore.notifyAll();
     } else if (msg.kind === 'REBUILD') {
       try {
-        const taskService = new TaskApplicationService();
-        const idbTasks = await taskService.listTasks();
-        const savedMovements = idbTasks && idbTasks.length > 0 ? idbTasks : (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []);
+        const rawMovements = storageService.getItem(STORAGE_KEYS.MOUVEMENTS);
+        const savedMovements = Array.isArray(rawMovements) ? rawMovements : [];
         const deltas: MovementDelta[] = savedMovements.map((m: any) => ({
-          ref: m.ref || m['Référence'] || '',
-          type: m.type || m['Type (Entrée/Sortie)'] || '',
-          quantity: Number(m.quantite != null ? m.quantite : m['Quantité']) || 0,
+          ref: m?.ref || m?.code_article || m?.['Référence'] || m?.['Reference'] || '',
+          type: m?.type || m?.['Type (Entrée/Sortie)'] || '',
+          quantity: Number(m?.quantite != null ? m.quantite : m?.quantity != null ? m.quantity : m?.['Quantité']) || 0,
         }));
-        stockIndexStore.index.rebuild(deltas);
+        const rawStockList = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
+        let initialStockMap: Map<string, number> | undefined;
+        if (Array.isArray(rawStockList)) {
+          initialStockMap = new Map<string, number>();
+          for (const s of rawStockList) {
+            const sRef = String(s?.ref || s?.Ref || '').trim();
+            if (sRef) {
+              initialStockMap.set(sRef, Number(s.stockInitial) || 0);
+            }
+          }
+        }
+        stockIndexStore.index.rebuild(deltas, initialStockMap);
+        stockIndexStore.markHydrated();
         stockIndexStore.notifyAll();
       } catch (err) {
         console.error('[MovementRepository] Failed to handle remote REBUILD message:', err);

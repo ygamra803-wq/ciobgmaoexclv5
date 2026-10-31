@@ -5,6 +5,7 @@ import { dataIntegrityService } from '../services/dataIntegrityService';
 import { sanitizeObject } from '../utils/sanitize';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
+import { movementRepository } from './MovementRepository';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
@@ -40,6 +41,18 @@ import seedCompFamilies from '../data/warehouse/seedCompFamilies.json';
 import seedCompTemplates from '../data/warehouse/seedCompTemplates.json';
 import seedPartTypes from '../data/warehouse/seedPartTypes.json';
 import seedPartDesignations from '../data/warehouse/seedPartDesignations.json';
+
+function buildInitialStockMap(rawStock: any[] = []): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!Array.isArray(rawStock)) return map;
+  for (const item of rawStock) {
+    if (!item) continue;
+    const ref = String(item.ref || item.Ref || '').trim();
+    if (!ref) continue;
+    map.set(ref, Number(item.stockInitial) || 0);
+  }
+  return map;
+}
 
 /**
  * Thin Write Gateway (Single Write Path for all Canonical Entities).
@@ -443,6 +456,7 @@ export const DataGateway = {
     this.saveStockTypes(seedStockTypes);
     this.saveDesignations(derivedDesignations);
     this.saveMouvements(seedMouvements);
+    movementRepository.bulkReplace(seedMouvements as any[], buildInitialStockMap(seedStockItems));
 
     this.savePreventiveTasks(seedPreventiveTasks, { machines: seedMachines });
     this.savePreventiveActions(seedPreventiveActions);
@@ -593,6 +607,7 @@ export const DataGateway = {
     this.saveDesignations([]);
     this.saveMouvements([]);
     this.saveSortieDemands([]);
+    movementRepository.bulkReplace([], new Map());
 
     this.savePreventiveTasks([]);
     this.savePreventiveActions([]);
@@ -804,6 +819,7 @@ export const DataGateway = {
     this.saveMachineBom(machineElementsLedger);
     this.saveMouvements(mouvements);
     this.saveSortieDemands(sortieDemands);
+    movementRepository.bulkReplace(mouvements as any[], buildInitialStockMap(rawStock));
     this.savePreventiveTasks(preventiveTasks);
     this.savePreventiveActions(preventiveActions);
     this.savePreventiveGuides(preventiveGuides);
@@ -945,6 +961,10 @@ export const DataGateway = {
         this.saveStock(seedStockItems);
         this.saveStockTypes(seedStockTypes);
         this.saveDesignations(derivedDesignations);
+        movementRepository.bulkReplace(
+          (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
+          buildInitialStockMap(seedStockItems)
+        );
         if (setters.setRawStock) setters.setRawStock(seedStockItems);
         if (setters.setTypes) setters.setTypes(seedStockTypes);
         if (setters.setDesignations) setters.setDesignations(derivedDesignations);
@@ -1005,6 +1025,10 @@ export const DataGateway = {
       case 'movements':
         this.saveMouvements(seedMouvements);
         this.saveSortiesExterne(seedSortiesExternes);
+        movementRepository.bulkReplace(
+          seedMouvements as any[],
+          buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
+        );
         if (setters.setMouvements) setters.setMouvements(seedMouvements);
         if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
         break;
@@ -1055,6 +1079,10 @@ export const DataGateway = {
         this.saveStock([]);
         this.saveStockTypes([]);
         this.saveDesignations([]);
+        movementRepository.bulkReplace(
+          (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
+          new Map()
+        );
         if (setters.setRawStock) setters.setRawStock([]);
         if (setters.setTypes) setters.setTypes([]);
         if (setters.setDesignations) setters.setDesignations([]);
@@ -1113,6 +1141,10 @@ export const DataGateway = {
       case 'movements':
         this.saveMouvements([]);
         this.saveSortiesExterne([]);
+        movementRepository.bulkReplace(
+          [],
+          buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
+        );
         if (setters.setMouvements) setters.setMouvements([]);
         if (setters.setSortiesExterne) setters.setSortiesExterne([]);
         break;

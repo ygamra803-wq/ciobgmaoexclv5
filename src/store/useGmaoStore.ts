@@ -76,6 +76,18 @@ function resolveUpdate<T>(updater: T | ((prev: T) => T), current: T): T {
   return typeof updater === 'function' ? (updater as (prev: T) => T)(current) : updater;
 }
 
+function buildInitialStockMapFromList(rawStock: any[] = []): Map<string, number> {
+  const map = new Map<string, number>();
+  if (!Array.isArray(rawStock)) return map;
+  for (const item of rawStock) {
+    if (!item) continue;
+    const ref = String(item.ref || item.Ref || '').trim();
+    if (!ref) continue;
+    map.set(ref, Number(item.stockInitial) || 0);
+  }
+  return map;
+}
+
 function isRealPersonnelUser(u: any): boolean {
   if (!u || typeof u !== 'object') return false;
   if (u.passwordHash) return false;
@@ -641,6 +653,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const next = resolveUpdate(updater, get().mouvements);
       set({ mouvements: next });
       DataGateway.saveMovements(next);
+      movementRepository.bulkReplace(next as any[], buildInitialStockMapFromList(get().rawStock));
     },
 
     setSortieDemands: (updater) => {
@@ -3104,6 +3117,19 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       if (Object.keys(updates).length > 0) {
         set(updates);
+      }
+
+      if (Array.isArray(remoteState.mouvements) || Array.isArray(remoteState.rawStock)) {
+        const effectiveMovements = Array.isArray(remoteState.mouvements)
+          ? remoteState.mouvements
+          : get().mouvements || [];
+        const effectiveRawStock = Array.isArray(remoteState.rawStock)
+          ? remoteState.rawStock
+          : get().rawStock || [];
+        movementRepository.bulkReplace(
+          effectiveMovements as any[],
+          buildInitialStockMapFromList(effectiveRawStock)
+        );
       }
     },
   };
