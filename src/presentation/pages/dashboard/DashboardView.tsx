@@ -52,6 +52,7 @@ import {
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { serverSyncService } from '../../../services/serverSyncService';
 import ServerSyncConflictModal from '../../components/common/ServerSyncConflictModal';
+import FactoryOnboardingWizard from '../../components/common/FactoryOnboardingWizard';
 
 export default function DashboardView({
   stockItems = [],
@@ -206,6 +207,7 @@ export default function DashboardView({
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [formulaTab, setFormulaTab] = useState('stock'); // 'stock' | 'kpi'
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
   const [orderForm, setOrderForm] = useState({
     ref: '',
     designation: '',
@@ -560,6 +562,16 @@ export default function DashboardView({
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
                 100% Offline
               </span>
+              {!isTechUser && (
+                <button
+                  type="button"
+                  onClick={() => setForceShowOnboarding((prev) => !prev)}
+                  data-testid="c4-open-onboarding-btn"
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-mono transition cursor-pointer"
+                >
+                  Assistant Usine (C4)
+                </button>
+              )}
             </div>
             <p className="text-xs text-slate-500 max-w-3xl leading-relaxed">
               {isTechUser
@@ -1284,6 +1296,17 @@ export default function DashboardView({
               </button>
             </div>
           )}
+
+          {/* C4 — Empty Factory Onboarding Wizard (Desktop Admin / Skippable & Dismissible) */}
+          <FactoryOnboardingWizard
+            onNavigateToZones={onNavigateToZones}
+            onNavigateToMachines={onNavigateToMachines}
+            onNavigateToUsers={onNavigateToUsers}
+            onNavigateToPreventive={onNavigateToPreventive}
+            showToast={showToast}
+            forceOpen={forceShowOnboarding}
+            onCloseForceOpen={() => setForceShowOnboarding(false)}
+          />
 
           {/* A2 — Lightweight Operational Trust & LAN Sync Card (Desktop Admin / Supervisor) */}
           <div

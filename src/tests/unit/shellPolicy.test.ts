@@ -2275,6 +2275,74 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(resItem.seuil).toBe(4);
     expect(stockItems[3].stockActuel).toBe(6); // Source stockItem never mutated
   });
+
+  it('Phase 2 — C4 Empty Factory Onboarding Wizard: evaluates sequential readiness, supports skipping optional steps, and hides once minimum baseline is met or dismissed', async () => {
+    const { evaluateFactoryOnboardingStatus } = await import(
+      '../../presentation/components/common/FactoryOnboardingWizard'
+    );
+
+    // 1) Completely empty factory (START_MODE === 'empty', 0 zones, 0 machines, 0 techs) -> auto-shows
+    const emptyStatus = evaluateFactoryOnboardingStatus({
+      zones: [],
+      generalSystemTypes: [],
+      machines: [],
+      technicians: [],
+      startMode: 'empty',
+      dismissedFlag: false,
+    });
+    expect(emptyStatus.isMinimumComplete).toBe(false);
+    expect(emptyStatus.shouldAutoShow).toBe(true);
+    expect(emptyStatus.completedMandatoryCount).toBe(0);
+
+    // 2) Dismissed by admin -> does not force auto-show even when empty
+    const dismissedStatus = evaluateFactoryOnboardingStatus({
+      zones: [],
+      generalSystemTypes: [],
+      machines: [],
+      technicians: [],
+      startMode: 'empty',
+      dismissedFlag: 'true',
+    });
+    expect(dismissedStatus.isDismissed).toBe(true);
+    expect(dismissedStatus.shouldAutoShow).toBe(false);
+
+    // 3) Archived machine alone does not satisfy step 3
+    const archivedMachineOnly = evaluateFactoryOnboardingStatus({
+      zones: [{ id_zone: 'Z-01', nom_zone: 'Atelier 1' }],
+      generalSystemTypes: [],
+      machines: [{ id: 'M-OLD', status: 'ARCHIVEE', archived: true }],
+      technicians: [{ id_technician: 'TECH-01', nom: 'Karim', is_active: true }],
+      startMode: 'empty',
+      dismissedFlag: false,
+    });
+    expect(archivedMachineOnly.step3MachineDone).toBe(false);
+    expect(archivedMachineOnly.isMinimumComplete).toBe(false);
+    expect(archivedMachineOnly.shouldAutoShow).toBe(true);
+
+    // 4) Minimum baseline met (1 Zone + 1 Active Machine + 1 Active Tech, Step 2 optional skipped) -> hides automatically
+    const readyStatus = evaluateFactoryOnboardingStatus({
+      zones: [{ id_zone: 'Z-01', nom_zone: 'Atelier 1' }],
+      generalSystemTypes: [], // Step 2 skipped
+      machines: [
+        {
+          id_machine_registered: 'EXT-SEC-01',
+          designation: 'Extincteur CO2 Hall',
+          asset_class: 'SYSTEM_GENERAL',
+          status: 'En Service',
+          is_active: true,
+        },
+      ],
+      technicians: [{ id_technician: 'TECH-01', nom: 'Karim', is_active: true }],
+      startMode: 'empty',
+      dismissedFlag: false,
+    });
+    expect(readyStatus.step1ZonesDone).toBe(true);
+    expect(readyStatus.step2SysTypesOptionalDone).toBe(false);
+    expect(readyStatus.step3MachineDone).toBe(true);
+    expect(readyStatus.step4TechnicianDone).toBe(true);
+    expect(readyStatus.isMinimumComplete).toBe(true);
+    expect(readyStatus.shouldAutoShow).toBe(false);
+  });
 });
 
 
