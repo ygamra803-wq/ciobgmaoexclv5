@@ -672,4 +672,150 @@ export function selectValidationCenterQueues({
   };
 }
 
+export type StockReorderAlertStatus =
+  | 'RUPTURE'
+  | 'SOUS_SEUIL'
+  | 'RISQUE_APRES_RESERVATION';
+
+export interface StockReorderAlertItem {
+  ref: string;
+  designation: string;
+  emplacement: string;
+  type: string;
+  unit: string;
+  stockActuel: number;
+  seuil: number;
+  reservedQty: number;
+  netAvailable: number;
+  deficitToThreshold: number;
+  status: StockReorderAlertStatus;
+  statusLabelFr: string;
+}
+
+export interface StockReorderAlertsSummary {
+  items: StockReorderAlertItem[];
+  ruptureCount: number;
+  sousSeuilCount: number;
+  reservationRiskCount: number;
+  totalAlertCount: number;
+}
+
+/**
+ * C3 — Pure read-only reorder alert selector:
+ * Evaluates existing `stockItems` against their minimum threshold (`seuil` / `stock_min`)
+ * using the already-computed `stockActuel` balance and optional derived Maker-Checker
+ * virtual reservations (`computeReservedStockMap`).
+ *
+ * Rules:
+ * - `RUPTURE`: `stockActuel <= 0`
+ * - `SOUS_SEUIL`: `stockActuel > 0 && stockActuel <= seuil`
+ * - `RISQUE_APRES_RESERVATION`: `stockActuel > seuil && reservedQty > 0 && (stockActuel - reservedQty) <= seuil`
+ * - Items with `stockActuel > seuil` AND `(stockActuel - reservedQty) > seuil` are strictly excluded (`OK`).
+ * - Never mutates `stockActuel` or touches `IncrementalStockIndex` / `StockCalculationService`.
+ */
+export function computeStockReorderAlerts({
+  stockItems = [],
+  correctiveInterventions = [],
+  preventiveExecutions = [],
+  sortieDemands = [],
+  reservedStockMap: providedReservedMap,
+}: {
+  stockItems?: any[];
+  correctiveInterventions?: any[];
+  preventiveExecutions?: any[];
+  sortieDemands?: any[];
+  reservedStockMap?: Map<string, ReservedStockEntry>;
+}): StockReorderAlertsSummary {
+  const reservedMap =
+    providedReservedMap ??
+    computeReservedStockMap({
+      correctiveInterventions,
+      preventiveExecutions,
+      sortieDemands,
+    });
+
+  const items: StockReorderAlertItem[] = [];
+  let ruptureCount = 0;
+  let sousSeuilCount = 0;
+  let reservationRiskCount = 0;
+
+  for (const raw of stockItems || []) {
+    if (!raw || typeof raw !== 'object') continue;
+    const ref = String(raw.ref || raw.reference || raw.code_article || raw.id || '').trim();
+    if (!ref) continue;
+
+    // Read displayed balance strictly as-is (fallback to Initial + Entrees - Sorties only if stockActuel is omitted)
+    const hasExplicitActuel =
+      raw.stockActuel !== undefined && raw.stockActuel !== null && raw.stockActuel !== '';
+    const hasSnakeActuel =
+      raw.stock_actuel !== undefined && raw.stock_actuel !== null && raw.stock_actuel !== '';
+    const stockActuel = hasExplicitActuel
+      ? Number(raw.stockActuel)
+      : hasSnakeActuel
+      ? Number(raw.stock_actuel)
+      : (Number(raw.stockInitial) || 0) + (Number(raw.entrees) || 0) - (Number(raw.sorties) || 0);
+
+    const seuil = Number(raw.seuil ?? raw.stock_min ?? raw.stockMin ?? raw.min ?? 0) || 0;
+    const reservedEntry = reservedMap.get(normalizeToken(ref));
+    const reservedQty = Number(reservedEntry?.reservedQty || 0) || 0;
+    const netAvailable = stockActuel - reservedQty;
+
+    let status: StockReorderAlertStatus | null = null;
+    let statusLabelFr = '';
+
+    if (stockActuel <= 0) {
+      status = 'RUPTURE';
+      statusLabelFr = 'Rupture (Stock ≤ 0)';
+      ruptureCount += 1;
+    } else if (stockActuel <= seuil) {
+      status = 'SOUS_SEUIL';
+      statusLabelFr = 'Sous seuil min';
+      sousSeuilCount += 1;
+    } else if (reservedQty > 0 && netAvailable <= seuil) {
+      status = 'RISQUE_APRES_RESERVATION';
+      statusLabelFr = 'Sous seuil après réservation';
+      reservationRiskCount += 1;
+    }
+
+    if (!status) continue; // Above threshold both physically and after reservation -> excluded
+
+    items.push({
+      ref,
+      designation: String(raw.designation || raw.nom || ref).trim(),
+      emplacement: String(raw.emplacement || 'Magasin').trim(),
+      type: String(raw.type || raw.id_type || 'PDR').trim(),
+      unit: String(raw.unit || raw.unite || 'pcs').trim(),
+      stockActuel,
+      seuil,
+      reservedQty,
+      netAvailable,
+      deficitToThreshold: Math.max(0, seuil - netAvailable),
+      status,
+      statusLabelFr,
+    });
+  }
+
+  const priorityOrder: Record<StockReorderAlertStatus, number> = {
+    RUPTURE: 0,
+    SOUS_SEUIL: 1,
+    RISQUE_APRES_RESERVATION: 2,
+  };
+
+  items.sort((a, b) => {
+    const pDiff = priorityOrder[a.status] - priorityOrder[b.status];
+    if (pDiff !== 0) return pDiff;
+    if (a.netAvailable !== b.netAvailable) return a.netAvailable - b.netAvailable;
+    return a.ref.localeCompare(b.ref, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return {
+    items,
+    ruptureCount,
+    sousSeuilCount,
+    reservationRiskCount,
+    totalAlertCount: items.length,
+  };
+}
+
+
 

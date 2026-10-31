@@ -920,9 +920,98 @@ export default function ShiftWeeklyReportView({
             )}
           </div>
 
-          <div className="p-5 flex-1 space-y-3">
+          <div className="p-5 flex-1 space-y-4">
+            {/* C3 — Compact Stock Reorder Alert Strip (Rupture / Sous Seuil / Risque après réservation) */}
+            <div
+              className={`p-3.5 rounded-xl border ${
+                report.stockReorderAlerts.totalAlertCount > 0
+                  ? 'bg-amber-50/80 border-amber-200'
+                  : 'bg-emerald-50/60 border-emerald-200'
+              }`}
+              data-testid="c3-report-reorder-alert-section"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle
+                    className={`w-4 h-4 shrink-0 ${
+                      report.stockReorderAlerts.totalAlertCount > 0
+                        ? 'text-amber-700'
+                        : 'text-emerald-700'
+                    }`}
+                  />
+                  <span className="text-xs font-black text-slate-900">
+                    Alerte Réapprovisionnement (C3) : {report.stockReorderAlerts.totalAlertCount} article(s)
+                  </span>
+                  {report.stockReorderAlerts.ruptureCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-200">
+                      {report.stockReorderAlerts.ruptureCount} rupture
+                    </span>
+                  )}
+                  {report.stockReorderAlerts.sousSeuilCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                      {report.stockReorderAlerts.sousSeuilCount} sous seuil
+                    </span>
+                  )}
+                  {report.stockReorderAlerts.reservationRiskCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                      {report.stockReorderAlerts.reservationRiskCount} après réservation
+                    </span>
+                  )}
+                </div>
+                {onNavigateToTab && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToTab('stock')}
+                    className="text-[11px] font-bold text-amber-900 hover:underline inline-flex items-center gap-1 cursor-pointer print:hidden"
+                  >
+                    <span>Catalogue Stock</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {report.stockReorderAlerts.items.length > 0 && (
+                <div className="mt-2.5 overflow-x-auto bg-white rounded-lg border border-amber-200/80">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[10px] font-extrabold uppercase text-slate-500">
+                        <th className="py-1.5 px-2.5">Réf</th>
+                        <th className="py-1.5 px-2.5">Désignation</th>
+                        <th className="py-1.5 px-2.5 text-right">Actuel</th>
+                        <th className="py-1.5 px-2.5 text-right">Net Dispo</th>
+                        <th className="py-1.5 px-2.5 text-right">Seuil</th>
+                        <th className="py-1.5 px-2.5 text-right">Statut</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {report.stockReorderAlerts.items.slice(0, 5).map((it) => (
+                        <tr key={it.ref}>
+                          <td className="py-1.5 px-2.5 font-mono font-bold text-slate-900">{it.ref}</td>
+                          <td className="py-1.5 px-2.5 text-slate-700 truncate max-w-[140px]">
+                            {it.designation}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right font-mono font-bold text-slate-900">
+                            {it.stockActuel}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right font-mono font-bold text-rose-700">
+                            {it.netAvailable}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right font-mono text-slate-600">
+                            {it.seuil}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-right font-mono font-bold text-amber-900">
+                            {it.statusLabelFr}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             {report.topConsumedParts.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500">
+              <div className="py-6 text-center text-xs text-slate-500">
                 Aucun mouvement de sortie officiel enregistré sur cette période.
               </div>
             ) : (

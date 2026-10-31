@@ -5,7 +5,11 @@ import {
   filterProductionMachines,
   getMachineAssetClass,
 } from '../../utils/activeMachines';
-import { selectValidationCenterQueues } from '../../core/security/validationReconciliation';
+import {
+  selectValidationCenterQueues,
+  computeStockReorderAlerts,
+  type StockReorderAlertsSummary,
+} from '../../core/security/validationReconciliation';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
 
 const UNAPPROVED_VALIDATION_STATUSES = new Set([
@@ -720,6 +724,9 @@ export interface ShiftOrWeeklyReportData {
 
   // C2 — Official Validated Movements in Period (for CSV / JSON practical export)
   officialMovementsInPeriod: OfficialMovementExportRow[];
+
+  // C3 — Stock Reorder Alerts (Rupture / Sous Seuil / Risque Après Réservation)
+  stockReorderAlerts: StockReorderAlertsSummary;
 }
 
 export interface MachineOfficialCostRow {
@@ -1824,6 +1831,10 @@ export function buildShiftOrWeeklyReport({
     totalOfficialMaintenanceCost,
     machineCostBreakdown,
     officialMovementsInPeriod,
+    stockReorderAlerts: computeStockReorderAlerts({
+      stockItems,
+      reservedStockMap: queues.reservedStockMap,
+    }),
   };
 }
 

@@ -39,7 +39,10 @@ import {
   Lock,
 } from 'lucide-react';
 import { useGmaoStore } from '../../../store/useGmaoStore';
-import { computeReservedStockMap } from '../../../core/security/validationReconciliation';
+import {
+  computeReservedStockMap,
+  computeStockReorderAlerts,
+} from '../../../core/security/validationReconciliation';
 
 const TYPE_STYLES = {
   Foret: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -127,6 +130,17 @@ export default function StockView({
     }
     return { articlesCount, totalUnits, riskCount };
   }, [stockItems, getReservedEntry]);
+
+  const reorderAlerts = useMemo(
+    () =>
+      computeStockReorderAlerts({
+        stockItems,
+        reservedStockMap,
+      }),
+    [stockItems, reservedStockMap]
+  );
+
+  const [showReorderPanel, setShowReorderPanel] = useState(false);
 
   const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
 
@@ -744,6 +758,135 @@ export default function StockView({
               ? 'Afficher tout le stock'
               : `Filtrer les réservations (${reservedSummary.articlesCount})`}
           </button>
+        </div>
+      )}
+
+      {/* C3 — Lightweight Stock Reorder Alert Card (Read-only warning, no purchasing module) */}
+      {reorderAlerts.totalAlertCount > 0 && (
+        <div
+          className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-2xs space-y-3"
+          data-testid="c3-stock-reorder-alert-card"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                    Alerte Réapprovisionnement (C3 — Articles sous seuil / rupture)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-200">
+                    {reorderAlerts.ruptureCount} rupture(s)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-200/80 text-amber-950 border border-amber-300">
+                    {reorderAlerts.sousSeuilCount} sous seuil
+                  </span>
+                  {reorderAlerts.reservationRiskCount > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                      {reorderAlerts.reservationRiskCount} sous seuil après réservation
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-amber-900 mt-0.5">
+                  Lecture seule basée sur le solde affiché (Stock Actuel ≤ Seuil Min) et les réservations en attente. Aucun bon d&apos;achat automatique n&apos;est généré.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setStockAlertOnly(!stockAlertOnly);
+                  setActiveKpiFilter('ALL');
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  stockAlertOnly
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white hover:bg-amber-100 text-amber-950 border border-amber-300'
+                }`}
+              >
+                {stockAlertOnly ? 'Tout afficher' : 'Filtrer dans la grille'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReorderPanel((prev) => !prev)}
+                className="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <span>
+                  {showReorderPanel
+                    ? 'Masquer la liste'
+                    : `Voir la liste (${reorderAlerts.totalAlertCount})`}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform ${
+                    showReorderPanel ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {showReorderPanel && (
+            <div className="bg-white rounded-xl border border-amber-200 overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold uppercase text-slate-600">
+                    <th className="py-2 px-3">Réf</th>
+                    <th className="py-2 px-3">Désignation</th>
+                    <th className="py-2 px-3">Emplacement</th>
+                    <th className="py-2 px-3 text-right">Stock Actuel</th>
+                    <th className="py-2 px-3 text-right">Réservé (Attente)</th>
+                    <th className="py-2 px-3 text-right">Net Dispo</th>
+                    <th className="py-2 px-3 text-right">Seuil Min</th>
+                    <th className="py-2 px-3 text-center">Statut Alerte</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {reorderAlerts.items.slice(0, 15).map((item) => (
+                    <tr key={item.ref} className="hover:bg-slate-50/80">
+                      <td className="py-2 px-3 font-mono font-bold text-slate-900">{item.ref}</td>
+                      <td className="py-2 px-3 font-semibold text-slate-800">
+                        {item.designation}
+                      </td>
+                      <td className="py-2 px-3 text-slate-600">{item.emplacement}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                        {item.stockActuel} {item.unit}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-purple-800">
+                        {item.reservedQty > 0 ? `${item.reservedQty} ${item.unit}` : '—'}
+                      </td>
+                      <td
+                        className={`py-2 px-3 text-right font-mono font-bold ${
+                          item.netAvailable <= 0 ? 'text-rose-700' : 'text-amber-800'
+                        }`}
+                      >
+                        {item.netAvailable} {item.unit}
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">
+                        {item.seuil} {item.unit}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                            item.status === 'RUPTURE'
+                              ? 'bg-rose-100 text-rose-900 border-rose-200'
+                              : item.status === 'SOUS_SEUIL'
+                              ? 'bg-amber-100 text-amber-900 border-amber-200'
+                              : 'bg-purple-100 text-purple-900 border-purple-200'
+                          }`}
+                        >
+                          {item.statusLabelFr}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

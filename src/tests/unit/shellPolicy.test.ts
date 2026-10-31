@@ -2197,6 +2197,84 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(jsonParsed.machineCostBreakdown[0].totalOfficialCost).toBe(600);
     expect(jsonParsed.officialMovementsInPeriod).toHaveLength(1);
   });
+
+  it('Phase 2 — C3 Stock Reorder Alert: excludes items above threshold and surfaces RUPTURE, SOUS_SEUIL, and RISQUE_APRES_RESERVATION without mutating stock balance', async () => {
+    const { computeStockReorderAlerts } = await import(
+      '../../core/security/validationReconciliation'
+    );
+
+    const stockItems = [
+      // 1) Healthy item above threshold (20 > 5) with no reservation risk -> MUST NOT appear
+      {
+        ref: 'ROUL-OK-01',
+        designation: 'Roulement Sain',
+        emplacement: 'A-01',
+        stockActuel: 20,
+        seuil: 5,
+      },
+      // 2) Item at/below threshold (3 <= 5) -> MUST appear as SOUS_SEUIL
+      {
+        ref: 'COUR-LOW-02',
+        designation: 'Courroie Trapézoïdale',
+        emplacement: 'B-02',
+        stockActuel: 3,
+        seuil: 5,
+      },
+      // 3) Item in rupture (0 <= 0) -> MUST appear as RUPTURE
+      {
+        ref: 'CAP-ZERO-03',
+        designation: 'Capteur Inductif',
+        emplacement: 'C-03',
+        stockActuel: 0,
+        seuil: 2,
+      },
+      // 4) Item physically above threshold (6 > 4), but with 3 units reserved in PENDING_VALIDATION -> net 3 <= 4 -> MUST appear as RISQUE_APRES_RESERVATION
+      {
+        ref: 'JOINT-RES-04',
+        designation: 'Joint Hydraulique',
+        emplacement: 'D-04',
+        stockActuel: 6,
+        seuil: 4,
+      },
+    ];
+
+    const sortieDemands = [
+      {
+        id: 'DEM-PEND-1',
+        code_bon_tech: 'BS-TECH-09',
+        validation_status: 'PENDING_VALIDATION',
+        items: [{ ref: 'JOINT-RES-04', quantite: 3 }],
+      },
+    ];
+
+    const summary = computeStockReorderAlerts({
+      stockItems,
+      sortieDemands,
+    });
+
+    // Item above threshold ('ROUL-OK-01') is strictly excluded
+    expect(summary.items.some((i) => i.ref === 'ROUL-OK-01')).toBe(false);
+
+    // The 3 alert items are present and sorted by severity (RUPTURE -> SOUS_SEUIL -> RISQUE_APRES_RESERVATION)
+    expect(summary.totalAlertCount).toBe(3);
+    expect(summary.ruptureCount).toBe(1);
+    expect(summary.sousSeuilCount).toBe(1);
+    expect(summary.reservationRiskCount).toBe(1);
+
+    expect(summary.items.map((i) => i.ref)).toEqual([
+      'CAP-ZERO-03',
+      'COUR-LOW-02',
+      'JOINT-RES-04',
+    ]);
+
+    const resItem = summary.items.find((i) => i.ref === 'JOINT-RES-04')!;
+    expect(resItem.status).toBe('RISQUE_APRES_RESERVATION');
+    expect(resItem.stockActuel).toBe(6); // Physical balance untouched
+    expect(resItem.reservedQty).toBe(3);
+    expect(resItem.netAvailable).toBe(3);
+    expect(resItem.seuil).toBe(4);
+    expect(stockItems[3].stockActuel).toBe(6); // Source stockItem never mutated
+  });
 });
 
 
