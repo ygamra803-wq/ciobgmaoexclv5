@@ -83,11 +83,60 @@ function parseDateSafe(raw: any): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+export function computeOfficialCorrectiveBtCost(
+  ci: any,
+  stockPriceMap?: Map<string, number>
+): number {
+  if (!ci) return 0;
+  const valSt = String(ci?.validation_status || '').trim().toUpperCase();
+  const wfSt = String(ci?.statut || '').trim().toUpperCase();
+  if (
+    UNAPPROVED_STATUSES.has(valSt) ||
+    wfSt === 'EN_ATTENTE_VALIDATION' ||
+    wfSt === 'ANNULE' ||
+    wfSt === 'REJECTED'
+  ) {
+    return 0;
+  }
+
+  const explicitCost = Number(ci?.cout_pdr ?? ci?.pdr_cost ?? ci?.cout_total ?? 0);
+  if (Number.isFinite(explicitCost) && explicitCost > 0) {
+    return Number(explicitCost.toFixed(2));
+  }
+
+  if (Array.isArray(ci?.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
+    let sum = 0;
+    for (const p of ci.pieces_utilisees) {
+      const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
+      const pQty = Number(p?.quantite ?? p?.qte ?? p?.qty ?? 0);
+      const pPrice =
+        Number(p?.prix_unitaire ?? p?.prix ?? p?.unitPrice ?? 0) ||
+        (pRef && stockPriceMap ? stockPriceMap.get(pRef) || 0 : 0);
+      if (pQty > 0 && pPrice > 0) {
+        sum += pQty * pPrice;
+      }
+    }
+    return Number(sum.toFixed(2));
+  }
+
+  const pdrRef = String(ci?.pdr_ref || ci?.pdr || '').trim().toUpperCase();
+  const qty = Number(ci?.pdr_quantite ?? ci?.quantite ?? (pdrRef ? 1 : 0));
+  const unitPrice =
+    Number(ci?.pdr_prix ?? ci?.prix_unitaire ?? 0) ||
+    (pdrRef && stockPriceMap ? stockPriceMap.get(pdrRef) || 0 : 0);
+  if (qty > 0 && unitPrice > 0) {
+    return Number((qty * unitPrice).toFixed(2));
+  }
+
+  return 0;
+}
+
 export function computeMachineHealthPassport(params: {
   machine: any;
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
   sortiesExterne?: any[];
+  stockItems?: any[];
   referenceDate?: string | Date;
   windowMonths?: number;
   recurrenceWindowDays?: number;
@@ -98,6 +147,7 @@ export function computeMachineHealthPassport(params: {
     correctiveInterventions = [],
     preventiveExecutions = [],
     sortiesExterne = [],
+    stockItems = [],
     referenceDate,
     windowMonths = 12,
     recurrenceWindowDays = 60,
@@ -123,6 +173,13 @@ export function computeMachineHealthPassport(params: {
     { label: string; count60d: number; count12m: number; cost12m: number; bobinageCount12m: number }
   >();
 
+  const stockPriceMap = new Map<string, number>();
+  for (const item of stockItems || []) {
+    const ref = String(item?.ref || item?.reference || item?.code_article || '').trim().toUpperCase();
+    const price = Number(item?.prix_unitaire ?? item?.prix_achat_ht ?? item?.prix ?? item?.unitPrice ?? 0);
+    if (ref && price > 0) stockPriceMap.set(ref, price);
+  }
+
   for (const ci of correctiveInterventions || []) {
     const code = String(ci?.code_machine || ci?.id_machine_registered || '')
       .trim()
@@ -145,7 +202,7 @@ export function computeMachineHealthPassport(params: {
     if (d && d < cutoff12m) continue;
 
     correctiveCount12m += 1;
-    const cost = Number(ci?.cout_pdr ?? ci?.pdr_cost ?? 0) || 0;
+    const cost = computeOfficialCorrectiveBtCost(ci, stockPriceMap);
     correctivePdrCost12m += cost;
 
     const mins =
@@ -352,25 +409,33 @@ function toYMD(raw: any): string {
  * `NEEDS_CLARIFICATION`, `REJECTED`) are strictly excluded from the official ledger.
  */
 export function buildMachineActivityLedger(params: {
-  machineOrId: any;
+  machineOrId?: any;
+  machine?: any;
+  machineId?: string;
   machines?: any[];
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
   sortiesExterne?: any[];
+  stockItems?: any[];
   machineElementsLedger?: any[];
   warehouseItems?: any[];
   includePendingClaims?: boolean;
 }): MachineActivityLedgerEvent[] {
   const {
-    machineOrId,
+    machineOrId: rawMachineOrId,
+    machine,
+    machineId,
     machines = [],
     correctiveInterventions = [],
     preventiveExecutions = [],
     sortiesExterne = [],
+    stockItems = [],
     machineElementsLedger = [],
     warehouseItems = [],
     includePendingClaims = false,
   } = params || {};
+
+  const machineOrId = rawMachineOrId ?? machine ?? machineId;
 
   const rawCode =
     typeof machineOrId === 'string'
@@ -382,6 +447,14 @@ export function buildMachineActivityLedger(params: {
         '';
   const machineCode = String(rawCode || '').trim().toUpperCase();
   if (!machineCode) return [];
+
+  const stockPriceMap = new Map<string, number>();
+  for (const s of stockItems || []) {
+    if (!s) continue;
+    const ref = String(s.ref || s.code || s.id || '').trim().toUpperCase();
+    const price = Number(s.prixUnitaire ?? s.prix_unitaire ?? s.price ?? 0) || 0;
+    if (ref && price > 0) stockPriceMap.set(ref, price);
+  }
 
   const resolvedMachine =
     typeof machineOrId === 'object' && machineOrId !== null
@@ -426,7 +499,7 @@ export function buildMachineActivityLedger(params: {
     const dateYMD = toYMD(rawTs);
     if (!dateYMD) continue;
 
-    const cost = Number(ci.cout_pdr ?? ci.pdr_cost ?? 0) || 0;
+    const cost = isOfficial ? computeOfficialCorrectiveBtCost(ci, stockPriceMap) : 0;
     const downtimeMinutes =
       Number(
         ci.temps_arret_minutes ??
@@ -524,21 +597,32 @@ export function buildMachineActivityLedger(params: {
   // 3) External Subcontracting / Bobinage (Sorties Externe)
   for (const se of sortiesExterne || []) {
     if (!se) continue;
-    const code = String(se.id_machine || se.code_machine || '')
+    const code = String(se.id_machine || se.code_machine || se.machineCode || '')
       .trim()
       .toUpperCase();
     if (!code || code !== machineCode) continue;
 
+    const valSt = String(se.validation_status || '').trim().toUpperCase();
+    const wfSt = String(se.statut || '').trim().toUpperCase();
+    const isUnapproved =
+      UNAPPROVED_STATUSES.has(valSt) || wfSt === 'ANNULE' || wfSt === 'REJECTED';
+    const isOfficial = !isUnapproved;
+    if (!isOfficial && !includePendingClaims) continue;
+
     const rawTs =
       se.date_montage ||
       se.date_arrivee_reelle ||
+      se.date_retour ||
       se.date_expedition ||
+      se.date_sortie ||
       se.date_demontage ||
+      se.date ||
       se.created_at;
     const dateYMD = toYMD(rawTs);
     if (!dateYMD) continue;
 
-    const cost = Number(se.cout_bobinage || 0) || 0;
+    const cost =
+      Number(se.cout_bobinage ?? se.cout_reparation ?? se.cout ?? se.montant ?? 0) || 0;
     const refCode = String(se.code || se.id || se.ref || 'SORT-EXT').trim();
     const motorLabel = String(se.designation_moteur || se.code_moteur_reel || 'Moteur / Organe').trim();
 
@@ -546,16 +630,16 @@ export function buildMachineActivityLedger(params: {
       id: `LEDGER-EXT-${String(se.id || se.code || events.length + 1)}`,
       machineCode,
       type: 'EXTERNAL_BOBINAGE',
-      typeLabelFr: 'Bobinage / Prestataire Externe',
+      typeLabelFr: isOfficial ? 'Bobinage / Prestataire Externe' : 'Bobinage (En attente)',
       timestamp: String(rawTs),
       dateYMD,
       title: `${refCode} — ${motorLabel}`,
       details: `Statut: ${se.statut || 'Enregistré'}${se.fournisseur ? ` • Prestataire: ${se.fournisseur}` : ''}${se.nature_travaux ? ` • Travaux: ${se.nature_travaux}` : ''}`,
       actor: se.fournisseur || se.technicien_demontage || undefined,
-      cost: cost > 0 ? Number(cost.toFixed(2)) : undefined,
+      cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
       referenceCode: refCode,
-      validationStatus: 'APPROVED',
-      isOfficial: true,
+      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      isOfficial,
     });
   }
 
@@ -749,4 +833,101 @@ export function buildMachineActivityLedger(params: {
 
   return events;
 }
+
+export interface MachineOfficialCostSummary {
+  machineCode: string;
+  fromYMD?: string;
+  toYMD?: string;
+  correctiveCount: number;
+  correctivePdrCost: number;
+  preventiveCount: number;
+  preventiveCost: number;
+  externalBobinageCount: number;
+  externalBobinageCost: number;
+  totalOfficialCost: number;
+  officialEventsCount: number;
+}
+
+/**
+ * C1 — Computes the official validated maintenance cost summary for a single machine
+ * by aggregating only official (`isOfficial === true`, i.e., non-PENDING / non-REJECTED)
+ * events from `buildMachineActivityLedger`:
+ * 1) Approved Corrective BTs (`CORRECTIVE_BT`)
+ * 2) Approved Preventive Executions (`PREVENTIVE_EXECUTION`)
+ * 3) External Bobinage / Subcontracting (`EXTERNAL_BOBINAGE`)
+ */
+export function computeMachineOfficialCostSummary(params: {
+  machineOrId?: any;
+  machine?: any;
+  machineId?: string;
+  machines?: any[];
+  correctiveInterventions?: any[];
+  preventiveExecutions?: any[];
+  sortiesExterne?: any[];
+  stockItems?: any[];
+  fromYMD?: string;
+  toYMD?: string;
+}): MachineOfficialCostSummary {
+  const { fromYMD, toYMD, ...ledgerParams } = params || ({} as any);
+  const targetMachine = params?.machineOrId ?? params?.machine ?? params?.machineId;
+  const rawCode =
+    typeof targetMachine === 'string'
+      ? targetMachine
+      : targetMachine?.id_machine_registered ||
+        targetMachine?.id ||
+        targetMachine?.code ||
+        targetMachine?.code_machine ||
+        '';
+  const machineCode = String(rawCode || '').trim().toUpperCase();
+
+  const officialLedger = buildMachineActivityLedger({
+    ...ledgerParams,
+    machineOrId: targetMachine,
+    includePendingClaims: false,
+  });
+
+  let correctiveCount = 0;
+  let correctivePdrCost = 0;
+  let preventiveCount = 0;
+  let preventiveCost = 0;
+  let externalBobinageCount = 0;
+  let externalBobinageCost = 0;
+
+  for (const ev of officialLedger) {
+    if (!ev.isOfficial) continue;
+    if (fromYMD && ev.dateYMD < fromYMD) continue;
+    if (toYMD && ev.dateYMD > toYMD) continue;
+
+    const eventCost = Number(ev.cost || 0) || 0;
+    if (ev.type === 'CORRECTIVE_BT') {
+      correctiveCount += 1;
+      correctivePdrCost += eventCost;
+    } else if (ev.type === 'PREVENTIVE_EXECUTION') {
+      preventiveCount += 1;
+      preventiveCost += eventCost;
+    } else if (ev.type === 'EXTERNAL_BOBINAGE') {
+      externalBobinageCount += 1;
+      externalBobinageCost += eventCost;
+    }
+  }
+
+  const totalOfficialCost = Number(
+    (correctivePdrCost + preventiveCost + externalBobinageCost).toFixed(2)
+  );
+
+  return {
+    machineCode,
+    ...(fromYMD ? { fromYMD } : {}),
+    ...(toYMD ? { toYMD } : {}),
+    correctiveCount,
+    correctivePdrCost: Number(correctivePdrCost.toFixed(2)),
+    preventiveCount,
+    preventiveCost: Number(preventiveCost.toFixed(2)),
+    externalBobinageCount,
+    externalBobinageCost: Number(externalBobinageCost.toFixed(2)),
+    totalOfficialCost,
+    officialEventsCount: correctiveCount + preventiveCount + externalBobinageCount,
+  };
+}
+
 

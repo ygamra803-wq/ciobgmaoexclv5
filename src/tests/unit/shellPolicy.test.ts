@@ -2001,6 +2001,202 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
       });
     }
   });
+
+  it('Phase 2 — C1 & C2 Official Machine Cost Summary & Practical Export: excludes PENDING/REJECTED from official costs and exports machine cost rows & validated movements', async () => {
+    const { computeMachineOfficialCostSummary } = await import(
+      '../../application/services/MachineHealthPassportService'
+    );
+    const {
+      buildShiftOrWeeklyReport,
+      buildShiftWeeklyReportExportRows,
+      buildShiftWeeklyReportCsv,
+      buildShiftWeeklyReportJson,
+    } = await import('../../application/services/MonthlyReportCalculationService');
+
+    const machines = [
+      {
+        id: 'PRESSE-01',
+        code: 'PRESSE-01',
+        designation: 'Presse Injection 01',
+        asset_class: 'PRODUCTION',
+        statut: 'En marche',
+        is_active: true,
+      },
+    ];
+
+    const stockItems = [
+      { id: 'STK-1', ref: 'ROUL-6204', designation: 'Roulement 6204', prixUnitaire: 100 },
+      { id: 'STK-2', ref: 'JOINT-SPI', designation: 'Joint Spi', prixUnitaire: 50 },
+    ];
+
+    const correctiveInterventions = [
+      // 1) Official APPROVED BT: 2 x ROUL-6204 = 200 €
+      {
+        id: 'BT-APP-1',
+        code_machine: 'PRESSE-01',
+        nom_machine: 'Presse Injection 01',
+        date_demande: '2026-10-10',
+        date_cloture: '2026-10-11',
+        statut: 'CLOTURE',
+        validation_status: 'APPROVED',
+        temps_arret: 3,
+        pieces_utilisees: [{ ref: 'ROUL-6204', quantite: 2, prix_unitaire: 100 }],
+      },
+      // 2) PENDING_VALIDATION BT with proposed spares (999 €) -> MUST NOT enter official cost
+      {
+        id: 'BT-PEND-2',
+        code_machine: 'PRESSE-01',
+        nom_machine: 'Presse Injection 01',
+        date_demande: '2026-10-12',
+        statut: 'CLOTURE',
+        validation_status: 'PENDING_VALIDATION',
+        cout_pdr: 999,
+        pieces_proposees: [{ ref: 'ROUL-6204', quantite: 5, prix_unitaire: 100 }],
+      },
+      // 3) REJECTED BT with cout_pdr (500 €) -> MUST NOT enter official cost
+      {
+        id: 'BT-REJ-3',
+        code_machine: 'PRESSE-01',
+        nom_machine: 'Presse Injection 01',
+        date_demande: '2026-10-13',
+        statut: 'CLOTURE',
+        validation_status: 'REJECTED',
+        cout_pdr: 500,
+      },
+    ];
+
+    const preventiveExecutions = [
+      // 1) Official APPROVED PM execution: 1 x JOINT-SPI = 50 €
+      {
+        id: 'EXEC-APP-1',
+        taskId: 'PM-1',
+        machineId: 'PRESSE-01',
+        machineCode: 'PRESSE-01',
+        machineName: 'Presse Injection 01',
+        executedAt: '2026-10-14',
+        validation_status: 'APPROVED',
+        totalCost: 50,
+        sparesUsed: [{ ref: 'JOINT-SPI', qty: 1, unitPrice: 50 }],
+      },
+      // 2) PENDING_VALIDATION PM execution (800 €) -> MUST NOT enter official cost
+      {
+        id: 'EXEC-PEND-2',
+        taskId: 'PM-1',
+        machineId: 'PRESSE-01',
+        machineCode: 'PRESSE-01',
+        machineName: 'Presse Injection 01',
+        executedAt: '2026-10-15',
+        validation_status: 'PENDING_VALIDATION',
+        totalCost: 800,
+        sparesProposed: [{ ref: 'ROUL-6204', qty: 8, unitPrice: 100 }],
+      },
+    ];
+
+    const sortiesExterne = [
+      // Official external bobinage: 350 €
+      {
+        id: 'EXT-1',
+        code_machine: 'PRESSE-01',
+        designation_moteur: 'Moteur Pompe 15kW',
+        date_sortie: '2026-10-12',
+        statut: 'Terminé',
+        cout_reparation: 350,
+      },
+      // Pending external bobinage -> MUST NOT enter official cost
+      {
+        id: 'EXT-PEND-2',
+        code_machine: 'PRESSE-01',
+        designation_moteur: 'Moteur Auxiliaire',
+        date_sortie: '2026-10-13',
+        validation_status: 'PENDING_VALIDATION',
+        cout_reparation: 1200,
+      },
+    ];
+
+    const mouvements = [
+      {
+        id: 'MVT-1',
+        date: '2026-10-11',
+        type: 'Sortie',
+        ref: 'ROUL-6204',
+        designation: 'Roulement 6204',
+        quantite: 2,
+        machine: 'PRESSE-01',
+        num_bon: 'BS-2026-101',
+      },
+      // Unapproved movement claim -> excluded
+      {
+        id: 'MVT-PEND-2',
+        date: '2026-10-12',
+        type: 'Sortie',
+        ref: 'ROUL-6204',
+        quantite: 5,
+        machine: 'PRESSE-01',
+        validation_status: 'PENDING_VALIDATION',
+      },
+    ];
+
+    // Verify C1 per-machine official cost summary via MachineHealthPassportService
+    const machineCost = computeMachineOfficialCostSummary({
+      machine: machines[0],
+      correctiveInterventions,
+      preventiveExecutions,
+      sortiesExterne,
+      stockItems,
+      fromYMD: '2026-10-01',
+      toYMD: '2026-10-31',
+    });
+
+    expect(machineCost.correctivePdrCost).toBe(200);
+    expect(machineCost.preventiveCost).toBe(50);
+    expect(machineCost.externalBobinageCost).toBe(350);
+    expect(machineCost.totalOfficialCost).toBe(600);
+
+    // Verify C1 + C2 in MonthlyReportCalculationService
+    const report = buildShiftOrWeeklyReport({
+      from: '2026-10-01',
+      to: '2026-10-31',
+      machines,
+      stockItems,
+      correctiveInterventions,
+      preventiveTasks: [],
+      preventiveExecutions,
+      sortiesExterne,
+      mouvements,
+    });
+
+    expect(report.totalOfficialMaintenanceCost).toBe(600);
+    expect(report.machineCostBreakdown).toHaveLength(1);
+    expect(report.machineCostBreakdown[0]).toMatchObject({
+      machineCode: 'PRESSE-01',
+      correctivePdrCost: 200,
+      preventiveCost: 50,
+      externalBobinageCost: 350,
+      totalOfficialCost: 600,
+    });
+
+    // Only the official validated movement is included in officialMovementsInPeriod
+    expect(report.officialMovementsInPeriod).toHaveLength(1);
+    expect(report.officialMovementsInPeriod[0].id).toBe('MVT-1');
+    expect(report.officialMovementsInPeriod[0].totalCost).toBe(200);
+
+    // Verify C2 CSV & JSON export payloads contain the machine cost rows & validated movement rows without secrets
+    const exportRows = buildShiftWeeklyReportExportRows(report);
+    const hasMachineCostSection = exportRows.some((r) => r[0] === 'SECTION_COUTS_MACHINES');
+    const hasMovementsSection = exportRows.some((r) => r[0] === 'SECTION_MOUVEMENTS_VALIDES');
+    expect(hasMachineCostSection).toBe(true);
+    expect(hasMovementsSection).toBe(true);
+
+    const csvText = buildShiftWeeklyReportCsv(report);
+    expect(csvText).toContain('PRESSE-01');
+    expect(csvText).toContain('600');
+    expect(csvText).toContain('BS-2026-101');
+
+    const jsonParsed = JSON.parse(buildShiftWeeklyReportJson(report));
+    expect(jsonParsed.summary.totalOfficialMaintenanceCost).toBe(600);
+    expect(jsonParsed.machineCostBreakdown[0].totalOfficialCost).toBe(600);
+    expect(jsonParsed.officialMovementsInPeriod).toHaveLength(1);
+  });
 });
 
 

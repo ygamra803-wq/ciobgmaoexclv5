@@ -713,6 +713,43 @@ export interface ShiftOrWeeklyReportData {
   // External Subcontracting / Bobinage in period
   externalBobinageCount?: number;
   externalBobinageCost?: number;
+
+  // C1 — Official Machine Cost Summary (Approved BT + Approved PM + External Bobinage)
+  totalOfficialMaintenanceCost: number;
+  machineCostBreakdown: MachineOfficialCostRow[];
+
+  // C2 — Official Validated Movements in Period (for CSV / JSON practical export)
+  officialMovementsInPeriod: OfficialMovementExportRow[];
+}
+
+export interface MachineOfficialCostRow {
+  machineCode: string;
+  machineName: string;
+  assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL';
+  failureCount: number;
+  correctiveCount: number;
+  correctiveCost: number;
+  correctivePdrCost: number;
+  preventiveCount: number;
+  preventiveCost: number;
+  externalBobinageCount: number;
+  externalBobinageCost: number;
+  totalOfficialCost: number;
+  totalDowntimeHours: number;
+}
+
+export interface OfficialMovementExportRow {
+  id: string;
+  date: string;
+  codeBon: string;
+  type: string;
+  machineCode: string;
+  ref: string;
+  designation: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  totalCost: number;
 }
 
 export type PmComplianceStatus = 'ON_TIME' | 'LATE' | 'OVERDUE';
@@ -1187,7 +1224,9 @@ export function buildShiftOrWeeklyReport({
   const stockPriceMap = new Map<string, number>();
   (stockItems || []).forEach((item) => {
     const ref = String(item?.ref || item?.reference || item?.code_article || '').trim().toUpperCase();
-    const price = Number(item?.prix_unitaire ?? item?.prix_achat_ht ?? item?.prix ?? item?.unitPrice ?? 0);
+    const price = Number(
+      item?.prix_unitaire ?? item?.prixUnitaire ?? item?.prix_achat_ht ?? item?.prix ?? item?.unitPrice ?? 0
+    );
     if (ref && price > 0) {
       stockPriceMap.set(ref, price);
     }
@@ -1232,6 +1271,34 @@ export function buildShiftOrWeeklyReport({
     string,
     FailingMachineSummary & { assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL' }
   >();
+  const machineCostMap = new Map<string, MachineOfficialCostRow>();
+  const ensureMachineCostRow = (meta: {
+    machineCode: string;
+    machineName: string;
+    assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL';
+  }): MachineOfficialCostRow => {
+    const code = meta.machineCode || 'GLOBAL';
+    let row = machineCostMap.get(code);
+    if (!row) {
+      row = {
+        machineCode: code,
+        machineName: meta.machineName || code,
+        assetClass: meta.assetClass,
+        failureCount: 0,
+        correctiveCount: 0,
+        correctiveCost: 0,
+        correctivePdrCost: 0,
+        preventiveCount: 0,
+        preventiveCost: 0,
+        externalBobinageCount: 0,
+        externalBobinageCost: 0,
+        totalOfficialCost: 0,
+        totalDowntimeHours: 0,
+      };
+      machineCostMap.set(code, row);
+    }
+    return row;
+  };
   const techMap = new Map<string, TechnicianMonthlySummary>();
   const productionCorrectiveInPeriod: any[] = [];
 
@@ -1322,9 +1389,10 @@ export function buildShiftOrWeeklyReport({
     }
 
     // Approved spares cost (strictly pieces_utilisees / pdr_cost, never pieces_proposees)
+    let btOfficialCost = 0;
     const explicitCost = Number(ci.pdr_cost ?? ci.cout_pdr ?? ci.cout_total ?? 0);
     if (Number.isFinite(explicitCost) && explicitCost > 0) {
-      correctiveSparesCost += explicitCost;
+      btOfficialCost = explicitCost;
     } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
       ci.pieces_utilisees.forEach((p: any) => {
         const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
@@ -1333,7 +1401,7 @@ export function buildShiftOrWeeklyReport({
           Number(p?.prix_unitaire ?? p?.prix ?? p?.unitPrice ?? 0) ||
           (pRef ? stockPriceMap.get(pRef) || 0 : 0);
         if (pQty > 0 && pPrice > 0) {
-          correctiveSparesCost += pQty * pPrice;
+          btOfficialCost += pQty * pPrice;
         }
       });
     } else {
@@ -1343,9 +1411,22 @@ export function buildShiftOrWeeklyReport({
         Number(ci.pdr_prix ?? ci.prix_unitaire ?? 0) ||
         (pdrRef ? stockPriceMap.get(pdrRef) || 0 : 0);
       if (qty > 0 && unitPrice > 0) {
-        correctiveSparesCost += qty * unitPrice;
+        btOfficialCost = qty * unitPrice;
       }
     }
+    correctiveSparesCost += btOfficialCost;
+
+    const costRow = ensureMachineCostRow(meta);
+    costRow.failureCount++;
+    costRow.correctiveCount++;
+    costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
+    costRow.correctivePdrCost = costRow.correctiveCost;
+    costRow.totalDowntimeHours = Number(
+      (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
+    );
+    costRow.totalOfficialCost = Number(
+      (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+    );
 
     if (ci.intervenant) {
       const tEntry = ensureTech(ci.intervenant);
@@ -1420,9 +1501,17 @@ export function buildShiftOrWeeklyReport({
 
     if (!matchesClassFilter(meta.assetClass)) return;
 
+    const exOfficialCost = Number(ex.totalCost ?? ex.sparesCost ?? 0) || 0;
     preventiveExecutedInPeriodCount++;
-    preventiveTotalCost += Number(ex.totalCost) || 0;
+    preventiveTotalCost += exOfficialCost;
     totalPreventiveMinutes += Number(ex.durationMinutes) || 0;
+
+    const costRow = ensureMachineCostRow(meta);
+    costRow.preventiveCount++;
+    costRow.preventiveCost = Number((costRow.preventiveCost + exOfficialCost).toFixed(2));
+    costRow.totalOfficialCost = Number(
+      (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+    );
 
     const tEntry = ensureTech(ex.executorName || 'Technicien');
     tEntry.preventiveCount++;
@@ -1525,6 +1614,7 @@ export function buildShiftOrWeeklyReport({
   let consumptionCost = 0;
   let entriesCost = 0;
   const consumedPartsMap = new Map<string, ConsumedPartSummary>();
+  const officialMovementsInPeriod: OfficialMovementExportRow[] = [];
 
   (mouvements || []).forEach((m) => {
     if (!m || isUnapprovedFieldClaim(m)) return;
@@ -1543,6 +1633,20 @@ export function buildShiftOrWeeklyReport({
     const qty = Math.abs(Number(m.quantite || 1));
     const price = Number(m.prix_unitaire ?? m.prix_achat_ht ?? m.prix ?? 0) || fallbackPrice;
     const cost = qty * (price > 0 ? price : 0);
+
+    officialMovementsInPeriod.push({
+      id: String(m.id || `MVT-${officialMovementsInPeriod.length + 1}`),
+      date: mDate || fromYMD,
+      codeBon: String(m.code_bon || m.num_bon || m.num_bon_saisi_par_tech || m.id || 'BON'),
+      type: isSortie ? 'SORTIE' : isEntree ? 'ENTREE' : String(m.type || 'MVT').toUpperCase(),
+      machineCode: meta.machineCode,
+      ref,
+      designation: String(m.designation || ref).trim(),
+      quantity: qty,
+      unit: String(m.unit || m.unite || 'pcs'),
+      unitPrice: Number(price.toFixed(2)),
+      totalCost: Number(cost.toFixed(2)),
+    });
 
     if (isSortie) {
       sortiesCount++;
@@ -1605,16 +1709,44 @@ export function buildShiftOrWeeklyReport({
   let externalBobinageCount = 0;
   let externalBobinageCost = 0;
   (sortiesExterne || []).forEach((se) => {
-    if (!se) return;
+    if (!se || isUnapprovedFieldClaim(se)) return;
     const seDate = normalizeDateToYMD(
-      se.date_montage || se.date_arrivee_reelle || se.date_expedition || se.date_demontage || se.created_at
+      se.date_montage ||
+        se.date_arrivee_reelle ||
+        se.date_retour ||
+        se.date_expedition ||
+        se.date_sortie ||
+        se.date_demontage ||
+        se.date ||
+        se.created_at
     );
     if (!isWithinRange(seDate)) return;
     const meta = resolveRecordAssetClass(se, 'id_machine');
     if (!matchesClassFilter(meta.assetClass)) return;
+    const extCost =
+      Number(se.cout_bobinage ?? se.cout_reparation ?? se.cout ?? se.montant ?? 0) || 0;
     externalBobinageCount++;
-    externalBobinageCost += Number(se.cout_bobinage || 0) || 0;
+    externalBobinageCost += extCost;
+
+    const costRow = ensureMachineCostRow(meta);
+    costRow.externalBobinageCount++;
+    costRow.externalBobinageCost = Number((costRow.externalBobinageCost + extCost).toFixed(2));
+    costRow.totalOfficialCost = Number(
+      (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+    );
   });
+
+  const machineCostBreakdown = Array.from(machineCostMap.values()).sort(
+    (a, b) =>
+      b.totalOfficialCost - a.totalOfficialCost ||
+      b.correctiveCount + b.preventiveCount + b.externalBobinageCount -
+        (a.correctiveCount + a.preventiveCount + a.externalBobinageCount) ||
+      b.totalDowntimeHours - a.totalDowntimeHours
+  );
+
+  const totalOfficialMaintenanceCost = Number(
+    (correctiveSparesCost + preventiveTotalCost + externalBobinageCost).toFixed(2)
+  );
 
   return {
     fromYMD,
@@ -1689,9 +1821,176 @@ export function buildShiftOrWeeklyReport({
     technicianBreakdown,
     externalBobinageCount,
     externalBobinageCost: Number(externalBobinageCost.toFixed(2)),
+    totalOfficialMaintenanceCost,
+    machineCostBreakdown,
+    officialMovementsInPeriod,
   };
 }
 
+/**
+ * C2 — Builds the structured CSV rows for the Shift / Weekly / 12m Operational Report,
+ * extending the KPI summary with:
+ * - C1 Official Maintenance Cost Summary rows (per machine: BT + PM + External Bobinage + Total)
+ * - C2 Official Validated Stock Movements rows in the selected period
+ * Never includes unapproved (PENDING_VALIDATION / REJECTED) claims or secrets.
+ */
+export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData): string[][] {
+  const rows: string[][] = [
+    ['Indicateur', 'Valeur', 'Unite / Detail', 'Perimetre'],
+    ['Periode Debut', report.fromYMD, `${report.daysCount} jour(s)`, report.assetClassFilter],
+    ['Periode Fin', report.toYMD, '', report.assetClassFilter],
+    ['Correctif Clotures (Approuves)', String(report.correctiveClosedInPeriodCount), 'BT', report.assetClassFilter],
+    ['Correctif Total Periode (Approuves)', String(report.correctiveTotalInPeriodCount), 'BT', report.assetClassFilter],
+    ['Correctif Ouverts (Snapshot)', String(report.correctiveOpenSnapshotCount), 'BT en cours', report.assetClassFilter],
+    ['Temps Arret Correctif', String(report.totalDowntimeHours), 'heures', report.assetClassFilter],
+    ['Cout PDR Correctif (Approuve)', String(report.correctiveSparesCost), 'EUR', report.assetClassFilter],
+    ['Preventif Executes (Approuves)', String(report.preventiveExecutedInPeriodCount), 'executions', report.assetClassFilter],
+    ['Cout Preventif (Approuve)', String(report.preventiveTotalCost), 'EUR', report.assetClassFilter],
+    ['Bobinage / Sous-traitance Externe (Approuve)', String(report.externalBobinageCount || 0), 'dossiers', report.assetClassFilter],
+    ['Cout Bobinage Externe (Approuve)', String(report.externalBobinageCost || 0), 'EUR', report.assetClassFilter],
+    ['Cout Total Maintenance Officiel (C1: BT + PM + Externe)', String(report.totalOfficialMaintenanceCost), 'EUR', report.assetClassFilter],
+    ['Preventif A Temps (ON_TIME)', String(report.pmCompliance.onTimeCount), 'taches', report.assetClassFilter],
+    ['Preventif Fait En Retard (LATE)', String(report.pmCompliance.lateCompletedCount), 'taches', report.assetClassFilter],
+    ['Preventif Non Realise / En Retard (OVERDUE)', String(report.pmCompliance.overdueCount), 'taches', report.assetClassFilter],
+    ['Preventif Denominateur Actif (Hors Archivees)', String(report.pmCompliance.totalEligibleCount), 'taches', report.assetClassFilter],
+    ['Taux Conformite A Temps (ON_TIME %)', String(report.pmCompliance.onTimeComplianceRate), '%', report.assetClassFilter],
+    ['Discipline Preventive Globale', String(report.preventiveDisciplineRate), '%', report.assetClassFilter],
+    ['Preventif En Retard (Snapshot)', String(report.preventiveOverdueSnapshotCount), 'taches', report.assetClassFilter],
+    ['Magasin Sorties Validees', String(report.sortiesCount), `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
+    ['Magasin Cout Consommation', String(report.consumptionCost), 'EUR', report.assetClassFilter],
+    ['Magasin Demandes Sortie En Attente (Non deduites)', String(report.pendingSortieDemandsWarningCount), 'demandes', 'GLOBAL'],
+    ['Maker-Checker En Attente Total', String(report.makerCheckerQueue.totalPendingCount), 'elements', 'GLOBAL'],
+    ['Systeme General Interventions Periode (Approuvees)', String(report.systemGeneralSummary.correctiveInPeriodCount), 'BT', 'SYSTEM_GENERAL'],
+    ['Systeme General Preventif Periode (Approuvees)', String(report.systemGeneralSummary.preventiveInPeriodCount), 'executions', 'SYSTEM_GENERAL'],
+  ];
+
+  // Section C1: Official Machine Cost Breakdown (BT + PM + External Bobinage)
+  rows.push([]);
+  rows.push([
+    'SECTION_COUTS_MACHINES',
+    'Code Machine',
+    'Equipement',
+    'Classe',
+    'Cout BT Approuve (EUR)',
+    'Cout PM Approuve (EUR)',
+    'Cout Externe Bobinage (EUR)',
+    'Cout Total Officiel (EUR)',
+    'Arret (h)',
+  ]);
+  for (const m of report.machineCostBreakdown || []) {
+    rows.push([
+      'COUT_MACHINE_OFFICIEL',
+      m.machineCode,
+      m.machineName,
+      m.assetClass,
+      String(m.correctiveCost),
+      String(m.preventiveCost),
+      String(m.externalBobinageCost),
+      String(m.totalOfficialCost),
+      String(m.totalDowntimeHours),
+    ]);
+  }
+
+  // Section C2: Official Validated Movements in Period
+  rows.push([]);
+  rows.push([
+    'SECTION_MOUVEMENTS_VALIDES',
+    'Date',
+    'Bon / Ref',
+    'Type',
+    'Machine',
+    'Reference PDR',
+    'Designation',
+    'Quantite',
+    'Cout Total (EUR)',
+  ]);
+  for (const mvt of report.officialMovementsInPeriod || []) {
+    rows.push([
+      'MOUVEMENT_VALIDE',
+      mvt.date,
+      mvt.codeBon,
+      mvt.type,
+      mvt.machineCode,
+      mvt.ref,
+      mvt.designation,
+      `${mvt.quantity} ${mvt.unit}`,
+      String(mvt.totalCost),
+    ]);
+  }
+
+  return rows;
+}
+
+export function buildShiftWeeklyReportCsv(report: ShiftOrWeeklyReportData): string {
+  const rows = buildShiftWeeklyReportExportRows(report);
+  return (
+    '\uFEFF' +
+    rows
+      .map((r) => r.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n')
+  );
+}
+
+/**
+ * C2 — Builds a secret-free, non-technical JSON export payload of official costs & validated movements
+ * for the selected report period (`fromYMD` -> `toYMD` or 12 months).
+ */
+export function buildShiftWeeklyReportJson(report: ShiftOrWeeklyReportData): string {
+  const summary = {
+    correctiveSparesCost: report.correctiveSparesCost,
+    preventiveTotalCost: report.preventiveTotalCost,
+    externalBobinageCost: report.externalBobinageCost || 0,
+    totalOfficialMaintenanceCost: report.totalOfficialMaintenanceCost,
+    storeConsumptionCost: report.consumptionCost,
+    excludedUnapprovedClaimsInPeriod: report.excludedUnapprovedInPeriod,
+  };
+  return JSON.stringify(
+    {
+      schemaVersion: 'CIOB-REPORT-EXPORT-V1',
+      exportedAt: new Date().toISOString(),
+      period: {
+        from: report.fromYMD,
+        to: report.toYMD,
+        daysCount: report.daysCount,
+        assetClassFilter: report.assetClassFilter,
+      },
+      summary,
+      officialCostsSummary: summary,
+      machineCostBreakdown: (report.machineCostBreakdown || []).map((m) => ({
+        machineCode: m.machineCode,
+        machineName: m.machineName,
+        assetClass: m.assetClass,
+        failureCount: m.failureCount,
+        correctiveCount: m.correctiveCount,
+        correctiveCost: m.correctiveCost,
+        correctivePdrCost: m.correctivePdrCost,
+        preventiveCount: m.preventiveCount,
+        preventiveCost: m.preventiveCost,
+        externalBobinageCount: m.externalBobinageCount,
+        externalBobinageCost: m.externalBobinageCost,
+        totalOfficialCost: m.totalOfficialCost,
+        totalDowntimeHours: m.totalDowntimeHours,
+      })),
+      officialMovementsInPeriod: (report.officialMovementsInPeriod || []).map((mvt) => ({
+        id: mvt.id,
+        date: mvt.date,
+        codeBon: mvt.codeBon,
+        type: mvt.type,
+        machineCode: mvt.machineCode,
+        ref: mvt.ref,
+        designation: mvt.designation,
+        quantity: mvt.quantity,
+        unit: mvt.unit,
+        unitPrice: mvt.unitPrice,
+        totalCost: mvt.totalCost,
+      })),
+    },
+    null,
+    2
+  );
+}
+
 export default MonthlyReportCalculationService;
+
 
 

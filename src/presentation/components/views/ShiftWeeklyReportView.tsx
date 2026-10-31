@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import {
   buildShiftOrWeeklyReport,
+  buildShiftWeeklyReportCsv,
+  buildShiftWeeklyReportJson,
   type ReportAssetClassFilter,
 } from '../../../application/services/MonthlyReportCalculationService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -26,7 +28,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
 
-export type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'CUSTOM';
+export type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_12_MONTHS' | 'CUSTOM';
 
 interface ShiftWeeklyReportViewProps {
   stockItems?: any[];
@@ -35,6 +37,7 @@ interface ShiftWeeklyReportViewProps {
   preventiveTasks?: any[];
   preventiveExecutions?: any[];
   sortieDemands?: any[];
+  sortiesExterne?: any[];
   machines?: any[];
   onNavigateToTab?: (tab: string) => void;
   showToast?: (msg: string, type?: string) => void;
@@ -56,13 +59,16 @@ export default function ShiftWeeklyReportView({
   preventiveTasks = [],
   preventiveExecutions = [],
   sortieDemands: propSortieDemands,
+  sortiesExterne: propSortiesExterne,
   machines = [],
   onNavigateToTab,
   showToast,
 }: ShiftWeeklyReportViewProps) {
   const { user: currentUser } = useAuth();
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
+  const storeSortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const sortieDemands = propSortieDemands ?? storeSortieDemands ?? [];
+  const sortiesExterne = propSortiesExterne ?? storeSortiesExterne ?? [];
 
   // Default period: LAST_7_DAYS (last 7 calendar days inclusive: [today - 6 days .. today])
   const [preset, setPreset] = useState<PeriodPreset>('LAST_7_DAYS');
@@ -78,6 +84,7 @@ export default function ShiftWeeklyReportView({
     const today = getYMDWithOffset(0);
     const yesterday = getYMDWithOffset(-1);
     const sevenDaysAgo = getYMDWithOffset(-6);
+    const twelveMonthsAgo = getYMDWithOffset(-364);
 
     if (preset === 'TODAY') {
       return {
@@ -100,6 +107,13 @@ export default function ShiftWeeklyReportView({
         periodLabel: `7 derniers jours (${sevenDaysAgo} → ${today})`,
       };
     }
+    if (preset === 'LAST_12_MONTHS') {
+      return {
+        activeFrom: twelveMonthsAgo,
+        activeTo: today,
+        periodLabel: `12 derniers mois (${twelveMonthsAgo} → ${today})`,
+      };
+    }
     return {
       activeFrom: customFrom || sevenDaysAgo,
       activeTo: customTo || today,
@@ -118,6 +132,7 @@ export default function ShiftWeeklyReportView({
       preventiveTasks,
       preventiveExecutions,
       sortieDemands,
+      sortiesExterne,
       machines,
     });
   }, [
@@ -130,6 +145,7 @@ export default function ShiftWeeklyReportView({
     preventiveTasks,
     preventiveExecutions,
     sortieDemands,
+    sortiesExterne,
     machines,
   ]);
 
@@ -146,42 +162,15 @@ export default function ShiftWeeklyReportView({
     } else if (nextPreset === 'LAST_7_DAYS') {
       setCustomFrom(getYMDWithOffset(-6));
       setCustomTo(getYMDWithOffset(0));
+    } else if (nextPreset === 'LAST_12_MONTHS') {
+      setCustomFrom(getYMDWithOffset(-364));
+      setCustomTo(getYMDWithOffset(0));
     }
   };
 
   const handleExportCsv = () => {
     try {
-      const rows = [
-        ['Indicateur', 'Valeur', 'Unite / Detail', 'Perimetre'],
-        ['Periode Debut', report.fromYMD, `${report.daysCount} jour(s)`, report.assetClassFilter],
-        ['Periode Fin', report.toYMD, '', report.assetClassFilter],
-        ['Correctif Clotures (Approuves)', String(report.correctiveClosedInPeriodCount), 'BT', report.assetClassFilter],
-        ['Correctif Total Periode (Approuves)', String(report.correctiveTotalInPeriodCount), 'BT', report.assetClassFilter],
-        ['Correctif Ouverts (Snapshot)', String(report.correctiveOpenSnapshotCount), 'BT en cours', report.assetClassFilter],
-        ['Temps Arret Correctif', String(report.totalDowntimeHours), 'heures', report.assetClassFilter],
-        ['Cout PDR Correctif (Approuve)', String(report.correctiveSparesCost), 'EUR', report.assetClassFilter],
-        ['Preventif Executes (Approuves)', String(report.preventiveExecutedInPeriodCount), 'executions', report.assetClassFilter],
-        ['Preventif A Temps (ON_TIME)', String(report.pmCompliance.onTimeCount), 'taches', report.assetClassFilter],
-        ['Preventif Fait En Retard (LATE)', String(report.pmCompliance.lateCompletedCount), 'taches', report.assetClassFilter],
-        ['Preventif Non Realise / En Retard (OVERDUE)', String(report.pmCompliance.overdueCount), 'taches', report.assetClassFilter],
-        ['Preventif Denominateur Actif (Hors Archivees)', String(report.pmCompliance.totalEligibleCount), 'taches', report.assetClassFilter],
-        ['Taux Conformite A Temps (ON_TIME %)', String(report.pmCompliance.onTimeComplianceRate), '%', report.assetClassFilter],
-        ['Discipline Preventive Globale', String(report.preventiveDisciplineRate), '%', report.assetClassFilter],
-        ['Preventif En Retard (Snapshot)', String(report.preventiveOverdueSnapshotCount), 'taches', report.assetClassFilter],
-        ['Magasin Sorties Validees', String(report.sortiesCount), `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
-        ['Magasin Cout Consommation', String(report.consumptionCost), 'EUR', report.assetClassFilter],
-        ['Magasin Demandes Sortie En Attente (Non deduites)', String(report.pendingSortieDemandsWarningCount), 'demandes', 'GLOBAL'],
-        ['Maker-Checker En Attente Total', String(report.makerCheckerQueue.totalPendingCount), 'elements', 'GLOBAL'],
-        ['Systeme General Interventions Periode (Approuvees)', String(report.systemGeneralSummary.correctiveInPeriodCount), 'BT', 'SYSTEM_GENERAL'],
-        ['Systeme General Preventif Periode (Approuvees)', String(report.systemGeneralSummary.preventiveInPeriodCount), 'executions', 'SYSTEM_GENERAL'],
-      ];
-
-      const csvContent =
-        '\uFEFF' +
-        rows
-          .map((r) => r.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';'))
-          .join('\n');
-
+      const csvContent = buildShiftWeeklyReportCsv(report);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -191,10 +180,29 @@ export default function ShiftWeeklyReportView({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast?.('Rapport de vacation / hebdo exporté en CSV', 'success');
+      showToast?.('Rapport (KPIs + Coûts Machines + Mouvements validés) exporté en CSV', 'success');
     } catch (err) {
       console.error('Failed to export shift/weekly CSV:', err);
       showToast?.("Erreur lors de l'export CSV", 'error');
+    }
+  };
+
+  const handleExportJson = () => {
+    try {
+      const jsonContent = buildShiftWeeklyReportJson(report);
+      const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Rapport_Couts_Mouvements_${report.fromYMD}_${report.toYMD}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast?.('Synthèse des coûts officiels & mouvements validés exportée en JSON', 'success');
+    } catch (err) {
+      console.error('Failed to export shift/weekly JSON:', err);
+      showToast?.("Erreur lors de l'export JSON", 'error');
     }
   };
 
@@ -284,6 +292,17 @@ export default function ShiftWeeklyReportView({
             </button>
             <button
               type="button"
+              onClick={() => handleSelectPreset('LAST_12_MONTHS')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                preset === 'LAST_12_MONTHS'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              12 mois
+            </button>
+            <button
+              type="button"
               onClick={() => setPreset('CUSTOM')}
               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                 preset === 'CUSTOM'
@@ -355,10 +374,21 @@ export default function ShiftWeeklyReportView({
           <button
             type="button"
             onClick={handleExportCsv}
+            title="Exporter KPIs, coûts machines officiels et mouvements validés en CSV"
             className="h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportJson}
+            title="Exporter synthèse des coûts officiels par machine et mouvements validés en JSON"
+            className="h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-600" />
+            <span>JSON</span>
           </button>
 
           <button
@@ -622,56 +652,68 @@ export default function ShiftWeeklyReportView({
 
       {/* Main Operational Grid: Top Failing Machines + Overdue Preventive Snapshot */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Section 1 Detail: Top Machines / Arrêts Correctifs */}
+        {/* Section 1 Detail: Top Machines / Arrêts Correctifs & Coûts Officiels (C1) */}
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden flex flex-col">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2.5">
               <Factory className="w-4 h-4 text-amber-600" />
-              <h3 className="text-sm font-black text-slate-900">
-                Top Équipements Sollicités en Correctif (Période)
-              </h3>
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  Équipements Sollicités & Coûts Officiels par Machine (C1)
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Uniquement BT approuvés, exécutions PM validées et bobinage externe officiel (hors PENDING/rejetés)
+                </p>
+              </div>
             </div>
-            {onNavigateToTab && (
-              <button
-                type="button"
-                onClick={() => onNavigateToTab('corrective')}
-                className="text-xs font-bold text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer print:hidden"
-              >
-                <span>Correctif Hub</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono font-black">
+                Total Officiel : {report.totalOfficialMaintenanceCost} €
+              </span>
+              {onNavigateToTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateToTab('corrective')}
+                  className="text-xs font-bold text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer print:hidden"
+                >
+                  <span>Correctif Hub</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="p-5 flex-1">
-            {report.topFailingMachines.length === 0 ? (
+            {report.machineCostBreakdown.length === 0 ? (
               <div className="py-8 text-center text-xs text-slate-500">
-                Aucune intervention corrective approuvée sur la période sélectionnée.
+                Aucune intervention ou dépense officielle enregistrée sur la période sélectionnée.
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 text-[11px] font-extrabold uppercase text-slate-500">
-                      <th className="py-2 pr-3">Code</th>
-                      <th className="py-2 px-3">Équipement</th>
-                      <th className="py-2 px-3">Classe</th>
-                      <th className="py-2 px-3 text-right">Pannes</th>
-                      <th className="py-2 pl-3 text-right">Arrêt (h)</th>
+                      <th className="py-2 pr-2">Code</th>
+                      <th className="py-2 px-2">Équipement</th>
+                      <th className="py-2 px-2 text-right">BT / Arrêt</th>
+                      <th className="py-2 px-2 text-right">Coût BT</th>
+                      <th className="py-2 px-2 text-right">Coût PM</th>
+                      <th className="py-2 px-2 text-right">Externe</th>
+                      <th className="py-2 pl-2 text-right">Total Officiel</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {report.topFailingMachines.map((m) => (
+                    {report.machineCostBreakdown.slice(0, 12).map((m) => (
                       <tr key={m.machineCode} className="hover:bg-slate-50/80">
-                        <td className="py-2.5 pr-3 font-mono font-bold text-slate-900">
+                        <td className="py-2.5 pr-2 font-mono font-bold text-slate-900">
                           {m.machineCode}
                         </td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-700">
-                          {m.machineName}
-                        </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-2 font-semibold text-slate-700">
+                          <div className="truncate max-w-[160px]" title={m.machineName}>
+                            {m.machineName}
+                          </div>
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                            className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border ${
                               m.assetClass === 'SYSTEM_GENERAL'
                                 ? 'bg-amber-50 text-amber-800 border-amber-200'
                                 : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -680,15 +722,57 @@ export default function ShiftWeeklyReportView({
                             {m.assetClass === 'SYSTEM_GENERAL' ? 'SYS. GÉNÉRAL' : 'PRODUCTION'}
                           </span>
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                          {m.failureCount}
+                        <td className="py-2.5 px-2 text-right font-mono text-slate-700">
+                          <span className="font-bold text-slate-900">{m.failureCount}</span> BT
+                          {m.totalDowntimeHours > 0 && (
+                            <span className="block text-[10px] font-bold text-rose-700">
+                              {m.totalDowntimeHours} h
+                            </span>
+                          )}
                         </td>
-                        <td className="py-2.5 pl-3 text-right font-mono font-bold text-rose-700">
-                          {m.totalDowntimeHours} h
+                        <td className="py-2.5 px-2 text-right font-mono text-slate-700">
+                          {m.correctivePdrCost} €
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono text-slate-700">
+                          {m.preventiveCost} €
+                        </td>
+                        <td className="py-2.5 px-2 text-right font-mono text-slate-700">
+                          {m.externalBobinageCost} €
+                        </td>
+                        <td className="py-2.5 pl-2 text-right font-mono font-black text-emerald-800">
+                          {m.totalOfficialCost} €
                         </td>
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-200 bg-slate-50/80 font-mono text-xs font-black text-slate-900">
+                      <td colSpan={3} className="py-2.5 pr-2">
+                        TOTAL PÉRIODE ({report.machineCostBreakdown.length} machine(s))
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        {Math.round(
+                          report.machineCostBreakdown.reduce((s, r) => s + r.correctivePdrCost, 0) * 100
+                        ) / 100}{' '}
+                        €
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        {Math.round(
+                          report.machineCostBreakdown.reduce((s, r) => s + r.preventiveCost, 0) * 100
+                        ) / 100}{' '}
+                        €
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        {Math.round(
+                          report.machineCostBreakdown.reduce((s, r) => s + r.externalBobinageCost, 0) * 100
+                        ) / 100}{' '}
+                        €
+                      </td>
+                      <td className="py-2.5 pl-2 text-right text-emerald-800">
+                        {report.totalOfficialMaintenanceCost} €
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
