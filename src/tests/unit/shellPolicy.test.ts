@@ -904,6 +904,164 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
     expect(afterDeletePrv.preventiveTasks[0].cout_cumule).toBe(340); // 540 - 200
   });
 
+  it('Batch S3 — AuditLock & SortieDemand Reconciliation: empties SortieDemand items on full cancel, deducts partial quantity, updates BT stock_deducted, and derives oldSparesCost from sparesUsed when missing', async () => {
+    const {
+      reconcileMakerCheckerOnMovementDelete,
+      reconcileMakerCheckerOnMovementUpdate,
+    } = await import('../../core/security/auditLockReconciliation');
+
+    // 1. SortieDemand partial quantity deletion vs full cancellation (empty items branch)
+    const initialDemand = {
+      id: 'DEM-SRT-700',
+      code_bon_tech: 'BS-TECH-700',
+      validation_status: 'APPROVED',
+      stock_deducted: true,
+      items: [
+        { ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 5, unit: 'pcs' },
+      ],
+      emitted_movement_ids: ['MVT-SRT-700-A', 'MVT-SRT-700-B'],
+    };
+
+    // 1a. Delete partial movement of quantite=2 -> item remains with quantite=3 and stock_deducted=true
+    const partialDeleteRes = reconcileMakerCheckerOnMovementDelete(
+      {
+        id: 'MVT-SRT-700-A',
+        source_demand_id: 'DEM-SRT-700',
+        code_bon: 'BS-MAG-700',
+        ref: 'ROUL-6204',
+        quantite: 2,
+      },
+      {
+        correctiveInterventions: [],
+        preventiveExecutions: [],
+        preventiveTasks: [],
+        sortieDemands: [initialDemand],
+      }
+    );
+    expect(partialDeleteRes.sortieDemandsChanged).toBe(true);
+    expect(partialDeleteRes.sortieDemands[0].items).toHaveLength(1);
+    expect(partialDeleteRes.sortieDemands[0].items[0].quantite).toBe(3);
+    expect(partialDeleteRes.sortieDemands[0].stock_deducted).toBe(true);
+    expect(partialDeleteRes.sortieDemands[0].validation_status).toBe('APPROVED');
+
+    // 1b. Delete remaining movement of quantite=3 -> items becomes [] (NOT restored to original items!), stock_deducted=false, validation_status='REJECTED'
+    const fullCancelRes = reconcileMakerCheckerOnMovementDelete(
+      {
+        id: 'MVT-SRT-700-B',
+        source_demand_id: 'DEM-SRT-700',
+        code_bon: 'BS-MAG-700',
+        ref: 'ROUL-6204',
+        quantite: 3,
+      },
+      {
+        correctiveInterventions: [],
+        preventiveExecutions: [],
+        preventiveTasks: [],
+        sortieDemands: partialDeleteRes.sortieDemands,
+      }
+    );
+    expect(fullCancelRes.sortieDemandsChanged).toBe(true);
+    expect(fullCancelRes.sortieDemands[0].items).toEqual([]);
+    expect(fullCancelRes.sortieDemands[0].stock_deducted).toBe(false);
+    expect(fullCancelRes.sortieDemands[0].validation_status).toBe('REJECTED');
+
+    // 2. Deleting last spare part on Corrective BT updates stock_deducted to false (and partial keeps true)
+    const btWithTwoParts = {
+      id: 'BT-800',
+      num_bt: 'BT-2026-800',
+      code_machine: 'DET-01',
+      statut: 'CLOTURE',
+      validation_status: 'APPROVED',
+      stock_deducted: true,
+      pieces_utilisees: [
+        { ref: 'ROUL-6204', designation: 'Roulement 6204', quantite: 2, prix_unitaire: 100 },
+        { ref: 'COUR-A42', designation: 'Courroie A42', quantite: 1, prix_unitaire: 50 },
+      ],
+      cout_pdr: 250,
+      pdr_cost: 250,
+      emitted_movement_ids: ['MVT-BT-800-1', 'MVT-BT-800-2'],
+    };
+
+    const btAfterFirstDelete = reconcileMakerCheckerOnMovementDelete(
+      {
+        id: 'MVT-BT-800-1',
+        source_bt_id: 'BT-800',
+        code_bon: 'BS-BT-BT-2026-800',
+        ref: 'ROUL-6204',
+        quantite: 2,
+      },
+      {
+        correctiveInterventions: [btWithTwoParts],
+        preventiveExecutions: [],
+        preventiveTasks: [],
+        sortieDemands: [],
+      }
+    );
+    expect(btAfterFirstDelete.correctiveInterventions[0].pieces_utilisees).toHaveLength(1);
+    expect(btAfterFirstDelete.correctiveInterventions[0].stock_deducted).toBe(true);
+
+    const btAfterLastDelete = reconcileMakerCheckerOnMovementDelete(
+      {
+        id: 'MVT-BT-800-2',
+        source_bt_id: 'BT-800',
+        code_bon: 'BS-BT-BT-2026-800',
+        ref: 'COUR-A42',
+        quantite: 1,
+      },
+      {
+        correctiveInterventions: btAfterFirstDelete.correctiveInterventions,
+        preventiveExecutions: [],
+        preventiveTasks: [],
+        sortieDemands: [],
+      }
+    );
+    expect(btAfterLastDelete.correctiveInterventions[0].pieces_utilisees).toEqual([]);
+    expect(btAfterLastDelete.correctiveInterventions[0].stock_deducted).toBe(false);
+    expect(btAfterLastDelete.correctiveInterventions[0].cout_pdr).toBe(0);
+
+    // 3. Legacy Preventive Execution without explicit sparesCost (or sparesCost=0) computes oldSparesCost from sparesUsed
+    const legacyExecWithoutSparesCost = {
+      id: 'EXEC-LEGACY-1',
+      taskId: 'TASK-LEGACY-1',
+      taskCode: 'PM-LEG-1',
+      durationMinutes: 60,
+      laborRate: 40,
+      sparesUsed: [{ ref: 'FILTRE-H1', designation: 'Filtre Hydraulique', qty: 2, unitPrice: 100 }],
+      // sparesCost intentionally omitted / 0 on legacy record while cout_cumule already includes 200
+      sparesCost: 0,
+      totalCost: 240,
+      stock_deducted: true,
+      emitted_movement_ids: ['MVT-PRV-LEG-1'],
+    };
+    const parentTask = { id: 'TASK-LEGACY-1', cout_cumule: 500 };
+
+    const updateLegacyRes = reconcileMakerCheckerOnMovementUpdate(
+      {
+        id: 'MVT-PRV-LEG-1',
+        source_execution_id: 'EXEC-LEGACY-1',
+        ref: 'FILTRE-H1',
+        quantite: 2,
+        prix_unitaire: 100,
+      },
+      {
+        id: 'MVT-PRV-LEG-1',
+        source_execution_id: 'EXEC-LEGACY-1',
+        ref: 'FILTRE-H1',
+        quantite: 3,
+        prix_unitaire: 100,
+      },
+      {
+        correctiveInterventions: [],
+        preventiveExecutions: [legacyExecWithoutSparesCost],
+        preventiveTasks: [parentTask],
+        sortieDemands: [],
+      }
+    );
+    // Old spares cost derived from sparesUsed = 2 * 100 = 200; new spares cost = 3 * 100 = 300 -> costDiff = +100 -> cout_cumule = 600 (not 800!)
+    expect(updateLegacyRes.preventiveExecutions[0].sparesCost).toBe(300);
+    expect(updateLegacyRes.preventiveTasks[0].cout_cumule).toBe(600);
+  });
+
   it('Vulnerability 5 Fix: unifies Preventive execution review parity with exactMovementMatch (skipStockDeduction) and Auto-DI anomaly detection', async () => {
     const { reconcileFieldClaim } = await import('../../core/security/validationReconciliation');
     const { hasPreventiveExecutionAnomaly } = await import(

@@ -137,15 +137,21 @@ export function reconcileMakerCheckerOnMovementDelete(
     const pieces = Array.isArray(bt.pieces_utilisees) ? [...bt.pieces_utilisees] : [];
     const updatedPieces: any[] = [];
 
-    let removedMatch = false;
+    let remainingToDeductBt = targetQty;
     for (const p of pieces) {
       const pRef = norm(p?.ref || p?.code_article);
-      if (!removedMatch && pRef === targetRef) {
+      if (remainingToDeductBt > 0 && pRef === targetRef) {
         const currentQty = Number(p?.quantite ?? p?.qty ?? 0) || 0;
-        const remainingQty = currentQty - targetQty;
-        removedMatch = true;
-        if (remainingQty > 0) {
-          updatedPieces.push({ ...p, quantite: remainingQty });
+        if (currentQty > remainingToDeductBt) {
+          const remainingQty = currentQty - remainingToDeductBt;
+          remainingToDeductBt = 0;
+          updatedPieces.push({
+            ...p,
+            quantite: remainingQty,
+            ...(p?.qty !== undefined ? { qty: remainingQty } : {}),
+          });
+        } else {
+          remainingToDeductBt = Math.max(0, remainingToDeductBt - currentQty);
         }
       } else {
         updatedPieces.push(p);
@@ -179,6 +185,7 @@ export function reconcileMakerCheckerOnMovementDelete(
       pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : 0,
       cout_pdr: newTotalPdrCost,
       pdr_cost: newTotalPdrCost,
+      stock_deducted: updatedPieces.length > 0,
       emitted_movement_ids: Array.isArray(bt.emitted_movement_ids)
         ? bt.emitted_movement_ids.filter((id: string) => id !== mvtId)
         : [],
@@ -205,20 +212,25 @@ export function reconcileMakerCheckerOnMovementDelete(
     const spares = Array.isArray(exec.sparesUsed) ? [...exec.sparesUsed] : [];
     const updatedSpares: any[] = [];
     let removedCostDelta = 0;
-    let removedMatch = false;
+    let remainingToDeductPrv = targetQty;
 
     for (const s of spares) {
       const sRef = norm(s?.ref || s?.code_article);
-      if (!removedMatch && sRef === targetRef) {
+      if (remainingToDeductPrv > 0 && sRef === targetRef) {
         const currentQty = Number(s?.qty ?? s?.quantite ?? 0) || 0;
         const unitPrice = Number(s?.unitPrice ?? s?.prix_unitaire ?? 0) || 0;
-        const remainingQty = currentQty - targetQty;
-        removedMatch = true;
-        if (remainingQty > 0) {
-          removedCostDelta += targetQty * unitPrice;
-          updatedSpares.push({ ...s, qty: remainingQty });
+        if (currentQty > remainingToDeductPrv) {
+          const remainingQty = currentQty - remainingToDeductPrv;
+          removedCostDelta += remainingToDeductPrv * unitPrice;
+          remainingToDeductPrv = 0;
+          updatedSpares.push({
+            ...s,
+            qty: remainingQty,
+            ...(s?.quantite !== undefined ? { quantite: remainingQty } : {}),
+          });
         } else {
           removedCostDelta += currentQty * unitPrice;
+          remainingToDeductPrv = Math.max(0, remainingToDeductPrv - currentQty);
         }
       } else {
         updatedSpares.push(s);
@@ -289,18 +301,47 @@ export function reconcileMakerCheckerOnMovementDelete(
   if (matchedDemandIndex >= 0) {
     const demand = result.sortieDemands[matchedDemandIndex];
     const items = Array.isArray(demand.items) ? [...demand.items] : [];
-    const remainingItems = items.filter((it: any) => norm(it?.ref) !== targetRef);
+    const remainingItems: any[] = [];
+    let remainingToDeductDemand = targetQty;
+
+    for (const it of items) {
+      const itRef = norm(it?.ref || it?.code_article);
+      if (itRef === targetRef) {
+        const currentQty = Number(it?.quantite ?? it?.qty ?? 0) || 0;
+        if (targetQty > 0 && remainingToDeductDemand > 0) {
+          if (currentQty > remainingToDeductDemand) {
+            const nextQty = currentQty - remainingToDeductDemand;
+            remainingToDeductDemand = 0;
+            remainingItems.push({
+              ...it,
+              quantite: nextQty,
+              ...(it?.qty !== undefined ? { qty: nextQty } : {}),
+            });
+          } else {
+            remainingToDeductDemand = Math.max(0, remainingToDeductDemand - currentQty);
+          }
+        } else if (targetQty <= 0) {
+          // If movement had no explicit quantity (>0), remove the matching item
+        } else {
+          remainingItems.push(it);
+        }
+      } else {
+        remainingItems.push(it);
+      }
+    }
+
     const remainingMovementIds = Array.isArray(demand.emitted_movement_ids)
       ? demand.emitted_movement_ids.filter((id: string) => id !== mvtId)
       : [];
-    const allCancelled = remainingMovementIds.length === 0 && remainingItems.length === 0;
+    const allCancelled = remainingItems.length === 0 && remainingMovementIds.length === 0;
     const prevNote = String(demand.validation_note || '').trim();
     const auditNote = `[Audit Magasin] Mouvement ${mvtBon} (${mvt.ref} x${targetQty}) annulé.`;
 
     const updatedDemand = {
       ...demand,
-      items: remainingItems.length > 0 ? remainingItems : items,
+      items: remainingItems,
       emitted_movement_ids: remainingMovementIds,
+      stock_deducted: remainingItems.length > 0 && !allCancelled,
       ...(allCancelled
         ? {
             validation_status: 'REJECTED',
@@ -368,18 +409,20 @@ export function reconcileMakerCheckerOnMovementUpdate(
     const pieces = Array.isArray(bt.pieces_utilisees) ? [...bt.pieces_utilisees] : [];
     let matchedPiece = false;
 
-    const updatedPieces = pieces.map((p: any) => {
-      if (!matchedPiece && norm(p?.ref || p?.code_article) === targetRef) {
-        matchedPiece = true;
-        return {
-          ...p,
-          ref: newRef || p.ref,
-          quantite: newQty,
-          ...(newPrice !== undefined ? { prix_unitaire: newPrice } : {}),
-        };
-      }
-      return p;
-    });
+    const updatedPieces = pieces
+      .map((p: any) => {
+        if (!matchedPiece && norm(p?.ref || p?.code_article) === targetRef) {
+          matchedPiece = true;
+          return {
+            ...p,
+            ref: newRef || p.ref,
+            quantite: newQty,
+            ...(newPrice !== undefined ? { prix_unitaire: newPrice } : {}),
+          };
+        }
+        return p;
+      })
+      .filter((p: any) => (Number(p?.quantite ?? p?.qty ?? 0) || 0) > 0);
 
     if (matchedPiece) {
       const newTotalPdrCost = Number(
@@ -402,6 +445,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
         pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : 0,
         cout_pdr: newTotalPdrCost,
         pdr_cost: newTotalPdrCost,
+        stock_deducted: updatedPieces.length > 0,
         updated_at: new Date().toISOString(),
       };
 
@@ -422,22 +466,39 @@ export function reconcileMakerCheckerOnMovementUpdate(
   );
   if (matchedExecIndex >= 0) {
     const exec = result.preventiveExecutions[matchedExecIndex];
-    const oldSparesCost = Number(exec.sparesCost || 0);
     const spares = Array.isArray(exec.sparesUsed) ? [...exec.sparesUsed] : [];
+    const derivedOldSparesCost = Number(
+      spares
+        .reduce(
+          (sum, s) =>
+            sum + (Number(s?.qty ?? s?.quantite ?? 0) || 0) * (Number(s?.unitPrice ?? s?.prix_unitaire ?? 0) || 0),
+          0
+        )
+        .toFixed(2)
+    );
+    const explicitOldSparesCost = Number(exec.sparesCost);
+    const oldSparesCost =
+      Number.isFinite(explicitOldSparesCost) && explicitOldSparesCost > 0
+        ? explicitOldSparesCost
+        : derivedOldSparesCost;
+
     let matchedSpare = false;
 
-    const updatedSpares = spares.map((s: any) => {
-      if (!matchedSpare && norm(s?.ref || s?.code_article) === targetRef) {
-        matchedSpare = true;
-        return {
-          ...s,
-          ref: newRef || s.ref,
-          qty: newQty,
-          ...(newPrice !== undefined ? { unitPrice: newPrice } : {}),
-        };
-      }
-      return s;
-    });
+    const updatedSpares = spares
+      .map((s: any) => {
+        if (!matchedSpare && norm(s?.ref || s?.code_article) === targetRef) {
+          matchedSpare = true;
+          return {
+            ...s,
+            ref: newRef || s.ref,
+            qty: newQty,
+            ...(s?.quantite !== undefined ? { quantite: newQty } : {}),
+            ...(newPrice !== undefined ? { unitPrice: newPrice } : {}),
+          };
+        }
+        return s;
+      })
+      .filter((s: any) => (Number(s?.qty ?? s?.quantite ?? 0) || 0) > 0);
 
     if (matchedSpare) {
       const newSparesCost = Number(
@@ -461,6 +522,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
         sparesProposed: updatedSpares,
         sparesCost: newSparesCost,
         totalCost: newTotalCost,
+        stock_deducted: updatedSpares.length > 0,
         updated_at: new Date().toISOString(),
       };
 
@@ -488,6 +550,50 @@ export function reconcileMakerCheckerOnMovementUpdate(
       result.linkedType = 'PREVENTIVE_EXEC';
       result.linkedId = String(exec.id);
       result.auditSummary = `Coût PDR de l'exécution préventive ${exec.taskCode || exec.id} synchronisé (${newSparesCost} DH).`;
+    }
+    return result;
+  }
+
+  // 3. Check Sortie Demands
+  const matchedDemandIndex = result.sortieDemands.findIndex((d) =>
+    matchesSortieDemandMovement(oldMvt, d)
+  );
+  if (matchedDemandIndex >= 0) {
+    const demand = result.sortieDemands[matchedDemandIndex];
+    const items = Array.isArray(demand.items) ? [...demand.items] : [];
+    let matchedItem = false;
+
+    const updatedItems = items
+      .map((it: any) => {
+        if (!matchedItem && norm(it?.ref || it?.code_article) === targetRef) {
+          matchedItem = true;
+          return {
+            ...it,
+            ref: newRef || it.ref,
+            quantite: newQty,
+            ...(it?.qty !== undefined ? { qty: newQty } : {}),
+          };
+        }
+        return it;
+      })
+      .filter((it: any) => (Number(it?.quantite ?? it?.qty ?? 0) || 0) > 0);
+
+    if (matchedItem) {
+      const updatedDemand = {
+        ...demand,
+        items: updatedItems,
+        stock_deducted: updatedItems.length > 0,
+        ...(updatedItems.length === 0 ? { validation_status: 'REJECTED' } : {}),
+        updated_at: new Date().toISOString(),
+      };
+
+      result.sortieDemands = result.sortieDemands.map((item, idx) =>
+        idx === matchedDemandIndex ? updatedDemand : item
+      );
+      result.sortieDemandsChanged = true;
+      result.linkedType = 'SORTIE_DEMAND';
+      result.linkedId = String(demand.code_bon_tech || demand.id);
+      result.auditSummary = `Demande de sortie ${demand.code_bon_tech || demand.id} synchronisée.`;
     }
     return result;
   }
