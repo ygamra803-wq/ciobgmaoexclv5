@@ -37,6 +37,7 @@ import UserCodePicker from '../../components/common/UserCodePicker';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import {
   RESPONSABLE_TEMPLATES,
   normalizeTemplateIds,
@@ -849,80 +850,73 @@ export default function UtilisateursView({
           </div>
         </div>
 
-        {/* Quick KPI stats bar - Redesigned to be highly polished */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Unified 4-Tier Light Excel KPI Bar (Interactive Profile Filters) */}
+        <GmaoKpiGrid columns={4}>
           {/* Card 1: Total Membres */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                {t('utilisateurs.stats.total_users')}
-              </span>
-              <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
-                {combinedUsers.length}
-              </span>
-              <span className="text-[10px] text-slate-400 mt-0.5 block">{t('utilisateurs.stats.registered_members')}</span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
+          <GmaoKpiCard
+            title={t('utilisateurs.stats.total_users')}
+            value={combinedUsers.length}
+            unit="membres"
+            icon={Users}
+            color="slate"
+            valueColored={false}
+            isActive={profileFilter === 'ALL'}
+            onClick={() => setProfileFilter('ALL')}
+            badgeText={t('utilisateurs.stats.registered_members')}
+            footerLabel="Feuille Personnel :"
+            footerValue="Annuaire global"
+          />
 
           {/* Card 2: Techniciens */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider block">
-                {t('utilisateurs.stats.technicians')}
-              </span>
-              <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
-                {technicians.length}
-              </span>
-              <span className="text-[10px] text-blue-500 mt-0.5 block">{t('utilisateurs.stats.technicians_sub')}</span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-              <Wrench className="w-5 h-5" />
-            </div>
-          </div>
+          <GmaoKpiCard
+            title={t('utilisateurs.stats.technicians')}
+            value={technicians.length}
+            unit="techniciens"
+            icon={Wrench}
+            color="blue"
+            isActive={profileFilter === 'TECHNICIEN'}
+            onClick={() => setProfileFilter(profileFilter === 'TECHNICIEN' ? 'ALL' : 'TECHNICIEN')}
+            badgeText={t('utilisateurs.stats.technicians_sub')}
+            footerLabel="Interventions :"
+            footerValue="Préventif & Correctif"
+          />
 
           {/* Card 3: Opérateurs */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">
-                {t('utilisateurs.stats.operators')}
-              </span>
-              <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
-                {operations.filter((o) => o.type_profil === 'OPERATEUR').length}
-              </span>
-              <span className="text-[10px] text-indigo-500 mt-0.5 block">{t('utilisateurs.stats.operators_sub')}</span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-              <ClipboardList className="w-5 h-5" />
-            </div>
-          </div>
+          <GmaoKpiCard
+            title={t('utilisateurs.stats.operators')}
+            value={operations.filter((o) => o.type_profil === 'OPERATEUR').length}
+            unit="opérateurs"
+            icon={ClipboardList}
+            color="indigo"
+            isActive={profileFilter === 'OPERATEUR'}
+            onClick={() => setProfileFilter(profileFilter === 'OPERATEUR' ? 'ALL' : 'OPERATEUR')}
+            badgeText={t('utilisateurs.stats.operators_sub')}
+            footerLabel="Terrain :"
+            footerValue="Signalement DI"
+          />
 
           {/* Card 4: Responsables */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider block">
-                {t('utilisateurs.stats.responsables')}
-              </span>
-              <span className="text-2xl font-black text-slate-900 mt-1 block font-mono">
-                {
-                  operations.filter(
-                    (o) =>
-                      o.type_profil === 'RESPONSABLE' ||
-                      o.type_profil === 'CHEF' ||
-                      String(o.id_operation).startsWith('RESP') ||
-                      String(o.id_operation).startsWith('CHEF')
-                  ).length
-                }
-              </span>
-              <span className="text-[10px] text-rose-500 mt-0.5 block">{t('utilisateurs.stats.responsables_sub')}</span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </div>
-        </div>
+          <GmaoKpiCard
+            title={t('utilisateurs.stats.responsables')}
+            value={
+              operations.filter(
+                (o) =>
+                  o.type_profil === 'RESPONSABLE' ||
+                  o.type_profil === 'CHEF' ||
+                  String(o.id_operation).startsWith('RESP') ||
+                  String(o.id_operation).startsWith('CHEF')
+              ).length
+            }
+            unit="cadres"
+            icon={ShieldCheck}
+            color="rose"
+            isActive={profileFilter === 'RESPONSABLE'}
+            onClick={() => setProfileFilter(profileFilter === 'RESPONSABLE' ? 'ALL' : 'RESPONSABLE')}
+            badgeText={t('utilisateurs.stats.responsables_sub')}
+            footerLabel="Gouvernance :"
+            footerValue="RMT • RZN • RPD • RMG"
+          />
+        </GmaoKpiGrid>
 
         {/* Filter and search controls - Fully responsive & styled */}
         <div className="relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">

@@ -9,6 +9,11 @@ import {
   FileSpreadsheet,
   Download,
   Loader2,
+  Wand2,
+  LayoutList,
+  Factory,
+  Wrench,
+  Calendar,
 } from 'lucide-react';
 import Action3DButton from '../../../components/common/Action3DButton';
 import PageHeaderIcon from '../../../components/common/PageHeaderIcon';
@@ -18,6 +23,7 @@ import { filterActiveMachines } from '../../../../utils/activeMachines';
 import { rankStockItemsByMachineBom } from '../../../../core/domain';
 import { isWarehousePart } from '../../../../core/domain/EntrepotItem';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
+import { WizardShell, useWizardFeature, type WizardProfile } from '../../../components/common/wizard';
 
 export default function TabPlanBuilder({
   machines = [],
@@ -323,11 +329,11 @@ export default function TabPlanBuilder({
     return sum;
   }, [taskList, includeGlobalMachineAction]);
 
-  // Handle Final Submission of the Plan
-  const handleGeneratePlan = (e) => {
-    e.preventDefault();
+  const { isEnabled: isWizardMode, setMode: setWizardMode } = useWizardFeature('preventive_plan');
+
+  // Handle Final Submission of the Plan (shared between Classic Form & Wizard)
+  const executeGeneratePlan = () => {
     if (!selectedMachineId) {
-      alert('Veuillez sélectionner une machine dans la liste.');
       return;
     }
 
@@ -367,7 +373,6 @@ export default function TabPlanBuilder({
     }
 
     if (finalTasks.length === 0) {
-      alert('Veuillez ajouter au moins une tâche préventive au plan.');
       return;
     }
 
@@ -393,6 +398,11 @@ export default function TabPlanBuilder({
     if (onNavigateToMainView) {
       onNavigateToMainView();
     }
+  };
+
+  const handleGeneratePlan = (e) => {
+    e.preventDefault();
+    executeGeneratePlan();
   };
 
   // Import Excel Handler
@@ -454,6 +464,518 @@ export default function TabPlanBuilder({
     }
   };
 
+  // SHARED SECTION 1: ÉQUIPEMENT & AFFECTATION
+  const step1EquipementSection = (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+          Machine Cible *
+        </label>
+        <select
+          required
+          value={selectedMachineId}
+          onChange={(e) => setSelectedMachineId(e.target.value)}
+          className="w-full px-3 py-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
+        >
+          <option value="">-- Sélectionner une Machine du Parc --</option>
+          {filterActiveMachines(machines).length > 0 ? (
+            filterActiveMachines(machines).map((m) => (
+              <option key={m.id_machine_registered || m.id || m.code_machine} value={m.code_machine || m.id_machine_registered}>
+                {m.code_machine || m.id_machine_registered} - {m.nom || m.designation || 'Machine'} ({m.id_zone || m.zone || 'Zone'})
+              </option>
+            ))
+          ) : (
+            <option value="" disabled>
+              -- Aucune machine active enregistrée dans le Parc --
+            </option>
+          )}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5">
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Zone Usine (Auto)
+          </label>
+          <select
+            value={targetZone}
+            onChange={(e) => setTargetZone(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+          >
+            <option value="">-- Sélectionner Zone --</option>
+            {zones.map((z) => {
+              const zName = z.id_zone || z.nom || z.code_zone || 'Zone';
+              return (
+                <option key={zName} value={zName}>
+                  {zName} {z.nom && z.nom !== zName ? `- ${z.nom}` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Technicien (Auto)
+          </label>
+          <select
+            value={targetTechnician}
+            onChange={(e) => setTargetTechnician(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 truncate cursor-pointer"
+          >
+            <option value="">-- Sélectionner Technicien --</option>
+            {technicians.map((t) => {
+              const tName = t.nom || t.name || 'Technicien';
+              return (
+                <option key={t.id_technician || t.id || tName} value={tName}>
+                  {tName} ({t.id_zone || t.zone || 'Usine'})
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+          Réf Plan Préventif (Norme / ISO)
+        </label>
+        <input
+          type="text"
+          value={planReference}
+          onChange={(e) => setPlanReference(e.target.value)}
+          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold"
+        />
+      </div>
+
+      {/* ACTION GLOBALE MACHINE TOGGLE */}
+      <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl space-y-2">
+        <label className="flex items-center gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={includeGlobalMachineAction}
+            onChange={(e) => setIncludeGlobalMachineAction(e.target.checked)}
+            className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+          />
+          <span className="text-xs font-black text-emerald-950">
+            Inclure Action Globale Bâti / Sécurité
+          </span>
+        </label>
+        <p className="text-[11px] text-emerald-800 leading-relaxed">
+          Applique une action globale (ex: Nettoyage complet N) à la machine sans la restreindre à un seul organe.
+        </p>
+        {includeGlobalMachineAction && (
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] text-slate-700 font-bold">Action :</span>
+            <select
+              value={globalActionCode}
+              onChange={(e) => setGlobalActionCode(e.target.value)}
+              className="px-2.5 py-1 text-xs font-bold bg-white border border-emerald-300 rounded-lg text-emerald-900 shadow-2xs"
+            >
+              <option value="N">N - Nettoyage Général & Bâti</option>
+              <option value="V">V - Vérification globale des sécurités</option>
+              <option value="C">C - Contrôle visuel d'ensemble</option>
+              <option value="R">R - Révision complète de la machine</option>
+            </select>
+          </div>
+        )}
+
+        <div className="pt-2 border-t border-emerald-200/60">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isGroupedIntervention}
+              onChange={(e) => setIsGroupedIntervention(e.target.checked)}
+              className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+            />
+            <span className="text-[11.5px] font-bold text-emerald-950">
+              Regrouper les composants sous le même Bon d'OT
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  // SHARED SECTION 2: COMPOSANTS & TÂCHES ASSOCIÉES
+  const step2OperationsSection = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="text-xs font-bold text-slate-600">
+          Opérations normalisées configurées : <strong className="font-mono text-indigo-700">{taskList.length}</strong> tâche(s)
+        </div>
+
+        {/* BOUTON AJOUTER COMPOSANT */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setComponentPickerOpen(!componentPickerOpen)}
+            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Ajouter un Composant</span>
+          </button>
+
+          {componentPickerOpen && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-30 space-y-2.5 max-h-96 overflow-y-auto">
+              {machineComponents.length > 0 && (
+                <div>
+                  <p className="text-[11px] font-black text-indigo-900 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                    <span>Composants de la Machine</span>
+                    <span className="text-[10px] px-1.5 py-0.2 bg-indigo-50 rounded text-indigo-700 font-mono font-bold">
+                      Entrepôt / Blueprints
+                    </span>
+                  </p>
+                  <div className="space-y-1 mb-2">
+                    {machineComponents.map((c, i) => (
+                      <button
+                        type="button"
+                        key={`mach-c-${i}`}
+                        onClick={() => handleAddComponentWithGuide(c.nom)}
+                        className="w-full text-left px-2.5 py-1.5 text-xs rounded-xl bg-indigo-50/60 hover:bg-indigo-100 text-indigo-950 font-bold flex items-center justify-between transition-colors cursor-pointer border border-indigo-200/60"
+                      >
+                        <span className="truncate">{c.nom}</span>
+                        <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-white text-indigo-700 font-mono">
+                          {c.source}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-[11px] font-black text-slate-800 uppercase tracking-wider mb-1.5">
+                  Guides Métier Standards :
+                </p>
+                <div className="max-h-36 overflow-y-auto space-y-1">
+                  {guides.map((g) => (
+                    <button
+                      type="button"
+                      key={g.id}
+                      onClick={() => handleAddComponentWithGuide(g.composant_nom)}
+                      className="w-full text-left px-2.5 py-1.5 text-xs rounded-lg hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <span className="font-semibold truncate">{g.composant_nom}</span>
+                      <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold shrink-0 ml-1">
+                        {(g.actions_liees || []).join('+')}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Nom personnalisé..."
+                  value={customComponentName}
+                  onChange={(e) => setCustomComponentName(e.target.value)}
+                  className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-xl"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAddComponentWithGuide(customComponentName)}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* LISTE DES TACHES EN COURS DE CONFIGURATION */}
+      {taskList.length === 0 ? (
+        <div className="text-center py-10 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
+          Sélectionnez une machine à l'étape 1 pour charger ses composants ou cliquez sur "Ajouter un Composant".
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+          {taskList.map((task) => (
+            <div
+              key={task.id_temp}
+              className="p-3 bg-slate-50 hover:bg-white border border-slate-200/90 hover:border-indigo-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all shadow-2xs"
+            >
+              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-900 font-mono font-black flex items-center justify-center shrink-0 border border-indigo-200">
+                  {task.action_code}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-slate-900 truncate">{task.composant}</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-slate-600 font-medium truncate">{task.type_intervention}</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 line-clamp-1">{task.consigne}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
+                {/* PDR Selector from Magasin Stock */}
+                <select
+                  value={task.pdr_ref || ''}
+                  onChange={(e) => handleUpdateTaskField(task.id_temp, 'pdr_ref', e.target.value)}
+                  className={`px-2 py-1 text-[11px] rounded-lg border font-mono ${
+                    task.pdr_ref
+                      ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
+                      : 'bg-white text-slate-500 border-slate-200'
+                  }`}
+                  title="Pièce de rechange requise (Stock PDR Magasin)"
+                >
+                  <option value="">-- Sans PDR --</option>
+                  {availablePdrList.map((p) => (
+                    <option key={p.ref} value={p.ref}>
+                      {p.ref} ({p.stockActuel > 0 ? `Stock: ${p.stockActuel}` : 'Rupture'})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Action Code selector */}
+                <select
+                  value={task.action_code}
+                  onChange={(e) => handleUpdateTaskField(task.id_temp, 'action_code', e.target.value)}
+                  className="px-2 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg text-slate-800"
+                >
+                  {actions.map((a) => (
+                    <option key={a.code} value={a.code}>
+                      {a.code} ({a.libelle})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Frequency selector */}
+                <select
+                  value={task.frequence}
+                  onChange={(e) => handleUpdateTaskField(task.id_temp, 'frequence', e.target.value)}
+                  className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700"
+                >
+                  <option value="Hebdo">Hebdo</option>
+                  <option value="Mensuel">Mensuel</option>
+                  <option value="Trimestriel">Trimestriel</option>
+                  <option value="Semestriel">Semestriel</option>
+                  <option value="Annuel">Annuel</option>
+                </select>
+
+                {/* Duration */}
+                <span className="text-[10.5px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg">
+                  {task.duree_estimee}
+                </span>
+
+                {/* Remove button */}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveTask(task.id_temp)}
+                  className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // SHARED SECTION 3: PROGRAMMATION, PÉRIODICITÉ & DÉCLENCHEURS
+  const step3ProgrammationSection = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
+            Semaine Cible (S1-S52)
+          </label>
+          <select
+            value={startWeek}
+            onChange={(e) => setStartWeek(e.target.value)}
+            className="w-full px-3 py-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 font-mono"
+          >
+            {Array.from({ length: 52 }, (_, i) => `S${i + 1}`).map((s) => (
+              <option key={s} value={s}>
+                Semaine {s}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
+            Date d'intervention
+          </label>
+          <input
+            type="date"
+            value={scheduledDate}
+            onChange={(e) => setScheduledDate(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
+            Fréquence Récurrente
+          </label>
+          <select
+            value={frequenceGlobale}
+            onChange={(e) => setFrequenceGlobale(e.target.value)}
+            className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="Hebdo">Hebdomadaire (Toutes les semaines)</option>
+            <option value="Mensuel">Mensuel (Toutes les 4 semaines)</option>
+            <option value="Trimestriel">Trimestriel (Toutes les 12 sem.)</option>
+            <option value="Semestriel">Semestriel (Toutes les 26 sem.)</option>
+            <option value="Annuel">Annuel</option>
+          </select>
+        </div>
+      </div>
+
+      {/* LOGIQUE INDUSTRIELLE (RECURRENCE GLISSANTE & COMPTEURS) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-indigo-50/50 border border-indigo-200/70 rounded-2xl">
+        <div>
+          <label className="block text-[10.5px] font-black text-indigo-950 uppercase tracking-wider mb-1">
+            Mode de Récurrence
+          </label>
+          <select
+            value={modeCalculRecurrence}
+            onChange={(e) => setModeCalculRecurrence(e.target.value)}
+            className="w-full px-3 py-2 text-xs font-bold bg-white border border-indigo-200 rounded-xl text-indigo-900"
+          >
+            <option value="FIXE">Planning Fixe (Calendrier calendaire figé)</option>
+            <option value="GLISSANT">Planning Glissant / Dynamique (Recalcul après réalisation)</option>
+          </select>
+          <p className="text-[10px] text-indigo-700 mt-1 leading-relaxed">
+            {modeCalculRecurrence === 'FIXE'
+              ? 'Les échéances restent ancrées aux semaines prévues du calendrier annuel.'
+              : 'Si la tâche est effectuée avec retard (ex: S3 au lieu de S1), la prochaine sera décalée à S7.'}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-[10.5px] font-black text-indigo-950 uppercase tracking-wider mb-1">
+            Type de Déclencheur
+          </label>
+          <select
+            value={typeDeclencheur}
+            onChange={(e) => setTypeDeclencheur(e.target.value)}
+            className="w-full px-3 py-2 text-xs font-bold bg-white border border-indigo-200 rounded-xl text-indigo-900"
+          >
+            <option value="CALENDRIER">Calendrier Périodique (Semaines / Mois)</option>
+            <option value="COMPTEUR">Compteur d'Usage (Heures / Cycles)</option>
+            <option value="HYBRIDE">Hybride (1er terme échu : Temps OU Compteur)</option>
+          </select>
+
+          {typeDeclencheur !== 'CALENDRIER' && (
+            <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-indigo-200/60">
+              <div>
+                <span className="text-[10px] font-bold text-indigo-900 block">Unité</span>
+                <select
+                  value={compteurUnite}
+                  onChange={(e) => setCompteurUnite(e.target.value)}
+                  className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg"
+                >
+                  <option value="Heures">Heures</option>
+                  <option value="Cycles">Cycles</option>
+                  <option value="Km">Km</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-indigo-900 block">Intervalle</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={compteurIntervalle}
+                  onChange={(e) => setCompteurIntervalle(e.target.value)}
+                  className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg font-bold"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-indigo-900 block">Index Actuel</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={compteurIndexActuel}
+                  onChange={(e) => setCompteurIndexActuel(e.target.value)}
+                  className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Récapitulatif rapide en bas de l'étape 3 */}
+      <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2 text-emerald-950 font-bold">
+          <Clock className="w-4 h-4 text-emerald-600" />
+          <span>
+            Charge estimée : <strong className="font-mono">{totalMinutes} min ({(totalMinutes / 60).toFixed(1)}h)</strong>
+          </span>
+        </div>
+        <span className="font-mono text-[11px] font-bold text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
+          {planReference || 'Réf Plan Auto'} • {startWeek} • {frequenceGlobale}
+        </span>
+      </div>
+    </div>
+  );
+
+  // PROFILE-DRIVEN WIZARD CONFIGURATION (3 ÉTAPES)
+  const preventiveWizardProfile: WizardProfile = {
+    id: 'preventive-plan-wizard',
+    title: 'Concepteur de Plan Préventif',
+    subtitle: 'Gammes & Périodicités GMAO',
+    themeColor: 'emerald',
+    submitLabel: 'Générer le Plan & Programmer',
+    onComplete: executeGeneratePlan,
+    steps: [
+      {
+        id: 'step-1-equipement',
+        title: 'Équipement Cible & Affectation',
+        subtitle: 'Sélectionnez la machine du parc pour détecter sa zone, son technicien et ses organes.',
+        badge: 'GAMME PM',
+        icon: Factory,
+        content: step1EquipementSection,
+        validate: () => {
+          if (!selectedMachineId) {
+            return 'Veuillez sélectionner une machine active du parc avant de continuer.';
+          }
+          return true;
+        },
+      },
+      {
+        id: 'step-2-operations',
+        title: 'Gamme d’Opérations & PDR',
+        subtitle: 'Configurez les composants, les codes actions (C/N/G/V) et les pièces de rechange associées.',
+        badge: `${taskList.length} OPÉRATION(S)`,
+        icon: Wrench,
+        content: step2OperationsSection,
+        validate: () => {
+          if (taskList.length === 0 && !includeGlobalMachineAction) {
+            return 'Veuillez ajouter au moins un composant/tâche ou activer l’action globale machine.';
+          }
+          return true;
+        },
+      },
+      {
+        id: 'step-3-programmation',
+        title: 'Périodicité, Déclencheur & Déploiement',
+        subtitle: 'Définissez la semaine cible, le mode de récurrence (Fixe/Glissant) et le déclencheur.',
+        badge: `${startWeek} • ${frequenceGlobale.toUpperCase()}`,
+        icon: Calendar,
+        content: step3ProgrammationSection,
+        validate: () => {
+          if (!selectedMachineId) {
+            return 'Machine cible manquante.';
+          }
+          if (taskList.length === 0 && !includeGlobalMachineAction) {
+            return 'Aucune tâche préventive à programmer.';
+          }
+          return true;
+        },
+      },
+    ],
+  };
+
   return (
     <div className="space-y-5">
       {/* Hidden file input for Excel */}
@@ -485,6 +1007,36 @@ export default function TabPlanBuilder({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-center">
+          {/* Switcher Mode Formulaire Classique ⇄ Assistant Wizard */}
+          <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/90 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setWizardMode(false)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                !isWizardMode
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Afficher la grille classique à 3 colonnes"
+            >
+              <LayoutList className="w-3.5 h-3.5" />
+              <span>Grille Classique</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setWizardMode(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                isWizardMode
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+              title="Activer l'assistant guidé étape par étape (Wizard)"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Assistant Wizard</span>
+            </button>
+          </div>
+
           {/* Duration summary */}
           <div className="px-3.5 py-2 rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center gap-2 text-xs font-bold text-slate-700 shadow-2xs">
             <Clock className="w-3.5 h-3.5 text-emerald-600" />
@@ -540,157 +1092,37 @@ export default function TabPlanBuilder({
         </div>
       )}
 
-      {/* FORMULAIRE PRINCIPAL DE CONCEPTION (Grid 3 colonnes) */}
-      <form onSubmit={handleGeneratePlan} className="space-y-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* COLONNE GAUCHE: IDENTIFICATION MACHINE & AUTOMATISME (STEP 1) */}
-          <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-            <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-              <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
-                1
-              </div>
-              <div>
-                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
-                  Équipement & Affectation
-                </h4>
-                <p className="text-[10.5px] text-slate-400">Détection automatique de la zone</p>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Machine Cible *
-              </label>
-              <select
-                required
-                value={selectedMachineId}
-                onChange={(e) => setSelectedMachineId(e.target.value)}
-                className="w-full px-3 py-2.5 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
-              >
-                <option value="">-- Sélectionner une Machine du Parc --</option>
-                {filterActiveMachines(machines).length > 0 ? (
-                  filterActiveMachines(machines).map((m) => (
-                    <option key={m.id_machine_registered || m.id || m.code_machine} value={m.code_machine || m.id_machine_registered}>
-                      {m.code_machine || m.id_machine_registered} - {m.nom || m.designation || 'Machine'} ({m.id_zone || m.zone || 'Zone'})
-                    </option>
-                  ))
-                ) : (
-                  <option value="" disabled>
-                    -- Aucune machine active enregistrée dans le Parc --
-                  </option>
-                )}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Zone Usine (Auto)
-                </label>
-                <select
-                  value={targetZone}
-                  onChange={(e) => setTargetZone(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="">-- Sélectionner Zone --</option>
-                  {zones.map((z) => {
-                    const zName = z.id_zone || z.nom || z.code_zone || 'Zone';
-                    return (
-                      <option key={zName} value={zName}>
-                        {zName} {z.nom && z.nom !== zName ? `- ${z.nom}` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Technicien (Auto)
-                </label>
-                <select
-                  value={targetTechnician}
-                  onChange={(e) => setTargetTechnician(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 truncate cursor-pointer"
-                >
-                  <option value="">-- Sélectionner Technicien --</option>
-                  {technicians.map((t) => {
-                    const tName = t.nom || t.name || 'Technicien';
-                    return (
-                      <option key={t.id_technician || t.id || tName} value={tName}>
-                        {tName} ({t.id_zone || t.zone || 'Usine'})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[10.5px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Réf Plan Préventif (Norme / ISO)
-              </label>
-              <input
-                type="text"
-                value={planReference}
-                onChange={(e) => setPlanReference(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono font-bold"
-              />
-            </div>
-
-            {/* ACTION GLOBALE MACHINE TOGGLE */}
-            <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/90 rounded-2xl space-y-2">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeGlobalMachineAction}
-                  onChange={(e) => setIncludeGlobalMachineAction(e.target.checked)}
-                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                />
-                <span className="text-xs font-black text-emerald-950">
-                  Inclure Action Globale Bâti / Sécurité
-                </span>
-              </label>
-              <p className="text-[11px] text-emerald-800 leading-relaxed">
-                Applique une action globale (ex: Nettoyage complet N) à la machine sans la restreindre à un seul organe.
-              </p>
-              {includeGlobalMachineAction && (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-[11px] text-slate-700 font-bold">Action :</span>
-                  <select
-                    value={globalActionCode}
-                    onChange={(e) => setGlobalActionCode(e.target.value)}
-                    className="px-2.5 py-1 text-xs font-bold bg-white border border-emerald-300 rounded-lg text-emerald-900 shadow-2xs"
-                  >
-                    <option value="N">N - Nettoyage Général & Bâti</option>
-                    <option value="V">V - Vérification globale des sécurités</option>
-                    <option value="C">C - Contrôle visuel d'ensemble</option>
-                    <option value="R">R - Révision complète de la machine</option>
-                  </select>
+      {/* MODE ASSISTANT WIZARD vs FORMULAIRE PRINCIPAL DE CONCEPTION (Grid 3 colonnes) */}
+      {isWizardMode ? (
+        <WizardShell
+          profile={preventiveWizardProfile}
+          layout="split"
+          className="min-h-[540px] max-h-[780px]"
+        />
+      ) : (
+        <form onSubmit={handleGeneratePlan} className="space-y-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            {/* COLONNE GAUCHE: IDENTIFICATION MACHINE & AUTOMATISME (STEP 1) */}
+            <div className="bg-white rounded-2xl p-5 md:p-6 border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
+              <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
+                <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  1
                 </div>
-              )}
-
-              <div className="pt-2 border-t border-emerald-200/60">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isGroupedIntervention}
-                    onChange={(e) => setIsGroupedIntervention(e.target.checked)}
-                    className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-                  />
-                  <span className="text-[11.5px] font-bold text-emerald-950">
-                    Regrouper les composants sous le même Bon d'OT
-                  </span>
-                </label>
+                <div>
+                  <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider">
+                    Équipement & Affectation
+                  </h4>
+                  <p className="text-[10.5px] text-slate-400">Détection automatique de la zone</p>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* COLONNE CENTRE & DROITE: TACHES DU PLAN ET GUIDE (STEP 2 & 3) */}
-          <div className="lg:col-span-2 bg-white rounded-2xl p-5 md:p-6 border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3 flex-wrap gap-2">
-                <div className="flex items-center gap-2.5">
+              {step1EquipementSection}
+            </div>
+
+            {/* COLONNE CENTRE & DROITE: TACHES DU PLAN ET GUIDE (STEP 2 & 3) */}
+            <div className="lg:col-span-2 bg-white rounded-2xl p-5 md:p-6 border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100 mb-3">
                   <div className="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-xs">
                     2
                   </div>
@@ -704,330 +1136,41 @@ export default function TabPlanBuilder({
                   </div>
                 </div>
 
-                {/* BOUTON AJOUTER COMPOSANT */}
-                <div className="relative">
+                {step2OperationsSection}
+              </div>
+
+              {/* OPTIONS DE PROGRAMMATION ET VALIDATION (STEP 3) */}
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                {step3ProgrammationSection}
+
+                {/* BOUTON GENERER LE PLAN */}
+                <div className="flex items-center justify-end gap-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={() => setComponentPickerOpen(!componentPickerOpen)}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs rounded-xl border border-emerald-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    onClick={() => {
+                      setSelectedMachineId('');
+                      setTaskList([]);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Ajouter un Composant</span>
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Réinitialiser</span>
                   </button>
 
-                  {componentPickerOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-3.5 z-30 space-y-2.5 max-h-96 overflow-y-auto">
-                      {machineComponents.length > 0 && (
-                        <div>
-                          <p className="text-[11px] font-black text-indigo-900 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                            <span>Composants de la Machine</span>
-                            <span className="text-[10px] px-1.5 py-0.2 bg-indigo-50 rounded text-indigo-700 font-mono font-bold">
-                              Entrepôt / Blueprints
-                            </span>
-                          </p>
-                          <div className="space-y-1 mb-2">
-                            {machineComponents.map((c, i) => (
-                              <button
-                                type="button"
-                                key={`mach-c-${i}`}
-                                onClick={() => handleAddComponentWithGuide(c.nom)}
-                                className="w-full text-left px-2.5 py-1.5 text-xs rounded-xl bg-indigo-50/60 hover:bg-indigo-100 text-indigo-950 font-bold flex items-center justify-between transition-colors cursor-pointer border border-indigo-200/60"
-                              >
-                                <span className="truncate">{c.nom}</span>
-                                <span className="text-[9.5px] px-1.5 py-0.5 rounded bg-white text-indigo-700 font-mono">
-                                  {c.source}
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <p className="text-[11px] font-black text-slate-800 uppercase tracking-wider mb-1.5">
-                          Guides Métier Standards :
-                        </p>
-                        <div className="max-h-36 overflow-y-auto space-y-1">
-                          {guides.map((g) => (
-                            <button
-                              type="button"
-                              key={g.id}
-                              onClick={() => handleAddComponentWithGuide(g.composant_nom)}
-                              className="w-full text-left px-2.5 py-1.5 text-xs rounded-lg hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 flex items-center justify-between transition-colors cursor-pointer"
-                            >
-                              <span className="font-semibold truncate">{g.composant_nom}</span>
-                              <span className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold shrink-0 ml-1">
-                                {(g.actions_liees || []).join('+')}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-slate-100 flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="Nom personnalisé..."
-                          value={customComponentName}
-                          onChange={(e) => setCustomComponentName(e.target.value)}
-                          className="flex-1 px-2.5 py-1.5 text-xs border border-slate-200 rounded-xl"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleAddComponentWithGuide(customComponentName)}
-                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl cursor-pointer"
-                        >
-                          OK
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* LISTE DES TACHES EN COURS DE CONFIGURATION */}
-              {taskList.length === 0 ? (
-                <div className="text-center py-10 bg-slate-50/70 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
-                  Sélectionnez une machine à gauche pour charger ses composants ou cliquez sur "Ajouter un Composant".
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                  {taskList.map((task) => (
-                    <div
-                      key={task.id_temp}
-                      className="p-3 bg-slate-50 hover:bg-white border border-slate-200/90 hover:border-indigo-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all shadow-2xs"
-                    >
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-900 font-mono font-black flex items-center justify-center shrink-0 border border-indigo-200">
-                          {task.action_code}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 truncate">{task.composant}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-slate-600 font-medium truncate">{task.type_intervention}</span>
-                          </div>
-                          <p className="text-[10.5px] text-slate-400 line-clamp-1">{task.consigne}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
-                        {/* PDR Selector from Magasin Stock */}
-                        <select
-                          value={task.pdr_ref || ''}
-                          onChange={(e) => handleUpdateTaskField(task.id_temp, 'pdr_ref', e.target.value)}
-                          className={`px-2 py-1 text-[11px] rounded-lg border font-mono ${
-                            task.pdr_ref
-                              ? 'bg-amber-50 text-amber-900 border-amber-300 font-bold'
-                              : 'bg-white text-slate-500 border-slate-200'
-                          }`}
-                          title="Pièce de rechange requise (Stock PDR Magasin)"
-                        >
-                          <option value="">-- Sans PDR --</option>
-                          {availablePdrList.map((p) => (
-                            <option key={p.ref} value={p.ref}>
-                              {p.ref} ({p.stockActuel > 0 ? `Stock: ${p.stockActuel}` : 'Rupture'})
-                            </option>
-                          ))}
-                        </select>
-
-                        {/* Action Code selector */}
-                        <select
-                          value={task.action_code}
-                          onChange={(e) => handleUpdateTaskField(task.id_temp, 'action_code', e.target.value)}
-                          className="px-2 py-1 text-xs font-bold bg-white border border-slate-200 rounded-lg text-slate-800"
-                        >
-                          {actions.map((a) => (
-                            <option key={a.code} value={a.code}>
-                              {a.code} ({a.libelle})
-                            </option>
-                          ))}
-                        </select>
-
-                        {/* Frequency selector */}
-                        <select
-                          value={task.frequence}
-                          onChange={(e) => handleUpdateTaskField(task.id_temp, 'frequence', e.target.value)}
-                          className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700"
-                        >
-                          <option value="Hebdo">Hebdo</option>
-                          <option value="Mensuel">Mensuel</option>
-                          <option value="Trimestriel">Trimestriel</option>
-                          <option value="Semestriel">Semestriel</option>
-                          <option value="Annuel">Annuel</option>
-                        </select>
-
-                        {/* Duration */}
-                        <span className="text-[10.5px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg">
-                          {task.duree_estimee}
-                        </span>
-
-                        {/* Remove button */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTask(task.id_temp)}
-                          className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* OPTIONS DE PROGRAMMATION ET VALIDATION (STEP 3) */}
-            <div className="pt-4 border-t border-slate-100 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
-                    Semaine Cible (S1-S52)
-                  </label>
-                  <select
-                    value={startWeek}
-                    onChange={(e) => setStartWeek(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 font-mono"
+                  <button
+                    type="submit"
+                    disabled={!selectedMachineId || (taskList.length === 0 && !includeGlobalMachineAction)}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
                   >
-                    {Array.from({ length: 52 }, (_, i) => `S${i + 1}`).map((s) => (
-                      <option key={s} value={s}>
-                        Semaine {s}
-                      </option>
-                    ))}
-                  </select>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Générer le Plan & Programmer les Tâches</span>
+                  </button>
                 </div>
-
-                <div>
-                  <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
-                    Date d'intervention
-                  </label>
-                  <input
-                    type="date"
-                    value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10.5px] font-black text-slate-600 uppercase tracking-wider mb-1">
-                    Fréquence Récurrente
-                  </label>
-                  <select
-                    value={frequenceGlobale}
-                    onChange={(e) => setFrequenceGlobale(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="Hebdo">Hebdomadaire (Toutes les semaines)</option>
-                    <option value="Mensuel">Mensuel (Toutes les 4 semaines)</option>
-                    <option value="Trimestriel">Trimestriel (Toutes les 12 sem.)</option>
-                    <option value="Semestriel">Semestriel (Toutes les 26 sem.)</option>
-                    <option value="Annuel">Annuel</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* LOGIQUE INDUSTRIELLE (RECURRENCE GLISSANTE & COMPTEURS) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-indigo-50/50 border border-indigo-200/70 rounded-2xl">
-                <div>
-                  <label className="block text-[10.5px] font-black text-indigo-950 uppercase tracking-wider mb-1">
-                    Mode de Récurrence
-                  </label>
-                  <select
-                    value={modeCalculRecurrence}
-                    onChange={(e) => setModeCalculRecurrence(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-indigo-200 rounded-xl text-indigo-900"
-                  >
-                    <option value="FIXE">Planning Fixe (Calendrier calendaire figé)</option>
-                    <option value="GLISSANT">Planning Glissant / Dynamique (Recalcul après réalisation)</option>
-                  </select>
-                  <p className="text-[10px] text-indigo-700 mt-1 leading-relaxed">
-                    {modeCalculRecurrence === 'FIXE' 
-                      ? 'Les échéances restent ancrées aux semaines prévues du calendrier annuel.' 
-                      : 'Si la tâche est effectuée avec retard (ex: S3 au lieu de S1), la prochaine sera décalée à S7.'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-[10.5px] font-black text-indigo-950 uppercase tracking-wider mb-1">
-                    Type de Déclencheur
-                  </label>
-                  <select
-                    value={typeDeclencheur}
-                    onChange={(e) => setTypeDeclencheur(e.target.value)}
-                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-indigo-200 rounded-xl text-indigo-900"
-                  >
-                    <option value="CALENDRIER">Calendrier Périodique (Semaines / Mois)</option>
-                    <option value="COMPTEUR">Compteur d'Usage (Heures / Cycles)</option>
-                    <option value="HYBRIDE">Hybride (1er terme échu : Temps OU Compteur)</option>
-                  </select>
-
-                  {typeDeclencheur !== 'CALENDRIER' && (
-                    <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-indigo-200/60">
-                      <div>
-                        <span className="text-[10px] font-bold text-indigo-900 block">Unité</span>
-                        <select
-                          value={compteurUnite}
-                          onChange={(e) => setCompteurUnite(e.target.value)}
-                          className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg"
-                        >
-                          <option value="Heures">Heures</option>
-                          <option value="Cycles">Cycles</option>
-                          <option value="Km">Km</option>
-                        </select>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-indigo-900 block">Intervalle</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={compteurIntervalle}
-                          onChange={(e) => setCompteurIntervalle(e.target.value)}
-                          className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg font-bold"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold text-indigo-900 block">Index Actuel</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={compteurIndexActuel}
-                          onChange={(e) => setCompteurIndexActuel(e.target.value)}
-                          className="w-full px-1.5 py-1 text-xs bg-white border border-indigo-200 rounded-lg"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* BOUTON GENERER LE PLAN */}
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMachineId('');
-                    setTaskList([]);
-                  }}
-                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Réinitialiser</span>
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={!selectedMachineId || taskList.length === 0}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Générer le Plan & Programmer les Tâches</span>
-                </button>
               </div>
             </div>
           </div>
-        </div>
-      </form>
+        </form>
+      )}
     </div>
   );
 }

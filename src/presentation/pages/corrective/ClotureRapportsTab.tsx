@@ -28,6 +28,7 @@ import { CorrectiveCalculationService } from '../../../domain/corrective/service
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -161,16 +162,23 @@ export default function ClotureRapportsTab({
     let totalMinutes = 0;
     let countMinutes = 0;
     scopedInterventions.forEach((i) => {
+      const rawTimeStr = i.temps_intervention_calc || i.temps_intervention;
       const minutes =
         i.temps_minutes ||
-        (i.temps_intervention_calc ? CorrectiveCalculationService.timeStringToMinutes(i.temps_intervention_calc) : 0);
+        i.temps_intervention_mins ||
+        (rawTimeStr ? CorrectiveCalculationService.timeStringToMinutes(rawTimeStr) : 0);
       if (minutes > 0) {
         totalMinutes += minutes;
         countMinutes++;
       }
     });
 
-    const avgMinutes = countMinutes > 0 ? Math.round(totalMinutes / countMinutes) : 45;
+    const avgMinutes =
+      countMinutes > 0
+        ? Math.round(totalMinutes / countMinutes)
+        : scopedInterventions.length > 0
+        ? 45
+        : 0;
     const mttrFormatted = CorrectiveCalculationService.minutesToTimeString(avgMinutes);
 
     return { total, closed, arret, withPdr, avgMinutes, mttrFormatted };
@@ -489,142 +497,62 @@ export default function ClotureRapportsTab({
   return (
     <div className="space-y-6">
       {/* 1. Top 4 Primary KPI Metrics Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <GmaoKpiGrid columns={4}>
         {/* Total Interventions Clôturées */}
-        <div
+        <GmaoKpiCard
+          title={t('corrective.cloture.closed_summary')}
+          value={kpiStats.total}
+          unit="interventions"
+          icon={CheckCircle}
+          color="emerald"
+          valueColored={false}
+          isActive={selectedStatus === 'ALL'}
           onClick={() => setSelectedStatus('ALL')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            selectedStatus === 'ALL'
-              ? 'border-emerald-400 ring-2 ring-emerald-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-emerald-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(16,185,129,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                {t('corrective.cloture.closed_summary')}
-              </span>
-              <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-emerald-600 transition-colors">
-                {kpiStats.total}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">interventions</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-mono">
-                Feuille Rapport Excel
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Clôturées à 100% :</span>
-            <span className="font-mono font-bold text-emerald-700">{kpiStats.closed} validées</span>
-          </div>
-        </div>
+          badgeText="Feuille Rapport Excel"
+          footerLabel="Clôturées à 100% :"
+          footerValue={`${kpiStats.closed} validées`}
+        />
 
         {/* MTTR Moyen */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 hover:border-blue-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(59,130,246,0.12)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                MTTR Moyen (Maintenabilité)
-              </span>
-              <Clock className="w-6 h-6 text-blue-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-blue-600 font-mono tracking-tight">
-                {kpiStats.mttrFormatted}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">/ panne</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono">
-                {kpiStats.avgMinutes} min temps ouvré
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Formule :</span>
-            <span className="font-mono font-bold text-blue-700">Σ Temps / N</span>
-          </div>
-        </div>
+        <GmaoKpiCard
+          title="MTTR Moyen (Maintenabilité)"
+          value={kpiStats.mttrFormatted}
+          unit="/ panne"
+          icon={Clock}
+          color="blue"
+          badgeText={`${kpiStats.avgMinutes} min temps ouvré`}
+          footerLabel="Formule :"
+          footerValue="Σ Temps / N"
+        />
 
         {/* Pannes avec Arrêt Machine */}
-        <div
+        <GmaoKpiCard
+          title="Arrêts Machine Traités"
+          value={kpiStats.arret}
+          unit="arrêts"
+          icon={AlertTriangle}
+          color="purple"
+          isActive={selectedStatus === 'ARRET'}
           onClick={() => setSelectedStatus('ARRET')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            selectedStatus === 'ARRET'
-              ? 'border-purple-400 ring-2 ring-purple-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-purple-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(168,85,247,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Arrêts Machine Traités
-              </span>
-              <AlertTriangle className="w-6 h-6 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-purple-600 font-mono tracking-tight">
-                {kpiStats.arret}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">arrêts</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-mono">
-                Col H Excel
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Impact sur parc :</span>
-            <span className="font-mono font-bold text-purple-700">
-              {kpiStats.total ? Math.round((kpiStats.arret / kpiStats.total) * 100) : 0}%
-            </span>
-          </div>
-        </div>
+          badgeText="Col H Excel"
+          footerLabel="Impact sur parc :"
+          footerValue={`${kpiStats.total ? Math.round((kpiStats.arret / kpiStats.total) * 100) : 0}%`}
+        />
 
         {/* Total PDR Consommées */}
-        <div
+        <GmaoKpiCard
+          title="PDR Utilisées & Sorties"
+          value={kpiStats.withPdr}
+          unit="pièces"
+          icon={Package}
+          color="cyan"
+          isActive={selectedStatus === 'PDR'}
           onClick={() => setSelectedStatus('PDR')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            selectedStatus === 'PDR'
-              ? 'border-cyan-400 ring-2 ring-cyan-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-cyan-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(6,182,212,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                PDR Utilisées & Sorties
-              </span>
-              <Package className="w-6 h-6 text-cyan-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-cyan-600 font-mono tracking-tight">
-                {kpiStats.withPdr}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">pièces</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-cyan-700 font-bold bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200 font-mono">
-                Col L/M/N Excel
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Déstockage :</span>
-            <span className="font-mono font-bold text-cyan-700">Automatique</span>
-          </div>
-        </div>
-      </div>
+          badgeText="Col L/M/N Excel"
+          footerLabel="Déstockage :"
+          footerValue="Automatique"
+        />
+      </GmaoKpiGrid>
 
       {/* 2. Filter & Search Card (Unified Mature Light UI Design System) */}
       <div className="relative z-30 bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">

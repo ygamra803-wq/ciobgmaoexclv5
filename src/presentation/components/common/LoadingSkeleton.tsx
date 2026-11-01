@@ -14,41 +14,68 @@ import FamilySkeletonView from '../../pages/machines/components/FamilySkeletonVi
 import TemplatesSkeletonView from '../../pages/machines/components/TemplatesSkeletonView';
 import BlueprintMachineSkeletonView from '../../pages/machines/components/BlueprintMachineSkeletonView';
 import {
+  PreventiveSkeleton,
+  CorrectiveSkeleton,
+  CompGroupSkeleton,
+  PreventiveReferentielSkeleton,
+  CatalogueDonneesSkeleton,
+  ValidationCenterSkeleton,
+  ExecutiveReportSkeleton,
   SortieRapideSkeleton,
   GenericTableSkeleton,
   GuidanceCardsTableSkeleton,
   SettingsSkeleton,
 } from './PageSkeletons';
 
-export default function LoadingSkeleton({ currentTab = 'dashboard' }) {
+/**
+ * Central Skeleton Dispatcher
+ * Maps every L1, L2, and Special route in AppRouter to its exact pixel-matched skeleton.
+ */
+export default function LoadingSkeleton({ currentTab = 'dashboard' }: { currentTab?: string }) {
+  if (currentTab.startsWith('corrective') && currentTab !== 'corrective_referentiel') {
+    return <CorrectiveSkeleton subTab={currentTab === 'corrective' ? 'corrective_di' : currentTab} />;
+  }
+
   switch (currentTab) {
+    // ─── Special Pages ───
     case 'dashboard':
       return <DashboardSkeleton />;
+    case 'validation_center':
+      return <ValidationCenterSkeleton />;
+    case 'shift_weekly_report':
+    case 'executive_report':
+      return <ExecutiveReportSkeleton />;
+    case 'settings':
+      return <SettingsSkeleton />;
+    case 'nexus':
+    case 'guide':
+      return <GenericTableSkeleton />;
+
+    // ─── L1 Operational Pages ───
     case 'stock':
       return <StockSkeletonView />;
-    case 'types':
-      return <TypeSkeletonView />;
-    case 'designations':
-      return <DesignationSkeletonView />;
+    case 'machines':
+      return <MachinesRegisteredSkeletonView />;
+    case 'preventive':
+      return <PreventiveSkeleton />;
+    case 'entrepot':
+    case 'warehouse':
+      return <EntrepotSkeletonView />;
+    case 'zones':
+      return <ZonesSkeletonView />;
     case 'utilisateurs':
     case 'operations':
     case 'technicians':
       return <UtilisateurSkeletonView />;
-    case 'zones':
-      return <ZonesSkeletonView />;
-    case 'entrepot':
-    case 'warehouse':
-      return <EntrepotSkeletonView />;
-    case 'part_types':
-      return <PartTypeSkeletonView />;
-    case 'part_designations':
-      return <PartDesignationSkeletonView />;
-    case 'comp_families':
-      return <CompFamilySkeletonView />;
-    case 'comp_templates':
-      return <CompTemplateSkeletonView />;
-    case 'machines':
-      return <MachinesRegisteredSkeletonView />;
+
+    // ─── L2 Engineering, Referentiel & Operational Sub-Pages ───
+    case 'sortie':
+    case 'mouvements':
+      return <SortieRapideSkeleton />;
+    case 'types':
+      return <TypeSkeletonView />;
+    case 'designations':
+      return <DesignationSkeletonView />;
     case 'families':
       return <FamilySkeletonView />;
     case 'templates':
@@ -56,21 +83,24 @@ export default function LoadingSkeleton({ currentTab = 'dashboard' }) {
       return <TemplatesSkeletonView />;
     case 'blueprints':
       return <BlueprintMachineSkeletonView />;
-    case 'sortie':
-    case 'mouvements':
-      return <SortieRapideSkeleton />;
+    case 'preventive_referentiel':
+      return <PreventiveReferentielSkeleton />;
+    case 'corrective_referentiel':
+      return <CatalogueDonneesSkeleton />;
+    case 'comp_groups':
+      return <CompGroupSkeleton />;
+    case 'comp_families':
+      return <CompFamilySkeletonView />;
+    case 'comp_templates':
+      return <CompTemplateSkeletonView />;
+    case 'part_types':
+      return <PartTypeSkeletonView />;
+    case 'part_designations':
+      return <PartDesignationSkeletonView />;
     case 'diagnostics':
       return <GuidanceCardsTableSkeleton />;
-    case 'nexus':
-    case 'guide':
-      return <GenericTableSkeleton />;
-    case 'settings':
-      return <SettingsSkeleton />;
+
     default:
-      return <DashboardSkeleton />;
+      return <GenericTableSkeleton />;
   }
 }
-
-
-
-

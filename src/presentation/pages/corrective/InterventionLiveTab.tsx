@@ -12,7 +12,10 @@ import {
   Trash2,
   Cpu,
   AlertTriangle,
+  Wand2,
+  LayoutList,
 } from 'lucide-react';
+import { WizardShell, useWizardFeature, type WizardProfile } from '../../components/common/wizard';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { stockIndexStore } from '../../../application/StockIndexStore';
 import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
@@ -48,6 +51,8 @@ export default function InterventionLiveTab({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const { isEnabled: isWizardMode, setEnabled: setWizardMode } =
+    useWizardFeature('corrective_bt');
   const blueprints = useGmaoStore((s) => s.blueprints);
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const storeSubmitForValidation = useGmaoStore((s) => s.handleSubmitInterventionForValidation);
@@ -378,9 +383,8 @@ export default function InterventionLiveTab({
     }));
   };
 
-  // Handle Clôture / Validation Submit (Maker-Checker V1+V2)
-  const handleClotureSubmit = (e) => {
-    e.preventDefault();
+  // Shared core execution logic for both Classic Form & Wizard
+  const executeClotureOrSubmit = () => {
     if (!activeIntervention) {
       showToast?.('Aucune intervention active sélectionnée', 'warning');
       return;
@@ -495,6 +499,12 @@ export default function InterventionLiveTab({
     }
   };
 
+  // Handle Clôture / Validation Submit (Maker-Checker V1+V2)
+  const handleClotureSubmit = (e) => {
+    e.preventDefault();
+    executeClotureOrSubmit();
+  };
+
   if (!activeIntervention) {
     return (
       <div className="bg-white rounded-3xl border border-slate-200/90 p-12 text-center shadow-xs space-y-4 max-w-2xl mx-auto">
@@ -518,6 +528,547 @@ export default function InterventionLiveTab({
       </div>
     );
   }
+
+  // ============================================================================
+  // SHARED SECTIONS FOR CLASSIC FORM & 3-STEP WIZARD (ZERO DUPLICATION)
+  // ============================================================================
+  const step1DiagnosticSection = (
+    <div className="space-y-4">
+      {/* Travail à faire & Suggestions d'Atelier */}
+      <div className="space-y-2">
+        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          Travail à Faire / Action Réalisée (Col K) <span className="text-rose-500">*</span>
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            required
+            value={formState.action_realisee || formState.travail_a_faire}
+            onChange={(e) => {
+              const val = e.target.value;
+              setFormState((p) => ({ ...p, action_realisee: val, travail_a_faire: val }));
+              setTravailSearch(val);
+              setShowTravailSuggestions(true);
+            }}
+            onFocus={() => setShowTravailSuggestions(true)}
+            placeholder="Ex: Démonter vis sans fin, vérification circuit de commande, changement huile..."
+            className="w-full py-2.5 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-amber-400 focus:outline-hidden transition"
+          />
+
+          {/* Dropdown Suggestions */}
+          {showTravailSuggestions && filteredSuggestions.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white rounded-2xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto p-2 space-y-1">
+              <div className="text-[10px] font-extrabold uppercase text-slate-400 px-2 py-1">
+                Suggestions Base Usine (143 phrases types) :
+              </div>
+              {filteredSuggestions.map((item, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => {
+                    setFormState((p) => ({ ...p, action_realisee: item, travail_a_faire: item }));
+                    setTravailSearch(item);
+                    setShowTravailSuggestions(false);
+                  }}
+                  className="p-2 text-xs rounded-lg hover:bg-amber-50 text-slate-800 cursor-pointer font-medium transition"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Actions fréquentes rapides en mode Wizard */}
+      {isWizardMode && smartAnomalyActions.length > 0 && (
+        <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-1.5">
+          <span className="text-[10.5px] font-black uppercase tracking-wider text-amber-950 block">
+            Solutions rapides associées à « {activeIntervention.anomalie} » :
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {smartAnomalyActions.map((act, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() =>
+                  setFormState((p) => ({ ...p, action_realisee: act, travail_a_faire: act }))
+                }
+                className="px-2.5 py-1 rounded-lg bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 font-semibold text-[11px] cursor-pointer transition shadow-2xs"
+              >
+                + {act}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const step2PdrSection = (
+    <div className="p-4 rounded-2xl bg-cyan-50/50 border border-cyan-200/80 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-black uppercase tracking-wider text-cyan-950 flex items-center gap-1.5">
+          <Package className="w-4 h-4 text-cyan-700" />
+          Pièce de Rechange Utilisée (Col L) & Sortie Magasin
+        </span>
+        <span className="text-[10px] font-mono text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full font-bold">
+          Liaison Stock_Actuel
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Search PDR in Stock */}
+        <div className="relative sm:col-span-2">
+          <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+            Rechercher Article PDR au Magasin
+          </label>
+          <input
+            type="text"
+            value={pdrSearch}
+            onChange={(e) => {
+              setPdrSearch(e.target.value);
+              setShowPdrList(true);
+            }}
+            onFocus={() => setShowPdrList(true)}
+            placeholder="Ex: ROULEMENT, COURROIE, CAPTEUR..."
+            className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden transition"
+          />
+
+          {showPdrList && matchedStockItems.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white rounded-2xl border border-cyan-200 shadow-xl max-h-48 overflow-y-auto p-2 space-y-1">
+              {matchedStockItems.map((item) => {
+                const dispo = item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0;
+                return (
+                  <div
+                    key={item.ref || item.code_article}
+                    onClick={() => handleSelectPdr(item)}
+                    className="p-2 text-xs rounded-lg hover:bg-cyan-50 text-slate-800 cursor-pointer font-medium transition flex items-center justify-between"
+                  >
+                    <div className="min-w-0 pr-2 flex items-center gap-1.5 flex-wrap">
+                      {item.isBomRecommended && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono font-bold text-[10px] shrink-0">
+                          ★ {item.bomSourceLabel || 'BOM'}
+                        </span>
+                      )}
+                      <span className="font-mono font-bold text-cyan-900">{item.ref || item.code_article}</span>
+                      <span className="text-slate-600 truncate">{item.designation || item.nom}</span>
+                    </div>
+                    <span
+                      className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border shrink-0 ${
+                        dispo > 0
+                          ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                          : 'text-rose-700 bg-rose-50 border-rose-200'
+                      }`}
+                    >
+                      Dispo: {dispo}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Real-time Selected PDR Confirmation & Stock Badge */}
+          {formState.pdr_ref && (
+            <div className="mt-2 p-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
+                  {formState.pdr_ref}
+                </span>
+                <span className="font-semibold text-slate-800 truncate">
+                  {formState.pdr_designation}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded border ${
+                    Number(formState.pdr_quantite) > Number(formState.pdr_stock_actuel)
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  }`}
+                >
+                  Stock: {formState.pdr_stock_actuel ?? 0}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormState((prev) => ({
+                      ...prev,
+                      pdr_ref: '',
+                      pdr_designation: '',
+                      pdr_stock_actuel: undefined,
+                    }));
+                    setPdrSearch('');
+                  }}
+                  className="text-[11px] text-slate-400 hover:text-rose-600 font-bold underline cursor-pointer"
+                >
+                  Effacer
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quantité Sortie + Bouton Ajouter Multi-PDR */}
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+            Quantité Utilisée
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={formState.pdr_quantite}
+              onChange={(e) => setFormState({ ...formState, pdr_quantite: Number(e.target.value) })}
+              className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+            />
+            <button
+              type="button"
+              onClick={handleAddPieceToList}
+              disabled={!formState.pdr_ref}
+              title="Ajouter cette pièce à la liste multi-PDR du Bon de Travail"
+              className="px-3 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Ajouter</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Multi-PDR Consumed List (pieces_utilisees) */}
+      {Array.isArray(formState.pieces_utilisees) && formState.pieces_utilisees.length > 0 && (
+        <div className="p-3 rounded-xl bg-white/90 border border-cyan-200 space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-bold text-cyan-950">
+            <span>Pièces sélectionnées pour sortie magasin ({formState.pieces_utilisees.length}) :</span>
+            <span className="font-mono text-cyan-700">
+              Total Qte: {formState.pieces_utilisees.reduce((s: number, p: any) => s + Number(p.quantite || 0), 0)}
+            </span>
+          </div>
+          <div className="space-y-1.5">
+            {formState.pieces_utilisees.map((piece: any) => (
+              <div
+                key={piece.ref}
+                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-cyan-50/70 border border-cyan-200/80 text-xs"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
+                    {piece.ref}
+                  </span>
+                  <span className="font-medium text-slate-700 truncate">
+                    {piece.designation}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono font-black text-cyan-900 bg-cyan-100 px-2 py-0.5 rounded">
+                    × {piece.quantite} {piece.unite || 'Pièce'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePieceFromList(piece.ref)}
+                    className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer transition"
+                    title="Retirer de la liste"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        {/* Marque */}
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+            Marque de la Pièce (Col M)
+          </label>
+          <input
+            type="text"
+            value={formState.marque}
+            onChange={(e) => setFormState({ ...formState, marque: e.target.value })}
+            placeholder="Ex: SKF, Schneider, Festo, Omron..."
+            className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+          />
+        </div>
+
+        {/* État de la Pièce */}
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+            État Pièce (Col N)
+          </label>
+          <select
+            value={formState.etat_piece}
+            onChange={(e) => setFormState({ ...formState, etat_piece: e.target.value })}
+            className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+          >
+            <option value="Neuve">Neuve (Neuf usine)</option>
+            <option value="Occasion">Occasion (Reconditionnée)</option>
+            <option value="Réparée">Réparée sur place</option>
+          </select>
+        </div>
+
+        {/* N° Bon Saisi par le Technicien (Optionnel — V2) */}
+        <div>
+          <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+            N° Bon Magasin (Optionnel · Terrain)
+          </label>
+          <input
+            type="text"
+            value={formState.num_bon_saisi_par_tech || ''}
+            onChange={(e) =>
+              setFormState({ ...formState, num_bon_saisi_par_tech: e.target.value })
+            }
+            placeholder="Ex: BS-2026-0412 (pour contrôle)"
+            className="w-full py-2 px-3 text-xs font-mono font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+          />
+        </div>
+      </div>
+    </div>
+  );
+
+  const step3LifecycleSection = (
+    <div className="space-y-4">
+      {/* Organe / Composant (Cycle de vie) & Part (Localisation Structurelle — Sans déstockage) */}
+      {(machineComponents.length > 0 ||
+        machineParts.length > 0 ||
+        formState.id_composant ||
+        formState.id_part ||
+        isWizardMode) && (
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
+              <Cpu className="w-3.5 h-3.5 text-cyan-700" />
+              <span>Organe / Composant (Cycle de vie)</span>
+            </label>
+            <select
+              value={formState.id_composant || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                const found = machineComponents.find(
+                  (c: any) => String(c.id_warehouse_item || c.id || c.id_item) === val
+                );
+                setFormState({
+                  ...formState,
+                  id_composant: val,
+                  nom_composant: found
+                    ? String(found.designation || found.nom_composant || found.nom || val)
+                    : '',
+                });
+              }}
+              className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+            >
+              <option value="">— Aucun composant spécifique —</option>
+              {machineComponents.map((comp: any) => {
+                const cId = comp.id_warehouse_item || comp.id || comp.id_item;
+                return (
+                  <option key={cId} value={cId}>
+                    {cId} · {comp.designation || comp.nom || 'Composant'} ({comp.status || 'En service'})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          {formState.id_composant && (
+            <div>
+              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+                État du Composant après clôture
+              </label>
+              <select
+                value={formState.statut_composant_cloture || 'En service'}
+                onChange={(e) =>
+                  setFormState({ ...formState, statut_composant_cloture: e.target.value })
+                }
+                className="w-full py-2 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+              >
+                <option value="En service">En service (Opérationnel sur machine)</option>
+                <option value="En réparation">En réparation (Déposé atelier / révision)</option>
+                <option value="Hors service">Hors service (À réformer / remplacer)</option>
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
+              Localisation / Part Structurelle (Sans déstockage)
+            </label>
+            <select
+              value={formState.id_part || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                const found = machineParts.find(
+                  (p: any) => String(p.id_warehouse_item || p.id || p.id_item) === val
+                );
+                setFormState({
+                  ...formState,
+                  id_part: val,
+                  nom_part: found
+                    ? String(found.designation_part || found.designation || found.nom || val)
+                    : '',
+                });
+              }}
+              className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-cyan-400 focus:outline-hidden"
+            >
+              <option value="">— Aucun site structurel —</option>
+              {machineParts.map((part: any) => {
+                const pId = part.id_warehouse_item || part.id || part.id_item;
+                return (
+                  <option key={pId} value={pId}>
+                    {pId} · {part.designation_part || part.designation || part.nom || 'Part'}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Synthèse finale en mode Wizard */}
+      {isWizardMode && (
+        <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-emerald-900">
+              Synthèse du Bon de Travail ({activeIntervention.num_bt || 'BT'})
+            </span>
+            <span className="font-mono font-bold text-emerald-800 bg-white px-2.5 py-0.5 rounded border border-emerald-200">
+              Temps Ouvré : {liveWorkingTime.formatted}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11.5px] text-slate-700">
+            <div>
+              <span className="text-slate-500">Machine : </span>
+              <strong className="font-mono text-slate-900">{activeIntervention.code_machine}</strong>
+            </div>
+            <div>
+              <span className="text-slate-500">PDR déclarées : </span>
+              <strong className="font-mono text-slate-900">
+                {Array.isArray(formState.pieces_utilisees) && formState.pieces_utilisees.length > 0
+                  ? `${formState.pieces_utilisees.length} réf.`
+                  : formState.pdr_ref
+                  ? `1 réf. (${formState.pdr_ref})`
+                  : 'Aucune PDR'}
+              </strong>
+            </div>
+            <div className="sm:col-span-2 truncate">
+              <span className="text-slate-500">Action Réalisée (Col K) : </span>
+              <strong className="text-slate-900">
+                {formState.action_realisee || formState.travail_a_faire || 'Non renseignée'}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const pauseAndSuspendButtons = (
+    <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+      <button
+        type="button"
+        onClick={() => {
+          setActiveLiveId(null);
+          showToast?.(`Intervention ${activeIntervention.num_bt || ''} mise en pause.`, 'info');
+          onNavigateToTab?.('corrective_bt');
+        }}
+        className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-bold text-xs text-slate-700 cursor-pointer w-full sm:w-auto"
+      >
+        Mettre en Pause / Quitter
+      </button>
+
+      {typeof onUpdateIntervention === 'function' && (
+        <button
+          type="button"
+          onClick={() => {
+            onUpdateIntervention(activeIntervention.id, {
+              ...formState,
+              statut: 'EN_ATTENTE_PDR',
+            });
+            setActiveLiveId(null);
+            showToast?.(
+              `BT ${activeIntervention.num_bt || activeIntervention.id} suspendu en attente de pièce (EN_ATTENTE_PDR).`,
+              'warning'
+            );
+            onNavigateToTab?.('corrective_bt');
+          }}
+          className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 font-bold text-xs text-amber-900 cursor-pointer w-full sm:w-auto"
+        >
+          Suspendre (Attente PDR)
+        </button>
+      )}
+    </div>
+  );
+
+  const correctiveBtWizardProfile: WizardProfile = {
+    id: 'corrective-bt-cloture-wizard',
+    title: isTechUser
+      ? 'Assistant Déclaration Terrain (BT)'
+      : 'Assistant Clôture Bon de Travail (BT)',
+    subtitle: `Machine ${activeIntervention.code_machine} • ${activeIntervention.num_bt || 'BT'} • Colonnes Excel K → N`,
+    themeColor: isTechUser ? 'purple' : 'emerald',
+    finishLabel: isTechUser
+      ? 'Soumettre pour Validation Responsable'
+      : "Clôturer l'Intervention & Valider le Rapport",
+    onFinish: async () => {
+      executeClotureOrSubmit();
+    },
+    steps: [
+      {
+        id: 'step-1-diagnostic',
+        code: 'ÉTAPE 01',
+        title: 'Action Réalisée (Col K)',
+        description:
+          "Renseignez le diagnostic technique et le travail effectivement réalisé sur l'équipement.",
+        icon: Wrench,
+        content: step1DiagnosticSection,
+        validate: () => {
+          const actionText = String(
+            formState.action_realisee || formState.travail_a_faire || ''
+          ).trim();
+          if (!actionText) {
+            return {
+              isValid: false,
+              severity: 'critical',
+              message:
+                "Veuillez décrire le travail réalisé (Col K) avant de passer à l'étape des pièces de rechange.",
+            };
+          }
+          return { isValid: true };
+        },
+      },
+      {
+        id: 'step-2-pdr',
+        code: 'ÉTAPE 02',
+        title: 'Pièces PDR & Magasin',
+        description:
+          'Sélectionnez les pièces de rechange consommées (Col L), leur marque (Col M), leur état (Col N) et le N° de bon.',
+        icon: Package,
+        content: step2PdrSection,
+        validate: () => {
+          if (
+            formState.pdr_ref &&
+            Number(formState.pdr_quantite) > Number(formState.pdr_stock_actuel ?? Infinity)
+          ) {
+            return {
+              isValid: true,
+              severity: 'warning',
+              message: `Attention : la quantité saisie (${formState.pdr_quantite}) dépasse le stock disponible (${formState.pdr_stock_actuel ?? 0}).`,
+            };
+          }
+          return { isValid: true };
+        },
+      },
+      {
+        id: 'step-3-cloture',
+        code: 'ÉTAPE 03',
+        title: 'Organe & Validation',
+        description:
+          "Mettez à jour l'état de l'organe ou de la part structurelle et validez la clôture du Bon de Travail.",
+        icon: CheckCircle,
+        content: step3LifecycleSection,
+        validate: () => ({ isValid: true }),
+      },
+    ],
+  };
 
   return (
     <div className="space-y-6">
@@ -671,14 +1222,11 @@ export default function InterventionLiveTab({
         </div>
       )}
 
-      {/* 2. Clôture Form & PDR Consumption Card */}
-      <form
-        onSubmit={handleClotureSubmit}
-        className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] space-y-6"
-      >
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* 2. Clôture Form & PDR Consumption Card (Toggleable Classic ⇄ Wizard) */}
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs shrink-0">
               <FileCheck className="w-4 h-4 text-emerald-700" />
             </div>
             <div>
@@ -694,417 +1242,82 @@ export default function InterventionLiveTab({
               </p>
             </div>
           </div>
-        </div>
 
-        {/* Travail à faire & Suggestions d'Atelier */}
-        <div className="space-y-2">
-          <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-            Travail à Faire / Action Réalisée (Col K) <span className="text-rose-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              required
-              value={formState.action_realisee || formState.travail_a_faire}
-              onChange={(e) => {
-                const val = e.target.value;
-                setFormState((p) => ({ ...p, action_realisee: val, travail_a_faire: val }));
-                setTravailSearch(val);
-                setShowTravailSuggestions(true);
-              }}
-              onFocus={() => setShowTravailSuggestions(true)}
-              placeholder="Ex: Démonter vis sans fin, vérification circuit de commande, changement huile..."
-              className="w-full py-2.5 px-3.5 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-amber-400 focus:outline-hidden transition"
-            />
-
-            {/* Dropdown Suggestions */}
-            {showTravailSuggestions && filteredSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white rounded-2xl border border-slate-200 shadow-xl max-h-48 overflow-y-auto p-2 space-y-1">
-                <div className="text-[10px] font-extrabold uppercase text-slate-400 px-2 py-1">
-                  Suggestions Base Usine (143 phrases types) :
-                </div>
-                {filteredSuggestions.map((item, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      setFormState((p) => ({ ...p, action_realisee: item, travail_a_faire: item }));
-                      setTravailSearch(item);
-                      setShowTravailSuggestions(false);
-                    }}
-                    className="p-2 text-xs rounded-lg hover:bg-amber-50 text-slate-800 cursor-pointer font-medium transition"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* PDR (Pièce de Rechange) Autocomplete & Details */}
-        <div className="p-4 rounded-2xl bg-cyan-50/50 border border-cyan-200/80 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-cyan-950 flex items-center gap-1.5">
-              <Package className="w-4 h-4 text-cyan-700" />
-              Pièce de Rechange Utilisée (Col L) & Sortie Magasin
-            </span>
-            <span className="text-[10px] font-mono text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full font-bold">
-              Liaison Stock_Actuel
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Search PDR in Stock */}
-            <div className="relative sm:col-span-2">
-              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                Rechercher Article PDR au Magasin
-              </label>
-              <input
-                type="text"
-                value={pdrSearch}
-                onChange={(e) => {
-                  setPdrSearch(e.target.value);
-                  setShowPdrList(true);
-                }}
-                onFocus={() => setShowPdrList(true)}
-                placeholder="Ex: ROULEMENT, COURROIE, CAPTEUR..."
-                className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden transition"
-              />
-
-              {showPdrList && matchedStockItems.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white rounded-2xl border border-cyan-200 shadow-xl max-h-48 overflow-y-auto p-2 space-y-1">
-                  {matchedStockItems.map((item) => {
-                    const dispo = item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0;
-                    return (
-                      <div
-                        key={item.ref || item.code_article}
-                        onClick={() => handleSelectPdr(item)}
-                        className="p-2 text-xs rounded-lg hover:bg-cyan-50 text-slate-800 cursor-pointer font-medium transition flex items-center justify-between"
-                      >
-                        <div className="min-w-0 pr-2 flex items-center gap-1.5 flex-wrap">
-                          {item.isBomRecommended && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono font-bold text-[10px] shrink-0">
-                              ★ {item.bomSourceLabel || 'BOM'}
-                            </span>
-                          )}
-                          <span className="font-mono font-bold text-cyan-900">{item.ref || item.code_article}</span>
-                          <span className="text-slate-600 truncate">{item.designation || item.nom}</span>
-                        </div>
-                        <span className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border shrink-0 ${
-                          dispo > 0 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
-                        }`}>
-                          Dispo: {dispo}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Real-time Selected PDR Confirmation & Stock Badge */}
-              {formState.pdr_ref && (
-                <div className="mt-2 p-2.5 rounded-xl bg-cyan-50/70 border border-cyan-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
-                      {formState.pdr_ref}
-                    </span>
-                    <span className="font-semibold text-slate-800 truncate">
-                      {formState.pdr_designation}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded border ${
-                      Number(formState.pdr_quantite) > Number(formState.pdr_stock_actuel)
-                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                        : 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                    }`}>
-                      Stock: {formState.pdr_stock_actuel ?? 0}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFormState((prev) => ({
-                          ...prev,
-                          pdr_ref: '',
-                          pdr_designation: '',
-                          pdr_stock_actuel: undefined,
-                        }));
-                        setPdrSearch('');
-                      }}
-                      className="text-[11px] text-slate-400 hover:text-rose-600 font-bold underline cursor-pointer"
-                    >
-                      Effacer
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Quantité Sortie + Bouton Ajouter Multi-PDR */}
-            <div>
-              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                Quantité Utilisée
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  value={formState.pdr_quantite}
-                  onChange={(e) => setFormState({ ...formState, pdr_quantite: Number(e.target.value) })}
-                  className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddPieceToList}
-                  disabled={!formState.pdr_ref}
-                  title="Ajouter cette pièce à la liste multi-PDR du Bon de Travail"
-                  className="px-3 py-2 rounded-xl bg-cyan-700 hover:bg-cyan-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold text-xs transition cursor-pointer shrink-0 inline-flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Ajouter</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Multi-PDR Consumed List (pieces_utilisees) */}
-          {Array.isArray(formState.pieces_utilisees) && formState.pieces_utilisees.length > 0 && (
-            <div className="p-3 rounded-xl bg-white/90 border border-cyan-200 space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-bold text-cyan-950">
-                <span>Pièces sélectionnées pour sortie magasin ({formState.pieces_utilisees.length}) :</span>
-                <span className="font-mono text-cyan-700">
-                  Total Qte: {formState.pieces_utilisees.reduce((s: number, p: any) => s + Number(p.quantite || 0), 0)}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {formState.pieces_utilisees.map((piece: any) => (
-                  <div
-                    key={piece.ref}
-                    className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-cyan-50/70 border border-cyan-200/80 text-xs"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
-                        {piece.ref}
-                      </span>
-                      <span className="font-medium text-slate-700 truncate">
-                        {piece.designation}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="font-mono font-black text-cyan-900 bg-cyan-100 px-2 py-0.5 rounded">
-                        × {piece.quantite} {piece.unite || 'Pièce'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemovePieceFromList(piece.ref)}
-                        className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer transition"
-                        title="Retirer de la liste"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-            {/* Marque */}
-            <div>
-              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                Marque de la Pièce (Col M)
-              </label>
-              <input
-                type="text"
-                value={formState.marque}
-                onChange={(e) => setFormState({ ...formState, marque: e.target.value })}
-                placeholder="Ex: SKF, Schneider, Festo, Omron..."
-                className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-              />
-            </div>
-
-            {/* État de la Pièce */}
-            <div>
-              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                État Pièce (Col N)
-              </label>
-              <select
-                value={formState.etat_piece}
-                onChange={(e) => setFormState({ ...formState, etat_piece: e.target.value })}
-                className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-              >
-                <option value="Neuve">Neuve (Neuf usine)</option>
-                <option value="Occasion">Occasion (Reconditionnée)</option>
-                <option value="Réparée">Réparée sur place</option>
-              </select>
-            </div>
-
-            {/* N° Bon Saisi par le Technicien (Optionnel — V2) */}
-            <div>
-              <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                N° Bon Magasin (Optionnel · Terrain)
-              </label>
-              <input
-                type="text"
-                value={formState.num_bon_saisi_par_tech || ''}
-                onChange={(e) =>
-                  setFormState({ ...formState, num_bon_saisi_par_tech: e.target.value })
-                }
-                placeholder="Ex: BS-2026-0412 (pour contrôle)"
-                className="w-full py-2 px-3 text-xs font-mono font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-              />
-            </div>
-          </div>
-
-          {/* Organe / Composant (Cycle de vie) & Part (Localisation Structurelle — Sans déstockage) */}
-          {(machineComponents.length > 0 ||
-            machineParts.length > 0 ||
-            formState.id_composant ||
-            formState.id_part) && (
-            <div className="pt-3 border-t border-cyan-200/70 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1 flex items-center gap-1">
-                  <Cpu className="w-3.5 h-3.5 text-cyan-700" />
-                  <span>Organe / Composant (Cycle de vie)</span>
-                </label>
-                <select
-                  value={formState.id_composant || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const found = machineComponents.find(
-                      (c: any) => String(c.id_warehouse_item || c.id || c.id_item) === val
-                    );
-                    setFormState({
-                      ...formState,
-                      id_composant: val,
-                      nom_composant: found
-                        ? String(found.designation || found.nom_composant || found.nom || val)
-                        : '',
-                    });
-                  }}
-                  className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-                >
-                  <option value="">— Aucun composant spécifique —</option>
-                  {machineComponents.map((comp: any) => {
-                    const cId = comp.id_warehouse_item || comp.id || comp.id_item;
-                    return (
-                      <option key={cId} value={cId}>
-                        {cId} · {comp.designation || comp.nom || 'Composant'} ({comp.status || 'En service'})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              {formState.id_composant && (
-                <div>
-                  <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                    État du Composant après clôture
-                  </label>
-                  <select
-                    value={formState.statut_composant_cloture || 'En service'}
-                    onChange={(e) =>
-                      setFormState({ ...formState, statut_composant_cloture: e.target.value })
-                    }
-                    className="w-full py-2 px-3 text-xs font-bold rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-                  >
-                    <option value="En service">En service (Opérationnel sur machine)</option>
-                    <option value="En réparation">En réparation (Déposé atelier / révision)</option>
-                    <option value="Hors service">Hors service (À réformer / remplacer)</option>
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-[10.5px] font-bold text-slate-600 uppercase mb-1">
-                  Localisation / Part Structurelle (Sans déstockage)
-                </label>
-                <select
-                  value={formState.id_part || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    const found = machineParts.find(
-                      (p: any) => String(p.id_warehouse_item || p.id || p.id_item) === val
-                    );
-                    setFormState({
-                      ...formState,
-                      id_part: val,
-                      nom_part: found
-                        ? String(found.designation_part || found.designation || found.nom || val)
-                        : '',
-                    });
-                  }}
-                  className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-cyan-200 bg-white focus:border-cyan-400 focus:outline-hidden"
-                >
-                  <option value="">— Aucun site structurel —</option>
-                  {machineParts.map((part: any) => {
-                    const pId = part.id_warehouse_item || part.id || part.id_item;
-                    return (
-                      <option key={pId} value={pId}>
-                        {pId} · {part.designation_part || part.designation || part.nom || 'Part'}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modal / Form Submit Buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
-          <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+          {/* Mode Switcher: Formulaire Classique ⇄ Assistant Wizard */}
+          <div
+            className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/90 shadow-2xs self-start sm:self-auto shrink-0"
+            role="group"
+            aria-label="Mode de clôture BT"
+          >
             <button
               type="button"
-              onClick={() => {
-                setActiveLiveId(null);
-                showToast?.(`Intervention ${activeIntervention.num_bt || ''} mise en pause.`, 'info');
-                onNavigateToTab?.('corrective_bt');
-              }}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-100 font-bold text-xs text-slate-700 cursor-pointer w-full sm:w-auto"
+              onClick={() => setWizardMode(false)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                !isWizardMode
+                  ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
             >
-              Mettre en Pause / Quitter
+              <LayoutList className="w-3.5 h-3.5 text-slate-600" />
+              <span>Formulaire Classique</span>
             </button>
 
-            {typeof onUpdateIntervention === 'function' && (
-              <button
-                type="button"
-                onClick={() => {
-                  onUpdateIntervention(activeIntervention.id, {
-                    ...formState,
-                    statut: 'EN_ATTENTE_PDR',
-                  });
-                  setActiveLiveId(null);
-                  showToast?.(
-                    `BT ${activeIntervention.num_bt || activeIntervention.id} suspendu en attente de pièce (EN_ATTENTE_PDR).`,
-                    'warning'
-                  );
-                  onNavigateToTab?.('corrective_bt');
-                }}
-                className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 font-bold text-xs text-amber-900 cursor-pointer w-full sm:w-auto"
-              >
-                Suspendre (Attente PDR)
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setWizardMode(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isWizardMode
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-500 hover:text-emerald-700'
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Assistant Wizard</span>
+            </button>
           </div>
-
-          <button
-            type="submit"
-            data-testid="live-submit-btn"
-            className={`px-6 py-3 rounded-xl text-white font-bold text-xs transition cursor-pointer shadow-lg active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto ${
-              isTechUser
-                ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/25'
-                : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
-            }`}
-          >
-            {isTechUser ? <ShieldCheck className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-            <span>
-              {isTechUser
-                ? 'Soumettre pour Validation Responsable (Sans déstockage)'
-                : "Clôturer l'Intervention & Valider le Rapport"}
-            </span>
-          </button>
         </div>
-      </form>
+
+        {isWizardMode ? (
+          <div className="space-y-4">
+            <WizardShell
+              profile={correctiveBtWizardProfile}
+              layout="split"
+              className="min-h-[480px] max-h-[760px]"
+            />
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              {pauseAndSuspendButtons}
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleClotureSubmit} className="space-y-6">
+            {step1DiagnosticSection}
+            {step2PdrSection}
+            {step3LifecycleSection}
+
+            {/* Modal / Form Submit Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-100">
+              {pauseAndSuspendButtons}
+
+              <button
+                type="submit"
+                data-testid="live-submit-btn"
+                className={`px-6 py-3 rounded-xl text-white font-bold text-xs transition cursor-pointer shadow-lg active:scale-95 flex items-center justify-center gap-2 w-full sm:w-auto ${
+                  isTechUser
+                    ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-600/25'
+                    : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/25'
+                }`}
+              >
+                {isTechUser ? <ShieldCheck className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                <span>
+                  {isTechUser
+                    ? 'Soumettre pour Validation Responsable (Sans déstockage)'
+                    : "Clôturer l'Intervention & Valider le Rapport"}
+                </span>
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

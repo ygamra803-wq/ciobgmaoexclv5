@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { SkeletonKpiGrid } from './skeleton/GmaoSkeletonPrimitives';
 
 /**
  * DashboardSkeleton
@@ -41,56 +42,16 @@ function DashboardSkeletonComponent() {
         </div>
       </div>
 
-      {/* ─── 2. Top Primary KPI Metrics Grid (Mirroring DashboardKPIs.jsx 4 Cards) ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Articles au Catalogue */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div className="space-y-2 flex-1">
-            <div className="h-3 w-28 rounded shimmer-wave" />
-            <div className="h-8 w-20 rounded-lg shimmer-wave" />
-            <div className="h-3 w-32 rounded shimmer-wave" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-            <div className="w-6 h-6 rounded-lg shimmer-wave" />
-          </div>
-        </div>
-
-        {/* KPI 2: Unités Physiques en Stock */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div className="space-y-2 flex-1">
-            <div className="h-3 w-28 rounded shimmer-wave" />
-            <div className="h-8 w-24 rounded-lg shimmer-wave" />
-            <div className="h-3 w-28 rounded shimmer-wave" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
-            <div className="w-6 h-6 rounded-lg shimmer-wave" />
-          </div>
-        </div>
-
-        {/* KPI 3: Seuils Critiques & Ruptures */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div className="space-y-2 flex-1">
-            <div className="h-3 w-32 rounded shimmer-wave" />
-            <div className="h-8 w-16 rounded-lg shimmer-wave" />
-            <div className="h-3 w-32 rounded shimmer-wave" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-            <div className="w-6 h-6 rounded-lg shimmer-wave" />
-          </div>
-        </div>
-
-        {/* KPI 4: Disponibilité Parc Machines */}
-        <div className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
-          <div className="space-y-2 flex-1">
-            <div className="h-3 w-32 rounded shimmer-wave" />
-            <div className="h-8 w-20 rounded-lg shimmer-wave" />
-            <div className="h-3 w-32 rounded shimmer-wave" />
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0">
-            <div className="w-6 h-6 rounded-lg shimmer-wave" />
-          </div>
-        </div>
-      </div>
+      {/* ─── 2. Top Primary KPI Metrics Grid (Mirroring 4-Tier GmaoKpiCard in DashboardKPIs.tsx) ─── */}
+      <SkeletonKpiGrid
+        columns={4}
+        cards={[
+          { titleW: 'w-32', valueW: 'w-16', unitW: 'w-16', badgeW: 'w-28', footerLeftW: 'w-24', footerRightW: 'w-20' },
+          { titleW: 'w-36', valueW: 'w-20', unitW: 'w-14', badgeW: 'w-32', footerLeftW: 'w-18', footerRightW: 'w-28' },
+          { titleW: 'w-36', valueW: 'w-14', unitW: 'w-16', badgeW: 'w-28', footerLeftW: 'w-28', footerRightW: 'w-16' },
+          { titleW: 'w-36', valueW: 'w-16', unitW: 'w-20', badgeW: 'w-28', footerLeftW: 'w-20', footerRightW: 'w-20' },
+        ]}
+      />
 
       {/* ─── 3. Procurement & Purchase Orders Tracking Center (Lines 434-645) ─── */}
       <div className="bg-white rounded-3xl border border-amber-200 shadow-xs p-5 md:p-6 space-y-4">

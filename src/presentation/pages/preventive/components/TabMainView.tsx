@@ -29,6 +29,7 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../../components/common/GmaoKpiCard';
 import { useI18n } from '../../../../i18n/I18nContext';
 import PrintWorkOrderModal from './PrintWorkOrderModal';
 import SystemGeneralRoundModal from './SystemGeneralRoundModal';
@@ -881,146 +882,87 @@ export default function TabMainView({
         </div>
       )}
 
-      {/* 3D TACTILE KPI CARDS BAR */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
+      {/* UNIFIED 4-TIER LIGHT EXCEL KPI CARDS BAR (5-COLUMN) */}
+      <GmaoKpiGrid columns={5}>
         {/* Card 1: Total Tasks */}
-        <div 
+        <GmaoKpiCard
+          title={t('preventive.kpis.total_program', 'Total Programme')}
+          value={stats.total}
+          unit="tâches"
+          icon={Calendar}
+          color="indigo"
+          valueColored={false}
+          isActive={selectedStatus === 'ALL'}
           onClick={() => setSelectedStatus('ALL')}
-          className={`bg-white rounded-2xl p-4 border transition-all duration-300 cursor-pointer relative overflow-hidden group shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 ${
-            selectedStatus === 'ALL' ? 'border-indigo-400 ring-2 ring-indigo-500/20 bg-indigo-50/20' : 'border-slate-200/90'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-slate-500">
-              {t('preventive.kpis.total_program', 'Total Programme')}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shadow-2xs group-hover:scale-110 transition-transform">
-              <Calendar className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-slate-900 font-mono tracking-tight">
-              {stats.total}
-            </span>
-            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
-              {t('preventive.kpis.weeks_range', 'S1-S52')}
-            </span>
-          </div>
-          <p className="text-[10.5px] text-slate-400 mt-1 truncate">
-            {t('preventive.kpis.registered_machines', { count: Math.max(0, machineList.length - 1) })}
-          </p>
-        </div>
+          badgeText={t('preventive.kpis.weeks_range', 'S1-S52')}
+          footerLabel="Parc couvert :"
+          footerValue={t('preventive.kpis.registered_machines', {
+            count: Math.max(0, machineList.length - 1),
+          })}
+        />
 
         {/* Card 2: À Faire */}
-        <div 
+        <GmaoKpiCard
+          title={t('preventive.kpis.to_do', 'À Réaliser')}
+          value={stats.aFaire}
+          unit="tâches"
+          icon={Clock}
+          color="blue"
+          isActive={selectedStatus === 'À faire'}
           onClick={() => setSelectedStatus(selectedStatus === 'À faire' ? 'ALL' : 'À faire')}
-          className={`bg-white rounded-2xl p-4 border transition-all duration-300 cursor-pointer relative overflow-hidden group shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 ${
-            selectedStatus === 'À faire' ? 'border-blue-400 ring-2 ring-blue-500/20 bg-blue-50/20' : 'border-slate-200/90'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-blue-700">
-              {t('preventive.kpis.to_do', 'À Réaliser')}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shadow-2xs group-hover:scale-110 transition-transform">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-blue-900 font-mono tracking-tight">
-              {stats.aFaire}
-            </span>
-            <span className="text-[11px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-md">
-              {t('preventive.kpis.planned', 'Planifiées')}
-            </span>
-          </div>
-          <p className="text-[10.5px] text-slate-400 mt-1">
-            {t('preventive.kpis.waiting_execution', 'En attente d\'exécution')}
-          </p>
-        </div>
+          badgeText={t('preventive.kpis.planned', 'Planifiées')}
+          footerLabel="Statut :"
+          footerValue={t('preventive.kpis.waiting_execution', "En attente d'exécution")}
+        />
 
         {/* Card 3: Fait & Conforme */}
-        <div 
+        <GmaoKpiCard
+          title={t('preventive.kpis.done_compliant', 'Fait & Conforme')}
+          value={stats.fait}
+          unit="validées"
+          icon={CheckCircle2}
+          color="emerald"
+          isActive={selectedStatus === 'Fait'}
           onClick={() => setSelectedStatus(selectedStatus === 'Fait' ? 'ALL' : 'Fait')}
-          className={`bg-white rounded-2xl p-4 border transition-all duration-300 cursor-pointer relative overflow-hidden group shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 ${
-            selectedStatus === 'Fait' ? 'border-emerald-400 ring-2 ring-emerald-500/20 bg-emerald-50/20' : 'border-slate-200/90'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-emerald-700">
-              {t('preventive.kpis.done_compliant', 'Fait & Conforme')}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs group-hover:scale-110 transition-transform">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-emerald-900 font-mono tracking-tight">
-              {stats.fait}
-            </span>
-            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-md">
-              {stats.complianceRate}%
-            </span>
-          </div>
-          <div className="w-full bg-emerald-100 h-1.5 rounded-full mt-1.5 overflow-hidden">
-            <div 
-              className="bg-emerald-600 h-full rounded-full transition-all duration-500" 
-              style={{ width: `${stats.complianceRate}%` }} 
-            />
-          </div>
-        </div>
+          badgeText={`${stats.complianceRate}% conforme`}
+          footerLabel="Taux conformité :"
+          footerValue={`${stats.complianceRate}%`}
+          progressBarPercent={stats.complianceRate}
+        />
 
         {/* Card 4: En Retard / Alertes */}
-        <div 
+        <GmaoKpiCard
+          title={t('preventive.kpis.overdue', 'En Retard')}
+          value={stats.enRetard}
+          unit="retards"
+          icon={AlertTriangle}
+          color="rose"
+          isActive={selectedStatus === 'En retard'}
           onClick={() => setSelectedStatus(selectedStatus === 'En retard' ? 'ALL' : 'En retard')}
-          className={`bg-white rounded-2xl p-4 border transition-all duration-300 cursor-pointer relative overflow-hidden group shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 ${
-            selectedStatus === 'En retard' ? 'border-rose-400 ring-2 ring-rose-500/20 bg-rose-50/20' : 'border-slate-200/90'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-rose-700">
-              {t('preventive.kpis.overdue', 'En Retard')}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700 shadow-2xs group-hover:scale-110 transition-transform">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-2xl font-black text-rose-900 font-mono tracking-tight">
-              {stats.enRetard}
-            </span>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${stats.enRetard > 0 ? 'bg-rose-100 text-rose-800 animate-pulse' : 'bg-slate-100 text-slate-500'}`}>
-              {stats.enRetard > 0 ? t('preventive.kpis.action_required', 'Action Requise') : t('preventive.kpis.none', 'Aucun')}
-            </span>
-          </div>
-          <p className="text-[10.5px] text-slate-400 mt-1">
-            {t('preventive.kpis.trigger_wo', 'Déclenchement BT possible')}
-          </p>
-        </div>
+          badgeText={
+            stats.enRetard > 0
+              ? t('preventive.kpis.action_required', 'Action Requise')
+              : t('preventive.kpis.none', 'Aucun')
+          }
+          pulseBadge={stats.enRetard > 0}
+          footerLabel="Escalade :"
+          footerValue={t('preventive.kpis.trigger_wo', 'Déclenchement BT')}
+        />
 
         {/* Card 5: Budget PDR */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.12)] hover:-translate-y-0.5 transition-all duration-300 col-span-2 lg:col-span-1 group">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-black tracking-wider uppercase text-amber-700">
-              {t('preventive.kpis.pdr_budget', 'Budget PDR Réalisé')}
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shadow-2xs group-hover:scale-110 transition-transform">
-              <DollarSign className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-2 flex items-baseline justify-between">
-            <span className="text-xl font-black text-slate-900 font-mono tracking-tight">
-              {stats.totalCost.toFixed(2)} <span className="text-xs font-normal text-slate-500">DT</span>
-            </span>
-            <span className="text-[10.5px] font-bold text-amber-800 bg-amber-100/70 px-2 py-0.5 rounded-md">
-              {t('preventive.kpis.parts', 'Pièces')}
-            </span>
-          </div>
-          <p className="text-[10.5px] text-slate-400 mt-1 truncate">
-            {t('preventive.kpis.cumulative_cost', 'Coût cumulé préventif')}
-          </p>
-        </div>
-      </div>
+        <GmaoKpiCard
+          title={t('preventive.kpis.pdr_budget', 'Budget PDR Réalisé')}
+          value={stats.totalCost.toFixed(2)}
+          unit="DT"
+          icon={DollarSign}
+          color="amber"
+          valueColored={false}
+          badgeText={t('preventive.kpis.parts', 'Pièces')}
+          footerLabel="Valorisation :"
+          footerValue={t('preventive.kpis.cumulative_cost', 'Coût cumulé préventif')}
+          className="col-span-2 lg:col-span-1"
+        />
+      </GmaoKpiGrid>
 
       {/* FILTER TOOLBAR CARD (Tactile Elevation & CustomSelect Dropdowns) */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">

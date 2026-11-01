@@ -38,6 +38,7 @@ import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import TablePaginationCard from '../../components/common/TablePaginationCard';
 import IndustrialFilterCard, { FilterField, FilterSearchInput } from '../../components/common/IndustrialFilterCard';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import ComponentsTable from './components/ComponentsTable';
 import PartsTable from './components/PartsTable';
 import { useTranslation } from '../../../i18n/I18nContext';
@@ -1224,119 +1225,76 @@ export default function EntrepotView({
         </div>
       </div>
 
-      {/* 2. Top Metric Cards (Interactive KPI Filter Bar) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* 2. Top Metric Cards (Unified 4-Tier Light Excel KPI Filter Bar) */}
+      <GmaoKpiGrid columns={4}>
         {/* Card 1: Total Global */}
-        <div
+        <GmaoKpiCard
+          title={t('entrepot.stats.global_inventory')}
+          value={kpis.total}
+          unit="éléments"
+          icon={Warehouse}
+          color="teal"
+          valueColored={false}
+          isActive={activeKpiFilter === 'ALL' && currentNatureFilter === 'ALL'}
           onClick={() => {
             setActiveKpiFilter('ALL');
             changeNatureFilter('ALL');
           }}
-          className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between ${
-            activeKpiFilter === 'ALL' && currentNatureFilter === 'ALL'
-              ? 'border-teal-500 ring-2 ring-teal-100 bg-teal-50/20'
-              : 'border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-              {t('entrepot.stats.global_inventory')}
-            </span>
-            <span className="text-2xl font-black text-slate-900 mt-0.5 block font-mono">
-              {kpis.total}
-            </span>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              {t('entrepot.stats.global_sub')}
-            </span>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0 border border-teal-200/60">
-            <Warehouse className="w-5 h-5 text-teal-700" />
-          </div>
-        </div>
+          badgeText={t('entrepot.stats.global_sub')}
+          footerLabel="Feuille Entrepôt :"
+          footerValue="Vue complète"
+        />
 
         {/* Card 2: Components (Ensembles / Sub-systems) */}
-        <div
+        <GmaoKpiCard
+          title={t('entrepot.stats.components_title')}
+          value={kpis.components}
+          unit="ensembles"
+          icon={CubeIcon}
+          color="blue"
+          isActive={isComponentNature(currentNatureFilter) || isComponentNature(activeKpiFilter)}
           onClick={() => {
             setActiveKpiFilter('COMPONENT');
             changeNatureFilter('COMPONENT');
           }}
-          className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between ${
-            isComponentNature(currentNatureFilter) || isComponentNature(activeKpiFilter)
-              ? 'border-blue-500 ring-2 ring-blue-100 bg-blue-50/20'
-              : 'border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
-              {t('entrepot.stats.components_title')}
-            </span>
-            <span className="text-2xl font-black text-blue-700 mt-0.5 block font-mono">
-              {kpis.components}
-            </span>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              {t('entrepot.stats.components_sub')}
-            </span>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 border border-blue-200/60">
-            <CubeIcon className="w-5 h-5 text-blue-700" />
-          </div>
-        </div>
+          badgeText={t('entrepot.stats.components_sub')}
+          footerLabel="Architecture :"
+          footerValue="Sous-systèmes"
+        />
 
         {/* Card 3: Parts (Pièces détachées) */}
-        <div
+        <GmaoKpiCard
+          title={t('entrepot.stats.parts_title')}
+          value={kpis.parts}
+          unit="pièces"
+          icon={LayersIcon}
+          color="indigo"
+          isActive={isPartNature(currentNatureFilter) || isPartNature(activeKpiFilter)}
           onClick={() => {
             setActiveKpiFilter('PART');
             changeNatureFilter('PART');
           }}
-          className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between ${
-            isPartNature(currentNatureFilter) || isPartNature(activeKpiFilter)
-              ? 'border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50/20'
-              : 'border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">
-              {t('entrepot.stats.parts_title')}
-            </span>
-            <span className="text-2xl font-black text-indigo-700 mt-0.5 block font-mono">
-              {kpis.parts}
-            </span>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              {t('entrepot.stats.parts_sub')}
-            </span>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-200/60">
-            <LayersIcon className="w-5 h-5 text-indigo-700" />
-          </div>
-        </div>
+          badgeText={t('entrepot.stats.parts_sub')}
+          footerLabel="Nomenclature :"
+          footerValue="Pièces élémentaires"
+        />
 
         {/* Card 4: En Service Actif */}
-        <div
+        <GmaoKpiCard
+          title={t('entrepot.stats.active_service')}
+          value={kpis.enService}
+          unit="actifs"
+          icon={CheckCircle2}
+          color="emerald"
+          isActive={activeKpiFilter === 'SERVICE'}
           onClick={() => {
             setActiveKpiFilter('SERVICE');
           }}
-          className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between ${
-            activeKpiFilter === 'SERVICE'
-              ? 'border-emerald-500 ring-2 ring-emerald-100 bg-emerald-50/20'
-              : 'border-slate-200 hover:border-slate-300'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">
-              {t('entrepot.stats.active_service')}
-            </span>
-            <span className="text-2xl font-black text-emerald-700 mt-0.5 block font-mono">
-              {kpis.enService}
-            </span>
-            <span className="text-[11px] text-slate-500 mt-0.5 block">
-              {t('entrepot.stats.active_service_sub')}
-            </span>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-200/60">
-            <CheckCircle2 className="w-5 h-5 text-emerald-700" />
-          </div>
-        </div>
-      </div>
+          badgeText={t('entrepot.stats.active_service_sub')}
+          footerLabel="Taux affectation :"
+          footerValue={`${kpis.total ? Math.round((kpis.enService / kpis.total) * 100) : 0}%`}
+        />
+      </GmaoKpiGrid>
 
       {/* 4. Central Unified Industrial Filter & Search Card */}
       <IndustrialFilterCard

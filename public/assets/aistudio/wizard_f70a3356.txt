@@ -1,0 +1,420 @@
+summarize_autoAction historychevron_right
+
+تصميم الـ Wizard (مساعد الخطوات المتعددة) في هذا النظام مبني وفق نمط معماري يُعرف بـ Profile-Driven Wizard Engine.
+
+🌟 مميزات وفلسفة تصميم هذا الـ Wizard
+
+فصل تام بين المحرك والمحتوى (Profile-Driven):
+
+هيكل الـ Wizard مجرد محرك لا يعرف شيئاً عن البيانات الخاصة بمشروعك.
+
+تقوم فقط بتمرير كائن إعدادات (WizardProfile) يحتوي على مصفوفة الخطوات، الأيقونات، ودوال التحقق (validate).
+
+شريط خطوات عمودي (Vertical Timeline Stepper):
+
+خط اتصال متدرج (Vertical Spine) يربط الدوائر.
+
+تأثير التوهج والهالة (Glow/Halo effect) على الخطوة الحالية النشطة.
+
+إشارة اكتمال خضراء مع أيقونة Check للخطوات السابقة، مع إمكانية النقر والعودة إليها.
+
+دعم كامل للهواتف (Responsive Mobile Header):
+
+يتحول تلقائياً على الشاشات الصغيرة إلى شريط تقدم علوي خفيف ونظيف بدلاً من الشريط الجانبي.
+
+حركات انتقالية ناعمة (Framer Motion Transitions):
+
+انتقال كل خطوة مع تأثير Fade & Slide سلس، مع عزل أخطاء كل خطوة (StepErrorBoundary) لضمان عدم تعطل التطبيق بالكامل.
+
+نظام تحقق ديناميكي في كل خطوة (Step Validation Guard):
+
+كل خطوة يمكنها إرجاع { valid: boolean, message: string }.
+
+لا يُتاح زر الخطوة التالية إلا بعد استيفاء الشروط مع إظهار تنبيه الخطأ مباشرة في الفوتر.
+
+📦 حزمة الأكواد الكاملة للاستخدام في تطبيقك الآخر
+
+يمكنك نقل هذه الملفات ووضعها داخل مجلد components/wizard أو دمجها في ملف واحد:
+
+1. ملف الأنواع (wizard.types.ts)
+
+codeTypeScript
+
+import { ComponentType } from "react"; export interface ValidationResult { valid: boolean; message?: string; level?: 'warning' | 'critical'; } export interface WizardStep { id: string; title: string; description?: string; component: ComponentType<any>; icon?: ComponentType<{ className?: string }>; validate?: () => ValidationResult; } export interface WizardProfile { id: string; title: string; description?: string; steps: WizardStep[]; onFinish: () => Promise<void> | void; onCancel: () => void; }
+
+3. الشريط الجانبي والتايملاين العمودي (WizardSidebar.tsx)
+
+"use client";
+
+import React from "react";
+import { Check } from "lucide-react";
+import { useWizard } from "./WizardContext";
+
+export function WizardSidebar() {
+  const { profile, stepIndex, goToStep } = useWizard();
+
+  return (
+    <aside className="hidden md:flex w-72 flex-col border-r border-border/50 bg-muted/20 backdrop-blur-sm">
+      {/* ── العنوان والوصف ── */}
+      <div className="px-8 pt-8 pb-6">
+        <h2 className="text-xl font-bold tracking-tight text-primary">
+          {profile.title}
+        </h2>
+        {profile.description && (
+          <p className="mt-1 text-sm text-muted-foreground leading-relaxed">
+            {profile.description}
+          </p>
+        )}
+      </div>
+
+      {/* ── قائمة المراحل والتايملاين ── */}
+      <nav aria-label="Wizard progress" className="relative flex-1 overflow-y-auto px-6">
+        <ol className="relative space-y-6 py-4">
+          {/* العمود الرابط بين المراحل */}
+          <div
+            className="absolute left-4 top-4 bottom-4 w-px bg-border/40"
+            aria-hidden="true"
+          />
+
+          {profile.steps.map((step, index) => {
+            const isActive = index === stepIndex;
+            const isCompleted = index < stepIndex;
+            const isUpcoming = index > stepIndex;
+            const Icon = step.icon;
+
+            return (
+              <li key={step.id} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isCompleted) goToStep(index);
+                  }}
+                  aria-current={isActive ? "step" : undefined}
+                  disabled={isUpcoming}
+                  className={`group flex w-full items-start gap-4 text-left transition-all ${
+                    isUpcoming ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+                  }`}
+                >
+                  {/* الدائرة والمؤشر البصري */}
+                  <span className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center">
+                    {/* هالة التوهج عند التفعيل */}
+                    <span
+                      className={`absolute inset-0 rounded-full transition-all duration-300 ${
+                        isActive
+                          ? "bg-primary/20 scale-125 ring-4 ring-primary/30"
+                          : isCompleted
+                          ? "bg-green-500/10"
+                          : ""
+                      }`}
+                    />
+
+                    {/* الدائرة المركزية */}
+                    <span
+                      className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 transition-colors ${
+                        isActive
+                          ? "border-primary bg-background text-primary font-bold shadow-md"
+                          : isCompleted
+                          ? "border-green-500/50 bg-green-500/20 text-green-500"
+                          : "border-border bg-background text-muted-foreground group-hover:border-primary/40"
+                      }`}
+                    >
+                      {isCompleted ? (
+                        <Check className="h-4 w-4 stroke-[2.5]" />
+                      ) : Icon ? (
+                        <Icon className="h-4 w-4" />
+                      ) : (
+                        <span className="text-xs font-semibold">{index + 1}</span>
+                      )}
+                    </span>
+                  </span>
+
+                  {/* نصوص المرحلة */}
+                  <span className="flex-1 pt-1">
+                    <span
+                      className={`block text-sm font-medium transition-colors ${
+                        isActive
+                          ? "text-primary font-semibold"
+                          : isCompleted
+                          ? "text-foreground group-hover:text-primary"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {step.title}
+                    </span>
+
+                    {step.description && isActive && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {step.description}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    </aside>
+  );
+}
+
+
+4. محتوى المرحلة والانتقالات (WizardContent.tsx)
+"use client";
+
+import React, { Suspense } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useWizard } from "./WizardContext";
+
+class StepErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  state = { hasError: false, error: undefined };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError && this.state.error) {
+      return (
+        <div className="flex h-full items-center justify-center p-8">
+          <div className="max-w-md rounded-xl border border-destructive/30 bg-destructive/10 p-6 text-center">
+            <h3 className="text-lg font-semibold text-destructive">خطأ في عرض هذه المرحلة</h3>
+            <p className="mt-2 text-sm text-muted-foreground">{this.state.error.message}</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function WizardContent() {
+  const { profile, stepIndex } = useWizard();
+  const step = profile.steps[stepIndex];
+  const StepComponent = step.component;
+
+  return (
+    <main className="relative flex-1 overflow-hidden bg-background">
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={step.id}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+          className="h-full"
+        >
+          <Suspense
+            fallback={
+              <div className="flex h-full items-center justify-center">
+                <div className="animate-pulse text-muted-foreground">جاري تحميل المرحلة…</div>
+              </div>
+            }
+          >
+            <div className="h-full overflow-y-auto p-6 md:p-10">
+              <div className="max-w-4xl mx-auto">
+                <StepErrorBoundary>
+                  <StepComponent />
+                </StepErrorBoundary>
+              </div>
+            </div>
+          </Suspense>
+        </motion.div>
+      </AnimatePresence>
+    </main>
+  );
+}
+5. شريط الأزرار والتحقق السفلي (WizardFooter.tsx)
+
+"use client";
+
+import React from "react";
+import { useWizard } from "./WizardContext";
+import { ArrowRight, ArrowLeft, CheckCircle, AlertTriangle } from "lucide-react";
+
+export function WizardFooter() {
+  const { next, back, isFirst, isLast, profile, stepIndex } = useWizard();
+  
+  const currentStep = profile.steps[stepIndex];
+  const validationResult = currentStep.validate ? currentStep.validate() : { valid: true };
+  const canGoNext = validationResult.valid;
+
+  return (
+    <footer className="h-20 border-t border-border/50 bg-background/80 backdrop-blur-md px-6 md:px-8 flex items-center justify-between flex-shrink-0">
+      {/* جهة الرجوع والإلغاء */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={back}
+          disabled={isFirst}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors hover:bg-muted ${
+            isFirst ? "invisible" : ""
+          }`}
+        >
+          <ArrowLeft className="w-4 h-4" /> السابق
+        </button>
+        <button
+          type="button"
+          onClick={profile.onCancel}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          إلغاء
+        </button>
+      </div>
+
+      {/* جهة التقدم والتأكيد ورسائل التحقق */}
+      <div className="flex items-center gap-4">
+        {!canGoNext && validationResult.message && (
+          <div className="flex items-center gap-2 py-1.5 px-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive text-xs max-w-xs animate-in fade-in">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>{validationResult.message}</span>
+          </div>
+        )}
+        
+        <button
+          type="button"
+          onClick={isLast ? profile.onFinish : next}
+          disabled={!canGoNext}
+          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium shadow-md transition-all ${
+            !canGoNext
+              ? "opacity-50 cursor-not-allowed bg-muted text-muted-foreground"
+              : isLast
+              ? "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20"
+              : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+          }`}
+        >
+          {isLast ? (
+            <>
+              إتمام وحفظ <CheckCircle className="w-4 h-4" />
+            </>
+          ) : (
+            <>
+              التالي <ArrowRight className="w-4 h-4" />
+            </>
+          )}
+        </button>
+      </div>
+    </footer>
+  );
+}
+6. الهيكل العام الشامل (WizardShell.tsx)
+
+"use client";
+
+import React, { ReactNode } from "react";
+import { WizardProvider, useWizard } from "./WizardContext";
+import { WizardSidebar } from "./WizardSidebar";
+import { WizardContent } from "./WizardContent";
+import { WizardFooter } from "./WizardFooter";
+import type { WizardProfile } from "./wizard.types";
+
+const MobileWizardHeader = () => {
+  const { profile, stepIndex, totalSteps } = useWizard();
+  const currentStep = profile.steps[stepIndex];
+
+  return (
+    <div className="md:hidden border-b border-border bg-background/80 p-4 flex-shrink-0">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-base">{currentStep.title}</h3>
+          <p className="text-xs text-muted-foreground">{`مرحلة ${stepIndex + 1} من ${totalSteps}`}</p>
+        </div>
+      </div>
+      
+      <div className="flex gap-1.5 mt-3">
+        {Array.from({ length: totalSteps }).map((_, index) => (
+          <div
+            key={`progress-${index}`}
+            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+              index <= stepIndex ? "bg-primary" : "bg-muted"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export function WizardShell({ profile }: { profile: WizardProfile; children?: ReactNode }) {
+  return (
+    <WizardProvider profile={profile}>
+      <div className="flex h-full w-full bg-background text-foreground overflow-hidden rounded-2xl border border-border shadow-2xl">
+        {/* الشريط الجانبي للشاشات الكبيرة */}
+        <WizardSidebar />
+
+        {/* مساحة المحتوى + الموبايل + الفوتر */}
+        <div className="flex flex-1 flex-col min-h-0">
+          <MobileWizardHeader />
+          <WizardContent />
+          <WizardFooter />
+        </div>
+      </div>
+    </WizardProvider>
+  );
+}
+
+🚀 مثال عملي سريع على الاستخدام (Quick Example)
+"use client";
+
+import { WizardShell } from "./components/wizard/WizardShell";
+import { StepHeader } from "./components/wizard/StepHeader";
+import { User, FileText, CheckCheck } from "lucide-react";
+import { useState } from "react";
+
+// المرحلة الأولى
+function StepOne() {
+  return (
+    <div>
+      <StepHeader title="البيانات الأساسية" description="أدخل اسم ومعلومات الجهاز أو المستخدم." />
+      <div className="p-6 border rounded-xl bg-card">
+        <input className="w-full p-3 rounded-lg border bg-background" placeholder="الاسم الكامل..." />
+      </div>
+    </div>
+  );
+}
+
+// المرحلة الثانية
+function StepTwo() {
+  return (
+    <div>
+      <StepHeader title="المواصفات الفنية" description="حدد إعدادات النظام ومعايير التشغيل." />
+      <div className="p-6 border rounded-xl bg-card">
+        <textarea className="w-full p-3 rounded-lg border bg-background" rows={4} placeholder="الوصف الفني..." />
+      </div>
+    </div>
+  );
+}
+
+export default function MyCustomWizardPage() {
+  const profile = {
+    id: "device-setup",
+    title: "معالج الإعداد",
+    description: "إعداد وتكوين الماكينة خطوة بخطوة.",
+    steps: [
+      {
+        id: "step-1",
+        title: "البيانات الأساسية",
+        description: "الاسم والتعريف",
+        icon: User,
+        component: StepOne,
+        validate: () => ({ valid: true }), // يمكنك وضع شروطك هنا
+      },
+      {
+        id: "step-2",
+        title: "المواصفات الفنية",
+        description: "الخصائص والتهيئة",
+        icon: FileText,
+        component: StepTwo,
+      },
+    ],
+    onFinish: () => alert("تم حفظ كل الخطوات بنجاح!"),
+    onCancel: () => alert("تم إلغاء المعالج"),
+  };
+
+  return (
+    <div className="h-[650px] w-full max-w-5xl mx-auto p-4">
+      <WizardShell profile={profile} />
+    </div>
+  );
+}

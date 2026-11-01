@@ -26,6 +26,7 @@ import {
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
@@ -835,151 +836,65 @@ export default function DemandesInterventionTab({
   return (
     <div className="space-y-6">
       {/* 1. Top 4 Primary KPI Metrics Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <GmaoKpiGrid columns={4}>
         {/* Total Demandes */}
-        <div
+        <GmaoKpiCard
+          title={t('corrective.di.title')}
+          value={kpiStats.total}
+          unit="demandes"
+          icon={Flame}
+          color="amber"
+          valueColored={false}
+          isActive={filterStatus === 'ALL'}
           onClick={() => setFilterStatus('ALL')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'ALL'
-              ? 'border-amber-400 ring-2 ring-amber-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-amber-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(245,158,11,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                {t('corrective.di.title')}
-              </span>
-              <Flame className="w-6 h-6 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-amber-600 transition-colors">
-                {kpiStats.total}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">demandes</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="font-semibold text-slate-700">Toutes origines</span>
-              <span>•</span>
-              <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-mono">
-                100% tracé
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Vue générale :</span>
-            <span className="font-mono font-bold text-amber-700">Flux d'entrée usine</span>
-          </div>
-        </div>
+          badgePrefix="Toutes origines"
+          badgeText="100% tracé"
+          footerLabel="Vue générale :"
+          footerValue="Flux d'entrée usine"
+        />
 
         {/* En Attente de Traitement */}
-        <div
+        <GmaoKpiCard
+          title={`${t('corrective.di.status')} (En Attente)`}
+          value={kpiStats.pending}
+          unit="à convertir"
+          icon={Clock}
+          color="rose"
+          isActive={filterStatus === 'DEMANDE'}
           onClick={() => setFilterStatus('DEMANDE')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'DEMANDE'
-              ? 'border-rose-400 ring-2 ring-rose-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-rose-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(244,63,94,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-rose-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-rose-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                {t('corrective.di.status')} (En Attente)
-              </span>
-              <Clock className="w-6 h-6 text-rose-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-rose-600 font-mono tracking-tight">
-                {kpiStats.pending}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">à convertir</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-rose-700 font-bold bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200 font-mono">
-                Action Chef requise
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Priorité :</span>
-            <span className="font-mono font-bold text-rose-700">Génération BT</span>
-          </div>
-        </div>
+          badgeText="Action Chef requise"
+          footerLabel="Priorité :"
+          footerValue="Génération BT"
+        />
 
         {/* Converties en BT */}
-        <div
+        <GmaoKpiCard
+          title={t('corrective.bt.title')}
+          value={kpiStats.converted}
+          unit="ordres BT"
+          icon={Wrench}
+          color="blue"
+          isActive={filterStatus === 'EN_COURS'}
           onClick={() => setFilterStatus('EN_COURS')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'EN_COURS'
-              ? 'border-blue-400 ring-2 ring-blue-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-blue-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(59,130,246,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                {t('corrective.bt.title')}
-              </span>
-              <Wrench className="w-6 h-6 text-blue-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-blue-600 font-mono tracking-tight">
-                {kpiStats.converted}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">ordres BT</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono">
-                Techniciens affectés
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Taux prise en charge :</span>
-            <span className="font-mono font-bold text-blue-700">
-              {kpiStats.total ? Math.round((kpiStats.converted / kpiStats.total) * 100) : 0}%
-            </span>
-          </div>
-        </div>
+          badgeText="Techniciens affectés"
+          footerLabel="Taux prise en charge :"
+          footerValue={`${kpiStats.total ? Math.round((kpiStats.converted / kpiStats.total) * 100) : 0}%`}
+        />
 
         {/* Pannes avec Arrêt Machine */}
-        <div
+        <GmaoKpiCard
+          title="Arrêt Machine Bloquant"
+          value={kpiStats.arret}
+          unit="lignes stoppées"
+          icon={AlertTriangle}
+          color="purple"
+          isActive={filterStatus === 'ARRET'}
           onClick={() => setFilterStatus('ARRET')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'ARRET'
-              ? 'border-purple-400 ring-2 ring-purple-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-purple-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(168,85,247,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Arrêt Machine Bloquant
-              </span>
-              <AlertTriangle className="w-6 h-6 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-purple-600 font-mono tracking-tight">
-                {kpiStats.arret}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">lignes stoppées</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-mono">
-                Impact direct production
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Gravité :</span>
-            <span className="font-mono font-bold text-purple-700">Arrêt Usine</span>
-          </div>
-        </div>
-      </div>
+          badgeText="Impact direct production"
+          footerLabel="Gravité :"
+          footerValue="Arrêt Usine"
+        />
+      </GmaoKpiGrid>
 
       {/* 2. Filter & Search Card (Unified Mature Light UI Design System) */}
       <div className="relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">

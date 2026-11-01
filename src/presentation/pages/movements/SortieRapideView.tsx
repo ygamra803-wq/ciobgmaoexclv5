@@ -63,6 +63,12 @@ import {
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
 import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
+import {
+  WizardShell,
+  StepHeader,
+  useWizardFeature,
+  type WizardProfile,
+} from '../../components/common/wizard';
 
 // Custom Select Component with BDR Light styling and optional onAddNew
 function CustomSelect({
@@ -201,7 +207,7 @@ function CustomSelect({
 }
 
 // Floating Form Container with frosted glass backdrop and elevated card
-function FormContainerWrapper({ isFloating, onClose, children }) {
+function FormContainerWrapper({ isFloating, isWizardMode = false, onClose, children }) {
   if (isFloating) {
     return (
       <div
@@ -217,7 +223,9 @@ function FormContainerWrapper({ isFloating, onClose, children }) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.94, y: 16 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="relative w-full max-w-4xl max-h-[90vh] bg-white rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-slate-200/90 overflow-hidden my-auto flex flex-col"
+          className={`relative w-full ${
+            isWizardMode ? 'max-w-5xl' : 'max-w-4xl'
+          } max-h-[90vh] bg-white rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-slate-200/90 overflow-hidden my-auto flex flex-col`}
         >
           {/* Header of Floating Card */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
@@ -311,6 +319,12 @@ export default function SortieRapideView({
     () => getTechnicianDisplayName(user, technicians),
     [user, technicians]
   );
+
+  // Toggleable Feature Flag: Classic Form vs 3-Step Guided Wizard Mode
+  const {
+    isEnabled: isWizardMode,
+    setModuleEnabled: setWizardModuleEnabled,
+  } = useWizardFeature('stock_rapid_movement');
 
   // V3 + V4 Store SortieDemands & Reconciliation Context
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands || []);
@@ -1304,9 +1318,11 @@ export default function SortieRapideView({
     }));
   };
 
-  // Form Submit Handler
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  // Form Submit Handler (Supports both Classic <form> submit and Wizard onFinish)
+  const handleSubmit = (e?: any) => {
+    if (e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
 
     const { isValid, errors } = getFormValidationState();
 
@@ -2070,23 +2086,38 @@ export default function SortieRapideView({
               {(viewMode === 'SPLIT' || isFloatingFormOpen) && (
                 <FormContainerWrapper
                   isFloating={viewMode === 'JOURNAL'}
+                  isWizardMode={isWizardMode}
                   onClose={() => setIsFloatingFormOpen(false)}
                 >
-                  <div className="flex flex-col xl:flex-row xl:items-center justify-between border-b border-slate-100 pb-3.5 gap-3">
+                  <div className="flex flex-col gap-3 border-b border-slate-100 pb-3.5">
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <Receipt className="w-5 h-5 text-indigo-600 shrink-0" />
                         <div>
-                          <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                            {isTechUser
-                              ? editingDemandId
-                                ? 'Correction de Demande de Sortie PDR'
-                                : 'Demande de Sortie PDR Terrain (Sans Déstockage Immédiat)'
-                              : 'Émission de Bon de Mouvement'}
-                          </h3>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                              {isTechUser
+                                ? editingDemandId
+                                  ? 'Correction de Demande de Sortie PDR'
+                                  : 'Demande de Sortie PDR Terrain (Sans Déstockage Immédiat)'
+                                : 'Émission de Bon de Mouvement'}
+                            </h3>
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                isWizardMode
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}
+                            >
+                              {isWizardMode ? 'MODE WIZARD (3 ÉTAPES)' : 'MODE CLASSIQUE'}
+                            </span>
+                          </div>
                           <p className="text-[11px] text-slate-500">
                             {isTechUser
                               ? 'Saisissez votre N° de bon terrain et les pièces demandées pour validation Magasin'
-                              : 'Sélectionnez le type de flux et les articles concernés'}
+                              : isWizardMode
+                                ? 'Saisie guidée étape par étape avec contrôle de stock intégré'
+                                : 'Sélectionnez le type de flux et les articles concernés'}
                           </p>
                         </div>
                       </div>
@@ -2104,7 +2135,49 @@ export default function SortieRapideView({
                       </div>
                     </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+                    {/* Feature Flag Toggle Bar: Formulaire Classique <-> Assistant Wizard */}
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-50/90 border border-slate-200/80">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span className="text-[11px] font-bold text-slate-700 truncate">
+                          Mode de Saisie du Bon :
+                        </span>
+                      </div>
+                      <div
+                        role="group"
+                        aria-label="Sélecteur de mode de saisie"
+                        className="inline-flex items-center p-0.5 rounded-lg bg-white border border-slate-200/90 shadow-2xs shrink-0"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setWizardModuleEnabled('stock_rapid_movement', false)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                            !isWizardMode
+                              ? 'bg-slate-900 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          Formulaire Classique
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setWizardModuleEnabled('stock_rapid_movement', true)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                            isWizardMode
+                              ? 'bg-indigo-600 text-white shadow-2xs'
+                              : 'text-slate-600 hover:text-indigo-700'
+                          }`}
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>Assistant Wizard</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+          {(() => {
+            const step1FluxSection = (
+              <div className="space-y-4">
             {/* 1. FLOW TYPE SELECTOR (5 Operational Flows categorized under 3 Philosophies) */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
@@ -2608,7 +2681,11 @@ export default function SortieRapideView({
                 />
               </div>
             </div>
+              </div>
+            );
 
+            const step2ArticlesSection = (
+              <div className="space-y-3">
             {/* 5. MULTI-ARTICLES SECTION - EXCEL LIGHT UI PDR */}
             <div className="space-y-3 pt-3 border-t border-slate-200">
               <div className="flex items-center justify-between">
@@ -2987,7 +3064,11 @@ export default function SortieRapideView({
                 })()}
               </div>
             </div>
+              </div>
+            );
 
+            const step3ContextSection = (
+              <div className="space-y-4">
             {/* 6. CONTEXTUAL FIELDS BASED ON FLOW TYPE */}
             {/* CASE A: SORTIE INTERNE */}
             {isSortieInterne && (
@@ -5044,57 +5125,276 @@ export default function SortieRapideView({
                 className="w-full h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800"
               />
             </div>
+              </div>
+            );
 
-            {/* Submit & Reset Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
+            if (isWizardMode) {
+              const totalQte = mouvementItems.reduce(
+                (acc, i) => acc + (parseFloat(String(i.quantite)) || 0),
+                0
+              );
+
+              const sortieWizardProfile: WizardProfile = {
+                id: 'sortie-entree-rapide-wizard',
+                code: form.code_bon || 'BON-MVT',
+                title: isTechUser ? 'Assistant Demande PDR' : 'Assistant Bon de Mouvement',
+                description: `${form.type} • ${form.action_id}`,
+                themeColor: isSortieInterne
+                  ? 'indigo'
+                  : isEntreeExterne
+                    ? 'emerald'
+                    : isCommandeFlow
+                      ? 'amber'
+                      : isBonSortie
+                        ? 'purple'
+                        : 'teal',
+                finishLabel: isTechUser
+                  ? 'Soumettre la Demande'
+                  : `Valider ${form.code_bon} (${totalQte} pcs)`,
+                cancelLabel: 'Réinitialiser',
+                steps: [
+                  {
+                    id: 'step-1-flux',
+                    code: 'ÉTAPE 01',
+                    title: 'Flux & Référence',
+                    description: 'Type de mouvement, source/destination, date et N° OT',
+                    badge: form.type,
+                    icon: Receipt,
+                    component: (
+                      <div className="space-y-4">
+                        <StepHeader
+                          title="Flux Industriel & Référence du Bon"
+                          description="Choisissez la nature du flux (Sortie, Entrée, Commande), la catégorie de stock et les références temporelles."
+                          icon={Receipt}
+                        />
+                        {step1FluxSection}
+                      </div>
+                    ),
+                    validate: () => {
+                      if (!form.date || !String(form.date).trim()) {
+                        return {
+                          valid: false,
+                          message: 'Veuillez renseigner la date du mouvement.',
+                          level: 'critical',
+                        };
+                      }
+                      if (!form.code_bon || !String(form.code_bon).trim()) {
+                        return {
+                          valid: false,
+                          message: 'Le code du Bon de Mouvement est obligatoire.',
+                          level: 'critical',
+                        };
+                      }
+                      return { valid: true };
+                    },
+                  },
+                  {
+                    id: 'step-2-articles',
+                    code: 'ÉTAPE 02',
+                    title: 'Articles & Stock',
+                    description: 'Sélection catalogue, quantités et contrôle stock temps réel',
+                    badge: `${mouvementItems.length}/5 lignes`,
+                    icon: Boxes,
+                    component: (
+                      <div className="space-y-4">
+                        <StepHeader
+                          title="Articles & Simulation Stock Actuel"
+                          description="Sélectionnez jusqu'à 5 références et contrôlez l'impact sur le stock avant de passer à l'imputation."
+                          icon={Boxes}
+                        />
+                        {step2ArticlesSection}
+                      </div>
+                    ),
+                    validate: () => {
+                      for (let idx = 0; idx < mouvementItems.length; idx++) {
+                        const item = mouvementItems[idx];
+                        if (!item.ref || String(item.ref).trim() === '') {
+                          return {
+                            valid: false,
+                            message: `Ligne ${idx + 1} : Veuillez sélectionner un article dans le catalogue.`,
+                            level: 'critical',
+                          };
+                        }
+                        if (!item.quantite || Number(item.quantite) <= 0) {
+                          return {
+                            valid: false,
+                            message: `Ligne ${idx + 1} : La quantité doit être supérieure à 0.`,
+                            level: 'critical',
+                          };
+                        }
+                      }
+
+                      const isSortie =
+                        form.type === 'Sortie Interne' ||
+                        form.type === 'Bon de Sortie' ||
+                        form.type === 'Sortie Externe';
+                      if (isSortie) {
+                        for (const item of mouvementItems) {
+                          const match =
+                            unifiedSearchCatalog.find((c) => c.ref === item.ref) ||
+                            stockItems.find((s) => s.ref === item.ref);
+                          const currentStock = match
+                            ? (match.stockActuel ??
+                                match.raw?.stockActuel ??
+                                match.raw?.stockInitial ??
+                                0)
+                            : 0;
+                          const qte = Number(item.quantite) || 0;
+                          if (qte > currentStock) {
+                            return {
+                              valid: false,
+                              message: `Stock insuffisant pour [${item.ref}] (Demandé: ${qte}, Disponible: ${currentStock}).`,
+                              level: 'critical',
+                            };
+                          }
+                        }
+                      }
+                      return { valid: true };
+                    },
+                  },
+                  {
+                    id: 'step-3-imputation',
+                    code: 'ÉTAPE 03',
+                    title: 'Imputation & Validation',
+                    description: 'Machine/Zone, Intervenant, Demandeur et validation finale',
+                    badge: form.action_id,
+                    icon: ShieldCheck,
+                    component: (
+                      <div className="space-y-4">
+                        <StepHeader
+                          title="Imputation & Traçabilité GMAO"
+                          description="Renseignez le motif d'intervention, l'équipement concerné et l'intervenant avant d'enregistrer le bon."
+                          icon={ShieldCheck}
+                        />
+                        {step3ContextSection}
+
+                        {/* Light Excel Final Summary Ledger Card */}
+                        <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/90 space-y-2 text-xs">
+                          <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                            <span className="font-mono font-bold text-[10px] uppercase tracking-wider text-slate-500">
+                              Récapitulatif Excel du Bon ({form.code_bon})
+                            </span>
+                            <span className="font-mono font-bold text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              {form.type} • {form.action_id}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                            <div>
+                              <span className="text-slate-400 block">Articles :</span>
+                              <span className="font-mono font-bold text-slate-800">
+                                {mouvementItems.length} réf(s) • {totalQte} pcs
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block">Équipement / Zone :</span>
+                              <span className="font-mono font-bold text-slate-800 truncate block">
+                                {form.id_machine_registered || form.id_zone || form.emplacement_reception || '—'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-400 block">Intervenant / Tiers :</span>
+                              <span className="font-bold text-slate-800 truncate block">
+                                {form.technicien || form.operation || form.fournisseur || form.prestataire_externe || '—'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ),
+                    validate: () => {
+                      const { isValid, errors } = getFormValidationState();
+                      if (!isValid) {
+                        return {
+                          valid: false,
+                          message:
+                            errors[0] ||
+                            'Veuillez compléter les champs obligatoires avant de valider.',
+                          level: 'critical',
+                        };
+                      }
+                      return { valid: true };
+                    },
+                  },
+                ],
+                onFinish: () => {
+                  handleSubmit();
+                },
+                onCancel: () => {
                   resetForm();
-                }}
-                className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer shrink-0"
-                title="Réinitialiser le formulaire"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-              <button
-                type="submit"
-                className={`flex-1 h-10 rounded-xl font-bold text-xs transition shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
-                  getFormValidationState().isPristine
-                    ? 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 hover:text-slate-700'
-                    : getFormValidationState().isValid
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
-                      : 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
-                }`}
-              >
-                {getFormValidationState().isPristine ? (
-                  <>
-                    <HelpCircle className="w-4 h-4" />
-                    <span>Formulaire prêt à être rempli</span>
-                  </>
-                ) : getFormValidationState().isValid ? (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>
-                      {isTechUser
-                        ? 'Soumettre Demande de Sortie (Validation Magasin)'
-                        : 'Valider et Enregistrer (Prêt)'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <AlertTriangle className="w-4 h-4" />
-                    <span>
-                      {isTechUser ? 'Soumettre Demande' : `Valider ${form.type}`} (
-                      {mouvementItems.reduce((acc, i) => acc + (Number(i.quantite) || 0), 0)} pcs) •{' '}
-                      {form.code_bon}
-                    </span>
-                  </>
-                )}
-              </button>
-            </div>
-          </form>
+                },
+              };
+
+              return (
+                <WizardShell
+                  profile={sortieWizardProfile}
+                  layout={viewMode === 'JOURNAL' ? 'split' : 'compact'}
+                  className={
+                    viewMode === 'JOURNAL'
+                      ? 'min-h-[560px] max-h-[75vh]'
+                      : 'min-h-[520px] max-h-[calc(100vh-230px)]'
+                  }
+                />
+              );
+            }
+
+            return (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {step1FluxSection}
+                {step2ArticlesSection}
+                {step3ContextSection}
+
+                {/* Submit & Reset Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      resetForm();
+                    }}
+                    className="h-10 w-10 rounded-xl bg-slate-100 text-slate-500 hover:text-slate-800 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition cursor-pointer shrink-0"
+                    title="Réinitialiser le formulaire"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="submit"
+                    className={`flex-1 h-10 rounded-xl font-bold text-xs transition shadow-sm flex items-center justify-center gap-2 cursor-pointer ${
+                      getFormValidationState().isPristine
+                        ? 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 hover:text-slate-700'
+                        : getFormValidationState().isValid
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                          : 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
+                    }`}
+                  >
+                    {getFormValidationState().isPristine ? (
+                      <>
+                        <HelpCircle className="w-4 h-4" />
+                        <span>Formulaire prêt à être rempli</span>
+                      </>
+                    ) : getFormValidationState().isValid ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>
+                          {isTechUser
+                            ? 'Soumettre Demande de Sortie (Validation Magasin)'
+                            : 'Valider et Enregistrer (Prêt)'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>
+                          {isTechUser ? 'Soumettre Demande' : `Valider ${form.type}`} (
+                          {mouvementItems.reduce((acc, i) => acc + (Number(i.quantite) || 0), 0)} pcs) •{' '}
+                          {form.code_bon}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            );
+          })()}
                 </FormContainerWrapper>
               )}
 

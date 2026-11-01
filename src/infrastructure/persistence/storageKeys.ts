@@ -68,6 +68,7 @@ export const STORAGE_KEYS = {
   ANIMATIONS: 'gmao_animations',
   HEADER_CLOCK: 'gmao_header_clock',
   ACTIVE_TAB: 'gmao_active_tab',
+  WIZARD_FEATURE_FLAGS: 'gmao_wizard_feature_flags_v1',
 };
 
 /**

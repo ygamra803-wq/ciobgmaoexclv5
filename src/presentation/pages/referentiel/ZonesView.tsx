@@ -5,6 +5,7 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, Calculator, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from '../../../i18n/I18nContext';
 
@@ -379,6 +380,53 @@ export default function ZonesView({
           />
         </div>
       </div>
+
+      {/* Unified 4-Tier Light Excel KPI Bar */}
+      <GmaoKpiGrid columns={4}>
+        <GmaoKpiCard
+          title="Total Zones & Ateliers"
+          value={safeZones.length}
+          unit="secteurs"
+          icon={MapPin}
+          color="purple"
+          valueColored={false}
+          badgeText="Topologie Usine"
+          footerLabel="Feuille Zones :"
+          footerValue="Col A → E"
+        />
+        <GmaoKpiCard
+          title="Machines Rattachées"
+          value={safeMachines.length}
+          unit="équipements"
+          icon={Wrench}
+          color="emerald"
+          badgeText="Parc affecté"
+          footerLabel="Formule :"
+          footerValue="=COUNTIF(Machines[Zone])"
+          onClick={onNavigateToMachines ? () => onNavigateToMachines('') : undefined}
+        />
+        <GmaoKpiCard
+          title="Techniciens Affectés"
+          value={safeTechs.length}
+          unit="techniciens"
+          icon={Users}
+          color="blue"
+          badgeText="Équipe Maintenance"
+          footerLabel="Couverture :"
+          footerValue="Secteurs actifs"
+          onClick={onNavigateToTechs ? () => onNavigateToTechs('') : undefined}
+        />
+        <GmaoKpiCard
+          title="Opérateurs & Responsables"
+          value={safeOps.length}
+          unit="membres"
+          icon={Shield}
+          color="indigo"
+          badgeText="Exploitation & Cadres"
+          footerLabel="Supervision :"
+          footerValue="Multi-zones"
+        />
+      </GmaoKpiGrid>
 
       {/* Filter Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">

@@ -16,6 +16,44 @@ function isOfficialIntervention(item: any): boolean {
 }
 
 export class CorrectiveCalculationService {
+  static minutesToTimeString(minutes: number): string {
+    const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+    const hrs = Math.floor(safeMinutes / 60);
+    const mins = safeMinutes % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  }
+
+  static timeStringToMinutes(timeStr: unknown): number {
+    if (typeof timeStr === 'number' && Number.isFinite(timeStr)) {
+      return Math.max(0, Math.round(timeStr));
+    }
+    if (!timeStr) return 0;
+    const str = String(timeStr).trim();
+    if (!str) return 0;
+
+    if (str.includes(':')) {
+      const parts = str.split(':');
+      const h = Number(parts[0]) || 0;
+      const m = Number(parts[1]) || 0;
+      return Math.max(0, h * 60 + m);
+    }
+
+    const hmMatch = str.match(/(\d+)\s*h(?:our|eure)?s?\s*(\d+)?/i);
+    if (hmMatch) {
+      const h = Number(hmMatch[1]) || 0;
+      const m = Number(hmMatch[2]) || 0;
+      return Math.max(0, h * 60 + m);
+    }
+
+    const minMatch = str.match(/^(\d+(?:\.\d+)?)\s*m(?:in)?/i);
+    if (minMatch) {
+      return Math.max(0, Math.round(Number(minMatch[1]) || 0));
+    }
+
+    const num = Number(str);
+    return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
+  }
+
   static calculateWorkingTime(dDebut: string, hDebut: string, dFin: string, hFin: string) {
     try {
       const start = new Date(`${dDebut}T${hDebut || '08:00'}:00`);

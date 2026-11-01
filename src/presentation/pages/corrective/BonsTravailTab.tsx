@@ -26,6 +26,7 @@ import {
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import PeriodFilterBar from '../../components/common/PeriodFilterBar';
 import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePeriodUtils';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -803,149 +804,65 @@ export default function BonsTravailTab({
   return (
     <div className="space-y-6">
       {/* 1. Top 4 Primary KPI Metrics Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <GmaoKpiGrid columns={4}>
         {/* Total BTs */}
-        <div
+        <GmaoKpiCard
+          title="Total Bons de Travail (BT)"
+          value={kpiStats.total}
+          unit="ordres"
+          icon={Wrench}
+          color="blue"
+          valueColored={false}
+          isActive={filterStatus === 'ALL'}
           onClick={() => setFilterStatus('ALL')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'ALL'
-              ? 'border-blue-400 ring-2 ring-blue-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-blue-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(59,130,246,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-blue-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-blue-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Total Bons de Travail (BT)
-              </span>
-              <Wrench className="w-6 h-6 text-blue-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-blue-600 transition-colors">
-                {kpiStats.total}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">ordres</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono">
-                Col B Excel
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Historique usine :</span>
-            <span className="font-mono font-bold text-blue-700">Complet</span>
-          </div>
-        </div>
+          badgeText="Col B Excel"
+          footerLabel="Historique usine :"
+          footerValue="Complet"
+        />
 
         {/* BTs En Cours */}
-        <div
+        <GmaoKpiCard
+          title={t('corrective.bt.title')}
+          value={kpiStats.inProgress}
+          unit="interventions"
+          icon={Play}
+          color="amber"
+          isActive={filterStatus === 'EN_COURS'}
           onClick={() => setFilterStatus('EN_COURS')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'EN_COURS'
-              ? 'border-amber-400 ring-2 ring-amber-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-amber-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(245,158,11,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                {t('corrective.bt.title')}
-              </span>
-              <Play className="w-6 h-6 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-amber-600 font-mono tracking-tight">
-                {kpiStats.inProgress}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">interventions</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-mono animate-pulse">
-                Chrono Live disponible
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Techniciens mobilisés :</span>
-            <span className="font-mono font-bold text-amber-700">{availableTechs.length} actifs</span>
-          </div>
-        </div>
+          badgeText="Chrono Live disponible"
+          pulseBadge={true}
+          footerLabel="Techniciens mobilisés :"
+          footerValue={`${availableTechs.length} actifs`}
+        />
 
         {/* BTs Clôturés */}
-        <div
+        <GmaoKpiCard
+          title="BTs Clôturés & Validés"
+          value={kpiStats.closed}
+          unit="dépannages OK"
+          icon={CheckCircle}
+          color="emerald"
+          isActive={filterStatus === 'CLOTURE'}
           onClick={() => setFilterStatus('CLOTURE')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'CLOTURE'
-              ? 'border-emerald-400 ring-2 ring-emerald-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-emerald-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(16,185,129,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                BTs Clôturés & Validés
-              </span>
-              <CheckCircle className="w-6 h-6 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-emerald-600 font-mono tracking-tight">
-                {kpiStats.closed}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">dépannages OK</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-mono">
-                Temps calculé & PDR déstockée
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Taux résolution :</span>
-            <span className="font-mono font-bold text-emerald-700">
-              {kpiStats.total ? Math.round((kpiStats.closed / kpiStats.total) * 100) : 0}%
-            </span>
-          </div>
-        </div>
+          badgeText="Temps calculé & PDR déstockée"
+          footerLabel="Taux résolution :"
+          footerValue={`${kpiStats.total ? Math.round((kpiStats.closed / kpiStats.total) * 100) : 0}%`}
+        />
 
         {/* Avec PDR */}
-        <div
+        <GmaoKpiCard
+          title="Consommation PDR"
+          value={kpiStats.withPdr}
+          unit="avec pièces"
+          icon={Package}
+          color="cyan"
+          isActive={filterStatus === 'WITH_PDR'}
           onClick={() => setFilterStatus('WITH_PDR')}
-          className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group cursor-pointer flex flex-col justify-between ${
-            filterStatus === 'WITH_PDR'
-              ? 'border-cyan-400 ring-2 ring-cyan-400/30 shadow-md'
-              : 'border-slate-200/90 hover:border-cyan-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(6,182,212,0.12)] hover:-translate-y-1'
-          }`}
-        >
-          <div className="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-cyan-500/10 transition-colors" />
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Consommation PDR
-              </span>
-              <Package className="w-6 h-6 text-cyan-600 shrink-0 group-hover:scale-110 transition-transform" />
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-black text-cyan-600 font-mono tracking-tight">
-                {kpiStats.withPdr}
-              </span>
-              <span className="text-xs font-bold text-slate-400 font-mono">avec pièces</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
-              <span className="text-cyan-700 font-bold bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-200 font-mono">
-                Liaison Stock Automatique
-              </span>
-            </div>
-          </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-            <span className="text-slate-400 font-medium">Impact magasin :</span>
-            <span className="font-mono font-bold text-cyan-700">Sorties PDR</span>
-          </div>
-        </div>
-      </div>
+          badgeText="Liaison Stock Automatique"
+          footerLabel="Impact magasin :"
+          footerValue="Sorties PDR"
+        />
+      </GmaoKpiGrid>
 
       {/* Maker-Checker Validation Queue Banner (Admin) & Clarification Alert Banner (Technician) */}
       {!isTechUser && kpiStats.pendingValidation > 0 && (
