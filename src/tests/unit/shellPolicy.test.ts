@@ -2720,4 +2720,120 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(applyRemoteCalled).toBe(1);
     expect(redundantSetterCalled).toBe(0);
   });
+
+  it('Batch S5 — Closes remaining 6 audit points (Points 15 to 20): AuthService zero defaultPass plaintext, BT delete movement cleanup, direct PM emitted_movement_ids & cost sync, ReactiveCalculationEngine Commande/empty-mode safety, and SortieExterne SSOT parity', async () => {
+    const { AuthService } = await import('../../core/security/AuthService');
+    const { useGmaoStore } = await import('../../store/useGmaoStore');
+    const { reactiveCalculationEngine } = await import('../../services/reactiveCalculationEngine');
+    const { stockIndexStore } = await import('../../application/StockIndexStore');
+
+    // Point 16: AuthService never stores plaintext defaultPass in gmao_auth_accounts_v2
+    const auth = new AuthService();
+    const storedUsers = auth.getStoredUsersList();
+    expect(storedUsers.length).toBeGreaterThan(0);
+    for (const u of storedUsers) {
+      expect(u.defaultPass).toBeUndefined();
+    }
+    // Login with default admin credentials still works via seed hash marker and upgrades to real PBKDF2 hash
+    const adminSession = await auth.login('admin', 'admin');
+    expect(adminSession.role).toBe('ADMIN');
+    const upgradedAdmin = auth.getStoredUsersList().find((u: any) => u.username === 'admin');
+    expect(upgradedAdmin?.defaultPass).toBeUndefined();
+    expect(String(upgradedAdmin?.passwordHash || '').endsWith(':admin_init_seed')).toBe(false);
+
+    // Point 17: handleDeleteCorrectiveIntervention cleans up linked BS-BT-* movements
+    useGmaoStore.getState().setRawStock([
+      { ref: 'PDR-S5-1', designation: 'Courroie S5', stockInitial: 10, prix_unitaire: 120, seuil: 2 },
+    ]);
+    useGmaoStore.getState().setMouvements([]);
+    useGmaoStore.getState().setCorrectiveInterventions([
+      {
+        id: 'BT-S5-100',
+        num_bt: 'BT-2026-S5',
+        code_machine: 'M-S5',
+        statut: 'EN_COURS',
+        action_fermee: 'NON',
+        date_debut: '2026-10-30',
+        heure_debut: '08:00',
+      } as any,
+    ]);
+    const closedBt = useGmaoStore.getState().handleClotureIntervention('BT-S5-100', {
+      action_realisee: 'Remplacement courroie',
+      pieces_utilisees: [{ ref: 'PDR-S5-1', designation: 'Courroie S5', quantite: 2, prix_unitaire: 120 }],
+    });
+    expect(closedBt?.emitted_movement_ids?.length).toBe(1);
+    expect(useGmaoStore.getState().mouvements.some((m: any) => m.source_bt_id === 'BT-S5-100')).toBe(true);
+
+    // Delete the closed BT -> linked movement must be removed from mouvements and index
+    useGmaoStore.getState().handleDeleteCorrectiveIntervention('BT-S5-100');
+    expect(useGmaoStore.getState().mouvements.some((m: any) => m.source_bt_id === 'BT-S5-100')).toBe(false);
+    expect(stockIndexStore.index.getTotals('PDR-S5-1').sorties).toBe(0);
+
+    // Point 18: handleMarkTaskDone populates emitted_movement_ids, stock_deducted, and resolves unitPrice from rawStock into cout_cumule
+    useGmaoStore.getState().setPreventiveTasks([
+      {
+        id: 'PM-S5-1',
+        code: 'PREV-M-S5-001',
+        id_machine: 'M-S5',
+        nom_machine: 'Machine S5',
+        tache: 'Remplacement courroie préventif',
+        frequence: 'Mensuel',
+        etat: 'À faire',
+        cout_cumule: 0,
+      } as any,
+    ]);
+    useGmaoStore.getState().setPreventiveExecutions([]);
+    useGmaoStore.getState().handleMarkTaskDone('PM-S5-1', {
+      date_realisation: '2026-10-31',
+      durationMinutes: 60,
+      taux_horaire: 40,
+      // Note: unitPrice omitted in input payload — must be resolved from rawStock (120 MAD * 2 = 240 MAD)
+      sparesUsed: [{ ref: 'PDR-S5-1', qty: 2 }],
+    });
+    const execAfterDirect = useGmaoStore.getState().preventiveExecutions[0];
+    expect(execAfterDirect.stock_deducted).toBe(true);
+    expect(execAfterDirect.emitted_movement_ids?.length).toBe(1);
+    expect(execAfterDirect.sparesCost).toBe(240);
+    expect(execAfterDirect.totalCost).toBe(280); // 240 spares + 40 labor
+    const taskAfterDirect = useGmaoStore.getState().preventiveTasks.find((t: any) => t.id === 'PM-S5-1');
+    expect(taskAfterDirect?.cout_cumule).toBe(280);
+
+    // Point 19: reactiveCalculationEngine fallback does not count 'Commande' as 'Sortie'
+    const origIsHydrated = stockIndexStore.isHydrated;
+    stockIndexStore.isHydrated = () => false;
+    try {
+      const calcResult = reactiveCalculationEngine.recalculateStockReactive(
+        [{ ref: 'PDR-CMD-TEST', stockInitial: 10, seuil: 2 }],
+        [
+          { ref: 'PDR-CMD-TEST', type: 'Commande', quantite: 5 },
+          { ref: 'PDR-CMD-TEST', type: 'Sortie', quantite: 3 },
+        ]
+      );
+      expect(calcResult[0].sorties).toBe(3);
+      expect(calcResult[0].commandes).toBe(5);
+      expect(calcResult[0].stockActuel).toBe(7);
+    } finally {
+      stockIndexStore.isHydrated = origIsHydrated;
+    }
+
+    // Point 20: SortieExterne handlers use store SSOT even if localStorage was cleared/behind
+    useGmaoStore.getState().setSortiesExterne([
+      {
+        id: 'SE-S5-1',
+        code: 'SORT-EXT-901',
+        id_machine: 'M-S5',
+        code_moteur_reel: 'MOT-S5',
+        etat: 'En réparation externe',
+        cout_bobinage: 0,
+      } as any,
+    ]);
+    localStorage.removeItem('gmao_sortie_externe_bobinage_v1');
+    const returned = useGmaoStore.getState().handleMarkSortieReturned('SE-S5-1', {
+      date_arrivee_reelle: '2026-10-31',
+      cout_bobinage: 1500,
+      note: 'Retour OK S5',
+    });
+    expect(returned?.etat).toBe('Retourné OK');
+    expect(returned?.cout_bobinage).toBe(1500);
+  });
 });

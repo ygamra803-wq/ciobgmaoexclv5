@@ -91,21 +91,24 @@ class ReactiveCalculationEngine {
         } else if (Array.isArray(mouvements)) {
           let ent = 0;
           let sor = 0;
+          let cmd = 0;
           for (let i = 0; i < mouvements.length; i++) {
             const m = mouvements[i];
             if (!m) continue;
-            const mRef = String(m.ref || m.Ref || m['Référence'] || '').trim().toLowerCase();
+            const mRef = String(m.ref || m.Ref || m.code_article || m['Référence'] || '').trim().toLowerCase();
             if (mRef === itemRefKey) {
               const qte = safeNum(m.quantite != null ? m.quantite : m['Quantité'], 0);
               const type = String(m.type || m['Type (Entrée/Sortie)'] || '').trim().toLowerCase();
               if (type.includes('entr') || type === 'in') {
                 ent += qte;
-              } else {
+              } else if (type.includes('sort') || type === 'out') {
                 sor += qte;
+              } else if (type.includes('comm')) {
+                cmd += qte;
               }
             }
           }
-          totals = { entrees: ent, sorties: sor, commandes: 0 };
+          totals = { entrees: ent, sorties: sor, commandes: cmd };
         }
 
         let stockInitial = 0;
@@ -117,11 +120,20 @@ class ReactiveCalculationEngine {
         ) {
           stockInitial = Number(item.stockInitial);
         } else {
-          const baseline =
-            INITIAL_STOCK_LOOKUP.get(itemRefKey) ||
-            (itemDesigKey ? INITIAL_STOCK_LOOKUP.get(itemDesigKey) : null);
-          if (baseline && baseline.qty > 0) {
-            stockInitial = baseline.qty;
+          let isEmptyStartMode = false;
+          try {
+            if (typeof localStorage !== 'undefined') {
+              const rawMode = localStorage.getItem('gmao_start_mode') || '';
+              isEmptyStartMode = rawMode.replace(/^"|"$/g, '') === 'empty';
+            }
+          } catch {}
+          if (!isEmptyStartMode) {
+            const baseline =
+              INITIAL_STOCK_LOOKUP.get(itemRefKey) ||
+              (itemDesigKey ? INITIAL_STOCK_LOOKUP.get(itemDesigKey) : null);
+            if (baseline && baseline.qty > 0) {
+              stockInitial = baseline.qty;
+            }
           }
         }
 

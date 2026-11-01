@@ -68,8 +68,8 @@ class SortieExterneService {
   /**
    * Ajoute une nouvelle sortie externe bobinage
    */
-  static addSortie(payload) {
-    const currentList = this.getSorties();
+  static addSortie(payload, existingList?: any[]) {
+    const currentList = Array.isArray(existingList) ? [...existingList] : this.getSorties();
     const code = payload.code || this.getNextCode(currentList);
     const id = payload.id || this.generatePassportId({
       code,
@@ -117,8 +117,8 @@ class SortieExterneService {
   /**
    * Met à jour un enregistrement existant
    */
-  static updateSortie(id, updates) {
-    const currentList = this.getSorties();
+  static updateSortie(id, updates, existingList?: any[]) {
+    const currentList = Array.isArray(existingList) ? [...existingList] : this.getSorties();
     const index = currentList.findIndex((s) => s.id === id);
     if (index === -1) return null;
 
@@ -136,27 +136,35 @@ class SortieExterneService {
   /**
    * Marque une sortie comme "Retourné OK" avec date de retour réelle et coût final
    */
-  static markAsReturned(id, { date_arrivee_reelle, cout_bobinage, note, technicien_reception }) {
-    return this.updateSortie(id, {
-      etat: 'Retourné OK',
-      date_arrivee_reelle: date_arrivee_reelle || new Date().toISOString().split('T')[0],
-      cout_bobinage: cout_bobinage !== undefined ? Number(cout_bobinage) : undefined,
-      note: note || 'Retour atelier contrôlé OK',
-      technicien_reception: technicien_reception || '',
-    });
+  static markAsReturned(id, { date_arrivee_reelle, cout_bobinage, note, technicien_reception }, existingList?: any[]) {
+    return this.updateSortie(
+      id,
+      {
+        etat: 'Retourné OK',
+        date_arrivee_reelle: date_arrivee_reelle || new Date().toISOString().split('T')[0],
+        cout_bobinage: cout_bobinage !== undefined ? Number(cout_bobinage) : undefined,
+        note: note || 'Retour atelier contrôlé OK',
+        technicien_reception: technicien_reception || '',
+      },
+      existingList
+    );
   }
 
   /**
    * Marque le moteur comme remonté sur sa machine
    */
-  static markAsMounted(id, { technicien_montage, date_montage, id_machine_cible, note }) {
-    return this.updateSortie(id, {
-      etat: 'Monté',
-      technicien_montage: technicien_montage || 'Ismaayl',
-      date_montage: date_montage || new Date().toISOString().split('T')[0],
-      id_machine: id_machine_cible || undefined,
-      note: note || 'Moteur remonté et testé en charge OK',
-    });
+  static markAsMounted(id, { technicien_montage, date_montage, id_machine_cible, note }, existingList?: any[]) {
+    return this.updateSortie(
+      id,
+      {
+        etat: 'Monté',
+        technicien_montage: technicien_montage || 'Ismaayl',
+        date_montage: date_montage || new Date().toISOString().split('T')[0],
+        id_machine: id_machine_cible || undefined,
+        note: note || 'Moteur remonté et testé en charge OK',
+      },
+      existingList
+    );
   }
 
   /**

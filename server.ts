@@ -122,48 +122,70 @@ async function startServer() {
 
   // API Authentication & RBAC Middleware
   const authenticateApi = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const token = req.headers['x-gmao-api-token'];
+    const clientOrigin = req.headers['x-gmao-client-origin'];
+    const expectedToken = process.env.GMAO_API_TOKEN;
+    // Strict token policy: in production or when GMAO_API_TOKEN is configured, gmao-web-client
+    // does NOT bypass token verification unless GMAO_STRICT_TOKEN is explicitly set to 'false' in non-prod.
+    const strictToken = isProduction || process.env.GMAO_STRICT_TOKEN !== 'false';
+
+    // Reject immediately on any method (GET/POST/PUT/DELETE) if an explicit token header does not match expectedToken
+    if (expectedToken && token !== undefined && token !== expectedToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'API Token invalide ou manquant.',
+      });
+    }
+
+    const tokenValid = !expectedToken || token === expectedToken || (!strictToken && clientOrigin === 'gmao-web-client');
+    if (!tokenValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'API Token invalide ou manquant.',
+      });
+    }
+
+    const resolvedActor = resolveEffectiveServerRole(
+      req.headers as Record<string, unknown>,
+      dbStateRef.users,
+      dbStateRef.technicians
+    );
+    (req as any).resolvedServerActor = resolvedActor;
+
+    if (resolvedActor.isArchivedActor) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Actor profile is archived/inactive and cannot access server state.',
+      });
+    }
+
+    if (req.method === 'GET') {
+      const hasClientContext =
+        clientOrigin === 'gmao-web-client' ||
+        Boolean(req.headers['x-gmao-actor']) ||
+        Boolean(req.headers['x-gmao-role']) ||
+        Boolean(expectedToken && token === expectedToken);
+      if (!hasClientContext) {
+        return res.status(401).json({
+          success: false,
+          error: 'Unauthorized',
+          message: 'Client non identifié pour la lecture LAN (/api/gmao/*).',
+        });
+      }
+      return next();
+    }
+
     if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
-      const token = req.headers['x-gmao-api-token'];
-      const clientOrigin = req.headers['x-gmao-client-origin'];
-      const expectedToken = process.env.GMAO_API_TOKEN;
-      // Strict token policy: in production or when GMAO_API_TOKEN is configured, gmao-web-client
-      // does NOT bypass token verification unless GMAO_STRICT_TOKEN is explicitly set to 'false' in non-prod.
-      const strictToken = isProduction || process.env.GMAO_STRICT_TOKEN !== 'false';
-
-      // Reject immediately if an explicit token header is provided and does not match expectedToken
-      if (expectedToken && token !== undefined && token !== expectedToken) {
-        return res.status(401).json({
-          success: false,
-          error: 'Unauthorized',
-          message: 'API Token invalide ou manquant.',
-        });
-      }
-
-      const tokenValid = !expectedToken || token === expectedToken || (!strictToken && clientOrigin === 'gmao-web-client');
-      if (!tokenValid) {
-        return res.status(401).json({
-          success: false,
-          error: 'Unauthorized',
-          message: 'API Token invalide ou manquant.',
-        });
-      }
-
-      // Server-side RBAC enforcement: ALL write requests (POST/PUT/DELETE) unconditionally pass through resolveEffectiveServerRole
-      const resolvedActor = resolveEffectiveServerRole(
-        req.headers as Record<string, unknown>,
-        dbStateRef.users,
-        dbStateRef.technicians
-      );
       const role = normalizeServerRole(resolvedActor.effectiveRole);
-      (req as any).resolvedServerActor = resolvedActor;
 
       if (role === 'VIEWER') {
         return res.status(403).json({
           success: false,
           error: 'Forbidden',
-          message: resolvedActor.isArchivedActor
-            ? 'Actor profile is archived/inactive and cannot modify server state.'
-            : 'Role VIEWER or unauthenticated actor is read-only and cannot modify server state.',
+          message: 'Role VIEWER or unauthenticated actor is read-only and cannot modify server state.',
         });
       }
 

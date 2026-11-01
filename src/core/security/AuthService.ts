@@ -47,7 +47,13 @@ export class AuthService {
    * Persist the canonical accounts list to SecurityService and IndexedDB.
    */
   saveStoredUsersList(users, emitEvent = true) {
-    const safeUsers = Array.isArray(users) ? users : this.getDefaultUsersList();
+    const rawUsers = Array.isArray(users) ? users : this.getDefaultUsersList();
+    const safeUsers = rawUsers.map((u) => {
+      if (!u || typeof u !== 'object') return u;
+      const copy = { ...u };
+      delete copy.defaultPass;
+      return copy;
+    });
     SecurityService.saveSecure(USERS_KEY, safeUsers);
     indexedDBService.setItem(USERS_KEY, safeUsers).catch(() => {});
     if (emitEvent && typeof window !== 'undefined') {
@@ -103,7 +109,6 @@ export class AuthService {
         code: 'admin',
         username: 'admin',
         passwordHash: 'pbkdf2:v1:7a9f8c6b5d4e3f2a1b0c:100000:admin_init_seed',
-        defaultPass: 'admin',
         role: 'ADMIN',
         name: 'Administrateur',
         titleFr: 'Administrateur Système',
@@ -120,7 +125,6 @@ export class AuthService {
         code: 'magasinier',
         username: 'magasinier',
         passwordHash: 'pbkdf2:v1:8a1b2c3d4e5f6a7b8c9d:100000:mag_init_seed',
-        defaultPass: 'magasinier',
         role: 'RESPONSABLE_MAGASIN',
         name: 'Responsable Magasin',
         titleFr: 'Responsable Magasin (RMG)',
@@ -137,7 +141,6 @@ export class AuthService {
         code: 'viewer',
         username: 'viewer',
         passwordHash: 'pbkdf2:v1:0c3d4e5f6a7b8c9d0e1f:100000:viewer_init_seed',
-        defaultPass: 'viewer',
         role: 'VIEWER',
         name: 'Observateur',
         titleFr: 'Observateur / Consultation',
@@ -167,10 +170,6 @@ export class AuthService {
       code: techId,
       username: existingAccount?.username || defaultUsername,
       passwordHash: existingAccount?.passwordHash || TECH_DEFAULT_HASH,
-      defaultPass:
-        existingAccount && !existingAccount.defaultPass && existingAccount.passwordHash !== TECH_DEFAULT_HASH
-          ? undefined
-          : options.defaultPass || existingAccount?.defaultPass || 'tech',
       role: existingAccount?.role || 'TECHNICIEN',
       name: nom,
       titleFr: zone ? `Technicien (${zone})` : 'Technicien Maintenance',
@@ -785,19 +784,24 @@ export class AuthService {
         throw new Error("Ce compte d'accès est désactivé par l'administrateur.");
       }
 
-      const isDefaultPassMatch =
-        (user.defaultPass && cleanPassword === user.defaultPass) ||
-        (user.passwordHash === TECH_DEFAULT_HASH &&
-          user.defaultPass &&
-          (cleanPassword === 'tech' || cleanPassword === '1234'));
+      const hashStr = String(user.passwordHash || '');
+      const isSeedHashMatch =
+        (hashStr.endsWith(':admin_init_seed') && cleanPassword === 'admin') ||
+        (hashStr.endsWith(':mag_init_seed') && cleanPassword === 'magasinier') ||
+        (hashStr.endsWith(':viewer_init_seed') && cleanPassword === 'viewer') ||
+        (hashStr === TECH_DEFAULT_HASH && (cleanPassword === 'tech' || cleanPassword === '1234'));
       const isPasswordHashMatch =
         user.passwordHash && (await SecurityService.comparePassword(cleanPassword, user.passwordHash));
       const isPasswordValid =
-        isPasswordHashMatch || isDefaultPassMatch || (user.role === 'ADMIN' && isPinMatch);
+        isPasswordHashMatch || isSeedHashMatch || (user.role === 'ADMIN' && isPinMatch);
 
       if (isPasswordValid) {
-        // Upgrade legacy hash if necessary
-        if (user.passwordHash && SecurityService.isLegacyHash(user.passwordHash)) {
+        // Upgrade legacy or initial seed hash to full PBKDF2-SHA256
+        if (
+          (user.passwordHash && SecurityService.isLegacyHash(user.passwordHash)) ||
+          isSeedHashMatch ||
+          user.defaultPass
+        ) {
           const modernHash = await SecurityService.hashPassword(cleanPassword);
           user.passwordHash = modernHash;
           delete user.defaultPass;

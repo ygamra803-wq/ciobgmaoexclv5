@@ -1217,17 +1217,32 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           if (r) stockLookup.set(r, s);
         });
 
+        const prevSparesCost = Number(newestExec.sparesCost || 0);
+        let resolvedSparesCost = 0;
+        const enrichedSpares: any[] = [];
         const movementsToRecord: any[] = [];
         newestExec.sparesUsed.forEach((pdr: any, idx: number) => {
           const ref = String(pdr?.ref || '').trim();
           const qty = Number(pdr?.qty ?? pdr?.quantite ?? 0);
           if (!ref || !(qty > 0)) return;
+          const stockMatch = stockLookup.get(ref.toUpperCase());
+          const explicitPrice = Number(pdr?.unitPrice ?? pdr?.prix_unitaire ?? 0);
+          const unitPrice =
+            explicitPrice > 0
+              ? explicitPrice
+              : Number(stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
+          resolvedSparesCost += qty * unitPrice;
+          enrichedSpares.push({
+            ...pdr,
+            ref,
+            designation: pdr.designation || stockMatch?.designation || ref,
+            qty,
+            unit: pdr.unit || stockMatch?.unite || 'pcs',
+            unitPrice,
+          });
           if (isPartAlreadyDeductedByStoreBon(currentMouvements, newestExec.num_bon_saisi_par_tech, ref)) {
             return;
           }
-          const stockMatch = stockLookup.get(ref.toUpperCase());
-          const unitPrice =
-            Number(pdr?.unitPrice ?? pdr?.prix_unitaire ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
           const suffix = newestExec.sparesUsed.length > 1 ? `-${idx + 1}` : '';
           movementsToRecord.push({
             id: `MVT-PRV-${Date.now()}-${idx}-${Math.floor(100 + Math.random() * 900)}`,
@@ -1256,6 +1271,30 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             commentaire: `Consommation directe sur maintenance préventive ${newestExec.organe || ''} (${newestExec.machineCode || ''})`,
           });
         });
+
+        const execLaborCost =
+          (Number(newestExec.durationMinutes || 15) / 60) * Number(newestExec.laborRate ?? 35);
+        newestExec.sparesUsed = enrichedSpares;
+        newestExec.sparesProposed = enrichedSpares;
+        newestExec.sparesCost = Number(resolvedSparesCost.toFixed(2));
+        newestExec.totalCost = Number((resolvedSparesCost + execLaborCost).toFixed(2));
+        newestExec.emitted_movement_ids = movementsToRecord.map((m) => m.id);
+        newestExec.stock_deducted = movementsToRecord.length > 0;
+        set({ preventiveExecutions: executions });
+        PreventiveService.saveExecutions(executions);
+        DataGateway.savePreventiveExecutions(executions);
+
+        const costDelta = Number((newestExec.sparesCost - prevSparesCost).toFixed(2));
+        if (costDelta > 0) {
+          const nextTasksWithCost = (get().preventiveTasks || []).map((t: any) =>
+            String(t.id) === String(id)
+              ? { ...t, cout_cumule: Number((Number(t.cout_cumule || 0) + costDelta).toFixed(2)) }
+              : t
+          );
+          set({ preventiveTasks: nextTasksWithCost });
+          PreventiveService.saveTasks(nextTasksWithCost);
+          DataGateway.savePreventiveTasks(nextTasksWithCost);
+        }
 
         if (movementsToRecord.length > 0) {
           if (typeof validationData?.onAddMouvement === 'function') {
@@ -1339,15 +1378,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             const ref = String(s?.ref || s?.reference || s?.code || '').trim();
             const qty = Number(s?.qty ?? s?.quantite ?? 0);
             const stockMatch = ref ? stockLookup.get(ref.toUpperCase()) : null;
+            const explicitPrice = Number(s?.unitPrice ?? s?.prix_unitaire ?? s?.prix ?? 0);
             const unitPrice =
-              Number(
-                s?.unitPrice ??
-                  s?.prix_unitaire ??
-                  s?.prix ??
-                  stockMatch?.prix ??
-                  stockMatch?.prix_unitaire ??
-                  0
-              ) || 0;
+              explicitPrice > 0
+                ? explicitPrice
+                : Number(stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0) || 0;
             return {
               ref,
               designation: String(s?.designation || stockMatch?.designation || ref || 'PDR').trim(),
@@ -1619,7 +1654,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleDeletePreventiveExecution: (id) => {
       recordLocalDeletedIds('preventiveExecutions', [id]);
-      const targetExec = (get().preventiveExecutions || []).find(
+      const currentExecs = get().preventiveExecutions || [];
+      PreventiveService.saveExecutions(currentExecs);
+      const targetExec = currentExecs.find(
         (ex: any) => String(ex.id) === String(id)
       );
       const updated = PreventiveService.deleteExecution(id);
@@ -1690,38 +1727,50 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleAddAction: (actionData) => {
+      PreventiveService.saveActions(get().preventiveActions);
       const updated = PreventiveService.addAction(actionData);
       set({ preventiveActions: updated });
+      DataGateway.savePreventiveActions(updated);
       return updated;
     },
 
     handleUpdateAction: (id, actionData) => {
+      PreventiveService.saveActions(get().preventiveActions);
       const updated = PreventiveService.updateAction(id, actionData);
       set({ preventiveActions: updated });
+      DataGateway.savePreventiveActions(updated);
       return updated;
     },
 
     handleDeleteAction: (id) => {
+      PreventiveService.saveActions(get().preventiveActions);
       const updated = PreventiveService.deleteAction(id);
       set({ preventiveActions: updated });
+      DataGateway.savePreventiveActions(updated);
       return updated;
     },
 
     handleAddGuide: (guideData) => {
+      PreventiveService.saveGuides(get().preventiveGuides);
       const updated = PreventiveService.addGuide(guideData);
       set({ preventiveGuides: updated });
+      DataGateway.savePreventiveGuides(updated);
       return updated;
     },
 
     handleUpdateGuide: (id, guideData) => {
+      PreventiveService.saveGuides(get().preventiveGuides);
       const updated = PreventiveService.updateGuide(id, guideData);
       set({ preventiveGuides: updated });
+      DataGateway.savePreventiveGuides(updated);
       return updated;
     },
 
     handleDeleteGuide: (id) => {
+      PreventiveService.saveGuides(get().preventiveGuides);
       const updated = PreventiveService.deleteGuide(id);
       set({ preventiveGuides: updated });
+      DataGateway.savePreventiveGuides(updated);
       return updated;
     },
 
@@ -1824,8 +1873,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleAddSortieExterne: (sortieData) => {
-      const created = SortieExterneService.addSortie(sortieData);
-      const nextSorties = [created, ...get().sortiesExterne.filter((s) => s.id !== created.id)];
+      const currentSorties = get().sortiesExterne || [];
+      const created = SortieExterneService.addSortie(sortieData, currentSorties);
+      const nextSorties = [created, ...currentSorties.filter((s) => s.id !== created.id)];
       const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
         get().warehouseItems,
         created
@@ -1835,18 +1885,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         warehouseItems: nextWarehouse,
       });
       DataGateway.saveSortiesExterne(nextSorties);
-      if (nextWarehouse !== get().warehouseItems) {
-        DataGateway.saveWarehouseItems(nextWarehouse);
-      } else {
-        DataGateway.saveWarehouseItems(nextWarehouse);
-      }
+      DataGateway.saveWarehouseItems(nextWarehouse);
       return created;
     },
 
     handleUpdateSortieExterne: (id, sortieData) => {
-      const updated = SortieExterneService.updateSortie(id, sortieData);
+      const currentSorties = get().sortiesExterne || [];
+      const updated = SortieExterneService.updateSortie(id, sortieData, currentSorties);
       if (!updated) return null;
-      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextSorties = currentSorties.map((s) => (s.id === id ? updated : s));
       const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
         get().warehouseItems,
         updated
@@ -1869,9 +1916,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleMarkSortieReturned: (id, returnData) => {
-      const updated = SortieExterneService.markAsReturned(id, returnData);
+      const currentSorties = get().sortiesExterne || [];
+      const updated = SortieExterneService.markAsReturned(id, returnData, currentSorties);
       if (!updated) return null;
-      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextSorties = currentSorties.map((s) => (s.id === id ? updated : s));
       const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
         get().warehouseItems,
         updated
@@ -1886,9 +1934,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleMarkSortieMounted: (id, mountData) => {
-      const updated = SortieExterneService.markAsMounted(id, mountData);
+      const currentSorties = get().sortiesExterne || [];
+      const updated = SortieExterneService.markAsMounted(id, mountData, currentSorties);
       if (!updated) return null;
-      const nextSorties = get().sortiesExterne.map((s) => (s.id === id ? updated : s));
+      const nextSorties = currentSorties.map((s) => (s.id === id ? updated : s));
       const nextWarehouse = SortieExterneService.syncWarehouseItemsWithSortie(
         get().warehouseItems,
         updated
@@ -2898,11 +2947,47 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleDeleteCorrectiveIntervention: (id) => {
       recordLocalDeletedIds('correctiveInterventions', [id]);
-      const next = get().correctiveInterventions.filter((item) => item.id !== id);
+      const currentInterventions = get().correctiveInterventions || [];
+      const targetBt = currentInterventions.find((item) => String(item.id) === String(id));
+      const next = currentInterventions.filter((item) => item.id !== id);
       set({ correctiveInterventions: next });
       DataGateway.saveCorrectiveInterventions(next);
       if (get().activeLiveInterventionId === id) {
         get().setActiveLiveInterventionId(null);
+      }
+
+      if (targetBt) {
+        const btIdStr = String(targetBt.id || id).trim();
+        const btNumStr = String(targetBt.num_bt || targetBt.id || id).trim().toUpperCase();
+        const emittedSet = new Set(
+          Array.isArray((targetBt as any).emitted_movement_ids)
+            ? (targetBt as any).emitted_movement_ids
+            : []
+        );
+
+        const linkedMovements = (get().mouvements || []).filter((m: any) => {
+          if (!m) return false;
+          if (String(m.source_bt_id || '').trim() === btIdStr) return true;
+          if (btNumStr && String(m.source_num_bt || '').trim().toUpperCase() === btNumStr) return true;
+          if (emittedSet.has(String(m.id || ''))) return true;
+          const codeBon = String(m.code_bon || '').trim().toUpperCase();
+          return Boolean(
+            btNumStr &&
+              (codeBon === `BS-BT-${btNumStr}` || codeBon.startsWith(`BS-BT-${btNumStr}-`))
+          );
+        });
+
+        if (linkedMovements.length > 0) {
+          const removeIds = new Set(linkedMovements.map((m: any) => m.id));
+          linkedMovements.forEach((m: any) => {
+            try {
+              movementRepository.remove(m);
+            } catch (err) {
+              console.warn('[useGmaoStore] Failed to remove movement on corrective BT delete:', err);
+            }
+          });
+          get().setMouvements((prev) => (prev || []).filter((m: any) => !removeIds.has(m.id)));
+        }
       }
     },
 

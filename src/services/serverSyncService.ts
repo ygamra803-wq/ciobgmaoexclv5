@@ -425,11 +425,15 @@ export const serverSyncService = {
    */
   async fetchServerState(): Promise<{ online: boolean; state: Record<string, any> | null; summary: ServerStateSummary }> {
     try {
+      const actorName = getActiveActorName();
+      const actorRole = getActiveActorRole();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'GET',
         headers: {
           Accept: 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
+          ...(actorName ? { 'x-gmao-actor': actorName } : {}),
+          ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
         },
       });
       if (!response.ok) {
@@ -459,6 +463,8 @@ export const serverSyncService = {
    */
   async fetchAuditLogs(limit = 100): Promise<ServerAuditEntry[]> {
     try {
+      const actorName = getActiveActorName();
+      const actorRole = getActiveActorRole();
       const response = await fetch(
         networkConfigService.resolveApiUrl(`/api/gmao/audit?limit=${encodeURIComponent(String(limit))}`),
         {
@@ -466,6 +472,8 @@ export const serverSyncService = {
           headers: {
             Accept: 'application/json',
             'x-gmao-client-origin': 'gmao-web-client',
+            ...(actorName ? { 'x-gmao-actor': actorName } : {}),
+            ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
           },
         }
       );

@@ -249,7 +249,7 @@ describe('4. Security & Hardening Tests', () => {
 
       const viteConfigContent = fs.readFileSync(path.resolve(process.cwd(), 'vite.config.ts'), 'utf-8');
       expect(viteConfigContent).toContain('Content-Security-Policy');
-      expect(viteConfigContent).toContain('X-Frame-Options');
+      expect(viteConfigContent).toContain('Referrer-Policy');
       expect(viteConfigContent).toContain('X-Content-Type-Options');
       expect(viteConfigContent).toContain("object-src 'none'");
       expect(viteConfigContent).toContain("base-uri 'self'");
