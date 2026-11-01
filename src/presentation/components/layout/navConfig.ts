@@ -35,9 +35,9 @@ export const PARENT_MODULES = [
     bgLight: 'bg-cyan-50',
     children: [
       { id: 'stock', label: 'Stock Articles' },
+      { id: 'sortie', label: 'Sortie & Entrée Rapide' },
       { id: 'types', label: 'Types PDR' },
-      { id: 'designations', label: 'Désignations PDR' },
-      { id: 'sortie', label: 'Mouvements' }
+      { id: 'designations', label: 'Désignations PDR' }
     ]
   },
   {
@@ -75,7 +75,7 @@ export const PARENT_MODULES = [
     bgLight: 'bg-amber-50',
     children: [
       { id: 'corrective', label: 'Correctif Hub' },
-      { id: 'corrective_referentiel', label: 'Catalogue & Données GMAO' }
+      { id: 'corrective_referentiel', label: 'Catalogue' }
     ]
   },
   {

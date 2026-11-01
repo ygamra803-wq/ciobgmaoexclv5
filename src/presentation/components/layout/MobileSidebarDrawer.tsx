@@ -109,12 +109,16 @@ export default function MobileSidebarDrawer({
       if (isActive) {
         return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] font-bold bg-white text-slate-900 shadow-sm transition-all duration-150 cursor-pointer`;
       }
-      return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 transition-all duration-150 cursor-pointer`;
+      return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] ${
+        isSubItem ? 'font-normal text-slate-300' : 'font-semibold text-slate-100'
+      } hover:text-white hover:bg-slate-800/80 transition-all duration-150 cursor-pointer`;
     } else {
       if (isActive) {
         return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] font-bold bg-slate-900 text-white shadow-sm transition-all duration-150 cursor-pointer`;
       }
-      return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all duration-150 cursor-pointer`;
+      return `w-full flex items-center justify-between ${basePadding} rounded-xl text-[13px] ${
+        isSubItem ? 'font-normal text-slate-600' : 'font-semibold text-slate-800'
+      } hover:text-slate-900 hover:bg-slate-100 transition-all duration-150 cursor-pointer`;
     }
   };
 
@@ -347,37 +351,20 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Sortie Rapide Tab */}
-            {canAccess('sortie') && (
-              <button onClick={() => navTo('sortie')} className={getTabClass('sortie')}>
-                <span className="flex items-center gap-2.5">
-                  <SortieEntreeIcon className="w-4 h-4 shrink-0" />
-                  <span>Sortie & Entrée Rapide</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  {pendingSortieDemands > 0 && (
-                    <span
-                      className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
-                      title={`${pendingSortieDemands} demande(s) de sortie à valider`}
-                    >
-                      {pendingSortieDemands} À valider
-                    </span>
-                  )}
-                  <span className={getBadgeClass('sortie')}>Mvt</span>
-                </span>
-              </button>
-            )}
           </div>
 
-          {/* GROUPE 1: STOCK & COMPOSANTS */}
-          {(canAccess('stock') || canAccess('types') || canAccess('designations')) && (
+          {/* GROUPE 1: STOCK & ARTICLES */}
+          {(canAccess('stock') ||
+            canAccess('sortie') ||
+            canAccess('types') ||
+            canAccess('designations')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-slate-400" />
                 <span>Stock & Articles</span>
               </div>
               <div className="space-y-1">
-                {/* Stock Actuel */}
+                {/* L1: Stock (Articles) */}
                 {canAccess('stock') && (
                   <button onClick={() => navTo('stock')} className={getTabClass('stock')}>
                     <span className="flex items-center gap-2.5">
@@ -390,7 +377,28 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Types */}
+                {/* L2: Sortie & Entrée Rapide */}
+                {canAccess('sortie') && (
+                  <button onClick={() => navTo('sortie')} className={getTabClass('sortie', true)}>
+                    <span className="flex items-center gap-2">
+                      <SortieEntreeIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span>Sortie & Entrée Rapide</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {pendingSortieDemands > 0 && (
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
+                          title={`${pendingSortieDemands} demande(s) de sortie à valider`}
+                        >
+                          {pendingSortieDemands} À valider
+                        </span>
+                      )}
+                      <span className={getBadgeClass('sortie')}>Mvt</span>
+                    </span>
+                  </button>
+                )}
+
+                {/* L2: Types */}
                 {canAccess('types') && (
                   <button onClick={() => navTo('types')} className={getTabClass('types', true)}>
                     <span className="flex items-center gap-2">
@@ -403,7 +411,7 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Désignations */}
+                {/* L2: Désignations */}
                 {canAccess('designations') && (
                   <button
                     onClick={() => navTo('designations')}
@@ -500,7 +508,7 @@ export default function MobileSidebarDrawer({
           {(canAccess('preventive') || canAccess('preventive_referentiel')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <span>Maintenance & Préventif</span>
               </div>
               <div className="space-y-1">
@@ -551,7 +559,7 @@ export default function MobileSidebarDrawer({
           {(canAccess('corrective') || canAccess('corrective_referentiel')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Wrench className="w-3.5 h-3.5 text-amber-500" />
+                <Wrench className="w-3.5 h-3.5 text-slate-400" />
                 <span>Maintenance Corrective</span>
               </div>
               <div className="space-y-1">
@@ -578,7 +586,7 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Item 2: Catalogue & Données GMAO (Second position) */}
+                {/* Item 2: Catalogue (Second position - L2) */}
                 {canAccess('corrective_referentiel') && (
                   <button
                     onClick={() => navTo('corrective_referentiel')}
@@ -588,9 +596,9 @@ export default function MobileSidebarDrawer({
                       <Database
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
-                      <span>Catalogue & Données GMAO</span>
+                      <span className="truncate">Catalogue</span>
                     </span>
-                    <span className={getBadgeClass('corrective_referentiel')}>Catalogue</span>
+                    <span className={getBadgeClass('corrective_referentiel')}>Réf</span>
                   </button>
                 )}
               </div>
