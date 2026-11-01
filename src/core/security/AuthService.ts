@@ -40,7 +40,12 @@ export class AuthService {
     if (!users || !Array.isArray(users) || users.length === 0) {
       return this.getDefaultUsersList();
     }
-    return users;
+    return users.map((u) => {
+      if (!u || typeof u !== 'object') return u;
+      const copy = { ...u };
+      delete copy.defaultPass;
+      return copy;
+    });
   }
 
   /**
@@ -317,7 +322,6 @@ export class AuthService {
         ? {
             ...def,
             passwordHash: found.passwordHash || def.passwordHash,
-            defaultPass: found.defaultPass,
             isActive: true,
           }
         : def;
@@ -401,7 +405,6 @@ export class AuthService {
     }
 
     let passwordHash = existing?.passwordHash || TECH_DEFAULT_HASH;
-    let defaultPass = existing?.defaultPass;
 
     const cleanPass = String(plainPassword || '').trim();
     if (cleanPass) {
@@ -409,9 +412,6 @@ export class AuthService {
         throw new Error('Le mot de passe doit comporter au moins 4 caractères.');
       }
       passwordHash = await SecurityService.hashPassword(cleanPass);
-      defaultPass = undefined;
-    } else if (!existing) {
-      defaultPass = 'tech';
     }
 
     const cleanName = String(nom || existing?.name || cleanPersonnelId).trim();
@@ -462,11 +462,7 @@ export class AuthService {
       isActive: Boolean(isActive),
     };
 
-    if (defaultPass) {
-      accountObj.defaultPass = defaultPass;
-    } else {
-      delete accountObj.defaultPass;
-    }
+    delete accountObj.defaultPass;
 
     if (idx !== -1) {
       users[idx] = accountObj;

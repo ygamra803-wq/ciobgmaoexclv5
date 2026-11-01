@@ -2741,6 +2741,19 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(upgradedAdmin?.defaultPass).toBeUndefined();
     expect(String(upgradedAdmin?.passwordHash || '').endsWith(':admin_init_seed')).toBe(false);
 
+    // S5-fix: upsertPersonnelAuthAccount without plainPassword also never sets defaultPass on return or storage
+    const techAcct = await auth.upsertPersonnelAuthAccount({
+      personnelId: 'TECH-S5',
+      nom: 'Tech S5',
+      role: 'TECHNICIEN',
+      username: 'techs5',
+    });
+    expect((techAcct as any).defaultPass).toBeUndefined();
+    const clearedAccounts = auth.clearPersonnelAuthAccounts(false);
+    for (const c of clearedAccounts) {
+      expect((c as any).defaultPass).toBeUndefined();
+    }
+
     // Point 17: handleDeleteCorrectiveIntervention cleans up linked BS-BT-* movements
     useGmaoStore.getState().setRawStock([
       { ref: 'PDR-S5-1', designation: 'Courroie S5', stockInitial: 10, prix_unitaire: 120, seuil: 2 },
@@ -2769,7 +2782,7 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(useGmaoStore.getState().mouvements.some((m: any) => m.source_bt_id === 'BT-S5-100')).toBe(false);
     expect(stockIndexStore.index.getTotals('PDR-S5-1').sorties).toBe(0);
 
-    // Point 18: handleMarkTaskDone populates emitted_movement_ids, stock_deducted, and resolves unitPrice from rawStock into cout_cumule
+    // Point 18: Both handleMarkTaskDone (direct) and handleReviewPreventiveExecutionValidation (review) resolve unitPrice from rawStock when 0/omitted, populate emitted_movement_ids, and update cout_cumule
     useGmaoStore.getState().setPreventiveTasks([
       {
         id: 'PM-S5-1',
@@ -2797,6 +2810,25 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(execAfterDirect.totalCost).toBe(280); // 240 spares + 40 labor
     const taskAfterDirect = useGmaoStore.getState().preventiveTasks.find((t: any) => t.id === 'PM-S5-1');
     expect(taskAfterDirect?.cout_cumule).toBe(280);
+
+    // Also verify technician PENDING_VALIDATION submission (where ExecutionService sets unitPrice: 0) followed by handleReviewPreventiveExecutionValidation
+    useGmaoStore.getState().handleMarkTaskDone('PM-S5-1', {
+      date_realisation: '2026-11-01',
+      durationMinutes: 30,
+      taux_horaire: 40,
+      submitForValidation: true,
+      sparesProposed: [{ ref: 'PDR-S5-1', qty: 1 }], // ExecutionService stores unitPrice: 0 on PENDING
+    });
+    const pendingExec = useGmaoStore.getState().preventiveExecutions[0];
+    expect(pendingExec.validation_status).toBe('PENDING_VALIDATION');
+    const reviewedExec = useGmaoStore
+      .getState()
+      .handleReviewPreventiveExecutionValidation(pendingExec.id, { decision: 'APPROVED' });
+    expect(reviewedExec?.sparesCost).toBe(120); // resolved from rawStock even though pendingExec had unitPrice: 0
+    expect(reviewedExec?.totalCost).toBe(140); // 120 spares + 20 labor
+    expect(reviewedExec?.emitted_movement_ids?.length).toBe(1);
+    const taskAfterReview = useGmaoStore.getState().preventiveTasks.find((t: any) => t.id === 'PM-S5-1');
+    expect(taskAfterReview?.cout_cumule).toBe(420); // 280 + 140
 
     // Point 19: reactiveCalculationEngine fallback does not count 'Commande' as 'Sortie'
     const origIsHydrated = stockIndexStore.isHydrated;
