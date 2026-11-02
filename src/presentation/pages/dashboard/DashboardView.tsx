@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Layers,
   ChevronRight,
+  ChevronDown,
   Trash2,
   ShieldCheck,
   Zap,
@@ -208,6 +209,7 @@ export default function DashboardView({
   const [formulaTab, setFormulaTab] = useState('stock'); // 'stock' | 'kpi'
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
+  const [isRadarExpanded, setIsRadarExpanded] = useState(false);
   const [orderForm, setOrderForm] = useState({
     ref: '',
     designation: '',
@@ -1265,38 +1267,7 @@ export default function DashboardView({
           </div>
         </div>
       ) : (
-        <>
-          {/* Referential Integrity Quick Health Banner */}
-          {referentialAudit?.summary && !referentialAudit.summary.isFullyAligned && (
-            <div className="p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-300/90 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-amber-950 shadow-xs animate-fade-in">
-              <div className="flex items-start sm:items-center gap-3.5">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shrink-0 shadow-xs">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="font-black text-sm text-slate-900 flex items-center gap-2 flex-wrap">
-                    <span>Écarts Référentiels Détectés ({referentialAudit.summary.totalOrphanErrors || 0} orphelin{(referentialAudit.summary.totalOrphanErrors || 0) > 1 ? 's' : ''})</span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300">
-                      Santé {referentialAudit.healthScore ?? 100}% · Grade {referentialAudit.statusGrade || 'A+'}
-                    </span>
-                  </div>
-                  <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
-                    Des mouvements ou interventions font référence à des machines ou techniciens non enregistrés dans les listes maîtresses.
-                  </p>
-                </div>
-              </div>
-
-              <button
-                onClick={() => onNavigateToSettings?.('matching')}
-                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0 active:scale-95"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Vérifier & Appairer (1 Clic)</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          )}
-
+        <div className="space-y-5">
           {/* C4 — Empty Factory Onboarding Wizard (Desktop Admin / Skippable & Dismissible) */}
           <FactoryOnboardingWizard
             onNavigateToZones={onNavigateToZones}
@@ -1308,41 +1279,43 @@ export default function DashboardView({
             onCloseForceOpen={() => setForceShowOnboarding(false)}
           />
 
-          {/* A2 — Lightweight Operational Trust & LAN Sync Card (Desktop Admin / Supervisor) */}
+          {/* 1.5 Compact Governance, Operational Trust & LAN Sync Strip */}
           <div
             data-testid="a2-operational-trust-card"
-            className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/90 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-xs"
+            className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 space-y-3 text-xs"
           >
-            {/* 1. LAN Sync Status & Last Outcome */}
-            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-              <div
-                className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold shrink-0 shadow-2xs ${
-                  syncTrust.hasUnresolvedConflict
-                    ? 'bg-amber-500 text-white'
-                    : syncTrust.lastSyncStatus === 'ERROR'
-                    ? 'bg-rose-600 text-white'
-                    : 'bg-emerald-600 text-white'
-                }`}
-              >
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-black text-sm text-slate-900">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+              {/* Left: LAN Sync Status + Queue Counters + Referential Health */}
+              <div className="flex items-start sm:items-center gap-3 min-w-0 flex-wrap">
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold shrink-0 shadow-2xs ${
+                    syncTrust.hasUnresolvedConflict
+                      ? 'bg-amber-500 text-white'
+                      : syncTrust.lastSyncStatus === 'ERROR'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-emerald-600 text-white'
+                  }`}
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <span className="font-extrabold text-xs text-slate-900">
                     Confiance Opérationnelle & Synchronisation LAN
                   </span>
+
                   {syncTrust.hasUnresolvedConflict ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300 flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3 text-amber-600" />
                       Conflit LAN à résoudre
                     </span>
                   ) : syncTrust.lastSyncStatus === 'ERROR' ? (
-                    <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 font-mono text-[10.5px] font-extrabold border border-rose-300 flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 font-mono text-[10.5px] font-extrabold border border-rose-300 flex items-center gap-1">
                       <XCircle className="w-3 h-3 text-rose-600" />
                       Échec dernière synchro
                     </span>
                   ) : (
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono text-[10.5px] font-bold border border-emerald-200 flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono text-[10.5px] font-bold border border-emerald-200 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                       {syncTrust.lastSyncAt
                         ? `Synchro OK (${new Date(syncTrust.lastSyncAt).toLocaleTimeString('fr-FR', {
@@ -1352,71 +1325,239 @@ export default function DashboardView({
                         : 'Prêt (Local / LAN)'}
                     </span>
                   )}
+
+                  {referentialAudit?.summary && !referentialAudit.summary.isFullyAligned && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToSettings?.('matching')}
+                      className="px-2.5 py-0.5 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10.5px] font-bold inline-flex items-center gap-1 transition cursor-pointer"
+                      title="Des mouvements ou interventions font référence à des machines ou techniciens non enregistrés."
+                    >
+                      <ShieldAlert className="w-3 h-3 text-amber-600" />
+                      <span>
+                        Écarts Référentiels ({referentialAudit.summary.totalOrphanErrors || 0}) · Santé {referentialAudit.healthScore ?? 100}%
+                      </span>
+                      <span className="underline ml-0.5">Appairer</span>
+                    </button>
+                  )}
                 </div>
 
-                {syncTrust.lastSyncError && (
-                  <div className="text-[11px] font-semibold text-rose-700 truncate">
-                    Dernière erreur : {syncTrust.lastSyncError}
-                  </div>
-                )}
+                <div className="hidden lg:block h-4 w-px bg-slate-200" />
 
-                {/* 2. Live PENDING Queue Counters (Exact same source as ValidationCenterView) */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                  <span className="text-[11px] font-bold text-slate-600">
+                {/* Live PENDING Queue Counters */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] font-bold text-slate-500">
                     File d&apos;attente À valider ({validationQueues.totalPending}) :
                   </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-mono font-bold text-[10.5px]">
-                    BT Correctif : {validationQueues.pendingCorrective.length}
+                  <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
+                    BT Correctif : <b className="text-amber-700">{validationQueues.pendingCorrective.length}</b>
                   </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-900 border border-indigo-200 font-mono font-bold text-[10.5px]">
-                    Préventif : {validationQueues.pendingPreventive.length}
+                  <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
+                    Préventif : <b className="text-indigo-700">{validationQueues.pendingPreventive.length}</b>
                   </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-teal-50 text-teal-900 border border-teal-200 font-mono font-bold text-[10.5px]">
-                    Sorties PDR : {validationQueues.pendingSortieDemands.length}
+                  <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
+                    Sorties PDR : <b className="text-teal-700">{validationQueues.pendingSortieDemands.length}</b>
                   </span>
                   {validationQueues.totalClarification > 0 && (
-                    <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-900 border border-rose-200 font-mono font-bold text-[10.5px]">
+                    <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-900 border border-rose-200 font-mono font-bold text-[10.5px]">
                       À clarifier : {validationQueues.totalClarification}
                     </span>
                   )}
                 </div>
               </div>
-            </div>
 
-            {/* 3 & 4. Unresolved Conflict Action + Fast Link to validation_center */}
-            <div className="flex items-center gap-2 flex-wrap shrink-0">
-              {syncTrust.hasUnresolvedConflict && (
+              {/* Right: Conflict / Sync / Validation Center Actions */}
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                {syncTrust.hasUnresolvedConflict && (
+                  <button
+                    type="button"
+                    onClick={() => setShowConflictModal(true)}
+                    className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Résoudre conflit LAN</span>
+                  </button>
+                )}
+
+                {(validationRadar.totalPendingCount > 0 || validationRadar.totalClarificationCount > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setIsRadarExpanded((prev) => !prev)}
+                    className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Radar terrain ({validationRadar.totalPendingCount})</span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isRadarExpanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => setShowConflictModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                  onClick={handleQuickLanMerge}
+                  disabled={isSyncBusy}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  title="Fusionner intelligemment avec le serveur LAN sans écraser les données"
                 >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Résoudre conflit LAN</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncBusy ? 'animate-spin text-emerald-600' : 'text-slate-600'}`} />
+                  <span>Sync LAN</span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={handleQuickLanMerge}
-                disabled={isSyncBusy}
-                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title="Fusionner intelligemment avec le serveur LAN sans écraser les données"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isSyncBusy ? 'animate-spin text-emerald-600' : 'text-slate-600'}`} />
-                <span>Sync LAN</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onNavigateToValidationCenter?.()}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-xs transition flex items-center gap-2 cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Centre À valider ({validationQueues.totalPending})</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateToValidationCenter?.()}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Centre À valider ({validationQueues.totalPending})</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+
+            {syncTrust.lastSyncError && (
+              <div className="text-[11px] font-semibold text-rose-700 truncate pt-1 border-t border-slate-100">
+                Dernière erreur : {syncTrust.lastSyncError}
+              </div>
+            )}
+
+            {/* Collapsible V4 Admin Validation Radar (Unified Maker-Checker Queue) */}
+            {(validationRadar.totalPendingCount > 0 || validationRadar.totalClarificationCount > 0) && (
+              <div
+                data-testid="v4-admin-validation-radar"
+                className="pt-3 border-t border-slate-100 space-y-2.5"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-xs text-slate-800">
+                      Radar de Validation Terrain (Maker-Checker V4) : {validationRadar.totalPendingCount} à valider
+                    </span>
+                    {validationRadar.criticalAlertCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 font-mono text-[10px] font-bold border border-rose-200 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-rose-600" />
+                        {validationRadar.criticalAlertCount} anomalie(s) stock/bon
+                      </span>
+                    )}
+                    {validationRadar.totalClarificationCount > 0 && (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 font-mono text-[10px] font-bold border border-amber-200">
+                        {validationRadar.totalClarificationCount} en clarification tech.
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {validationRadar.pendingCorrectiveCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onNavigateToValidationCenter
+                            ? onNavigateToValidationCenter()
+                            : onNavigateToCorrective?.('corrective_bt')
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Wrench className="w-3 h-3 text-amber-700" />
+                        <span>BT ({validationRadar.pendingCorrectiveCount})</span>
+                      </button>
+                    )}
+                    {validationRadar.pendingPreventiveCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onNavigateToValidationCenter
+                            ? onNavigateToValidationCenter()
+                            : onNavigateToPreventive?.()
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Calendar className="w-3 h-3 text-indigo-700" />
+                        <span>Préventif ({validationRadar.pendingPreventiveCount})</span>
+                      </button>
+                    )}
+                    {validationRadar.pendingSortieCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onNavigateToValidationCenter
+                            ? onNavigateToValidationCenter()
+                            : onNavigateToSortie?.()
+                        }
+                        className="px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <SortieEntreeIcon className="w-3 h-3 text-teal-700" />
+                        <span>Sorties ({validationRadar.pendingSortieCount})</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {isRadarExpanded && validationRadar.items.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {validationRadar.items.slice(0, 6).map((item) => (
+                      <div
+                        key={`${item.claimType}-${item.id}`}
+                        className={`p-3 rounded-xl bg-slate-50/80 border flex items-center justify-between gap-2.5 text-xs ${
+                          item.reconciliation.hasCritical
+                            ? 'border-rose-300'
+                            : item.reconciliation.hasWarning
+                            ? 'border-amber-300'
+                            : 'border-slate-200/90'
+                        }`}
+                      >
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black ${
+                                item.claimType === 'CORRECTIVE'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                                  : item.claimType === 'PREVENTIVE'
+                                  ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
+                                  : 'bg-teal-100 text-teal-900 border border-teal-200'
+                              }`}
+                            >
+                              {item.claimType === 'CORRECTIVE'
+                                ? 'BT'
+                                : item.claimType === 'PREVENTIVE'
+                                ? 'PRÉV'
+                                : 'SORTIE'}
+                            </span>
+                            <span className="font-mono font-bold text-slate-900">{item.machineCode}</span>
+                            <span className="text-[10.5px] text-slate-500 truncate">• {item.technicianName}</span>
+                          </div>
+                          <div className="font-bold text-slate-800 truncate">{item.title}</div>
+                          {item.reconciliation.alerts.length > 0 ? (
+                            <div className="text-[10px] font-bold text-rose-700 flex items-center gap-1 truncate">
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                              <span className="truncate">{item.reconciliation.alerts[0].title}</span>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] font-mono text-emerald-700">
+                              {item.sparesCount} PDR • Concordance OK
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            item.claimType === 'CORRECTIVE'
+                              ? onNavigateToCorrective?.('corrective_bt')
+                              : item.claimType === 'PREVENTIVE'
+                              ? onNavigateToPreventive?.()
+                              : onNavigateToSortie?.()
+                          }
+                          className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
+                        >
+                          Contrôler
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <ServerSyncConflictModal
@@ -1429,151 +1570,6 @@ export default function DashboardView({
             isProcessing={isSyncBusy}
           />
 
-          {/* V4 Admin Validation Radar (Unified Maker-Checker Queue & Smart Reconciliation) */}
-          {(validationRadar.totalPendingCount > 0 || validationRadar.totalClarificationCount > 0) && (
-            <div
-              data-testid="v4-admin-validation-radar"
-              className={`p-4 sm:p-5 rounded-3xl border shadow-xs space-y-3.5 animate-fade-in ${
-                validationRadar.criticalAlertCount > 0
-                  ? 'bg-gradient-to-r from-rose-500/10 via-purple-500/5 to-white border-rose-300/90'
-                  : 'bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-white border-purple-300/90'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start sm:items-center gap-3.5">
-                  <div
-                    className={`w-10 h-10 rounded-2xl text-white flex items-center justify-center font-bold shrink-0 shadow-xs ${
-                      validationRadar.criticalAlertCount > 0 ? 'bg-rose-600' : 'bg-purple-600'
-                    }`}
-                  >
-                    <ShieldCheck className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-black text-sm text-slate-900 flex items-center gap-2 flex-wrap">
-                      <span>
-                        Radar de Validation Terrain (Maker-Checker V4) : {validationRadar.totalPendingCount} à valider
-                      </span>
-                      {validationRadar.criticalAlertCount > 0 && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900 font-mono text-[10.5px] font-extrabold border border-rose-300 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          {validationRadar.criticalAlertCount} anomalie(s) stock/bon
-                        </span>
-                      )}
-                      {validationRadar.totalClarificationCount > 0 && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono text-[10.5px] font-bold border border-amber-300">
-                          {validationRadar.totalClarificationCount} en clarification tech.
-                        </span>
-                      )}
-                    </div>
-                      <p className="text-slate-600 text-[11px] mt-0.5 max-w-2xl leading-relaxed">
-                      Les déclarations des techniciens (BT correctifs, exécutions préventives et demandes de sortie rapide) sont isolées du stock jusqu&apos;à votre approbation.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  {validationRadar.pendingCorrectiveCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToValidationCenter ? onNavigateToValidationCenter() : onNavigateToCorrective?.('corrective_bt')}
-                      className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Wrench className="w-3.5 h-3.5" />
-                      <span>BT à valider ({validationRadar.pendingCorrectiveCount})</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {validationRadar.pendingPreventiveCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToValidationCenter ? onNavigateToValidationCenter() : onNavigateToPreventive?.()}
-                      className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>Préventif à valider ({validationRadar.pendingPreventiveCount})</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {validationRadar.pendingSortieCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToValidationCenter ? onNavigateToValidationCenter() : onNavigateToSortie?.()}
-                      className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <SortieEntreeIcon className="w-3.5 h-3.5" />
-                      <span>Sorties à valider ({validationRadar.pendingSortieCount})</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {validationRadar.items.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-purple-200/60">
-                  {validationRadar.items.slice(0, 6).map((item) => (
-                    <div
-                      key={`${item.claimType}-${item.id}`}
-                      className={`p-3 rounded-2xl bg-white/95 border flex items-center justify-between gap-2.5 text-xs ${
-                        item.reconciliation.hasCritical
-                          ? 'border-rose-300 shadow-2xs'
-                          : item.reconciliation.hasWarning
-                          ? 'border-amber-300'
-                          : 'border-slate-200/90'
-                      }`}
-                    >
-                      <div className="min-w-0 space-y-0.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black ${
-                              item.claimType === 'CORRECTIVE'
-                                ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                                : item.claimType === 'PREVENTIVE'
-                                ? 'bg-indigo-100 text-indigo-900 border border-indigo-200'
-                                : 'bg-teal-100 text-teal-900 border border-teal-200'
-                            }`}
-                          >
-                            {item.claimType === 'CORRECTIVE'
-                              ? 'BT'
-                              : item.claimType === 'PREVENTIVE'
-                              ? 'PRÉV'
-                              : 'SORTIE'}
-                          </span>
-                          <span className="font-mono font-bold text-slate-900">{item.machineCode}</span>
-                          <span className="text-[10.5px] text-slate-500 truncate">• {item.technicianName}</span>
-                        </div>
-                        <div className="font-bold text-slate-800 truncate">{item.title}</div>
-                        {item.reconciliation.alerts.length > 0 ? (
-                          <div className="text-[10px] font-bold text-rose-700 flex items-center gap-1 truncate">
-                            <AlertTriangle className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{item.reconciliation.alerts[0].title}</span>
-                          </div>
-                        ) : (
-                          <div className="text-[10px] font-mono text-emerald-700">
-                            {item.sparesCount} PDR • Concordance OK
-                          </div>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          item.claimType === 'CORRECTIVE'
-                            ? onNavigateToCorrective?.('corrective_bt')
-                            : item.claimType === 'PREVENTIVE'
-                            ? onNavigateToPreventive?.()
-                            : onNavigateToSortie?.()
-                        }
-                        className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 font-bold text-[11px] shrink-0 cursor-pointer transition"
-                      >
-                        Contrôler
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* 2. Top Primary KPI Metrics Grid */}
           <DashboardKPIs
             stockKPIs={stockKPIs}
@@ -1583,26 +1579,132 @@ export default function DashboardView({
             onNavigateToMachines={onNavigateToMachines}
           />
 
-          {/* 2.5 Hub Maintenance Corrective Industrielle Nexus */}
-          <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-white rounded-3xl border border-amber-300/80 shadow-[0_8px_30px_rgba(245,158,11,0.08)] p-5 md:p-6 space-y-4 relative overflow-hidden">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-white shadow-md shadow-amber-500/20 shrink-0">
-                  <Wrench className="w-6 h-6" />
+          {/* 3. Accès Rapide aux Modules GMAO (Placed at the top for immediate engineer navigation) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2 tracking-tight">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span>Accès Rapide aux Modules GMAO</span>
+              </h3>
+              <span className="text-[10.5px] font-mono font-bold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/80">
+                Navigation Directe
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
+                <button
+                  onClick={onNavigateToStock}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
+                  <div className="text-[10px] text-slate-500">Gestion des articles</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
+                <button
+                  onClick={onNavigateToSortie}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <SortieEntreeIcon className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
+                  <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
+                <button
+                  onClick={onNavigateToMachines}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Factory className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
+                  <div className="text-[10px] text-slate-500">Arborescence actifs</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'entrepot')) && (
+                <button
+                  onClick={onNavigateToWarehouse}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Warehouse className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Entrepôt</div>
+                  <div className="text-[10px] text-slate-500">Éléments & Moteurs</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'zones')) && (
+                <button
+                  onClick={onNavigateToZones}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Layers className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Zones & Ateliers</div>
+                  <div className="text-[10px] text-slate-500">Emplacements usine</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'utilisateurs')) && (
+                <button
+                  onClick={onNavigateToUsers}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Personnel GMAO</div>
+                  <div className="text-[10px] text-slate-500">Techniciens & Chefs</div>
+                </button>
+              )}
+
+              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'settings')) && (
+                <button
+                  onClick={onNavigateToSettings}
+                  className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 hover:border-slate-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">Excel Twin</div>
+                  <div className="text-[10px] text-slate-500">Sauvegardes & Sync</div>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3.5 Hub Maintenance Corrective Industrielle Nexus (Mature Light Excel UI) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 border-l-4 border-l-amber-500 shadow-2xs p-4 sm:p-5 space-y-3.5 relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/90 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
+                  <Wrench className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h2 className="text-base font-black text-slate-900 tracking-tight">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
                       Maintenance Corrective Nexus
                     </h2>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider font-mono">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-200/80 tracking-wider font-mono">
                       Hub Dédié
                     </span>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/90 text-slate-700 border border-amber-200">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200 font-mono">
                       5 Sous-sections
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+                  <p className="text-xs text-slate-500 mt-0.5 max-w-3xl leading-relaxed">
                     Pilotage complet des pannes : Demandes (DI), Ordres de Travail (BT), Chronomètre d’Atelier avec déduction automatique de pause, Clôture avec sortie PDR et Pareto 80/20.
                   </p>
                 </div>
@@ -1611,7 +1713,7 @@ export default function DashboardView({
               <div className="flex items-center gap-2 flex-wrap shrink-0">
                 <button
                   onClick={() => onNavigateToCorrective?.('corrective')}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/25 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-2xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
                 >
                   <Wrench className="w-3.5 h-3.5" />
                   <span>Ouvrir Correctif Nexus</span>
@@ -1621,13 +1723,13 @@ export default function DashboardView({
             </div>
 
             {/* Quick Tabs Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-2 border-t border-amber-200/60">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-3 border-t border-slate-100">
               <button
                 onClick={() => onNavigateToCorrective?.('corrective_di')}
-                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">1. Demandes</div>
-                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">1. Demandes</div>
+                <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                   <span>DI Usine</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
                     {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
@@ -1637,10 +1739,10 @@ export default function DashboardView({
 
               <button
                 onClick={() => onNavigateToCorrective?.('corrective_bt')}
-                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">2. Bons Travail</div>
-                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">2. Bons Travail</div>
+                <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                   <span>BT Planifiés</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
                     {(correctiveInterventions || []).filter((i) => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR').length}
@@ -1650,10 +1752,10 @@ export default function DashboardView({
 
               <button
                 onClick={() => onNavigateToCorrective?.('corrective_live')}
-                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">3. Chrono Live</div>
-                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">3. Chrono Live</div>
+                <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                   <span>Intervention Live</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                     {(correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length} en cours
@@ -1663,12 +1765,12 @@ export default function DashboardView({
 
               <button
                 onClick={() => onNavigateToCorrective?.('corrective_cloture')}
-                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">4. Rapports</div>
-                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">4. Rapports</div>
+                <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                   <span>Clôturées</span>
-                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-white text-slate-700 border border-slate-200">
                     {(correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length}
                   </span>
                 </div>
@@ -1676,10 +1778,10 @@ export default function DashboardView({
 
               <button
                 onClick={() => onNavigateToCorrective?.('corrective_analyse')}
-                className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
+                className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">5. Décisionnel</div>
-                <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
+                <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">5. Décisionnel</div>
+                <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                   <span>Pareto 80/20</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
                     MTTR
@@ -1689,931 +1791,882 @@ export default function DashboardView({
             </div>
           </div>
 
-          {/* 3. Procurement & Purchase Orders Tracking Center */}
-          <div className="bg-white rounded-3xl border border-amber-200/90 shadow-[0_8px_30px_rgba(245,158,11,0.06)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.1)] transition-all duration-300 p-5 md:p-6 space-y-4 relative overflow-hidden">
-        {/* Subtle Ambient Background Highlight */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+          {/* 4. Critical Watchlist (2/3) & Recent Flux Live Feed (1/3) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            {/* Watchlist Ruptures & Alertes */}
+            <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs flex flex-col justify-between space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-200/80 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-4 h-4 text-rose-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                        Articles Sous Seuil Critique ({alertAndRuptureItems.length})
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Pièces nécessitant un réapprovisionnement urgent
+                      </p>
+                    </div>
+                  </div>
 
-        <div className="border-b border-slate-100/90 pb-4 relative space-y-3">
-          <div className="flex items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="w-6 h-6 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-extrabold text-base text-slate-900 tracking-tight">
-                    Suivi des Commandes & Réapprovisionnements
-                  </h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-amber-100/90 text-amber-950 border border-amber-200/80 shadow-2xs">
-                    {pendingOrders.length} en attente
-                  </span>
+                  <button
+                    onClick={onNavigateToStock}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Voir tout le Stock</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Gérez vos demandes d'achats. Cliquez sur <b className="text-emerald-700">"Valider Réception"</b> pour convertir la commande en Entrée de Stock.
-                </p>
+
+                <div className="overflow-x-auto border border-slate-200/80 rounded-xl shadow-2xs">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3.5">Ref</th>
+                        <th className="py-2.5 px-3.5">Désignation</th>
+                        <th className="py-2.5 px-2 text-right">Stock Actuel</th>
+                        <th className="py-2.5 px-2 text-right">Seuil</th>
+                        <th className="py-2.5 px-3 text-center">État</th>
+                        <th className="py-2.5 px-3">Emplacement</th>
+                        <th className="py-2.5 px-3 text-center">Actions Rapides</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {!isWatchlistReady ? (
+                        <TableSkeletonRows cols={7} rows={6} />
+                      ) : alertAndRuptureItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-400">
+                            <div className="flex flex-col items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                              <span className="font-semibold text-slate-700">Aucun article en alerte ou rupture</span>
+                              <span className="text-xs text-slate-500">Tous les niveaux de stock sont optimaux</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        alertAndRuptureItems.slice(0, 8).map((item, idx) => (
+                          <tr key={`alert-item-${item.id ?? ''}-${item.ref ?? ''}-${idx}`} className="hover:bg-slate-50/80 transition">
+                            <td className="py-2.5 px-3.5 font-mono font-bold text-slate-900">{item.ref}</td>
+                            <td className="py-2.5 px-3.5 font-medium text-slate-800">{item.designation}</td>
+                            <td className="py-2.5 px-2 text-right font-mono font-black text-rose-600">
+                              {item.stockActuel}
+                            </td>
+                            <td className="py-2.5 px-2 text-right font-mono text-slate-500">{item.seuil}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              {item.alerte === 'RUPTURE' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
+                                  <XCircle className="w-3 h-3" />
+                                  <span>RUPTURE</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-2xs">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  <span>ALERTE</span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono text-slate-600">{item.emplacement}</td>
+                            <td className="py-2.5 px-3 text-center">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Action3DButton
+                                  icon={ShoppingCart}
+                                  showAddBadge={true}
+                                  variant="circle"
+                                  color="amber"
+                                  title="Commander réapprovisionnement"
+                                  onClick={() => handleOpenOrderForArticle(item)}
+                                />
+                                <button
+                                  onClick={() => onQuickSortie(item)}
+                                  className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold shadow-2xs transition cursor-pointer active:scale-95"
+                                  title="Faire une sortie"
+                                >
+                                  Sortie
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
-            <Action3DButton
-              icon={ShoppingCart}
-              showAddBadge={true}
-              variant="circle"
-              color="amber"
-              title="Créer une nouvelle commande"
-              onClick={handleOpenNewOrder}
-            />
-          </div>
-
-          {/* Filter Tabs Bar */}
-          <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-            <div className="inline-flex p-1 bg-slate-100/90 rounded-xl border border-slate-200/80 text-xs font-medium shadow-2xs">
-              <button
-                onClick={() => setOrderFilterTab('ALL')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${
-                  orderFilterTab === 'ALL'
-                    ? 'bg-white text-slate-900 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Toutes ({allOrders.length})
-              </button>
-              <button
-                onClick={() => setOrderFilterTab('PENDING')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${
-                  orderFilterTab === 'PENDING'
-                    ? 'bg-white text-amber-900 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                En cours ({pendingOrders.length})
-              </button>
-              <button
-                onClick={() => setOrderFilterTab('RECEIVED')}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer ${
-                  orderFilterTab === 'RECEIVED'
-                    ? 'bg-white text-emerald-900 font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Réceptionnées ({completedOrders.length})
-              </button>
-            </div>
-
-            <div className="text-[11px] text-slate-400 font-mono">
-              Affichage de {displayedOrders.length} commande(s)
-            </div>
-          </div>
-        </div>
-
-        {/* Order Cards Grid */}
-        {displayedOrders.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 relative">
-            {displayedOrders.map((cmd, idx) => {
-              const art = stockItems.find(
-                (s) => String(s.ref).toLowerCase() === String(cmd.ref).toLowerCase()
-              );
-              const isReceived =
-                Array.isArray(cmd.tags) && cmd.tags.includes('#RECEPTION_VALIDE');
-
-              return (
-                <div
-                  key={`dash-cmd-${cmd.id ?? ''}-${cmd.ref ?? ''}-${idx}`}
-                  className={`p-4 rounded-2xl border transition-all duration-300 relative flex flex-col justify-between space-y-3 ${
-                    isReceived
-                      ? 'bg-emerald-50/30 border-emerald-200/90 shadow-2xs'
-                      : 'bg-white border-amber-200/90 hover:border-amber-400/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_20px_rgba(245,158,11,0.12)] hover:-translate-y-0.5'
-                  }`}
-                >
-                  <div className="space-y-2">
-                    {/* Card Top Row */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono font-extrabold text-xs text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shadow-2xs">
-                          {cmd.ref}
-                        </span>
-                        <span className="text-[10.5px] font-bold text-amber-950 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-200 font-mono">
-                          {cmd.code_bon || 'CMD'}
-                        </span>
-                        {Array.isArray(cmd.tags) && cmd.tags.includes('#Achat_Unique') ? (
-                          <span className="text-[10px] font-bold text-purple-800 bg-purple-100/90 px-2 py-0.5 rounded-full border border-purple-200">
-                            Achat Unique
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded-full border border-blue-200">
-                            Stock Permanent
-                          </span>
-                        )}
-                      </div>
-
-                      {isReceived ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200 shadow-2xs">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>Réceptionné</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-200/80 shadow-2xs">
-                          <Clock className="w-3 h-3 text-amber-600" />
-                          <span>En attente</span>
-                        </span>
-                      )}
+            {/* Live Flux Feed */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs flex flex-col justify-between space-y-4">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0">
+                      <SortieEntreeIcon className="w-4 h-4 text-slate-800" strokeWidth={2.25} />
                     </div>
-
-                    {/* Designation & Quantities */}
                     <div>
-                      <div className="font-bold text-xs text-slate-900 line-clamp-1">
-                        {art ? art.designation : cmd.designation || 'Article commandé'}
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center justify-between">
-                        <span>
-                          Quantité :{' '}
-                          <b className="text-slate-900 text-xs font-black">
-                            {cmd.quantite} pcs
-                          </b>
-                        </span>
-                        <span>Date : {cmd.date}</span>
-                      </div>
+                      <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">Derniers Mouvements</h3>
+                      <p className="text-[11px] text-slate-500">Flux récents de magasin</p>
                     </div>
-
-                    {/* Details Info Pill */}
-                    {(cmd.technicien || cmd.fournisseur || cmd.id_zone) && (
-                      <div className="text-[10.5px] text-slate-600 bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80 font-mono space-y-0.5">
-                        {cmd.fournisseur && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Fournisseur:</span>
-                            <b className="text-slate-800">{cmd.fournisseur}</b>
-                          </div>
-                        )}
-                        {cmd.technicien && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Demandeur:</span>
-                            <b className="text-slate-800">{cmd.technicien}</b>
-                          </div>
-                        )}
-                        {cmd.id_zone && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Destination:</span>
-                            <b className="text-slate-800">
-                              {cmd.id_zone}{' '}
-                              {cmd.id_machine_registered ? `(${cmd.id_machine_registered})` : ''}
-                            </b>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Actions Buttons */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                    {!isReceived ? (
-                      <button
-                        onClick={() => handleValidateReception(cmd)}
-                        className="flex-1 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-[0_2px_8px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_12px_rgba(16,185,129,0.35)] transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>Valider Réception (Entrée)</span>
-                      </button>
-                    ) : (
-                      <div className="flex-1 py-1.5 text-center text-emerald-900 font-bold text-xs bg-emerald-100/70 border border-emerald-200/80 rounded-xl">
-                        ✓ Entrée de stock enregistrée
-                      </div>
-                    )}
-
-                    {onDeleteMouvement && (
-                      <button
-                        onClick={() => onDeleteMouvement(cmd.id)}
-                        className="p-1.5 rounded-xl border border-slate-200 hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition cursor-pointer"
-                        title="Supprimer la commande"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    onClick={onNavigateToSortie}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Sortie</span>
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-6 text-center space-y-2">
-            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 mx-auto flex items-center justify-center shadow-2xs">
-              <ShoppingCart className="w-5 h-5" />
-            </div>
-            <h4 className="text-xs font-bold text-slate-800">Aucune commande répertoriée</h4>
-            <p className="text-[11px] text-slate-500 max-w-md mx-auto">
-              Initiez facilement une commande d'achat ou un réassort pour vos pièces sous seuil d'alerte en cliquant sur le bouton ci-dessous.
-            </p>
-            <button
-              onClick={handleOpenNewOrder}
-              className="mt-2 px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Créer une Commande d'Achat</span>
-            </button>
-          </div>
-        )}
-      </div>
 
-      {/* 3.5 External Repairs & Overdue Tracking Section (Bons de Sortie) */}
-      <div className="bg-white rounded-3xl border border-purple-200/90 shadow-[0_8px_30px_rgba(168,85,247,0.06)] hover:shadow-[0_12px_36px_rgba(168,85,247,0.1)] transition-all duration-300 p-5 md:p-6 space-y-4 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl pointer-events-none" />
+                {mouvements.length > 0 ? (
+                  <div className="space-y-2">
+                    {mouvements.slice(0, 6).map((m, idx) => {
+                      const art = stockItems.find(
+                        (s) => String(s.ref).toLowerCase() === String(m.ref).toLowerCase()
+                      );
+                      const isSortie = String(m.type || '').toLowerCase().includes('sort');
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-purple-100/90 pb-4 relative">
-          <div className="flex items-center gap-3">
-            <Truck className="w-6 h-6 text-purple-600 shrink-0" />
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-extrabold text-base text-slate-900 tracking-tight">
-                  Matériels en Réparation Externe (Bons de Sortie)
-                </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-purple-100/90 text-purple-950 border border-purple-200/80 shadow-2xs">
-                  {pendingExternalRepairs.length} en cours
-                </span>
-                {overdueRepairs.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-extrabold bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1 animate-pulse shadow-2xs">
-                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                    <span>{overdueRepairs.length} en retard</span>
-                  </span>
+                      return (
+                        <div
+                          key={`feed-mvt-${m.id ?? ''}-${m.code_bon ?? ''}-${idx}`}
+                          className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/80 flex items-center justify-between text-xs hover:border-slate-300 transition"
+                        >
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.2 rounded-full font-mono ${
+                                  isSortie
+                                    ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                }`}
+                              >
+                                {m.type}
+                              </span>
+                              <span className="font-mono font-bold text-slate-900">{m.ref}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-600 truncate max-w-[180px] font-medium">
+                              {art ? art.designation : m.designation || 'Article'}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {m.code_bon || 'Bon'} • {m.date} • {m.technicien || 'Tech'}
+                            </div>
+                          </div>
+                          <div className="text-right font-mono font-black text-sm shrink-0">
+                            {isSortie ? (
+                              <span className="text-rose-600">-{m.quantite}</span>
+                            ) : (
+                              <span className="text-emerald-600">+{m.quantite}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-400 text-center py-8 bg-slate-50/60 rounded-xl border border-slate-100">
+                    Aucun mouvement récent enregistré.
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Suivi des moteurs, pompes et pièces envoyés en usinage/bobinage. Réceptionnez le retour pour réintégrer l'article.
-              </p>
             </div>
           </div>
 
-          <Action3DButton
-            icon={Truck}
-            showAddBadge={true}
-            variant="circle"
-            color="purple"
-            title="Nouveau Bon de Sortie"
-            onClick={onNavigateToSortie}
-          />
-        </div>
-
-        {/* List of External Repairs */}
-        {pendingExternalRepairs.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 relative">
-            {pendingExternalRepairs.map((rep, idx) => {
-              const isLate = rep.date_retour_prevue && rep.date_retour_prevue < todayStr;
-              return (
-                <div
-                  key={`dash-rep-${rep.id ?? ''}-${idx}`}
-                  className={`p-4 rounded-2xl border transition-all duration-300 relative flex flex-col justify-between space-y-3 ${
-                    isLate
-                      ? 'bg-rose-50/40 border-rose-300/90 shadow-[0_2px_10px_rgba(244,63,94,0.06)] ring-1 ring-rose-400/20'
-                      : 'bg-white border-purple-200/90 hover:border-purple-400/90 shadow-[0_2px_10px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_20px_rgba(168,85,247,0.12)] hover:-translate-y-0.5'
-                  }`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-extrabold text-xs text-purple-950 bg-purple-100/90 px-2 py-0.5 rounded border border-purple-300 shadow-2xs">
-                          {rep.code_bon || 'BS-EXT'}
-                        </span>
-                        <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200 font-mono">
-                          {rep.ref}
-                        </span>
+          {/* 5. Side-by-Side Logistics Hub: Commandes & Réappro (Left) + Réparations Externes (Right) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+            {/* Left Column: Suivi des Commandes & Réapprovisionnements */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="border-b border-slate-100 pb-3.5 space-y-3">
+                  <div className="flex items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center shrink-0">
+                        <ShoppingCart className="w-4 h-4 text-amber-600" />
                       </div>
-                      {isLate ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs">
-                          <AlertTriangle className="w-3 h-3 text-rose-600" />
-                          <span>Délai Dépassé</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200/80 shadow-2xs">
-                          <Clock className="w-3 h-3 text-purple-600" />
-                          <span>Chez Prestataire</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="font-bold text-xs text-slate-900 line-clamp-1">
-                        {rep.designation || 'Pièce en réparation'}
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono mt-1 flex items-center justify-between">
-                        <span>Qté : <b className="text-slate-900 font-black">{rep.quantite} pcs</b></span>
-                        <span className={isLate ? 'text-rose-700 font-bold font-mono' : 'text-purple-950 font-semibold'}>
-                          Retour : {rep.date_retour_prevue || 'Non fixé'}
-                        </span>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                            Suivi des Commandes & Réapprovisionnements
+                          </h2>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-amber-100/90 text-amber-950 border border-amber-200/80">
+                            {pendingOrders.length} en attente
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Cliquez sur <b className="text-emerald-700">"Valider Réception"</b> pour convertir en Entrée de Stock.
+                        </p>
                       </div>
                     </div>
 
-                    {(rep.prestataire_externe || rep.id_machine_registered) && (
-                      <div className="text-[10.5px] text-slate-600 bg-slate-50/90 p-2.5 rounded-xl border border-slate-200/80 font-mono space-y-0.5">
-                        {rep.prestataire_externe && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Prestataire:</span>
-                            <b className="text-purple-950">{rep.prestataire_externe}</b>
-                          </div>
-                        )}
-                        {rep.id_machine_registered && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400">Machine:</span>
-                            <b className="text-slate-800">{rep.id_machine_registered}</b>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <Action3DButton
+                      icon={ShoppingCart}
+                      showAddBadge={true}
+                      variant="circle"
+                      color="amber"
+                      title="Créer une nouvelle commande"
+                      onClick={handleOpenNewOrder}
+                    />
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100">
-                    <button
-                      onClick={onNavigateToSortie}
-                      className="w-full py-1.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold text-xs rounded-xl shadow-[0_2px_8px_rgba(147,51,234,0.25)] hover:shadow-[0_4px_12px_rgba(147,51,234,0.35)] transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                    >
-                      <Inbox className="w-3.5 h-3.5" />
-                      <span>Réceptionner le Retour (Entrée)</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 text-center space-y-1.5">
-            <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500" />
-            <div className="text-xs font-bold text-slate-800">Aucune pièce en réparation externe</div>
-            <p className="text-[11px] text-slate-500">
-              Tous les moteurs et équipements sont présents au sein du site.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* 4. GMAO Flux Intelligence & Action Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Actions & Interventions Breakdown */}
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Activity className="w-6 h-6 text-blue-600 shrink-0" />
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                  Répartition des Interventions
-                </h3>
-                <p className="text-[11px] text-slate-500">Par type d'action GMAO</p>
-              </div>
-            </div>
-            <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60 shadow-2xs">
-              {mouvements.length} mvts
-            </span>
-          </div>
-
-          <div className="space-y-3 text-xs">
-            {/* Corrective */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between font-medium">
-                <span className="text-rose-700 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  Corrective (Dépannage)
-                </span>
-                <span className="font-mono font-bold text-slate-800">
-                  {actionStats.counts.CORRECTIVE} (
-                  {Math.round((actionStats.counts.CORRECTIVE / actionStats.totalActions) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-rose-500 h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.round(
-                      (actionStats.counts.CORRECTIVE / actionStats.totalActions) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Preventive */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between font-medium">
-                <span className="text-blue-700 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                  Préventive (Systématique)
-                </span>
-                <span className="font-mono font-bold text-slate-800">
-                  {actionStats.counts.PREVENTIVE} (
-                  {Math.round((actionStats.counts.PREVENTIVE / actionStats.totalActions) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-blue-500 h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.round(
-                      (actionStats.counts.PREVENTIVE / actionStats.totalActions) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Usage Direct */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between font-medium">
-                <span className="text-purple-700 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" />
-                  Usage Direct / Consommables
-                </span>
-                <span className="font-mono font-bold text-slate-800">
-                  {actionStats.counts.USAGE} (
-                  {Math.round((actionStats.counts.USAGE / actionStats.totalActions) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-purple-500 h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.round(
-                      (actionStats.counts.USAGE / actionStats.totalActions) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Ameliorative */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between font-medium">
-                <span className="text-amber-700 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Améliorative / Travaux Neufs
-                </span>
-                <span className="font-mono font-bold text-slate-800">
-                  {actionStats.counts.AMELIORATIVE} (
-                  {Math.round((actionStats.counts.AMELIORATIVE / actionStats.totalActions) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-amber-500 h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.round(
-                      (actionStats.counts.AMELIORATIVE / actionStats.totalActions) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Reapprovisionnements & Entrees */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between font-medium">
-                <span className="text-emerald-700 font-bold flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Réapprovisionnement Magasin
-                </span>
-                <span className="font-mono font-bold text-slate-800">
-                  {actionStats.counts.REAPPRO} (
-                  {Math.round((actionStats.counts.REAPPRO / actionStats.totalActions) * 100)}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${Math.round(
-                      (actionStats.counts.REAPPRO / actionStats.totalActions) * 100
-                    )}%`,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Top 5 Most Consumed Articles */}
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <TrendingDown className="w-6 h-6 text-amber-600 shrink-0" />
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                  Top 5 Pièces Consommées
-                </h3>
-                <p className="text-[11px] text-slate-500">Volume total de sorties</p>
-              </div>
-            </div>
-            <button
-              onClick={onNavigateToStock}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Stock</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {topConsumedArticles.length > 0 ? (
-              topConsumedArticles.map((art, idx) => {
-                // Medal styling for top 3
-                const rankStyles = [
-                  'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold shadow-2xs',
-                  'bg-slate-200 text-slate-800 border border-slate-300 font-bold',
-                  'bg-orange-100 text-orange-900 border border-orange-200 font-bold',
-                  'bg-slate-100 text-slate-600 border border-slate-200 font-medium',
-                  'bg-slate-100 text-slate-600 border border-slate-200 font-medium',
-                ];
-
-                return (
-                  <div
-                    key={`top-art-${art.ref ?? ''}-${idx}`}
-                    className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:border-slate-300 flex items-center justify-between text-xs transition-colors"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-mono ${rankStyles[idx] || rankStyles[4]}`}>
-                          {idx + 1}
-                        </span>
-                        <span className="font-mono font-bold text-slate-900">{art.ref}</span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
-                        {art.designation}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono font-black text-rose-600 text-sm">
-                        -{art.qty} pcs
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        Reste : {art.stockActuel}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="text-xs text-slate-400 text-center py-6">
-                Aucune sortie enregistrée pour le moment.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Top Demanding Machines */}
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Factory className="w-6 h-6 text-purple-600 shrink-0" />
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                  Machines les Plus Sollicitées
-                </h3>
-                <p className="text-[11px] text-slate-500">Nombre d'interventions / dépannages</p>
-              </div>
-            </div>
-            <button
-              onClick={onNavigateToMachines}
-              className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-0.5 cursor-pointer"
-            >
-              <span>Parc</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {machineHealth.topMachines.length > 0 ? (
-              machineHealth.topMachines.map((mch, idx) => (
-                <div
-                  key={`top-mch-${mch.id ?? ''}-${idx}`}
-                  className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:border-slate-300 flex items-center justify-between text-xs transition-colors"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] shadow-2xs">
-                        {mch.id}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-700 truncate max-w-[140px]">
-                        {mch.designation}
-                      </span>
-                    </div>
-                    <div className="text-[10.5px] text-slate-400 font-mono">
-                      Zone : {mch.zone}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 font-mono font-bold text-xs border border-purple-200/80 shadow-2xs">
-                      {mch.count} interventions
-                    </span>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-xs text-slate-400 text-center py-6">
-                Aucune machine associée aux sorties.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Critical Watchlist & Recent Flux Live Feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Watchlist Ruptures & Alertes */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] transition-all duration-300 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <AlertTriangle className="w-6 h-6 text-rose-600 shrink-0" />
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                  Articles Sous Seuil Critique ({alertAndRuptureItems.length})
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Pièces nécessitant un réapprovisionnement urgent
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={onNavigateToStock}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
-            >
-              <span>Voir tout le Stock</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="overflow-x-auto border border-slate-200/80 rounded-2xl shadow-2xs">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-3.5">Ref</th>
-                  <th className="py-3 px-3.5">Désignation</th>
-                  <th className="py-3 px-2 text-right">Stock Actuel</th>
-                  <th className="py-3 px-2 text-right">Seuil</th>
-                  <th className="py-3 px-3 text-center">État</th>
-                  <th className="py-3 px-3">Emplacement</th>
-                  <th className="py-3 px-3 text-center">Actions Rapides</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {!isWatchlistReady ? (
-                  <TableSkeletonRows cols={7} rows={6} color="rose" />
-                ) : alertAndRuptureItems.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="py-8 text-center text-slate-400">
-                      <div className="flex flex-col items-center justify-center gap-1.5">
-                        <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                        <span className="font-semibold text-slate-700">Aucun article en alerte ou rupture</span>
-                        <span className="text-xs text-slate-500">Tous les niveaux de stock sont optimaux</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  alertAndRuptureItems.slice(0, 8).map((item, idx) => (
-                  <tr key={`alert-item-${item.id ?? ''}-${item.ref ?? ''}-${idx}`} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-3.5 font-mono font-bold text-slate-900">{item.ref}</td>
-                    <td className="py-3 px-3.5 font-medium text-slate-800">{item.designation}</td>
-                    <td className="py-3 px-2 text-right font-mono font-black text-rose-600">
-                      {item.stockActuel}
-                    </td>
-                    <td className="py-3 px-2 text-right font-mono text-slate-500">{item.seuil}</td>
-                    <td className="py-3 px-3 text-center">
-                      {item.alerte === 'RUPTURE' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
-                          <XCircle className="w-3 h-3" />
-                          <span>RUPTURE</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-2xs">
-                          <AlertTriangle className="w-3 h-3" />
-                          <span>ALERTE</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 font-mono text-slate-600">{item.emplacement}</td>
-                    <td className="py-3 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <Action3DButton
-                          icon={ShoppingCart}
-                          showAddBadge={true}
-                          variant="circle"
-                          color="amber"
-                          title="Commander réapprovisionnement"
-                          onClick={() => handleOpenOrderForArticle(item)}
-                        />
-                        <button
-                          onClick={() => onQuickSortie(item)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold shadow-2xs transition cursor-pointer active:scale-95"
-                          title="Faire une sortie"
-                        >
-                          Sortie
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Live Flux Feed */}
-        <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] transition-all duration-300 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <SortieEntreeIcon className="w-6 h-6 text-slate-800 shrink-0" strokeWidth={2.25} />
-              <div>
-                <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">Derniers Mouvements</h3>
-                <p className="text-[11px] text-slate-500">Flux récents de magasin</p>
-              </div>
-            </div>
-            <button
-              onClick={onNavigateToSortie}
-              className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Sortie</span>
-            </button>
-          </div>
-
-          <div className="space-y-2.5">
-            {mouvements.slice(0, 6).map((m, idx) => {
-              const art = stockItems.find(
-                (s) => String(s.ref).toLowerCase() === String(m.ref).toLowerCase()
-              );
-              const isSortie = String(m.type || '').toLowerCase().includes('sort');
-
-              return (
-                <div
-                  key={`feed-mvt-${m.id ?? ''}-${m.code_bon ?? ''}-${idx}`}
-                  className="p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80 flex items-center justify-between text-xs hover:border-slate-300 hover:shadow-2xs transition"
-                >
-                  <div className="space-y-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.2 rounded-full font-mono shadow-2xs ${
-                          isSortie
-                            ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  {/* Filter Tabs Bar */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="inline-flex p-0.5 bg-slate-100/90 rounded-xl border border-slate-200/80 text-[11px] font-medium">
+                      <button
+                        onClick={() => setOrderFilterTab('ALL')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          orderFilterTab === 'ALL'
+                            ? 'bg-white text-slate-900 font-bold shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        {m.type}
-                      </span>
-                      <span className="font-mono font-bold text-slate-900">{m.ref}</span>
+                        Toutes ({allOrders.length})
+                      </button>
+                      <button
+                        onClick={() => setOrderFilterTab('PENDING')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          orderFilterTab === 'PENDING'
+                            ? 'bg-white text-amber-900 font-bold shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        En cours ({pendingOrders.length})
+                      </button>
+                      <button
+                        onClick={() => setOrderFilterTab('RECEIVED')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                          orderFilterTab === 'RECEIVED'
+                            ? 'bg-white text-emerald-900 font-bold shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Réceptionnées ({completedOrders.length})
+                      </button>
                     </div>
-                    <div className="text-[11px] text-slate-600 truncate max-w-[170px] font-medium">
-                      {art ? art.designation : m.designation || 'Article'}
+
+                    <div className="text-[10.5px] text-slate-400 font-mono">
+                      {displayedOrders.length} commande(s)
                     </div>
-                    <div className="text-[10px] text-slate-400 font-mono">
-                      {m.code_bon || 'Bon'} • {m.date} • {m.technicien || 'Tech'}
-                    </div>
-                  </div>
-                  <div className="text-right font-mono font-black text-sm">
-                    {isSortie ? (
-                      <span className="text-rose-600">-{m.quantite}</span>
-                    ) : (
-                      <span className="text-emerald-600">+{m.quantite}</span>
-                    )}
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Order Cards Grid */}
+                {displayedOrders.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                    {displayedOrders.map((cmd, idx) => {
+                      const art = stockItems.find(
+                        (s) => String(s.ref).toLowerCase() === String(cmd.ref).toLowerCase()
+                      );
+                      const isReceived =
+                        Array.isArray(cmd.tags) && cmd.tags.includes('#RECEPTION_VALIDE');
+
+                      return (
+                        <div
+                          key={`dash-cmd-${cmd.id ?? ''}-${cmd.ref ?? ''}-${idx}`}
+                          className={`p-3.5 rounded-xl border transition-all relative flex flex-col justify-between space-y-2.5 ${
+                            isReceived
+                              ? 'bg-emerald-50/30 border-emerald-200/90'
+                              : 'bg-slate-50/60 border-slate-200/90 hover:border-amber-300'
+                          }`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="font-mono font-extrabold text-[11px] text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                  {cmd.ref}
+                                </span>
+                                <span className="text-[10px] font-bold text-amber-950 bg-amber-100/90 px-2 py-0.5 rounded-full border border-amber-200 font-mono">
+                                  {cmd.code_bon || 'CMD'}
+                                </span>
+                              </div>
+
+                              {isReceived ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Reçu</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-200/80">
+                                  <Clock className="w-3 h-3 text-amber-600" />
+                                  <span>Attente</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">
+                                {art ? art.designation : cmd.designation || 'Article commandé'}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center justify-between">
+                                <span>
+                                  Qté : <b className="text-slate-900 font-black">{cmd.quantite} pcs</b>
+                                </span>
+                                <span>{cmd.date}</span>
+                              </div>
+                            </div>
+
+                            {(cmd.technicien || cmd.fournisseur || cmd.id_zone) && (
+                              <div className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/80 font-mono space-y-0.5">
+                                {cmd.fournisseur && (
+                                  <div className="flex items-center justify-between truncate">
+                                    <span className="text-slate-400">Fourn.:</span>
+                                    <b className="text-slate-800 truncate ml-1">{cmd.fournisseur}</b>
+                                  </div>
+                                )}
+                                {cmd.technicien && (
+                                  <div className="flex items-center justify-between truncate">
+                                    <span className="text-slate-400">Dem.:</span>
+                                    <b className="text-slate-800 truncate ml-1">{cmd.technicien}</b>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-200/60 flex items-center gap-1.5">
+                            {!isReceived ? (
+                              <button
+                                onClick={() => handleValidateReception(cmd)}
+                                className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Valider Réception</span>
+                              </button>
+                            ) : (
+                              <div className="flex-1 py-1.5 text-center text-emerald-900 font-bold text-[11px] bg-emerald-100/70 border border-emerald-200/80 rounded-lg">
+                                ✓ Entrée enregistrée
+                              </div>
+                            )}
+
+                            {onDeleteMouvement && (
+                              <button
+                                onClick={() => onDeleteMouvement(cmd.id)}
+                                className="p-1.5 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-600 text-slate-400 transition cursor-pointer"
+                                title="Supprimer la commande"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-6 text-center space-y-2 min-h-[190px] flex flex-col items-center justify-center">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 mx-auto flex items-center justify-center">
+                      <ShoppingCart className="w-4 h-4" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-800">Aucune commande répertoriée</h4>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Initiez une commande d&apos;achat ou un réassort pour vos pièces sous seuil d&apos;alerte.
+                    </p>
+                    <button
+                      onClick={handleOpenNewOrder}
+                      className="mt-1 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Créer une Commande d&apos;Achat</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Matériels en Réparation Externe (Bons de Sortie) */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200/80 flex items-center justify-center shrink-0">
+                      <Truck className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                          Matériels en Réparation Externe (Bons de Sortie)
+                        </h2>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-purple-100/90 text-purple-950 border border-purple-200/80">
+                          {pendingExternalRepairs.length} en cours
+                        </span>
+                        {overdueRepairs.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1 animate-pulse">
+                            <AlertTriangle className="w-3 h-3 text-rose-600" />
+                            <span>{overdueRepairs.length} en retard</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Suivi des moteurs, pompes et pièces envoyés en usinage/bobinage externe.
+                      </p>
+                    </div>
+                  </div>
+
+                  <Action3DButton
+                    icon={Truck}
+                    showAddBadge={true}
+                    variant="circle"
+                    color="purple"
+                    title="Nouveau Bon de Sortie"
+                    onClick={onNavigateToSortie}
+                  />
+                </div>
+
+                {/* List of External Repairs */}
+                {pendingExternalRepairs.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
+                    {pendingExternalRepairs.map((rep, idx) => {
+                      const isLate = rep.date_retour_prevue && rep.date_retour_prevue < todayStr;
+                      return (
+                        <div
+                          key={`dash-rep-${rep.id ?? ''}-${idx}`}
+                          className={`p-3.5 rounded-xl border transition-all relative flex flex-col justify-between space-y-2.5 ${
+                            isLate
+                              ? 'bg-rose-50/40 border-rose-300/90'
+                              : 'bg-slate-50/60 border-slate-200/90 hover:border-purple-300'
+                          }`}
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-1">
+                                <span className="font-mono font-extrabold text-[11px] text-purple-950 bg-purple-100/90 px-2 py-0.5 rounded border border-purple-200">
+                                  {rep.code_bon || 'BS-EXT'}
+                                </span>
+                                <span className="text-[10px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded-full border border-slate-200 font-mono">
+                                  {rep.ref}
+                                </span>
+                              </div>
+                              {isLate ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
+                                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                                  <span>Retard</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200/80">
+                                  <Clock className="w-3 h-3 text-purple-600" />
+                                  <span>Externe</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="font-bold text-xs text-slate-900 line-clamp-1">
+                                {rep.designation || 'Pièce en réparation'}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center justify-between">
+                                <span>Qté : <b className="text-slate-900 font-black">{rep.quantite} pcs</b></span>
+                                <span className={isLate ? 'text-rose-700 font-bold font-mono' : 'text-purple-950 font-semibold'}>
+                                  Retour : {rep.date_retour_prevue || 'Non fixé'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {(rep.prestataire_externe || rep.id_machine_registered) && (
+                              <div className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/80 font-mono space-y-0.5">
+                                {rep.prestataire_externe && (
+                                  <div className="flex items-center justify-between truncate">
+                                    <span className="text-slate-400">Prest.:</span>
+                                    <b className="text-purple-950 truncate ml-1">{rep.prestataire_externe}</b>
+                                  </div>
+                                )}
+                                {rep.id_machine_registered && (
+                                  <div className="flex items-center justify-between truncate">
+                                    <span className="text-slate-400">Machine:</span>
+                                    <b className="text-slate-800 truncate ml-1">{rep.id_machine_registered}</b>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-200/60">
+                            <button
+                              onClick={onNavigateToSortie}
+                              className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Inbox className="w-3.5 h-3.5" />
+                              <span>Réceptionner le Retour</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-6 text-center space-y-2 min-h-[190px] flex flex-col items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500" />
+                    <div className="text-xs font-bold text-slate-800">Aucune pièce en réparation externe</div>
+                    <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                      Tous les moteurs et équipements sont présents au sein du site.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 6. GMAO Flux Intelligence & Action Distribution (3-Column Grid) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+            {/* Actions & Interventions Breakdown */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-200/80 flex items-center justify-center shrink-0">
+                    <Activity className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Répartition des Interventions
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Par type d&apos;action GMAO</p>
+                  </div>
+                </div>
+                <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                  {mouvements.length} mvts
+                </span>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                {/* Corrective */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-rose-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      Corrective (Dépannage)
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {actionStats.counts.CORRECTIVE} (
+                      {Math.round((actionStats.counts.CORRECTIVE / actionStats.totalActions) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-rose-500 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.round(
+                          (actionStats.counts.CORRECTIVE / actionStats.totalActions) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Preventive */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-blue-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                      Préventive (Systématique)
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {actionStats.counts.PREVENTIVE} (
+                      {Math.round((actionStats.counts.PREVENTIVE / actionStats.totalActions) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-blue-500 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.round(
+                          (actionStats.counts.PREVENTIVE / actionStats.totalActions) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Usage Direct */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-purple-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      Usage Direct / Consommables
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {actionStats.counts.USAGE} (
+                      {Math.round((actionStats.counts.USAGE / actionStats.totalActions) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-purple-500 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.round(
+                          (actionStats.counts.USAGE / actionStats.totalActions) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Ameliorative */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-amber-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      Améliorative / Travaux Neufs
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {actionStats.counts.AMELIORATIVE} (
+                      {Math.round((actionStats.counts.AMELIORATIVE / actionStats.totalActions) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-amber-500 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.round(
+                          (actionStats.counts.AMELIORATIVE / actionStats.totalActions) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Reapprovisionnements & Entrees */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between font-medium">
+                    <span className="text-emerald-700 font-bold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      Réapprovisionnement Magasin
+                    </span>
+                    <span className="font-mono font-bold text-slate-800">
+                      {actionStats.counts.REAPPRO} (
+                      {Math.round((actionStats.counts.REAPPRO / actionStats.totalActions) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.round(
+                          (actionStats.counts.REAPPRO / actionStats.totalActions) * 100
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Top 5 Most Consumed Articles */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center shrink-0">
+                    <TrendingDown className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Top 5 Pièces Consommées
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Volume total de sorties</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onNavigateToStock}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Stock</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {topConsumedArticles.length > 0 ? (
+                  topConsumedArticles.map((art, idx) => {
+                    const rankStyles = [
+                      'bg-amber-100 text-amber-900 border border-amber-300 font-extrabold shadow-2xs',
+                      'bg-slate-200 text-slate-800 border border-slate-300 font-bold',
+                      'bg-orange-100 text-orange-900 border border-orange-200 font-bold',
+                      'bg-slate-100 text-slate-600 border border-slate-200 font-medium',
+                      'bg-slate-100 text-slate-600 border border-slate-200 font-medium',
+                    ];
+
+                    return (
+                      <div
+                        key={`top-art-${art.ref ?? ''}-${idx}`}
+                        className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:border-slate-300 flex items-center justify-between text-xs transition-colors"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`w-5 h-5 rounded-full text-[10px] flex items-center justify-center font-mono ${rankStyles[idx] || rankStyles[4]}`}>
+                              {idx + 1}
+                            </span>
+                            <span className="font-mono font-bold text-slate-900">{art.ref}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 truncate max-w-[180px]">
+                            {art.designation}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-mono font-black text-rose-600 text-sm">
+                            -{art.qty} pcs
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Reste : {art.stockActuel}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-xs text-slate-400 text-center py-6">
+                    Aucune sortie enregistrée pour le moment.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Top Demanding Machines */}
+            <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-200/80 flex items-center justify-center shrink-0">
+                    <Factory className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
+                      Machines les Plus Sollicitées
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Nombre d&apos;interventions / dépannages</p>
+                  </div>
+                </div>
+                <button
+                  onClick={onNavigateToMachines}
+                  className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span>Parc</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {machineHealth.topMachines.length > 0 ? (
+                  machineHealth.topMachines.map((mch, idx) => (
+                    <div
+                      key={`top-mch-${mch.id ?? ''}-${idx}`}
+                      className="p-2.5 rounded-xl bg-slate-50/90 border border-slate-200/70 hover:border-slate-300 flex items-center justify-between text-xs transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200 text-[11px] shadow-2xs">
+                            {mch.id}
+                          </span>
+                          <span className="text-[11px] font-bold text-slate-700 truncate max-w-[140px]">
+                            {mch.designation}
+                          </span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-400 font-mono">
+                          Zone : {mch.zone}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-900 font-mono font-bold text-xs border border-purple-200/80 shadow-2xs">
+                          {mch.count} interventions
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-slate-400 text-center py-6">
+                    Aucune machine associée aux sorties.
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-        </>
       )}
 
-      {/* 7. GMAO Shortcuts Hub */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 p-5 md:p-6 shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(0,0,0,0.08)] transition-all duration-300 space-y-3">
-        <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2 tracking-tight">
-          <Zap className="w-4 h-4 text-amber-500" />
-          <span>Accès Rapide aux Modules GMAO</span>
-        </h3>
+      {/* Technician Accès Rapide Hub (for Technician shift scope) */}
+      {isTechUser && (
+        <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3">
+          <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2 tracking-tight">
+            <Zap className="w-4 h-4 text-amber-500" />
+            <span>Accès Rapide aux Modules GMAO</span>
+          </h3>
 
-        <div className={`grid grid-cols-2 sm:grid-cols-3 ${isTechUser ? 'lg:grid-cols-6' : 'lg:grid-cols-7'} gap-3`}>
-          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'preventive')) && onNavigateToPreventive && (
-            <button
-              onClick={onNavigateToPreventive}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(79,70,229,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Maintenance Préventive</div>
-              <div className="text-[10px] text-slate-500">Mes tâches & planning</div>
-            </button>
-          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'preventive')) && onNavigateToPreventive && (
+              <button
+                onClick={onNavigateToPreventive}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Maintenance Préventive</div>
+                <div className="text-[10px] text-slate-500">Mes tâches & planning</div>
+              </button>
+            )}
 
-          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective')) && onNavigateToCorrective && (
-            <button
-              onClick={() => onNavigateToCorrective('corrective')}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(245,158,11,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Wrench className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Maintenance Corrective</div>
-              <div className="text-[10px] text-slate-500">DI, BT & Chrono Live</div>
-            </button>
-          )}
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective')) && onNavigateToCorrective && (
+              <button
+                onClick={() => onNavigateToCorrective('corrective')}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Wrench className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Maintenance Corrective</div>
+                <div className="text-[10px] text-slate-500">DI, BT & Chrono Live</div>
+              </button>
+            )}
 
-          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
-            <button
-              onClick={onNavigateToStock}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(59,130,246,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Package className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
-              <div className="text-[10px] text-slate-500">{isTechUser ? 'Consulter les PDR' : 'Gestion des articles'}</div>
-            </button>
-          )}
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
+              <button
+                onClick={onNavigateToStock}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
+                <div className="text-[10px] text-slate-500">Consulter les PDR</div>
+              </button>
+            )}
 
-          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
-            <button
-              onClick={onNavigateToSortie}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(16,185,129,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <SortieEntreeIcon className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
-              <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
-            </button>
-          )}
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
+              <button
+                onClick={onNavigateToSortie}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <SortieEntreeIcon className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
+                <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
+              </button>
+            )}
 
-          {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
-            <button
-              onClick={onNavigateToMachines}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(168,85,247,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Factory className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
-              <div className="text-[10px] text-slate-500">Arborescence actifs</div>
-            </button>
-          )}
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
+              <button
+                onClick={onNavigateToMachines}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <Factory className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
+                <div className="text-[10px] text-slate-500">Arborescence actifs</div>
+              </button>
+            )}
 
-          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'entrepot')) && (
-            <button
-              onClick={onNavigateToWarehouse}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(20,184,166,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Warehouse className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Entrepôt</div>
-              <div className="text-[10px] text-slate-500">Éléments & Moteurs</div>
-            </button>
-          )}
-
-          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'zones')) && (
-            <button
-              onClick={onNavigateToZones}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(245,158,11,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Layers className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Zones & Ateliers</div>
-              <div className="text-[10px] text-slate-500">Emplacements usine</div>
-            </button>
-          )}
-
-          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'utilisateurs')) && (
-            <button
-              onClick={onNavigateToUsers}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(99,102,241,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <UserCheck className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Personnel GMAO</div>
-              <div className="text-[10px] text-slate-500">Techniciens & Chefs</div>
-            </button>
-          )}
-
-          {!isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'settings')) && (
-            <button
-              onClick={onNavigateToSettings}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 hover:border-slate-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <FileSpreadsheet className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">Excel Twin</div>
-              <div className="text-[10px] text-slate-500">Sauvegardes & Sync</div>
-            </button>
-          )}
-
-          {isTechUser && (!currentUser || AuthorizationService.canAccessTab(currentUser, 'guide')) && onNavigateToGuide && (
-            <button
-              onClick={onNavigateToGuide}
-              className="p-3.5 rounded-2xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-[0_2px_8px_rgba(0,0,0,0.03)] hover:shadow-[0_6px_16px_rgba(20,184,166,0.12)] hover:-translate-y-0.5 transition-all duration-300 space-y-1.5 cursor-pointer group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Guide Terrain</div>
-              <div className="text-[10px] text-slate-500">Manuel & Procédures</div>
-            </button>
-          )}
+            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'guide')) && onNavigateToGuide && (
+              <button
+                onClick={onNavigateToGuide}
+                className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Guide Terrain</div>
+                <div className="text-[10px] text-slate-500">Manuel & Procédures</div>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 8. Purchase Order Modal (BDR Light Excel Unified Modal System) */}
       {showOrderModal && (
