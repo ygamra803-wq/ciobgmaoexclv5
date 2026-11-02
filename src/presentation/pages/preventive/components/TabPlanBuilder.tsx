@@ -432,6 +432,9 @@ export default function TabPlanBuilder({
 
     try {
       const importedTasks = await PreventiveService.importFromExcel(file);
+      if (Array.isArray(importedTasks)) {
+        useGmaoStore.getState().setPreventiveTasks(importedTasks);
+      }
       setImportStatus({
         type: 'success',
         message: `Succès ! ${importedTasks.length} tâches injectées directement dans le planning (localStorage).`,
@@ -461,6 +464,9 @@ export default function TabPlanBuilder({
 
     try {
       const loaded = await PreventiveService.loadFromPublicJson();
+      if (Array.isArray(loaded) && loaded.length > 0) {
+        useGmaoStore.getState().setPreventiveTasks(loaded);
+      }
       setImportStatus({
         type: 'success',
         message: `Succès ! ${loaded.length} tâches chargées depuis les fichiers JSON publics.`,

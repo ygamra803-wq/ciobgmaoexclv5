@@ -67,7 +67,7 @@ export default function UtilisateursView({
     upsertPersonnelAuthAccount,
     removePersonnelAuthAccount,
   } = useAuth();
-  const isAdmin = !currentUser || currentUser.role === 'ADMIN';
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');

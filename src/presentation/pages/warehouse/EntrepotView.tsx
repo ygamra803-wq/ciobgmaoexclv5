@@ -1829,7 +1829,17 @@ export default function EntrepotView({
                   </label>
                   <select
                     value={addForm.rattachement_type}
-                    onChange={(e) => setAddForm({ ...addForm, rattachement_type: e.target.value })}
+                    onChange={(e) => {
+                      const nextType = e.target.value;
+                      setAddForm({
+                        ...addForm,
+                        rattachement_type: nextType,
+                        id_zone:
+                          nextType === 'ZONE'
+                            ? addForm.id_zone || zones[0]?.id_zone || ''
+                            : addForm.id_zone,
+                      });
+                    }}
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold focus:border-teal-500 outline-none"
                   >
                     <option value="MACHINE">{t('entrepot.modal.machine')}</option>
@@ -1875,6 +1885,53 @@ export default function EntrepotView({
                       </option>
                     ))}
                   </select>
+                </div>
+              ) : addForm.rattachement_type === 'ZONE' ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.zone')} *
+                    </label>
+                    <select
+                      value={addForm.id_zone}
+                      onChange={(e) => setAddForm({ ...addForm, id_zone: e.target.value })}
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-amber-800 focus:border-teal-500 outline-none"
+                      required
+                    >
+                      <option value="">-- {t('entrepot.modal.zone')} --</option>
+                      {zones.map((z) => (
+                        <option key={z.id_zone} value={z.id_zone}>
+                          {z.id_zone} - {z.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        {t('entrepot.modal.location')}
+                      </label>
+                      <input
+                        type="text"
+                        value={addForm.emplacement}
+                        onChange={(e) => setAddForm({ ...addForm, emplacement: e.target.value })}
+                        placeholder="Ex: Z-ATELIER-01"
+                        className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:border-teal-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        {t('entrepot.modal.initial_stock')}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={addForm.stockInitial}
+                        onChange={(e) => setAddForm({ ...addForm, stockInitial: e.target.value })}
+                        className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold focus:border-teal-500 outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -2018,12 +2075,17 @@ export default function EntrepotView({
                   </label>
                   <select
                     value={editForm.rattachement_type}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const nextType = e.target.value;
                       setEditForm({
                         ...editForm,
-                        rattachement_type: e.target.value,
-                      })
-                    }
+                        rattachement_type: nextType,
+                        id_zone:
+                          nextType === 'ZONE'
+                            ? editForm.id_zone || zones[0]?.id_zone || ''
+                            : editForm.id_zone,
+                      });
+                    }}
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold focus:border-blue-500 outline-none"
                   >
                     <option value="MACHINE">{t('entrepot.modal.machine')}</option>
@@ -2072,6 +2134,52 @@ export default function EntrepotView({
                       </option>
                     ))}
                   </select>
+                </div>
+              ) : editForm.rattachement_type === 'ZONE' ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.zone')} *
+                    </label>
+                    <select
+                      value={editForm.id_zone}
+                      onChange={(e) => setEditForm({ ...editForm, id_zone: e.target.value })}
+                      className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-amber-800 focus:border-blue-500 outline-none"
+                      required
+                    >
+                      <option value="">-- {t('entrepot.modal.zone')} --</option>
+                      {zones.map((z) => (
+                        <option key={z.id_zone} value={z.id_zone}>
+                          {z.id_zone} - {z.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        {t('entrepot.modal.location')}
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.emplacement}
+                        onChange={(e) => setEditForm({ ...editForm, emplacement: e.target.value })}
+                        className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        {t('entrepot.modal.initial_stock')}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editForm.stockInitial}
+                        onChange={(e) => setEditForm({ ...editForm, stockInitial: e.target.value })}
+                        className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5">
@@ -2324,9 +2432,9 @@ export default function EntrepotView({
                     <span className="text-[10px] text-slate-400 block font-medium">{t('entrepot.modal.rattachement')}</span>
                     <span className="font-bold text-slate-800">
                       {selectedDetails.rattachement_type === 'MACHINE'
-                        ? `${t('entrepot.modal.machine')} : ${selectedDetails.id_machine_registered || selectedDetails.id_machine}`
+                        ? `${t('entrepot.modal.machine')} : ${selectedDetails.id_machine_registered || selectedDetails.id_machine || '--'}`
                         : selectedDetails.rattachement_type === 'ZONE'
-                          ? `${t('entrepot.modal.zone')} : ${selectedDetails.id_zone}`
+                          ? `${t('entrepot.modal.zone')} : ${selectedDetails.id_zone || '--'}`
                           : t('entrepot.modal.location')}
                     </span>
                   </div>

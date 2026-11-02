@@ -364,7 +364,7 @@ export class TaskService {
       }
     }
     if (allTasks.length > 0) {
-      this.injectRealData(allTasks);
+      return this.injectRealData(allTasks);
     }
     return allTasks;
   }

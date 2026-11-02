@@ -25,6 +25,7 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import ErrorBoundary from '../../components/common/ErrorBoundary';
 import PreventiveService from '../../../application/services/PreventiveService';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import TabMainView from './components/TabMainView';
 import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -798,6 +799,9 @@ export default function PreventiveView({
           isOpen={showImportModal}
           onClose={() => setShowImportModal(false)}
           onImportSuccess={(updated) => {
+            if (Array.isArray(updated)) {
+              useGmaoStore.getState().setPreventiveTasks(updated);
+            }
             if (showToast) {
               showToast(`Importation réussie : ${updated?.length || 0} tâches prêtes !`, 'success');
             }
