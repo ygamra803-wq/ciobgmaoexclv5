@@ -1140,33 +1140,62 @@ export default function EntrepotView({
   };
 
   return (
-    <AnimatedPage className="space-y-5">
+    <AnimatedPage className="space-y-4">
       {/* 1. Top Banner (BDR Light GMAO Header Card with 3D Tactile Elevation) */}
-      <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 relative overflow-hidden group/header">
+      <div className="bg-white px-4 py-3.5 md:px-5 md:py-4 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3.5 relative overflow-hidden group/header">
         {/* Subtle Ambient Gradient Background Highlight */}
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
-        <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
+        <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3 relative">
           <PageHeaderIcon icon={Warehouse} colorClass="text-indigo-700" />
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              <h2 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
                 {t('entrepot.title')}
               </h2>
               <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
                 {t('entrepot.registered_count', { count: warehouseItems.length })}
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 max-w-3xl leading-snug line-clamp-1">
               {t('entrepot.subtitle')}
             </p>
           </div>
         </div>
 
-        {/* Right Column: Action Buttons at Top, Tabs Below */}
-        <div className="flex flex-col items-stretch sm:items-end gap-2.5 shrink-0 relative">
-          {/* Top Row: Circular Action Buttons (Formulas Modal & Action3D with smooth switch animation) */}
-          <div className="flex items-center justify-end gap-2.5">
+        {/* Right Column: Unified Single-Row Tab Switcher + Action Buttons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5 shrink-0 relative">
+          {/* Tab Switcher (Components vs Parts) — Equal Width & Structured */}
+          <div className="inline-grid grid-cols-2 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/90 shadow-2xs w-full sm:w-[320px] select-none">
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('COMPONENTS')}
+              className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeWarehouseTab === 'COMPONENTS'
+                  ? 'bg-white text-blue-950 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+              }`}
+            >
+              <CubeIcon className={`w-4 h-4 shrink-0 ${activeWarehouseTab === 'COMPONENTS' ? 'text-blue-600' : 'text-slate-500'}`} />
+              <span className="truncate">{t('entrepot.tabs.components')} ({kpis.components})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTabSwitch('PARTS')}
+              className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeWarehouseTab === 'PARTS'
+                  ? 'bg-white text-indigo-950 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+              }`}
+            >
+              <LayersIcon className={`w-4 h-4 shrink-0 ${activeWarehouseTab === 'PARTS' ? 'text-indigo-600' : 'text-slate-500'}`} />
+              <span className="truncate">{t('entrepot.tabs.parts')} ({kpis.parts})</span>
+            </button>
+          </div>
+
+          {/* Circular Action Buttons */}
+          <div className="flex items-center justify-end gap-2">
             <FormulasModalButton
               onClick={() => setShowFormulasModal(true)}
               title={t('entrepot.buttons.view_formulas')}
@@ -1192,35 +1221,6 @@ export default function EntrepotView({
                 </motion.div>
               </AnimatePresence>
             )}
-          </div>
-
-          {/* Bottom Row: Tab Switcher (Components vs Parts) — Equal Width & Structured */}
-          <div className="inline-grid grid-cols-2 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/90 shadow-2xs w-full sm:w-[340px] select-none">
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('COMPONENTS')}
-              className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeWarehouseTab === 'COMPONENTS'
-                  ? 'bg-white text-blue-950 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
-              }`}
-            >
-              <CubeIcon className={`w-4 h-4 shrink-0 ${activeWarehouseTab === 'COMPONENTS' ? 'text-blue-600' : 'text-slate-500'}`} />
-              <span className="truncate">{t('entrepot.tabs.components')} ({kpis.components})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleTabSwitch('PARTS')}
-              className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap ${
-                activeWarehouseTab === 'PARTS'
-                  ? 'bg-white text-indigo-950 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-slate-200/60'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
-              }`}
-            >
-              <LayersIcon className={`w-4 h-4 shrink-0 ${activeWarehouseTab === 'PARTS' ? 'text-indigo-600' : 'text-slate-500'}`} />
-              <span className="truncate">{t('entrepot.tabs.parts')} ({kpis.parts})</span>
-            </button>
           </div>
         </div>
       </div>

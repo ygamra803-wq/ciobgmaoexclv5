@@ -1038,7 +1038,11 @@ export default function TabPlanBuilder({
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0 self-start md:self-center">
           {/* Switcher Mode Formulaire Classique ⇄ Assistant Wizard */}
-          <div className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/90 shadow-inner">
+          <div
+            className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/90 shadow-2xs"
+            role="group"
+            aria-label="Mode de conception du plan préventif"
+          >
             <button
               type="button"
               onClick={() => setWizardMode(false)}
@@ -1047,10 +1051,10 @@ export default function TabPlanBuilder({
                   ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
-              title="Afficher la grille classique à 3 colonnes"
+              title="Afficher le formulaire complet classique"
             >
-              <LayoutList className="w-3.5 h-3.5" />
-              <span>Grille Classique</span>
+              <LayoutList className="w-3.5 h-3.5 text-slate-600" />
+              <span>Formulaire Classique</span>
             </button>
             <button
               type="button"
@@ -1058,7 +1062,7 @@ export default function TabPlanBuilder({
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                 isWizardMode
                   ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-500 hover:text-indigo-700'
               }`}
               title="Activer l'assistant guidé étape par étape (Wizard)"
             >

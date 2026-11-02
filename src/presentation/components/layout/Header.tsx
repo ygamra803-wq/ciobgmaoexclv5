@@ -9,6 +9,8 @@ import {
   Bell,
   Keyboard,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Layers,
   Boxes,
   Truck,
@@ -537,10 +539,10 @@ export default function Header({
 
           {/* Smart Breadcrumb Navigation Capsule */}
           <div
-            className={`flex items-center gap-2 max-w-[280px] lg:max-w-[460px] shrink-0 ${
+            className={`flex items-center gap-2 max-w-[200px] lg:max-w-[260px] xl:max-w-[380px] shrink-0 ${
               isStandardFixed
-                ? 'px-3 py-1.5 rounded-lg bg-zinc-100/80 border border-zinc-200/70 text-xs shadow-none'
-                : 'hidden md:flex px-3 sm:px-3.5 py-1.5 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                ? 'px-2.5 py-1 rounded-lg bg-zinc-100/80 border border-zinc-200/70 text-xs shadow-none'
+                : 'hidden md:flex px-2.5 sm:px-3 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
             }`}
             role="navigation"
             aria-label="Fil d'Ariane intelligent (Breadcrumbs)"
@@ -584,65 +586,95 @@ export default function Header({
           </div>
         </div>
 
-        {/* Center: Scrollable Responsive Sub-Tabs Navigation */}
+        {/* Center: Scrollable Responsive Sub-Tabs Navigation with Overflow Affordance */}
         <nav
           role="navigation"
           aria-label="Sous-onglets de navigation"
-          className="flex items-center justify-center flex-1 min-w-0 mx-1 sm:mx-2 overflow-hidden"
+          className="flex items-center justify-center flex-1 min-w-0 mx-1 sm:mx-1.5 overflow-hidden gap-1"
         >
           {childTabs.length > 0 && (
-            <div
-              role="tablist"
-              aria-label={activeParent.label}
-              className="inline-flex items-center p-1 sm:p-1.5 rounded-full bg-[#EFEFEE] border border-[#E5E5E3] shadow-[inset_0_1px_2px_rgba(0,0,0,0.06),0_2px_10px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full scrollbar-none no-scrollbar flex-nowrap shrink-0 sm:shrink min-w-0 gap-0.5 sm:gap-1"
-            >
-              {childTabs.map((child, index) => {
-                const isActive = currentTab === child.id;
-                const isTech = isTechnicianRole(currentUser);
-                const totalPendingValidation =
-                  Number(counts?.pendingSortieDemands || 0) +
-                  Number(counts?.pendingPreventiveValidation || 0) +
-                  Number(counts?.pendingCorrectiveValidation || 0);
-                const childPending = !isTech
-                  ? child.id === 'validation_center'
-                    ? totalPendingValidation
-                    : child.id === 'sortie'
-                    ? Number(counts?.pendingSortieDemands || 0)
-                    : child.id === 'preventive'
-                    ? Number(counts?.pendingPreventiveValidation || 0)
-                    : child.id === 'corrective'
-                    ? Number(counts?.pendingCorrectiveValidation || 0)
-                    : 0
-                  : 0;
-                return (
-                  <button
-                    key={child.id}
-                    role="tab"
-                    id={`tab-${child.id}`}
-                    aria-selected={isActive}
-                    aria-current={isActive ? 'page' : undefined}
-                    tabIndex={isActive ? 0 : -1}
-                    onKeyDown={(e) => handleChildTabKeyDown(e, index)}
-                    onClick={() => setCurrentTab(child.id)}
-                    className={`whitespace-nowrap px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-[11.5px] sm:text-[12.5px] font-semibold transition-all duration-200 cursor-pointer shrink-0 inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
-                      isActive
-                        ? 'bg-[#111111] text-white shadow-[0_4px_14px_rgba(0,0,0,0.25)] scale-[1.02]'
-                        : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/60'
-                    }`}
-                  >
-                    <span>{child.label}</span>
-                    {childPending > 0 && (
-                      <span
-                        className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black font-mono leading-tight"
-                        title={`${childPending} élément(s) à valider`}
-                      >
-                        {childPending}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            <>
+              {childTabs.length >= 4 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const container = e.currentTarget.parentElement?.querySelector('[role="tablist"]');
+                    container?.scrollBy({ left: -160, behavior: 'smooth' });
+                  }}
+                  className="hidden md:flex 2xl:hidden w-6 h-6 rounded-full bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/80 items-center justify-center text-zinc-600 hover:text-zinc-900 shrink-0 cursor-pointer transition"
+                  title="Faire défiler les onglets vers la gauche"
+                  aria-label="Défiler les onglets vers la gauche"
+                >
+                  <ChevronLeft size={13} />
+                </button>
+              )}
+              <div
+                role="tablist"
+                aria-label={activeParent.label}
+                className="inline-flex items-center p-1 rounded-full bg-[#EFEFEE] border border-[#E5E5E3] shadow-[inset_0_1px_2px_rgba(0,0,0,0.06),0_2px_10px_rgba(0,0,0,0.03)] overflow-x-auto max-w-full scrollbar-none no-scrollbar flex-nowrap shrink min-w-0 gap-0.5 sm:gap-1 scroll-smooth"
+              >
+                {childTabs.map((child, index) => {
+                  const isActive = currentTab === child.id;
+                  const isTech = isTechnicianRole(currentUser);
+                  const totalPendingValidation =
+                    Number(counts?.pendingSortieDemands || 0) +
+                    Number(counts?.pendingPreventiveValidation || 0) +
+                    Number(counts?.pendingCorrectiveValidation || 0);
+                  const childPending = !isTech
+                    ? child.id === 'validation_center'
+                      ? totalPendingValidation
+                      : child.id === 'sortie'
+                      ? Number(counts?.pendingSortieDemands || 0)
+                      : child.id === 'preventive'
+                      ? Number(counts?.pendingPreventiveValidation || 0)
+                      : child.id === 'corrective'
+                      ? Number(counts?.pendingCorrectiveValidation || 0)
+                      : 0
+                    : 0;
+                  return (
+                    <button
+                      key={child.id}
+                      role="tab"
+                      id={`tab-${child.id}`}
+                      aria-selected={isActive}
+                      aria-current={isActive ? 'page' : undefined}
+                      tabIndex={isActive ? 0 : -1}
+                      onKeyDown={(e) => handleChildTabKeyDown(e, index)}
+                      onClick={() => setCurrentTab(child.id)}
+                      className={`whitespace-nowrap px-2.5 lg:px-3 xl:px-3.5 py-1 rounded-full text-[11px] lg:text-[12px] font-semibold transition-all duration-200 cursor-pointer shrink-0 inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+                        isActive
+                          ? 'bg-[#111111] text-white shadow-[0_4px_14px_rgba(0,0,0,0.25)] scale-[1.02]'
+                          : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/60'
+                      }`}
+                    >
+                      <span>{child.label}</span>
+                      {childPending > 0 && (
+                        <span
+                          className="px-1.5 py-0.2 rounded-full bg-rose-600 text-white text-[10px] font-black font-mono leading-tight"
+                          title={`${childPending} élément(s) à valider`}
+                        >
+                          {childPending}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {childTabs.length >= 4 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    const container = e.currentTarget.parentElement?.querySelector('[role="tablist"]');
+                    container?.scrollBy({ left: 160, behavior: 'smooth' });
+                  }}
+                  className="hidden md:flex 2xl:hidden w-6 h-6 rounded-full bg-zinc-100 hover:bg-zinc-200 border border-zinc-200/80 items-center justify-center text-zinc-600 hover:text-zinc-900 shrink-0 cursor-pointer transition"
+                  title="Faire défiler les onglets vers la droite"
+                  aria-label="Défiler les onglets vers la droite"
+                >
+                  <ChevronRight size={13} />
+                </button>
+              )}
+            </>
           )}
         </nav>
 

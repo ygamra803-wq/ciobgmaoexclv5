@@ -500,55 +500,55 @@ export default function ClotureRapportsTab({
         <GmaoKpiCard
           title={t('corrective.cloture.closed_summary')}
           value={kpiStats.total}
-          unit="interventions"
+          unit={t('corrective.cloture.unit_interventions', 'interventions')}
           icon={CheckCircle}
           color="emerald"
           valueColored={false}
           isActive={selectedStatus === 'ALL'}
           onClick={() => setSelectedStatus('ALL')}
-          badgeText="Feuille Rapport Excel"
-          footerLabel="Clôturées à 100% :"
-          footerValue={`${kpiStats.closed} validées`}
+          badgeText={t('corrective.cloture.excel_sheet', 'Feuille Rapport Excel')}
+          footerLabel={t('corrective.cloture.closed_100', 'Clôturées à 100% :')}
+          footerValue={`${kpiStats.closed} ${t('corrective.cloture.validated', 'validées')}`}
         />
 
         {/* MTTR Moyen */}
         <GmaoKpiCard
-          title="MTTR Moyen (Maintenabilité)"
+          title={t('corrective.cloture.mttr_title', 'MTTR Moyen (Maintenabilité)')}
           value={kpiStats.mttrFormatted}
-          unit="/ panne"
+          unit={t('corrective.cloture.per_failure', '/ panne')}
           icon={Clock}
           color="blue"
-          badgeText={`${kpiStats.avgMinutes} min temps ouvré`}
-          footerLabel="Formule :"
+          badgeText={`${kpiStats.avgMinutes} ${t('corrective.cloture.working_mins', 'min temps ouvré')}`}
+          footerLabel={t('corrective.cloture.formula_label', 'Formule :')}
           footerValue="Σ Temps / N"
         />
 
         {/* Pannes avec Arrêt Machine */}
         <GmaoKpiCard
-          title="Arrêts Machine Traités"
+          title={t('corrective.cloture.downtimes_handled', 'Arrêts Machine Traités')}
           value={kpiStats.arret}
-          unit="arrêts"
+          unit={t('corrective.cloture.unit_downtimes', 'arrêts')}
           icon={AlertTriangle}
           color="purple"
           isActive={selectedStatus === 'ARRET'}
           onClick={() => setSelectedStatus('ARRET')}
           badgeText="Col H Excel"
-          footerLabel="Impact sur parc :"
+          footerLabel={t('corrective.cloture.fleet_impact', 'Impact sur parc :')}
           footerValue={`${kpiStats.total ? Math.round((kpiStats.arret / kpiStats.total) * 100) : 0}%`}
         />
 
         {/* Total PDR Consommées */}
         <GmaoKpiCard
-          title="PDR Utilisées & Sorties"
+          title={t('corrective.cloture.pdr_used_title', 'PDR Utilisées & Sorties')}
           value={kpiStats.withPdr}
-          unit="pièces"
+          unit={t('corrective.cloture.unit_parts', 'pièces')}
           icon={Package}
           color="cyan"
           isActive={selectedStatus === 'PDR'}
           onClick={() => setSelectedStatus('PDR')}
           badgeText="Col L/M/N Excel"
-          footerLabel="Déstockage :"
-          footerValue="Automatique"
+          footerLabel={t('corrective.cloture.destocking_label', 'Déstockage :')}
+          footerValue={t('corrective.cloture.automatic', 'Automatique')}
         />
       </GmaoKpiGrid>
 
@@ -583,7 +583,7 @@ export default function ClotureRapportsTab({
               title="Exporter le rapport filtré vers Excel (.xlsx)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Export Excel</span>
+              <span className="hidden sm:inline">{t('common.export_excel', 'Export Excel')}</span>
             </button>
 
             {hasActiveFilters && (
@@ -603,33 +603,33 @@ export default function ClotureRapportsTab({
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1">
             <CheckCircle className="w-3 h-3 text-slate-400" />
-            Filtres Rapides :
+            {t('common.quick_filters', 'Filtres Rapides :')}
           </span>
           {[
             {
               key: 'ALL',
-              label: 'Tous les Rapports',
+              label: t('corrective.cloture.preset_all', 'Tous les Rapports'),
               count: scopedInterventions.length,
               activeBg: 'bg-slate-900 text-white shadow-xs',
               colorDot: null,
             },
             {
               key: 'CLOTURE',
-              label: 'Clôturés Validés',
+              label: t('corrective.cloture.preset_closed', 'Clôturés Validés'),
               count: kpiStats.closed,
               activeBg: 'bg-emerald-600 text-white shadow-xs',
               colorDot: 'bg-emerald-500',
             },
             {
               key: 'ARRET',
-              label: 'Avec Arrêt Machine',
+              label: t('corrective.cloture.preset_downtime', 'Avec Arrêt Machine'),
               count: kpiStats.arret,
               activeBg: 'bg-purple-600 text-white shadow-xs',
               colorDot: 'bg-purple-500',
             },
             {
               key: 'PDR',
-              label: 'Avec PDR Utilisée',
+              label: t('corrective.cloture.preset_pdr', 'Avec PDR Utilisée'),
               count: kpiStats.withPdr,
               activeBg: 'bg-cyan-600 text-white shadow-xs',
               colorDot: 'bg-cyan-500',

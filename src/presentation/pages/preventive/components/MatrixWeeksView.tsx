@@ -151,6 +151,23 @@ export default function MatrixWeeksView({
     }
   }, [allDisplayedExpanded, collapseAll, expandAll]);
 
+  const scrollToCurrentWeek = useCallback(() => {
+    const targetWeek = `S${currentWeekNumber || 1}`;
+    if (!matrixWeeks.includes(targetWeek)) {
+      onWeekRangeChange('ALL');
+    }
+    setTimeout(() => {
+      const container = matrixScrollContainerRef.current;
+      if (!container) return;
+      const thEl = container.querySelector(`th[data-week="${targetWeek}"]`) as HTMLElement | null;
+      if (thEl) {
+        const stickyOffset = 480;
+        const targetLeft = Math.max(0, thEl.offsetLeft - stickyOffset);
+        container.scrollTo({ left: targetLeft, behavior: 'smooth' });
+      }
+    }, 60);
+  }, [currentWeekNumber, matrixWeeks, onWeekRangeChange]);
+
 
   return (
     <div className="space-y-4 animate-view-transition">
@@ -158,7 +175,7 @@ export default function MatrixWeeksView({
         {/* Table Controls Sub-Header with Week Range Quick Buttons & Switch to List */}
         <div className="px-5 py-3.5 border-b border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 bg-slate-50/50 gap-3">
           {/* Left Title & Status Badges */}
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="flex items-center gap-2">
               <Grid className="w-4 h-4 text-indigo-600" />
               <span className="font-bold text-slate-800 text-[13px]">
@@ -169,9 +186,16 @@ export default function MatrixWeeksView({
               {totalMachines} {t('common.machine', 'Machine')}{totalMachines > 1 ? 's' : ''} ({totalTasks} {t('preventive.table.tasks_count', '{{count}} tâches', { count: totalTasks })})
             </span>
             {currentWeekNumber && (
-              <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                {t('preventive.table.current_week', 'Semaine courante : {{week}}', { week: `S${currentWeekNumber}` })}
-              </span>
+              <button
+                type="button"
+                onClick={scrollToCurrentWeek}
+                title={`Aller directement à la semaine courante S${currentWeekNumber}`}
+                className="px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition cursor-pointer inline-flex items-center gap-1 shadow-2xs active:scale-95"
+              >
+                <Calendar className="w-3 h-3 text-amber-600" />
+                <span>{t('preventive.table.current_week', 'Semaine courante : {{week}}', { week: `S${currentWeekNumber}` })}</span>
+                <span className="text-[9.5px] font-mono underline ml-0.5">Aller →</span>
+              </button>
             )}
 
             {/* Quick Batch Toggle Button (Déplier / Replier Tout) */}
@@ -231,27 +255,27 @@ export default function MatrixWeeksView({
         </div>
 
         {/* Matrix Table with Horizontal Scroll */}
-        <div ref={matrixScrollContainerRef} className="overflow-x-auto max-h-[62vh] overflow-y-auto">
+        <div ref={matrixScrollContainerRef} className="overflow-x-auto max-h-[62vh] overflow-y-auto scroll-smooth">
           <table className="w-full text-left border-collapse text-xs">
             <thead className="sticky top-0 bg-slate-100 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-200 z-20 shadow-2xs select-none">
               <tr>
                 {/* Row Index */}
-                <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/70 border-r border-slate-200 sticky left-0 z-30">
+                <th className="py-3 px-3 text-center w-12 min-w-[48px] max-w-[48px] text-slate-500 font-mono text-[10px] bg-slate-200 border-r border-slate-200 sticky left-0 z-30">
                   {t('preventive.table.col_num', 'N°')}
                 </th>
 
                 {/* Machine (A) */}
-                <th className="py-3 px-3.5 min-w-[170px] sticky left-12 z-30 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
+                <th className="py-3 px-3.5 w-[180px] min-w-[180px] max-w-[180px] sticky left-12 z-30 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                   <span>{t('preventive.table.col_machine', 'MACHINE (A)')}</span>
                 </th>
 
                 {/* Zone (B) */}
-                <th className="py-3 px-3 min-w-[70px] border-r border-slate-200">
+                <th className="py-3 px-3 w-[72px] min-w-[72px] max-w-[72px] border-r border-slate-200 md:sticky md:left-[228px] md:z-30 bg-slate-100">
                   <span>{t('preventive.table.col_zone', 'ZONE (B)')}</span>
                 </th>
 
                 {/* Composant (C) */}
-                <th className="py-3 px-3.5 min-w-[170px] border-r border-slate-200">
+                <th className="py-3 px-3.5 w-[175px] min-w-[175px] max-w-[175px] border-r border-slate-200 md:sticky md:left-[300px] md:z-30 bg-slate-100 md:shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                   <div className="flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>{t('preventive.table.col_composant', 'COMPOSANT (C)')}</span>
@@ -280,6 +304,7 @@ export default function MatrixWeeksView({
                   return (
                     <th
                       key={week}
+                      data-week={week}
                       className={`py-2 px-1 text-center font-mono text-[11px] min-w-[36px] border-r border-slate-200/80 transition-colors ${
                         isCurrent ? 'bg-indigo-600 text-white font-black' : 'bg-slate-100 text-slate-700'
                       }`}
@@ -351,13 +376,13 @@ export default function MatrixWeeksView({
                         }`}
                       >
                         {/* Machine Row N° */}
-                        <td className="py-2.5 px-3 text-center font-mono text-[11px] font-bold text-slate-500 bg-slate-100/50 border-r border-slate-200 shrink-0 sticky left-0 z-10">
+                        <td className="py-2.5 px-3 text-center w-12 min-w-[48px] max-w-[48px] font-mono text-[11px] font-bold text-slate-500 bg-slate-100 border-r border-slate-200 shrink-0 sticky left-0 z-10">
                           {groupRowNum}
                         </td>
 
                         {/* Machine Column: Chevron + ID + Nom Machine + Tasks Count */}
-                        <td className="py-2.5 px-3 border-r border-slate-200 whitespace-nowrap sticky left-12 z-10 bg-inherit shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                          <div className="flex items-center gap-2">
+                        <td className="py-2.5 px-3 w-[180px] min-w-[180px] max-w-[180px] border-r border-slate-200 whitespace-nowrap sticky left-12 z-10 bg-white shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
                               onClick={(e) => {
@@ -378,31 +403,31 @@ export default function MatrixWeeksView({
                               {group.id_machine}
                             </span>
 
-                            <span className="text-xs font-bold text-slate-900 truncate max-w-[130px]">
+                            <span className="text-xs font-bold text-slate-900 truncate max-w-[85px]" title={group.nom_machine}>
                               {group.nom_machine}
                             </span>
 
                             <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-100/80 text-indigo-900 border border-indigo-200 shrink-0">
-                              {group.tasks.length} tâche{group.tasks.length > 1 ? 's' : ''}
+                              {group.tasks.length}
                             </span>
                           </div>
                         </td>
 
                         {/* Zone */}
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-700 border-r border-slate-200 whitespace-nowrap">
+                        <td className="py-2.5 px-3 w-[72px] min-w-[72px] max-w-[72px] font-mono font-bold text-slate-700 border-r border-slate-200 whitespace-nowrap md:sticky md:left-[228px] md:z-10 bg-white">
                           <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px]">
                             {group.id_zone || group.tasks[0]?.id_zone || 'AFM'}
                           </span>
                         </td>
 
                         {/* Composant Summary */}
-                        <td className="py-2.5 px-3.5 border-r border-slate-200 text-xs">
+                        <td className="py-2.5 px-3.5 w-[175px] min-w-[175px] max-w-[175px] border-r border-slate-200 text-xs md:sticky md:left-[300px] md:z-10 bg-white md:shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                           {group.tasks.length === 1 ? (
-                            <span className="text-slate-800 font-semibold truncate max-w-[160px] block">
+                            <span className="text-slate-800 font-semibold truncate max-w-[150px] block">
                               {group.tasks[0].composant || 'Général'}
                             </span>
                           ) : (
-                            <span className="text-slate-500 italic text-[11px]">
+                            <span className="text-slate-500 italic text-[11px] truncate block">
                               {group.tasks.length} composants associés
                             </span>
                           )}
@@ -591,38 +616,38 @@ export default function MatrixWeeksView({
                               className="bg-slate-50/70 hover:bg-indigo-50/40 border-b border-slate-200/70 transition-colors"
                             >
                               {/* Sub-row N° */}
-                              <td className="py-2 px-3 text-center font-mono text-[10px] font-bold text-slate-400 bg-slate-100/40 border-r border-slate-200/80 shrink-0 sticky left-0 z-10">
+                              <td className="py-2 px-3 text-center w-12 min-w-[48px] max-w-[48px] font-mono text-[10px] font-bold text-slate-400 bg-slate-100 border-r border-slate-200/80 shrink-0 sticky left-0 z-10">
                                 <span className="text-slate-500">
                                   {groupRowNum}.{taskIdx + 1}
                                 </span>
                               </td>
 
                               {/* Machine Column: Indented Connector */}
-                              <td className="py-2 px-3.5 border-r border-slate-200/80 whitespace-nowrap pl-6 sticky left-12 z-10 bg-slate-50/70 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
+                              <td className="py-2 px-3.5 w-[180px] min-w-[180px] max-w-[180px] border-r border-slate-200/80 whitespace-nowrap pl-6 sticky left-12 z-10 bg-slate-50 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                                 <div className="flex items-center gap-1.5 text-slate-400 font-mono text-xs">
                                   <span className="text-indigo-600 font-bold">└─</span>
-                                  <span className="text-[11px] text-slate-600 font-medium truncate max-w-[130px]">
+                                  <span className="text-[11px] text-slate-600 font-medium truncate max-w-[125px]">
                                     {t('preventive.tabs.list', 'Tâche')} {taskIdx + 1}/{group.tasks.length}
                                   </span>
                                 </div>
                               </td>
 
                               {/* Zone */}
-                              <td className="py-2 px-3 font-mono text-slate-500 border-r border-slate-200/80 text-[11px]">
+                              <td className="py-2 px-3 w-[72px] min-w-[72px] max-w-[72px] font-mono text-slate-500 border-r border-slate-200/80 text-[11px] md:sticky md:left-[228px] md:z-10 bg-slate-50">
                                 {task.id_zone || group.id_zone || 'AFM'}
                               </td>
 
                               {/* Composant */}
-                              <td className="py-2 px-3.5 font-medium text-slate-800 border-r border-slate-200/80">
+                              <td className="py-2 px-3.5 w-[175px] min-w-[175px] max-w-[175px] font-medium text-slate-800 border-r border-slate-200/80 md:sticky md:left-[300px] md:z-10 bg-slate-50 md:shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="font-bold text-slate-800 text-xs">{task.composant}</span>
+                                  <span className="font-bold text-slate-800 text-xs truncate max-w-[150px]" title={task.composant}>{task.composant}</span>
                                   {task.is_global_machine && (
                                     <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded border border-emerald-200">
                                       Globale
                                     </span>
                                   )}
                                 </div>
-                                <span className="text-[10.5px] text-slate-400 block truncate max-w-[180px] mt-0.5">
+                                <span className="text-[10.5px] text-slate-400 block truncate max-w-[150px] mt-0.5">
                                   {task.type_intervention}
                                 </span>
                               </td>

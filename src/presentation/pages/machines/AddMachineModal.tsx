@@ -1091,9 +1091,9 @@ export default function AddMachineModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {/* Mode Switcher: Classique ⇄ Wizard */}
+            {/* Mode Switcher: Formulaire Classique ⇄ Assistant Wizard */}
             <div
-              className="inline-flex items-center p-0.5 rounded-xl bg-slate-100 border border-slate-200/90 shadow-2xs"
+              className="inline-flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/90 shadow-2xs"
               role="group"
               aria-label="Mode de saisie machine"
             >
@@ -1101,27 +1101,29 @@ export default function AddMachineModal({
                 type="button"
                 disabled={isSubmittingMachine}
                 onClick={() => setWizardMode(false)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                title="Afficher le formulaire complet classique"
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                   !isWizardMode
                     ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <LayoutList className="w-3 h-3 text-slate-600" />
-                <span>Classique</span>
+                <LayoutList className="w-3.5 h-3.5 text-slate-600" />
+                <span>Formulaire Classique</span>
               </button>
               <button
                 type="button"
                 disabled={isSubmittingMachine}
                 onClick={() => setWizardMode(true)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                title="Activer l'assistant guidé étape par étape (Wizard)"
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                   isWizardMode
                     ? 'bg-emerald-600 text-white shadow-2xs'
                     : 'text-slate-500 hover:text-emerald-700'
                 }`}
               >
-                <Wand2 className="w-3 h-3" />
-                <span>Wizard</span>
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>Assistant Wizard</span>
               </button>
             </div>
 

@@ -661,20 +661,20 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'date_demande',
-        label: 'Date & Heure',
+        label: t('corrective.di.col_datetime', 'Date & Heure'),
         colLetter: 'Col C',
         icon: Clock,
         sortable: true,
         render: (di) => (
           <div className="font-mono whitespace-nowrap">
-            <div className="font-semibold text-slate-800">{di.date_demande || di.date || '2026-03-24'}</div>
-            <div className="text-[10.5px] text-slate-400">{di.heure_demande || di.heure || '08:00'}</div>
+            <div className="font-semibold text-slate-800">{di.date_demande || di.date || '—'}</div>
+            <div className="text-[10.5px] text-slate-400">{di.heure_demande || di.heure || '—'}</div>
           </div>
         ),
       },
       {
         key: 'type_panne',
-        label: 'Type',
+        label: t('corrective.di.col_type', 'Type'),
         colLetter: 'Col I',
         icon: Layers,
         sortable: true,
@@ -686,14 +686,14 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'anomalie',
-        label: 'Anomalie Constatée',
+        label: t('corrective.di.col_anomalie', 'Anomalie Constatée'),
         colLetter: 'Col J',
         icon: AlertTriangle,
         sortable: true,
         render: (di) => (
           <div className="space-y-1 max-w-xs">
             <span className="font-bold text-slate-900 truncate block" title={di.anomalie}>
-              {di.anomalie || 'court_circuit'}
+              {di.anomalie || t('corrective.common.unspecified', 'Non spécifiée')}
             </span>
             {(di.source === 'AUTO_DI_PREVENTIF' || di.source_preventive_execution_id) && (
               <span
@@ -709,7 +709,7 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'demandeur',
-        label: 'Demandeur / Travail Demandé',
+        label: t('corrective.di.col_requester', 'Demandeur / Travail Demandé'),
         icon: User,
         render: (di) => (
           <div className="max-w-xs truncate" title={di.travail_a_faire}>
@@ -722,7 +722,7 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'arret_machine',
-        label: 'Arrêt Machine',
+        label: t('corrective.di.col_downtime', 'Arrêt Machine'),
         icon: Power,
         align: 'center',
         sortable: true,
@@ -741,7 +741,7 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'priorite',
-        label: 'Priorité',
+        label: t('corrective.di.col_priority', 'Priorité'),
         icon: Flame,
         align: 'center',
         sortable: true,
@@ -761,7 +761,7 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'statut',
-        label: 'Statut',
+        label: t('corrective.di.status', 'Statut'),
         icon: Radio,
         align: 'center',
         sortable: true,
@@ -793,7 +793,7 @@ export default function DemandesInterventionTab({
       },
       {
         key: 'actions',
-        label: 'Action Rapide',
+        label: t('corrective.di.col_quick_action', 'Action Rapide'),
         icon: Wrench,
         align: 'center',
         headerClassName: 'w-36 text-center whitespace-nowrap',
@@ -809,7 +809,7 @@ export default function DemandesInterventionTab({
               title="Convertir en Bon de Travail (BT) et affecter un technicien"
             >
               <Wrench className="w-3.5 h-3.5" />
-              <span>Générer BT</span>
+              <span>{t('corrective.di.generate_bt', 'Générer BT')}</span>
               <ArrowRight className="w-3 h-3" />
             </button>
           ) : (
@@ -821,7 +821,7 @@ export default function DemandesInterventionTab({
         },
       },
     ],
-    []
+    [t]
   );
 
   return (
@@ -832,58 +832,58 @@ export default function DemandesInterventionTab({
         <GmaoKpiCard
           title={t('corrective.di.title')}
           value={kpiStats.total}
-          unit="demandes"
+          unit={t('corrective.di.unit_requests', 'demandes')}
           icon={Flame}
           color="amber"
           valueColored={false}
           isActive={filterStatus === 'ALL'}
           onClick={() => setFilterStatus('ALL')}
-          badgePrefix="Toutes origines"
-          badgeText="100% tracé"
-          footerLabel="Vue générale :"
-          footerValue="Flux d'entrée usine"
+          badgePrefix={t('corrective.di.all_origins', 'Toutes origines')}
+          badgeText={t('corrective.di.traced', '100% tracé')}
+          footerLabel={t('corrective.di.overview_label', 'Vue générale :')}
+          footerValue={t('corrective.di.overview_value', "Flux d'entrée usine")}
         />
 
         {/* En Attente de Traitement */}
         <GmaoKpiCard
-          title={`${t('corrective.di.status')} (En Attente)`}
+          title={`${t('corrective.di.status')} (${t('corrective.di.pending', 'En Attente')})`}
           value={kpiStats.pending}
-          unit="à convertir"
+          unit={t('corrective.di.unit_to_convert', 'à convertir')}
           icon={Clock}
           color="rose"
           isActive={filterStatus === 'DEMANDE'}
           onClick={() => setFilterStatus('DEMANDE')}
-          badgeText="Action Chef requise"
-          footerLabel="Priorité :"
-          footerValue="Génération BT"
+          badgeText={t('corrective.di.manager_action', 'Action Chef requise')}
+          footerLabel={t('corrective.di.priority_label', 'Priorité :')}
+          footerValue={t('corrective.di.generate_bt', 'Génération BT')}
         />
 
         {/* Converties en BT */}
         <GmaoKpiCard
           title={t('corrective.bt.title')}
           value={kpiStats.converted}
-          unit="ordres BT"
+          unit={t('corrective.di.unit_bt_orders', 'ordres BT')}
           icon={Wrench}
           color="blue"
           isActive={filterStatus === 'EN_COURS'}
           onClick={() => setFilterStatus('EN_COURS')}
-          badgeText="Techniciens affectés"
-          footerLabel="Taux prise en charge :"
+          badgeText={t('corrective.di.assigned_techs', 'Techniciens affectés')}
+          footerLabel={t('corrective.di.coverage_rate', 'Taux prise en charge :')}
           footerValue={`${kpiStats.total ? Math.round((kpiStats.converted / kpiStats.total) * 100) : 0}%`}
         />
 
         {/* Pannes avec Arrêt Machine */}
         <GmaoKpiCard
-          title="Arrêt Machine Bloquant"
+          title={t('corrective.di.blocking_downtime', 'Arrêt Machine Bloquant')}
           value={kpiStats.arret}
-          unit="lignes stoppées"
+          unit={t('corrective.di.unit_stopped_lines', 'lignes stoppées')}
           icon={AlertTriangle}
           color="purple"
           isActive={filterStatus === 'ARRET'}
           onClick={() => setFilterStatus('ARRET')}
-          badgeText="Impact direct production"
-          footerLabel="Gravité :"
-          footerValue="Arrêt Usine"
+          badgeText={t('corrective.di.direct_impact', 'Impact direct production')}
+          footerLabel={t('corrective.di.severity_label', 'Gravité :')}
+          footerValue={t('corrective.di.plant_stop', 'Arrêt Usine')}
         />
       </GmaoKpiGrid>
 

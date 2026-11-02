@@ -254,20 +254,20 @@ export default function PreventiveView({
 
   return (
     <AnimatedPage>
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* ========================================================================= */}
         {/* TOP MASTER HEADER (PRIMARY PAGE WITH 3D ELEVATION)                         */}
         {/* ========================================================================= */}
-        <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/header">
+        <div className="bg-white px-4 py-3.5 md:px-5 md:py-4 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-3 relative overflow-hidden group/header">
           {/* Ambient Glow */}
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
           {/* Left Column: Title & Overview */}
-          <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
+          <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3 relative">
             <PageHeaderIcon icon={Calendar} colorClass="text-indigo-700" />
             <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
                   {t('preventive.title')}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs">
@@ -293,14 +293,14 @@ export default function PreventiveView({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
+              <p className="text-xs text-slate-500 mt-0.5 max-w-3xl leading-snug line-clamp-1">
                 {t('preventive.subtitle')}
               </p>
             </div>
           </div>
 
           {/* Right Column: 3D Circular Action Buttons */}
-          <div className="flex items-center gap-2.5 shrink-0 relative">
+          <div className="flex items-center gap-2 shrink-0 relative">
             {/* 3D Switch Button: Grouped by Machine */}
             <Action3DButton
               variant="circle"

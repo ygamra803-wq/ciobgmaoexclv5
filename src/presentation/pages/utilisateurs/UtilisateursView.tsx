@@ -856,43 +856,43 @@ export default function UtilisateursView({
           <GmaoKpiCard
             title={t('utilisateurs.stats.total_users')}
             value={combinedUsers.length}
-            unit="membres"
+            unit={t('utilisateurs.stats.unit_members', 'membres')}
             icon={Users}
             color="slate"
             valueColored={false}
             isActive={profileFilter === 'ALL'}
             onClick={() => setProfileFilter('ALL')}
             badgeText={t('utilisateurs.stats.registered_members')}
-            footerLabel="Feuille Personnel :"
-            footerValue="Annuaire global"
+            footerLabel={t('utilisateurs.stats.footer_sheet', 'Feuille Personnel :')}
+            footerValue={t('utilisateurs.stats.footer_directory', 'Annuaire global')}
           />
 
           {/* Card 2: Techniciens */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.technicians')}
             value={technicians.length}
-            unit="techniciens"
+            unit={t('utilisateurs.stats.unit_technicians', 'techniciens')}
             icon={Wrench}
             color="blue"
             isActive={profileFilter === 'TECHNICIEN'}
             onClick={() => setProfileFilter(profileFilter === 'TECHNICIEN' ? 'ALL' : 'TECHNICIEN')}
             badgeText={t('utilisateurs.stats.technicians_sub')}
-            footerLabel="Interventions :"
-            footerValue="Préventif & Correctif"
+            footerLabel={t('utilisateurs.stats.footer_interventions', 'Interventions :')}
+            footerValue={t('utilisateurs.stats.footer_prev_corr', 'Préventif & Correctif')}
           />
 
           {/* Card 3: Opérateurs */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.operators')}
             value={operations.filter((o) => o.type_profil === 'OPERATEUR').length}
-            unit="opérateurs"
+            unit={t('utilisateurs.stats.unit_operators', 'opérateurs')}
             icon={ClipboardList}
             color="indigo"
             isActive={profileFilter === 'OPERATEUR'}
             onClick={() => setProfileFilter(profileFilter === 'OPERATEUR' ? 'ALL' : 'OPERATEUR')}
             badgeText={t('utilisateurs.stats.operators_sub')}
-            footerLabel="Terrain :"
-            footerValue="Signalement DI"
+            footerLabel={t('utilisateurs.stats.footer_field', 'Terrain :')}
+            footerValue={t('utilisateurs.stats.footer_di', 'Signalement DI')}
           />
 
           {/* Card 4: Responsables */}
@@ -907,13 +907,13 @@ export default function UtilisateursView({
                   String(o.id_operation).startsWith('CHEF')
               ).length
             }
-            unit="cadres"
+            unit={t('utilisateurs.stats.unit_managers', 'cadres')}
             icon={ShieldCheck}
             color="rose"
             isActive={profileFilter === 'RESPONSABLE'}
             onClick={() => setProfileFilter(profileFilter === 'RESPONSABLE' ? 'ALL' : 'RESPONSABLE')}
             badgeText={t('utilisateurs.stats.responsables_sub')}
-            footerLabel="Gouvernance :"
+            footerLabel={t('utilisateurs.stats.footer_governance', 'Gouvernance :')}
             footerValue="RMT • RZN • RPD • RMG"
           />
         </GmaoKpiGrid>
