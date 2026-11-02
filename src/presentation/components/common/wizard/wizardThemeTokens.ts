@@ -1,4 +1,32 @@
-import type { WizardThemeColor } from './wizard.types';
+import type { WizardModuleKey, WizardThemeColor } from './wizard.types';
+
+/**
+ * Canonical module-to-theme color rule for Mature Light Excel consistency:
+ * - Machines & Actifs -> emerald
+ * - Stock / Sortie & Entrée / Entrepôt -> teal
+ * - Maintenance Corrective (DI / BT) -> amber
+ * - Maintenance Préventive -> indigo
+ */
+export const WIZARD_MODULE_THEME_MAP: Record<WizardModuleKey, WizardThemeColor> = {
+  global: 'emerald',
+  machines_onboarding: 'emerald',
+  stock_rapid_movement: 'teal',
+  stock_article: 'teal',
+  entrepot_component: 'teal',
+  corrective_di: 'amber',
+  corrective_bt: 'amber',
+  preventive_plan: 'indigo',
+};
+
+export function resolveWizardThemeColor(
+  themeColor?: WizardThemeColor,
+  moduleKey?: WizardModuleKey
+): WizardThemeColor {
+  if (moduleKey && WIZARD_MODULE_THEME_MAP[moduleKey]) {
+    return WIZARD_MODULE_THEME_MAP[moduleKey];
+  }
+  return themeColor ?? 'emerald';
+}
 
 export interface WizardThemeTokens {
   headerBadgeBg: string;

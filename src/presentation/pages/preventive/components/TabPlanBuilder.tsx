@@ -922,14 +922,17 @@ export default function TabPlanBuilder({
   // PROFILE-DRIVEN WIZARD CONFIGURATION (3 ÉTAPES)
   const preventiveWizardProfile: WizardProfile = {
     id: 'preventive-plan-wizard',
+    moduleKey: 'preventive_plan',
+    code: planReference || 'PLAN-PM',
     title: 'Concepteur de Plan Préventif',
     subtitle: 'Gammes & Périodicités GMAO',
-    themeColor: 'emerald',
+    themeColor: 'indigo',
     submitLabel: 'Générer le Plan & Programmer',
     onComplete: executeGeneratePlan,
     steps: [
       {
         id: 'step-1-equipement',
+        code: 'ÉTAPE 01',
         title: 'Équipement Cible & Affectation',
         subtitle: 'Sélectionnez la machine du parc pour détecter sa zone, son technicien et ses organes.',
         badge: 'GAMME PM',
@@ -944,6 +947,7 @@ export default function TabPlanBuilder({
       },
       {
         id: 'step-2-operations',
+        code: 'ÉTAPE 02',
         title: 'Gamme d’Opérations & PDR',
         subtitle: 'Configurez les composants, les codes actions (C/N/G/V) et les pièces de rechange associées.',
         badge: `${taskList.length} OPÉRATION(S)`,
@@ -958,6 +962,7 @@ export default function TabPlanBuilder({
       },
       {
         id: 'step-3-programmation',
+        code: 'ÉTAPE 03',
         title: 'Périodicité, Déclencheur & Déploiement',
         subtitle: 'Définissez la semaine cible, le mode de récurrence (Fixe/Glissant) et le déclencheur.',
         badge: `${startWeek} • ${frequenceGlobale.toUpperCase()}`,
@@ -990,13 +995,13 @@ export default function TabPlanBuilder({
       {/* 3D TACTILE SUB-BANNER HEADER */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/gen">
         <div className="flex items-start sm:items-center gap-3.5 relative">
-          <PageHeaderIcon icon={Sparkles} colorClass="text-emerald-700" />
+          <PageHeaderIcon icon={Sparkles} colorClass="text-indigo-700" />
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h3 className="text-lg font-black text-slate-900 tracking-tight">
                 Concepteur de Plans & Déploiement Assisté
               </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs">
                 ASSISTANT GMAO
               </span>
             </div>
@@ -1027,7 +1032,7 @@ export default function TabPlanBuilder({
               onClick={() => setWizardMode(true)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                 isWizardMode
-                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
               }`}
               title="Activer l'assistant guidé étape par étape (Wizard)"

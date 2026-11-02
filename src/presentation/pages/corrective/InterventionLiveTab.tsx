@@ -925,12 +925,12 @@ export default function InterventionLiveTab({
 
       {/* Synthèse finale en mode Wizard */}
       {isWizardMode && (
-        <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200/80 space-y-2 text-xs">
+        <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2 text-xs">
           <div className="flex items-center justify-between">
-            <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-emerald-900">
+            <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-amber-950">
               Synthèse du Bon de Travail ({activeIntervention.num_bt || 'BT'})
             </span>
-            <span className="font-mono font-bold text-emerald-800 bg-white px-2.5 py-0.5 rounded border border-emerald-200">
+            <span className="font-mono font-bold text-amber-900 bg-white px-2.5 py-0.5 rounded border border-amber-200">
               Temps Ouvré : {liveWorkingTime.formatted}
             </span>
           </div>
@@ -1000,11 +1000,13 @@ export default function InterventionLiveTab({
 
   const correctiveBtWizardProfile: WizardProfile = {
     id: 'corrective-bt-cloture-wizard',
+    moduleKey: 'corrective_bt',
+    code: activeIntervention.num_bt || 'BT-LIVE',
     title: isTechUser
       ? 'Assistant Déclaration Terrain (BT)'
       : 'Assistant Clôture Bon de Travail (BT)',
     subtitle: `Machine ${activeIntervention.code_machine} • ${activeIntervention.num_bt || 'BT'} • Colonnes Excel K → N`,
-    themeColor: isTechUser ? 'purple' : 'emerald',
+    themeColor: 'amber',
     finishLabel: isTechUser
       ? 'Soumettre pour Validation Responsable'
       : "Clôturer l'Intervention & Valider le Rapport",
@@ -1018,6 +1020,7 @@ export default function InterventionLiveTab({
         title: 'Action Réalisée (Col K)',
         description:
           "Renseignez le diagnostic technique et le travail effectivement réalisé sur l'équipement.",
+        badge: 'COL K',
         icon: Wrench,
         content: step1DiagnosticSection,
         validate: () => {
@@ -1041,6 +1044,8 @@ export default function InterventionLiveTab({
         title: 'Pièces PDR & Magasin',
         description:
           'Sélectionnez les pièces de rechange consommées (Col L), leur marque (Col M), leur état (Col N) et le N° de bon.',
+        badge: 'COL L-N',
+        optional: true,
         icon: Package,
         content: step2PdrSection,
         validate: () => {
@@ -1063,9 +1068,22 @@ export default function InterventionLiveTab({
         title: 'Organe & Validation',
         description:
           "Mettez à jour l'état de l'organe ou de la part structurelle et validez la clôture du Bon de Travail.",
+        badge: 'CLÔTURE',
         icon: CheckCircle,
         content: step3LifecycleSection,
-        validate: () => ({ isValid: true }),
+        validate: () => {
+          const actionText = String(
+            formState.action_realisee || formState.travail_a_faire || ''
+          ).trim();
+          if (!actionText) {
+            return {
+              isValid: false,
+              severity: 'critical',
+              message: 'Le rapport de travail réalisé (Col K) est requis pour clôturer le BT.',
+            };
+          }
+          return { isValid: true };
+        },
       },
     ],
   };
@@ -1226,8 +1244,8 @@ export default function InterventionLiveTab({
       <div className="bg-white rounded-3xl border border-slate-200/90 p-6 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-200 flex items-center justify-center text-emerald-700 shadow-2xs shrink-0">
-              <FileCheck className="w-4 h-4 text-emerald-700" />
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
+              <FileCheck className="w-4 h-4 text-amber-700" />
             </div>
             <div>
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
@@ -1267,8 +1285,8 @@ export default function InterventionLiveTab({
               onClick={() => setWizardMode(true)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                 isWizardMode
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'text-slate-500 hover:text-emerald-700'
+                  ? 'bg-amber-600 text-white shadow-2xs'
+                  : 'text-slate-500 hover:text-amber-700'
               }`}
             >
               <Wand2 className="w-3.5 h-3.5" />

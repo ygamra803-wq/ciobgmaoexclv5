@@ -1,5 +1,5 @@
-import React from 'react';
-import { Check, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Check, ChevronDown, X } from 'lucide-react';
 import type { WizardProfile } from './wizard.types';
 import { WizardProvider, useWizard } from './WizardContext';
 import { WizardSidebar } from './WizardSidebar';
@@ -10,30 +10,103 @@ import { WIZARD_THEME_TOKENS } from './wizardThemeTokens';
 /**
  * Compact responsive header visible on mobile & tablet screens (< lg)
  * when `layout === 'split'` is used.
+ * Includes an interactive Step Jump selector so mobile users can jump directly
+ * to completed steps without clicking "Précédent" repeatedly.
  */
 const MobileWizardHeader: React.FC = () => {
-  const { profile, stepIndex, totalSteps, currentStep, themeColor } = useWizard();
+  const { profile, stepIndex, totalSteps, currentStep, themeColor, goToStep, isSubmitting } =
+    useWizard();
+  const [isStepMenuOpen, setIsStepMenuOpen] = useState(false);
   const tokens = WIZARD_THEME_TOKENS[themeColor];
   const progressPercentage =
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 100;
 
   return (
-    <div className="lg:hidden bg-slate-50/95 border-b border-slate-200/90 p-4 shrink-0">
+    <div className="lg:hidden bg-slate-50/95 border-b border-slate-200/90 px-4 py-3 shrink-0 relative">
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="min-w-0">
-          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 block truncate">
             {profile.title}
           </span>
-          <h2 className="text-sm font-black text-slate-900 truncate">
+          <h2 className="text-xs sm:text-sm font-black text-slate-900 truncate">
             {currentStep?.title}
           </h2>
         </div>
-        <span
-          className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-md border shrink-0 tabular-nums ${tokens.headerBadgeBg} ${tokens.headerBadgeText} ${tokens.headerBadgeBorder}`}
+
+        {/* Interactive Step Jump Trigger */}
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => setIsStepMenuOpen((prev) => !prev)}
+          aria-expanded={isStepMenuOpen}
+          aria-label="Sélectionner une étape"
+          className={`inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2.5 py-1 rounded-lg border shrink-0 tabular-nums cursor-pointer transition-all ${tokens.headerBadgeBg} ${tokens.headerBadgeText} ${tokens.headerBadgeBorder}`}
         >
-          {stepIndex + 1} / {totalSteps}
-        </span>
+          <span>
+            {stepIndex + 1} / {totalSteps}
+          </span>
+          <ChevronDown
+            className={`w-3.5 h-3.5 transition-transform duration-150 ${
+              isStepMenuOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </button>
       </div>
+
+      {/* Expandable Quick Step Jump List on Mobile */}
+      {isStepMenuOpen && (
+        <div className="mb-2.5 p-2 rounded-xl bg-white border border-slate-200/90 shadow-lg space-y-1 z-20">
+          {profile.steps.map((step, idx) => {
+            const isActive = idx === stepIndex;
+            const isCompleted = idx < stepIndex;
+            const isClickable = idx < stepIndex || idx === stepIndex + 1;
+            const stepNum = String(idx + 1).padStart(2, '0');
+
+            return (
+              <button
+                key={step.id}
+                type="button"
+                disabled={!isClickable && !isActive}
+                onClick={() => {
+                  setIsStepMenuOpen(false);
+                  if (isClickable) {
+                    void goToStep(idx);
+                  }
+                }}
+                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs transition-colors ${
+                  isActive
+                    ? `${tokens.activeCardBg} ${tokens.activeTitleText} font-bold border ${tokens.activeCardBorder}`
+                    : isCompleted
+                      ? 'hover:bg-slate-50 text-slate-800 font-semibold cursor-pointer'
+                      : isClickable
+                        ? 'hover:bg-slate-50 text-slate-600 cursor-pointer'
+                        : 'text-slate-400 opacity-60 cursor-default'
+                }`}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-5 h-5 rounded-md flex items-center justify-center font-mono text-[10px] font-bold shrink-0 ${
+                      isCompleted
+                        ? 'bg-emerald-600 text-white'
+                        : isActive
+                          ? `${tokens.activeCircleBg} ${tokens.activeCircleText} border ${tokens.activeCircleBorder}`
+                          : 'bg-slate-100 text-slate-500'
+                    }`}
+                  >
+                    {isCompleted ? <Check className="w-3 h-3 stroke-[2.5]" /> : stepNum}
+                  </span>
+                  <span className="truncate">{step.title}</span>
+                </div>
+                {step.optional && (
+                  <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 shrink-0">
+                    Opt.
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Progress Bar */}
       <div className="w-full bg-slate-200/80 h-1.5 rounded-full overflow-hidden">
@@ -48,7 +121,7 @@ const MobileWizardHeader: React.FC = () => {
 
 /**
  * Horizontal Mature Light Excel Stepper Bar used when `layout="compact"`
- * (e.g. inside a 5-column split-view card such as Sortie & Entrée Rapide).
+ * (e.g. inside a 5-column split-view card such as Sortie & Entrée Rapide or AddMachineModal).
  */
 const CompactHorizontalStepper: React.FC = () => {
   const { profile, stepIndex, totalSteps, goToStep, themeColor } = useWizard();
@@ -57,13 +130,18 @@ const CompactHorizontalStepper: React.FC = () => {
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 100;
 
   return (
-    <div className="bg-slate-50/90 border-b border-slate-200/90 px-4 py-3 shrink-0 select-none">
-      {/* Horizontal Step Pills */}
-      <div className="grid grid-cols-3 gap-2">
+    <div className="bg-slate-50/90 border-b border-slate-200/90 px-3.5 py-2.5 shrink-0 select-none">
+      {/* Sleek Horizontal Step Pills */}
+      <div
+        className="grid gap-1.5"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(1, Math.min(totalSteps, 4))}, minmax(0, 1fr))`,
+        }}
+      >
         {profile.steps.map((step, idx) => {
           const isActive = idx === stepIndex;
           const isCompleted = idx < stepIndex;
-          const isClickable = idx < stepIndex;
+          const isClickable = idx < stepIndex || idx === stepIndex + 1;
           const StepIcon = step.icon;
           const stepNumberCode = String(idx + 1).padStart(2, '0');
 
@@ -77,25 +155,27 @@ const CompactHorizontalStepper: React.FC = () => {
                   void goToStep(idx);
                 }
               }}
-              className={`group flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
+              className={`group flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-left transition-all min-w-0 ${
                 isActive
                   ? `${tokens.activeCardBg} ${tokens.activeCardBorder} shadow-2xs`
                   : isCompleted
                     ? 'bg-white border-slate-200/80 hover:border-slate-300 cursor-pointer'
-                    : 'bg-white/50 border-slate-200/50 opacity-60 cursor-default'
+                    : isClickable
+                      ? 'bg-white/70 border-slate-200/60 hover:border-slate-300/80 opacity-85 cursor-pointer'
+                      : 'bg-white/40 border-slate-200/50 opacity-55 cursor-default'
               }`}
             >
               <div
-                className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold shrink-0 border transition-all ${
+                className={`w-5.5 h-5.5 rounded-md flex items-center justify-center font-mono text-[10px] font-bold shrink-0 border transition-all ${
                   isActive
-                    ? `${tokens.activeCircleBorder} ${tokens.activeCircleBg} ${tokens.activeCircleText} ring-2 ring-indigo-500/15`
+                    ? `${tokens.activeCircleBorder} ${tokens.activeCircleBg} ${tokens.activeCircleText} ${tokens.activeHalo}`
                     : isCompleted
                       ? 'border-emerald-600 bg-emerald-600 text-white'
                       : 'border-slate-300 bg-white text-slate-400'
                 }`}
               >
                 {isCompleted ? (
-                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                  <Check className="w-3 h-3 stroke-[2.5]" />
                 ) : StepIcon ? (
                   <StepIcon className="w-3 h-3" />
                 ) : (
@@ -104,11 +184,18 @@ const CompactHorizontalStepper: React.FC = () => {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 truncate">
-                  {step.code || `ÉTAPE ${stepNumberCode}`}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-slate-400 truncate">
+                    {step.code || `ÉTAPE ${stepNumberCode}`}
+                  </span>
+                  {step.optional && (
+                    <span className="text-[8px] font-mono uppercase px-1 rounded bg-slate-100 text-slate-500 shrink-0">
+                      Opt
+                    </span>
+                  )}
                 </div>
                 <div
-                  className={`text-[11px] font-bold truncate ${
+                  className={`text-[11px] font-bold truncate leading-tight ${
                     isActive
                       ? tokens.activeTitleText
                       : isCompleted
@@ -125,7 +212,7 @@ const CompactHorizontalStepper: React.FC = () => {
       </div>
 
       {/* Thin Excel Progress Bar */}
-      <div className="w-full bg-slate-200/70 h-1 rounded-full overflow-hidden mt-2.5">
+      <div className="w-full bg-slate-200/70 h-1 rounded-full overflow-hidden mt-2">
         <div
           className={`h-full transition-all duration-300 ease-out rounded-full ${tokens.progressBarFill}`}
           style={{ width: `${progressPercentage}%` }}
@@ -146,6 +233,46 @@ export interface WizardShellProps {
   /** Optional custom height/container classes (defaults to min-h-[560px]) */
   className?: string;
 }
+
+const WizardShellInner: React.FC<{
+  isCompact: boolean;
+  className: string;
+  onModalClose?: () => void;
+}> = ({ isCompact, className, onModalClose }) => {
+  const { isSubmitting } = useWizard();
+
+  return (
+    <div className="relative w-full">
+      {onModalClose && (
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={() => {
+            if (!isSubmitting) {
+              onModalClose();
+            }
+          }}
+          aria-label="Fermer l'assistant"
+          className="absolute top-3 right-3 z-20 w-8 h-8 rounded-lg bg-white/90 hover:bg-slate-100 border border-slate-200/90 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+      <div
+        className={`flex ${
+          isCompact ? 'flex-col' : 'flex-col lg:flex-row'
+        } w-full bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200/90 ${className}`}
+      >
+        {!isCompact && <WizardSidebar />}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-white">
+          {isCompact ? <CompactHorizontalStepper /> : <MobileWizardHeader />}
+          <WizardContent compact={isCompact} />
+          <WizardFooter />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 /**
  * Inline Mature Light Excel Wizard container.
@@ -169,18 +296,7 @@ export const WizardShell: React.FC<WizardShellProps> = ({
 
   return (
     <WizardProvider profile={profile} initialStepIndex={initialStepIndex}>
-      <div
-        className={`flex ${
-          isCompact ? 'flex-col' : 'flex-col lg:flex-row'
-        } w-full bg-white rounded-2xl shadow-sm overflow-hidden border border-slate-200/90 ${className}`}
-      >
-        {!isCompact && <WizardSidebar />}
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden bg-white">
-          {isCompact ? <CompactHorizontalStepper /> : <MobileWizardHeader />}
-          <WizardContent compact={isCompact} />
-          <WizardFooter />
-        </div>
-      </div>
+      <WizardShellInner isCompact={isCompact} className={className} />
     </WizardProvider>
   );
 };
@@ -192,7 +308,7 @@ export interface WizardModalProps extends WizardShellProps {
 
 /**
  * Ready-to-use Modal Dialog wrapper around `WizardShell`.
- * Allows any GMAO module to launch a multi-step wizard overlay when the feature flag is enabled.
+ * Guards dismissal while `isSubmitting` is active.
  */
 export const WizardModal: React.FC<WizardModalProps> = ({
   isOpen,
@@ -208,6 +324,8 @@ export const WizardModal: React.FC<WizardModalProps> = ({
     onCancel: profile.onCancel ?? onClose,
   };
 
+  const isCompact = layout === 'compact';
+
   return (
     <div
       role="dialog"
@@ -216,20 +334,13 @@ export const WizardModal: React.FC<WizardModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-xs animate-fade-in"
     >
       <div className="relative w-full max-w-5xl">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer l'assistant"
-          className="absolute top-3 right-3 z-20 w-8 h-8 rounded-lg bg-white/90 hover:bg-slate-100 border border-slate-200/90 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors shadow-2xs"
-        >
-          <X className="w-4 h-4" />
-        </button>
-        <WizardShell
-          profile={profileWithCancel}
-          initialStepIndex={initialStepIndex}
-          layout={layout}
-          className="h-[82vh] max-h-[760px] shadow-2xl"
-        />
+        <WizardProvider profile={profileWithCancel} initialStepIndex={initialStepIndex}>
+          <WizardShellInner
+            isCompact={isCompact}
+            className="h-[82vh] max-h-[760px] shadow-2xl"
+            onModalClose={onClose}
+          />
+        </WizardProvider>
       </div>
     </div>
   );

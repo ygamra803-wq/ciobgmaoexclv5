@@ -904,24 +904,36 @@ export default function AddMachineModal({
 
       {/* Récapitulatif en mode Wizard */}
       {isWizardMode && (
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/90 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500">
+        <div className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200/80 space-y-2">
+          <div className="flex items-center justify-between border-b border-emerald-200/60 pb-1.5">
+            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-900">
               Synthèse Immatriculation (Liaison B→H)
             </span>
-            <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
+            <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded bg-white text-emerald-800 border border-emerald-200">
               {form.id_machine_registered || '—'}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <div>
-              <span className="text-slate-400">Désignation : </span>
-              <strong className="text-slate-800">{form.designation || 'Non renseignée'}</strong>
+              <span className="text-slate-500">Désignation (C) : </span>
+              <strong className="text-slate-900">{form.designation || 'Non renseignée'}</strong>
             </div>
             <div>
-              <span className="text-slate-400">Classe : </span>
-              <strong className="text-slate-800">
+              <span className="text-slate-500">Classe : </span>
+              <strong className="text-slate-900">
                 {isSystemGeneral ? 'Système Général' : 'Production'}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500">Famille / Modèle : </span>
+              <strong className="font-mono text-slate-800">
+                {form.id_family || '—'} / {form.id_templates || '—'}
+              </strong>
+            </div>
+            <div>
+              <span className="text-slate-500">Zone / Tech : </span>
+              <strong className="font-mono text-slate-800">
+                {form.id_zone_default || '—'} • {form.technician || '—'}
               </strong>
             </div>
           </div>
@@ -932,11 +944,13 @@ export default function AddMachineModal({
 
   const machineWizardProfile: WizardProfile = {
     id: 'machines-onboarding-wizard',
+    moduleKey: 'machines_onboarding',
+    code: form.id_machine_registered || 'WIZ-MAC',
     title: isSystemGeneral
-      ? 'Assistant Immatriculation Système Général'
+      ? 'Assistant Système Général'
       : 'Assistant Immatriculation Machine',
     subtitle: 'Enregistrement guidé au référentiel Parc Machines (Colonnes B → H)',
-    themeColor: 'teal',
+    themeColor: 'emerald',
     finishLabel: isSystemGeneral
       ? 'Enregistrer le Système Général'
       : 'Enregistrer la Machine',
@@ -952,6 +966,7 @@ export default function AddMachineModal({
         title: 'Identité & Code',
         description:
           "Choisissez la catégorie d'actif, le code matricule séquentiel (Col B) et la désignation officielle (Col C).",
+        badge: 'COL B-C',
         icon: Factory,
         content: step1IdentitySection,
         validate: () => {
@@ -985,6 +1000,8 @@ export default function AddMachineModal({
         title: 'Famille & Blueprint',
         description:
           "Rattachez l'équipement à sa Famille (Col D), son Modèle Template (Col E) et son Schéma Blueprint.",
+        badge: 'COL D-E',
+        optional: isSystemGeneral,
         icon: FileText,
         content: step2ArborescenceSection,
         validate: () => {
@@ -1004,6 +1021,7 @@ export default function AddMachineModal({
         title: 'Zone & Exploitation',
         description:
           'Définissez le N° de série, la Zone physique (Col F), le Technicien référent (Col G) et le Statut (Col H).',
+        badge: 'COL F-H',
         icon: MapPin,
         content: step3ExploitationSection,
         validate: () => {
@@ -1075,8 +1093,8 @@ export default function AddMachineModal({
                 onClick={() => setWizardMode(true)}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   isWizardMode
-                    ? 'bg-teal-700 text-white shadow-2xs'
-                    : 'text-slate-500 hover:text-teal-700'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'text-slate-500 hover:text-emerald-700'
                 }`}
               >
                 <Wand2 className="w-3 h-3" />

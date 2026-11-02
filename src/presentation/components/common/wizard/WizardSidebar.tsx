@@ -13,12 +13,12 @@ export const WizardSidebar: React.FC = () => {
   return (
     <aside
       aria-label="Progression de l'assistant"
-      className="w-80 bg-slate-50/90 border-r border-slate-200/90 flex flex-col justify-between shrink-0 select-none hidden lg:flex"
+      className="w-72 bg-slate-50/90 border-r border-slate-200/90 flex flex-col justify-between shrink-0 select-none hidden lg:flex"
     >
       {/* Top Section: Header + Vertical Timeline Stepper */}
-      <div className="p-6 overflow-y-auto flex-1">
+      <div className="p-5 overflow-y-auto flex-1">
         {/* Excel-style Header Block */}
-        <div className="mb-6 pb-5 border-b border-slate-200/80">
+        <div className="mb-5 pb-4 border-b border-slate-200/80">
           <div className="flex items-center justify-between gap-2 mb-2">
             <span
               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase tracking-wider border ${tokens.headerBadgeBg} ${tokens.headerBadgeText} ${tokens.headerBadgeBorder}`}
@@ -30,11 +30,11 @@ export const WizardSidebar: React.FC = () => {
               {totalSteps} ÉTAPES
             </span>
           </div>
-          <h2 className="text-base font-black text-slate-900 tracking-tight leading-snug">
+          <h2 className="text-sm font-black text-slate-900 tracking-tight leading-snug">
             {profile.title}
           </h2>
           {(profile.description || profile.subtitle) && (
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
               {profile.description || profile.subtitle}
             </p>
           )}
@@ -50,11 +50,11 @@ export const WizardSidebar: React.FC = () => {
             />
           )}
 
-          <div className="space-y-2.5 relative z-10">
+          <div className="space-y-2 relative z-10">
             {profile.steps.map((step, idx) => {
               const isActive = idx === stepIndex;
               const isCompleted = idx < stepIndex;
-              const isClickable = idx < stepIndex;
+              const isClickable = idx < stepIndex || idx === stepIndex + 1;
               const StepIcon = step.icon;
               const stepNumberCode = String(idx + 1).padStart(2, '0');
 
@@ -68,12 +68,14 @@ export const WizardSidebar: React.FC = () => {
                       void goToStep(idx);
                     }
                   }}
-                  className={`w-full text-left group flex items-start gap-3.5 p-2.5 rounded-xl border transition-all duration-200 ${
+                  className={`w-full text-left group flex items-start gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
                     isActive
                       ? `${tokens.activeCardBg} ${tokens.activeCardBorder} shadow-2xs`
                       : isCompleted
-                        ? 'bg-white/70 border-slate-200/70 hover:bg-white hover:border-slate-300 cursor-pointer'
-                        : 'bg-transparent border-transparent opacity-60 cursor-default'
+                        ? 'bg-white/80 border-slate-200/70 hover:bg-white hover:border-slate-300 cursor-pointer'
+                        : isClickable
+                          ? 'bg-transparent border-transparent hover:bg-white/60 hover:border-slate-200/60 opacity-80 cursor-pointer'
+                          : 'bg-transparent border-transparent opacity-55 cursor-default'
                   }`}
                 >
                   {/* Step Node Circle */}
@@ -101,15 +103,17 @@ export const WizardSidebar: React.FC = () => {
                       <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
                         {step.code || `ÉTAPE ${stepNumberCode}`}
                       </span>
-                      {step.badge ? (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200/80">
-                          {step.badge}
-                        </span>
-                      ) : step.optional ? (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-medium bg-slate-100 text-slate-500">
-                          Optionnel
-                        </span>
-                      ) : null}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {step.optional ? (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold uppercase bg-slate-100 text-slate-500 border border-slate-200/90">
+                            Optionnel
+                          </span>
+                        ) : step.badge ? (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold bg-white text-slate-600 border border-slate-200/80">
+                            {step.badge}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
 
                     <p

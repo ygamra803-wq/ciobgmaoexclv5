@@ -65,7 +65,6 @@ import {
 import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
 import {
   WizardShell,
-  StepHeader,
   useWizardFeature,
   type WizardProfile,
 } from '../../components/common/wizard';
@@ -5136,18 +5135,11 @@ export default function SortieRapideView({
 
               const sortieWizardProfile: WizardProfile = {
                 id: 'sortie-entree-rapide-wizard',
+                moduleKey: 'stock_rapid_movement',
                 code: form.code_bon || 'BON-MVT',
                 title: isTechUser ? 'Assistant Demande PDR' : 'Assistant Bon de Mouvement',
                 description: `${form.type} • ${form.action_id}`,
-                themeColor: isSortieInterne
-                  ? 'indigo'
-                  : isEntreeExterne
-                    ? 'emerald'
-                    : isCommandeFlow
-                      ? 'amber'
-                      : isBonSortie
-                        ? 'purple'
-                        : 'teal',
+                themeColor: 'teal',
                 finishLabel: isTechUser
                   ? 'Soumettre la Demande'
                   : `Valider ${form.code_bon} (${totalQte} pcs)`,
@@ -5157,19 +5149,11 @@ export default function SortieRapideView({
                     id: 'step-1-flux',
                     code: 'ÉTAPE 01',
                     title: 'Flux & Référence',
-                    description: 'Type de mouvement, source/destination, date et N° OT',
+                    description:
+                      'Choisissez la nature du flux (Sortie, Entrée, Commande), la catégorie de stock et les références temporelles.',
                     badge: form.type,
                     icon: Receipt,
-                    component: (
-                      <div className="space-y-4">
-                        <StepHeader
-                          title="Flux Industriel & Référence du Bon"
-                          description="Choisissez la nature du flux (Sortie, Entrée, Commande), la catégorie de stock et les références temporelles."
-                          icon={Receipt}
-                        />
-                        {step1FluxSection}
-                      </div>
-                    ),
+                    content: step1FluxSection,
                     validate: () => {
                       if (!form.date || !String(form.date).trim()) {
                         return {
@@ -5192,19 +5176,11 @@ export default function SortieRapideView({
                     id: 'step-2-articles',
                     code: 'ÉTAPE 02',
                     title: 'Articles & Stock',
-                    description: 'Sélection catalogue, quantités et contrôle stock temps réel',
+                    description:
+                      "Sélectionnez jusqu'à 5 références et contrôlez l'impact sur le stock avant de passer à l'imputation.",
                     badge: `${mouvementItems.length}/5 lignes`,
                     icon: Boxes,
-                    component: (
-                      <div className="space-y-4">
-                        <StepHeader
-                          title="Articles & Simulation Stock Actuel"
-                          description="Sélectionnez jusqu'à 5 références et contrôlez l'impact sur le stock avant de passer à l'imputation."
-                          icon={Boxes}
-                        />
-                        {step2ArticlesSection}
-                      </div>
-                    ),
+                    content: step2ArticlesSection,
                     validate: () => {
                       for (let idx = 0; idx < mouvementItems.length; idx++) {
                         const item = mouvementItems[idx];
@@ -5256,44 +5232,40 @@ export default function SortieRapideView({
                     id: 'step-3-imputation',
                     code: 'ÉTAPE 03',
                     title: 'Imputation & Validation',
-                    description: 'Machine/Zone, Intervenant, Demandeur et validation finale',
+                    description:
+                      "Renseignez le motif d'intervention, l'équipement concerné et l'intervenant avant d'enregistrer le bon.",
                     badge: form.action_id,
                     icon: ShieldCheck,
-                    component: (
+                    content: (
                       <div className="space-y-4">
-                        <StepHeader
-                          title="Imputation & Traçabilité GMAO"
-                          description="Renseignez le motif d'intervention, l'équipement concerné et l'intervenant avant d'enregistrer le bon."
-                          icon={ShieldCheck}
-                        />
                         {step3ContextSection}
 
                         {/* Light Excel Final Summary Ledger Card */}
-                        <div className="p-3.5 rounded-xl bg-slate-50/90 border border-slate-200/90 space-y-2 text-xs">
-                          <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
-                            <span className="font-mono font-bold text-[10px] uppercase tracking-wider text-slate-500">
+                        <div className="p-3.5 rounded-xl bg-teal-50/50 border border-teal-200/80 space-y-2 text-xs">
+                          <div className="flex items-center justify-between border-b border-teal-200/60 pb-2">
+                            <span className="font-mono font-bold text-[10px] uppercase tracking-wider text-teal-900">
                               Récapitulatif Excel du Bon ({form.code_bon})
                             </span>
-                            <span className="font-mono font-bold text-[11px] text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                            <span className="font-mono font-bold text-[11px] text-teal-800 bg-white px-2 py-0.5 rounded border border-teal-200">
                               {form.type} • {form.action_id}
                             </span>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
                             <div>
-                              <span className="text-slate-400 block">Articles :</span>
-                              <span className="font-mono font-bold text-slate-800">
+                              <span className="text-slate-500 block">Articles :</span>
+                              <span className="font-mono font-bold text-slate-900">
                                 {mouvementItems.length} réf(s) • {totalQte} pcs
                               </span>
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Équipement / Zone :</span>
-                              <span className="font-mono font-bold text-slate-800 truncate block">
+                              <span className="text-slate-500 block">Équipement / Zone :</span>
+                              <span className="font-mono font-bold text-slate-900 truncate block">
                                 {form.id_machine_registered || form.id_zone || form.emplacement_reception || '—'}
                               </span>
                             </div>
                             <div>
-                              <span className="text-slate-400 block">Intervenant / Tiers :</span>
-                              <span className="font-bold text-slate-800 truncate block">
+                              <span className="text-slate-500 block">Intervenant / Tiers :</span>
+                              <span className="font-bold text-slate-900 truncate block">
                                 {form.technicien || form.operation || form.fournisseur || form.prestataire_externe || '—'}
                               </span>
                             </div>

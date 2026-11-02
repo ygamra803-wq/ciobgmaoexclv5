@@ -1,5 +1,86 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import type { WizardProfile, WizardStep, ValidationResult, WizardThemeColor } from './wizard.types';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import type {
+  WizardProfile,
+  WizardStep,
+  ValidationResult,
+  WizardThemeColor,
+  StepValidationReturn,
+} from './wizard.types';
+import { resolveWizardThemeColor } from './wizardThemeTokens';
+
+export interface EvaluatedStepValidation {
+  canProceed: boolean;
+  banner: ValidationResult | null;
+}
+
+/**
+ * Pure helper that normalizes any StepValidationReturn (boolean, string, or ValidationResult)
+ * into a deterministic navigation decision (`canProceed`) and footer alert state (`banner`).
+ * Preserves non-blocking operational warnings (`valid: true, level: 'warning'`).
+ */
+export function evaluateStepValidation(
+  rawResult: StepValidationReturn | undefined | null
+): EvaluatedStepValidation {
+  if (rawResult === undefined || rawResult === null) {
+    return { canProceed: true, banner: null };
+  }
+
+  if (typeof rawResult === 'boolean') {
+    if (!rawResult) {
+      return {
+        canProceed: false,
+        banner: {
+          valid: false,
+          message: 'Veuillez vérifier les champs requis avant de continuer.',
+          level: 'critical',
+        },
+      };
+    }
+    return { canProceed: true, banner: null };
+  }
+
+  if (typeof rawResult === 'string') {
+    const trimmed = rawResult.trim();
+    if (trimmed.length > 0) {
+      return {
+        canProceed: false,
+        banner: {
+          valid: false,
+          message: trimmed,
+          level: 'critical',
+        },
+      };
+    }
+    return { canProceed: true, banner: null };
+  }
+
+  const isStepValid = rawResult.valid ?? rawResult.isValid ?? true;
+  const resolvedLevel = rawResult.level ?? rawResult.severity ?? 'critical';
+
+  if (!isStepValid) {
+    return {
+      canProceed: false,
+      banner: {
+        valid: false,
+        message: rawResult.message || 'Veuillez vérifier les champs requis avant de continuer.',
+        level: resolvedLevel,
+      },
+    };
+  }
+
+  if (resolvedLevel === 'warning' && rawResult.message) {
+    return {
+      canProceed: true,
+      banner: {
+        valid: true,
+        message: rawResult.message,
+        level: 'warning',
+      },
+    };
+  }
+
+  return { canProceed: true, banner: null };
+}
 
 export interface WizardContextValue {
   profile: WizardProfile;
@@ -45,7 +126,10 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
   const currentStep = profile.steps[stepIndex];
   const isFirst = stepIndex === 0;
   const isLast = totalSteps > 0 && stepIndex === totalSteps - 1;
-  const themeColor: WizardThemeColor = profile.themeColor ?? 'emerald';
+  const themeColor: WizardThemeColor = resolveWizardThemeColor(
+    profile.themeColor,
+    profile.moduleKey
+  );
 
   const clearValidation = useCallback(() => {
     setValidationResult(null);
@@ -60,41 +144,9 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
     try {
       setIsValidating(true);
       const rawResult = await Promise.resolve(currentStep.validate());
-      if (typeof rawResult === 'boolean') {
-        if (!rawResult) {
-          setValidationResult({
-            valid: false,
-            message: 'Veuillez vérifier les champs requis avant de continuer.',
-            level: 'critical',
-          });
-          return false;
-        }
-        setValidationResult(null);
-        return true;
-      }
-
-      if (typeof rawResult === 'string') {
-        setValidationResult({
-          valid: false,
-          message: rawResult,
-          level: 'critical',
-        });
-        return false;
-      }
-
-      const isStepValid = rawResult.valid ?? rawResult.isValid ?? true;
-      const resolvedLevel = rawResult.level ?? rawResult.severity ?? 'critical';
-
-      if (!isStepValid) {
-        setValidationResult({
-          valid: false,
-          message: rawResult.message || 'Veuillez vérifier les champs requis avant de continuer.',
-          level: resolvedLevel,
-        });
-        return false;
-      }
-      setValidationResult(null);
-      return true;
+      const evaluated = evaluateStepValidation(rawResult);
+      setValidationResult(evaluated.banner);
+      return evaluated.canProceed;
     } catch (error) {
       const message =
         error instanceof Error
@@ -110,6 +162,14 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
       setIsValidating(false);
     }
   }, [currentStep]);
+
+  const effectiveValidateOn = currentStep?.validateOn ?? profile.validateOn ?? 'next';
+
+  useEffect(() => {
+    if (effectiveValidateOn === 'always' && currentStep?.validate) {
+      void runCurrentStepValidation();
+    }
+  }, [effectiveValidateOn, currentStep, runCurrentStepValidation]);
 
   const next = useCallback(async (): Promise<boolean> => {
     if (isLast || isSubmitting || isValidating) return false;

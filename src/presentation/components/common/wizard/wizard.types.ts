@@ -54,6 +54,8 @@ export interface WizardStep {
   icon?: LucideIcon;
   /** Optional mark indicating this step is non-mandatory */
   optional?: boolean;
+  /** When to run validation for this step ('next' by default, or 'always' on mount/change) */
+  validateOn?: 'next' | 'always';
   /**
    * Guard executed when the user clicks "Suivant" or "Terminer".
    * Supports both synchronous and async validation.
@@ -62,11 +64,26 @@ export interface WizardStep {
 }
 
 /**
+ * Registered GMAO modules that can individually enable or disable Wizard mode.
+ */
+export type WizardModuleKey =
+  | 'global'
+  | 'machines_onboarding'
+  | 'preventive_plan'
+  | 'corrective_di'
+  | 'corrective_bt'
+  | 'stock_article'
+  | 'stock_rapid_movement'
+  | 'entrepot_component';
+
+/**
  * Complete declarative configuration for a multi-step GMAO workflow.
  */
 export interface WizardProfile {
   /** Unique profile identifier (e.g. "machine-onboarding-v1") */
   id: string;
+  /** Optional canonical module key used to enforce module themeColor consistency */
+  moduleKey?: WizardModuleKey;
   /** Optional Excel/GMAO reference code displayed in the sidebar badge (e.g. "WIZ-MAC-01") */
   code?: string;
   /** Main title of the wizard shown in the sidebar header */
@@ -75,8 +92,10 @@ export interface WizardProfile {
   description?: string;
   /** Alias for description */
   subtitle?: string;
-  /** Module accent color matching the parent L1/L2 page (defaults to 'emerald') */
+  /** Module accent color matching the parent L1/L2 page (defaults to moduleKey mapping or 'emerald') */
   themeColor?: WizardThemeColor;
+  /** Default validation timing for steps in this profile ('next' by default) */
+  validateOn?: 'next' | 'always';
   /** Custom label for the final submission button (defaults to "Valider & Enregistrer") */
   finishLabel?: string;
   /** Alias for finishLabel */
@@ -92,18 +111,5 @@ export interface WizardProfile {
   /** Optional callback fired when the user cancels/closes the wizard */
   onCancel?: () => void;
 }
-
-/**
- * Registered GMAO modules that can individually enable or disable Wizard mode.
- */
-export type WizardModuleKey =
-  | 'global'
-  | 'machines_onboarding'
-  | 'preventive_plan'
-  | 'corrective_di'
-  | 'corrective_bt'
-  | 'stock_article'
-  | 'stock_rapid_movement'
-  | 'entrepot_component';
 
 export type WizardFeatureFlagsState = Record<WizardModuleKey, boolean>;
