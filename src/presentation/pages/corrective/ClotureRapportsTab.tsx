@@ -64,7 +64,7 @@ export default function ClotureRapportsTab({
       );
       if (found) return found.nom;
     }
-    return item.intervenant || 'm_hammed';
+    return item.intervenant || 'Non assigné';
   };
 
   const resolvePdrDisplay = (item) => {
@@ -176,8 +176,6 @@ export default function ClotureRapportsTab({
     const avgMinutes =
       countMinutes > 0
         ? Math.round(totalMinutes / countMinutes)
-        : scopedInterventions.length > 0
-        ? 45
         : 0;
     const mttrFormatted = CorrectiveCalculationService.minutesToTimeString(avgMinutes);
 
@@ -381,7 +379,7 @@ export default function ClotureRapportsTab({
         sortable: true,
         render: (item) => (
           <span className="font-semibold text-slate-800 font-mono whitespace-nowrap">
-            {item.date_demande || item.date || '2026-03-24'}
+            {item.date_demande || item.demande_date || item.date || '—'}
           </span>
         ),
       },
@@ -394,7 +392,7 @@ export default function ClotureRapportsTab({
         render: (item) => (
           <div className="flex items-center gap-1.5 font-mono font-bold text-emerald-700 whitespace-nowrap">
             <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>{item.temps_intervention_calc || item.temps_intervention || '00:45'}</span>
+            <span>{item.temps_intervention_calc || item.temps_intervention || '00:00'}</span>
           </div>
         ),
       },
@@ -425,7 +423,7 @@ export default function ClotureRapportsTab({
         sortable: true,
         render: (item) => (
           <span className="px-2.5 py-1 rounded-md font-mono font-bold text-xs bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs">
-            {item.type_panne || 'M'}
+            {item.type_panne || '—'}
           </span>
         ),
       },
@@ -437,7 +435,7 @@ export default function ClotureRapportsTab({
         sortable: true,
         render: (item) => (
           <span className="font-bold text-slate-900 max-w-xs truncate block" title={item.anomalie}>
-            {item.anomalie || 'court_circuit'}
+            {item.anomalie || '—'}
           </span>
         ),
       },
@@ -1041,7 +1039,7 @@ export default function ClotureRapportsTab({
                     Fiche Technique de Rapport d'Intervention
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Bon de Travail : <b>{previewItem.num_bt || 'BT-4825'}</b> • Machine : <b>{previewItem.code_machine}</b>
+                    Bon de Travail : <b>{previewItem.num_bt || `BT-${String(previewItem.id || '').slice(-4) || 'N/A'}`}</b> • Machine : <b>{previewItem.code_machine}</b>
                   </p>
                 </div>
               </div>
@@ -1074,13 +1072,13 @@ export default function ClotureRapportsTab({
                       </div>
                       <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                         <span className="text-[10px] font-bold text-slate-400 uppercase block">Intervenant</span>
-                        <span className="font-bold text-slate-900 block">{previewItem.intervenant || 'Rachid'}</span>
+                        <span className="font-bold text-slate-900 block">{resolveTechNom(previewItem)}</span>
                         <span className="text-[11px] text-slate-500 font-medium">Technicien GMAO</span>
                       </div>
                       <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
                         <span className="text-[10px] font-bold text-slate-400 uppercase block">Temps Ouvré</span>
                         <span className="font-mono font-bold text-emerald-700 text-sm block">
-                          {previewItem.temps_intervention_calc || previewItem.temps_intervention || '00:45'}
+                          {previewItem.temps_intervention_calc || previewItem.temps_intervention || '00:00'}
                         </span>
                         <span className="text-[11px] text-slate-400">Durée réelle</span>
                       </div>
@@ -1098,7 +1096,7 @@ export default function ClotureRapportsTab({
                         Diagnostic Panne & Anomalie Constatée
                       </span>
                       <div className="font-medium text-slate-900">
-                        <b>Type {previewItem.type_panne || 'M'} :</b> {previewItem.anomalie || 'court_circuit'}
+                        <b>Type {previewItem.type_panne || '—'} :</b> {previewItem.anomalie || 'Non spécifiée'}
                       </div>
                       {(previewItem.id_composant ||
                         previewItem.nom_composant ||

@@ -195,15 +195,6 @@ export default function DemandesInterventionTab({
       });
     }
 
-    if (list.length === 0) {
-      return [
-        { nom: 'Rachid', name: 'Rachid', role: 'Technicien FM' },
-        { nom: 'Youssef', name: 'Youssef', role: 'Technicien Polissage' },
-        { nom: 'Mhammed', name: 'Mhammed', role: 'Technicien Presse Injection' },
-        { nom: 'Ismail', name: 'Ismail', role: 'Technicien Presse Hydraulique' },
-        { nom: 'Boujamaa', name: 'Boujamaa', role: 'Technicien FEMB2' },
-      ];
-    }
     return list;
   }, [technicians, intervenants]);
 
@@ -398,7 +389,7 @@ export default function DemandesInterventionTab({
   // Convert Modal State
   const [convertForm, setConvertForm] = useState({
     num_bt: '',
-    intervenant: allTechnicianOptions[0]?.nom || 'm_hammed',
+    intervenant: allTechnicianOptions[0]?.nom || '',
     priorite: 'HAUTE',
     travail_a_faire: '',
   });
@@ -623,7 +614,7 @@ export default function DemandesInterventionTab({
       num_bt: di.num_bt || `BT-${suffix}`,
       intervenant:
         di.intervenant ||
-        (isTechUser && techDisplayName ? techDisplayName : allTechnicianOptions[0]?.nom || 'm_hammed'),
+        (isTechUser && techDisplayName ? techDisplayName : allTechnicianOptions[0]?.nom || ''),
       priorite: di.priorite || 'HAUTE',
       travail_a_faire: di.travail_a_faire || '',
     });
@@ -1901,6 +1892,11 @@ export default function DemandesInterventionTab({
                   onChange={(e) => setConvertForm({ ...convertForm, intervenant: e.target.value })}
                   className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-400 focus:outline-hidden"
                 >
+                  <option value="">
+                    {allTechnicianOptions.length > 0
+                      ? '-- Sélectionner un intervenant --'
+                      : '-- Aucun technicien enregistré (Non assigné) --'}
+                  </option>
                   {allTechnicianOptions.map((t) => (
                     <option key={t.nom || t.name} value={t.nom || t.name}>
                       {t.nom || t.name} {t.role ? `(${t.role})` : ''}

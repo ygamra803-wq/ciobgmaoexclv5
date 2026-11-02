@@ -215,17 +215,18 @@ export default function TabPlanBuilder({
     const autoTech = mach?.technicien_responsable || mach?.technicien || (technicians[0]?.nom || technicians[0]?.name || 'Technicien');
     setTargetTechnician(autoTech);
 
-    // 3. Auto-generate Reference
+    // 3. Auto-generate Reference with current year
+    const currentYear = new Date().getFullYear();
     const cleanId = (mach?.code_machine || selectedMachineId).replace(/[^a-zA-Z0-9]/g, '');
-    setPlanReference(`Plan-2025-${autoZone}-${cleanId}-${startWeek}`);
+    setPlanReference(`Plan-${currentYear}-${autoZone}-${cleanId}-${startWeek}`);
     setPlanDescription(`Plan de maintenance préventive structuré pour ${mach?.nom || selectedMachineId}`);
 
-    // 4. Initial default task suggestions from real machine components or guides
+    // 4. Initial default task suggestions strictly from registered machine components (SSOT)
     const initialTasks = [];
 
-    const compsToAdd = machineComponents.length > 0 
-      ? machineComponents.map(c => c.nom)
-      : ['Roulement', 'Courroie', 'Niveau d\'huile', 'Glissière', 'Armoire électrique'];
+    const compsToAdd = machineComponents.length > 0
+      ? machineComponents.map((c) => c.nom)
+      : [];
 
     compsToAdd.slice(0, 6).forEach((compName) => {
       const matchedCompObj = machineComponents.find(

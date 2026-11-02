@@ -1204,8 +1204,11 @@ export default function InterventionLiveTab({
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
                 Machine : <b className="text-slate-800">{activeIntervention.code_machine}</b> • BT :{' '}
-                <b className="text-blue-700">{activeIntervention.num_bt || 'BT-4825'}</b> • Intervenant :{' '}
-                <b className="text-slate-800">{activeIntervention.intervenant || 'm_hammed'}</b>
+                <b className="text-blue-700">
+                  {activeIntervention.num_bt || `BT-${String(activeIntervention.id || '').slice(-4) || 'N/A'}`}
+                </b>{' '}
+                • Intervenant :{' '}
+                <b className="text-slate-800">{activeIntervention.intervenant || 'Non assigné'}</b>
               </p>
             </div>
           </div>
@@ -1239,7 +1242,15 @@ export default function InterventionLiveTab({
               <div className="flex justify-between gap-4">
                 <span className="text-slate-400">Début :</span>
                 <span className="font-bold text-white">
-                  {activeIntervention.date_debut || '2026-03-24'} à {activeIntervention.heure_debut || '08:00'}
+                  {activeIntervention.date_debut ||
+                    activeIntervention.date_demande ||
+                    activeIntervention.demande_date ||
+                    new Date().toISOString().split('T')[0]}{' '}
+                  à{' '}
+                  {activeIntervention.heure_debut ||
+                    activeIntervention.heure_demande ||
+                    activeIntervention.demande_heure ||
+                    '08:00'}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
@@ -1259,12 +1270,12 @@ export default function InterventionLiveTab({
                 Anomalie Constatée (Col J)
               </span>
               <p className="font-black text-slate-900 text-sm mt-1 font-mono">
-                {activeIntervention.anomalie || 'court_circuit'}
+                {activeIntervention.anomalie || 'Non spécifiée'}
               </p>
               <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-800">
                 <span className="font-bold">Type :</span>
                 <span className="px-1.5 py-0.2 rounded bg-amber-200/60 font-mono font-bold">
-                  {activeIntervention.type_panne || 'E'}
+                  {activeIntervention.type_panne || '—'}
                 </span>
               </div>
             </div>
