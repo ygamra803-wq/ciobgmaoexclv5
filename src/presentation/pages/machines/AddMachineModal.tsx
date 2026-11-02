@@ -404,31 +404,45 @@ export default function AddMachineModal({
     return list;
   }, [availableTemplates, templates, isSystemGeneral]);
 
+  const [isSubmittingMachine, setIsSubmittingMachine] = useState(false);
+
+  const handleSafeClose = () => {
+    if (!isSubmittingMachine) {
+      onClose();
+    }
+  };
+
   const submitMachineRegistration = () => {
+    if (isSubmittingMachine) return false;
     if (!form.id_machine_registered || !form.designation) return false;
     if (isSystemGeneral && !form.id_general_system_type) return false;
 
-    onAddMachine({
-      id_machine_registered: form.id_machine_registered.trim().toUpperCase(),
-      designation: form.designation.trim(),
-      serial_number:
-        form.serial_number?.trim() ||
-        `SN-${new Date().getFullYear()}-${form.id_machine_registered.replace(/[^A-Z0-9]/g, '')}`,
-      date_mise_en_service: form.date_mise_en_service || new Date().toISOString().slice(0, 10),
-      asset_class: form.asset_class,
-      id_general_system_type: isSystemGeneral ? form.id_general_system_type : null,
-      id_family: isSystemGeneral ? form.id_family || '' : form.id_family,
-      id_templates: isSystemGeneral
-        ? form.id_templates || ''
-        : form.id_templates || availableTemplates[0]?.id_templates || '',
-      id_blueprint: form.id_blueprint || '',
-      id_zone_default: form.id_zone_default,
-      technician: form.technician,
-      status: form.status,
-    });
+    try {
+      setIsSubmittingMachine(true);
+      onAddMachine({
+        id_machine_registered: form.id_machine_registered.trim().toUpperCase(),
+        designation: form.designation.trim(),
+        serial_number:
+          form.serial_number?.trim() ||
+          `SN-${new Date().getFullYear()}-${form.id_machine_registered.replace(/[^A-Z0-9]/g, '')}`,
+        date_mise_en_service: form.date_mise_en_service || new Date().toISOString().slice(0, 10),
+        asset_class: form.asset_class,
+        id_general_system_type: isSystemGeneral ? form.id_general_system_type : null,
+        id_family: isSystemGeneral ? form.id_family || '' : form.id_family,
+        id_templates: isSystemGeneral
+          ? form.id_templates || ''
+          : form.id_templates || availableTemplates[0]?.id_templates || '',
+        id_blueprint: form.id_blueprint || '',
+        id_zone_default: form.id_zone_default,
+        technician: form.technician,
+        status: form.status,
+      });
 
-    onClose();
-    return true;
+      onClose();
+      return true;
+    } finally {
+      setIsSubmittingMachine(false);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -955,7 +969,7 @@ export default function AddMachineModal({
       ? 'Enregistrer le Système Général'
       : 'Enregistrer la Machine',
     cancelLabel: 'Annuler',
-    onCancel: onClose,
+    onCancel: handleSafeClose,
     onFinish: async () => {
       submitMachineRegistration();
     },
@@ -1002,6 +1016,7 @@ export default function AddMachineModal({
           "Rattachez l'équipement à sa Famille (Col D), son Modèle Template (Col E) et son Schéma Blueprint.",
         badge: 'COL D-E',
         optional: isSystemGeneral,
+        validateOn: 'always',
         icon: FileText,
         content: step2ArborescenceSection,
         validate: () => {
@@ -1039,8 +1054,16 @@ export default function AddMachineModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmittingMachine) {
+          handleSafeClose();
+        }
+      }}
+      className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+    >
       <div
+        onClick={(e) => e.stopPropagation()}
         className={`bg-white rounded-3xl shadow-2xl w-full ${
           isWizardMode ? 'max-w-2xl' : 'max-w-lg'
         } border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] transition-all duration-200`}
@@ -1078,8 +1101,9 @@ export default function AddMachineModal({
             >
               <button
                 type="button"
+                disabled={isSubmittingMachine}
                 onClick={() => setWizardMode(false)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                   !isWizardMode
                     ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/80'
                     : 'text-slate-500 hover:text-slate-800'
@@ -1090,8 +1114,9 @@ export default function AddMachineModal({
               </button>
               <button
                 type="button"
+                disabled={isSubmittingMachine}
                 onClick={() => setWizardMode(true)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                   isWizardMode
                     ? 'bg-emerald-600 text-white shadow-2xs'
                     : 'text-slate-500 hover:text-emerald-700'
@@ -1104,8 +1129,10 @@ export default function AddMachineModal({
 
             <button
               type="button"
-              onClick={onClose}
-              className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+              disabled={isSubmittingMachine}
+              onClick={handleSafeClose}
+              aria-label="Fermer la fenêtre"
+              className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1128,14 +1155,15 @@ export default function AddMachineModal({
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer text-xs"
+                disabled={isSubmittingMachine}
+                onClick={handleSafeClose}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition cursor-pointer text-xs disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                disabled={isSystemGeneral && !form.id_general_system_type}
+                disabled={isSubmittingMachine || (isSystemGeneral && !form.id_general_system_type)}
                 className="px-5 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
               >
                 <Plus className="w-4 h-4" />

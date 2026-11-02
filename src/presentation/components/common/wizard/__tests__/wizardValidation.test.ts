@@ -104,4 +104,54 @@ describe('Wizard Engine Validation & Module Theme Rules', () => {
       expect(resolveWizardThemeColor(undefined)).toBe('emerald');
     });
   });
+
+  describe('validateOn: always (live vs submit context differentiation)', () => {
+    it('defers empty-ref blocking in live mode while enforcing stock checks immediately', () => {
+      const mockStepValidate = (
+        items: Array<{ ref: string; quantite: number; stock: number }>,
+        mode: 'live' | 'submit'
+      ) => {
+        for (const item of items) {
+          if (!item.ref) {
+            if (mode !== 'live') {
+              return { valid: false, message: 'Sélectionnez un article.', level: 'critical' as const };
+            }
+            continue;
+          }
+          if (item.quantite > item.stock) {
+            return { valid: false, message: 'Stock insuffisant.', level: 'critical' as const };
+          }
+          if (item.quantite === item.stock && item.stock > 0) {
+            return { valid: true, message: 'Stock épuisé après sortie.', level: 'warning' as const };
+          }
+        }
+        return { valid: true };
+      };
+
+      // 1. Entering Step 2 with blank ref in 'live' mode does not flash premature red error
+      expect(evaluateStepValidation(mockStepValidate([{ ref: '', quantite: 1, stock: 5 }], 'live'))).toEqual({
+        canProceed: true,
+        banner: null,
+      });
+
+      // 2. Clicking 'Suivant' ('submit' mode) with blank ref blocks navigation
+      expect(
+        evaluateStepValidation(mockStepValidate([{ ref: '', quantite: 1, stock: 5 }], 'submit')).canProceed
+      ).toBe(false);
+
+      // 3. Selecting an item that exhausts stock surfaces a live warning banner without blocking
+      const liveWarning = evaluateStepValidation(
+        mockStepValidate([{ ref: 'PDR-01', quantite: 5, stock: 5 }], 'live')
+      );
+      expect(liveWarning.canProceed).toBe(true);
+      expect(liveWarning.banner?.level).toBe('warning');
+
+      // 4. Exceeding stock in 'live' mode immediately surfaces a critical banner
+      const liveOverflow = evaluateStepValidation(
+        mockStepValidate([{ ref: 'PDR-01', quantite: 6, stock: 5 }], 'live')
+      );
+      expect(liveOverflow.canProceed).toBe(false);
+      expect(liveOverflow.banner?.level).toBe('critical');
+    });
+  });
 });

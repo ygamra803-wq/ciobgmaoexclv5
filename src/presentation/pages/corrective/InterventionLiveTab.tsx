@@ -1046,6 +1046,7 @@ export default function InterventionLiveTab({
           'Sélectionnez les pièces de rechange consommées (Col L), leur marque (Col M), leur état (Col N) et le N° de bon.',
         badge: 'COL L-N',
         optional: true,
+        validateOn: 'always',
         icon: Package,
         content: step2PdrSection,
         validate: () => {

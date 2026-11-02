@@ -124,7 +124,7 @@ const MobileWizardHeader: React.FC = () => {
  * (e.g. inside a 5-column split-view card such as Sortie & Entrée Rapide or AddMachineModal).
  */
 const CompactHorizontalStepper: React.FC = () => {
-  const { profile, stepIndex, totalSteps, goToStep, themeColor } = useWizard();
+  const { profile, stepIndex, totalSteps, goToStep, themeColor, isSubmitting } = useWizard();
   const tokens = WIZARD_THEME_TOKENS[themeColor];
   const progressPercentage =
     totalSteps > 0 ? Math.round(((stepIndex + 1) / totalSteps) * 100) : 100;
@@ -141,7 +141,7 @@ const CompactHorizontalStepper: React.FC = () => {
         {profile.steps.map((step, idx) => {
           const isActive = idx === stepIndex;
           const isCompleted = idx < stepIndex;
-          const isClickable = idx < stepIndex || idx === stepIndex + 1;
+          const isClickable = !isSubmitting && (idx < stepIndex || idx === stepIndex + 1);
           const StepIcon = step.icon;
           const stepNumberCode = String(idx + 1).padStart(2, '0');
 
@@ -149,7 +149,7 @@ const CompactHorizontalStepper: React.FC = () => {
             <button
               key={step.id}
               type="button"
-              disabled={!isClickable && !isActive}
+              disabled={isSubmitting || (!isClickable && !isActive)}
               onClick={() => {
                 if (isClickable) {
                   void goToStep(idx);
@@ -274,6 +274,36 @@ const WizardShellInner: React.FC<{
   );
 };
 
+const WizardModalDialogInner: React.FC<{
+  title: string;
+  isCompact: boolean;
+  onClose: () => void;
+}> = ({ title, isCompact, onClose }) => {
+  const { isSubmitting } = useWizard();
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSubmitting) {
+          onClose();
+        }
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-xs animate-fade-in"
+    >
+      <div className="relative w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+        <WizardShellInner
+          isCompact={isCompact}
+          className="h-[82vh] max-h-[760px] shadow-2xl"
+          onModalClose={onClose}
+        />
+      </div>
+    </div>
+  );
+};
+
 /**
  * Inline Mature Light Excel Wizard container.
  * Can be rendered inside any page, tab, split-column card, or modal dialog.
@@ -308,7 +338,7 @@ export interface WizardModalProps extends WizardShellProps {
 
 /**
  * Ready-to-use Modal Dialog wrapper around `WizardShell`.
- * Guards dismissal while `isSubmitting` is active.
+ * Guards backdrop and close button dismissal while `isSubmitting` is active.
  */
 export const WizardModal: React.FC<WizardModalProps> = ({
   isOpen,
@@ -327,21 +357,12 @@ export const WizardModal: React.FC<WizardModalProps> = ({
   const isCompact = layout === 'compact';
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={profile.title}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/50 backdrop-blur-xs animate-fade-in"
-    >
-      <div className="relative w-full max-w-5xl">
-        <WizardProvider profile={profileWithCancel} initialStepIndex={initialStepIndex}>
-          <WizardShellInner
-            isCompact={isCompact}
-            className="h-[82vh] max-h-[760px] shadow-2xl"
-            onModalClose={onClose}
-          />
-        </WizardProvider>
-      </div>
-    </div>
+    <WizardProvider profile={profileWithCancel} initialStepIndex={initialStepIndex}>
+      <WizardModalDialogInner
+        title={profile.title}
+        isCompact={isCompact}
+        onClose={onClose}
+      />
+    </WizardProvider>
   );
 };

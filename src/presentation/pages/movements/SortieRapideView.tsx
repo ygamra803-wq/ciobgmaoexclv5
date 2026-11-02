@@ -5180,16 +5180,23 @@ export default function SortieRapideView({
                       "Sélectionnez jusqu'à 5 références et contrôlez l'impact sur le stock avant de passer à l'imputation.",
                     badge: `${mouvementItems.length}/5 lignes`,
                     icon: Boxes,
+                    validateOn: 'always',
                     content: step2ArticlesSection,
-                    validate: () => {
+                    validate: (ctx) => {
+                      const isLive = ctx?.mode === 'live';
+
                       for (let idx = 0; idx < mouvementItems.length; idx++) {
                         const item = mouvementItems[idx];
-                        if (!item.ref || String(item.ref).trim() === '') {
-                          return {
-                            valid: false,
-                            message: `Ligne ${idx + 1} : Veuillez sélectionner un article dans le catalogue.`,
-                            level: 'critical',
-                          };
+                        const hasRef = Boolean(item.ref && String(item.ref).trim() !== '');
+                        if (!hasRef) {
+                          if (!isLive) {
+                            return {
+                              valid: false,
+                              message: `Ligne ${idx + 1} : Veuillez sélectionner un article dans le catalogue.`,
+                              level: 'critical',
+                            };
+                          }
+                          continue;
                         }
                         if (!item.quantite || Number(item.quantite) <= 0) {
                           return {
@@ -5206,6 +5213,7 @@ export default function SortieRapideView({
                         form.type === 'Sortie Externe';
                       if (isSortie) {
                         for (const item of mouvementItems) {
+                          if (!item.ref || String(item.ref).trim() === '') continue;
                           const match =
                             unifiedSearchCatalog.find((c) => c.ref === item.ref) ||
                             stockItems.find((s) => s.ref === item.ref);
@@ -5221,6 +5229,13 @@ export default function SortieRapideView({
                               valid: false,
                               message: `Stock insuffisant pour [${item.ref}] (Demandé: ${qte}, Disponible: ${currentStock}).`,
                               level: 'critical',
+                            };
+                          }
+                          if (qte === currentStock && currentStock > 0) {
+                            return {
+                              valid: true,
+                              message: `Attention : cette sortie épuisera le stock disponible de [${item.ref}] (Stock restant = 0).`,
+                              level: 'warning',
                             };
                           }
                         }

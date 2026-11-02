@@ -135,45 +135,48 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
     setValidationResult(null);
   }, []);
 
-  const runCurrentStepValidation = useCallback(async (): Promise<boolean> => {
-    if (!currentStep?.validate) {
-      setValidationResult(null);
-      return true;
-    }
+  const runCurrentStepValidation = useCallback(
+    async (mode: 'live' | 'submit' = 'submit'): Promise<boolean> => {
+      if (!currentStep?.validate) {
+        setValidationResult(null);
+        return true;
+      }
 
-    try {
-      setIsValidating(true);
-      const rawResult = await Promise.resolve(currentStep.validate());
-      const evaluated = evaluateStepValidation(rawResult);
-      setValidationResult(evaluated.banner);
-      return evaluated.canProceed;
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Une erreur est survenue lors de la validation de cette étape.';
-      setValidationResult({
-        valid: false,
-        message,
-        level: 'critical',
-      });
-      return false;
-    } finally {
-      setIsValidating(false);
-    }
-  }, [currentStep]);
+      try {
+        setIsValidating(true);
+        const rawResult = await Promise.resolve(currentStep.validate({ mode }));
+        const evaluated = evaluateStepValidation(rawResult);
+        setValidationResult(evaluated.banner);
+        return evaluated.canProceed;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Une erreur est survenue lors de la validation de cette étape.';
+        setValidationResult({
+          valid: false,
+          message,
+          level: 'critical',
+        });
+        return false;
+      } finally {
+        setIsValidating(false);
+      }
+    },
+    [currentStep]
+  );
 
   const effectiveValidateOn = currentStep?.validateOn ?? profile.validateOn ?? 'next';
 
   useEffect(() => {
     if (effectiveValidateOn === 'always' && currentStep?.validate) {
-      void runCurrentStepValidation();
+      void runCurrentStepValidation('live');
     }
   }, [effectiveValidateOn, currentStep, runCurrentStepValidation]);
 
   const next = useCallback(async (): Promise<boolean> => {
     if (isLast || isSubmitting || isValidating) return false;
-    const isValid = await runCurrentStepValidation();
+    const isValid = await runCurrentStepValidation('submit');
     if (!isValid) return false;
 
     setDirection(1);

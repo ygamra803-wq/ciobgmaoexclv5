@@ -30,6 +30,11 @@ export type StepValidationReturn =
   | boolean
   | string;
 
+export interface StepValidationContext {
+  /** 'live' when triggered reactively via validateOn: 'always', 'submit' when triggered by Suivant/Terminer */
+  mode: 'live' | 'submit';
+}
+
 /**
  * Definition of a single step inside a Profile-Driven Wizard.
  */
@@ -57,10 +62,13 @@ export interface WizardStep {
   /** When to run validation for this step ('next' by default, or 'always' on mount/change) */
   validateOn?: 'next' | 'always';
   /**
-   * Guard executed when the user clicks "Suivant" or "Terminer".
+   * Guard executed when the user clicks "Suivant"/"Terminer" (mode='submit')
+   * or reactively on state change when `validateOn === 'always'` (mode='live').
    * Supports both synchronous and async validation.
    */
-  validate?: () => StepValidationReturn | Promise<StepValidationReturn>;
+  validate?: (
+    context?: StepValidationContext
+  ) => StepValidationReturn | Promise<StepValidationReturn>;
 }
 
 /**
