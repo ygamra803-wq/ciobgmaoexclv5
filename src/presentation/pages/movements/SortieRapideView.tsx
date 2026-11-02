@@ -1275,15 +1275,36 @@ export default function SortieRapideView({
       }
     }
 
-    // Collective stock deficit check
+    // Collective stock deficit check (aggregated by ref across all lines in the bon)
     if (isSortie || isSortieEx) {
+      const requestedByRef = new Map<string, { ref: string; totalQte: number }>();
       for (const item of mouvementItems) {
-        if (!item.ref) continue;
-        const match = unifiedSearchCatalog.find((c) => c.ref === item.ref) || stockItems.find((s) => s.ref === item.ref);
-        const currentStock = match ? (match.stockActuel ?? match.raw?.stockActuel ?? match.raw?.stockInitial ?? 0) : 0;
+        const rawRef = String(item.ref || '').trim();
+        if (!rawRef) continue;
+        const normKey = rawRef.toUpperCase();
+        const prev = requestedByRef.get(normKey);
         const qte = Number(item.quantite) || 0;
-        if (qte > currentStock) {
-          errors.push(`Stock insuffisant pour [${item.ref}] (Demandé: ${qte}, Dispo: ${currentStock}).`);
+        requestedByRef.set(normKey, {
+          ref: prev ? prev.ref : rawRef,
+          totalQte: (prev ? prev.totalQte : 0) + qte,
+        });
+      }
+
+      for (const { ref, totalQte } of requestedByRef.values()) {
+        const match =
+          unifiedSearchCatalog.find(
+            (c) => String(c.ref || '').trim().toUpperCase() === ref.toUpperCase()
+          ) ||
+          stockItems.find(
+            (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
+          );
+        const currentStock = match
+          ? (match.stockActuel ?? match.raw?.stockActuel ?? match.raw?.stockInitial ?? 0)
+          : 0;
+        if (totalQte > currentStock) {
+          errors.push(
+            `Stock insuffisant pour [${ref}] (Demandé cumulé: ${totalQte}, Dispo: ${currentStock}).`
+          );
         }
       }
     }
@@ -1318,7 +1339,7 @@ export default function SortieRapideView({
   };
 
   // Form Submit Handler (Supports both Classic <form> submit and Wizard onFinish)
-  const handleSubmit = (e?: any) => {
+  const handleSubmit = (e?: any): boolean => {
     if (e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
@@ -1328,7 +1349,7 @@ export default function SortieRapideView({
     if (!isValid) {
       setValidationErrors(errors);
       setShowValidationAlert(true);
-      return;
+      return false;
     }
 
     // Process valid submission
@@ -1371,7 +1392,7 @@ export default function SortieRapideView({
       setTimeout(() => {
         setShowSuccessAlert(false);
       }, 3000);
-      return;
+      return true;
     }
 
     // Submit movement records for each item in the bon (Admin / Magasinier / Responsable)
@@ -1508,6 +1529,7 @@ export default function SortieRapideView({
     setTimeout(() => {
       setShowSuccessAlert(false);
     }, 3000);
+    return true;
   };
 
   // Convert Pending Commande / Demande to Entrée Externe in 1 click
@@ -5212,32 +5234,52 @@ export default function SortieRapideView({
                         form.type === 'Bon de Sortie' ||
                         form.type === 'Sortie Externe';
                       if (isSortie) {
+                        const requestedByRef = new Map<string, { ref: string; totalQte: number }>();
                         for (const item of mouvementItems) {
-                          if (!item.ref || String(item.ref).trim() === '') continue;
+                          const rawRef = String(item.ref || '').trim();
+                          if (!rawRef) continue;
+                          const normKey = rawRef.toUpperCase();
+                          const prev = requestedByRef.get(normKey);
+                          const qte = Number(item.quantite) || 0;
+                          requestedByRef.set(normKey, {
+                            ref: prev ? prev.ref : rawRef,
+                            totalQte: (prev ? prev.totalQte : 0) + qte,
+                          });
+                        }
+
+                        let exhaustionWarning: string | null = null;
+                        for (const { ref, totalQte } of requestedByRef.values()) {
                           const match =
-                            unifiedSearchCatalog.find((c) => c.ref === item.ref) ||
-                            stockItems.find((s) => s.ref === item.ref);
+                            unifiedSearchCatalog.find(
+                              (c) => String(c.ref || '').trim().toUpperCase() === ref.toUpperCase()
+                            ) ||
+                            stockItems.find(
+                              (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
+                            );
                           const currentStock = match
                             ? (match.stockActuel ??
                                 match.raw?.stockActuel ??
                                 match.raw?.stockInitial ??
                                 0)
                             : 0;
-                          const qte = Number(item.quantite) || 0;
-                          if (qte > currentStock) {
+                          if (totalQte > currentStock) {
                             return {
                               valid: false,
-                              message: `Stock insuffisant pour [${item.ref}] (Demandé: ${qte}, Disponible: ${currentStock}).`,
+                              message: `Stock insuffisant pour [${ref}] (Demandé: ${totalQte}, Disponible: ${currentStock}).`,
                               level: 'critical',
                             };
                           }
-                          if (qte === currentStock && currentStock > 0) {
-                            return {
-                              valid: true,
-                              message: `Attention : cette sortie épuisera le stock disponible de [${item.ref}] (Stock restant = 0).`,
-                              level: 'warning',
-                            };
+                          if (totalQte === currentStock && currentStock > 0 && !exhaustionWarning) {
+                            exhaustionWarning = `Attention : cette sortie épuisera le stock disponible de [${ref}] (Stock restant = 0).`;
                           }
+                        }
+
+                        if (exhaustionWarning) {
+                          return {
+                            valid: true,
+                            message: exhaustionWarning,
+                            level: 'warning',
+                          };
                         }
                       }
                       return { valid: true };
@@ -5303,9 +5345,7 @@ export default function SortieRapideView({
                     },
                   },
                 ],
-                onFinish: () => {
-                  handleSubmit();
-                },
+                onFinish: () => handleSubmit(),
                 onCancel: () => {
                   resetForm();
                 },

@@ -231,7 +231,10 @@ export const WizardProvider: React.FC<WizardProviderProps> = ({
       setIsSubmitting(true);
       const finishFn = profile.onFinish ?? profile.onComplete;
       if (finishFn) {
-        await Promise.resolve(finishFn());
+        const outcome = await Promise.resolve(finishFn());
+        if (outcome === false) {
+          return false;
+        }
       }
       setValidationResult(null);
       setDirection(-1);

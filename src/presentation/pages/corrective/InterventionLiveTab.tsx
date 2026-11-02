@@ -383,12 +383,57 @@ export default function InterventionLiveTab({
     }));
   };
 
+  // Merge any pending single-input PDR (`pdr_ref`) with `pieces_utilisees` so a selected part
+  // is never silently dropped if the user clicks Suivant/Valider without clicking "+ Ajouter".
+  const buildEffectivePiecesList = (state: any) => {
+    const baseList = Array.isArray(state.pieces_utilisees)
+      ? state.pieces_utilisees.map((item: any) => ({ ...item }))
+      : [];
+    const pendingRef = String(state.pdr_ref || '').trim();
+    const pendingQty = Number(state.pdr_quantite || 0);
+
+    if (pendingRef && pendingQty > 0) {
+      const existingIdx = baseList.findIndex(
+        (p: any) => String(p.ref || '').trim().toUpperCase() === pendingRef.toUpperCase()
+      );
+      if (existingIdx >= 0) {
+        baseList[existingIdx] = {
+          ...baseList[existingIdx],
+          quantite: Number(baseList[existingIdx].quantite || 0) + pendingQty,
+        };
+      } else {
+        baseList.push({
+          ref: pendingRef,
+          designation: state.pdr_designation || pendingRef,
+          quantite: pendingQty,
+          prix_unitaire: Number(state.pdr_prix || 0),
+          unite: state.pdr_unite || 'Pièce',
+          marque: state.marque || '',
+          etat_piece: state.etat_piece || 'Neuve',
+        });
+      }
+    }
+
+    return baseList;
+  };
+
   // Shared core execution logic for both Classic Form & Wizard
-  const executeClotureOrSubmit = () => {
+  const executeClotureOrSubmit = (): boolean => {
     if (!activeIntervention) {
       showToast?.('Aucune intervention active sélectionnée', 'warning');
-      return;
+      return false;
     }
+
+    const effectivePieces = buildEffectivePiecesList(formState);
+    const primaryPiece = effectivePieces.length === 1 ? effectivePieces[0] : null;
+    const normalizedFormState = {
+      ...formState,
+      pieces_utilisees: effectivePieces,
+      pdr_ref: primaryPiece ? primaryPiece.ref : formState.pdr_ref,
+      pdr_designation: primaryPiece ? primaryPiece.designation : formState.pdr_designation,
+      pdr_quantite: primaryPiece ? primaryPiece.quantite : formState.pdr_quantite,
+      pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : formState.pdr_prix,
+    };
 
     const now = new Date();
     const dateFin = now.toISOString().split('T')[0];
@@ -408,9 +453,9 @@ export default function InterventionLiveTab({
       const submitFn = onSubmitForValidation || storeSubmitForValidation;
       if (typeof submitFn === 'function') {
         const submittedResult = submitFn(activeIntervention.id, {
-          ...formState,
-          pieces_proposees: formState.pieces_utilisees,
-          num_bon_saisi_par_tech: formState.num_bon_saisi_par_tech,
+          ...normalizedFormState,
+          pieces_proposees: effectivePieces,
+          num_bon_saisi_par_tech: normalizedFormState.num_bon_saisi_par_tech,
           zone: machineZone,
           machine_designation: machineDesignation,
           date_fin_proposee: dateFin,
@@ -427,16 +472,16 @@ export default function InterventionLiveTab({
             'Soumission refusée : vérifiez le travail réalisé ou le statut du Bon de Travail.',
             'warning'
           );
-          return;
+          return false;
         }
       } else if (typeof onUpdateIntervention === 'function') {
         onUpdateIntervention(activeIntervention.id, {
-          ...formState,
-          pieces_proposees: formState.pieces_utilisees,
+          ...normalizedFormState,
+          pieces_proposees: effectivePieces,
           pieces_utilisees: [],
           pdr_ref: '',
           pdr_quantite: 0,
-          num_bon_saisi_par_tech: formState.num_bon_saisi_par_tech,
+          num_bon_saisi_par_tech: normalizedFormState.num_bon_saisi_par_tech,
           date_fin_proposee: dateFin,
           heure_fin_proposee: heureFin,
           temps_intervention_propose: liveWorkingTime.formatted,
@@ -459,12 +504,12 @@ export default function InterventionLiveTab({
       if (onNavigateToTab) {
         onNavigateToTab('corrective_bt');
       }
-      return;
+      return true;
     }
 
     // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
     const closedResult = onClotureIntervention(activeIntervention.id, {
-      ...formState,
+      ...normalizedFormState,
       zone: machineZone,
       machine_designation: machineDesignation,
       date_fin: activeIntervention.date_fin_proposee || dateFin,
@@ -485,7 +530,7 @@ export default function InterventionLiveTab({
         'Transition refusée : vérifiez le travail réalisé ou le statut du Bon de Travail.',
         'warning'
       );
-      return;
+      return false;
     }
 
     showToast?.(
@@ -497,6 +542,7 @@ export default function InterventionLiveTab({
     if (onNavigateToTab) {
       onNavigateToTab('corrective_cloture');
     }
+    return true;
   };
 
   // Handle Clôture / Validation Submit (Maker-Checker V1+V2)
@@ -1010,9 +1056,7 @@ export default function InterventionLiveTab({
     finishLabel: isTechUser
       ? 'Soumettre pour Validation Responsable'
       : "Clôturer l'Intervention & Valider le Rapport",
-    onFinish: async () => {
-      executeClotureOrSubmit();
-    },
+    onFinish: async () => executeClotureOrSubmit(),
     steps: [
       {
         id: 'step-1-diagnostic',
@@ -1049,15 +1093,66 @@ export default function InterventionLiveTab({
         validateOn: 'always',
         icon: Package,
         content: step2PdrSection,
-        validate: () => {
-          if (
-            formState.pdr_ref &&
-            Number(formState.pdr_quantite) > Number(formState.pdr_stock_actuel ?? Infinity)
-          ) {
+        validate: (ctx) => {
+          if (formState.pdr_ref && Number(formState.pdr_quantite) <= 0) {
+            return {
+              isValid: false,
+              severity: 'critical',
+              message: `La quantité pour la pièce [${formState.pdr_ref}] doit être supérieure à 0.`,
+            };
+          }
+
+          const effectivePieces = buildEffectivePiecesList(formState);
+          let stockWarningMessage: string | null = null;
+
+          for (const piece of effectivePieces) {
+            const ref = String(piece.ref || '').trim();
+            if (!ref) continue;
+            const qty = Number(piece.quantite || 0);
+            if (qty <= 0) {
+              return {
+                isValid: false,
+                severity: 'critical',
+                message: `La quantité pour la pièce [${ref}] doit être supérieure à 0.`,
+              };
+            }
+
+            const stockItem = rankedMachineStockItems.find(
+              (s: any) =>
+                String(s.ref || s.code_article || '').trim().toUpperCase() === ref.toUpperCase()
+            );
+            const availableStock =
+              stockItem !== undefined
+                ? Number(stockItem.stockActuel ?? stockItem.stock_actuel ?? stockItem.quantite ?? 0)
+                : String(formState.pdr_ref || '').trim().toUpperCase() === ref.toUpperCase() &&
+                    formState.pdr_stock_actuel !== undefined
+                  ? Number(formState.pdr_stock_actuel)
+                  : Infinity;
+
+            if (qty > availableStock && !stockWarningMessage) {
+              stockWarningMessage = `Attention : la quantité totale demandée pour [${ref}] (${qty}) dépasse le stock disponible (${availableStock}).`;
+            }
+          }
+
+          // When advancing to Step 3 via "Suivant" (`mode === 'submit'`), auto-commit any pending
+          // single PDR selection into `pieces_utilisees` so it is visibly listed and never lost.
+          if (ctx?.mode === 'submit' && String(formState.pdr_ref || '').trim()) {
+            setFormState((prev) => ({
+              ...prev,
+              pieces_utilisees: buildEffectivePiecesList(prev),
+              pdr_ref: '',
+              pdr_designation: '',
+              pdr_quantite: 1,
+              pdr_stock_actuel: undefined,
+            }));
+            setPdrSearch('');
+          }
+
+          if (stockWarningMessage) {
             return {
               isValid: true,
               severity: 'warning',
-              message: `Attention : la quantité saisie (${formState.pdr_quantite}) dépasse le stock disponible (${formState.pdr_stock_actuel ?? 0}).`,
+              message: stockWarningMessage,
             };
           }
           return { isValid: true };

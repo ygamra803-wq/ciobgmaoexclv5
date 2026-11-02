@@ -259,7 +259,24 @@ export default function TabPlanBuilder({
     });
 
     setTaskList(initialTasks);
-  }, [selectedMachineId, machines, zones, technicians, guides, actions, startWeek, machineComponents]);
+    // Intentionally omit `startWeek` from initialization dependencies so changing
+    // target week in Step 3 does not wipe custom tasks/PDRs configured in Step 2.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMachineId, machines, zones, technicians, guides, actions, machineComponents]);
+
+  // Non-destructively sync `startWeek` into existing tasks and auto-generated planReference
+  useEffect(() => {
+    if (!selectedMachineId) return;
+    setTaskList((prev) =>
+      prev.map((task) =>
+        task.target_week === startWeek ? task : { ...task, target_week: startWeek }
+      )
+    );
+    setPlanReference((prevRef) => {
+      if (!prevRef) return prevRef;
+      return prevRef.replace(/-S\d+$/, `-${startWeek}`);
+    });
+  }, [startWeek, selectedMachineId]);
 
   // Handle adding a component with its guide actions
   const handleAddComponentWithGuide = (compName) => {
@@ -332,9 +349,9 @@ export default function TabPlanBuilder({
   const { isEnabled: isWizardMode, setMode: setWizardMode } = useWizardFeature('preventive_plan');
 
   // Handle Final Submission of the Plan (shared between Classic Form & Wizard)
-  const executeGeneratePlan = () => {
+  const executeGeneratePlan = (): boolean => {
     if (!selectedMachineId) {
-      return;
+      return false;
     }
 
     const machObj = machines.find((m) => m.id_machine_registered === selectedMachineId || m.code_machine === selectedMachineId || m.id === selectedMachineId);
@@ -373,7 +390,7 @@ export default function TabPlanBuilder({
     }
 
     if (finalTasks.length === 0) {
-      return;
+      return false;
     }
 
     const planPayload = {
@@ -398,6 +415,7 @@ export default function TabPlanBuilder({
     if (onNavigateToMainView) {
       onNavigateToMainView();
     }
+    return true;
   };
 
   const handleGeneratePlan = (e) => {

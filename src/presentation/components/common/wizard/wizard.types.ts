@@ -112,10 +112,10 @@ export interface WizardProfile {
   cancelLabel?: string;
   /** Ordered list of steps */
   steps: WizardStep[];
-  /** Callback fired after the final step passes validation */
-  onFinish?: () => Promise<void> | void;
-  /** Alias for onFinish */
-  onComplete?: () => Promise<void> | void;
+  /** Callback fired after the final step passes validation. Return `false` to abort reset and stay on the final step. */
+  onFinish?: () => Promise<boolean | void> | boolean | void;
+  /** Alias for onFinish. Return `false` to abort reset and stay on the final step. */
+  onComplete?: () => Promise<boolean | void> | boolean | void;
   /** Optional callback fired when the user cancels/closes the wizard */
   onCancel?: () => void;
 }

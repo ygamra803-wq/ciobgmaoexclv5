@@ -970,9 +970,7 @@ export default function AddMachineModal({
       : 'Enregistrer la Machine',
     cancelLabel: 'Annuler',
     onCancel: handleSafeClose,
-    onFinish: async () => {
-      submitMachineRegistration();
-    },
+    onFinish: async () => submitMachineRegistration(),
     steps: [
       {
         id: 'step-1-identite',
