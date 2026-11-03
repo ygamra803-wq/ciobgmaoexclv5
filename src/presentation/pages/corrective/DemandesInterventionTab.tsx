@@ -210,7 +210,7 @@ export default function DemandesInterventionTab({
     demandeur: 'Production',
     priorite: 'HAUTE',
     type_panne: 'E',
-    anomalie: 'court_circuit',
+    anomalie: panneCategories?.E?.[0] || '',
     travail_a_faire: '',
     arret_machine: true,
   });
@@ -1648,6 +1648,7 @@ export default function DemandesInterventionTab({
                     onChange={(e) => setNewForm({ ...newForm, anomalie: e.target.value })}
                     className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-amber-400 focus:outline-hidden"
                   >
+                    <option value="">{t('corrective.common.unspecified', '— Non spécifiée —')}</option>
                     {newForm.anomalie && !anomaliesForSelectedCategory.includes(newForm.anomalie) && (
                       <option value={newForm.anomalie}>{newForm.anomalie}</option>
                     )}
@@ -1877,7 +1878,7 @@ export default function DemandesInterventionTab({
                   required
                   value={convertForm.num_bt}
                   onChange={(e) => setConvertForm({ ...convertForm, num_bt: e.target.value })}
-                  placeholder="Ex: BT-4825"
+                  placeholder="Ex: BT-0001"
                   className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-blue-400 focus:outline-hidden"
                 />
               </div>
