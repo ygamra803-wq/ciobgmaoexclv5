@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { serverSyncService, type ConflictDetectionResult, type ServerStateSummary } from '../../../services/serverSyncService';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import ServerSyncConflictModal from './ServerSyncConflictModal';
 
 interface SyncButtonsProps {
@@ -30,6 +32,17 @@ export default function SyncButtons({
   onCloseDropdown,
 }: SyncButtonsProps) {
   const { t, language } = useI18n();
+  const { user: currentUser } = useAuth();
+  const canPushToServer =
+    !currentUser ||
+    (!AuthorizationService.isReadOnly(currentUser) &&
+      (AuthorizationService.hasPermission(currentUser, 'settings.backup') ||
+        AuthorizationService.hasPermission(currentUser, 'stock.export')));
+  const canRestoreFromServer =
+    !currentUser ||
+    AuthorizationService.hasPermission(currentUser, 'settings.restore') ||
+    AuthorizationService.hasPermission(currentUser, 'settings.manage');
+
   const [actionLoading, setActionLoading] = useState<'push' | 'pull' | 'check' | null>(null);
   const [serverOnline, setServerOnline] = useState<boolean>(true);
   const [serverSummary, setServerSummary] = useState<ServerStateSummary | null>(null);
@@ -84,6 +97,10 @@ export default function SyncButtons({
   };
 
   const handleSaveToServer = async (force = false) => {
+    if (!canPushToServer) {
+      notify('Action non autorisée : votre rôle ne permet pas de pousser l’état vers le serveur.', 'error');
+      return;
+    }
     setActionLoading('push');
     try {
       const res = await serverSyncService.pushToServer({ force, customState: state });
@@ -107,6 +124,10 @@ export default function SyncButtons({
   };
 
   const handleRestoreFromServer = async (force = false) => {
+    if (!canRestoreFromServer) {
+      notify('Action non autorisée : seuls les administrateurs peuvent restaurer l’état depuis le serveur.', 'error');
+      return;
+    }
     setActionLoading('pull');
     try {
       const res = await serverSyncService.pullFromServer({ force });

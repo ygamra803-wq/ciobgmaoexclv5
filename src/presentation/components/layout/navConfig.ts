@@ -141,7 +141,18 @@ export const PARENT_MODULES = [
   }
 ];
 
-export function getParentModuleForTab(currentTab) {
-  const match = PARENT_MODULES.find(p => p.children.some(c => c.id === currentTab));
+export function getParentModuleForTab(currentTab?: string) {
+  const cleanTab = String(currentTab || 'dashboard').trim();
+  if (cleanTab === 'diagnostics') {
+    return PARENT_MODULES.find((p) => p.id === 'stock') || PARENT_MODULES[0];
+  }
+  if (cleanTab.startsWith('corrective_')) {
+    return PARENT_MODULES.find((p) => p.id === 'corrective') || PARENT_MODULES[0];
+  }
+  if (cleanTab.startsWith('preventive_')) {
+    return PARENT_MODULES.find((p) => p.id === 'preventive') || PARENT_MODULES[0];
+  }
+  const match = PARENT_MODULES.find((p) => p.children.some((c) => c.id === cleanTab));
   return match || PARENT_MODULES[0];
 }
+

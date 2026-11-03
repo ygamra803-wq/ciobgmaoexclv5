@@ -19,6 +19,7 @@ export default defineConfig(({ command }) => ({
     dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
+    entries: ['index.html'],
     include: [
       'react',
       'react-dom',
@@ -29,6 +30,17 @@ export default defineConfig(({ command }) => ({
       'motion/react',
       'lucide-react',
       'zod',
+      '@tanstack/react-virtual',
+      'crypto-js',
+      'date-fns',
+      'dompurify',
+      'exceljs',
+      'hyperformula',
+      'lz-string',
+      'prop-types',
+      'react-window',
+      'recharts',
+      'xlsx',
     ],
   },
   plugins: [

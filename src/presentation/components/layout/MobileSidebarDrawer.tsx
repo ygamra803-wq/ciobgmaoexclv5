@@ -37,6 +37,7 @@ import { CubeIcon } from '../common/icons/CubeIcon';
 import { LayersIcon } from '../common/icons/LayersIcon';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
+import { useTranslation } from '../../../i18n/I18nContext';
 
 export default function MobileSidebarDrawer({
   isFixedDesktop = false,
@@ -51,12 +52,25 @@ export default function MobileSidebarDrawer({
   handleExportExcel,
   onLogout,
 }) {
-  // Sidebar Dark / Light Theme state (persisted in storageService)
+  const { t } = useTranslation();
+  // Sidebar Dark / Light Theme state (persisted in storageService — NH-5 unified default 'light')
   const [sidebarTheme, setSidebarTheme] = useState(() => {
-    return storageService.getItem('gmao_sidebar_theme') || 'dark';
+    return (
+      storageService.getItem('gmao_sidebar_theme') ||
+      storageService.getItem('gmao_theme') ||
+      'light'
+    );
   });
 
   const canAccess = (tabId) => !currentUser || AuthorizationService.canAccessTab(currentUser, tabId);
+  const canExportData =
+    !currentUser ||
+    AuthorizationService.hasPermission(currentUser, 'stock.export') ||
+    AuthorizationService.hasPermission(currentUser, 'report.export');
+  const canImportData =
+    !currentUser ||
+    AuthorizationService.hasPermission(currentUser, 'settings.restore') ||
+    AuthorizationService.hasPermission(currentUser, 'settings.manage');
   const isTechUser = isTechnicianRole(currentUser);
   const pendingSortieDemands = !isTechUser ? Number(counts.pendingSortieDemands || 0) : 0;
   const pendingPreventiveVal = !isTechUser ? Number(counts.pendingPreventiveValidation || 0) : 0;
@@ -88,8 +102,19 @@ export default function MobileSidebarDrawer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mobileMenuOpen, setMobileMenuOpen]);
 
+  // NH-5: Broadcast theme change so FloatingSidebar and AppearanceLayoutSelector stay in sync
   const toggleSidebarTheme = () => {
-    setSidebarTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setSidebarTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      storageService.setItem('gmao_sidebar_theme', next);
+      storageService.setItem('gmao_theme', next);
+      window.dispatchEvent(
+        new CustomEvent('gmao_appearance_changed', {
+          detail: { theme: next },
+        })
+      );
+      return next;
+    });
   };
 
   const navTo = (tab) => {
@@ -99,10 +124,22 @@ export default function MobileSidebarDrawer({
 
   const isDark = sidebarTheme === 'dark';
 
+  const isTabRouteActive = (tabName) => {
+    if (currentTab === tabName) return true;
+    if (tabName === 'designations' && currentTab === 'diagnostics') return true;
+    if (
+      tabName === 'corrective' &&
+      String(currentTab || '').startsWith('corrective_') &&
+      currentTab !== 'corrective_referentiel'
+    ) {
+      return true;
+    }
+    return false;
+  };
+
   // Dynamic styling based on sidebarTheme
   const getTabClass = (tabName, isSubItem = false) => {
-    const isActive =
-      currentTab === tabName || (tabName === 'designations' && currentTab === 'diagnostics');
+    const isActive = isTabRouteActive(tabName);
     const basePadding = isSubItem ? 'pl-6 pr-3 py-2' : 'px-3 py-2.5';
 
     if (isDark) {
@@ -124,8 +161,7 @@ export default function MobileSidebarDrawer({
 
   // Badge styling
   const getBadgeClass = (tabName) => {
-    const isActive =
-      currentTab === tabName || (tabName === 'designations' && currentTab === 'diagnostics');
+    const isActive = isTabRouteActive(tabName);
     if (isDark) {
       if (isActive) {
         return 'text-[11px] px-2 py-0.5 rounded-full font-mono bg-slate-900 text-white font-bold';
@@ -259,7 +295,7 @@ export default function MobileSidebarDrawer({
               <div
                 className={`text-[11px] font-semibold tracking-tight ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}
               >
-                Pièces de Rechange & GMAO
+                {t('app.subtitle', 'Pièces de Rechange & GMAO')}
               </div>
             </div>
           </div>
@@ -270,7 +306,7 @@ export default function MobileSidebarDrawer({
                 ? 'text-slate-400 hover:text-white hover:bg-slate-800'
                 : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
             }`}
-            aria-label="Fermer le menu"
+            aria-label={t('common.close', 'Fermer le menu')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -287,7 +323,7 @@ export default function MobileSidebarDrawer({
                   <LayoutDashboard
                     className={`w-4 h-4 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
                   />
-                  <span>Dashboard</span>
+                  <span>{t('nav.dashboard', 'Dashboard')}</span>
                 </span>
                 <span className={getBadgeClass('dashboard')}>KPI</span>
               </button>
@@ -304,17 +340,17 @@ export default function MobileSidebarDrawer({
                   <BadgeCheck
                     className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-rose-400' : 'text-rose-600'}`}
                   />
-                  <span>Centre de Validation</span>
+                  <span>{t('nav.subtabs.validation_center_short', 'Centre de Validation')}</span>
                 </span>
                 {pendingSortieDemands + pendingPreventiveVal + pendingCorrectiveVal > 0 ? (
                   <span
                     className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
                     title="Total en attente de validation (Maker-Checker)"
                   >
-                    {pendingSortieDemands + pendingPreventiveVal + pendingCorrectiveVal} À valider
+                    {pendingSortieDemands + pendingPreventiveVal + pendingCorrectiveVal} {t('nav.groups.to_validate', 'À valider')}
                   </span>
                 ) : (
-                  <span className={getBadgeClass('validation_center')}>À jour</span>
+                  <span className={getBadgeClass('validation_center')}>{t('nav.groups.up_to_date', 'À jour')}</span>
                 )}
               </button>
             )}
@@ -329,7 +365,7 @@ export default function MobileSidebarDrawer({
                   <FileBarChart2
                     className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                   />
-                  <span>Rapport Vacation / Hebdo</span>
+                  <span>{t('nav.subtabs.shift_weekly_report', 'Rapport Vacation / Hebdo')}</span>
                 </span>
                 <span className={getBadgeClass('shift_weekly_report')}>Exploit.</span>
               </button>
@@ -345,7 +381,7 @@ export default function MobileSidebarDrawer({
                   <FileBarChart2
                     className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
                   />
-                  <span>Rapport Mensuel Exécutif</span>
+                  <span>{t('nav.subtabs.executive_report', 'Rapport Mensuel Exécutif')}</span>
                 </span>
                 <span className={getBadgeClass('executive_report')}>Direction</span>
               </button>
@@ -361,7 +397,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Database className="w-3.5 h-3.5 text-slate-400" />
-                <span>Stock & Articles</span>
+                <span>{t('nav.groups.stock_articles', 'Stock & Articles')}</span>
               </div>
               <div className="space-y-1">
                 {/* L1: Stock (Articles) */}
@@ -371,7 +407,7 @@ export default function MobileSidebarDrawer({
                       <Package
                         className={`w-4 h-4 shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`}
                       />
-                      <span>Stock (Articles)</span>
+                      <span>{t('nav.subtabs.stock', 'Stock (Articles)')}</span>
                     </span>
                     <span className={getBadgeClass('stock')}>{counts.stock || 0}</span>
                   </button>
@@ -382,7 +418,7 @@ export default function MobileSidebarDrawer({
                   <button onClick={() => navTo('sortie')} className={getTabClass('sortie', true)}>
                     <span className="flex items-center gap-2">
                       <SortieEntreeIcon className="w-3.5 h-3.5 shrink-0" />
-                      <span>Sortie & Entrée Rapide</span>
+                      <span>{t('nav.subtabs.sortie', 'Sortie & Entrée Rapide')}</span>
                     </span>
                     <span className="flex items-center gap-1">
                       {pendingSortieDemands > 0 && (
@@ -390,7 +426,7 @@ export default function MobileSidebarDrawer({
                           className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
                           title={`${pendingSortieDemands} demande(s) de sortie à valider`}
                         >
-                          {pendingSortieDemands} À valider
+                          {pendingSortieDemands} {t('nav.groups.to_validate', 'À valider')}
                         </span>
                       )}
                       <span className={getBadgeClass('sortie')}>Mvt</span>
@@ -405,7 +441,7 @@ export default function MobileSidebarDrawer({
                       <Tag
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
                       />
-                      <span>Types</span>
+                      <span>{t('nav.subtabs.types', 'Types')}</span>
                     </span>
                     <span className={getBadgeClass('types')}>{counts.types || 0}</span>
                   </button>
@@ -421,7 +457,7 @@ export default function MobileSidebarDrawer({
                       <BadgeCheck
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                       />
-                      <span>Désignations</span>
+                      <span>{t('nav.subtabs.designations', 'Désignations')}</span>
                     </span>
                     <span className={getBadgeClass('designations')}>
                       {counts.designations || counts.diagnostics || 0}
@@ -440,7 +476,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Factory className="w-3.5 h-3.5 text-slate-400" />
-                <span>Parc Machines</span>
+                <span>{t('nav.groups.parc_machines', 'Parc Machines')}</span>
               </div>
               <div className="space-y-1">
                 {/* Machines Registered */}
@@ -450,7 +486,7 @@ export default function MobileSidebarDrawer({
                       <Factory
                         className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                       />
-                      <span>Machines Registered</span>
+                      <span>{t('nav.subtabs.machines', 'Machines Registered')}</span>
                     </span>
                     <span className={getBadgeClass('machines')}>{counts.machines || 0}</span>
                   </button>
@@ -463,7 +499,7 @@ export default function MobileSidebarDrawer({
                       <HubIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
                       />
-                      <span>Familles Machines</span>
+                      <span>{t('nav.subtabs.families', 'Familles Machines')}</span>
                     </span>
                     <span className={getBadgeClass('families')}>{counts.families || 0}</span>
                   </button>
@@ -479,7 +515,7 @@ export default function MobileSidebarDrawer({
                       <CategoryIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
-                      <span>Templates Machines</span>
+                      <span>{t('nav.subtabs.templates', 'Templates Machines')}</span>
                     </span>
                     <span className={getBadgeClass('templates')}>{counts.templates || 0}</span>
                   </button>
@@ -495,7 +531,7 @@ export default function MobileSidebarDrawer({
                       <FingerprintPattern
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                       />
-                      <span>Blueprint Machine</span>
+                      <span>{t('nav.subtabs.blueprints', 'Blueprint Machine')}</span>
                     </span>
                     <span className={getBadgeClass('blueprints')}>{counts.blueprints || 0}</span>
                   </button>
@@ -509,7 +545,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <span>Maintenance & Préventif</span>
+                <span>{t('nav.groups.maintenance_preventive', 'Maintenance & Préventif')}</span>
               </div>
               <div className="space-y-1">
                 {canAccess('preventive') && (
@@ -518,7 +554,7 @@ export default function MobileSidebarDrawer({
                       <Calendar
                         className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                       />
-                      <span>Planning Préventif</span>
+                      <span>{t('nav.subtabs.preventive', 'Planning Préventif')}</span>
                     </span>
                     <span className="flex items-center gap-1">
                       {pendingPreventiveVal > 0 && (
@@ -526,7 +562,7 @@ export default function MobileSidebarDrawer({
                           className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-amber-500 text-slate-950 font-black shadow-2xs"
                           title={`${pendingPreventiveVal} exécution(s) préventive(s) à valider`}
                         >
-                          {pendingPreventiveVal} À valider
+                          {pendingPreventiveVal} {t('nav.groups.to_validate', 'À valider')}
                         </span>
                       )}
                       <span className={getBadgeClass('preventive')}>{counts.preventive || 0}</span>
@@ -544,7 +580,7 @@ export default function MobileSidebarDrawer({
                       <Settings2
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
                       />
-                      <span>Ingénierie & Référentiel</span>
+                      <span>{t('nav.subtabs.preventive_referentiel', 'Ingénierie & Référentiel')}</span>
                     </span>
                     <span className={getBadgeClass('preventive_referentiel')}>
                       {(counts.preventiveGuides || 0) + (counts.preventiveActions || 0) || 'Guides'}
@@ -560,7 +596,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Wrench className="w-3.5 h-3.5 text-slate-400" />
-                <span>Maintenance Corrective</span>
+                <span>{t('nav.groups.maintenance_corrective', 'Maintenance Corrective')}</span>
               </div>
               <div className="space-y-1">
                 {/* Item 1: Correctif Hub (Main page) */}
@@ -570,7 +606,7 @@ export default function MobileSidebarDrawer({
                       <Wrench
                         className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
-                      <span>Correctif Hub</span>
+                      <span>{t('nav.subtabs.corrective', 'Correctif Hub')}</span>
                     </span>
                     <span className="flex items-center gap-1">
                       {pendingCorrectiveVal > 0 && (
@@ -578,7 +614,7 @@ export default function MobileSidebarDrawer({
                           className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-rose-600 text-white font-black shadow-2xs"
                           title={`${pendingCorrectiveVal} intervention(s) corrective(s) à valider`}
                         >
-                          {pendingCorrectiveVal} À valider
+                          {pendingCorrectiveVal} {t('nav.groups.to_validate', 'À valider')}
                         </span>
                       )}
                       <span className={getBadgeClass('corrective')}>{counts.corrective || 'Live'}</span>
@@ -596,7 +632,7 @@ export default function MobileSidebarDrawer({
                       <Database
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
-                      <span className="truncate">Catalogue</span>
+                      <span className="truncate">{t('nav.subtabs.corrective_referentiel', 'Catalogue')}</span>
                     </span>
                     <span className={getBadgeClass('corrective_referentiel')}>Réf</span>
                   </button>
@@ -610,7 +646,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <Warehouse className="w-3.5 h-3.5 text-slate-400" />
-                <span>Groupe Entrepôt</span>
+                <span>{t('nav.groups.groupe_entrepot', 'Groupe Entrepôt')}</span>
               </div>
               <div className="space-y-1">
                 {/* Entrepôt Principal (Éléments, Composants & Parts) */}
@@ -619,7 +655,7 @@ export default function MobileSidebarDrawer({
                     <Warehouse
                       className={`w-4 h-4 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                     />
-                    <span>Entrepôt (Inventaire)</span>
+                    <span>{t('nav.subtabs.entrepot', 'Entrepôt (Inventaire)')}</span>
                   </span>
                   <span className={getBadgeClass('entrepot')}>
                     {counts.warehouse || counts.entrepot || 0}
@@ -636,7 +672,7 @@ export default function MobileSidebarDrawer({
                       <Boxes
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                       />
-                      <span>Groupes (Composants)</span>
+                      <span>{t('nav.subtabs.comp_groups', 'Groupes (Composants)')}</span>
                     </span>
                     <span className={getBadgeClass('comp_groups')}>{counts.compGroups || 0}</span>
                   </button>
@@ -651,7 +687,7 @@ export default function MobileSidebarDrawer({
                       <SpokeIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
-                      <span>Familles (Composants)</span>
+                      <span>{t('nav.subtabs.comp_families', 'Familles (Composants)')}</span>
                     </span>
                     <span className={getBadgeClass('comp_families')}>
                       {counts.compFamilies || 0}
@@ -668,7 +704,7 @@ export default function MobileSidebarDrawer({
                       <CubeIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
                       />
-                      <span>Templates (Composants)</span>
+                      <span>{t('nav.subtabs.comp_templates', 'Templates (Composants)')}</span>
                     </span>
                     <span className={getBadgeClass('comp_templates')}>
                       {counts.compTemplates || 0}
@@ -686,7 +722,7 @@ export default function MobileSidebarDrawer({
                       <LayersIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                       />
-                      <span>Types (Parts)</span>
+                      <span>{t('nav.subtabs.part_types', 'Types (Parts)')}</span>
                     </span>
                     <span className={getBadgeClass('part_types')}>{counts.partTypes || 0}</span>
                   </button>
@@ -701,7 +737,7 @@ export default function MobileSidebarDrawer({
                       <PartInfoIcon
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
                       />
-                      <span>Désignations (Parts)</span>
+                      <span>{t('nav.subtabs.part_designations', 'Désignations (Parts)')}</span>
                     </span>
                     <span className={getBadgeClass('part_designations')}>
                       {counts.partDesignations || 0}
@@ -717,7 +753,7 @@ export default function MobileSidebarDrawer({
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                <span>Zones & Équipes</span>
+                <span>{t('nav.groups.zones_equipes', 'Zones & Équipes')}</span>
               </div>
               <div className="space-y-1">
                 {/* Zones */}
@@ -727,7 +763,7 @@ export default function MobileSidebarDrawer({
                       <MapPin
                         className={`w-4 h-4 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
                       />
-                      <span>Zones & Ateliers</span>
+                      <span>{t('nav.subtabs.zones', 'Zones & Ateliers')}</span>
                     </span>
                     <span className={getBadgeClass('zones')}>{counts.zones || 0}</span>
                   </button>
@@ -743,7 +779,7 @@ export default function MobileSidebarDrawer({
                       <Users
                         className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
                       />
-                      <span>Utilisateurs (Membres)</span>
+                      <span>{t('nav.subtabs.utilisateurs', 'Utilisateurs (Membres)')}</span>
                     </span>
                     <span className={getBadgeClass('utilisateurs')}>
                       {(counts.technicians || 0) + (counts.operations || 0)}
@@ -765,7 +801,7 @@ export default function MobileSidebarDrawer({
                     <GitBranch
                       className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                     />
-                    <span>Nexus Matrix</span>
+                    <span>{t('nav.subtabs.nexus', 'Nexus Matrix')}</span>
                   </span>
                 </button>
               )}
@@ -775,7 +811,7 @@ export default function MobileSidebarDrawer({
                     <BookOpen
                       className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                     />
-                    <span>Guide d'utilisation</span>
+                    <span>{t('nav.subtabs.guide', "Guide d'utilisation")}</span>
                   </span>
                 </button>
               )}
@@ -783,7 +819,7 @@ export default function MobileSidebarDrawer({
           )}
         </div>
 
-        {/* Guided Tip Box */}
+            {/* Guided Tip Box */}
         <div
           className={`p-3 border-t ${isDark ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-50'}`}
         >
@@ -798,54 +834,55 @@ export default function MobileSidebarDrawer({
               className={`font-semibold flex items-center gap-1.5 text-[12px] ${isDark ? 'text-slate-100' : 'text-slate-800'}`}
             >
               <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Astuce Excel Twin</span>
+              <span>{t('nav.groups.tip_title', 'Astuce Excel Twin')}</span>
             </div>
             <div
               className={`text-[11px] leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-500'}`}
             >
-              • Cliquez sur n'importe quel code (Zone, Famille, Type) pour filtrer les tables
-              associées.
+              {t('nav.groups.tip_body', "• Cliquez sur n'importe quel code (Zone, Famille, Type) pour filtrer les tables associées.")}
             </div>
           </div>
         </div>
 
-        {/* Quick Excel Synchronization for Mobile */}
-        <div className="px-3 pb-2 flex items-center gap-2">
-          {handleExportExcel && (
-            <button
-              onClick={() => {
-                handleExportExcel();
-                setMobileMenuOpen(false);
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                isDark
-                  ? 'bg-slate-800/80 border-slate-700 text-emerald-400 hover:bg-slate-700'
-                  : 'bg-white border-slate-200 text-emerald-700 hover:bg-emerald-50'
-              }`}
-              title="Exporter les données au format Excel"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Excel</span>
-            </button>
-          )}
-          {fileInputRef && (
-            <button
-              onClick={() => {
-                fileInputRef.current?.click();
-                setMobileMenuOpen(false);
-              }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                isDark
-                  ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-              }`}
-              title="Importer un fichier Excel ou JSON"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Import Excel</span>
-            </button>
-          )}
-        </div>
+        {/* Quick Excel Synchronization for Mobile / Fixed Sidebar (RBAC Guarded — NH-1) */}
+        {((handleExportExcel && canExportData) || (fileInputRef && canImportData)) && (
+          <div className="px-3 pb-2 flex items-center gap-2">
+            {handleExportExcel && canExportData && (
+              <button
+                onClick={() => {
+                  handleExportExcel();
+                  setMobileMenuOpen(false);
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800/80 border-slate-700 text-emerald-400 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-emerald-700 hover:bg-emerald-50'
+                }`}
+                title={t('header.export_excel', 'Exporter les données au format Excel')}
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{t('common.filters.export_excel', 'Export Excel')}</span>
+              </button>
+            )}
+            {fileInputRef && canImportData && (
+              <button
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setMobileMenuOpen(false);
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                  isDark
+                    ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                }`}
+                title={t('header.import_excel', 'Importer un fichier Excel ou JSON')}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{t('header.import_excel', 'Import Excel')}</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* PWA Install Button Container */}
         <div className="px-3 pb-2">
@@ -871,12 +908,12 @@ export default function MobileSidebarDrawer({
                     ? 'text-slate-300 hover:text-white hover:bg-slate-800'
                     : 'text-slate-700 hover:text-slate-900 hover:bg-slate-200/80'
               }`}
-              title="Paramètres du système"
+              title={t('nav.settings', 'Paramètres du système')}
             >
               <Settings
                 className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? (isDark ? 'text-slate-900' : 'text-white') : 'text-slate-400'}`}
               />
-              <span>Paramètres</span>
+              <span>{t('nav.subtabs.settings', 'Paramètres')}</span>
             </button>
           )}
 
@@ -890,8 +927,8 @@ export default function MobileSidebarDrawer({
             }`}
             title={
               isDark
-                ? 'Passer au mode Light pour le volet latéral'
-                : 'Passer au mode Dark pour le volet latéral'
+                ? t('nav.theme_light', 'Passer au mode clair')
+                : t('nav.theme_dark', 'Passer au mode sombre')
             }
             aria-label="Toggle Sidebar Theme"
           >
@@ -940,8 +977,8 @@ export default function MobileSidebarDrawer({
                     ? 'text-slate-400 hover:text-rose-400 hover:bg-slate-800'
                     : 'text-slate-500 hover:text-rose-600 hover:bg-rose-50'
                 }`}
-                title="Déconnexion"
-                aria-label="Déconnexion"
+                title={t('nav.logout', 'Déconnexion')}
+                aria-label={t('nav.logout', 'Déconnexion')}
               >
                 <LogOut className="w-4 h-4" />
               </button>

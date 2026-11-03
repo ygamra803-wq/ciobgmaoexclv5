@@ -11,6 +11,7 @@ import MobileContainer from '../../../mobile/views/MobileContainer';
 import { useMobileDetect } from '../../../mobile/hooks/useMobileDetect';
 import { keyboardShortcuts } from '../../../services/KeyboardShortcutsService';
 import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
@@ -103,25 +104,69 @@ export default function MainLayout({
     });
   };
 
-  // Drag and Drop File Handlers (Window level)
-  const handleDragEnter = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current += 1;
-    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
-      setIsDragOver(true);
-    }
-  }, []);
+  // RBAC Capability Guards for Global Drag-and-Drop & Shortcuts (NH-1 & NH-2)
+  const canImportData =
+    !user ||
+    AuthorizationService.hasPermission(user, 'settings.restore') ||
+    AuthorizationService.hasPermission(user, 'settings.manage');
 
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current -= 1;
-    if (dragCounter.current <= 0) {
-      dragCounter.current = 0;
-      setIsDragOver(false);
+  const canDirectSave =
+    !user ||
+    (!AuthorizationService.isReadOnly(user) &&
+      (AuthorizationService.hasPermission(user, 'settings.backup') ||
+        AuthorizationService.hasPermission(user, 'stock.export')));
+
+  const navigateIfAllowed = useCallback(
+    (targetTab: string) => {
+      if (user && !AuthorizationService.canAccessTab(user, targetTab)) {
+        showToast?.(
+          `Accès restreint : votre rôle (${user.titleFr || user.role}) ne dispose pas des droits requis pour accéder à cette section.`,
+          'warning'
+        );
+        return;
+      }
+      setCurrentTab(targetTab);
+    },
+    [user, setCurrentTab, showToast]
+  );
+
+  const handleLogout = useCallback(() => {
+    try {
+      localStorage.setItem('gmao_active_tab', 'dashboard');
+    } catch {
+      /* ignore */
     }
-  }, []);
+    setCurrentTab('dashboard');
+    logout();
+  }, [setCurrentTab, logout]);
+
+  // Drag and Drop File Handlers (Window level — RBAC Guarded)
+  const handleDragEnter = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canImportData) return;
+      dragCounter.current += 1;
+      if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+        setIsDragOver(true);
+      }
+    },
+    [canImportData]
+  );
+
+  const handleDragLeave = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canImportData) return;
+      dragCounter.current -= 1;
+      if (dragCounter.current <= 0) {
+        dragCounter.current = 0;
+        setIsDragOver(false);
+      }
+    },
+    [canImportData]
+  );
 
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
@@ -135,6 +180,17 @@ export default function MainLayout({
       dragCounter.current = 0;
       setIsDragOver(false);
 
+      if (!canImportData) {
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+          showToast?.(
+            'Action non autorisée : seuls les administrateurs peuvent importer un fichier global.',
+            'warning'
+          );
+        }
+        return;
+      }
+
       const files = e.dataTransfer?.files;
       if (files && files.length > 0) {
         // Synthesize standard change event for handleImportFile
@@ -146,10 +202,10 @@ export default function MainLayout({
         handleImportFile(syntheticEvent);
       }
     },
-    [handleImportFile]
+    [canImportData, handleImportFile, showToast]
   );
 
-  // Global Keyboard Shortcuts Registry
+  // Global Keyboard Shortcuts Registry (RBAC Guarded — NH-2)
   useEffect(() => {
     const unregisters = [
       keyboardShortcuts.registerShortcut({
@@ -159,7 +215,7 @@ export default function MainLayout({
         description: 'Aller au Tableau de bord',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('dashboard'),
+        callback: () => navigateIfAllowed('dashboard'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-stock',
@@ -168,7 +224,7 @@ export default function MainLayout({
         description: 'Aller au Stock PDR',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('stock'),
+        callback: () => navigateIfAllowed('stock'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-entrepot',
@@ -177,7 +233,7 @@ export default function MainLayout({
         description: 'Aller à l’Entrepôt Parts',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('entrepot'),
+        callback: () => navigateIfAllowed('entrepot'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-machines',
@@ -186,7 +242,7 @@ export default function MainLayout({
         description: 'Aller aux Machines Enregistrées',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('machines'),
+        callback: () => navigateIfAllowed('machines'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-users',
@@ -195,7 +251,7 @@ export default function MainLayout({
         description: 'Aller aux Opérations & Chefs',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('utilisateurs'),
+        callback: () => navigateIfAllowed('utilisateurs'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-settings',
@@ -204,7 +260,7 @@ export default function MainLayout({
         description: 'Aller aux Paramètres & Sécurité',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('settings'),
+        callback: () => navigateIfAllowed('settings'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-preventive',
@@ -213,7 +269,7 @@ export default function MainLayout({
         description: 'Aller à la Maintenance Préventive',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('preventive'),
+        callback: () => navigateIfAllowed('preventive'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'nav-corrective',
@@ -222,7 +278,7 @@ export default function MainLayout({
         description: 'Aller à la Maintenance Corrective (Nexus)',
         category: 'navigation',
         alt: true,
-        callback: () => setCurrentTab('corrective'),
+        callback: () => navigateIfAllowed('corrective'),
       }),
       keyboardShortcuts.registerShortcut({
         id: 'action-save',
@@ -232,7 +288,10 @@ export default function MainLayout({
         category: 'actions',
         ctrl: true,
         allowInInputs: true,
-        callback: () => onDirectSave?.(),
+        callback: () => {
+          if (!canDirectSave) return;
+          onDirectSave?.();
+        },
       }),
       keyboardShortcuts.registerShortcut({
         id: 'system-shortcuts-f1',
@@ -270,7 +329,7 @@ export default function MainLayout({
     return () => {
       unregisters.forEach((unreg) => unreg());
     };
-  }, [setCurrentTab, onDirectSave, setMobileMenuOpen]);
+  }, [navigateIfAllowed, canDirectSave, onDirectSave, setMobileMenuOpen]);
 
   const mainContentSpacingClass = useMemo(() => {
     if (isMobile) return 'p-2.5 sm:p-4 pb-24';
@@ -396,6 +455,7 @@ export default function MainLayout({
           onDirectSave={onDirectSave}
           currentUser={user}
           onOpenShortcuts={() => setShortcutsModalOpen(true)}
+          onLogout={handleLogout}
           showToast={showToast}
         />
       )}
@@ -412,15 +472,7 @@ export default function MainLayout({
           fileInputRef={fileInputRef}
           handleImportFile={handleImportFile}
           handleExportExcel={handleExportExcel}
-          onLogout={() => {
-            try {
-              localStorage.setItem('gmao_active_tab', 'dashboard');
-            } catch {
-              /* ignore */
-            }
-            setCurrentTab('dashboard');
-            logout();
-          }}
+          onLogout={handleLogout}
         />
 
         {/* Main Page Content - Full width layout with responsive touch-friendly padding */}

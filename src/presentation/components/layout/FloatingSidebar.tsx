@@ -202,18 +202,23 @@ export default function FloatingSidebar({
     !currentUser || AuthorizationService.canAccessTab(currentUser, 'settings');
 
   const [sidebarTheme, setSidebarTheme] = useState(() => {
-    return storageService.getItem('gmao_sidebar_theme') || 'light';
+    return (
+      storageService.getItem('gmao_sidebar_theme') ||
+      storageService.getItem('gmao_theme') ||
+      'light'
+    );
   });
-  const [sidebarBehavior, setSidebarBehavior] = useState(() => {
+  const [_sidebarBehavior, setSidebarBehavior] = useState(() => {
     return storageService.getItem('gmao_sidebar_behavior') || 'push';
   });
   const [isExpanded, setIsExpanded] = useState(false);
   const [isTranslucent, setIsTranslucent] = useState(false);
-  const hoverTimeoutRef = useRef(null);
-  const translucencyTimerRef = useRef(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const translucencyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isAlwaysOpen = sidebarBehavior === 'push';
-  const effectiveExpanded = isAlwaysOpen ? true : isExpanded;
+  // NH-4: Floating dock expands on hover/interaction and auto-collapses smoothly when idle,
+  // while MainLayout independently uses sidebarBehavior ('push' vs 'overlay') for content margin.
+  const effectiveExpanded = isExpanded;
 
   useEffect(() => {
     storageService.setItem('gmao_sidebar_theme', sidebarTheme);
@@ -221,7 +226,11 @@ export default function FloatingSidebar({
 
   useEffect(() => {
     const handleAppearanceChanged = (e) => {
-      const savedTheme = e?.detail?.theme || storageService.getItem('gmao_sidebar_theme') || storageService.getItem('gmao_theme') || 'light';
+      const savedTheme =
+        e?.detail?.theme ||
+        storageService.getItem('gmao_sidebar_theme') ||
+        storageService.getItem('gmao_theme') ||
+        'light';
       setSidebarTheme(savedTheme);
       if (e?.detail?.sidebarBehavior !== undefined) {
         setSidebarBehavior(e.detail.sidebarBehavior);
@@ -235,7 +244,7 @@ export default function FloatingSidebar({
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
   }, []);
 
-  // Delayed translucency effect: when sidebar is collapsed in overlay mode, remain solid for 2 seconds before slowly fading to translucent
+  // Delayed translucency effect: when sidebar is collapsed, remain solid for 2 seconds before slowly fading to translucent
   useEffect(() => {
     if (!effectiveExpanded) {
       if (translucencyTimerRef.current) clearTimeout(translucencyTimerRef.current);
@@ -251,21 +260,30 @@ export default function FloatingSidebar({
     };
   }, [effectiveExpanded]);
 
+  // NH-5: Broadcast theme change so MobileSidebarDrawer and AppearanceLayoutSelector stay in sync
   const toggleSidebarTheme = () => {
-    setSidebarTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+    setSidebarTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      storageService.setItem('gmao_sidebar_theme', next);
+      storageService.setItem('gmao_theme', next);
+      window.dispatchEvent(
+        new CustomEvent('gmao_appearance_changed', {
+          detail: { theme: next },
+        })
+      );
+      return next;
+    });
   };
 
   const handleMouseEnter = () => {
     if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     if (translucencyTimerRef.current) clearTimeout(translucencyTimerRef.current);
     setIsTranslucent(false);
-    if (!isAlwaysOpen) {
-      setIsExpanded(true);
-    }
+    setIsExpanded(true);
   };
 
   const handleMouseLeave = () => {
-    if (isAlwaysOpen) return;
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     hoverTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
     }, 380);
@@ -293,21 +311,24 @@ export default function FloatingSidebar({
     ? (t('nav.settings') || 'Paramètres')
     : (t(`nav.${activeParent?.id}`) !== `nav.${activeParent?.id}` ? t(`nav.${activeParent?.id}`) : activeParent?.label || 'Navigation');
 
+  // NH-7: Strictly select only an allowed child tab (never fall back to an unauthorized child[0])
   const handleSelectParent = (module) => {
-    const allowedChild =
-      (module.children || []).find(
-        (c) => !currentUser || AuthorizationService.canAccessTab(currentUser, c.id)
-      ) || module.children?.[0];
-    const firstChild = allowedChild?.id || module.id;
+    const candidates =
+      Array.isArray(module.children) && module.children.length > 0
+        ? module.children
+        : [{ id: module.id }];
+    const allowedChild = candidates.find(
+      (c) => !currentUser || AuthorizationService.canAccessTab(currentUser, c.id)
+    );
+    if (!allowedChild) return;
+    const firstChild = allowedChild.id;
     analytics.track('navigation_tab_changed', 'navigation', {
       fromTab: currentTab,
       toTab: firstChild,
       moduleId: module.id,
     });
     setCurrentTab(firstChild);
-    if (!isAlwaysOpen) {
-      setIsExpanded(false);
-    }
+    setIsExpanded(false);
   };
 
   const handleModuleKeyDown = (e, index) => {
@@ -339,11 +360,11 @@ export default function FloatingSidebar({
         />
       )}
 
-      {/* 1. Primary Page Modules Container - Vertically Centered on Screen (Expands symmetrically up and down) */}
+      {/* 1. Primary Page Modules Container - Vertically Centered in safe zone above bottom utility dock (NH-11: prevents 768p collision) */}
       <div
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="fixed left-3.5 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center"
+        className="fixed left-3.5 top-4 bottom-[172px] z-40 flex flex-col items-center justify-center pointer-events-none"
       >
         {!effectiveExpanded ? (
           /* Messenger-Style Floating Dock Active Bubble (With 2s delayed smooth translucency) */
@@ -356,9 +377,9 @@ export default function FloatingSidebar({
                 setIsExpanded(true);
               }
             }}
-            aria-label={`Menu de navigation (Actuellement : ${activeLabel}) - Survoler pour ouvrir`}
-            title={`Module actif : ${activeLabel}\nApprochez la souris pour ouvrir la navigation`}
-            className={`group relative w-[54px] h-[54px] rounded-[22px] border flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-md hover:shadow-xl hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+            aria-label={`Menu de navigation (${activeLabel})`}
+            title={`${activeLabel}`}
+            className={`pointer-events-auto group relative w-[54px] h-[54px] rounded-[22px] border flex items-center justify-center transition-all duration-300 ease-out cursor-pointer shadow-md hover:shadow-xl hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
               isTranslucent
                 ? 'opacity-90 hover:opacity-100'
                 : 'opacity-100'
@@ -413,7 +434,7 @@ export default function FloatingSidebar({
                   }
                 }}
                 className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-900 shadow-md z-20 cursor-pointer"
-                title={`${totalPendingMakerChecker} élément(s) à valider — Ouvrir le Centre de Validation`}
+                title={t('header.notifications_pending', `${totalPendingMakerChecker} élément(s) à valider`, { count: totalPendingMakerChecker })}
               >
                 {totalPendingMakerChecker > 99 ? '99+' : totalPendingMakerChecker}
               </span>
@@ -428,12 +449,12 @@ export default function FloatingSidebar({
             </div>
           </div>
         ) : (
-          /* Symmetrically Expanded Capsule around Center (Smooth 450ms graceful growth) */
+          /* Symmetrically Expanded Capsule around Center (NH-11: max-h-[calc(100vh-192px)] prevents overlap on 768p screens) */
           <div
             role="tablist"
             aria-label="Modules principaux"
             aria-orientation="vertical"
-            className={`w-[60px] rounded-[28px] border px-2 py-3 flex flex-col items-center gap-2 transition-all duration-500 ease-out origin-center animate-in fade-in zoom-in-95 ${
+            className={`pointer-events-auto w-[60px] max-h-[calc(100vh-192px)] overflow-y-auto no-scrollbar rounded-[28px] border px-2 py-2.5 flex flex-col items-center gap-1.5 transition-all duration-500 ease-out origin-center animate-in fade-in zoom-in-95 ${
               isDark
                 ? 'bg-slate-800/95 border-slate-700/80 shadow-[0_20px_50px_-8px_rgba(0,0,0,0.6),0_6px_20px_rgba(0,0,0,0.4)] backdrop-blur-xl'
                 : 'bg-white/95 border-slate-200/90 shadow-[0_16px_40px_-6px_rgba(0,0,0,0.12),0_6px_16px_-3px_rgba(0,0,0,0.06)] backdrop-blur-xl'
@@ -442,7 +463,7 @@ export default function FloatingSidebar({
             {visibleModules.map((module, index) => {
               const isActive = !isSettings && activeParent.id === module.id;
               const IconComponent = module.icon;
-              const translatedLabel = t(`nav.${module.id}`) !== `nav.${module.id}` ? t(`nav.${module.id}`) : module.label;
+              const translatedLabel = t(`nav.${module.id}`, module.label);
               const theme = MODULE_THEME[module.id] || MODULE_THEME.dashboard;
               const pendingCount = getModulePendingCount(module.id);
 
@@ -459,7 +480,7 @@ export default function FloatingSidebar({
                   onClick={() => {
                     handleSelectParent(module);
                   }}
-                  className={`group relative w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 ease-out cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+                  className={`group relative w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-all duration-300 ease-out cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
                     isActive
                       ? isDark
                         ? 'z-20 scale-105 bg-slate-700/90 border border-slate-600 shadow-xs'
@@ -470,7 +491,7 @@ export default function FloatingSidebar({
                   }`}
                   title={
                     pendingCount > 0
-                      ? `${translatedLabel} (${pendingCount} à valider)`
+                      ? `${translatedLabel} (${pendingCount} ${t('nav.groups.to_validate', 'À valider')})`
                       : translatedLabel
                   }
                 >
@@ -487,7 +508,7 @@ export default function FloatingSidebar({
                   )}
 
                   <IconComponent
-                    size={22}
+                    size={21}
                     strokeWidth={isActive ? 2.5 : 1.9}
                     aria-hidden="true"
                     className={`relative z-10 transition-all duration-300 ${
@@ -505,7 +526,7 @@ export default function FloatingSidebar({
                   {pendingCount > 0 && (
                     <span
                       className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[9.5px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-slate-800 shadow-xs z-30"
-                      aria-label={`${pendingCount} à valider`}
+                      aria-label={`${pendingCount} ${t('nav.groups.to_validate', 'À valider')}`}
                     >
                       {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
@@ -519,7 +540,7 @@ export default function FloatingSidebar({
                     {translatedLabel}
                     {pendingCount > 0 && (
                       <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9.5px] font-mono">
-                        {pendingCount} à valider
+                        {pendingCount} {t('nav.groups.to_validate', 'À valider')}
                       </span>
                     )}
                   </div>
@@ -551,9 +572,7 @@ export default function FloatingSidebar({
           <button
             onClick={() => {
               setCurrentTab('settings');
-              if (!isAlwaysOpen) {
-                setIsExpanded(false);
-              }
+              setIsExpanded(false);
             }}
             className={`group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
               isSettings
@@ -564,7 +583,7 @@ export default function FloatingSidebar({
                   ? 'text-slate-400 hover:text-white hover:bg-slate-700/50 hover:scale-105 hover:-translate-y-0.5'
                   : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 hover:scale-105 hover:-translate-y-0.5'
             }`}
-            title={t('nav.settings')}
+            title={t('nav.settings', 'Paramètres Système')}
           >
             <Settings
               size={20}
@@ -578,7 +597,7 @@ export default function FloatingSidebar({
         <button
           onClick={toggleSidebarTheme}
           className="group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-slate-700/50 hover:scale-105 hover:-translate-y-0.5 cursor-pointer"
-          title={isDark ? "Activer le mode clair" : "Activer le mode sombre"}
+          title={isDark ? t('nav.theme_light', 'Passer au mode clair') : t('nav.theme_dark', 'Passer au mode sombre')}
         >
           {isDark ? (
             <Sun size={19} className="text-amber-400 transition-transform group-hover:rotate-45" />
@@ -591,7 +610,7 @@ export default function FloatingSidebar({
         <button
           onClick={onLogout}
           className="group relative w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:scale-105 hover:-translate-y-0.5 cursor-pointer"
-          title={t('nav.logout') || 'Déconnexion'}
+          title={t('nav.logout', 'Déconnexion')}
         >
           <LogOut size={19} className="transition-transform group-hover:scale-110" />
         </button>

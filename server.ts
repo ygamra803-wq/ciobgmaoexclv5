@@ -819,8 +819,8 @@ async function startServer() {
   });
 
   // Setup Vite or static serving
+  let viteInstance: any = null;
   if (!isProduction) {
-    let viteInstance: any = null;
     const viteReadyPromise = import('vite')
       .then(({ createServer: createViteServer }) =>
         createViteServer({
@@ -844,6 +844,12 @@ async function startServer() {
         return null;
       });
 
+    // Wait briefly for Vite middleware to be ready before accepting pre-warm requests
+    await Promise.race([
+      viteReadyPromise,
+      new Promise((resolve) => setTimeout(resolve, 4000)),
+    ]);
+
     app.use(async (req, res, next) => {
       try {
         const vite = viteInstance || (await viteReadyPromise);
@@ -865,16 +871,47 @@ async function startServer() {
     console.log('[Server] Production static serving enabled from dist/');
   }
 
-  const httpServer = app.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`🚀 GMAO Enterprise Server running on http://localhost:${PORT}`);
-  });
+  const listenWithRetry = (port: number, retriesLeft = 5) => {
+    const httpServer = app.listen(port, '0.0.0.0', () => {
+      console.log(`🚀 GMAO Enterprise Server running on http://localhost:${port}`);
+    });
 
-  httpServer.on('error', (err) => {
-    console.error('[Server] HTTP server error:', err);
-  });
+    httpServer.on('error', (err: any) => {
+      if (err?.code === 'EADDRINUSE' && retriesLeft > 0) {
+        console.warn(`[Server] Port ${port} busy, retrying in 300ms (${retriesLeft} attempts left)...`);
+        setTimeout(() => {
+          try {
+            httpServer.close();
+          } catch {
+            // ignore
+          }
+          listenWithRetry(port, retriesLeft - 1);
+        }, 300);
+        return;
+      }
+      console.error('[Server] HTTP server error:', err);
+    });
+
+    const shutdown = () => {
+      try {
+        httpServer.close(() => {
+          process.exit(0);
+        });
+        setTimeout(() => process.exit(0), 500).unref();
+      } catch {
+        process.exit(0);
+      }
+    };
+
+    process.once('SIGTERM', shutdown);
+    process.once('SIGINT', shutdown);
+  };
+
+  listenWithRetry(Number(PORT));
 }
 
 startServer().catch((err) => {
   console.error('[Server] Fatal startup error:', err);
   process.exit(1);
 });
+
