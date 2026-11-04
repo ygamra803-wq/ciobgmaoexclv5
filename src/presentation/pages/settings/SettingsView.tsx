@@ -32,6 +32,7 @@ import { StockCalculationService } from '../../../domain/pdr/services/StockCalcu
 import { stockIndex } from '../../../application/IncrementalStockIndex';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { confirmAction } from '../../../utils/confirmAction';
+import { useTranslation } from '../../../i18n/I18nContext';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
 import PerformanceDashboardPanel from '../../components/settings/PerformanceDashboardPanel';
 import AppearanceLayoutSelector from '../../components/settings/AppearanceLayoutSelector';
@@ -93,6 +94,30 @@ export default function SettingsView({
   onDirectLink,
   initialTab,
 }: any) {
+  const { language } = useTranslation();
+  const langKey = (language === 'ar' || language === 'en' ? language : 'fr') as 'fr' | 'ar' | 'en';
+
+  const headerCopy = {
+    fr: {
+      title: 'Configuration & Paramètres',
+      subTitle: '/ Settings & Twin Engine',
+      desc: 'Supervision du stockage local, diffusion LAN / QR, injection de maquettes, appairage automatique et liaison dossier réseau.',
+      badge: 'Mode Hybride LAN & Offline Actif',
+    },
+    ar: {
+      title: 'الإعدادات وتكوين النظام',
+      subTitle: '/ Settings & Twin Engine',
+      desc: 'إشراف التخزين المحلي، البث عبر الشبكة المحلية ورموز QR، حقن البيانات، المطابقة المرجعية التلقائية وربط مجلد الشبكة.',
+      badge: 'الوضع الهجين LAN وبدون اتصال نشط',
+    },
+    en: {
+      title: 'System Configuration & Settings',
+      subTitle: '/ Settings & Twin Engine',
+      desc: 'Local storage supervision, LAN / QR broadcasting, dataset injection, automatic referential matching, and network folder linking.',
+      badge: 'Hybrid LAN & Offline Mode Active',
+    },
+  }[langKey];
+
   const [activeTab, setActiveTab] = useState(() => {
     const pendingTarget = localStorage.getItem('gmao_settings_target_tab');
     if (pendingTarget) {
@@ -1532,21 +1557,28 @@ export default function SettingsView({
   const runPerformanceBenchmark = async () => {
     try {
       await performanceService.measure('Calcul_Formules_Twin_Stock', async () => {
-        const mvtsMap = new Map();
+        const mvtsMap = new Map<string, { in: number; out: number }>();
         for (const m of mouvements) {
-          const r = (m.ref || '').toUpperCase();
+          const r = String(m.ref || '').trim().toUpperCase();
+          if (!r) continue;
           if (!mvtsMap.has(r)) mvtsMap.set(r, { in: 0, out: 0 });
-          const item = mvtsMap.get(r);
-          if (m.type === 'Entrée') item.in += Number(m.quantite) || 0;
-          else if (m.type === 'Sortie') item.out += Number(m.quantite) || 0;
+          const item = mvtsMap.get(r)!;
+          const normType = StockCalculationService.normalizeType(m.type);
+          const qty = Math.max(0, Number(m.quantite) || 0);
+          if (normType === 'ENTREE' || normType === 'RETOUR') {
+            item.in += qty;
+          } else if (normType === 'SORTIE') {
+            item.out += qty;
+          }
         }
-        return rawStock.map((s: any) => ({
-          ...s,
-          calc:
-            (Number(s.stockInitial) || 0) +
-            (mvtsMap.get((s.ref || '').toUpperCase())?.in || 0) -
-            (mvtsMap.get((s.ref || '').toUpperCase())?.out || 0),
-        }));
+        return rawStock.map((s: any) => {
+          const r = String(s.ref || '').trim().toUpperCase();
+          const mvt = mvtsMap.get(r);
+          return {
+            ...s,
+            calc: (Number(s.stockInitial) || 0) + (mvt?.in || 0) - (mvt?.out || 0),
+          };
+        });
       });
       refreshPerformanceMetrics();
       showToast('Benchmark de performance calculé avec succès.', 'success');
@@ -1718,14 +1750,13 @@ export default function SettingsView({
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
-                <span>Configuration & Paramètres</span>
+                <span>{headerCopy.title}</span>
                 <span className="text-xs font-normal text-slate-400 font-mono">
-                  / Settings & Twin Engine
+                  {headerCopy.subTitle}
                 </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Supervision du stockage local, diffusion LAN / QR, injection de maquettes, appairage
-                automatique et liaison dossier réseau.
+                {headerCopy.desc}
               </p>
             </div>
           </div>
@@ -1733,7 +1764,7 @@ export default function SettingsView({
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-cyan-50 text-cyan-800 border border-cyan-200/60 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
-            Mode Hybride LAN & Offline Actif
+            {headerCopy.badge}
           </span>
         </div>
       </div>
