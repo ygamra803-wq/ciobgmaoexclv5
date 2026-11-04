@@ -463,17 +463,22 @@ export default function SettingsDirectoryTab({
         </div>
 
         <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200">
-          <div className="text-xs text-slate-500 font-medium flex items-center gap-1.5">
-            Statut de couplage :
+          <div className="text-xs text-slate-500 font-medium flex items-center gap-2 flex-wrap">
+            <span>Statut de couplage :</span>
             {linkedFileHandle ? (
               <span className="text-emerald-700 font-bold flex items-center gap-1.5 inline-flex">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
                 Connecté ({linkedFileName || 'Fichier réseau partagé'})
               </span>
+            ) : hostInfo?.online ? (
+              <span className="text-emerald-700 font-bold flex items-center gap-1.5 inline-flex">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+                Miroir Serveur LAN Actif (v{hostInfo.version} • Scrutation : {pollingInterval === 'off' ? 'Manuelle' : pollingInterval})
+              </span>
             ) : (
-              <span className="text-rose-700 font-bold flex items-center gap-1.5 inline-flex">
-                <span className="w-1.5 h-1.5 bg-rose-500 rounded-full" />
-                Déconnecté (Aucun fichier réseau lié)
+              <span className="text-amber-700 font-bold flex items-center gap-1.5 inline-flex">
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                Mode Local Autonome (Aucun fichier externe lié)
               </span>
             )}
           </div>

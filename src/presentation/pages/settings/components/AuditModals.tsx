@@ -1,4 +1,5 @@
 import { Users, Package, Link2 } from 'lucide-react';
+import { StockCalculationService } from '../../../../domain/pdr/services/StockCalculationService';
 
 /**
  * Modals for Settings Audit: Zone, User, Article, and Relink modals.
@@ -275,9 +276,10 @@ export function AuditArticleModal({
   types = [],
   setRawStock,
   rawStock = [],
+  mouvements = [],
   storageService,
   showToast,
-}) {
+}: any) {
   if (!isOpen) return null;
 
   return (
@@ -426,22 +428,32 @@ export function AuditArticleModal({
                 showToast?.('Veuillez renseigner la référence et la désignation.', 'error');
                 return;
               }
-              const newArticle = {
+              const baseArticle = {
                 ref: auditArticleForm.ref.trim(),
                 designation: auditArticleForm.designation.trim(),
                 type: auditArticleForm.type || types[0]?.id_type || 'MECANIQUE',
                 emplacement: auditArticleForm.emplacement || 'Magasin PDR',
                 stockInitial: Number(auditArticleForm.stockInitial) || 0,
-                stockActuel: Number(auditArticleForm.stockInitial) || 0,
                 seuil: Number(auditArticleForm.seuil) || 5,
               };
+              const calc = StockCalculationService.calculateStockByRef(baseArticle, mouvements);
+              const newArticle = {
+                ...baseArticle,
+                entrees: calc?.entrees ?? 0,
+                sorties: calc?.sorties ?? 0,
+                stockActuel: calc?.stockActuel ?? baseArticle.stockInitial,
+                alerte: calc?.alerte ?? 'OK',
+              };
               if (setRawStock) {
-                setRawStock((prev) => [...prev, newArticle]);
+                setRawStock((prev: any[]) => [...prev, newArticle]);
               }
               if (storageService) {
                 storageService.saveArticles([...rawStock, newArticle]);
               }
-              showToast?.(`Article "${newArticle.ref}" enregistré avec succès.`, 'success');
+              showToast?.(
+                `Article "${newArticle.ref}" enregistré avec succès (Stock calculé : ${newArticle.stockActuel}).`,
+                'success'
+              );
               onClose();
             }}
             className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer"

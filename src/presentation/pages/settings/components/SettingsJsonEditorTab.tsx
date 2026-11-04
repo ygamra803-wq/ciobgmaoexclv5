@@ -43,6 +43,11 @@ export default function SettingsJsonEditorTab({
             <option value="rawStock">Articles & Stock_Actuel</option>
             <option value="mouvements">Mouvements & Historique</option>
             <option value="machines">Machines_Registered</option>
+            <option value="preventiveTasks">Tâches Préventives (preventiveTasks)</option>
+            <option value="correctiveInterventions">Interventions Correctives (correctiveInterventions)</option>
+            <option value="warehouseItems">Articles Entrepôt / Réserve (warehouseItems)</option>
+            <option value="sortiesExterne">Sorties Externes / Sous-Traitance (sortiesExterne)</option>
+            <option value="machineElementsLedger">Arborescence Organes BOM (machineElementsLedger)</option>
             <option value="families">Familles</option>
             <option value="templates">Modèles (Templates)</option>
             <option value="zones">Zones d'usine</option>

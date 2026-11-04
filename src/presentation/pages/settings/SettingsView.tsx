@@ -28,6 +28,8 @@ import { analytics } from '../../../services/AnalyticsService';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { StockCalculationService } from '../../../domain/pdr/services/StockCalculationService';
+import { stockIndex } from '../../../application/IncrementalStockIndex';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { confirmAction } from '../../../utils/confirmAction';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
@@ -695,10 +697,15 @@ export default function SettingsView({
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   const originalJsonText = useMemo(() => {
-    let targetData = [];
+    let targetData: any[] = [];
     if (jsonTarget === 'rawStock') targetData = rawStock;
     else if (jsonTarget === 'mouvements') targetData = mouvements;
     else if (jsonTarget === 'machines') targetData = machines;
+    else if (jsonTarget === 'preventiveTasks') targetData = preventiveTasks;
+    else if (jsonTarget === 'correctiveInterventions') targetData = correctiveInterventions;
+    else if (jsonTarget === 'warehouseItems') targetData = warehouseItems;
+    else if (jsonTarget === 'sortiesExterne') targetData = sortiesExterne;
+    else if (jsonTarget === 'machineElementsLedger') targetData = machineElementsLedger;
     else if (jsonTarget === 'families') targetData = families;
     else if (jsonTarget === 'templates') targetData = templates;
     else if (jsonTarget === 'zones') targetData = zones;
@@ -711,6 +718,11 @@ export default function SettingsView({
     rawStock,
     mouvements,
     machines,
+    preventiveTasks,
+    correctiveInterventions,
+    warehouseItems,
+    sortiesExterne,
+    machineElementsLedger,
     families,
     templates,
     zones,
@@ -739,10 +751,76 @@ export default function SettingsView({
         throw new Error("La structure doit être un tableau JSON d'objets.");
       }
 
-      if (jsonTarget === 'rawStock') setRawStock(parsed);
-      else if (jsonTarget === 'mouvements') setMouvements(parsed);
-      else if (jsonTarget === 'machines') setMachines(parsed);
-      else if (jsonTarget === 'families') setFamilies(parsed);
+      const store = useGmaoStore.getState();
+
+      if (jsonTarget === 'rawStock') {
+        const calcMap = new Map(
+          StockCalculationService.calculateAllStocks(parsed, mouvements).map((c) => [
+            String(c.ref || '').trim().toUpperCase(),
+            c,
+          ])
+        );
+        const recalculatedStock = parsed.map((art: any) => {
+          const k = String(art?.ref || '').trim().toUpperCase();
+          const c = calcMap.get(k);
+          if (!c) return art;
+          return {
+            ...art,
+            entrees: c.entrees,
+            sorties: c.sorties,
+            stockActuel: c.stockActuel,
+            alerte: c.alerte,
+          };
+        });
+        const initMap = new Map<string, number>();
+        recalculatedStock.forEach((art: any) => {
+          if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
+        });
+        stockIndex.rebuild(mouvements, initMap);
+        setRawStock(recalculatedStock);
+        storageService.saveArticles(recalculatedStock);
+      } else if (jsonTarget === 'mouvements') {
+        const calcMap = new Map(
+          StockCalculationService.calculateAllStocks(rawStock, parsed).map((c) => [
+            String(c.ref || '').trim().toUpperCase(),
+            c,
+          ])
+        );
+        const recalculatedStock = (rawStock || []).map((art: any) => {
+          const k = String(art?.ref || '').trim().toUpperCase();
+          const c = calcMap.get(k);
+          if (!c) return art;
+          return {
+            ...art,
+            entrees: c.entrees,
+            sorties: c.sorties,
+            stockActuel: c.stockActuel,
+            alerte: c.alerte,
+          };
+        });
+        const initMap = new Map<string, number>();
+        recalculatedStock.forEach((art: any) => {
+          if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
+        });
+        stockIndex.rebuild(parsed, initMap);
+        setMouvements(parsed);
+        if (setRawStock) setRawStock(recalculatedStock);
+        storageService.saveArticles(recalculatedStock);
+      } else if (jsonTarget === 'machines') setMachines(parsed);
+      else if (jsonTarget === 'preventiveTasks') {
+        if (setPreventiveTasks) setPreventiveTasks(parsed);
+        else store.setPreventiveTasks(parsed);
+      } else if (jsonTarget === 'correctiveInterventions') {
+        if (setCorrectiveInterventions) setCorrectiveInterventions(parsed);
+        else store.setCorrectiveInterventions(parsed);
+      } else if (jsonTarget === 'warehouseItems') {
+        store.setWarehouseItems(parsed);
+      } else if (jsonTarget === 'sortiesExterne') {
+        store.setSortiesExterne(parsed);
+      } else if (jsonTarget === 'machineElementsLedger') {
+        if (setMachineElementsLedger) setMachineElementsLedger(parsed);
+        else store.setMachineElementsLedger(parsed);
+      } else if (jsonTarget === 'families') setFamilies(parsed);
       else if (jsonTarget === 'templates') setTemplates(parsed);
       else if (jsonTarget === 'zones') setZones(parsed);
       else if (jsonTarget === 'technicians') setTechnicians(parsed);
@@ -750,7 +828,7 @@ export default function SettingsView({
       else if (jsonTarget === 'types') setTypes(parsed);
 
       setJsonError(null);
-      showToast('Modification appliquée avec succès !', 'success');
+      showToast('Modification appliquée et synchronisée avec succès !', 'success');
     } catch (err: any) {
       setJsonError(err.message);
       showToast('Erreur de validation du JSON.', 'error');
@@ -835,7 +913,14 @@ export default function SettingsView({
     storageService.setItem('gmao_polling_interval', pollingInterval);
     storageService.setItem(STORAGE_KEYS.START_MODE, isDemoMode ? 'demo' : 'empty');
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, isDemoMode);
-    showToast('Paramètres système mis à jour !', 'success');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('gmao:sync_settings_updated', {
+          detail: { sharedFolderPath, autoWriteExcel, pollingInterval },
+        })
+      );
+    }
+    showToast('Paramètres système et synchronisation réseau mis à jour !', 'success');
   };
 
   // DATA INJECTION HUB HANDLERS
@@ -1164,10 +1249,10 @@ export default function SettingsView({
     if (discoveredItems.length === 0) return;
 
     if (auditTarget === 'machines') {
-      const defaultFamily = families[0]?.id_family || 'FAM-EMB';
-      const defaultTemplate = templates[0]?.id_templates || 'TPL-RCF100';
-      const defaultZone = zones[0]?.id_zone || 'ZONE-DET';
-      const defaultTech = technicians[0]?.nom || 'Rachid';
+      const defaultFamily = families[0]?.id_family || '';
+      const defaultTemplate = templates[0]?.id_templates || '';
+      const defaultZone = zones[0]?.id_zone || '';
+      const defaultTech = technicians[0]?.nom || '';
 
       const newMachines = discoveredItems.map((dm: any) => ({
         id_machine_registered: dm.code,
@@ -1224,7 +1309,7 @@ export default function SettingsView({
           nextOps.push({
             id_operation: nextId,
             nom: name,
-            id_zone: zones[0]?.id_zone || 'ZONE-DET',
+            id_zone: zones[0]?.id_zone || '',
             type_profil: 'CHEF',
             avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
           });
@@ -1245,7 +1330,7 @@ export default function SettingsView({
           nextOps.push({
             id_operation: nextId,
             nom: name,
-            id_zone: zones[0]?.id_zone || 'ZONE-DET',
+            id_zone: zones[0]?.id_zone || '',
             type_profil: 'OPERATEUR',
             avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
           });
@@ -1261,20 +1346,29 @@ export default function SettingsView({
       );
     } else if (auditTarget === 'articles') {
       const defaultType = types[0]?.id_type || 'MECANIQUE';
-      const newArticles = discoveredItems.map((item: any) => ({
-        ref: item.code,
-        designation: `Pièce PDR ${item.code}`,
-        type: defaultType,
-        stockInitial: 0,
-        stockActuel: 0,
-        seuil: 5,
-        emplacement: 'Magasin PDR',
-      }));
+      const newArticles = discoveredItems.map((item: any) => {
+        const baseArticle = {
+          ref: item.code,
+          designation: `Pièce PDR ${item.code}`,
+          type: defaultType,
+          stockInitial: 0,
+          seuil: 5,
+          emplacement: 'Magasin PDR',
+        };
+        const calc = StockCalculationService.calculateStockByRef(baseArticle, mouvements);
+        return {
+          ...baseArticle,
+          entrees: calc?.entrees ?? 0,
+          sorties: calc?.sorties ?? 0,
+          stockActuel: calc?.stockActuel ?? 0,
+          alerte: calc?.alerte ?? 'RUPTURE',
+        };
+      });
       if (setRawStock) {
         setRawStock((prev: any[]) => [...prev, ...newArticles]);
       }
       storageService.saveArticles([...rawStock, ...newArticles]);
-      showToast(`${newArticles.length} article(s) de stock enregistrés avec succès.`, 'success');
+      showToast(`${newArticles.length} article(s) de stock enregistrés et calculés avec succès.`, 'success');
     } else {
       showToast(
         'Veuillez enregistrer les éléments manuellement pour attribuer leurs libellés ou utilisez le bouton Rattacher.',
@@ -1533,16 +1627,52 @@ export default function SettingsView({
     )
       return;
     try {
-      const data = await backupService.restoreBackup(id);
-      if (data.Stock_Actuel) setRawStock(data.Stock_Actuel);
-      if (data.Mouvement) setMouvements(data.Mouvement);
-      if (data.Machines_Registered) setMachines(data.Machines_Registered);
-      if (data.Families) setFamilies(data.Families);
-      if (data.Templates) setTemplates(data.Templates);
-      if (data.Zones) setZones(data.Zones);
-      if (data.Technicians) setTechnicians(data.Technicians);
-      if (data.Operations) setOperations(data.Operations);
-      showToast('Restauration réussie !', 'success');
+      const data: any = await backupService.restoreBackup(id);
+      if (!data) {
+        showToast('Sauvegarde introuvable ou impossible à restaurer.', 'error');
+        return;
+      }
+      if (typeof data === 'object') {
+        if (data.Stock_Actuel) setRawStock(data.Stock_Actuel);
+        if (data.Mouvement) setMouvements(data.Mouvement);
+        if (data.Machines_Registered) setMachines(data.Machines_Registered);
+        if (data.Families) setFamilies(data.Families);
+        if (data.Templates) setTemplates(data.Templates);
+        if (data.Zones) setZones(data.Zones);
+        if (data.Technicians) setTechnicians(data.Technicians);
+        if (data.Operations) setOperations(data.Operations);
+      }
+      // Rebuild stock index & recalculate stock invariant across the restored SSOT store
+      const store = useGmaoStore.getState();
+      const restoredStock = Array.isArray(store.rawStock) ? store.rawStock : rawStock;
+      const restoredMvts = Array.isArray(store.mouvements) ? store.mouvements : mouvements;
+      const calcMap = new Map(
+        StockCalculationService.calculateAllStocks(restoredStock, restoredMvts).map((c) => [
+          String(c.ref || '').trim().toUpperCase(),
+          c,
+        ])
+      );
+      const recalculatedStock = restoredStock.map((art: any) => {
+        const k = String(art?.ref || '').trim().toUpperCase();
+        const c = calcMap.get(k);
+        if (!c) return art;
+        return {
+          ...art,
+          entrees: c.entrees,
+          sorties: c.sorties,
+          stockActuel: c.stockActuel,
+          alerte: c.alerte,
+        };
+      });
+      const initMap = new Map<string, number>();
+      recalculatedStock.forEach((art: any) => {
+        if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
+      });
+      stockIndex.rebuild(restoredMvts, initMap);
+      if (setRawStock) setRawStock(recalculatedStock);
+      storageService.saveArticles(recalculatedStock);
+
+      showToast('Restauration complète (SSOT + Stock recalculé) réussie !', 'success');
       logger.info('Backup restored manually', { backupId: id });
     } catch {
       showToast('Erreur lors de la restauration.', 'error');
@@ -1849,6 +1979,7 @@ export default function SettingsView({
         types={types}
         setRawStock={setRawStock}
         rawStock={rawStock}
+        mouvements={mouvements}
         storageService={storageService}
         showToast={showToast}
       />

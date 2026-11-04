@@ -122,6 +122,53 @@ export function useGmaoPersistence({
     };
   }, [setters]);
 
+  // 0.5 Periodic Network Polling controlled by SettingsDirectoryTab (gmao_polling_interval: 'off' | '5s' | '10s' | '30s')
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const parseIntervalMs = (raw: string | null): number => {
+      const val = String(raw || '10s').trim().toLowerCase();
+      if (val === 'off' || val === 'manual') return 0;
+      if (val === '5s') return 5000;
+      if (val === '30s') return 30000;
+      return 10000; // default 10s
+    };
+
+    const setupPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      const ms = parseIntervalMs(localStorage.getItem('gmao_polling_interval'));
+      if (ms <= 0) return;
+
+      intervalId = setInterval(async () => {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+        const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+        if (startMode === 'empty') return;
+        try {
+          const check = await serverSyncService.fetchServerState();
+          if (!check.online || !check.state) return;
+          const serverVersion = Number(check.state.version || 0);
+          const localVersion = Number(serverSyncService.getLastServerVersion() || 0);
+          if (serverVersion > 0 && serverVersion > localVersion) {
+            await serverSyncService.pullFromServer({ force: false, setters });
+          }
+        } catch {
+          // Silent background check
+        }
+      }, ms);
+    };
+
+    setupPolling();
+    window.addEventListener('gmao:sync_settings_updated', setupPolling);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      window.removeEventListener('gmao:sync_settings_updated', setupPolling);
+    };
+  }, [setters]);
+
   // 1. Debounced auto-save to LocalStorage and IndexedDB batch writes
   const { saveAllState } = useAutoSave(state, 1000, onStateChange);
 

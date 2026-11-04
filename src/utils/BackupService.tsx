@@ -75,16 +75,19 @@ export class BackupService {
       const targetId = typeof dbOrSnapshotId === 'string' ? dbOrSnapshotId : backupId;
       if (!targetId) return false;
 
-      if (targetId.startsWith('backup_')) {
+      if (targetId.startsWith('backup_') || targetId.startsWith('gmao_backup_')) {
         const raw = localStorage.getItem(targetId);
         if (raw) {
-          const backupData = JSON.parse(raw);
-          if (backupData?.data) {
-            Object.entries(backupData.data).forEach(([key, items]) => {
-              if (Array.isArray(items)) {
-                localStorage.setItem(`gmao_${key}`, JSON.stringify(items));
-              }
-            });
+          const imported = AutoBackupService.importFullBackupJSON(raw);
+          if (!imported) {
+            const backupData = JSON.parse(raw);
+            if (backupData?.data) {
+              Object.entries(backupData.data).forEach(([key, items]) => {
+                if (Array.isArray(items)) {
+                  localStorage.setItem(`gmao_${key}`, JSON.stringify(items));
+                }
+              });
+            }
           }
           Logger.debug(`✅ Backup ${targetId} restored successfully`);
           return true;

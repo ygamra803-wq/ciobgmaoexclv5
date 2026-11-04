@@ -233,10 +233,10 @@ export default function SettingsMatchingTab({
                                       {
                                         id_machine_registered: dm.code,
                                         designation: `Machine Auto-Détectée ${dm.code}`,
-                                        id_family: families[0]?.id_family || 'FAM-EMB',
-                                        id_templates: templates[0]?.id_templates || 'TPL-RCF100',
-                                        id_zone_default: zones[0]?.id_zone || 'ZONE-DET',
-                                        technician: technicians[0]?.nom || 'Technicien',
+                                        id_family: families[0]?.id_family || '',
+                                        id_templates: templates[0]?.id_templates || '',
+                                        id_zone_default: zones[0]?.id_zone || '',
+                                        technician: technicians[0]?.nom || '',
                                         status: 'En service',
                                       },
                                     ]);
