@@ -159,6 +159,10 @@ export default function DashboardView({
   const canAccessStockTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'stock');
   const canAccessSortieTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'sortie');
   const canAccessMachinesTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'machines');
+  const canAccessEntrepotTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'entrepot');
+  const canAccessZonesTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'zones');
+  const canAccessUsersTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'utilisateurs');
+  const canAccessGuideTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'guide');
   const canAccessPreventiveTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'preventive');
   const canAccessCorrectiveTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective');
   const canAccessCorrectiveDiTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_di');
@@ -2053,7 +2057,7 @@ export default function DashboardView({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
+              {canAccessStockTab && (
                 <button
                   onClick={onNavigateToStock}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2066,7 +2070,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
+              {canAccessSortieTab && (
                 <button
                   onClick={onNavigateToSortie}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2079,7 +2083,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
+              {canAccessMachinesTab && (
                 <button
                   onClick={onNavigateToMachines}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2092,7 +2096,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'entrepot')) && (
+              {canAccessEntrepotTab && (
                 <button
                   onClick={onNavigateToWarehouse}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2105,7 +2109,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'zones')) && (
+              {canAccessZonesTab && (
                 <button
                   onClick={onNavigateToZones}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2118,7 +2122,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'utilisateurs')) && (
+              {canAccessUsersTab && (
                 <button
                   onClick={onNavigateToUsers}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2131,7 +2135,7 @@ export default function DashboardView({
                 </button>
               )}
 
-              {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'settings')) && (
+              {canAccessSettingsTab && (
                 <button
                   onClick={onNavigateToSettings}
                   className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-slate-100 border border-slate-200/80 hover:border-slate-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -2969,13 +2973,15 @@ export default function DashboardView({
                     <p className="text-[11px] text-slate-500">Volume total de sorties</p>
                   </div>
                 </div>
-                <button
-                  onClick={onNavigateToStock}
-                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
-                >
-                  <span>Stock</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                {canAccessStockTab && onNavigateToStock && (
+                  <button
+                    onClick={onNavigateToStock}
+                    className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Stock</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -3038,13 +3044,15 @@ export default function DashboardView({
                     <p className="text-[11px] text-slate-500">Nombre d&apos;interventions / dépannages</p>
                   </div>
                 </div>
-                <button
-                  onClick={onNavigateToMachines}
-                  className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-0.5 cursor-pointer"
-                >
-                  <span>Parc</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                {canAccessMachinesTab && onNavigateToMachines && (
+                  <button
+                    onClick={onNavigateToMachines}
+                    className="text-xs font-bold text-purple-600 hover:text-purple-800 flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Parc</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -3094,7 +3102,7 @@ export default function DashboardView({
           </h3>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'preventive')) && onNavigateToPreventive && (
+            {canAccessPreventiveTab && onNavigateToPreventive && (
               <button
                 onClick={onNavigateToPreventive}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -3107,7 +3115,7 @@ export default function DashboardView({
               </button>
             )}
 
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective')) && onNavigateToCorrective && (
+            {canAccessCorrectiveTab && onNavigateToCorrective && (
               <button
                 onClick={() => onNavigateToCorrective('corrective')}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-amber-50/80 border border-slate-200/80 hover:border-amber-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -3120,7 +3128,7 @@ export default function DashboardView({
               </button>
             )}
 
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'stock')) && (
+            {canAccessStockTab && (
               <button
                 onClick={onNavigateToStock}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-blue-50/80 border border-slate-200/80 hover:border-blue-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -3133,7 +3141,7 @@ export default function DashboardView({
               </button>
             )}
 
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie')) && (
+            {canAccessSortieTab && (
               <button
                 onClick={onNavigateToSortie}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-emerald-50/80 border border-slate-200/80 hover:border-emerald-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -3146,7 +3154,7 @@ export default function DashboardView({
               </button>
             )}
 
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'machines')) && (
+            {canAccessMachinesTab && (
               <button
                 onClick={onNavigateToMachines}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-purple-50/80 border border-slate-200/80 hover:border-purple-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
@@ -3159,7 +3167,7 @@ export default function DashboardView({
               </button>
             )}
 
-            {(!currentUser || AuthorizationService.canAccessTab(currentUser, 'guide')) && onNavigateToGuide && (
+            {canAccessGuideTab && onNavigateToGuide && (
               <button
                 onClick={onNavigateToGuide}
                 className="p-3.5 rounded-xl bg-slate-50/90 hover:bg-teal-50/80 border border-slate-200/80 hover:border-teal-300 text-left shadow-2xs hover:shadow-xs hover:-translate-y-0.5 transition-all duration-200 space-y-1.5 cursor-pointer group"
