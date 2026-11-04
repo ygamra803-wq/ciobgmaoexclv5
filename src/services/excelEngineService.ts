@@ -97,6 +97,11 @@ class ExcelEngineService {
     diagnostics = [],
     families = [],
     templates = [],
+    compGroups = [],
+    compFamilies = [],
+    compTemplates = [],
+    partTypes = [],
+    partDesignations = [],
     sortiesExterne = [],
     demandes = [],
     bonsTravail = [],
@@ -415,6 +420,11 @@ class ExcelEngineService {
     this.appendGenericTableSheet(wb, 'Diagnostics', diagnostics, styles);
     this.appendGenericTableSheet(wb, 'Families', families, styles);
     this.appendGenericTableSheet(wb, 'Templates', templates, styles);
+    this.appendGenericTableSheet(wb, 'Comp_Groups', compGroups, styles);
+    this.appendGenericTableSheet(wb, 'Comp_Families', compFamilies, styles);
+    this.appendGenericTableSheet(wb, 'Comp_Templates', compTemplates, styles);
+    this.appendGenericTableSheet(wb, 'Part_Types', partTypes, styles);
+    this.appendGenericTableSheet(wb, 'Part_Designations', partDesignations, styles);
 
     return wb;
   }
@@ -532,6 +542,7 @@ class ExcelEngineService {
       Diagnostics: [],
       Families: [],
       Templates: [],
+      Comp_Groups: [],
       Comp_Families: [],
       Comp_Templates: [],
       Part_Types: [],
@@ -645,6 +656,12 @@ class ExcelEngineService {
         result.Families = extractSheetRows(ws);
       } else if (lower === 'templates' || lower === 'templates_machines') {
         result.Templates = extractSheetRows(ws);
+      } else if (lower === 'comp_groups' || lower === 'groupes_composants') {
+        result.Comp_Groups = extractSheetRows(ws);
+      } else if (lower === 'comp_families' || lower === 'familles_composants') {
+        result.Comp_Families = extractSheetRows(ws);
+      } else if (lower === 'comp_templates' || lower === 'templates_composants') {
+        result.Comp_Templates = extractSheetRows(ws);
       } else if (lower === 'part_types') {
         result.Part_Types = extractSheetRows(ws);
       } else if (lower === 'part_designations') {

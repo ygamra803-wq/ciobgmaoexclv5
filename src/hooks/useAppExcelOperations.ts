@@ -38,6 +38,8 @@ export function useAppExcelOperations({
     operations,
     setOperations,
     types,
+    compGroups,
+    setCompGroups,
     compFamilies,
     setCompFamilies,
     compTemplates,
@@ -87,6 +89,11 @@ export function useAppExcelOperations({
             operations,
             types,
             diagnostics,
+            compGroups,
+            compFamilies,
+            compTemplates,
+            partTypes,
+            partDesignations,
           },
         };
 
@@ -129,6 +136,11 @@ export function useAppExcelOperations({
       operations,
       types,
       diagnostics,
+      compGroups,
+      compFamilies,
+      compTemplates,
+      partTypes,
+      partDesignations,
     ]
   );
 
@@ -249,6 +261,11 @@ export function useAppExcelOperations({
     // 15. Operations
     appendSheetWithAutofit('Operations', operations);
 
+    // 15b. Comp_Groups
+    if (compGroups && compGroups.length > 0) {
+      appendSheetWithAutofit('Comp_Groups', compGroups);
+    }
+
     // 16. Comp_Families
     if (compFamilies && compFamilies.length > 0) {
       appendSheetWithAutofit('Comp_Families', compFamilies);
@@ -292,6 +309,7 @@ export function useAppExcelOperations({
     zones,
     technicians,
     operations,
+    compGroups,
     compFamilies,
     compTemplates,
     partTypes,
@@ -317,6 +335,11 @@ export function useAppExcelOperations({
     diagnostics,
     families,
     templates,
+    compGroups,
+    compFamilies,
+    compTemplates,
+    partTypes,
+    partDesignations,
     sortiesExterne: state.sortiesExterne,
     demandes: state.demandes,
     bonsTravail: state.bonsTravail,
@@ -334,6 +357,11 @@ export function useAppExcelOperations({
     diagnostics,
     families,
     templates,
+    compGroups,
+    compFamilies,
+    compTemplates,
+    partTypes,
+    partDesignations,
     state.sortiesExterne,
     state.demandes,
     state.bonsTravail,
@@ -417,6 +445,21 @@ export function useAppExcelOperations({
               } else if (workbook.SheetNames.includes('Entrepot')) {
                 importedData.Warehouse_Items = XLSX.utils.sheet_to_json(workbook.Sheets['Entrepot']);
               }
+              if (workbook.SheetNames.includes('Comp_Groups')) {
+                importedData.Comp_Groups = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Groups']);
+              }
+              if (workbook.SheetNames.includes('Comp_Families')) {
+                importedData.Comp_Families = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Families']);
+              }
+              if (workbook.SheetNames.includes('Comp_Templates')) {
+                importedData.Comp_Templates = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Templates']);
+              }
+              if (workbook.SheetNames.includes('Part_Types')) {
+                importedData.Part_Types = XLSX.utils.sheet_to_json(workbook.Sheets['Part_Types']);
+              }
+              if (workbook.SheetNames.includes('Part_Designations')) {
+                importedData.Part_Designations = XLSX.utils.sheet_to_json(workbook.Sheets['Part_Designations']);
+              }
             }
           }
 
@@ -460,6 +503,8 @@ export function useAppExcelOperations({
             setTechnicians(sanitizeObject(importedData.Technicians));
           if (importedData.Operations && importedData.Operations.length > 0)
             setOperations(sanitizeObject(importedData.Operations));
+          if (importedData.Comp_Groups && importedData.Comp_Groups.length > 0 && typeof setCompGroups === 'function')
+            setCompGroups(sanitizeObject(importedData.Comp_Groups));
           if (importedData.Comp_Families && importedData.Comp_Families.length > 0)
             setCompFamilies(sanitizeObject(importedData.Comp_Families));
           if (importedData.Comp_Templates && importedData.Comp_Templates.length > 0)
@@ -527,6 +572,7 @@ export function useAppExcelOperations({
       setZones,
       setTechnicians,
       setOperations,
+      setCompGroups,
       setCompFamilies,
       setCompTemplates,
       setPartTypes,
@@ -689,13 +735,17 @@ export function useAppExcelOperations({
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(stockItems || rawStock || []), 'PDR_Articles');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(warehouseItems || []), 'Warehouse_Components');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compGroups || []), 'Comp_Groups');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compFamilies || []), 'Comp_Families');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(compTemplates || []), 'Comp_Templates');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partTypes || []), 'Part_Types');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partDesignations || []), 'Part_Designations');
       XLSX.writeFile(wb, 'GMAO_Inventory_Materials.xlsx');
       showToast?.('Classeur 2: GMAO_Inventory_Materials.xlsx exporté avec succès !', 'success');
     } catch {
       showToast?.("Erreur lors de l'export du classeur d'inventaire.", 'error');
     }
-  }, [stockItems, rawStock, warehouseItems, partTypes, showToast]);
+  }, [stockItems, rawStock, warehouseItems, compGroups, compFamilies, compTemplates, partTypes, partDesignations, showToast]);
 
   // 3. Unified Movements & Gateway (Movements.xlsx)
   const exportMovementsUnifiedWorkbook = useCallback(() => {

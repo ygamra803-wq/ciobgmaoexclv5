@@ -9,6 +9,7 @@ import { CubeIcon } from '../../components/common/icons/CubeIcon';
 import { CubePlusIcon } from '../../components/common/icons/CubePlusIcon';
 import CustomSelect from '../../components/common/CustomSelect';
 import { useI18n } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   Search,
   ArrowRight,
@@ -46,6 +47,9 @@ export default function CompFamilyView({
   onNavigateToCompGroups,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
   const [internalGroupFilter, setInternalGroupFilter] = useState('');
   const activeGroupFilter = groupFilter !== undefined && setGroupFilter ? groupFilter : internalGroupFilter;
@@ -149,6 +153,7 @@ export default function CompFamilyView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.id_family || !form.libelle) return;
     const cleanPrefix = (form.componentCode || form.id_family.replace(/^FAM-?/i, ''))
       .toUpperCase()
@@ -159,7 +164,7 @@ export default function CompFamilyView({
       id_family: form.id_family.trim().toUpperCase(),
       componentCode: cleanPrefix,
     });
-    setForm({ id_family: '', libelle: '', componentCode: '' });
+    setForm({ id_family: '', id_groupe: '', libelle: '', componentCode: '' });
     setShowAddModal(false);
   };
 
@@ -314,21 +319,23 @@ export default function CompFamilyView({
           return (
             <div className="relative inline-flex items-center justify-center action-menu-container">
               <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onQuickCreateCompTemplate) {
-                      onQuickCreateCompTemplate(f.id_family);
-                    } else if (onNavigateToCompTemplates) {
-                      onNavigateToCompTemplates(f.id_family);
-                    }
-                    setActiveActionMenuId(null);
-                  }}
-                  className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
-                  title={t('components.family.quick_create_title', 'Créer une Désignation rapide pour ce Type')}
-                >
-                  <CubePlusIcon className="w-3.5 h-3.5 text-slate-900" />
-                </button>
+                {canCreateStock && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onQuickCreateCompTemplate) {
+                        onQuickCreateCompTemplate(f.id_family);
+                      } else if (onNavigateToCompTemplates) {
+                        onNavigateToCompTemplates(f.id_family);
+                      }
+                      setActiveActionMenuId(null);
+                    }}
+                    className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
+                    title={t('components.family.quick_create_title', 'Créer une Désignation rapide pour ce Type')}
+                  >
+                    <CubePlusIcon className="w-3.5 h-3.5 text-slate-900" />
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -357,21 +364,23 @@ export default function CompFamilyView({
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      if (onQuickCreateCompTemplate) {
-                        onQuickCreateCompTemplate(f.id_family);
-                      } else if (onNavigateToCompTemplates) {
-                        onNavigateToCompTemplates(f.id_family);
-                      }
-                    }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <CubePlusIcon className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{t('components.family.menu_create_designation', 'Créer une désignation (Niv 3)')}</span>
-                  </button>
+                  {canCreateStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        if (onQuickCreateCompTemplate) {
+                          onQuickCreateCompTemplate(f.id_family);
+                        } else if (onNavigateToCompTemplates) {
+                          onNavigateToCompTemplates(f.id_family);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <CubePlusIcon className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{t('components.family.menu_create_designation', 'Créer une désignation (Niv 3)')}</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -397,31 +406,35 @@ export default function CompFamilyView({
                     <span>{t('components.family.menu_filter_warehouse', "Filtrer l'entrepôt")} ({cCount})</span>
                   </button>
 
-                  <div className="border-t border-slate-100 my-1" />
+                  {(canEditStock || canDeleteStock) && <div className="border-t border-slate-100 my-1" />}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setToEdit({ ...f });
-                    }}
-                    className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{t('components.family.menu_edit', 'Modifier ce type')}</span>
-                  </button>
+                  {canEditStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setToEdit({ ...f });
+                      }}
+                      className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{t('components.family.menu_edit', 'Modifier ce type')}</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setToDelete(f);
-                    }}
-                    className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                    <span>{t('components.family.menu_delete', 'Supprimer ce type')}</span>
-                  </button>
+                  {canDeleteStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setToDelete(f);
+                      }}
+                      className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{t('components.family.menu_delete', 'Supprimer ce type')}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -429,7 +442,7 @@ export default function CompFamilyView({
         },
       },
     ],
-    [t, activeActionMenuId, compTemplates, warehouseItems, onNavigateToCompTemplates, onNavigateToEntrepotByFamily, onQuickCreateCompTemplate, setActiveGroupFilter]
+    [t, activeActionMenuId, compTemplates, warehouseItems, onNavigateToCompTemplates, onNavigateToEntrepotByFamily, onQuickCreateCompTemplate, setActiveGroupFilter, canCreateStock, canEditStock, canDeleteStock]
   );
 
   return (
@@ -456,22 +469,25 @@ export default function CompFamilyView({
             title={t('components.family.formulas_button', 'Formules Excel (Types Composants)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="amber"
-            icon={SpokeIcon}
-            showAddBadge={true}
-            onClick={() => {
-              const nextIdx = compFamilies.length + 1;
-              setForm({
-                id_family: `FAM-CMP${String(nextIdx).padStart(2, '0')}`,
-                libelle: '',
-                componentCode: `CMP${nextIdx}`,
-              });
-              setShowAddModal(true);
-            }}
-            title={t('components.family.add_button', 'Nouveau Type')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="amber"
+              icon={SpokeIcon}
+              showAddBadge={true}
+              onClick={() => {
+                const nextIdx = compFamilies.length + 1;
+                setForm({
+                  id_family: `FAM-CMP${String(nextIdx).padStart(2, '0')}`,
+                  id_groupe: activeGroupFilter && activeGroupFilter !== 'ALL' ? activeGroupFilter : '',
+                  libelle: '',
+                  componentCode: `CMP${nextIdx}`,
+                });
+                setShowAddModal(true);
+              }}
+              title={t('components.family.add_button', 'Nouveau Type')}
+            />
+          )}
         </div>
       </div>
 
@@ -897,6 +913,7 @@ export default function CompFamilyView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditStock) return;
                 onUpdateCompFamily(toEdit.id_family, toEdit);
                 setToEdit(null);
               }}
@@ -989,6 +1006,7 @@ export default function CompFamilyView({
               </button>
               <button
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeleteCompFamily(toDelete.id_family);
                   setToDelete(null);
                 }}

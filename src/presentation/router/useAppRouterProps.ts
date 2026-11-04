@@ -330,7 +330,9 @@ export function useAppRouterProps({
       compTemplates,
       partTypes,
       partDesignations,
+      zones,
       machines,
+      technicians,
       whSearch: filters.whSearch,
       setWhSearch: filters.setWhSearch,
       whFamilyFilter: filters.whFamilyFilter,
@@ -344,11 +346,27 @@ export function useAppRouterProps({
       onAddWarehouseItem: handleAddWarehouseItem,
       onUpdateWarehouseItem: handleUpdateWarehouseItem,
       onDeleteWarehouseItem: handleDeleteWarehouseItem,
+      onAddMouvement: handleAddMouvement,
+      onUpdateFamily: handleUpdateCompFamily,
+      onNavigateToFamily: navigation.handleNavigateToCompFamilies,
       onNavigateToCompFamilies: navigation.handleNavigateToCompFamilies,
+      onNavigateToTemplate: (tplId) => {
+        if (tplId) filters.setWhSearch(tplId);
+        navigateTo('comp_templates');
+      },
       onNavigateToCompTemplates: navigation.handleNavigateToCompTemplates,
+      onNavigateToType: navigation.handleNavigateToPartTypes,
       onNavigateToPartTypes: navigation.handleNavigateToPartTypes,
+      onNavigateToDiag: navigation.handleNavigateToPartDesignations,
       onNavigateToPartDesignations: navigation.handleNavigateToPartDesignations,
       onNavigateToEntrepotByPart: navigation.handleNavigateToEntrepotByPart,
+      onNavigateToZone: navigation.handleNavigateToZoneById || (() => navigateTo('zones')),
+      onNavigateToMachine:
+        navigation.handleNavigateToMachineById ||
+        ((mId) => {
+          if (mId) filters.setMchSearch(mId);
+          navigateTo('machines');
+        }),
       showToast: showToast || navigation?.showToast,
     },
 
@@ -471,11 +489,10 @@ export function useAppRouterProps({
       onUpdateCompTemplate: handleUpdateCompTemplate,
       onDeleteCompTemplate: handleDeleteCompTemplate,
       onOpenAddFamilyModal: () => navigateTo('comp_families'),
-      onNavigateToEntrepotByTemplate: navigation.handleNavigateToEntrepotByComp,
-      onNavigateToCompFamilies: (familyId) => {
-        if (familyId) navigation.handleNavigateToCompTemplates(familyId);
-        else navigateTo('comp_families');
-      },
+      onNavigateToEntrepotByTemplate:
+        navigation.handleNavigateToEntrepotByTemplate ||
+        ((tplId, famId) => navigation.handleNavigateToEntrepotByComp(famId, tplId)),
+      onNavigateToCompFamilies: navigation.handleNavigateToCompFamilies,
       onNavigateToQuickSortie: navigation.handleNavigateToQuickSortieFromCompTemplate,
       onNavigateToCompGroups: navigation.handleNavigateToCompGroups,
     },

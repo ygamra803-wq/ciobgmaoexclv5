@@ -7,6 +7,7 @@ import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGr
 import PartInfoIcon from '../../components/common/icons/PartInfoIcon';
 import { LayersIcon } from '../../components/common/icons/LayersIcon';
 import { useI18n } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   Search,
   Tag,
@@ -37,6 +38,9 @@ export default function PartTypeView({
   onNavigateToEntrepotByType,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -155,6 +159,7 @@ export default function PartTypeView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.id_type || !form.libelle) return;
     onAddPartType({
       ...form,
@@ -260,20 +265,22 @@ export default function PartTypeView({
               >
                 <PartInfoIcon className="w-3.5 h-3.5 text-slate-900" />
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveActionMenuId(activeActionMenuId === item.id_type ? null : item.id_type);
-                }}
-                className={`p-1.5 hover:bg-slate-100 transition cursor-pointer ${
-                  activeActionMenuId === item.id_type
-                    ? 'bg-slate-100 text-teal-700 font-bold'
-                    : 'text-slate-500 hover:text-slate-800'
-                }`}
-                title={t('part_types.action_menu_title', 'Actions et options')}
-              >
-                <MoreVertical className="w-3.5 h-3.5" />
-              </button>
+              {(canEditStock || canDeleteStock) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveActionMenuId(activeActionMenuId === item.id_type ? null : item.id_type);
+                  }}
+                  className={`p-1.5 hover:bg-slate-100 transition cursor-pointer ${
+                    activeActionMenuId === item.id_type
+                      ? 'bg-slate-100 text-teal-700 font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                  title={t('part_types.action_menu_title', 'Actions et options')}
+                >
+                  <MoreVertical className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {activeActionMenuId === item.id_type && (
@@ -286,35 +293,39 @@ export default function PartTypeView({
                     {item.id_type} — {item.libelle}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setToEdit({ ...item });
-                    setActiveActionMenuId(null);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                >
-                  <Edit2 className="w-3.5 h-3.5 text-teal-600" />
-                  <span>{t('part_types.menu_edit', 'Modifier ce type')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setToDelete(item);
-                    setActiveActionMenuId(null);
-                  }}
-                  className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                  <span>{t('part_types.menu_delete', 'Supprimer ce type')}</span>
-                </button>
+                {canEditStock && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setToEdit({ ...item });
+                      setActiveActionMenuId(null);
+                    }}
+                    className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5 text-teal-600" />
+                    <span>{t('part_types.menu_edit', 'Modifier ce type')}</span>
+                  </button>
+                )}
+                {canDeleteStock && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setToDelete(item);
+                      setActiveActionMenuId(null);
+                    }}
+                    className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                    <span>{t('part_types.menu_delete', 'Supprimer ce type')}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
         ),
       },
     ],
-    [t, partDesignations, warehouseItems, activeActionMenuId, onNavigateToPartDesignations, onNavigateToEntrepotByType]
+    [t, partDesignations, warehouseItems, activeActionMenuId, onNavigateToPartDesignations, onNavigateToEntrepotByType, canEditStock, canDeleteStock]
   );
 
   return (
@@ -342,21 +353,23 @@ export default function PartTypeView({
             title={t('part_types.formulas_button', 'Formules Excel (Types de Parts)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="emerald"
-            icon={LayersIcon}
-            showAddBadge={true}
-            onClick={() => {
-              const nextIdx = partTypes.length + 1;
-              setForm({
-                id_type: `TYPE-PRT${String(nextIdx).padStart(2, '0')}`,
-                libelle: '',
-              });
-              setShowAddModal(true);
-            }}
-            title={t('part_types.new_type_button', 'Nouveau Type de Part')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="emerald"
+              icon={LayersIcon}
+              showAddBadge={true}
+              onClick={() => {
+                const nextIdx = partTypes.length + 1;
+                setForm({
+                  id_type: `TYPE-PRT${String(nextIdx).padStart(2, '0')}`,
+                  libelle: '',
+                });
+                setShowAddModal(true);
+              }}
+              title={t('part_types.new_type_button', 'Nouveau Type de Part')}
+            />
+          )}
         </div>
       </div>
 
@@ -655,6 +668,7 @@ export default function PartTypeView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditStock) return;
                 onUpdatePartType(toEdit.id_type, toEdit);
                 setToEdit(null);
               }}
@@ -715,6 +729,7 @@ export default function PartTypeView({
 
               <button
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeletePartType(toDelete.id_type);
                   setToDelete(null);
                 }}

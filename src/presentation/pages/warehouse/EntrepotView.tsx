@@ -182,6 +182,20 @@ export default function EntrepotView({
   const canDeleteStock = usePermission('stock.delete');
   const canEditStock = usePermission('stock.edit');
   const canCreateStock = usePermission('stock.create');
+  const canCreateMovement = usePermission('movement.create');
+
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (tech) =>
+          tech &&
+          tech.is_active !== false &&
+          tech.actif !== false &&
+          String(tech.statut || '').toUpperCase() !== 'ARCHIVE' &&
+          String(tech.status || '').toUpperCase() !== 'ARCHIVEE'
+      ),
+    [technicians]
+  );
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -323,6 +337,7 @@ export default function EntrepotView({
 
   // Cascade Update: When a family prefix is changed, update state, families table, and rename existing components
   const handleCascadeFamilyPrefixUpdate = (familyId, newPrefix) => {
+    if (!canEditStock && !canCreateStock) return;
     const cleanPrefix = (newPrefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
     if (!familyId || !cleanPrefix) return;
 
@@ -407,6 +422,7 @@ export default function EntrepotView({
 
   // Open Add Modal initialized with smart auto-code
   const handleOpenAddModal = () => {
+    if (!canCreateStock) return;
     if (activeWarehouseTab === 'PARTS') {
       const defaultType = types[0]?.id_type || 'TYPE-MEC';
       const relDiags = diagnostics.filter((d) => d.id_type === defaultType);
@@ -426,7 +442,7 @@ export default function EntrepotView({
         rattachement_type: 'ENTREPOT',
         id_machine_registered: '',
         id_zone: zones[0]?.id_zone || '',
-        technician: technicians[0]?.nom || '',
+        technician: activeTechnicians[0]?.nom || '',
         status: 'En stock (Disponible)',
         emplacement: 'E-MAG-PDR-01',
         stockInitial: 1,
@@ -453,7 +469,7 @@ export default function EntrepotView({
         rattachement_type: 'ENTREPOT',
         id_machine_registered: '',
         id_zone: zones[0]?.id_zone || '',
-        technician: technicians[0]?.nom || '',
+        technician: activeTechnicians[0]?.nom || '',
         status: 'En stock (Disponible)',
         emplacement: 'E-MAG-A01',
         stockInitial: 1,
@@ -504,6 +520,7 @@ export default function EntrepotView({
 
   // Open Edit Modal
   const handleOpenEditModal = (item) => {
+    if (!canEditStock) return;
     setToEdit(item);
     setEditForm({
       id_warehouse_item: item.id_warehouse_item || '',
@@ -527,6 +544,7 @@ export default function EntrepotView({
   };
 
   const handleOpenQuickModal = (item, flow, action) => {
+    if (!canCreateMovement) return;
     // Adapt warehouse item into article format for QuickMovementModal
     const adaptedArticle = {
       id: item.id_warehouse_item,
@@ -623,6 +641,7 @@ export default function EntrepotView({
   // Submit Add
   const handleSubmitAdd = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!addForm.id_warehouse_item || !addForm.designation) {
       showToast?.('Veuillez renseigner le code et la désignation.', 'warning');
       return;
@@ -666,6 +685,7 @@ export default function EntrepotView({
   // Submit Edit
   const handleSubmitEdit = (e) => {
     e.preventDefault();
+    if (!canEditStock) return;
     if (!editForm.designation) {
       showToast?.('La désignation est obligatoire.', 'warning');
       return;
@@ -698,6 +718,7 @@ export default function EntrepotView({
 
   // Confirm Delete
   const handleConfirmDelete = () => {
+    if (!canDeleteStock) return;
     if (toDelete && onDeleteWarehouseItem) {
       onDeleteWarehouseItem(toDelete.id_warehouse_item);
     }
@@ -848,6 +869,7 @@ export default function EntrepotView({
     });
   }, [
     warehouseItems,
+    activeWarehouseTab,
     currentNatureFilter,
     activeKpiFilter,
     currentFamilyFilter,
@@ -1524,13 +1546,14 @@ export default function EntrepotView({
               setSelectedDetails={setSelectedDetails}
               handleOpenEditModal={handleOpenEditModal}
               setToDelete={setToDelete}
+              canCreateMovement={canCreateMovement}
               canEditStock={canEditStock}
               canDeleteStock={canDeleteStock}
               onNavigateToFamily={onNavigateToFamily}
               onNavigateToTemplate={onNavigateToTemplate}
               onNavigateToMachine={onNavigateToMachine}
               onNavigateToZone={onNavigateToZone}
-              handleOpenAddModal={handleOpenAddModal}
+              handleOpenAddModal={canCreateStock ? handleOpenAddModal : undefined}
             />
           ) : (
             <PartsTable
@@ -1552,6 +1575,7 @@ export default function EntrepotView({
               setSelectedDetails={setSelectedDetails}
               handleOpenEditModal={handleOpenEditModal}
               setToDelete={setToDelete}
+              canCreateMovement={canCreateMovement}
               canEditStock={canEditStock}
               canDeleteStock={canDeleteStock}
               onNavigateToType={onNavigateToType}
@@ -1559,7 +1583,7 @@ export default function EntrepotView({
               onNavigateToDiag={onNavigateToDiag}
               onNavigateToMachine={onNavigateToMachine}
               onNavigateToZone={onNavigateToZone}
-              handleOpenAddModal={handleOpenAddModal}
+              handleOpenAddModal={canCreateStock ? handleOpenAddModal : undefined}
             />
           )}
         </motion.div>
@@ -1974,7 +1998,7 @@ export default function EntrepotView({
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs focus:border-teal-500 outline-none"
                   >
                     <option value="">-- {t('entrepot.modal.responsible')} --</option>
-                    {technicians.map((tech) => (
+                    {activeTechnicians.map((tech) => (
                       <option key={tech.id_technician || tech.nom} value={tech.nom}>
                         {tech.nom} ({tech.id_technician})
                       </option>
@@ -2220,7 +2244,7 @@ export default function EntrepotView({
                     className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs focus:border-blue-500 outline-none"
                   >
                     <option value="">-- {t('entrepot.modal.responsible')} --</option>
-                    {technicians.map((tech) => (
+                    {activeTechnicians.map((tech) => (
                       <option key={tech.id_technician || tech.nom} value={tech.nom}>
                         {tech.nom} ({tech.id_technician})
                       </option>
@@ -2787,7 +2811,7 @@ export default function EntrepotView({
         initialAction={quickModalState.initialAction}
         zones={zones}
         machines={machines}
-        technicians={technicians}
+        technicians={activeTechnicians}
         mouvements={mouvements}
         onAddMouvement={onAddMouvement}
       />

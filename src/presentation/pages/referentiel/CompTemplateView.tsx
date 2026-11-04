@@ -9,6 +9,7 @@ import { Engine } from '../../components/common/icons/Engine';
 import { CubeIcon } from '../../components/common/icons/CubeIcon';
 import { SpokeIcon } from '../../components/common/icons/SpokeIcon';
 import { useI18n } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   Search,
   ArrowRight,
@@ -53,6 +54,9 @@ export default function CompTemplateView({
   onNavigateToCompGroups,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
   const [internalGroupFilter, setInternalGroupFilter] = useState('');
   const activeGroupFilter =
@@ -132,11 +136,11 @@ export default function CompTemplateView({
   );
 
   useEffect(() => {
-    if (quickCreateFamily) {
+    if (quickCreateFamily && canCreateStock) {
       handleFamilySelect(quickCreateFamily);
       setShowAddModal(true);
     }
-  }, [quickCreateFamily, handleFamilySelect]);
+  }, [quickCreateFamily, handleFamilySelect, canCreateStock]);
 
   const handleCloseAddModal = () => {
     setShowAddModal(false);
@@ -242,6 +246,7 @@ export default function CompTemplateView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.id_templates || !form.libelle || !form.id_family) return;
     onAddCompTemplate({
       ...form,
@@ -439,34 +444,32 @@ export default function CompTemplateView({
                       <Warehouse className="w-3.5 h-3.5 text-teal-600 group-hover:scale-110 transition-transform" />
                       <span>Filtrer l'Entrepôt</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToEdit({ ...item });
-                        setForm({
-                          id_templates: item.id_templates || '',
-                          libelle: item.libelle || '',
-                          id_family: item.id_family || '',
-                        });
-                        setShowAddModal(true);
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 transition cursor-pointer group"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
-                      <span>Modifier la Désignation</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToDelete(item);
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:scale-110 transition-transform" />
-                      <span>Supprimer du Référentiel</span>
-                    </button>
+                    {canEditStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToEdit({ ...item });
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 transition cursor-pointer group"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                        <span>Modifier la Désignation</span>
+                      </button>
+                    )}
+                    {canDeleteStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToDelete(item);
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:scale-110 transition-transform" />
+                        <span>Supprimer du Référentiel</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -475,7 +478,7 @@ export default function CompTemplateView({
         },
       },
     ],
-    [compFamilies, warehouseItems, activeActionMenuId, onNavigateToEntrepotByTemplate, onNavigateToCompFamilies]
+    [compFamilies, warehouseItems, activeActionMenuId, onNavigateToEntrepotByTemplate, onNavigateToCompFamilies, canEditStock, canDeleteStock]
   );
 
   return (
@@ -502,22 +505,24 @@ export default function CompTemplateView({
             title={t('components.template.formulas_button', 'Formules Excel (Désignations Composants)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="purple"
-            icon={CubeIcon}
-            showAddBadge={true}
-            onClick={() => {
-              const nextIdx = compTemplates.length + 1;
-              setForm({
-                id_templates: `TPL-CMP${String(nextIdx).padStart(2, '0')}`,
-                libelle: '',
-                id_family: compFamilies[0]?.id_family || '',
-              });
-              setShowAddModal(true);
-            }}
-            title={t('components.template.add_button', 'Nouvelle Désignation')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="purple"
+              icon={CubeIcon}
+              showAddBadge={true}
+              onClick={() => {
+                const nextIdx = compTemplates.length + 1;
+                setForm({
+                  id_templates: `TPL-CMP${String(nextIdx).padStart(2, '0')}`,
+                  libelle: '',
+                  id_family: compFamilies[0]?.id_family || '',
+                });
+                setShowAddModal(true);
+              }}
+              title={t('components.template.add_button', 'Nouvelle Désignation')}
+            />
+          )}
         </div>
       </div>
 
@@ -1017,6 +1022,7 @@ export default function CompTemplateView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditStock) return;
                 onUpdateCompTemplate(toEdit.id_templates, toEdit);
                 setToEdit(null);
               }}
@@ -1092,6 +1098,7 @@ export default function CompTemplateView({
               </button>
               <button
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeleteCompTemplate(toDelete.id_templates);
                   setToDelete(null);
                 }}

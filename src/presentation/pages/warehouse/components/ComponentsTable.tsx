@@ -49,6 +49,7 @@ export default function ComponentsTable({
   setSelectedDetails,
   handleOpenEditModal,
   setToDelete,
+  canCreateMovement = true,
   canEditStock = true,
   canDeleteStock = true,
   onNavigateToFamily,
@@ -464,15 +465,17 @@ export default function ComponentsTable({
                       <div className="relative inline-flex items-center justify-end action-menu-container">
                         <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
                           {/* Primary Action Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                            className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition flex items-center gap-1 cursor-pointer border-r border-slate-200"
-                            title="Sortie directe vers machine"
-                          >
-                            <Wrench className="w-3.5 h-3.5 text-slate-500" />
-                            <span className="hidden sm:inline">Sortie</span>
-                          </button>
+                          {canCreateMovement && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
+                              className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 text-xs font-bold transition flex items-center gap-1 cursor-pointer border-r border-slate-200"
+                              title="Sortie directe vers machine"
+                            >
+                              <Wrench className="w-3.5 h-3.5 text-slate-500" />
+                              <span className="hidden sm:inline">Sortie</span>
+                            </button>
+                          )}
 
                           {/* Dropdown Toggle */}
                           <button
@@ -501,45 +504,49 @@ export default function ComponentsTable({
                               </div>
                             </div>
 
-                            <div className="space-y-0.5">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer"
-                              >
-                                <Wrench className="w-3.5 h-3.5 text-rose-500" />
-                                <span>Sortie Interne (Machine / Zone)</span>
-                              </button>
+                            {canCreateMovement && (
+                              <>
+                                <div className="space-y-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Wrench className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Sortie Interne (Machine / Zone)</span>
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR_ATELIER')}
-                                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer"
-                              >
-                                <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
-                                <span>Retour Atelier / Démontage</span>
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR_ATELIER')}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
+                                    <span>Retour Atelier / Démontage</span>
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickModal(item, 'Entrée Externe', 'REAPPRO')}
-                                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition cursor-pointer"
-                              >
-                                <Plus className="w-3.5 h-3.5 text-emerald-500" />
-                                <span>Entrée Réception / Achat</span>
-                              </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Externe', 'REAPPRO')}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span>Entrée Réception / Achat</span>
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={() => handleOpenQuickModal(item, 'Ajustement & Recalibrage', 'INVENTAIRE')}
-                                className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition cursor-pointer"
-                              >
-                                <Scale className="w-3.5 h-3.5 text-amber-500" />
-                                <span>Ajustement Inventaire</span>
-                              </button>
-                            </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenQuickModal(item, 'Ajustement & Recalibrage', 'INVENTAIRE')}
+                                    className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition cursor-pointer"
+                                  >
+                                    <Scale className="w-3.5 h-3.5 text-amber-500" />
+                                    <span>Ajustement Inventaire</span>
+                                  </button>
+                                </div>
 
-                            <div className="my-1 border-t border-slate-100" />
+                                <div className="my-1 border-t border-slate-100" />
+                              </>
+                            )}
 
                             <div className="space-y-0.5">
                               <button

@@ -184,7 +184,10 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('comp_templates'));
   };
 
-  const handleNavigateToCompFamilies = () => {
+  const handleNavigateToCompFamilies = (familyId) => {
+    if (typeof familyId === 'string') {
+      setCompFamilyGroupFilter('');
+    }
     startTransition(() => setCurrentTab('comp_families'));
   };
 
@@ -193,11 +196,18 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('part_designations'));
   };
 
-  const handleNavigateToPartTypes = () => {
+  const handleNavigateToPartTypes = (_typeId) => {
     startTransition(() => setCurrentTab('part_types'));
   };
 
   const handleNavigateToEntrepotByComp = (familyId, templateId) => {
+    setWhFamilyFilter(familyId || 'ALL');
+    setWhTemplateFilter(templateId || 'ALL');
+    setWhNatureFilter('COMPONENT');
+    startTransition(() => setCurrentTab('entrepot'));
+  };
+
+  const handleNavigateToEntrepotByTemplate = (templateId, familyId) => {
     setWhFamilyFilter(familyId || 'ALL');
     setWhTemplateFilter(templateId || 'ALL');
     setWhNatureFilter('COMPONENT');
@@ -215,6 +225,18 @@ export function useAppNavigation({ setCurrentTab }) {
     setWhSearch(refOrPart || '');
     setWhNatureFilter('PART');
     startTransition(() => setCurrentTab('entrepot'));
+  };
+
+  const handleNavigateToMachineById = (machineId) => {
+    setMchSearch(machineId || '');
+    setMchFamilyFilter('ALL');
+    setMchTemplateFilter('ALL');
+    setMchZoneFilter('ALL');
+    startTransition(() => setCurrentTab('machines'));
+  };
+
+  const handleNavigateToZoneById = (_zoneId) => {
+    startTransition(() => setCurrentTab('zones'));
   };
 
   const handleNavigateToBlueprintsFiltered = (familyId, templateId) => {
@@ -324,8 +346,11 @@ export function useAppNavigation({ setCurrentTab }) {
       handleNavigateToPartDesignations,
       handleNavigateToPartTypes,
       handleNavigateToEntrepotByComp,
+      handleNavigateToEntrepotByTemplate,
       handleNavigateToEntrepotByType,
       handleNavigateToEntrepotByPart,
+      handleNavigateToMachineById,
+      handleNavigateToZoneById,
       handleNavigateToBlueprintsFiltered,
       handleNavigateToCreateBlueprintForTemplate,
     },

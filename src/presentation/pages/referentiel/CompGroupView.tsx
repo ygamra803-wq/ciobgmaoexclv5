@@ -5,6 +5,7 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   Search,
   ArrowRight,
@@ -39,6 +40,9 @@ export default function CompGroupView({
   onNavigateToCompTemplates,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState('code');
   const [sortOrder, setSortOrder] = useState('asc');
@@ -185,6 +189,7 @@ export default function CompGroupView({
 
   const handleAddSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.code || !form.libelle) return;
     const cleanCode = form.code.trim().toUpperCase().replace(/\s+/g, '_');
     const autoId =
@@ -205,6 +210,7 @@ export default function CompGroupView({
 
   const handleEditSubmit = (e) => {
     e.preventDefault();
+    if (!canEditStock) return;
     if (!editingGroup || !form.code || !form.libelle) return;
     const cleanCode = form.code.trim().toUpperCase().replace(/\s+/g, '_');
     const targetId = editingGroup.id || editingGroup.id_groupe;
@@ -472,37 +478,41 @@ export default function CompGroupView({
                     </span>
                   </button>
 
-                  <div className="border-t border-slate-100 my-1" />
+                  {(canEditStock || canDeleteStock) && <div className="border-t border-slate-100 my-1" />}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setEditingGroup(group);
-                      setForm({
-                        id: gId,
-                        code: group.code || '',
-                        libelle: group.libelle || '',
-                        description: group.description || '',
-                      });
-                    }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{t('components.group.menu_edit', 'Modifier ce groupe')}</span>
-                  </button>
+                  {canEditStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setEditingGroup(group);
+                        setForm({
+                          id: gId,
+                          code: group.code || '',
+                          libelle: group.libelle || '',
+                          description: group.description || '',
+                        });
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                      <span>{t('components.group.menu_edit', 'Modifier ce groupe')}</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setDeletingGroup(group);
-                    }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                    <span>{t('components.group.menu_delete', 'Supprimer ce groupe')}</span>
-                  </button>
+                  {canDeleteStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setDeletingGroup(group);
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{t('components.group.menu_delete', 'Supprimer ce groupe')}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -510,7 +520,7 @@ export default function CompGroupView({
         },
       },
     ],
-    [t, copiedId, groupStats, activeActionMenuId, onNavigateToCompFamilies, onNavigateToCompTemplates]
+    [t, copiedId, groupStats, activeActionMenuId, onNavigateToCompFamilies, onNavigateToCompTemplates, canEditStock, canDeleteStock]
   );
 
   return (
@@ -542,23 +552,25 @@ export default function CompGroupView({
             title={t('components.group.formulas_button', 'Aide & Architecture 4 Niveaux')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="indigo"
-            icon={Boxes}
-            showAddBadge={true}
-            onClick={() => {
-              const nextIdx = compGroups.length + 1;
-              setForm({
-                id: `GRP-CMP-${String(nextIdx).padStart(3, '0')}`,
-                code: '',
-                libelle: '',
-                description: '',
-              });
-              setShowAddModal(true);
-            }}
-            title={t('components.group.add_button', 'Nouveau Groupe')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="indigo"
+              icon={Boxes}
+              showAddBadge={true}
+              onClick={() => {
+                const nextIdx = compGroups.length + 1;
+                setForm({
+                  id: `GRP-CMP-${String(nextIdx).padStart(3, '0')}`,
+                  code: '',
+                  libelle: '',
+                  description: '',
+                });
+                setShowAddModal(true);
+              }}
+              title={t('components.group.add_button', 'Nouveau Groupe')}
+            />
+          )}
         </div>
       </div>
 
@@ -984,6 +996,7 @@ export default function CompGroupView({
               <button
                 type="button"
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeleteCompGroup(deletingGroup.id || deletingGroup.id_groupe);
                   setDeletingGroup(null);
                 }}

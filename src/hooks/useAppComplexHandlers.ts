@@ -629,10 +629,12 @@ export function useAppComplexHandlers({
   };
 
   const handleUpdatePartDesignation = (id, updatedDesig) => {
-    setPartDesignations((prev) => prev.map((d) => (d.id === id || d.ref === id ? updatedDesig : d)));
+    setPartDesignations((prev) =>
+      prev.map((d) => (d.id === id || d.ref === id || d.id_part === id ? updatedDesig : d))
+    );
     setWarehouseItems((prev) =>
       prev.map((w) =>
-        w.id_part_designation === id || w.ref === id
+        w.id_part_designation === id || w.ref === id || w.id_warehouse_item === id
           ? {
               ...w,
               ref: updatedDesig.ref || w.ref,
@@ -648,7 +650,11 @@ export function useAppComplexHandlers({
   };
   const handleDeletePartDesignation = (id) => {
     const linkedWh = (warehouseItems || []).filter(
-      (w) => w.id_part_designation === id || w.id_diag === id || w.ref === id
+      (w) =>
+        w.id_part_designation === id ||
+        w.id_diag === id ||
+        w.ref === id ||
+        w.id_warehouse_item === id
     ).length;
     const linkedBp = (blueprints || []).filter((b) =>
       (b.parts_theoriques || []).some((p) => p.id_part === id || p.ref === id)
@@ -660,7 +666,9 @@ export function useAppComplexHandlers({
       );
       return;
     }
-    setPartDesignations((prev) => prev.filter((d) => d.id !== id && d.ref !== id));
+    setPartDesignations((prev) =>
+      prev.filter((d) => d.id !== id && d.ref !== id && d.id_part !== id)
+    );
     showToast?.(`Désignation "${id}" supprimée.`, 'info');
   };
 

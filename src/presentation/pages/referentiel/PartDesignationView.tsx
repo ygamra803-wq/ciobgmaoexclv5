@@ -8,6 +8,7 @@ import CustomSelect from '../../components/common/CustomSelect';
 import PartInfoIcon from '../../components/common/icons/PartInfoIcon';
 import { LayersIcon } from '../../components/common/icons/LayersIcon';
 import { useI18n } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   Search,
   Tag,
@@ -43,6 +44,9 @@ export default function PartDesignationView({
   _onNavigateToQuickSortie,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -155,13 +159,27 @@ export default function PartDesignationView({
 
   const handleExportExcel = () => {
     const headers = ['Référence', 'Désignation Part', 'Type Parent', 'Stock Actuel', 'Emplacement'];
-    const rows = filtered.map((d) => [
-      d.ref || '',
-      d.designation || '',
-      d.id_type || '',
-      d.current_stock != null ? d.current_stock : '',
-      d.emplacement || '',
-    ]);
+    const rows = filtered.map((d) => {
+      const matchingItems = warehouseItems.filter(
+        (w) =>
+          (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
+          (w.id_warehouse_item === d.ref ||
+            w.ref === d.ref ||
+            w.id_part_designation === (d.ref || d.id_part) ||
+            w.designation === d.designation)
+      );
+      const totalStock = matchingItems.reduce(
+        (sum, w) => sum + (Number(w.stockActuel ?? w.quantite ?? 1) || 0),
+        0
+      );
+      return [
+        d.ref || d.id_part || '',
+        d.designation || '',
+        d.id_type || '',
+        totalStock,
+        d.emplacement || '',
+      ];
+    });
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
       [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
@@ -176,10 +194,12 @@ export default function PartDesignationView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.ref || !form.designation || !form.id_type) return;
     const cleanRef = form.ref.trim().toUpperCase();
     onAddPartDesignation({
       ...form,
+      id: cleanRef,
       id_part: cleanRef,
       ref: cleanRef,
       seuil: Number(form.seuil) || 0,
@@ -368,37 +388,32 @@ export default function PartDesignationView({
                     <Warehouse className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
                     <span>{t('designations.menu_filter_warehouse', "Filtrer l'Entrepôt")} ({pCount})</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setToEdit({ ...item });
-                      setForm({
-                        id_part: item.id_part || '',
-                        ref: item.ref || '',
-                        designation: item.designation || '',
-                        id_type: item.id_type || '',
-                        seuil: item.seuil || 5,
-                        emplacement: item.emplacement || 'E-MAG-RAYON-A01',
-                      });
-                      setShowAddModal(true);
-                    }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer border-t border-slate-100 mt-1 pt-2"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{t('designations.menu_edit', 'Modifier la Désignation')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveActionMenuId(null);
-                      setToDelete(item);
-                    }}
-                    className="w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                    <span>{t('designations.menu_delete', 'Supprimer du Référentiel')}</span>
-                  </button>
+                  {canEditStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setToEdit({ ...item });
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer border-t border-slate-100 mt-1 pt-2"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>{t('designations.menu_edit', 'Modifier la Désignation')}</span>
+                    </button>
+                  )}
+                  {canDeleteStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveActionMenuId(null);
+                        setToDelete(item);
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <span>{t('designations.menu_delete', 'Supprimer du Référentiel')}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -406,7 +421,7 @@ export default function PartDesignationView({
         },
       },
     ],
-    [t, partTypes, warehouseItems, activeActionMenuId, onNavigateToEntrepotByPart, onNavigateToPartTypes]
+    [t, partTypes, warehouseItems, activeActionMenuId, onNavigateToEntrepotByPart, onNavigateToPartTypes, canEditStock, canDeleteStock]
   );
 
   return (
@@ -434,25 +449,27 @@ export default function PartDesignationView({
             title={t('header.formulas_excel', 'Formules Excel (Désignations Parts)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="blue"
-            icon={PartInfoIcon}
-            showAddBadge={true}
-            onClick={() => {
-              const nextIdx = partDesignations.length + 1;
-              setForm({
-                id_part: `PRT-${String(nextIdx).padStart(2, '0')}`,
-                ref: `PRT-${String(nextIdx).padStart(2, '0')}`,
-                designation: '',
-                id_type: partTypes[0]?.id_type || '',
-                seuil: 5,
-                emplacement: 'E-MAG-RAYON-A01',
-              });
-              setShowAddModal(true);
-            }}
-            title={t('common.add', 'Nouvelle Désignation Part')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="blue"
+              icon={PartInfoIcon}
+              showAddBadge={true}
+              onClick={() => {
+                const nextIdx = partDesignations.length + 1;
+                setForm({
+                  id_part: `PRT-${String(nextIdx).padStart(2, '0')}`,
+                  ref: `PRT-${String(nextIdx).padStart(2, '0')}`,
+                  designation: '',
+                  id_type: partTypes[0]?.id_type || '',
+                  seuil: 5,
+                  emplacement: 'E-MAG-RAYON-A01',
+                });
+                setShowAddModal(true);
+              }}
+              title={t('common.add', 'Nouvelle Désignation Part')}
+            />
+          )}
         </div>
       </div>
 
@@ -923,7 +940,8 @@ export default function PartDesignationView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                onUpdatePartDesignation(toEdit.ref || toEdit.id_part, toEdit);
+                if (!canEditStock) return;
+                onUpdatePartDesignation(toEdit.id || toEdit.ref || toEdit.id_part, toEdit);
                 setToEdit(null);
               }}
               className="space-y-3"
@@ -1032,7 +1050,8 @@ export default function PartDesignationView({
 
               <button
                 onClick={() => {
-                  onDeletePartDesignation(toDelete.ref || toDelete.id_part);
+                  if (!canDeleteStock) return;
+                  onDeletePartDesignation(toDelete.id || toDelete.ref || toDelete.id_part);
                   setToDelete(null);
                 }}
                 className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-pointer"
