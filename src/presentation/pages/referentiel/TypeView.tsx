@@ -5,6 +5,7 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
+import { usePermission } from '../../components/common/PermissionGate';
 import { useI18n } from '../../../i18n/I18nContext';
 import {
   Tag,
@@ -42,6 +43,9 @@ export default function TypeView({
   onQuickCreateDesignation,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -214,6 +218,7 @@ export default function TypeView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.id_type || !form.libelle) return;
     onAddType(form);
     setForm({ id_type: '', libelle: '' });
@@ -323,21 +328,23 @@ export default function TypeView({
           return (
             <div className="relative inline-flex items-center justify-center action-menu-container">
               <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onQuickCreateDesignation) {
-                      onQuickCreateDesignation(typeVal);
-                    } else if (onNavigateToDesignationsFiltered) {
-                      onNavigateToDesignationsFiltered(typeVal);
-                    }
-                    setActiveActionMenuId(null);
-                  }}
-                  className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
-                  title={t('article_types.quick_create_desig_title', 'Créer une Désignation pour ce type')}
-                >
-                  <BadgePlus className="w-3.5 h-3.5 text-slate-900" />
-                </button>
+                {canCreateStock && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onQuickCreateDesignation) {
+                        onQuickCreateDesignation(typeVal);
+                      } else if (onNavigateToDesignationsFiltered) {
+                        onNavigateToDesignationsFiltered(typeVal);
+                      }
+                      setActiveActionMenuId(null);
+                    }}
+                    className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
+                    title={t('article_types.quick_create_desig_title', 'Créer une Désignation pour ce type')}
+                  >
+                    <BadgePlus className="w-3.5 h-3.5 text-slate-900" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -365,26 +372,28 @@ export default function TypeView({
                     </div>
                   </div>
                   <div className="space-y-0.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        if (onQuickCreateDesignation) {
-                          onQuickCreateDesignation(typeVal);
-                        } else if (onNavigateToDesignationsFiltered) {
-                          onNavigateToDesignationsFiltered(typeVal);
-                        }
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 flex items-center justify-between transition cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <BadgePlus className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
-                        <span>{t('article_types.new_designation', 'Nouvelle Désignation')}</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-bold border border-emerald-200/60">
-                        +
-                      </span>
-                    </button>
+                    {canCreateStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          if (onQuickCreateDesignation) {
+                            onQuickCreateDesignation(typeVal);
+                          } else if (onNavigateToDesignationsFiltered) {
+                            onNavigateToDesignationsFiltered(typeVal);
+                          }
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 flex items-center justify-between transition cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <BadgePlus className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                          <span>{t('article_types.new_designation', 'Nouvelle Désignation')}</span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded font-bold border border-emerald-200/60">
+                          +
+                        </span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -421,28 +430,32 @@ export default function TypeView({
                         {articleCount}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToEdit({ ...item });
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer group border-t border-slate-100 mt-1 pt-2"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
-                      <span>{t('article_types.edit_type', 'Modifier ce Type')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToDelete(item);
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
-                      <span>{t('article_types.delete_type', 'Supprimer ce Type')}</span>
-                    </button>
+                    {canEditStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToEdit({ ...item });
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer group border-t border-slate-100 mt-1 pt-2"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
+                        <span>{t('article_types.edit_type', 'Modifier ce Type')}</span>
+                      </button>
+                    )}
+                    {canDeleteStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToDelete(item);
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-rose-700 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
+                        <span>{t('article_types.delete_type', 'Supprimer ce Type')}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -451,7 +464,7 @@ export default function TypeView({
         },
       },
     ],
-    [designations, stockItems, activeActionMenuId, t]
+    [designations, stockItems, activeActionMenuId, canCreateStock, canEditStock, canDeleteStock, t]
   );
 
   return (
@@ -479,14 +492,16 @@ export default function TypeView({
             title={t('article_types.formulas_button', "Formules Excel (Types d'Articles)")}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="cyan"
-            icon={Tag}
-            showAddBadge={true}
-            onClick={() => setShowAddModal(true)}
-            title={t('article_types.new_type_button', 'Nouveau Type')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="cyan"
+              icon={Tag}
+              showAddBadge={true}
+              onClick={() => setShowAddModal(true)}
+              title={t('article_types.new_type_button', 'Nouveau Type')}
+            />
+          )}
         </div>
       </div>
 
@@ -801,6 +816,7 @@ export default function TypeView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditStock) return;
                 onUpdateType(toEdit.id_type, toEdit);
                 setToEdit(null);
               }}
@@ -863,6 +879,7 @@ export default function TypeView({
               </button>
               <button
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeleteType(toDelete.id_type);
                   setToDelete(null);
                 }}

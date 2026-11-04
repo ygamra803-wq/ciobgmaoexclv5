@@ -52,7 +52,7 @@ export default function AppRouter({
   // Page load orchestrator: manages per-tab first load skeletons and instant visited transitions
   const { isCurrentTabLoading } = usePageOrchestrator(currentTab);
 
-  const isTabAllowed = !currentUser || AuthorizationService.canAccessTab(currentUser, currentTab);
+  const isTabAllowed = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, currentTab);
 
   return (
     <StockContext.Provider value={props.stock}>

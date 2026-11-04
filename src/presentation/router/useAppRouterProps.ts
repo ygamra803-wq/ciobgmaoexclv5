@@ -319,6 +319,7 @@ export function useAppRouterProps({
       },
       onNavigateToWarehouse: () => navigateTo('entrepot'),
       onNavigateToStockFilteredByRef: navigation.handleNavigateToStockFilteredByRef,
+      showToast: showToast || navigation?.showToast,
     },
 
     entrepot: {

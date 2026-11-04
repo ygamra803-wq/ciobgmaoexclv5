@@ -55,6 +55,7 @@ import SortieExterneBobinageTab from './components/SortieExterneBobinageTab';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { applyReplacementMovementToLedger } from '../../../core/domain';
 import { useAuth } from '../../../context/AuthContext';
+import { usePermission } from '../../components/common/PermissionGate';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   isTechnicianRole,
@@ -307,8 +308,11 @@ export default function SortieRapideView({
   onOpenAddChef,
   onOpenAddOperator,
   _onNavigateToWarehouse,
+  showToast = null,
 }) {
   const { user } = useAuth();
+  const canCreateMovement = usePermission('movement.create');
+  const canEditMovement = usePermission('movement.edit');
   const isTechUser = isTechnicianRole(user);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
@@ -390,8 +394,9 @@ export default function SortieRapideView({
   ]);
 
   const handleOpenReviewDemandModal = (dem: any) => {
+    if (!canEditMovement) return;
     setReviewDemand(dem);
-    setReviewCodeBonMagasin(dem.code_bon_magasin || dem.code_bon_tech || '');
+    setReviewCodeBonMagasin(dem.code_bon_tech || dem.code_bon_magasin || '');
     setReviewMergeMovementId('');
     setReviewDemandItems(
       Array.isArray(dem.items) ? dem.items.map((it: any) => ({ ...it })) : []
@@ -402,7 +407,7 @@ export default function SortieRapideView({
   const handleReviewDemandDecision = (
     decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED'
   ) => {
-    if (!reviewDemand) return;
+    if (!canEditMovement || !reviewDemand) return;
     if (
       (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') &&
       !String(reviewDemandNote || '').trim()
@@ -1124,7 +1129,12 @@ export default function SortieRapideView({
   // Add Item to Current Movement
   const handleAddItem = () => {
     if (mouvementItems.length >= 5) {
-      alert('Vous pouvez ajouter jusqu’à 5 articles par bon.');
+      if (showToast) {
+        showToast('Vous pouvez ajouter jusqu’à 5 articles maximum par bon.', 'warning');
+      } else {
+        setValidationErrors(['Vous pouvez ajouter jusqu’à 5 articles maximum par bon.']);
+        setShowValidationAlert(true);
+      }
       return;
     }
     const defaultItem = unifiedSearchCatalog.find((c) => c.source === form.item_source) || unifiedSearchCatalog[0];
@@ -1344,6 +1354,14 @@ export default function SortieRapideView({
       e.preventDefault();
     }
 
+    if (!user || (!isTechUser && !canCreateMovement)) {
+      setValidationErrors([
+        "Accès restreint : votre profil ne dispose pas des privilèges requis pour émettre un mouvement de stock.",
+      ]);
+      setShowValidationAlert(true);
+      return false;
+    }
+
     const { isValid, errors } = getFormValidationState();
 
     if (!isValid) {
@@ -1534,6 +1552,7 @@ export default function SortieRapideView({
 
   // Convert Pending Commande / Demande to Entrée Externe in 1 click
   const handleFulfillOrder = (order) => {
+    if (!canCreateMovement) return;
     setForm((prev) => ({
       ...prev,
       type: 'Entrée Externe',
@@ -1561,6 +1580,7 @@ export default function SortieRapideView({
 
   // Convert External Repair Return to Entrée Externe in 1 click
   const handleReceiveRepairReturn = (repairMvt) => {
+    if (!canCreateMovement) return;
     setForm((prev) => ({
       ...prev,
       type: 'Entrée Externe',
@@ -1932,6 +1952,7 @@ export default function SortieRapideView({
               warehouseItems={warehouseItems}
               technicians={technicians}
               onAddMouvement={onAddMouvement}
+              showToast={showToast}
             />
           </motion.div>
         )}

@@ -25,6 +25,7 @@ import SortieExterneService from '../../../../application/services/SortieExterne
 import { Logger } from '../../../../core/logger/LoggerService';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { confirmAction } from '../../../../utils/confirmAction';
+import { usePermission } from '../../../components/common/PermissionGate';
 
 export default function SortieExterneBobinageTab({
   sorties = [],
@@ -41,6 +42,8 @@ export default function SortieExterneBobinageTab({
   onAddMouvement = null, // Sync back to movement journal if desired
   showToast = null,
 }) {
+  const canCreateMovement = usePermission('movement.create');
+  const canDeleteMovement = usePermission('movement.delete');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [fournisseurFilter, setFournisseurFilter] = useState('ALL');
@@ -144,6 +147,7 @@ export default function SortieExterneBobinageTab({
 
   // Prepare next code when opening new modal
   const handleOpenNewModal = () => {
+    if (!canCreateMovement) return;
     const nextCode = SortieExterneService.getNextCode(sorties);
     setFormData({
       code: nextCode,
@@ -189,6 +193,7 @@ export default function SortieExterneBobinageTab({
   // Submit new / edited sortie
   const handleSubmitSortie = (e) => {
     e.preventDefault();
+    if (!canCreateMovement) return;
     try {
       let created;
       if (onAddSortie) {
@@ -217,12 +222,15 @@ export default function SortieExterneBobinageTab({
       }
     } catch (err) {
       Logger.error('Erreur creation sortie externe:', err);
-      alert('Erreur lors de la création de la sortie.');
+      if (showToast) {
+        showToast('Erreur lors de la création de la sortie externe.', 'error');
+      }
     }
   };
 
   // Handle Mark as Returned
   const handleOpenReturnModal = (sortie) => {
+    if (!canCreateMovement) return;
     setSelectedSortie(sortie);
     setReturnFormData({
       date_arrivee_reelle: new Date().toISOString().split('T')[0],
@@ -235,7 +243,7 @@ export default function SortieExterneBobinageTab({
 
   const handleConfirmReturn = (e) => {
     e.preventDefault();
-    if (!selectedSortie) return;
+    if (!canCreateMovement || !selectedSortie) return;
     if (onMarkSortieReturned) {
       onMarkSortieReturned(selectedSortie.id, returnFormData);
     } else {
@@ -247,6 +255,7 @@ export default function SortieExterneBobinageTab({
 
   // Handle Mark as Mounted
   const handleOpenMountModal = (sortie) => {
+    if (!canCreateMovement) return;
     setSelectedSortie(sortie);
     setMountFormData({
       date_montage: new Date().toISOString().split('T')[0],
@@ -259,7 +268,7 @@ export default function SortieExterneBobinageTab({
 
   const handleConfirmMount = (e) => {
     e.preventDefault();
-    if (!selectedSortie) return;
+    if (!canCreateMovement || !selectedSortie) return;
     if (onMarkSortieMounted) {
       onMarkSortieMounted(selectedSortie.id, mountFormData);
     } else {
@@ -271,6 +280,7 @@ export default function SortieExterneBobinageTab({
 
   // Delete sortie
   const handleDeleteSortie = async (sortie) => {
+    if (!canDeleteMovement) return;
     if (
       await confirmAction({
         title: 'Supprimer la fiche de sortie',
@@ -650,14 +660,16 @@ export default function SortieExterneBobinageTab({
           </div>
 
           {/* Action: Nouvelle Sortie Externe Button */}
-          <button
-            type="button"
-            onClick={handleOpenNewModal}
-            className="h-10 px-4 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nouvelle Sortie Bobinage</span>
-          </button>
+          {canCreateMovement && (
+            <button
+              type="button"
+              onClick={handleOpenNewModal}
+              className="h-10 px-4 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nouvelle Sortie Bobinage</span>
+            </button>
+          )}
         </div>
 
         {/* Filter Pills */}

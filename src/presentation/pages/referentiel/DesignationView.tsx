@@ -6,6 +6,7 @@ import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
+import { usePermission } from '../../components/common/PermissionGate';
 import { useI18n } from '../../../i18n/I18nContext';
 import {
   BadgeCheck,
@@ -70,6 +71,9 @@ export default function DesignationView({
   _onNavigateToQuickSortie,
 }) {
   const { t } = useI18n();
+  const canCreateStock = usePermission('stock.create');
+  const canEditStock = usePermission('stock.edit');
+  const canDeleteStock = usePermission('stock.delete');
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -148,11 +152,11 @@ export default function DesignationView({
   );
 
   useEffect(() => {
-    if (quickCreateType) {
+    if (quickCreateType && canCreateStock) {
       handleTypeSelect(quickCreateType);
       setShowAddModal(true);
     }
-  }, [quickCreateType, handleTypeSelect]);
+  }, [quickCreateType, canCreateStock, handleTypeSelect]);
 
   // Filtered and sorted designations
   const filtered = designations
@@ -367,6 +371,7 @@ export default function DesignationView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreateStock) return;
     if (!form.id_type || !form.designation) return;
 
     onAddDesignation(form);
@@ -600,37 +605,40 @@ export default function DesignationView({
                       <Warehouse className="w-3.5 h-3.5 text-cyan-600 group-hover:scale-110 transition-transform" />
                       <span>{t('designation_articles.filter_stock_action', 'Filtrer le Stock Actuel ({{count}})', { count: currentStock })}</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToEdit(item);
-                        setForm({
-                          id_type: item.id_type || item.type || '',
-                          ref: item.ref || item.id_designation || item.id_diag || '',
-                          designation: item.designation || item.libelle || item.nom || '',
-                          stockInitial: item.stockInitial || currentStock || 5,
-                          seuil: item.seuil || 3,
-                          emplacement: item.emplacement || 'A1-R1',
-                        });
-                        setShowAddModal(true);
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 transition cursor-pointer group"
-                    >
-                      <Edit2 className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
-                      <span>{t('designation_articles.edit_designation', 'Modifier la Désignation')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveActionMenuId(null);
-                        setToDelete(item);
-                      }}
-                      className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:scale-110 transition-transform" />
-                      <span>{t('designation_articles.delete_designation', 'Supprimer du Référentiel')}</span>
-                    </button>
+                    {canEditStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToEdit({
+                            ...item,
+                            id_type: item.id_type || item.type || '',
+                            ref: item.ref || item.id_designation || item.id_diag || '',
+                            designation: item.designation || item.libelle || item.nom || '',
+                            stockInitial: item.stockInitial ?? currentStock ?? 5,
+                            seuil: item.seuil ?? 3,
+                            emplacement: item.emplacement || 'A1-R1',
+                          });
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 transition cursor-pointer group"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                        <span>{t('designation_articles.edit_designation', 'Modifier la Désignation')}</span>
+                      </button>
+                    )}
+                    {canDeleteStock && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveActionMenuId(null);
+                          setToDelete(item);
+                        }}
+                        className="w-full px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2 transition cursor-pointer group"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-500 group-hover:scale-110 transition-transform" />
+                        <span>{t('designation_articles.delete_designation', 'Supprimer du Référentiel')}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -639,7 +647,7 @@ export default function DesignationView({
         },
       },
     ],
-    [stockItems, activeActionMenuId, onNavigateToStockFilteredByRef, t]
+    [stockItems, activeActionMenuId, canEditStock, canDeleteStock, onNavigateToStockFilteredByRef, t]
   );
 
   return (
@@ -667,21 +675,23 @@ export default function DesignationView({
             title={t('designation_articles.formulas_button', "Formules Excel (Désignations Articles)")}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="indigo"
-            icon={BadgeCheck}
-            showAddBadge={true}
-            onClick={() => {
-              const initialType =
-                desigTypeFilter !== 'ALL'
-                  ? desigTypeFilter
-                  : types[0]?.id_type || types[0] || 'Foret';
-              handleTypeSelect(initialType);
-              setShowAddModal(true);
-            }}
-            title={t('designation_articles.new_designation_button', 'Nouvelle Désignation')}
-          />
+          {canCreateStock && (
+            <Action3DButton
+              variant="circle"
+              color="indigo"
+              icon={BadgeCheck}
+              showAddBadge={true}
+              onClick={() => {
+                const initialType =
+                  desigTypeFilter !== 'ALL'
+                    ? desigTypeFilter
+                    : types[0]?.id_type || types[0] || 'Foret';
+                handleTypeSelect(initialType);
+                setShowAddModal(true);
+              }}
+              title={t('designation_articles.new_designation_button', 'Nouvelle Désignation')}
+            />
+          )}
         </div>
       </div>
 
@@ -1164,6 +1174,7 @@ export default function DesignationView({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                if (!canEditStock) return;
                 onUpdateDesignation(toEdit.ref, toEdit);
                 setToEdit(null);
               }}
@@ -1280,6 +1291,7 @@ export default function DesignationView({
               </button>
               <button
                 onClick={() => {
+                  if (!canDeleteStock) return;
                   onDeleteDesignation(toDelete.ref);
                   setToDelete(null);
                 }}

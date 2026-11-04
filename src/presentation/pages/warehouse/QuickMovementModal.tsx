@@ -159,9 +159,6 @@ export default function QuickMovementModal({
       if (onAddMouvement) {
         onAddMouvement(mvtRecord);
       }
-      if (onDirectAdjustStock) {
-        onDirectAdjustStock(article, Number(targetStock));
-      }
     } else {
       // Delta Movement
       const isOut = flowType === 'Sortie Interne' || (flowType === 'Ajustement' && (actionId === 'AJUSTEMENT_SORTIE' || actionId === 'INVENTAIRE'));
