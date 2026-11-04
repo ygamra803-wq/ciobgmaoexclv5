@@ -49,7 +49,7 @@ function HeaderShiftClock({ tooltip }: { tooltip?: string }) {
 
   return (
     <div
-      className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100/90 border border-slate-200/90 text-slate-700 text-[11px] font-mono font-bold tabular-nums shadow-2xs select-none shrink-0"
+      className="hidden 2xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100/90 border border-slate-200/90 text-slate-700 text-[11px] font-mono font-bold tabular-nums shadow-2xs select-none shrink-0"
       title={tooltip || 'Horloge de poste industrielle (Temps Réel)'}
       aria-label={`Heure locale de poste : ${currentTime}`}
     >
@@ -539,38 +539,36 @@ export default function Header({
       className={`sticky select-none transition-all ${
         isStandardFixed
           ? 'top-0 z-30 w-full lg:w-[calc(100%-270px)] lg:ml-[270px] bg-white/95 backdrop-blur-md border-b border-zinc-200/90 shadow-2xs my-0 rounded-none h-16 flex items-center'
-          : 'top-2 sm:top-3 z-30 w-[calc(100%-0.75rem)] sm:w-[calc(100%-1.25rem)] lg:w-[calc(100%-2rem)] xl:w-[calc(100%-2.5rem)] 2xl:w-[calc(100%-3rem)] max-w-[2200px] mx-auto rounded-[22px] sm:rounded-full bg-white/95 backdrop-blur-xl border border-zinc-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] my-2 sm:my-3 overflow-hidden'
+          : 'top-2 sm:top-3 z-30 w-[calc(100%-0.75rem)] sm:w-[calc(100%-1.25rem)] lg:w-[calc(100%-2rem)] xl:w-[calc(100%-2.5rem)] 2xl:w-[calc(100%-3rem)] max-w-[2200px] mx-auto rounded-[22px] sm:rounded-full bg-white/95 backdrop-blur-xl border border-zinc-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] my-2 sm:my-3 overflow-visible'
       }`}
     >
-      <div className={`flex items-center justify-between gap-1.5 sm:gap-3 w-full min-w-0 ${isStandardFixed ? 'px-4 sm:px-6 py-0' : 'px-2.5 sm:px-5 py-2'}`}>
+      <div className={`flex items-center justify-between gap-1.5 sm:gap-2.5 w-full min-w-0 ${isStandardFixed ? 'px-4 sm:px-6 py-0' : 'px-2.5 sm:px-4 py-1.5 sm:py-2'}`}>
         {/* Left: Brand Capsule & Breadcrumbs (Clean & De-duplicated in Fixed Mode) */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 min-w-0">
-          {/* Menu Drawer Button: visible on mobile always; in floating mode also on desktop */}
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
+          {/* Menu Drawer Button: visible exclusively on mobile/tablet (drawer); hidden on desktop where sidebar (fixed or floating dock) is already active */}
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className={`w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-white border border-zinc-200/90 items-center justify-center text-zinc-700 hover:text-black hover:border-zinc-300 shadow-xs hover:shadow-md cursor-pointer transition-all shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
-              isStandardFixed ? 'flex lg:hidden' : 'flex'
-            }`}
+            className="flex lg:hidden w-8 h-8 rounded-full bg-white border border-zinc-200/90 items-center justify-center text-zinc-700 hover:text-black hover:border-zinc-300 shadow-xs hover:shadow-md cursor-pointer transition-all shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
             aria-label="Ouvrir le menu de navigation complet"
             title="Menu complet des modules et sections (Toutes les pages)"
             aria-haspopup="dialog"
           >
-            <Menu size={16} />
+            <Menu size={15} />
           </button>
 
           {/* Brand Capsule Pill: Only shown in Floating Mode (In Fixed mode, sidebar already has the brand logo & title) */}
           {!isStandardFixed && (
             <button
               onClick={() => setCurrentTab('dashboard')}
-              className="flex items-center gap-2 sm:gap-2.5 px-2 sm:px-3 py-1.5 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+              className="flex items-center gap-2 px-1.5 xl:px-2.5 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
               title="CIOB GMAO Light - Dashboard"
               aria-label="Tableau de bord CIOB GMAO Light"
             >
               {/* Dedicated 3D-styled green Excel workbook SVG Icon */}
-              <div className="relative w-7 sm:w-8 h-7 sm:h-8 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-xs shrink-0 ring-2 ring-emerald-500/20 overflow-hidden group-hover:scale-105 transition-transform">
+              <div className="relative w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white shadow-xs shrink-0 ring-2 ring-emerald-500/20 overflow-hidden group-hover:scale-105 transition-transform">
                 <div className="absolute inset-0 opacity-20 bg-[linear-gradient(to_right,#ffffff_1px,transparent_1px),linear-gradient(to_bottom,#ffffff_1px,transparent_1px)] bg-[size:4px_4px]" />
                 <svg
-                  className="w-3.5 sm:w-4 h-3.5 sm:h-4 text-white relative z-10"
+                  className="w-3.5 h-3.5 text-white relative z-10"
                   viewBox="0 0 24 24"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
@@ -630,14 +628,14 @@ export default function Header({
               </div>
 
               {/* Brand Title & Subtitle */}
-              <div className="text-left leading-tight pr-0.5 hidden sm:block">
-                <div className="font-bold text-[12.5px] tracking-tight text-zinc-900 flex items-center gap-1">
+              <div className="text-left leading-tight pr-0.5 hidden xl:block">
+                <div className="font-bold text-[12px] tracking-tight text-zinc-900 flex items-center gap-1">
                   <span>Ciob PDR</span>
                   <span className="text-[8.5px] font-extrabold uppercase px-1 py-0.1 rounded-md bg-emerald-500/15 text-emerald-700 border border-emerald-500/25">
                     XLS
                   </span>
                 </div>
-                <div className="text-[9.5px] font-semibold text-emerald-700 tracking-tight truncate max-w-[120px]">
+                <div className="hidden 2xl:block text-[9.5px] font-semibold text-emerald-700 tracking-tight truncate max-w-[115px]">
                   Pièces de Rechange
                 </div>
               </div>
@@ -646,10 +644,10 @@ export default function Header({
 
           {/* Smart Breadcrumb Navigation Capsule */}
           <div
-            className={`flex items-center gap-2 max-w-[200px] lg:max-w-[260px] xl:max-w-[380px] shrink-0 ${
+            className={`flex items-center gap-1.5 min-w-0 shrink max-w-[140px] lg:max-w-[180px] xl:max-w-[240px] 2xl:max-w-[360px] ${
               isStandardFixed
                 ? 'px-2.5 py-1 rounded-lg bg-zinc-100/80 border border-zinc-200/70 text-xs shadow-none'
-                : 'hidden md:flex px-2.5 sm:px-3 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
+                : 'hidden md:flex px-2.5 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
             }`}
             role="navigation"
             aria-label="Fil d'Ariane intelligent (Breadcrumbs)"
@@ -819,7 +817,7 @@ export default function Header({
                     }`}
                     aria-hidden="true"
                   />
-                  <span className="hidden sm:inline text-[11px] tracking-tight">{t('header.to_validate', 'À valider')}</span>
+                  <span className="hidden 2xl:inline text-[11px] tracking-tight">{t('header.to_validate', 'À valider')}</span>
                   <span
                     className={`px-1.5 py-0.2 rounded-full text-[10px] font-black font-mono leading-tight ${
                       isValidationCenterActive
@@ -860,21 +858,21 @@ export default function Header({
                 </span>
                 <button
                   onClick={onSaveWithTracking}
-                  className="w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center transition shadow-[0_2px_8px_rgba(4,120,87,0.25)] cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                  className="w-8 h-8 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center transition shadow-[0_2px_8px_rgba(4,120,87,0.25)] cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
                   title={`${t('header.save_to_excel', 'Enregistrer vers Excel')} (${linkedFileName})`}
                   aria-label="Sauvegarder dans le fichier Excel lié"
                 >
-                  <Save size={16} aria-hidden="true" />
+                  <Save size={15} aria-hidden="true" />
                 </button>
               </div>
             ) : (
               <button
                 onClick={onDirectLink}
-                className="w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 flex items-center justify-center text-emerald-700 hover:text-emerald-900 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                className="w-8 h-8 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 flex items-center justify-center text-emerald-700 hover:text-emerald-900 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
                 title={t('header.link_excel', 'Lier un fichier Excel (.xlsx)')}
                 aria-label="Lier directement un fichier Excel .xlsx"
               >
-                <Link size={16} className="text-emerald-600 shrink-0" aria-hidden="true" />
+                <Link size={15} className="text-emerald-600 shrink-0" aria-hidden="true" />
               </button>
             )
           )}
@@ -883,11 +881,11 @@ export default function Header({
 
           {/* Explicit Server Sync Capsule & Popover Menu (RBAC Guarded) */}
           {canSyncServer && (
-            <div className="relative" ref={syncMenuRef}>
+            <div className="relative shrink-0" ref={syncMenuRef}>
               <button
                 type="button"
                 onClick={() => setSyncMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-200/90 text-emerald-800 text-xs font-bold transition shadow-[0_2px_6px_rgba(4,120,87,0.08)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-200/90 text-emerald-800 text-xs font-bold transition shadow-[0_2px_6px_rgba(4,120,87,0.08)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
                 title={t('header.sync_server', 'Synchronisation Serveur (Sauvegarde / Restauration)')}
                 aria-label="Synchronisation Serveur gmao_state.json"
                 aria-expanded={syncMenuOpen}
@@ -897,15 +895,15 @@ export default function Header({
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
                 </span>
                 <Cloud size={14} className="text-emerald-700 group-hover:scale-110 transition-transform shrink-0" />
-                <span className="hidden xl:inline text-[11px] font-extrabold tracking-tight">{t('header.sync_server', 'Sync Serveur')}</span>
+                <span className="hidden 2xl:inline text-[11px] font-extrabold tracking-tight">{t('header.sync_server', 'Sync Serveur')}</span>
                 <ChevronDown
                   size={12}
-                  className={`text-emerald-600 transition-transform duration-200 ${syncMenuOpen ? 'rotate-180' : ''}`}
+                  className={`text-emerald-600 transition-transform duration-200 shrink-0 ${syncMenuOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
               {syncMenuOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200/90 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <SyncButtons
                     variant="dropdown"
                     showToast={showToast}
@@ -920,25 +918,25 @@ export default function Header({
           {headerClockEnabled && <HeaderShiftClock tooltip={t('header.clock_tooltip', 'Horloge de poste industrielle (Temps Réel)')} />}
 
           {/* Offline Language Switcher (Fixed-width trigger + floating popover — NH-13) */}
-          <LanguageSwitcher className="inline-flex" />
+          <LanguageSwitcher />
 
           {/* Export Excel Dropdown Menu - Only in Floating Mode & RBAC Guarded (Fixed sidebar already has Export button) */}
           {!isStandardFixed && canExportData && (
-            <div className="relative hidden sm:block" ref={topologyMenuRef}>
+            <div className="relative hidden sm:block shrink-0" ref={topologyMenuRef}>
               <button
                 onClick={() => setTopologyMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 pl-2.5 pr-2 py-1.5 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
                 title={t('header.export_excel', 'Exporter Excel & 3-Workbook Topology')}
                 aria-label="Menu d'exportation Excel et topologie industrielle"
                 aria-expanded={topologyMenuOpen}
               >
-                <Download size={14} className="text-emerald-400 group-hover:scale-110 transition-transform" aria-hidden="true" />
-                <span className="text-[11px] font-mono tracking-tight text-slate-100 hidden md:inline">{t('header.export_short', 'Export')}</span>
-                <ChevronDown size={12} className={`text-slate-400 transition-transform duration-200 ${topologyMenuOpen ? 'rotate-180' : ''}`} />
+                <Download size={14} className="text-emerald-400 group-hover:scale-110 transition-transform shrink-0" aria-hidden="true" />
+                <span className="text-[11px] font-mono tracking-tight text-slate-100 hidden xl:inline">{t('header.export_short', 'Export')}</span>
+                <ChevronDown size={12} className={`text-slate-400 transition-transform duration-200 shrink-0 ${topologyMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
               {topologyMenuOpen && (
-                <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3.5 py-1.5 border-b border-slate-100 mb-1">
                     <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
                       3-Workbook Topology Hub
@@ -1036,26 +1034,26 @@ export default function Header({
           {!isStandardFixed && canImportData && (
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="hidden sm:flex w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-white border border-zinc-200 items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+              className="hidden sm:flex w-8 h-8 rounded-full bg-white border border-zinc-200 items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
               title={t('header.import_excel', 'Importer JSON / Excel')}
               aria-label="Importer un fichier de données JSON ou Excel"
             >
-              <Upload size={16} aria-hidden="true" />
+              <Upload size={15} aria-hidden="true" />
             </button>
           )}
 
           {/* 1-Click ShellPolicy Switcher (Auto / Desktop / Mobile) */}
-          <div className="hidden md:flex items-center">
+          <div className="hidden md:block shrink-0">
             <ShellModeSwitcher compact />
           </div>
 
           <button
             onClick={onOpenShortcuts}
-            className="hidden sm:flex w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-white border border-zinc-200 items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+            className="hidden lg:flex w-8 h-8 rounded-full bg-white border border-zinc-200 items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
             title={t('header.shortcuts', 'Raccourcis clavier (F1)')}
             aria-label="Afficher la liste des raccourcis clavier"
           >
-            <Keyboard size={16} aria-hidden="true" />
+            <Keyboard size={15} aria-hidden="true" />
           </button>
 
           {/* NH-12: Interactive Notification Bell & Alert Status Popover */}
@@ -1070,13 +1068,13 @@ export default function Header({
               !isTech &&
               (!currentUser || AuthorizationService.canAccessTab(currentUser, 'validation_center'));
             return (
-              <div className="relative" ref={notifMenuRef}>
+              <div className="relative shrink-0" ref={notifMenuRef}>
                 <button
                   type="button"
                   onClick={() => setNotifMenuOpen((prev) => !prev)}
                   aria-expanded={notifMenuOpen}
                   aria-haspopup="menu"
-                  className="w-8 sm:w-9 h-8 sm:h-9 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md relative cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                  className="w-8 h-8 rounded-full bg-white border border-zinc-200 flex items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md relative cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
                   title={
                     totalPendingAlerts > 0
                       ? t('header.notifications_pending', `${totalPendingAlerts} élément(s) en attente de validation`, { count: totalPendingAlerts })
@@ -1084,7 +1082,7 @@ export default function Header({
                   }
                   aria-label={t('header.notifications_title', "Centre d'alertes & notifications")}
                 >
-                  <Bell size={16} aria-hidden="true" />
+                  <Bell size={15} aria-hidden="true" />
                   <span
                     className={`absolute top-1 right-1 w-2 h-2 rounded-full ring-2 ring-white ${
                       totalPendingAlerts > 0 ? 'bg-rose-600 animate-pulse' : 'bg-emerald-500'
@@ -1097,7 +1095,7 @@ export default function Header({
                   <div
                     role="menu"
                     aria-label={t('header.notifications_title', "Centre d'alertes & notifications")}
-                    className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-2.5"
+                    className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-2.5"
                   >
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <span className="text-xs font-extrabold text-slate-900">
@@ -1155,13 +1153,13 @@ export default function Header({
 
           {/* User Profile Account Card Pill & Popover Menu (NH-3: Interactive for all roles with Logout & guarded Settings) */}
           {!isStandardFixed && (
-            <div className="relative" ref={userMenuRef}>
+            <div className="relative shrink-0" ref={userMenuRef}>
               <button
                 type="button"
                 onClick={() => setUserMenuOpen((prev) => !prev)}
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
-                className="flex items-center gap-2 px-2 sm:px-2.5 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
                 title={
                   currentUser?.personnelId
                     ? `${currentUser.name} (${currentUser.personnelId})`
@@ -1171,13 +1169,13 @@ export default function Header({
               >
                 {/* Rounded Emerald Avatar Icon matching sidebar */}
                 <div
-                  className="w-7 h-7 rounded-lg bg-emerald-700 text-white font-extrabold text-[10.5px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform"
+                  className="w-6.5 h-6.5 rounded-lg bg-emerald-700 text-white font-extrabold text-[10px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform"
                   aria-hidden="true"
                 >
                   {currentUser?.avatar || 'RM'}
                 </div>
                 {/* User Name & Role matching sidebar typography */}
-                <div className="hidden xl:block text-left leading-tight min-w-0 pr-0.5">
+                <div className="hidden 2xl:block text-left leading-tight min-w-0 pr-0.5">
                   <div className="text-[11.5px] font-bold text-slate-900 truncate flex items-center gap-1">
                     <span>{currentUser?.name || 'Administrateur'}</span>
                     {currentUser?.personnelId && (
@@ -1192,7 +1190,7 @@ export default function Header({
                 </div>
                 <ChevronDown
                   size={12}
-                  className={`text-slate-400 transition-transform duration-200 hidden sm:block ${userMenuOpen ? 'rotate-180' : ''}`}
+                  className={`text-slate-400 transition-transform duration-200 hidden sm:block shrink-0 ${userMenuOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -1200,7 +1198,7 @@ export default function Header({
                 <div
                   role="menu"
                   aria-label="Menu du compte utilisateur"
-                  className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                  className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
                 >
                   <div className="px-3.5 py-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2.5">

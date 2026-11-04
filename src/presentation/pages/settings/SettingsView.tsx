@@ -228,15 +228,15 @@ export default function SettingsView({
     setupMasterPin,
   } = (useAuth() || {}) as any;
 
-  // Internal RBAC capability flags (ST-1)
+  // Internal RBAC capability flags (ST-1 & ST-AUTH-NULL: fail-closed when currentUser is null)
   const canManageSettings =
-    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.manage');
+    Boolean(currentUser) && AuthorizationService.hasPermission(currentUser, 'settings.manage');
   const canManageUsers =
-    !currentUser || AuthorizationService.hasPermission(currentUser, 'users.manage');
+    Boolean(currentUser) && AuthorizationService.hasPermission(currentUser, 'users.manage');
   const canBackupSettings =
-    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.backup');
+    Boolean(currentUser) && AuthorizationService.hasPermission(currentUser, 'settings.backup');
   const canViewSettings =
-    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.view');
+    Boolean(currentUser) && AuthorizationService.hasPermission(currentUser, 'settings.view');
 
   const allowedTabIds = useMemo(() => {
     const ids: string[] = [];
@@ -1832,7 +1832,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'directory' && (
+        {activeTab === 'directory' && allowedTabIds.includes('directory') && (
           <SettingsDirectoryTab
             sharedFolderPath={sharedFolderPath}
             setSharedFolderPath={setSharedFolderPath}
@@ -1848,7 +1848,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'matching' && (
+        {activeTab === 'matching' && allowedTabIds.includes('matching') && (
           <SettingsMatchingTab
             auditTarget={auditTarget}
             setAuditTarget={setAuditTarget}

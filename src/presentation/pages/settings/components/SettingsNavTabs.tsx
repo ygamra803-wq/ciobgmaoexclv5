@@ -199,7 +199,7 @@ export default function SettingsNavTabs({
     },
   ];
 
-  const visibleTabs = Array.isArray(allowedTabIds) && allowedTabIds.length > 0
+  const visibleTabs = Array.isArray(allowedTabIds)
     ? tabs.filter((t) => allowedTabIds.includes(t.id))
     : tabs;
 

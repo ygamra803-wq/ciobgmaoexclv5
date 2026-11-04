@@ -87,7 +87,7 @@ function resetFailedAttempts(username) {
 export const AuthProvider = ({ children }) => {
   const authService = Container.resolve('auth');
 
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => authService?.getCurrentUser() || null);
   const [isVaultExists, setIsVaultExists] = useState(() => vaultService.isVaultExists());
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [accounts, setAccounts] = useState(() => authService?.getAvailableAccounts(true) || []);

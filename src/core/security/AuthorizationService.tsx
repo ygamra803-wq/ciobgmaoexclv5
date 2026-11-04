@@ -103,6 +103,7 @@ export const PERMISSIONS: Record<string, string[]> = {
   'user.create': [ROLES.ADMIN],
   'user.edit': [ROLES.ADMIN],
   'user.delete': [ROLES.ADMIN],
+  'users.manage': [ROLES.ADMIN],
 
   // التقارير والإحصائيات (Reports & Analytics)
   'report.view': [

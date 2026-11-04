@@ -105,7 +105,7 @@ export default function DashboardView({
   const { t } = useTranslation();
 
   const normalizedUserRole = useMemo(
-    () => (currentUser?.role ? normalizeRole(currentUser.role) : ROLES.ADMIN),
+    () => normalizeRole(currentUser?.role),
     [currentUser?.role]
   );
   const isStoreManager = normalizedUserRole === ROLES.RESPONSABLE_MAGASIN;
@@ -126,45 +126,49 @@ export default function DashboardView({
   );
   const isTechUser = techScope.isTechUser;
 
-  // RBAC Capabilities & Tab Access Flags (DB-1 & DB-2)
-  const isReadOnlyUser = Boolean(currentUser && AuthorizationService.isReadOnly(currentUser));
+  // RBAC Capabilities & Tab Access Flags (DB-1, DB-2 & ST-AUTH-NULL: fail-closed when currentUser is null)
+  const isReadOnlyUser = !currentUser || AuthorizationService.isReadOnly(currentUser);
   const canCreateMovement =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser || AuthorizationService.hasPermission(currentUser, 'movement.create'));
+    AuthorizationService.hasPermission(currentUser, 'movement.create');
   const canEditMovement =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser || AuthorizationService.hasPermission(currentUser, 'movement.edit'));
+    AuthorizationService.hasPermission(currentUser, 'movement.edit');
   const canDeleteMovement =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser || AuthorizationService.hasPermission(currentUser, 'movement.delete'));
+    AuthorizationService.hasPermission(currentUser, 'movement.delete');
   const canExportData =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser ||
-      AuthorizationService.hasPermission(currentUser, 'stock.export') ||
+    (AuthorizationService.hasPermission(currentUser, 'stock.export') ||
       AuthorizationService.hasPermission(currentUser, 'report.export'));
   const canManageSettings =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser || AuthorizationService.hasPermission(currentUser, 'settings.manage'));
+    AuthorizationService.hasPermission(currentUser, 'settings.manage');
   const canSyncLan =
+    Boolean(currentUser) &&
     !isReadOnlyUser &&
-    (!currentUser ||
-      AuthorizationService.hasPermission(currentUser, 'settings.backup') ||
+    (AuthorizationService.hasPermission(currentUser, 'settings.backup') ||
       AuthorizationService.hasPermission(currentUser, 'stock.edit') ||
       AuthorizationService.hasPermission(currentUser, 'preventive.manage'));
 
-  const canAccessStockTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'stock');
-  const canAccessSortieTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'sortie');
-  const canAccessMachinesTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'machines');
-  const canAccessPreventiveTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'preventive');
-  const canAccessCorrectiveTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective');
-  const canAccessCorrectiveDiTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective_di');
-  const canAccessCorrectiveBtTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective_bt');
-  const canAccessCorrectiveLiveTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective_live');
-  const canAccessCorrectiveClotureTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective_cloture');
-  const canAccessCorrectiveAnalyticsTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'corrective_analytics');
+  const canAccessStockTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'stock');
+  const canAccessSortieTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'sortie');
+  const canAccessMachinesTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'machines');
+  const canAccessPreventiveTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'preventive');
+  const canAccessCorrectiveTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective');
+  const canAccessCorrectiveDiTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_di');
+  const canAccessCorrectiveBtTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_bt');
+  const canAccessCorrectiveLiveTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_live');
+  const canAccessCorrectiveClotureTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_cloture');
+  const canAccessCorrectiveAnalyticsTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'corrective_analytics');
   const canAccessValidationCenterTab =
-    !currentUser || AuthorizationService.canAccessTab(currentUser, 'validation_center');
-  const canAccessSettingsTab = !currentUser || AuthorizationService.canAccessTab(currentUser, 'settings');
+    Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'validation_center');
+  const canAccessSettingsTab = Boolean(currentUser) && AuthorizationService.canAccessTab(currentUser, 'settings');
 
   const storeSortieDemands = useGmaoStore((state) => state.sortieDemands);
 
