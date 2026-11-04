@@ -239,7 +239,13 @@ export class AuthorizationService {
     if (!allowed) return false;
     const cleanTab = String(tabId || 'dashboard').trim();
     if (allowed.has(cleanTab)) return true;
-    if (cleanTab.startsWith('corrective_') && cleanTab !== 'corrective_referentiel' && allowed.has('corrective')) {
+    const hasExplicitCorrectiveSubtabs = Array.from(allowed).some((t) => t.startsWith('corrective_'));
+    if (
+      !hasExplicitCorrectiveSubtabs &&
+      cleanTab.startsWith('corrective_') &&
+      cleanTab !== 'corrective_referentiel' &&
+      allowed.has('corrective')
+    ) {
       return true;
     }
     return false;
