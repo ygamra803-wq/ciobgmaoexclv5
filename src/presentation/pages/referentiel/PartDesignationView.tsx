@@ -80,7 +80,7 @@ export default function PartDesignationView({
     designation: '',
     id_type: '',
     seuil: 5,
-    emplacement: 'E-MAG-RAYON-A01',
+    emplacement: '',
   });
 
   // Filter
@@ -212,7 +212,7 @@ export default function PartDesignationView({
       designation: '',
       id_type: '',
       seuil: 5,
-      emplacement: 'E-MAG-RAYON-A01',
+      emplacement: '',
     });
     setShowAddModal(false);
   };
@@ -470,7 +470,7 @@ export default function PartDesignationView({
                   designation: '',
                   id_type: partTypes[0]?.id_type || '',
                   seuil: 5,
-                  emplacement: 'E-MAG-RAYON-A01',
+                  emplacement: '',
                 });
                 setShowAddModal(true);
               }}
