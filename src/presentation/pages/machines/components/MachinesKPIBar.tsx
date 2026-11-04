@@ -10,9 +10,11 @@ export default function MachinesKPIBar({
   const { t } = useI18n();
 
   const total = Number(kpis.total) || 0;
+  const archivees = Number(kpis.archivees) || 0;
+  const activeTotal = Math.max(0, total - archivees);
   const enService = Number(kpis.enService) || 0;
   const stoppedCount = (Number(kpis.enMaintenance) || 0) + (Number(kpis.enArret) || 0);
-  const availabilityRate = total > 0 ? Math.round((enService / total) * 100) : 0;
+  const availabilityRate = activeTotal > 0 ? Math.round((enService / activeTotal) * 100) : 0;
 
   return (
     <GmaoKpiGrid id="machines-kpis-grid" columns={4}>
@@ -32,8 +34,8 @@ export default function MachinesKPIBar({
           `${kpis.activeFamiliesCount || 0} Familles actives`,
           { count: kpis.activeFamiliesCount || 0 }
         )}
-        footerLabel="Registre actif :"
-        footerValue="Feuille Machines"
+        footerLabel="Parc actif :"
+        footerValue={archivees > 0 ? `${activeTotal} actives • ${archivees} archiv.` : 'Feuille Machines'}
       />
 
       {/* Card 2: En Service */}
@@ -48,11 +50,11 @@ export default function MachinesKPIBar({
         isActive={statusFilter === 'En Service'}
         onClick={() => setStatusFilter(statusFilter === 'En Service' ? 'ALL' : 'En Service')}
         badgeText="Production nominale"
-        footerLabel="Disponibilité parc :"
+        footerLabel="Disponibilité parc actif :"
         footerValue={`${availabilityRate}% en ligne`}
       />
 
-      {/* Card 3: En Maintenance / Panne */}
+      {/* Card 3: En Maintenance / Panne / Arrêt */}
       <GmaoKpiCard
         id="machines-kpi-maintenance"
         title={t('machines.kpis.maintenance_stopped', 'En Maintenance / Arrêt')}
@@ -62,9 +64,13 @@ export default function MachinesKPIBar({
         color="amber"
         valueColored={true}
         pulseIcon={stoppedCount > 0}
-        isActive={statusFilter === 'En Maintenance'}
+        isActive={
+          statusFilter === 'STOPPED_OR_MAINT' ||
+          statusFilter === 'En Maintenance' ||
+          statusFilter === 'Arrêt'
+        }
         onClick={() =>
-          setStatusFilter(statusFilter === 'En Maintenance' ? 'ALL' : 'En Maintenance')
+          setStatusFilter(statusFilter === 'STOPPED_OR_MAINT' ? 'ALL' : 'STOPPED_OR_MAINT')
         }
         badgeText={t('machines.kpis.interventions_required', 'Interventions requises')}
         footerLabel="Impact ligne :"

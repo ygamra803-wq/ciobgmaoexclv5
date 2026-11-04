@@ -180,7 +180,18 @@ export default function TabMainView({
   // Filters
   const [selectedAssetClass, setSelectedAssetClass] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [selectedZone, setSelectedZone] = useState('ALL');
-  const [selectedMachine, setSelectedMachine] = useState('ALL');
+  const [selectedMachine, setSelectedMachine] = useState(() => {
+    try {
+      const target = localStorage.getItem('gmao_preventive_target_machine');
+      if (target && target.trim()) {
+        localStorage.removeItem('gmao_preventive_target_machine');
+        return target.trim();
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return 'ALL';
+  });
   const [selectedBlueprint, setSelectedBlueprint] = useState('ALL');
   const [selectedAction, setSelectedAction] = useState('ALL');
   const [selectedFrequence, setSelectedFrequence] = useState('ALL');

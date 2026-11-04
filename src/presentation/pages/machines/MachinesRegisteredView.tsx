@@ -53,6 +53,8 @@ import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMa
 import MachineQrFieldModal from './components/MachineQrFieldModal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
+import { usePermission } from '../../components/common/PermissionGate';
+import { dataIntegrityService } from '../../../services/dataIntegrityService';
 
 // Helper to retrieve machine serial number with smart fallback
 export const getMachineSerialNumber = (m) => {
@@ -151,13 +153,18 @@ export default function MachinesRegisteredView({
   onUpdateMachine: propUpdateMachine,
   onDeleteMachine: propDeleteMachine,
   onOpenAddMachine = () => {},
-  onNavigateToFamily: _onNavigateToFamily = () => {},
-  onNavigateToTemplate: _onNavigateToTemplate = () => {},
-  onNavigateToZone: _onNavigateToZone = () => {},
+  onNavigateToFamily = () => {},
+  onNavigateToTemplate = () => {},
+  onNavigateToZone = () => {},
   onNavigateToBlueprints = () => {},
   onNavigateToQuickSortie = () => {},
   onNavigateToPreventive = () => {},
+  showToast,
 }) {
+  const canCreate = usePermission('CREATE');
+  const canEdit = usePermission('EDIT');
+  const canDelete = usePermission('DELETE');
+
   const {
     machines: dbMachines,
     generalSystemTypes = [],
@@ -167,9 +174,11 @@ export default function MachinesRegisteredView({
     toggleGeneralSystemType,
   } = useMachines();
 
+  const preventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
   const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
   const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne) || [];
+  const sortieDemands = useGmaoStore((s) => s.sortieDemands) || [];
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
   const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
 
@@ -197,12 +206,12 @@ export default function MachinesRegisteredView({
 
   const onUpdateMachine = (id, data) => {
     if (propUpdateMachine) propUpdateMachine(id, data);
-    if (dbUpdateMachine) dbUpdateMachine(id, data).catch(() => {});
+    else if (dbUpdateMachine) dbUpdateMachine(id, data).catch(() => {});
   };
 
   const onDeleteMachine = (id) => {
     if (propDeleteMachine) propDeleteMachine(id);
-    if (dbDeleteMachine) dbDeleteMachine(id).catch(() => {});
+    else if (dbDeleteMachine) dbDeleteMachine(id).catch(() => {});
   };
 
   const [toEdit, setToEdit] = useState(null);
@@ -275,10 +284,15 @@ export default function MachinesRegisteredView({
 
   // Calculate Interventions Count Map per Machine for high efficiency
   const sortiesCountMap = useMemo(() => {
-    const map = {};
+    const map: Record<string, number> = {};
     mouvements.forEach((m) => {
-      if (m.id_machine_registered) {
-        map[m.id_machine_registered] = (map[m.id_machine_registered] || 0) + 1;
+      const rawCode = String(m?.id_machine_registered || m?.machine || m?.code_machine || '').trim();
+      if (rawCode) {
+        const normCode = rawCode.toUpperCase();
+        map[normCode] = (map[normCode] || 0) + 1;
+        if (rawCode !== normCode) {
+          map[rawCode] = map[normCode];
+        }
       }
     });
     return map;
@@ -304,7 +318,10 @@ export default function MachinesRegisteredView({
     });
 
     const activeFamiliesCount = new Set(machines.map((m) => m.id_family).filter(Boolean)).size;
-    const totalInterventions = Object.values(sortiesCountMap).reduce((a, b) => a + b, 0);
+    const totalInterventions = machines.reduce((acc, m) => {
+      const codeNorm = String(m?.id_machine_registered || '').trim().toUpperCase();
+      return acc + (sortiesCountMap[codeNorm] || 0);
+    }, 0);
 
     return {
       total,
@@ -334,6 +351,7 @@ export default function MachinesRegisteredView({
           if (archived) return false;
           const st = String(m.status || 'En Service').toLowerCase();
           if (statusFilter === 'En Service' && !st.includes('service')) return false;
+          if (statusFilter === 'STOPPED_OR_MAINT' && st.includes('service')) return false;
           if (statusFilter === 'En Maintenance' && !st.includes('maint') && !st.includes('panne')) return false;
           if (statusFilter === 'Arrêt' && (st.includes('service') || st.includes('maint') || st.includes('panne'))) return false;
         }
@@ -558,14 +576,16 @@ export default function MachinesRegisteredView({
             title="Formules Excel (Liaisons Machines)"
           />
 
-          <Action3DButton
-            variant="circle"
-            color="emerald"
-            icon={Factory}
-            showAddBadge={true}
-            onClick={onOpenAddMachine}
-            title="Nouvelle Machine"
-          />
+          {canCreate && (
+            <Action3DButton
+              variant="circle"
+              color="emerald"
+              icon={Factory}
+              showAddBadge={true}
+              onClick={onOpenAddMachine}
+              title="Nouvelle Machine"
+            />
+          )}
         </div>
       </div>
 
@@ -757,15 +777,17 @@ export default function MachinesRegisteredView({
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={() => setShowSysTypesModal(true)}
-              className="h-7 px-2.5 rounded-lg border border-amber-300/90 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
-              title="Gérer les types de Système Général (+ Nouveau type / Activer / Désactiver)"
-            >
-              <Settings2 className="w-3.5 h-3.5 text-amber-700" />
-              <span>Types Système ({activeSystemTypes.length})</span>
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setShowSysTypesModal(true)}
+                className="h-7 px-2.5 rounded-lg border border-amber-300/90 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Gérer les types de Système Général (+ Nouveau type / Activer / Désactiver)"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-amber-700" />
+                <span>Types Système ({activeSystemTypes.length})</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -870,8 +892,8 @@ export default function MachinesRegisteredView({
               value={
                 mchZoneFilter === 'ALL'
                   ? 'ALL'
-                  : (getZoneByRef(mchZoneFilter, zones)?.code_zone ||
-                     getZoneByRef(mchZoneFilter, zones)?.id_zone ||
+                  : (getZoneByRef(mchZoneFilter, zones)?.id_zone ||
+                     getZoneByRef(mchZoneFilter, zones)?.code_zone ||
                      mchZoneFilter)
               }
               prefixIcon={
@@ -883,11 +905,11 @@ export default function MachinesRegisteredView({
               options={[
                 { value: 'ALL', label: `Tous Secteurs & Zones (${zones.length})` },
                 ...zones.map((z) => {
+                  const idZ = z.id_zone || z.code_zone || z.code;
                   const codeZ = z.code_zone || z.code || z.id_zone;
-                  const idZ = z.id_zone;
-                  const showDual = idZ && idZ !== codeZ;
+                  const showDual = idZ && codeZ && idZ !== codeZ;
                   return {
-                    value: codeZ,
+                    value: idZ,
                     label: `${z.code_zone ? z.code_zone + ' • ' : ''}${z.libelle}${showDual ? ` (${idZ})` : ''}`,
                   };
                 }),
@@ -994,7 +1016,9 @@ export default function MachinesRegisteredView({
               )}
               {statusFilter !== 'ALL' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-[11px] border border-emerald-200">
-                  <span>Statut: {statusFilter}</span>
+                  <span>
+                    Statut: {statusFilter === 'STOPPED_OR_MAINT' ? 'En Maintenance / Arrêt' : statusFilter}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setStatusFilter('ALL')}
@@ -1636,17 +1660,19 @@ export default function MachinesRegisteredView({
                               </button>
 
                               {/* Option 2: Modifier la machine */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setActiveActionMenuId(null);
-                                  setToEdit({ ...m });
-                                }}
-                                className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                <span>Modifier cette machine</span>
-                              </button>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    setToEdit({ ...m });
+                                  }}
+                                  className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  <span>Modifier cette machine</span>
+                                </button>
+                              )}
 
                               {/* Option 3: Consulter Blueprint si disponible */}
                               {m.id_blueprint && (
@@ -1663,38 +1689,85 @@ export default function MachinesRegisteredView({
                                 </button>
                               )}
 
+                              {/* Option 3b: Liaisons Référentiel (Famille / Template / Zone) */}
+                              {m.id_family && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    onNavigateToFamily(m.id_family);
+                                  }}
+                                  className="w-full px-3 py-1.5 text-xs font-medium text-cyan-800 hover:bg-cyan-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <HubIcon className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                                  <span>Ouvrir Famille ({m.id_family})</span>
+                                </button>
+                              )}
+
+                              {m.id_templates && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    onNavigateToTemplate(m.id_family || 'ALL');
+                                  }}
+                                  className="w-full px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <CategoryIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Ouvrir Template ({m.id_templates})</span>
+                                </button>
+                              )}
+
+                              {m.id_zone_default && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveActionMenuId(null);
+                                    onNavigateToZone(m.id_zone_default);
+                                  }}
+                                  className="w-full px-3 py-1.5 text-xs font-medium text-purple-800 hover:bg-purple-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                >
+                                  <MapPin className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                  <span>Ouvrir Zone ({m.id_zone_default})</span>
+                                </button>
+                              )}
+
                               {/* Option 4: Réactiver ou Archiver / Supprimer la machine */}
                               {isArchived ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveActionMenuId(null);
-                                    onUpdateMachine(m.id_machine_registered, {
-                                      ...m,
-                                      status: 'En Service',
-                                      statut: 'En Service',
-                                      is_active: true,
-                                      actif: true,
-                                      archived: false,
-                                    });
-                                  }}
-                                  className="w-full px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <span>Réactiver la machine (En Service)</span>
-                                </button>
+                                canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      onUpdateMachine(m.id_machine_registered, {
+                                        ...m,
+                                        status: 'En Service',
+                                        statut: 'En Service',
+                                        is_active: true,
+                                        actif: true,
+                                        archived: false,
+                                      });
+                                    }}
+                                    className="w-full px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                    <span>Réactiver la machine (En Service)</span>
+                                  </button>
+                                )
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveActionMenuId(null);
-                                    setToDelete(m);
-                                  }}
-                                  className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-                                  <span>Archiver / Supprimer la machine</span>
-                                </button>
+                                canDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      setToDelete(m);
+                                    }}
+                                    className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                    <span>Archiver / Supprimer la machine</span>
+                                  </button>
+                                )
                               )}
                             </div>
                           )}
@@ -2050,17 +2123,17 @@ export default function MachinesRegisteredView({
                   </label>
                   <CustomSelect
                     value={
-                      getZoneByRef(toEdit.id_zone_default, zones)?.code_zone ||
                       getZoneByRef(toEdit.id_zone_default, zones)?.id_zone ||
+                      getZoneByRef(toEdit.id_zone_default, zones)?.code_zone ||
                       toEdit.id_zone_default
                     }
                     onChange={(val) => setToEdit({ ...toEdit, id_zone_default: val })}
                     options={zones.map((z) => {
+                      const idZ = z.id_zone || z.code_zone || z.code;
                       const codeZ = z.code_zone || z.code || z.id_zone;
-                      const idZ = z.id_zone;
-                      const showDual = idZ && idZ !== codeZ;
+                      const showDual = idZ && codeZ && idZ !== codeZ;
                       return {
-                        value: codeZ,
+                        value: idZ,
                         label: `${z.code_zone ? z.code_zone + ' • ' : ''}${z.libelle}${showDual ? ` (${idZ})` : ''}`,
                       };
                     })}
@@ -2073,7 +2146,25 @@ export default function MachinesRegisteredView({
                   <CustomSelect
                     value={toEdit.technician}
                     onChange={(val) => setToEdit({ ...toEdit, technician: val })}
-                    options={technicians.map((t) => ({ value: t.id_technician, label: `${t.nom} (${t.id_technician})` }))}
+                    options={technicians
+                      .filter(
+                        (t) =>
+                          (t.is_active !== false &&
+                            t.actif !== false &&
+                            String(t.statut || '').toUpperCase() !== 'ARCHIVE') ||
+                          t.id_technician === toEdit.technician ||
+                          t.nom === toEdit.technician
+                      )
+                      .map((t) => {
+                        const isTechArchived =
+                          t.is_active === false ||
+                          t.actif === false ||
+                          String(t.statut || '').toUpperCase() === 'ARCHIVE';
+                        return {
+                          value: t.id_technician,
+                          label: `${t.nom} (${t.id_technician})${isTechArchived ? ' — Archivé' : ''}`,
+                        };
+                      })}
                   />
                 </div>
               </div>
@@ -2235,42 +2326,89 @@ export default function MachinesRegisteredView({
       )}
 
       {/* MODAL: SUPPRIMER MACHINE */}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-3">
-                <Trash2 className="w-6 h-6" />
+      {toDelete && (() => {
+        const deps = dataIntegrityService.getMachineDependencies(toDelete.id_machine_registered, {
+          preventiveTasks,
+          preventiveExecutions,
+          correctiveInterventions,
+          mouvements,
+          machineElementsLedger,
+          sortiesExterne,
+          sortieDemands,
+          warehouseItems,
+        });
+        const willSoftArchive = !deps.canHardDelete;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex flex-col items-center text-center">
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${
+                    willSoftArchive ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-600'
+                  }`}
+                >
+                  {willSoftArchive ? <RotateCcw className="w-6 h-6" /> : <Trash2 className="w-6 h-6" />}
+                </div>
+                <h3 className="font-bold text-base text-slate-900">
+                  {willSoftArchive ? 'Archiver la Machine (Historique Protégé)' : 'Supprimer Définitivement la Machine ?'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Équipement ciblé :{' '}
+                  <b className="font-mono text-slate-900">{toDelete.id_machine_registered}</b> ({toDelete.designation})
+                </p>
+
+                {willSoftArchive ? (
+                  <div className="mt-3 w-full text-left text-[11px] text-amber-950 bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+                    <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Cette machine possède {deps.total} liaison(s) active(s) ou historiques :</span>
+                    </div>
+                    <ul className="list-disc list-inside space-y-0.5 text-amber-800 font-medium pl-1">
+                      {deps.preventiveCount > 0 && <li>{deps.preventiveCount} tâche(s) préventive(s) planifiée(s)</li>}
+                      {deps.preventiveExecutionsCount > 0 && <li>{deps.preventiveExecutionsCount} exécution(s) préventive(s)</li>}
+                      {deps.correctiveCount > 0 && <li>{deps.correctiveCount} intervention(s) corrective(s) (DI/BT)</li>}
+                      {deps.movementsCount > 0 && <li>{deps.movementsCount} mouvement(s) de stock PDR</li>}
+                      {deps.bomCount > 0 && <li>{deps.bomCount} élément(s) de nomenclature BOM</li>}
+                      {deps.warehouseCount > 0 && <li>{deps.warehouseCount} organe(s) d&apos;entrepôt rattaché(s)</li>}
+                      {deps.externalSortiesCount > 0 && <li>{deps.externalSortiesCount} dossier(s) de bobinage externe</li>}
+                      {deps.sortieDemandsCount > 0 && <li>{deps.sortieDemandsCount} demande(s) de sortie PDR</li>}
+                    </ul>
+                    <p className="text-[10.5px] text-amber-800 pt-1 border-t border-amber-200/70">
+                      Conformément à la règle <b>Safe Archive</b>, la machine passera en statut <b>ARCHIVEE</b>, ses gammes préventives seront suspendues automatiquement, et son historique restera intact.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-3 w-full text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-2xl p-2.5">
+                    Aucune dépendance historique détectée (0 BT, 0 PM, 0 mouvement, 0 BOM). Cet équipement sera <b>supprimé définitivement</b> du référentiel.
+                  </div>
+                )}
               </div>
-              <h3 className="font-bold text-base text-slate-900">Archiver / Supprimer la Machine ?</h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Confirmez-vous le retrait de l&apos;équipement{' '}
-                <b className="font-mono text-slate-900">{toDelete.id_machine_registered}</b> ({toDelete.designation}) ?
-                <span className="block mt-1.5 text-[11px] text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-2">
-                  Si la machine possède un historique (BT, préventif, mouvements, BOM), elle sera <b>archivée (ARCHIVEE)</b> avec suspension automatique de ses gammes préventives et conservation intégrale de son historique.
-                </span>
-              </p>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => setToDelete(null)}
-                className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteMachine(toDelete.id_machine_registered);
-                  setToDelete(null);
-                }}
-                className="flex-1 h-10 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-pointer"
-              >
-                Confirmer
-              </button>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setToDelete(null)}
+                  className="flex-1 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteMachine(toDelete.id_machine_registered);
+                    setToDelete(null);
+                  }}
+                  className={`flex-1 h-10 rounded-xl text-white text-xs font-bold transition shadow-md cursor-pointer ${
+                    willSoftArchive ? 'bg-amber-600 hover:bg-amber-700' : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {willSoftArchive ? 'Archiver la Machine' : 'Supprimer Définitivement'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* Excel Formulas Preview Modal */}
       {showFormulasModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -2655,6 +2793,7 @@ export default function MachinesRegisteredView({
           onClose={() => setQrMachine(null)}
           onNavigateToPreventive={onNavigateToPreventive}
           onNavigateToQuickSortie={onNavigateToQuickSortie}
+          showToast={showToast}
         />
       )}
     </AnimatedPage>

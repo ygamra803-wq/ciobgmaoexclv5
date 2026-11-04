@@ -428,10 +428,20 @@ export function useAppRouterProps({
       onOpenAddMachine: () => setShowAddMachineModal(true),
       onNavigateToFamily: navigation.handleNavigateToFamilyFiltered,
       onNavigateToTemplate: navigation.handleNavigateToTemplatesFiltered,
-      onNavigateToZone: navigation.handleNavigateToMachinesByZone,
+      onNavigateToZone: navigation.handleNavigateToZoneById,
       onNavigateToBlueprints: navigation.handleNavigateToBlueprintsFiltered,
       onNavigateToQuickSortie: navigation.handleNavigateToQuickSortieFromMachine,
-      onNavigateToPreventive: (_machId) => navigateTo('preventive'),
+      onNavigateToPreventive: (machId) => {
+        if (typeof machId === 'string' && machId.trim()) {
+          try {
+            localStorage.setItem('gmao_preventive_target_machine', machId.trim());
+          } catch {
+            // ignore storage errors
+          }
+        }
+        navigateTo('preventive');
+      },
+      showToast: showToast || navigation?.showToast,
     },
 
     compGroups: {
@@ -809,7 +819,13 @@ export function useAppRouterProps({
       onDirectAdjustStock: handleDirectAdjustStock,
       onUpdateMachine: handleUpdateMachine,
       showToast: showToast || navigation?.showToast,
-      onNavigateToMachine: (_machId) => navigateTo('machines'),
+      onNavigateToMachine: (machId) => {
+        if (navigation?.handleNavigateToMachineById) {
+          navigation.handleNavigateToMachineById(machId);
+        } else {
+          navigateTo('machines');
+        }
+      },
       onNavigateToReferentiel: () => navigateTo('preventive_referentiel'),
       onCreateCorrective: (taskOrPayload = {}, btData = {}) => {
         if (typeof handleAddDemandeIntervention === 'function') {

@@ -113,10 +113,23 @@ export default function AddMachineModal({
     [generalSystemTypes]
   );
 
+  const activeTechnicians = useMemo(
+    () =>
+      (Array.isArray(technicians) ? technicians : []).filter(
+        (t) =>
+          t &&
+          t.is_active !== false &&
+          t.actif !== false &&
+          String(t.statut || '').toUpperCase() !== 'ARCHIVE'
+      ),
+    [technicians]
+  );
+
   const [showNewSysTypeForm, setShowNewSysTypeForm] = useState(false);
   const [showManageSysTypes, setShowManageSysTypes] = useState(false);
   const [newSysTypeName, setNewSysTypeName] = useState('');
   const [newSysTypeCode, setNewSysTypeCode] = useState('');
+  const [formError, setFormError] = useState('');
 
   const [form, setForm] = useState({
     asset_class: 'PRODUCTION' as 'PRODUCTION' | 'SYSTEM_GENERAL',
@@ -128,8 +141,8 @@ export default function AddMachineModal({
     id_family: families[0]?.id_family || '',
     id_templates: templates[0]?.id_templates || '',
     id_blueprint: '',
-    id_zone_default: zones[0]?.id_zone || '',
-    technician: technicians[0]?.id_technician || '',
+    id_zone_default: zones[0]?.id_zone || zones[0]?.code_zone || '',
+    technician: activeTechnicians[0]?.id_technician || '',
     status: 'En Service',
   });
 
@@ -146,6 +159,7 @@ export default function AddMachineModal({
       setShowManageSysTypes(false);
       setNewSysTypeName('');
       setNewSysTypeCode('');
+      setFormError('');
 
       setForm({
         asset_class: 'PRODUCTION',
@@ -157,8 +171,8 @@ export default function AddMachineModal({
         id_family: initialFam,
         id_templates: initialTpl,
         id_blueprint: '',
-        id_zone_default: zones[0]?.id_zone || '',
-        technician: technicians[0]?.id_technician || '',
+        id_zone_default: zones[0]?.id_zone || zones[0]?.code_zone || '',
+        technician: activeTechnicians[0]?.id_technician || '',
         status: 'En Service',
       });
     }
@@ -414,17 +428,32 @@ export default function AddMachineModal({
 
   const submitMachineRegistration = () => {
     if (isSubmittingMachine) return false;
-    if (!form.id_machine_registered || !form.designation) return false;
-    if (isSystemGeneral && !form.id_general_system_type) return false;
+    const codeNorm = String(form.id_machine_registered || '').trim().toUpperCase();
+    if (!codeNorm || !form.designation.trim()) {
+      setFormError('Veuillez renseigner le code matricule et la désignation de la machine.');
+      return false;
+    }
+    if (isSystemGeneral && !form.id_general_system_type) {
+      setFormError('Veuillez sélectionner un Type de Système Général.');
+      return false;
+    }
+    const isDuplicate = (machines || []).some(
+      (m) => String(m?.id_machine_registered || m?.id || '').trim().toUpperCase() === codeNorm
+    );
+    if (isDuplicate) {
+      setFormError(`Le code machine "${codeNorm}" existe déjà dans le parc enregistré.`);
+      return false;
+    }
+    setFormError('');
 
     try {
       setIsSubmittingMachine(true);
       onAddMachine({
-        id_machine_registered: form.id_machine_registered.trim().toUpperCase(),
+        id_machine_registered: codeNorm,
         designation: form.designation.trim(),
         serial_number:
           form.serial_number?.trim() ||
-          `SN-${new Date().getFullYear()}-${form.id_machine_registered.replace(/[^A-Z0-9]/g, '')}`,
+          `SN-${new Date().getFullYear()}-${codeNorm.replace(/[^A-Z0-9]/g, '')}`,
         date_mise_en_service: form.date_mise_en_service || new Date().toISOString().slice(0, 10),
         asset_class: form.asset_class,
         id_general_system_type: isSystemGeneral ? form.id_general_system_type : null,
@@ -837,11 +866,11 @@ export default function AddMachineModal({
             value={form.id_zone_default}
             onChange={(val) => setForm({ ...form, id_zone_default: val })}
             options={zones.map((z) => {
+              const idZ = z.id_zone || z.code_zone || z.code;
               const codeZ = z.code_zone || z.code || z.id_zone;
-              const idZ = z.id_zone;
-              const showDual = idZ && idZ !== codeZ;
+              const showDual = idZ && codeZ && idZ !== codeZ;
               return {
-                value: codeZ,
+                value: idZ,
                 label: `${z.code_zone ? z.code_zone + ' • ' : ''}${z.libelle}${showDual ? ` (${idZ})` : ''}`,
               };
             })}
@@ -870,7 +899,7 @@ export default function AddMachineModal({
           <CustomSelect
             value={form.technician}
             onChange={(val) => setForm({ ...form, technician: val })}
-            options={technicians.map((t) => ({
+            options={activeTechnicians.map((t) => ({
               value: t.id_technician,
               label: `${t.nom} (${t.id_technician})`,
             }))}
@@ -982,11 +1011,23 @@ export default function AddMachineModal({
         icon: Factory,
         content: step1IdentitySection,
         validate: () => {
-          if (!form.id_machine_registered.trim()) {
+          const codeNorm = form.id_machine_registered.trim().toUpperCase();
+          if (!codeNorm) {
             return {
               isValid: false,
               severity: 'critical',
               message: "Veuillez définir le code matricule de l'équipement (Col B).",
+            };
+          }
+          if (
+            (machines || []).some(
+              (m) => String(m?.id_machine_registered || m?.id || '').trim().toUpperCase() === codeNorm
+            )
+          ) {
+            return {
+              isValid: false,
+              severity: 'critical',
+              message: `Le code machine "${codeNorm}" existe déjà dans le parc enregistré.`,
             };
           }
           if (!form.designation.trim()) {
@@ -1147,6 +1188,12 @@ export default function AddMachineModal({
           />
         ) : (
           <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs overflow-y-auto">
+            {formError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 font-bold flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{formError}</span>
+              </div>
+            )}
             {step1IdentitySection}
             {step2ArborescenceSection}
             {step3ExploitationSection}

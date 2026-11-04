@@ -98,8 +98,13 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeleteZone = (id) => {
-    const zNorm = String(id || '').trim().toUpperCase();
-    const matchesZone = (val: unknown) => String(val || '').trim().toUpperCase() === zNorm;
+    const targetZone = (zones || []).find((z) => z.id_zone === id || z.code_zone === id);
+    const zIdNorm = String(targetZone?.id_zone || id || '').trim().toUpperCase();
+    const zCodeNorm = String(targetZone?.code_zone || targetZone?.code || id || '').trim().toUpperCase();
+    const matchesZone = (val: unknown) => {
+      const v = String(val || '').trim().toUpperCase();
+      return Boolean(v && (v === zIdNorm || v === zCodeNorm));
+    };
     const hasMachines = activeMachines.some(
       (m) => matchesZone(m.id_zone_default) || matchesZone(m.id_zone)
     );
@@ -374,6 +379,7 @@ export function useAppComplexHandlers({
       machineElementsLedger,
       sortiesExterne,
       sortieDemands,
+      warehouseItems,
     });
 
     if (!deps.canHardDelete) {
@@ -386,6 +392,7 @@ export function useAppComplexHandlers({
       if (deps.correctiveCount) parts.push(`${deps.correctiveCount} intervention(s) corrective(s)`);
       if (deps.movementsCount) parts.push(`${deps.movementsCount} mouvement(s)`);
       if (deps.bomCount) parts.push(`${deps.bomCount} élément(s) BOM`);
+      if (deps.warehouseCount) parts.push(`${deps.warehouseCount} organe(s) d'entrepôt`);
       if (deps.externalSortiesCount) parts.push(`${deps.externalSortiesCount} bobinage(s) externe(s)`);
       if (deps.sortieDemandsCount) parts.push(`${deps.sortieDemandsCount} demande(s) PDR`);
 
@@ -915,9 +922,20 @@ export function useAppComplexHandlers({
   };
 
   const handleAddMachine = async (newMch) => {
+    const codeNorm = String(newMch?.id_machine_registered || newMch?.id || '').trim().toUpperCase();
+    if (
+      codeNorm &&
+      (activeMachines || []).some(
+        (m) => String(m?.id_machine_registered || m?.id || '').trim().toUpperCase() === codeNorm
+      )
+    ) {
+      showToast?.(`Erreur : Le code machine "${codeNorm}" existe déjà dans le parc.`, 'error');
+      return;
+    }
     const service = new MachineApplicationService();
     const saved = await service.createMachine(newMch);
     setMachines((prev) => [...prev, saved]);
+    showToast?.(`Machine "${saved.id_machine_registered}" enregistrée avec succès !`, 'success');
   };
 
   const handleAddArticle = async (newArt) => {

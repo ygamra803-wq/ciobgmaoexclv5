@@ -743,6 +743,7 @@ class DataIntegrityService {
     machineElementsLedger = [],
     sortiesExterne = [],
     sortieDemands = [],
+    warehouseItems = [],
   } = {}) {
     const id = String(machineId || '').trim().toUpperCase();
     if (!id) {
@@ -755,6 +756,7 @@ class DataIntegrityService {
         bomCount: 0,
         externalSortiesCount: 0,
         sortieDemandsCount: 0,
+        warehouseCount: 0,
         total: 0,
         canHardDelete: true,
         preventiveSample: [],
@@ -817,6 +819,13 @@ class DataIntegrityService {
         matchMachine(sd.id_machine)
     );
 
+    const warehouseHits = (warehouseItems || []).filter(
+      (w) =>
+        matchMachine(w.id_machine_registered) ||
+        matchMachine(w.id_machine) ||
+        matchMachine(w.code_machine)
+    );
+
     const total =
       preventiveHits.length +
       executionHits.length +
@@ -824,7 +833,8 @@ class DataIntegrityService {
       movementsHits.length +
       bomHits.length +
       externalHits.length +
-      demandHits.length;
+      demandHits.length +
+      warehouseHits.length;
 
     return {
       machineId,
@@ -835,6 +845,7 @@ class DataIntegrityService {
       bomCount: bomHits.length,
       externalSortiesCount: externalHits.length,
       sortieDemandsCount: demandHits.length,
+      warehouseCount: warehouseHits.length,
       total,
       canHardDelete: total === 0,
       preventiveSample: preventiveHits.slice(0, 5).map((t) => t.id || t.code),

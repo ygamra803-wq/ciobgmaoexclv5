@@ -238,7 +238,10 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('machines'));
   };
 
-  const handleNavigateToZoneById = (_zoneId) => {
+  const handleNavigateToZoneById = (zoneId) => {
+    if (typeof zoneId === 'string') {
+      setWhSearch(zoneId);
+    }
     startTransition(() => setCurrentTab('zones'));
   };
 
