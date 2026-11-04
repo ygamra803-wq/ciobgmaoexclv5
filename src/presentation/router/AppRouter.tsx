@@ -237,9 +237,12 @@ export default function AppRouter({
                         </ErrorBoundary>
                       )}
 
-                      {currentTab === 'settings' && (
+                      {(currentTab === 'settings' || currentTab === 'appearance') && (
                         <ErrorBoundary sectionName="Paramètres & Sauvegardes">
-                          <SettingsView {...props.settings} />
+                          <SettingsView
+                            {...props.settings}
+                            initialTab={currentTab === 'appearance' ? 'appearance' : undefined}
+                          />
                         </ErrorBoundary>
                       )}
 

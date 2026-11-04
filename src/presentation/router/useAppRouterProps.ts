@@ -193,7 +193,12 @@ export function useAppRouterProps({
       onNavigateToCorrective: (targetTab = 'corrective') => navigateTo(typeof targetTab === 'string' ? targetTab : 'corrective'),
       onNavigateToZones: () => navigateTo('zones'),
       onNavigateToUsers: () => navigateTo('utilisateurs'),
-      onNavigateToSettings: () => navigateTo('settings'),
+      onNavigateToSettings: (targetSubTab?: string) => {
+        if (typeof targetSubTab === 'string' && targetSubTab.trim()) {
+          localStorage.setItem('gmao_settings_target_tab', targetSubTab.trim());
+        }
+        navigateTo('settings');
+      },
       onNavigateToGuide: () => navigateTo('guide'),
       onNavigateToValidationCenter: () => navigateTo('validation_center'),
       onQuickSortie: handleQuickSortie,

@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -8,6 +9,8 @@ import {
   ArrowRight,
   CheckCircle2,
   XCircle,
+  Lock,
+  X,
 } from 'lucide-react';
 import { vaultService } from '../../../../utils/vaultService';
 import { storageService } from '../../../../utils/storageService';
@@ -38,6 +41,93 @@ export default function SettingsAdminTab({
   technicians = [],
   onNavigateToUsers,
 }: any) {
+  const [vaultModal, setVaultModal] = useState<{
+    isOpen: boolean;
+    mode: 'change_password' | 'switch_session' | 'reset_vault';
+    targetUsername: string;
+    targetDisplayName: string;
+    newPassword: string;
+    masterPin: string;
+    submitting: boolean;
+  }>({
+    isOpen: false,
+    mode: 'change_password',
+    targetUsername: '',
+    targetDisplayName: '',
+    newPassword: '',
+    masterPin: '',
+    submitting: false,
+  });
+
+  useEffect(() => {
+    if (!vaultModal.isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !vaultModal.submitting) {
+        setVaultModal((prev) => ({ ...prev, isOpen: false, newPassword: '', masterPin: '' }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [vaultModal.isOpen, vaultModal.submitting]);
+
+  const closeVaultModal = () => {
+    if (vaultModal.submitting) return;
+    setVaultModal((prev) => ({ ...prev, isOpen: false, newPassword: '', masterPin: '' }));
+  };
+
+  const handleConfirmVaultModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const pin = vaultModal.masterPin.trim();
+    if (!pin) {
+      showToast?.('Veuillez saisir votre Master PIN.', 'error');
+      return;
+    }
+
+    setVaultModal((prev) => ({ ...prev, submitting: true }));
+    try {
+      if (vaultModal.mode === 'change_password') {
+        const newPass = vaultModal.newPassword.trim();
+        if (newPass.length < 4) {
+          showToast?.('Le nouveau mot de passe doit contenir au moins 4 caractères.', 'error');
+          setVaultModal((prev) => ({ ...prev, submitting: false }));
+          return;
+        }
+        if (updateUserPassword) {
+          await updateUserPassword(vaultModal.targetUsername, newPass, pin);
+          showToast?.(
+            `Mot de passe de @${vaultModal.targetUsername} mis à jour dans le coffre chiffré !`,
+            'success'
+          );
+          if (getAvailableAccounts) setAccountsList(getAvailableAccounts(true));
+        }
+      } else if (vaultModal.mode === 'switch_session') {
+        if (switchSessionToUser) {
+          await switchSessionToUser(vaultModal.targetUsername, pin);
+          showToast?.(
+            `Session basculée vers ${vaultModal.targetDisplayName || `@${vaultModal.targetUsername}`} (2FA Master PIN validé)`,
+            'success'
+          );
+        }
+      } else if (vaultModal.mode === 'reset_vault') {
+        if (handleResetAllAccounts) {
+          await handleResetAllAccounts(pin);
+        }
+      }
+      setVaultModal({
+        isOpen: false,
+        mode: 'change_password',
+        targetUsername: '',
+        targetDisplayName: '',
+        newPassword: '',
+        masterPin: '',
+        submitting: false,
+      });
+    } catch (err: any) {
+      showToast?.(err?.message || 'Opération refusée par le coffre-fort.', 'error');
+      setVaultModal((prev) => ({ ...prev, submitting: false }));
+    }
+  };
+
   const systemAccounts = (accountsList || []).filter((acc: any) => {
     const roleUpper = String(acc?.role || '').toUpperCase();
     const codeLower = String(acc?.code || acc?.username || '').toLowerCase();
@@ -268,7 +358,18 @@ export default function SettingsAdminTab({
                 </div>
               </div>
               <button
-                onClick={handleResetAllAccounts}
+                type="button"
+                onClick={() =>
+                  setVaultModal({
+                    isOpen: true,
+                    mode: 'reset_vault',
+                    targetUsername: '',
+                    targetDisplayName: 'Coffre-Fort Complet',
+                    newPassword: '',
+                    masterPin: '',
+                    submitting: false,
+                  })
+                }
                 className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition border border-rose-200 cursor-pointer"
               >
                 Reset Vault
@@ -276,70 +377,71 @@ export default function SettingsAdminTab({
             </div>
 
             <div className="space-y-3">
-              {systemAccounts.map((userAcc: any) => (
-                <div
-                  key={userAcc.id || userAcc.code || userAcc.username}
-                  className="p-3.5 rounded-2xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-xs">
-                      {(userAcc.code || userAcc.username || 'US').substring(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
-                        <span className="truncate">{userAcc.libelle || userAcc.name}</span>
-                        <span className="text-[10px] font-mono text-slate-500">@{userAcc.code || userAcc.username}</span>
-                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
-                          {userAcc.role}
-                        </span>
+              {systemAccounts.map((userAcc: any) => {
+                const accLogin = userAcc.code || userAcc.username;
+                const accLabel = userAcc.libelle || userAcc.name || accLogin;
+                return (
+                  <div
+                    key={userAcc.id || accLogin}
+                    className="p-3.5 rounded-2xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-xs">
+                        {String(accLogin || 'US').substring(0, 2).toUpperCase()}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
-                        Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                          <span className="truncate">{accLabel}</span>
+                          <span className="text-[10px] font-mono text-slate-500">@{accLogin}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
+                            {userAcc.role}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                          Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                    <button
-                      onClick={async () => {
-                        const newPass = prompt(`Nouveau mot de passe pour @${userAcc.code || userAcc.username} (au moins 4 caractères) :`);
-                        if (!newPass || newPass.trim().length < 4) return;
-                        const pin = prompt('Master PIN requis pour déverrouiller et mettre à jour le coffre-fort :');
-                        if (!pin) return;
-                        try {
-                          if (updateUserPassword) {
-                            await updateUserPassword(userAcc.code || userAcc.username, newPass.trim(), pin.trim());
-                            showToast(`Mot de passe de @${userAcc.code || userAcc.username} mis à jour dans le coffre chiffré !`, 'success');
-                            if (getAvailableAccounts) setAccountsList(getAvailableAccounts(true));
-                          }
-                        } catch (err: any) {
-                          showToast(err.message, 'error');
+                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVaultModal({
+                            isOpen: true,
+                            mode: 'change_password',
+                            targetUsername: accLogin,
+                            targetDisplayName: accLabel,
+                            newPassword: '',
+                            masterPin: '',
+                            submitting: false,
+                          })
                         }
-                      }}
-                      className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-amber-500 hover:text-white text-slate-700 font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                    >
-                      Changer Pass
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const pin = prompt('Master PIN requis pour confirmer le basculement de session (2FA) :');
-                        if (!pin) return;
-                        try {
-                          if (switchSessionToUser) {
-                            await switchSessionToUser(userAcc.code || userAcc.username, pin.trim());
-                            showToast(`Session -> @${userAcc.code || userAcc.username} — 2FA: Code + PIN`, 'success');
-                          }
-                        } catch (err: any) {
-                          showToast(err.message, 'error');
+                        className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-amber-500 hover:text-white text-slate-700 font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
+                      >
+                        Changer Pass
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVaultModal({
+                            isOpen: true,
+                            mode: 'switch_session',
+                            targetUsername: accLogin,
+                            targetDisplayName: `${accLabel} (@${accLogin})`,
+                            newPassword: '',
+                            masterPin: '',
+                            submitting: false,
+                          })
                         }
-                      }}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                    >
-                      Basculer (2FA)
-                    </button>
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
+                      >
+                        Basculer (2FA)
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {systemAccounts.length === 0 && (
                 <div className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
@@ -457,21 +559,17 @@ export default function SettingsAdminTab({
                   {isActive && switchSessionToUser && (
                     <button
                       type="button"
-                      onClick={async () => {
-                        const pin = prompt(
-                          `Master PIN requis pour basculer vers la session technicien @${loginId} (${code}) :`
-                        );
-                        if (!pin) return;
-                        try {
-                          await switchSessionToUser(loginId, pin.trim());
-                          showToast(
-                            `Session basculée vers ${techAcc.personnelName || loginId} (${code})`,
-                            'success'
-                          );
-                        } catch (err: any) {
-                          showToast(err.message, 'error');
-                        }
-                      }}
+                      onClick={() =>
+                        setVaultModal({
+                          isOpen: true,
+                          mode: 'switch_session',
+                          targetUsername: loginId,
+                          targetDisplayName: `${techAcc.personnelName || loginId} (${code})`,
+                          newPassword: '',
+                          masterPin: '',
+                          submitting: false,
+                        })
+                      }
                       className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white border border-purple-200 text-[11px] font-bold transition shrink-0 cursor-pointer"
                       title="Tester la vue de ce technicien (2FA Master PIN)"
                     >
@@ -493,6 +591,149 @@ export default function SettingsAdminTab({
           </div>
         )}
       </div>
+
+      {/* Vault Cryptographic Action Modal (Replaces blocked window.prompt) */}
+      {vaultModal.isOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={closeVaultModal}
+        >
+          <div
+            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={`px-5 py-4 border-b flex items-center justify-between ${
+                vaultModal.mode === 'reset_vault'
+                  ? 'bg-rose-50 border-rose-200'
+                  : 'bg-slate-900 border-slate-800 text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    vaultModal.mode === 'reset_vault'
+                      ? 'bg-rose-100 text-rose-700'
+                      : 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4
+                    className={`text-sm font-bold ${
+                      vaultModal.mode === 'reset_vault' ? 'text-rose-950' : 'text-white'
+                    }`}
+                  >
+                    {vaultModal.mode === 'change_password' &&
+                      `Modifier le mot de passe (@${vaultModal.targetUsername})`}
+                    {vaultModal.mode === 'switch_session' &&
+                      'Basculement de Session Sécurisé (2FA)'}
+                    {vaultModal.mode === 'reset_vault' &&
+                      'Réinitialiser le Coffre-Fort Cryptographique'}
+                  </h4>
+                  <p
+                    className={`text-[11px] ${
+                      vaultModal.mode === 'reset_vault' ? 'text-rose-700' : 'text-slate-300'
+                    }`}
+                  >
+                    Validation par clé maîtresse Master PIN (AES-256-GCM)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeVaultModal}
+                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  vaultModal.mode === 'reset_vault'
+                    ? 'text-rose-600 hover:bg-rose-100'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmVaultModal} className="p-5 space-y-4">
+              {vaultModal.mode === 'switch_session' && (
+                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950">
+                  Vous allez basculer votre session active vers{' '}
+                  <b className="font-mono">{vaultModal.targetDisplayName}</b>.
+                </div>
+              )}
+
+              {vaultModal.mode === 'reset_vault' && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 leading-relaxed">
+                  <b>Attention :</b> Cette action réinitialise le coffre-fort chiffré et rétablit tous les comptes système aux valeurs d&apos;usine.
+                </div>
+              )}
+
+              {vaultModal.mode === 'change_password' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Nouveau mot de passe (min. 4 caractères)
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    minLength={4}
+                    autoFocus
+                    value={vaultModal.newPassword}
+                    onChange={(e) =>
+                      setVaultModal((prev) => ({ ...prev, newPassword: e.target.value }))
+                    }
+                    placeholder="Saisir le nouveau mot de passe..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Master PIN requis pour autoriser l&apos;opération
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoFocus={vaultModal.mode !== 'change_password'}
+                  maxLength={8}
+                  value={vaultModal.masterPin}
+                  onChange={(e) =>
+                    setVaultModal((prev) => ({
+                      ...prev,
+                      masterPin: e.target.value.replace(/[^0-9]/g, ''),
+                    }))
+                  }
+                  placeholder="Master PIN (4 à 8 chiffres)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeVaultModal}
+                  disabled={vaultModal.submitting}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={vaultModal.submitting}
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition cursor-pointer ${
+                    vaultModal.mode === 'reset_vault'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
+                >
+                  {vaultModal.submitting ? 'Validation...' : 'Confirmer'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

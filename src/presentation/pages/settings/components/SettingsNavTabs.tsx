@@ -14,7 +14,17 @@ import {
 /**
  * Navigation tabs for SettingsView.
  */
-export default function SettingsNavTabs({ activeTab, setActiveTab, discoveredItemsCount = 0 }) {
+export default function SettingsNavTabs({
+  activeTab,
+  setActiveTab,
+  discoveredItemsCount = 0,
+  allowedTabIds,
+}: {
+  activeTab: string;
+  setActiveTab: (id: string) => void;
+  discoveredItemsCount?: number;
+  allowedTabIds?: string[];
+}) {
   const tabs = [
     {
       id: 'overview',
@@ -128,10 +138,14 @@ export default function SettingsNavTabs({ activeTab, setActiveTab, discoveredIte
     },
   ];
 
+  const visibleTabs = Array.isArray(allowedTabIds) && allowedTabIds.length > 0
+    ? tabs.filter((t) => allowedTabIds.includes(t.id))
+    : tabs;
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3 sm:p-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {tabs.map((tab) => {
+        {visibleTabs.map((tab) => {
           const IconComponent = tab.icon;
           const isActive = activeTab === tab.id;
           return (

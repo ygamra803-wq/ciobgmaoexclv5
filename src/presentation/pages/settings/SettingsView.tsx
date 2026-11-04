@@ -26,6 +26,8 @@ import { syncQueueService } from '../../../services/syncQueueService';
 import { errorTracker } from '../../../services/ErrorTrackingService';
 import { analytics } from '../../../services/AnalyticsService';
 import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { filterActiveMachines } from '../../../utils/activeMachines';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { confirmAction } from '../../../utils/confirmAction';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
@@ -87,8 +89,26 @@ export default function SettingsView({
   linkedFileHandle,
   linkedFileName,
   onDirectLink,
+  initialTab,
 }: any) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    const pendingTarget = localStorage.getItem('gmao_settings_target_tab');
+    if (pendingTarget) {
+      localStorage.removeItem('gmao_settings_target_tab');
+      return pendingTarget;
+    }
+    return initialTab || 'overview';
+  });
+
+  useEffect(() => {
+    const pendingTarget = localStorage.getItem('gmao_settings_target_tab');
+    if (pendingTarget) {
+      localStorage.removeItem('gmao_settings_target_tab');
+      setActiveTab(pendingTarget);
+    } else if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Local storage size computation (L1 Rapide + L2 IndexedDB High-Capacity)
   const localStorageSizeKB = useMemo(() => {
@@ -181,6 +201,49 @@ export default function SettingsView({
     setupMasterPin,
   } = (useAuth() || {}) as any;
 
+  // Internal RBAC capability flags (ST-1)
+  const canManageSettings =
+    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.manage');
+  const canManageUsers =
+    !currentUser || AuthorizationService.hasPermission(currentUser, 'users.manage');
+  const canBackupSettings =
+    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.backup');
+  const canViewSettings =
+    !currentUser || AuthorizationService.hasPermission(currentUser, 'settings.view');
+
+  const allowedTabIds = useMemo(() => {
+    const ids: string[] = [];
+    if (canViewSettings || canBackupSettings) {
+      ids.push('overview', 'mvt-logic');
+    }
+    if (canManageSettings) {
+      ids.push('injection');
+    }
+    if (canViewSettings || canBackupSettings) {
+      ids.push('directory', 'matching');
+    }
+    if (canManageSettings) {
+      ids.push('json-editor');
+    }
+    if (canViewSettings || canBackupSettings) {
+      ids.push('backup-audit');
+    }
+    if (canManageSettings && canManageUsers) {
+      ids.push('admin');
+    }
+    if (canViewSettings) {
+      ids.push('performance');
+    }
+    ids.push('appearance');
+    return ids;
+  }, [canManageSettings, canManageUsers, canBackupSettings, canViewSettings]);
+
+  useEffect(() => {
+    if (allowedTabIds.length > 0 && !allowedTabIds.includes(activeTab)) {
+      setActiveTab(allowedTabIds[0]);
+    }
+  }, [allowedTabIds, activeTab]);
+
   const [accountsList, setAccountsList] = useState(() => {
     return getAvailableAccounts ? getAvailableAccounts(true) : [];
   });
@@ -193,19 +256,25 @@ export default function SettingsView({
     }
   }, [getAvailableAccounts, isVaultUnlocked, technicians]);
 
-  const handleResetAllAccounts = async () => {
-    if (await confirmAction({ title: 'Réinitialiser le coffre-fort', message: 'Voulez-vous réinitialiser le coffre-fort et tous les comptes système ?', variant: 'danger' })) {
-      const pin = prompt('Veuillez saisir votre Master PIN pour autoriser la réinitialisation :');
-      if (!pin) return;
-      try {
-        if (resetAllAccountsToDefaults) {
-          await resetAllAccountsToDefaults(pin);
-          setAccountsList(getAvailableAccounts ? getAvailableAccounts(true) : []);
-          showToast('Le coffre-fort a été réinitialisé. Définissez votre nouveau Master PIN.', 'info');
-        }
-      } catch (err: any) {
-        showToast(err.message || 'Échec de la réinitialisation.', 'error');
+  const handleResetAllAccounts = async (providedPin?: string) => {
+    if (!canManageSettings || !canManageUsers) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
+    const pin = typeof providedPin === 'string' ? providedPin.trim() : '';
+    if (!pin) {
+      showToast?.('Master PIN requis pour autoriser la réinitialisation du coffre-fort.', 'error');
+      return;
+    }
+    try {
+      if (resetAllAccountsToDefaults) {
+        await resetAllAccountsToDefaults(pin);
+        setAccountsList(getAvailableAccounts ? getAvailableAccounts(true) : []);
+        showToast('Le coffre-fort a été réinitialisé. Définissez votre nouveau Master PIN.', 'info');
       }
+    } catch (err: any) {
+      showToast(err.message || 'Échec de la réinitialisation.', 'error');
+      throw err;
     }
   };
 
@@ -660,6 +729,10 @@ export default function SettingsView({
   }, [originalJsonText, activeTab]);
 
   const handleSaveJSON = () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis pour modifier la base JSON.', 'error');
+      return;
+    }
     try {
       const parsed = JSON.parse(jsonText);
       if (!Array.isArray(parsed)) {
@@ -767,6 +840,10 @@ export default function SettingsView({
 
   // DATA INJECTION HUB HANDLERS
   const handleResetToZero = async () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis pour réinitialiser l’usine.', 'error');
+      return;
+    }
     if (
       await confirmAction({
         title: 'Réinitialisation Mode Usine Réelle',
@@ -795,6 +872,10 @@ export default function SettingsView({
   };
 
   const handleInjectGroup = (group: string) => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     if (typeof onLoadDemoSection === 'function') {
       onLoadDemoSection(group);
       const labels: Record<string, string> = {
@@ -838,6 +919,10 @@ export default function SettingsView({
   };
 
   const handleClearGroup = (group: string) => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     if (!group || group === 'all') {
       handleResetToZero();
       return;
@@ -849,6 +934,10 @@ export default function SettingsView({
   };
 
   const handleToggleDemoMode = (nextActive: boolean, targetSection = 'all') => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     if (targetSection === 'all') {
       setIsDemoMode(nextActive);
       storageService.setItem(STORAGE_KEYS.DEMO_MODE, nextActive);
@@ -868,6 +957,10 @@ export default function SettingsView({
   };
 
   const handleInjectAll = () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     if (typeof onLoadDemoData === 'function') {
       onLoadDemoData();
     } else {
@@ -902,6 +995,10 @@ export default function SettingsView({
   );
 
   const handlePurgeSystemGeneralBomLeaks = async () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     if (systemGeneralBomLeaks.length === 0) {
       showToast?.('Aucune fuite BOM sur Système Général détectée.', 'info');
       return;
@@ -931,6 +1028,10 @@ export default function SettingsView({
   };
 
   const handlePurgePreventiveOrphans = async () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     const impact = dataIntegrityService.previewClearImpact({
       action: 'CLEAR_PREVENTIVE',
       machines,
@@ -955,6 +1056,10 @@ export default function SettingsView({
   };
 
   const handlePurgeCorrectiveOrphans = async () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
+      return;
+    }
     const impact = dataIntegrityService.previewClearImpact({
       action: 'CLEAR_CORRECTIVE',
       machines,
@@ -984,23 +1089,55 @@ export default function SettingsView({
     }
   };
 
+  const [bulkRelinkModal, setBulkRelinkModal] = useState<{
+    isOpen: boolean;
+    entityType: string;
+    targetMachineId: string;
+  }>({
+    isOpen: false,
+    entityType: 'preventive',
+    targetMachineId: '',
+  });
+
+  useEffect(() => {
+    if (!bulkRelinkModal.isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [bulkRelinkModal.isOpen]);
+
   const handleBulkRelink = (entityType: string) => {
     const orphans = entityType === 'preventive' ? preventiveOrphans : correctiveOrphans;
     if (orphans.length === 0) {
       showToast?.('Aucun élément orphelin à réassigner.', 'info');
       return;
     }
-    const activeMachines = Array.from(dataIntegrityService.buildActiveMachineIdSet(machines));
-    if (activeMachines.length === 0) {
+    const activeMachinesList = filterActiveMachines(machines);
+    if (activeMachinesList.length === 0) {
       showToast?.('Aucune machine active disponible pour la réassignation.', 'error');
       return;
     }
-    const target = window.prompt(
-      `Entrez le code de la machine active cible parmi (${activeMachines.slice(0, 10).join(', ')}...):`,
-      activeMachines[0]
-    );
-    if (!target) return;
+    const firstId =
+      activeMachinesList[0]?.id_machine_registered ||
+      activeMachinesList[0]?.id ||
+      activeMachinesList[0]?.code ||
+      '';
+    setBulkRelinkModal({
+      isOpen: true,
+      entityType,
+      targetMachineId: firstId,
+    });
+  };
 
+  const handleConfirmBulkRelink = (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = bulkRelinkModal.targetMachineId.trim();
+    if (!target) return;
+    const entityType = bulkRelinkModal.entityType;
     const items = entityType === 'preventive' ? preventiveTasks : correctiveInterventions;
     const { updated, changedCount, error } = dataIntegrityService.bulkRelinkOrphans({
       entityType,
@@ -1019,6 +1156,7 @@ export default function SettingsView({
     } else {
       setCorrectiveInterventions(updated);
     }
+    setBulkRelinkModal({ isOpen: false, entityType: 'preventive', targetMachineId: '' });
     showToast?.(`${changedCount} élément(s) réassigné(s) avec succès à ${target}.`, 'success');
   };
 
@@ -1337,6 +1475,10 @@ export default function SettingsView({
   };
 
   const handleClearAccessLogs = async () => {
+    if (!canManageSettings) {
+      showToast?.('Accès refusé : privilèges Administrateur requis pour vider le journal des accès.', 'error');
+      return;
+    }
     if (
       await confirmAction({
         title: 'Vider le journal des accès',
@@ -1471,11 +1613,12 @@ export default function SettingsView({
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         discoveredItemsCount={discoveredItems.length}
+        allowedTabIds={allowedTabIds}
       />
 
       {/* Modular Tab Panels */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 w-full max-w-full overflow-hidden">
-        {activeTab === 'overview' && (
+        {activeTab === 'overview' && allowedTabIds.includes('overview') && (
           <SettingsOverviewTab
             localStorageSizeKB={localStorageSizeKB}
             totalUsedMB={totalUsedMB}
@@ -1503,9 +1646,9 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'mvt-logic' && <SettingsMvtLogicTab />}
+        {activeTab === 'mvt-logic' && allowedTabIds.includes('mvt-logic') && <SettingsMvtLogicTab />}
 
-        {activeTab === 'injection' && (
+        {activeTab === 'injection' && allowedTabIds.includes('injection') && (
           <SettingsInjectionTab
             handleInjectAll={handleInjectAll}
             initialStock={initialStock}
@@ -1579,7 +1722,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'json-editor' && (
+        {activeTab === 'json-editor' && allowedTabIds.includes('json-editor') && (
           <SettingsJsonEditorTab
             jsonTarget={jsonTarget}
             setJsonTarget={setJsonTarget}
@@ -1594,7 +1737,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'backup-audit' && (
+        {activeTab === 'backup-audit' && allowedTabIds.includes('backup-audit') && (
           <SettingsBackupAuditTab
             auditSubTab={auditSubTab}
             setAuditSubTab={setAuditSubTab}
@@ -1638,7 +1781,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && allowedTabIds.includes('admin') && (
           <SettingsAdminTab
             currentUser={currentUser}
             isVaultUnlocked={isVaultUnlocked}
@@ -1664,7 +1807,7 @@ export default function SettingsView({
           />
         )}
 
-        {activeTab === 'performance' && (
+        {activeTab === 'performance' && allowedTabIds.includes('performance') && (
           <PerformanceDashboardPanel
             rawStock={rawStock}
             mouvements={mouvements}
@@ -1722,6 +1865,75 @@ export default function SettingsView({
         operations={operations}
         handleExecuteRelink={handleExecuteRelink}
       />
+
+      {bulkRelinkModal.isOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-bold">
+                  Réassigner en masse ({bulkRelinkModal.entityType === 'preventive' ? 'Tâches Préventives' : 'Interventions Correctives'})
+                </h4>
+                <p className="text-[11px] text-slate-300 mt-0.5">
+                  Sélectionnez la machine active cible pour rattacher les éléments orphelins
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleConfirmBulkRelink} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Machine Active Cible
+                </label>
+                <select
+                  required
+                  value={bulkRelinkModal.targetMachineId}
+                  onChange={(e) =>
+                    setBulkRelinkModal((prev) => ({ ...prev, targetMachineId: e.target.value }))
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                >
+                  {filterActiveMachines(machines).map((m: any) => {
+                    const mId = m.id_machine_registered || m.id || m.code;
+                    return (
+                      <option key={mId} value={mId}>
+                        {mId} — {m.designation || m.nom || 'Machine'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
+                >
+                  Confirmer la réassignation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showBackupManagerModal && (
         <BackupManagerModal
