@@ -156,7 +156,15 @@ export default function PartsTable({
         const realIndex = startIndex + idx;
         const domainItem = new EntrepotItem(item);
                 const typeObj = types.find((t) => t.id_type === item.id_type);
-                const diagObj = diagnostics.find((d) => d.id_diag === item.id_diag);
+                const diagObj = diagnostics.find((d) => {
+                  const dId = d.id_part || d.ref || d.id_diag || d.id;
+                  return (
+                    (item.id_diag && dId === item.id_diag) ||
+                    (item.ref && dId === item.ref) ||
+                    (item.id_part_designation && dId === item.id_part_designation) ||
+                    (item.designation && (d.designation === item.designation || d.libelle === item.designation))
+                  );
+                });
                 const isActionOpen = activeActionMenuId === item.id_warehouse_item;
 
                 return (
@@ -227,10 +235,12 @@ export default function PartsTable({
                             type="button"
                             onClick={() => onNavigateToDiag && onNavigateToDiag(item.id_type)}
                             className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-100/90 hover:bg-slate-200 text-slate-600 border border-slate-200/70 text-[10px] transition cursor-pointer max-w-[190px] truncate"
-                            title={`Diagnostic / Désignation: ${diagObj.libelle}`}
+                            title={`Diagnostic / Désignation: ${diagObj.designation || diagObj.libelle || diagObj.ref || diagObj.id_part}`}
                           >
                             <Tag className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                            <span className="truncate">{diagObj.libelle}</span>
+                            <span className="truncate">
+                              {diagObj.designation || diagObj.libelle || diagObj.ref || diagObj.id_part}
+                            </span>
                           </button>
                         )}
                       </div>
@@ -432,7 +442,7 @@ export default function PartsTable({
 
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR_ATELIER')}
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR')}
                                     className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
@@ -450,7 +460,7 @@ export default function PartsTable({
 
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Ajustement & Recalibrage', 'INVENTAIRE')}
+                                    onClick={() => handleOpenQuickModal(item, 'Ajustement', 'INVENTAIRE')}
                                     className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition cursor-pointer"
                                   >
                                     <Scale className="w-3.5 h-3.5 text-amber-500" />

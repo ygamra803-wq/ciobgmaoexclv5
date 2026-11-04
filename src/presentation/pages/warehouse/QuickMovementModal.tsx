@@ -43,8 +43,13 @@ export default function QuickMovementModal({
     [technicians]
   );
 
-  const [flowType, setFlowType] = useState(initialFlow);
-  const [actionId, setActionId] = useState(initialAction);
+  const normalizeFlow = (flow: string) =>
+    flow === 'Ajustement & Recalibrage' ? 'Ajustement' : flow || 'Sortie Interne';
+  const normalizeAction = (action: string) =>
+    action === 'RETOUR_ATELIER' ? 'RETOUR' : action || 'CORRECTIVE';
+
+  const [flowType, setFlowType] = useState(() => normalizeFlow(initialFlow));
+  const [actionId, setActionId] = useState(() => normalizeAction(initialAction));
   const [quantite, setQuantite] = useState(1);
   const [targetStock, setTargetStock] = useState(article?.stockActuel ?? 0);
   const [adjustMode, setAdjustMode] = useState('DELTA'); // 'DELTA' (Mouvement +/-) | 'DIRECT' (Corriger valeur réelle)
@@ -80,8 +85,8 @@ export default function QuickMovementModal({
   // Synchronize when initialFlow or article changes
   useEffect(() => {
     if (article) {
-      setFlowType(initialFlow);
-      setActionId(initialAction);
+      setFlowType(normalizeFlow(initialFlow));
+      setActionId(normalizeAction(initialAction));
       setQuantite(1);
       setTargetStock(article.stockActuel ?? 0);
       setAdjustMode('DELTA');

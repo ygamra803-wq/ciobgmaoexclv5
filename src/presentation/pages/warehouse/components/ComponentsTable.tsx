@@ -518,7 +518,7 @@ export default function ComponentsTable({
 
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR_ATELIER')}
+                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR')}
                                     className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-blue-700 hover:bg-blue-50 flex items-center gap-2 transition cursor-pointer"
                                   >
                                     <CheckCircle2 className="w-3.5 h-3.5 text-blue-500" />
@@ -536,7 +536,7 @@ export default function ComponentsTable({
 
                                   <button
                                     type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Ajustement & Recalibrage', 'INVENTAIRE')}
+                                    onClick={() => handleOpenQuickModal(item, 'Ajustement', 'INVENTAIRE')}
                                     className="w-full px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-amber-700 hover:bg-amber-50 flex items-center gap-2 transition cursor-pointer"
                                   >
                                     <Scale className="w-3.5 h-3.5 text-amber-500" />

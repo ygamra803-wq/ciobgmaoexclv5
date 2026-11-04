@@ -426,13 +426,15 @@ export default function EntrepotView({
     if (activeWarehouseTab === 'PARTS') {
       const defaultType = types[0]?.id_type || 'TYPE-MEC';
       const relDiags = diagnostics.filter((d) => d.id_type === defaultType);
-      const defaultDiag = relDiags[0]?.id_diag || '';
+      const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
+      const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+      const defaultDiagObj = relDiags[0] || null;
+      const defaultDiag = getDiagId(defaultDiagObj);
       const autoCode = getNextPartRef(defaultType);
-      const defaultDiagObj = diagnostics.find((d) => d.id_diag === defaultDiag);
 
       setAddForm({
         id_warehouse_item: autoCode,
-        designation: defaultDiagObj ? defaultDiagObj.libelle : '',
+        designation: getDiagLabel(defaultDiagObj),
         nature: 'PART',
         id_family: '',
         family_prefix: '',
@@ -444,9 +446,9 @@ export default function EntrepotView({
         id_zone: zones[0]?.id_zone || '',
         technician: activeTechnicians[0]?.nom || '',
         status: 'En stock (Disponible)',
-        emplacement: 'E-MAG-PDR-01',
+        emplacement: defaultDiagObj?.emplacement || 'E-MAG-PDR-01',
         stockInitial: 1,
-        seuil: 0,
+        seuil: defaultDiagObj?.seuil != null ? defaultDiagObj.seuil : 0,
         remarques: '',
       });
     } else {
@@ -503,9 +505,11 @@ export default function EntrepotView({
       // PART
       const defaultType = addForm.id_type || types[0]?.id_type || 'TYPE-MEC';
       const relDiags = diagnostics.filter((d) => d.id_type === defaultType);
-      const defaultDiag = relDiags[0]?.id_diag || '';
+      const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
+      const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+      const defaultDiagObj = relDiags[0] || null;
+      const defaultDiag = getDiagId(defaultDiagObj);
       const autoCode = getNextPartRef(defaultType);
-      const defaultDiagObj = diagnostics.find((d) => d.id_diag === defaultDiag);
 
       setAddForm((prev) => ({
         ...prev,
@@ -513,7 +517,9 @@ export default function EntrepotView({
         id_type: defaultType,
         id_diag: defaultDiag,
         id_warehouse_item: autoCode,
-        designation: defaultDiagObj ? defaultDiagObj.libelle : prev.designation,
+        designation: defaultDiagObj ? getDiagLabel(defaultDiagObj) : prev.designation,
+        emplacement: defaultDiagObj?.emplacement || prev.emplacement,
+        seuil: defaultDiagObj?.seuil != null ? defaultDiagObj.seuil : prev.seuil,
       }));
     }
   };
@@ -616,25 +622,34 @@ export default function EntrepotView({
 
   const handleAddTypeChange = (newType) => {
     const relDiags = diagnostics.filter((d) => d.id_type === newType);
-    const newDiag = relDiags[0]?.id_diag || '';
+    const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
+    const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+    const diagObj = relDiags[0] || null;
+    const newDiag = getDiagId(diagObj);
     const autoCode = getNextPartRef(newType);
-    const diagObj = diagnostics.find((d) => d.id_diag === newDiag);
 
     setAddForm((prev) => ({
       ...prev,
       id_type: newType,
       id_diag: newDiag,
       id_warehouse_item: autoCode,
-      designation: diagObj ? diagObj.libelle : prev.designation,
+      designation: diagObj ? getDiagLabel(diagObj) : prev.designation,
+      emplacement: diagObj?.emplacement || prev.emplacement,
+      seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
   };
 
   const handleAddDiagChange = (newDiag) => {
-    const diagObj = diagnostics.find((d) => d.id_diag === newDiag);
+    const diagObj = diagnostics.find(
+      (d) => (d.id_part || d.ref || d.id_diag || d.id) === newDiag
+    );
+    const diagLabel = diagObj ? (diagObj.designation || diagObj.libelle || '') : '';
     setAddForm((prev) => ({
       ...prev,
       id_diag: newDiag,
-      designation: diagObj ? diagObj.libelle : prev.designation,
+      designation: diagLabel || prev.designation,
+      emplacement: diagObj?.emplacement || prev.emplacement,
+      seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
   };
 
@@ -1120,7 +1135,9 @@ export default function EntrepotView({
         'Nature Twin (B)',
         'Designation (C)',
         'Famille / Type (D/B)',
+        'Template / Ref Catalogue (D/C)',
         'Rattachement (E)',
+        'Code Machine / Zone',
         'Emplacement (E)',
         'Statut (G)',
         'Stock Initial',
@@ -1134,7 +1151,9 @@ export default function EntrepotView({
         item.nature || '',
         item.designation || '',
         item.id_family || item.id_type || '',
+        item.id_templates || item.id_diag || item.ref || '',
         item.rattachement_type || '',
+        item.id_machine_registered || item.id_zone || '',
         item.emplacement || '',
         item.status || '',
         item.stockInitial || 0,
@@ -1834,11 +1853,15 @@ export default function EntrepotView({
                         className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
                       >
                         <option value="">-- {t('entrepot.modal.diag')} --</option>
-                        {availableAddDiags.map((d) => (
-                          <option key={d.id_diag} value={d.id_diag}>
-                            {d.libelle}
-                          </option>
-                        ))}
+                        {availableAddDiags.map((d) => {
+                          const dId = d.id_part || d.ref || d.id_diag || d.id;
+                          const dLabel = d.designation || d.libelle || dId;
+                          return (
+                            <option key={dId} value={dId}>
+                              {dId} - {dLabel}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>
@@ -2091,6 +2114,123 @@ export default function EntrepotView({
                   required
                 />
               </div>
+
+              {/* Dynamic Classification in Edit Modal */}
+              {isComponentNature(toEdit?.nature || editForm.nature) ? (
+                <div className="grid grid-cols-2 gap-2.5 p-2.5 bg-blue-50/40 rounded-xl border border-blue-100">
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.family')}
+                    </label>
+                    <select
+                      value={editForm.id_family}
+                      onChange={(e) => {
+                        const nextFam = e.target.value;
+                        const relTpl = templates.filter((tObj) => tObj.id_family === nextFam);
+                        setEditForm({
+                          ...editForm,
+                          id_family: nextFam,
+                          id_templates: relTpl[0]?.id_templates || '',
+                        });
+                      }}
+                      className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold focus:border-blue-500 outline-none"
+                    >
+                      {families.map((f) => (
+                        <option key={f.id_family} value={f.id_family}>
+                          {f.libelle} ({f.id_family})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.template')}
+                    </label>
+                    <select
+                      value={editForm.id_templates}
+                      onChange={(e) => setEditForm({ ...editForm, id_templates: e.target.value })}
+                      className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-blue-500 outline-none"
+                    >
+                      <option value="">-- {t('entrepot.filters.all_templates')} --</option>
+                      {(editForm.id_family
+                        ? templates.filter((tObj) => tObj.id_family === editForm.id_family)
+                        : templates
+                      ).map((tObj) => (
+                        <option key={tObj.id_templates} value={tObj.id_templates}>
+                          {tObj.libelle}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2.5 p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.type')}
+                    </label>
+                    <select
+                      value={editForm.id_type}
+                      onChange={(e) => {
+                        const nextType = e.target.value;
+                        const relDiags = diagnostics.filter((d) => d.id_type === nextType);
+                        const firstDiag = relDiags[0];
+                        const nextDiagId = firstDiag
+                          ? firstDiag.id_part || firstDiag.ref || firstDiag.id_diag || firstDiag.id || ''
+                          : '';
+                        setEditForm({
+                          ...editForm,
+                          id_type: nextType,
+                          id_diag: nextDiagId,
+                        });
+                      }}
+                      className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold focus:border-indigo-500 outline-none"
+                    >
+                      {types.map((tObj) => (
+                        <option key={tObj.id_type} value={tObj.id_type}>
+                          {tObj.libelle} ({tObj.id_type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10.5px] font-bold text-slate-700 block mb-1">
+                      {t('entrepot.modal.diag')}
+                    </label>
+                    <select
+                      value={editForm.id_diag}
+                      onChange={(e) => {
+                        const nextDiag = e.target.value;
+                        const diagObj = diagnostics.find(
+                          (d) => (d.id_part || d.ref || d.id_diag || d.id) === nextDiag
+                        );
+                        setEditForm({
+                          ...editForm,
+                          id_diag: nextDiag,
+                          designation: diagObj
+                            ? diagObj.designation || diagObj.libelle || editForm.designation
+                            : editForm.designation,
+                        });
+                      }}
+                      className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
+                    >
+                      <option value="">-- {t('entrepot.modal.diag')} --</option>
+                      {(editForm.id_type
+                        ? diagnostics.filter((d) => d.id_type === editForm.id_type)
+                        : diagnostics
+                      ).map((d) => {
+                        const dId = d.id_part || d.ref || d.id_diag || d.id;
+                        const dLabel = d.designation || d.libelle || dId;
+                        return (
+                          <option key={dId} value={dId}>
+                            {dId} - {dLabel}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>

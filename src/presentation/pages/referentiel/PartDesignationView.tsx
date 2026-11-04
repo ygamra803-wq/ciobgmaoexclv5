@@ -160,12 +160,14 @@ export default function PartDesignationView({
   const handleExportExcel = () => {
     const headers = ['Référence', 'Désignation Part', 'Type Parent', 'Stock Actuel', 'Emplacement'];
     const rows = filtered.map((d) => {
+      const dKey = d.ref || d.id_part || d.id_diag || d.id;
       const matchingItems = warehouseItems.filter(
         (w) =>
           (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
-          (w.id_warehouse_item === d.ref ||
-            w.ref === d.ref ||
-            w.id_part_designation === (d.ref || d.id_part) ||
+          (w.id_warehouse_item === dKey ||
+            w.ref === dKey ||
+            w.id_diag === dKey ||
+            w.id_part_designation === dKey ||
             w.designation === d.designation)
       );
       const totalStock = matchingItems.reduce(
@@ -296,11 +298,14 @@ export default function PartDesignationView({
         colLetter: 'F',
         icon: Warehouse,
         render: (item) => {
+          const dKey = item.ref || item.id_part || item.id_diag || item.id;
           const pCount = warehouseItems.filter(
             (w) =>
               (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
-              (w.id_warehouse_item === item.ref ||
-                w.ref === item.ref ||
+              (w.id_warehouse_item === dKey ||
+                w.ref === dKey ||
+                w.id_diag === dKey ||
+                w.id_part_designation === dKey ||
                 w.designation === item.designation)
           ).length;
           return (
@@ -326,12 +331,14 @@ export default function PartDesignationView({
         colLetter: '',
         align: 'center',
         render: (item) => {
-          const rowKey = item.ref || item.id_part || '';
+          const rowKey = item.ref || item.id_part || item.id_diag || item.id || '';
           const pCount = warehouseItems.filter(
             (w) =>
               (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
-              (w.id_warehouse_item === item.ref ||
-                w.ref === item.ref ||
+              (w.id_warehouse_item === rowKey ||
+                w.ref === rowKey ||
+                w.id_diag === rowKey ||
+                w.id_part_designation === rowKey ||
                 w.designation === item.designation)
           ).length;
           return (
@@ -1027,41 +1034,66 @@ export default function PartDesignationView({
       )}
 
       {/* Delete Modal */}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 border border-slate-200">
-            <h3 className="font-bold text-base text-slate-900 mb-1">
-              {t('part_designations.delete_title', 'Supprimer cette Désignation de Part ?')}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4">
-              {t('part_designations.delete_confirm', 'Êtes-vous sûr de vouloir supprimer')} {' '}
-              <strong className="text-slate-900 font-mono">
-                {toDelete.ref || toDelete.id_part}
-              </strong>{' '}
-              ({toDelete.designation}) ?
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setToDelete(null)}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-              >
-                {t('common.cancel', 'Annuler')}
-              </button>
+      {toDelete && (() => {
+        const delKey = toDelete.ref || toDelete.id_part || toDelete.id_diag || toDelete.id;
+        const linkedWarehouseCount = warehouseItems.filter(
+          (w) =>
+            (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
+            (w.id_warehouse_item === delKey ||
+              w.ref === delKey ||
+              w.id_diag === delKey ||
+              w.id_part_designation === delKey ||
+              w.designation === toDelete.designation)
+        ).length;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 border border-slate-200">
+              <h3 className="font-bold text-base text-slate-900 mb-1">
+                {t('part_designations.delete_title', 'Supprimer cette Désignation de Part ?')}
+              </h3>
+              <p className="text-xs text-slate-500 mb-3">
+                {t('part_designations.delete_confirm', 'Êtes-vous sûr de vouloir supprimer')}{' '}
+                <strong className="text-slate-900 font-mono">
+                  {toDelete.ref || toDelete.id_part}
+                </strong>{' '}
+                ({toDelete.designation}) ?
+              </p>
+              {linkedWarehouseCount > 0 && (
+                <div className="mb-4 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-800 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    Suppression bloquée : {linkedWarehouseCount} pièce(s) active(s) dans l&apos;entrepôt utilisent cette désignation.
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  {t('common.cancel', 'Annuler')}
+                </button>
 
-              <button
-                onClick={() => {
-                  if (!canDeleteStock) return;
-                  onDeletePartDesignation(toDelete.id || toDelete.ref || toDelete.id_part);
-                  setToDelete(null);
-                }}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-pointer"
-              >
-                {t('common.delete', 'Supprimer')}
-              </button>
+                <button
+                  disabled={linkedWarehouseCount > 0}
+                  onClick={() => {
+                    if (!canDeleteStock || linkedWarehouseCount > 0) return;
+                    onDeletePartDesignation(toDelete.id || toDelete.ref || toDelete.id_part);
+                    setToDelete(null);
+                  }}
+                  className={`px-4 py-2 text-xs font-bold text-white rounded-xl transition-all duration-300 ease-out ${
+                    linkedWarehouseCount > 0
+                      ? 'bg-slate-300 cursor-not-allowed'
+                      : 'bg-rose-600 hover:bg-rose-700 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 cursor-pointer'
+                  }`}
+                >
+                  {t('common.delete', 'Supprimer')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Excel Formulas Modal */}
       {showFormulasModal && (

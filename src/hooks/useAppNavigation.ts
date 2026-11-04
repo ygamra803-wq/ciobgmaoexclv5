@@ -196,7 +196,10 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('part_designations'));
   };
 
-  const handleNavigateToPartTypes = (_typeId) => {
+  const handleNavigateToPartTypes = (typeId) => {
+    if (typeof typeId === 'string') {
+      setWhSearch(typeId);
+    }
     startTransition(() => setCurrentTab('part_types'));
   };
 
