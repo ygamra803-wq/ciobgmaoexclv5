@@ -214,7 +214,7 @@ export default function DesignationView({
 
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState('id_diag');
+  const [sortField, setSortField] = useState('ref');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);

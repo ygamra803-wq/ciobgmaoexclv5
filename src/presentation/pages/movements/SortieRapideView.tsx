@@ -853,12 +853,15 @@ export default function SortieRapideView({
   // For Corrective: ALL technicians across the factory can intervene
   // For Preventive / other: ALL technicians with zone technicians prioritized
   const availableTechs = useMemo(() => {
+    const activeList = (technicians || []).filter(
+      (t) => t && t.is_active !== false && t.actif !== false && t.statut !== 'ARCHIVE'
+    );
     if (form.action_id === 'CORRECTIVE') {
-      return technicians;
+      return activeList;
     }
-    if (!form.id_zone) return technicians;
-    const zoneTechs = technicians.filter((t) => t.id_zone === form.id_zone);
-    const otherTechs = technicians.filter((t) => t.id_zone !== form.id_zone);
+    if (!form.id_zone) return activeList;
+    const zoneTechs = activeList.filter((t) => t.id_zone === form.id_zone);
+    const otherTechs = activeList.filter((t) => t.id_zone !== form.id_zone);
     return [...zoneTechs, ...otherTechs];
   }, [technicians, form.id_zone, form.action_id]);
 
@@ -947,10 +950,10 @@ export default function SortieRapideView({
     return getResponsableAllowedZones(currentUsageResponsable);
   }, [currentUsageResponsable, getResponsableAllowedZones]);
 
-  // Available machines for USAGE mode, filtered exclusively by selected zone
+  // Available machines for USAGE mode, filtered exclusively by selected zone and active status
   const usageAvailableMachines = useMemo(() => {
     if (!form.id_zone) return [];
-    return machines.filter((m) => m.id_zone_default === form.id_zone);
+    return filterActiveMachines(machines).filter((m) => m.id_zone_default === form.id_zone);
   }, [machines, form.id_zone]);
 
   const operatorsList = useMemo(() => {
@@ -1026,8 +1029,9 @@ export default function SortieRapideView({
   const unifiedSearchCatalog = useMemo(() => {
     const catalog = [];
 
-    // 1. Stock PDR Items
+    // 1. Stock PDR Items (Active only)
     stockItems.forEach((s) => {
+      if (!s || s.is_active === false || s.actif === false || s.statut === 'ARCHIVE') return;
       catalog.push({
         id: `PDR-${s.id || s.ref}`,
         source: 'STOCK_PDR',
@@ -1045,8 +1049,9 @@ export default function SortieRapideView({
       });
     });
 
-    // 2. Warehouse Digital Twin Items (Parties & Composants)
+    // 2. Warehouse Digital Twin Items (Parties & Composants, Active only)
     warehouseItems.forEach((w) => {
+      if (!w || w.is_active === false || w.actif === false || w.statut === 'ARCHIVE' || w.etat === 'ARCHIVE') return;
       const isPartie = w.category === 'PARTIE' || w.nature === 'PARTIE';
       const codeStr = w.id_warehouse_item || w.code || w.ref || `EXT-${w.id}`;
       catalog.push({

@@ -344,13 +344,12 @@ export function useAppComplexHandlers({
   const handleUpdateType = (id, updatedType) => {
     setTypes((prev) => prev.map((t) => (t.id_type === id ? updatedType : t)));
     if (id !== updatedType.id_type) {
-      setRawStock((prev) =>
-        prev.map((s) =>
-          s.type === id || s.id_type === id
-            ? { ...s, type: updatedType.id_type, id_type: updatedType.id_type }
-            : s
-        )
-      );
+      const typeUpdater = (s) =>
+        s.type === id || s.id_type === id
+          ? { ...s, type: updatedType.id_type, id_type: updatedType.id_type }
+          : s;
+      setRawStock((prev) => prev.map(typeUpdater));
+      setDesignations?.((prev) => (prev || []).map(typeUpdater));
     }
   };
   const handleDeleteType = (id) => {
@@ -828,8 +827,21 @@ export function useAppComplexHandlers({
     const saved = await service.createSparePart({
       id: crypto.randomUUID(),
       ...newArt,
+      type: newArt.id_type || newArt.type || '',
+      id_type: newArt.id_type || newArt.type || '',
     });
     setRawStock((prev) => [saved, ...prev]);
+    setDesignations?.((prev) => [
+      {
+        ...saved,
+        id_designation: saved.ref,
+        type: saved.id_type || saved.type || '',
+        id_type: saved.id_type || saved.type || '',
+      },
+      ...(prev || []).filter(
+        (d) => String(d.ref || d.id_designation || '').toLowerCase() !== String(saved.ref || '').toLowerCase()
+      ),
+    ]);
   };
 
   const handleAddMouvement = async (newMvtOrArray) => {
@@ -854,24 +866,31 @@ export function useAppComplexHandlers({
     } catch (err) {
       Logger.warn('[useAppComplexHandlers] SparePart update warning:', err);
     }
-    setRawStock((prev) =>
-      prev.map((a) =>
-        a.id === id || a.ref === id || (updatedArt && updatedArt.ref && a.ref === updatedArt.ref)
-          ? { ...a, ...updatedArt }
-          : a
-      )
-    );
+    const articleUpdater = (a) =>
+      a.id === id ||
+      a.ref === id ||
+      a.id_designation === id ||
+      (updatedArt && updatedArt.ref && (a.ref === updatedArt.ref || a.id_designation === updatedArt.ref))
+        ? {
+            ...a,
+            ...updatedArt,
+            type: updatedArt.id_type || updatedArt.type || a.type,
+            id_type: updatedArt.id_type || updatedArt.type || a.id_type,
+          }
+        : a;
+    setRawStock((prev) => prev.map(articleUpdater));
+    setDesignations?.((prev) => (prev || []).map(articleUpdater));
   };
   const handleDeleteArticle = async (id) => {
     const hasMovements = (mouvements || []).some((m) => m.ref === id || m.code_article === id);
     if (hasMovements) {
-      setRawStock((prev) =>
-        prev.map((a) =>
-          a.id === id || a.ref === id
-            ? { ...a, is_active: false, actif: false, statut: 'ARCHIVE', date_archivage: new Date().toISOString() }
-            : a
-        )
-      );
+      const archiveStamp = new Date().toISOString();
+      const archiveUpdater = (a) =>
+        a.id === id || a.ref === id || a.id_designation === id
+          ? { ...a, is_active: false, actif: false, statut: 'ARCHIVE', date_archivage: archiveStamp }
+          : a;
+      setRawStock((prev) => prev.map(archiveUpdater));
+      setDesignations?.((prev) => (prev || []).map(archiveUpdater));
       showToast?.(`Article ${id} archivé (désactivé) pour préserver l'historique des sorties et mouvements.`, 'info');
       return;
     }
@@ -883,6 +902,7 @@ export function useAppComplexHandlers({
       Logger.warn('[useAppComplexHandlers] SparePart delete warning:', err);
     }
     setRawStock((prev) => prev.filter((a) => a.id !== id && a.ref !== id));
+    setDesignations?.((prev) => (prev || []).filter((d) => d.id !== id && d.ref !== id && d.id_designation !== id));
     showToast?.(`Article ${id} supprimé définitivement.`, 'success');
   };
 

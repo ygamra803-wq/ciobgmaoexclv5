@@ -26,6 +26,7 @@ import { Logger } from '../../../../core/logger/LoggerService';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { confirmAction } from '../../../../utils/confirmAction';
 import { usePermission } from '../../../components/common/PermissionGate';
+import { filterActiveMachines } from '../../../../utils/activeMachines';
 
 export default function SortieExterneBobinageTab({
   sorties = [],
@@ -44,6 +45,14 @@ export default function SortieExterneBobinageTab({
 }) {
   const canCreateMovement = usePermission('movement.create');
   const canDeleteMovement = usePermission('movement.delete');
+  const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (t) => t && t.is_active !== false && t.actif !== false && t.statut !== 'ARCHIVE'
+      ),
+    [technicians]
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [fournisseurFilter, setFournisseurFilter] = useState('ALL');
@@ -149,26 +158,34 @@ export default function SortieExterneBobinageTab({
   const handleOpenNewModal = () => {
     if (!canCreateMovement) return;
     const nextCode = SortieExterneService.getNextCode(sorties);
+    const defaultMachineCode =
+      activeMachines.length > 0
+        ? activeMachines[0].id_machine_registered || activeMachines[0].id_machine || activeMachines[0].code || ''
+        : '';
+    const defaultTechName =
+      activeTechnicians.length > 0
+        ? activeTechnicians[0].nom || activeTechnicians[0].id_technician || activeTechnicians[0].id || ''
+        : '';
     setFormData({
       code: nextCode,
-      ref: `BS-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
-      id_machine: machines.length > 0 ? (machines[0].id_machine || machines[0].code || 'DET-01') : 'DET-01',
-      code_moteur_reel: 'mot 23',
+      ref: `BS-${new Date().getFullYear()}-${String(sorties.length + 1).padStart(3, '0')}`,
+      id_machine: defaultMachineCode,
+      code_moteur_reel: '',
       id_groupe: 'GRP-MOTEUR-001',
       id_family: 'FAM-MOTEUR-ELEC-001',
-      id_template: 'TPL-MOT-ASYNC-023',
-      ref_moteur: 'Siemens 1LA7 7,5KW 1450tr',
-      designation_moteur: 'Moteur Asynchrone 7,5KW 10CV 1450 tr/min (mot 23)',
+      id_template: '',
+      ref_moteur: '',
+      designation_moteur: '',
       date_demontage: new Date().toISOString().split('T')[0],
-      technicien_demontage: technicians.length > 0 ? (technicians[0].nom || technicians[0].id || 'Soufiane') : 'Soufiane',
+      technicien_demontage: defaultTechName,
       type_probleme: 'grille',
       observation_probleme: '',
       date_expedition: new Date().toISOString().split('T')[0],
       fournisseur_externe: 'Bobinage Casa',
       date_arrivee_prevue: new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString().split('T')[0],
-      cout_bobinage: 1800,
+      cout_bobinage: 0,
       note: '',
-      id_corrective: 'BT-3474',
+      id_corrective: '',
     });
     setIsNewModalOpen(true);
   };
@@ -234,9 +251,12 @@ export default function SortieExterneBobinageTab({
     setSelectedSortie(sortie);
     setReturnFormData({
       date_arrivee_reelle: new Date().toISOString().split('T')[0],
-      cout_bobinage: sortie.cout_bobinage || 1500,
+      cout_bobinage: sortie.cout_bobinage || 0,
       note: sortie.note || 'Retour bobinage contrôlé conforme, vernis et roulements neufs',
-      technicien_reception: technicians.length > 0 ? (technicians[0].nom || 'Ismaayl') : 'Ismaayl',
+      technicien_reception:
+        activeTechnicians.length > 0
+          ? activeTechnicians[0].nom || activeTechnicians[0].id_technician || activeTechnicians[0].id || ''
+          : '',
     });
     setIsReturnModalOpen(true);
   };
@@ -259,8 +279,11 @@ export default function SortieExterneBobinageTab({
     setSelectedSortie(sortie);
     setMountFormData({
       date_montage: new Date().toISOString().split('T')[0],
-      technicien_montage: technicians.length > 0 ? (technicians[0].nom || 'Ismaayl') : 'Ismaayl',
-      id_machine_cible: sortie.id_machine || 'DET-01',
+      technicien_montage:
+        activeTechnicians.length > 0
+          ? activeTechnicians[0].nom || activeTechnicians[0].id_technician || activeTechnicians[0].id || ''
+          : '',
+      id_machine_cible: sortie.id_machine || '',
       note: 'Moteur remonté sur la machine, sens de rotation et ampérage testés OK',
     });
     setIsMountModalOpen(true);
@@ -859,8 +882,9 @@ export default function SortieExterneBobinageTab({
                       onChange={(e) => setFormData({ ...formData, id_machine: e.target.value })}
                       className="w-full h-8 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-purple-500"
                     >
-                      {machines.map((m) => {
-                        const machCode = m.id_machine || m.code || m.id;
+                      <option value="">-- Sélectionner une machine --</option>
+                      {activeMachines.map((m) => {
+                        const machCode = m.id_machine_registered || m.id_machine || m.code || m.id;
                         return (
                           <option key={machCode} value={machCode}>
                             {machCode} - {m.nom || m.designation || 'Machine'}
@@ -939,8 +963,9 @@ export default function SortieExterneBobinageTab({
                       onChange={(e) => setFormData({ ...formData, technicien_demontage: e.target.value })}
                       className="w-full h-8 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-purple-500"
                     >
-                      {technicians.map((t) => (
-                        <option key={t.id || t.nom} value={t.nom || t.id}>
+                      <option value="">-- Sélectionner un technicien --</option>
+                      {activeTechnicians.map((t) => (
+                        <option key={t.id || t.id_technician || t.nom} value={t.nom || t.id}>
                           {t.nom || t.id}
                         </option>
                       ))}
@@ -1200,8 +1225,9 @@ export default function SortieExterneBobinageTab({
                     onChange={(e) => setMountFormData({ ...mountFormData, technicien_montage: e.target.value })}
                     className="w-full h-8 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 outline-none focus:bg-white focus:border-emerald-500"
                   >
-                    {technicians.map((t) => (
-                      <option key={t.id || t.nom} value={t.nom || t.id}>
+                    <option value="">-- Sélectionner un technicien --</option>
+                    {activeTechnicians.map((t) => (
+                      <option key={t.id || t.id_technician || t.nom} value={t.nom || t.id}>
                         {t.nom || t.id}
                       </option>
                     ))}

@@ -31,6 +31,15 @@ export default function EditArticleModal({
     }
   }, [article, types]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !article) return null;
 
   const handleSubmit = (e) => {
@@ -43,6 +52,7 @@ export default function EditArticleModal({
       id: targetId,
       designation: form.designation.trim(),
       id_type: form.id_type,
+      type: form.id_type,
       stockInitial: Number(form.stockInitial) || 0,
       seuil: Number(form.seuil) || 0,
       emplacement: form.emplacement.trim() || 'ATELIER',
@@ -52,7 +62,12 @@ export default function EditArticleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white">

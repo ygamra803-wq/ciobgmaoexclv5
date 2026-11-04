@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
+import { filterActiveMachines } from '../../../utils/activeMachines';
 
 export default function QuickMovementModal({
   isOpen,
@@ -33,14 +34,23 @@ export default function QuickMovementModal({
   onAddMouvement,
   onDirectAdjustStock,
 }) {
+  const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (t) => t && t.is_active !== false && t.actif !== false && t.statut !== 'ARCHIVE'
+      ),
+    [technicians]
+  );
+
   const [flowType, setFlowType] = useState(initialFlow);
   const [actionId, setActionId] = useState(initialAction);
   const [quantite, setQuantite] = useState(1);
   const [targetStock, setTargetStock] = useState(article?.stockActuel ?? 0);
   const [adjustMode, setAdjustMode] = useState('DELTA'); // 'DELTA' (Mouvement +/-) | 'DIRECT' (Corriger valeur réelle)
   const [idZone, setIdZone] = useState(zones[0]?.id_zone || '');
-  const [idMachine, setIdMachine] = useState(machines[0]?.id_machine_registered || '');
-  const [technicien, setTechnicien] = useState(technicians[0]?.nom || '');
+  const [idMachine, setIdMachine] = useState(activeMachines[0]?.id_machine_registered || '');
+  const [technicien, setTechnicien] = useState(activeTechnicians[0]?.nom || '');
   const [fournisseur, setFournisseur] = useState('Fournisseur Central Industriel');
   const [commentaire, setCommentaire] = useState('');
 
@@ -80,6 +90,15 @@ export default function QuickMovementModal({
     }
   }, [initialFlow, initialAction, article, autoBonCode]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !article) return null;
 
   // Handle flow change
@@ -98,8 +117,8 @@ export default function QuickMovementModal({
 
   // Filter available machines by zone
   const availableMachines = idZone
-    ? machines.filter((m) => m.id_zone_default === idZone)
-    : machines;
+    ? activeMachines.filter((m) => m.id_zone_default === idZone)
+    : activeMachines;
 
   const currentStock = Number(article.stockActuel || 0);
 
@@ -493,7 +512,7 @@ export default function QuickMovementModal({
                   value={idZone}
                   onChange={(val) => {
                     setIdZone(val);
-                    const relMch = machines.filter((m) => m.id_zone_default === val);
+                    const relMch = activeMachines.filter((m) => m.id_zone_default === val);
                     setIdMachine(relMch[0]?.id_machine_registered || '');
                   }}
                   options={zones.map((z) => ({ value: z.id_zone, label: `${z.libelle} (${z.id_zone})` }))}
@@ -541,7 +560,7 @@ export default function QuickMovementModal({
               <CustomSelect
                 value={technicien}
                 onChange={(val) => setTechnicien(val)}
-                options={technicians.map((t) => ({ value: t.nom, label: `${t.nom} (${t.id_technician})` }))}
+                options={activeTechnicians.map((t) => ({ value: t.nom, label: `${t.nom} (${t.id_technician})` }))}
               />
             </div>
 
