@@ -54,6 +54,7 @@ import { useGmaoStore } from '../../../store/useGmaoStore';
 import { serverSyncService } from '../../../services/serverSyncService';
 import ServerSyncConflictModal from '../../components/common/ServerSyncConflictModal';
 import FactoryOnboardingWizard from '../../components/common/FactoryOnboardingWizard';
+import { isArchivedMachine, getMachineLifecycleState } from '../../../utils/activeMachines';
 
 export default function DashboardView({
   stockItems = [],
@@ -249,10 +250,23 @@ export default function DashboardView({
 
   // --- Modals State ---
   const [showFormulasModal, setShowFormulasModal] = useState(false);
-  const [formulaTab, setFormulaTab] = useState('stock'); // 'stock' | 'kpi'
+  const [formulaTab, setFormulaTab] = useState<'stock' | 'kpis' | 'autoid'>('stock');
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
   const [isRadarExpanded, setIsRadarExpanded] = useState(false);
+
+  // DB-9: Close Dashboard modals on Escape key
+  useEffect(() => {
+    if (!showOrderModal && !showFormulasModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showOrderModal) setShowOrderModal(false);
+        if (showFormulasModal) setShowFormulasModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showOrderModal, showFormulasModal]);
   const [orderForm, setOrderForm] = useState({
     ref: '',
     designation: '',
@@ -334,9 +348,9 @@ export default function DashboardView({
     );
   }, [pendingExternalRepairs, todayStr]);
 
-  // Calculate analytics for GMAO actions
+  // Calculate analytics for GMAO actions (DB-7: exclude pending purchase orders & temporary external repair loans)
   const actionStats = useMemo(() => {
-    const counts = {
+    const counts: Record<string, number> = {
       CORRECTIVE: 0,
       PREVENTIVE: 0,
       AMELIORATIVE: 0,
@@ -349,12 +363,25 @@ export default function DashboardView({
     let totalSortieQty = 0;
     let totalEntreeQty = 0;
 
-    mouvements.forEach((m) => {
-      const act = String(m.action_id || '').toUpperCase();
+    (mouvements || []).forEach((m) => {
+      const act = String(m.action_id || m.type_intervention || '').toUpperCase();
       const type = String(m.type || '').toLowerCase();
       const q = Number(m.quantite || 0);
 
-      if (type.includes('sort')) {
+      const isPendingOrder =
+        (type === 'commande' || act === 'COMMANDE') &&
+        (!Array.isArray(m.tags) || !m.tags.includes('#RECEPTION_VALIDE'));
+      if (isPendingOrder) {
+        return;
+      }
+
+      const isExternalLoan =
+        type === 'sortie externe' ||
+        m.is_bon_sortie === true ||
+        (Array.isArray(m.tags) &&
+          (m.tags.includes('#BON_SORTIE') || m.tags.includes('#SORTIE_EXTERNE')));
+
+      if (type.includes('sort') && !isExternalLoan) {
         totalSortieQty += q;
       } else if (type.includes('entr')) {
         totalEntreeQty += q;
@@ -362,6 +389,8 @@ export default function DashboardView({
 
       if (counts[act] !== undefined) {
         counts[act] += 1;
+      } else if (type.includes('entr')) {
+        counts.REAPPRO += 1;
       } else {
         counts.AUTRE += 1;
       }
@@ -377,12 +406,17 @@ export default function DashboardView({
     };
   }, [mouvements]);
 
-  // Top 5 consumed spare parts
+  // Top 5 consumed spare parts (DB-7: exclude external repair loans from consumed parts)
   const topConsumedArticles = useMemo(() => {
-    const usageByRef = {};
-    mouvements.forEach((m) => {
+    const usageByRef: Record<string, number> = {};
+    (mouvements || []).forEach((m) => {
       const type = String(m.type || '').toLowerCase();
-      if (type.includes('sort')) {
+      const isExternalLoan =
+        type === 'sortie externe' ||
+        m.is_bon_sortie === true ||
+        (Array.isArray(m.tags) &&
+          (m.tags.includes('#BON_SORTIE') || m.tags.includes('#SORTIE_EXTERNE')));
+      if (type.includes('sort') && !isExternalLoan) {
         const ref = String(m.ref || '').trim();
         if (ref) {
           usageByRef[ref] = (usageByRef[ref] || 0) + Number(m.quantite || 0);
@@ -405,29 +439,48 @@ export default function DashboardView({
       });
   }, [mouvements, stockItems]);
 
-  // Machine health & interventions
+  // Machine health & interventions (DB-5 & DB-7: exclude soft-archived machines & include correctiveInterventions)
   const machineHealth = useMemo(() => {
     let enService = 0;
     let enMaintenance = 0;
     let arret = 0;
 
-    machines.forEach((m) => {
-      const status = String(m.status || '').toLowerCase();
-      if (status.includes('maint')) {
+    const operationalMachines = (machines || []).filter((m) => m && !isArchivedMachine(m));
+
+    operationalMachines.forEach((m) => {
+      const status = String(m.status || m.statut || '').toLowerCase();
+      const lifecycle = getMachineLifecycleState(m);
+      if (status.includes('maint') || status.includes('panne')) {
         enMaintenance += 1;
-      } else if (status.includes('arr') || status.includes('hors')) {
+      } else if (lifecycle === 'STOPPED' || status.includes('arr') || status.includes('hors')) {
         arret += 1;
       } else {
         enService += 1;
       }
     });
 
-    // Count interventions per machine
-    const mchInterventions = {};
-    mouvements.forEach((m) => {
-      if (m.id_machine_registered) {
+    // Count interventions per machine across corrective WOs and non-duplicate stock movements
+    const mchInterventions: Record<string, number> = {};
+    const countedBtCodes = new Set<string>();
+
+    (correctiveInterventions || []).forEach((ci) => {
+      const code = String(ci?.code_machine || ci?.id_machine || ci?.id_machine_registered || '').trim();
+      if (code) {
+        mchInterventions[code] = (mchInterventions[code] || 0) + 1;
+        if (ci?.id) countedBtCodes.add(String(ci.id).trim());
+        if (ci?.num_bt) countedBtCodes.add(String(ci.num_bt).trim());
+      }
+    });
+
+    (mouvements || []).forEach((m) => {
+      const type = String(m?.type || '').toLowerCase();
+      if (type === 'commande') return;
+      if (m?.id_machine_registered) {
         const id = String(m.id_machine_registered).trim();
-        mchInterventions[id] = (mchInterventions[id] || 0) + 1;
+        const bon = String(m.code_bon || '').trim();
+        if (id && (!bon || !countedBtCodes.has(bon))) {
+          mchInterventions[id] = (mchInterventions[id] || 0) + 1;
+        }
       }
     });
 
@@ -435,11 +488,13 @@ export default function DashboardView({
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([id, count]) => {
-        const mch = machines.find((m) => String(m.id_machine_registered) === id);
+        const mch = (machines || []).find(
+          (m) => String(m.id_machine_registered || m.id_machine || m.code || m.id || '').trim() === id
+        );
         return {
           id,
-          designation: mch?.designation || id,
-          zone: mch?.id_zone_default || 'Atelier',
+          designation: mch?.designation || mch?.nom || id,
+          zone: mch?.id_zone_default || mch?.zone || 'Atelier',
           count,
         };
       });
@@ -448,12 +503,12 @@ export default function DashboardView({
       enService,
       enMaintenance,
       arret,
-      total: machines.length,
+      total: operationalMachines.length,
       topMachines,
     };
-  }, [machines, mouvements]);
+  }, [machines, mouvements, correctiveInterventions]);
 
-  // Real-time Master Excel Referential Integrity Health Check
+  // Real-time Master Excel Referential Integrity Health Check (DB-4: pass real preventiveTasks)
   const referentialAudit = useMemo(() => {
     return dataIntegrityService.scanReferentialIntegrity({
       machines,
@@ -462,26 +517,94 @@ export default function DashboardView({
       operations,
       rawStock: stockItems,
       warehouseItems: _warehouseItems,
-      preventiveTasks: [],
+      preventiveTasks,
       correctiveInterventions,
       mouvements,
     });
-  }, [machines, _zones, technicians, operations, stockItems, _warehouseItems, correctiveInterventions, mouvements]);
+  }, [
+    machines,
+    _zones,
+    technicians,
+    operations,
+    stockItems,
+    _warehouseItems,
+    preventiveTasks,
+    correctiveInterventions,
+    mouvements,
+  ]);
 
   const { isDataReady: isWatchlistReady } = useSmartTableLoader(alertAndRuptureItems);
+
+  // DB-6: Active personnel lists & collision-safe CMD code generator
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (t) =>
+          t &&
+          t.is_active !== false &&
+          t.actif !== false &&
+          String(t.statut || t.status || '').toUpperCase() !== 'ARCHIVE' &&
+          String(t.statut || t.status || '').toUpperCase() !== 'ARCHIVEE'
+      ),
+    [technicians]
+  );
+
+  const activeOperationsChefs = useMemo(
+    () =>
+      (operations || []).filter(
+        (o) =>
+          o &&
+          o.type_profil === 'CHEF' &&
+          o.is_active !== false &&
+          o.actif !== false &&
+          String(o.statut || o.status || '').toUpperCase() !== 'ARCHIVE' &&
+          String(o.statut || o.status || '').toUpperCase() !== 'ARCHIVEE'
+      ),
+    [operations]
+  );
+
+  const generateNextCmdCode = useCallback(() => {
+    const year = new Date().getFullYear();
+    const prefix = `CMD-${year}-`;
+    let maxSeq = 0;
+    (allOrders || []).forEach((o) => {
+      const code = String(o?.code_bon || '').trim();
+      if (code.startsWith(prefix)) {
+        const tail = parseInt(code.slice(prefix.length), 10);
+        if (!Number.isNaN(tail) && tail > maxSeq) {
+          maxSeq = tail;
+        }
+      } else {
+        const match = code.match(/(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!Number.isNaN(num) && num > maxSeq && num < 100000) {
+            maxSeq = num;
+          }
+        }
+      }
+    });
+    return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+  }, [allOrders]);
 
   // Open Order modal for specific article
   const handleOpenOrderForArticle = (article) => {
     if (!canCreateMovement) return;
     const needed = Math.max(1, (Number(article.seuil) || 3) * 2 - (Number(article.stockActuel) || 0));
-    const nextCmdNum = `CMD-${new Date().getFullYear()}-${String(allOrders.length + 1).padStart(3, '0')}`;
+    const nextCmdNum = generateNextCmdCode();
+    const defaultRequester =
+      currentUser?.personnelName ||
+      currentUser?.name ||
+      activeTechnicians[0]?.nom ||
+      activeOperationsChefs[0]?.nom ||
+      '';
     setOrderForm({
       ref: article.ref,
       designation: article.designation,
       quantite: needed,
       order_nature: 'STOCK_PERMANENT',
-      fournisseur: 'Fournisseur Principal',
-      technicien: technicians[0]?.nom || 'Responsable Magasin',
+      fournisseur: article.fournisseur || '',
+      technicien: defaultRequester,
       id_zone: '',
       id_machine_registered: '',
       commentaire: `Réapprovisionnement pour alerte stock (${article.stockActuel}/${article.seuil})`,
@@ -494,14 +617,20 @@ export default function DashboardView({
   // Open Generic Order Modal
   const handleOpenNewOrder = () => {
     if (!canCreateMovement) return;
-    const nextCmdNum = `CMD-${new Date().getFullYear()}-${String(allOrders.length + 1).padStart(3, '0')}`;
+    const nextCmdNum = generateNextCmdCode();
+    const defaultRequester =
+      currentUser?.personnelName ||
+      currentUser?.name ||
+      activeTechnicians[0]?.nom ||
+      activeOperationsChefs[0]?.nom ||
+      '';
     setOrderForm({
       ref: stockItems[0]?.ref || '',
       designation: stockItems[0]?.designation || '',
       quantite: 5,
       order_nature: 'STOCK_PERMANENT',
       fournisseur: '',
-      technicien: technicians[0]?.nom || '',
+      technicien: defaultRequester,
       id_zone: '',
       id_machine_registered: '',
       commentaire: "Demande d'achat magasin",
@@ -1828,7 +1957,7 @@ export default function DashboardView({
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
                       <span>DI Usine</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                        {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
+                        {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
                       </span>
                     </div>
                   </button>
@@ -2808,8 +2937,14 @@ export default function DashboardView({
 
       {/* 8. Purchase Order Modal (BDR Light Excel Unified Modal System) */}
       {showOrderModal && canCreateMovement && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+        <div
+          onClick={() => setShowOrderModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/45 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+          >
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -2968,18 +3103,16 @@ export default function DashboardView({
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-amber-500 outline-none"
                   >
                     <option value="">Sélectionner un responsable...</option>
-                    {technicians.map((t) => (
+                    {activeTechnicians.map((t) => (
                       <option key={t.id_technician || t.nom} value={t.nom}>
                         {t.nom} ({t.specialite || 'Tech'})
                       </option>
                     ))}
-                    {operations
-                      .filter((o) => o.type_profil === 'CHEF')
-                      .map((c) => (
-                        <option key={c.id_operation || c.nom} value={c.nom}>
-                          {c.nom} (Chef)
-                        </option>
-                      ))}
+                    {activeOperationsChefs.map((c) => (
+                      <option key={c.id_operation || c.nom} value={c.nom}>
+                        {c.nom} (Chef)
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3019,8 +3152,14 @@ export default function DashboardView({
 
       {/* EXCEL FORMULAS MODAL (DASHBOARD TWIN) */}
       {showFormulasModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full p-5 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
+        <div
+          onClick={() => setShowFormulasModal(false)}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-3xl w-full p-5 space-y-4 animate-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2.5">
