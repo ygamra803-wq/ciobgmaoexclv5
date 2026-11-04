@@ -55,6 +55,8 @@ import { serverSyncService } from '../../../services/serverSyncService';
 import ServerSyncConflictModal from '../../components/common/ServerSyncConflictModal';
 import FactoryOnboardingWizard from '../../components/common/FactoryOnboardingWizard';
 import { isArchivedMachine, getMachineLifecycleState } from '../../../utils/activeMachines';
+import { useTranslation } from '../../../i18n/I18nContext';
+import { ROLES, normalizeRole } from '../../../core/security/Roles';
 
 export default function DashboardView({
   stockItems = [],
@@ -100,6 +102,15 @@ export default function DashboardView({
 }: any) {
   const { user: authUser } = useAuth();
   const currentUser = currentUserProp || authUser;
+  const { t } = useTranslation();
+
+  const normalizedUserRole = useMemo(
+    () => (currentUser?.role ? normalizeRole(currentUser.role) : ROLES.ADMIN),
+    [currentUser?.role]
+  );
+  const isStoreManager = normalizedUserRole === ROLES.RESPONSABLE_MAGASIN;
+  const isOperatorRole = normalizedUserRole === ROLES.OPERATEUR;
+  const isViewerRole = normalizedUserRole === ROLES.VIEWER;
 
   const techScope = useMemo(
     () =>
@@ -587,6 +598,72 @@ export default function DashboardView({
     return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
   }, [allOrders]);
 
+  // DB-11: Executive Maintenance & Reliability Summary (balances Stock KPIs with Maintenance KPIs)
+  const executiveMaintenanceSummary = useMemo(() => {
+    const activeTasks = Array.isArray(preventiveTasks) ? preventiveTasks : [];
+    const pmTotalCount = activeTasks.length;
+    const pmDoneCount = activeTasks.filter(
+      (task) => task?.etat === 'Fait' || task?.statut === 'FAIT'
+    ).length;
+    const pmOverdueCount = activeTasks.filter(
+      (task) => task?.etat === 'En retard' || task?.statut === 'EN_RETARD'
+    ).length;
+    const pmComplianceRate =
+      pmTotalCount > 0 ? Math.round((pmDoneCount / pmTotalCount) * 100) : 100;
+
+    const interventions = Array.isArray(correctiveInterventions) ? correctiveInterventions : [];
+    const openDiCount = interventions.filter(
+      (i) =>
+        i?.statut === 'DEMANDE' ||
+        i?.statut === 'DEMANDE_CREEE' ||
+        i?.statut === 'EN_ATTENTE_VALIDATION'
+    ).length;
+    const plannedBtCount = interventions.filter(
+      (i) => i?.statut === 'BT_PLANIFIE' || i?.statut === 'EN_ATTENTE_PDR'
+    ).length;
+    const liveBtCount = interventions.filter((i) => i?.statut === 'EN_COURS').length;
+    const closedList = interventions.filter((i) => i?.statut === 'CLOTURE');
+    const closedBtCount = closedList.length;
+
+    let mttrMinutes: number | null = null;
+    if (_correctiveKpis && typeof _correctiveKpis.mttrMinutes === 'number' && _correctiveKpis.mttrMinutes > 0) {
+      mttrMinutes = Math.round(_correctiveKpis.mttrMinutes);
+    } else if (closedList.length > 0) {
+      const durations = closedList
+        .map(
+          (i) =>
+            Number(i?.duree_nette_min) ||
+            Number(i?.duree_intervention_min) ||
+            Number(i?.temps_arret_min) ||
+            (Number(i?.duree_heures) > 0 ? Number(i.duree_heures) * 60 : 0)
+        )
+        .filter((v) => v > 0);
+      if (durations.length > 0) {
+        mttrMinutes = Math.round(durations.reduce((acc, v) => acc + v, 0) / durations.length);
+      }
+    }
+
+    const mttrDisplay =
+      mttrMinutes !== null
+        ? mttrMinutes >= 60
+          ? `${(mttrMinutes / 60).toFixed(1)} h`
+          : `${mttrMinutes} min`
+        : '—';
+
+    return {
+      pmTotalCount,
+      pmDoneCount,
+      pmOverdueCount,
+      pmComplianceRate,
+      openDiCount,
+      plannedBtCount,
+      liveBtCount,
+      activeCorrectiveTotal: openDiCount + plannedBtCount + liveBtCount,
+      closedBtCount,
+      mttrDisplay,
+    };
+  }, [preventiveTasks, correctiveInterventions, _correctiveKpis]);
+
   // Open Order modal for specific article
   const handleOpenOrderForArticle = (article) => {
     if (!canCreateMovement) return;
@@ -719,8 +796,14 @@ export default function DashboardView({
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
                 {isTechUser
-                  ? 'Tableau de Bord & Poste Technicien'
-                  : 'Tableau de Bord & Pilotage Opérationnel'}
+                  ? t('dashboard.header.techTitle')
+                  : isStoreManager
+                  ? t('dashboard.header.storeTitle')
+                  : isOperatorRole
+                  ? t('dashboard.header.operatorTitle')
+                  : isViewerRole
+                  ? t('dashboard.header.viewerTitle')
+                  : t('dashboard.header.adminTitle')}
               </h1>
               {isTechUser ? (
                 <span
@@ -728,16 +811,31 @@ export default function DashboardView({
                   className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100/90 text-emerald-900 border border-emerald-300 flex items-center gap-1.5 shadow-2xs font-mono"
                 >
                   <User className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Vue technicien · {techScope.badgeLabel}</span>
+                  <span>{t('dashboard.header.techBadgePrefix')} · {techScope.badgeLabel}</span>
+                </span>
+              ) : isStoreManager ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-teal-100/90 text-teal-900 border border-teal-300 flex items-center gap-1 shadow-2xs font-mono">
+                  <Warehouse className="w-3.5 h-3.5 text-teal-700" />
+                  <span>{t('dashboard.header.storeBadge')}</span>
+                </span>
+              ) : isOperatorRole ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100/90 text-amber-900 border border-amber-300 flex items-center gap-1 shadow-2xs font-mono">
+                  <Factory className="w-3.5 h-3.5 text-amber-700" />
+                  <span>{t('dashboard.header.operatorBadge')}</span>
+                </span>
+              ) : isViewerRole ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1 shadow-2xs font-mono">
+                  <BookOpen className="w-3.5 h-3.5 text-slate-600" />
+                  <span>{t('dashboard.header.viewerBadge')}</span>
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 flex items-center gap-1 shadow-2xs">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>CIOB GMAO Light Twin</span>
+                  <span>{t('dashboard.header.twinBadge')}</span>
                 </span>
               )}
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60 font-mono">
-                100% Offline
+                {t('dashboard.header.offlineBadge')}
               </span>
               {!isTechUser && canManageSettings && (
                 <button
@@ -746,26 +844,43 @@ export default function DashboardView({
                   data-testid="c4-open-onboarding-btn"
                   className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-mono transition cursor-pointer"
                 >
-                  Assistant Usine (C4)
+                  {t('dashboard.header.factoryWizardBtn')}
                 </button>
               )}
             </div>
             <p className="text-xs text-slate-500 max-w-3xl leading-relaxed">
               {isTechUser
-                ? 'Suivi opérationnel de votre poste : vos tâches préventives planifiées, vos ordres de travail correctifs assignés et vos sorties de pièces magasin.'
-                : 'Supervision en temps réel des flux de magasin, seuils critiques de réapprovisionnement, état du parc machines et traçabilité intégrale des interventions.'}
+                ? t('dashboard.header.techSubtitle')
+                : isStoreManager
+                ? t('dashboard.header.storeSubtitle')
+                : isOperatorRole
+                ? t('dashboard.header.operatorSubtitle')
+                : isViewerRole
+                ? t('dashboard.header.viewerSubtitle')
+                : t('dashboard.header.adminSubtitle')}
             </p>
           </div>
         </div>
 
         {/* Action Buttons — 3D Circular Archetype */}
         <div className="flex items-center gap-2.5 shrink-0 relative self-end md:self-auto">
+          {isOperatorRole && canAccessCorrectiveDiTab && onNavigateToCorrective && (
+            <button
+              type="button"
+              onClick={() => onNavigateToCorrective('corrective_di')}
+              className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer active:scale-95"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>{t('dashboard.header.reportBreakdownBtn')}</span>
+            </button>
+          )}
+
           {!isTechUser && (
             <>
               {/* 3D Formula Circular Trigger Button */}
               <FormulasModalButton
                 onClick={() => setShowFormulasModal(true)}
-                title="Formules Excel (GMAO Twin)"
+                title={t('dashboard.header.formulasTitle')}
               />
 
               {/* 3D Circular Nouvelle Commande Button */}
@@ -776,8 +891,8 @@ export default function DashboardView({
                   icon={ShoppingCart}
                   showAddBadge={true}
                   onClick={handleOpenNewOrder}
-                  title="Nouvelle Commande / Demande d'Achat"
-                  ariaLabel="Nouvelle Commande"
+                  title={t('dashboard.header.newOrderTitle')}
+                  ariaLabel={t('dashboard.header.newOrderAria')}
                 />
               )}
             </>
@@ -789,8 +904,8 @@ export default function DashboardView({
               color="indigo"
               icon={Calendar}
               onClick={onNavigateToPreventive}
-              title="Mes Tâches Préventives"
-              ariaLabel="Maintenance Préventive"
+              title={t('dashboard.header.myPreventiveTasksTitle')}
+              ariaLabel={t('dashboard.header.myPreventiveTasksAria')}
             />
           )}
 
@@ -801,8 +916,8 @@ export default function DashboardView({
               color="amber"
               icon={Wrench}
               onClick={() => onNavigateToCorrective('corrective')}
-              title="Maintenance Corrective Nexus (DI · BT · Live · Clôture)"
-              ariaLabel="Maintenance Corrective"
+              title={t('dashboard.header.correctiveNexusTitle')}
+              ariaLabel={t('dashboard.header.correctiveNexusAria')}
             />
           )}
 
@@ -813,8 +928,8 @@ export default function DashboardView({
               color="teal"
               icon={SortieEntreeIcon}
               onClick={onNavigateToSortie}
-              title="Sortie / Entrée Rapide (Mouvements)"
-              ariaLabel="Sortie / Entrée Rapide"
+              title={t('dashboard.header.quickMovementTitle')}
+              ariaLabel={t('dashboard.header.quickMovementAria')}
             />
           )}
 
@@ -825,8 +940,8 @@ export default function DashboardView({
               color="emerald"
               icon={FileSpreadsheet}
               onClick={onExportExcel}
-              title="Exporter Excel (.xlsx)"
-              ariaLabel="Exporter Excel"
+              title={t('dashboard.header.exportExcelTitle')}
+              ariaLabel={t('dashboard.header.exportExcelAria')}
             />
           )}
         </div>
@@ -844,7 +959,7 @@ export default function DashboardView({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                    Mes Tâches Préventives
+                    {t('dashboard.tech.myPreventiveTasks')}
                   </span>
                   <Calendar className="w-6 h-6 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
                 </div>
@@ -852,31 +967,31 @@ export default function DashboardView({
                   <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-indigo-600 transition-colors">
                     {techScope.overdueTasks.length + techScope.todoTasks.length}
                   </span>
-                  <span className="text-xs font-bold text-slate-400 font-mono">à traiter</span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">{t('dashboard.tech.toProcess')}</span>
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
-                    {techScope.overdueTasks.length} en retard
+                    {techScope.overdueTasks.length} {t('dashboard.tech.overdue')}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-bold text-[10px] font-mono border border-indigo-200/80">
-                    {techScope.thisWeekTasks.length} sem. {techScope.currentWeekKey}
+                    {techScope.thisWeekTasks.length} {t('dashboard.tech.weekShort')} {techScope.currentWeekKey}
                   </span>
                   {techScope.needsClarificationPreventive?.length > 0 && (
                     <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 font-bold text-[10px] font-mono border border-rose-200 animate-pulse">
-                      {techScope.needsClarificationPreventive.length} à clarifier
+                      {techScope.needsClarificationPreventive.length} {t('dashboard.tech.toClarify')}
                     </span>
                   )}
                   {techScope.pendingValidationPreventive?.length > 0 && (
                     <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px] font-mono border border-purple-200">
-                      {techScope.pendingValidationPreventive.length} en attente val.
+                      {techScope.pendingValidationPreventive.length} {t('dashboard.tech.pendingValidation')}
                     </span>
                   )}
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Total assigné :</span>
+                <span className="text-slate-400 font-medium">{t('dashboard.tech.totalAssigned')}</span>
                 <span className="font-mono font-bold text-indigo-700">
-                  {techScope.myPreventiveTasks.length} tâches ({techScope.doneTasks.length} faites)
+                  {techScope.myPreventiveTasks.length} {t('dashboard.tech.tasksCount')} ({techScope.doneTasks.length} {t('dashboard.tech.doneCount')})
                 </span>
               </div>
             </div>
@@ -889,7 +1004,7 @@ export default function DashboardView({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                    Mes Interventions Ouvertes
+                    {t('dashboard.tech.myOpenInterventions')}
                   </span>
                   <Wrench className="w-6 h-6 text-amber-600 shrink-0 group-hover:scale-110 transition-transform" />
                 </div>
@@ -897,31 +1012,31 @@ export default function DashboardView({
                   <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-amber-600 transition-colors">
                     {techScope.openCorrective.length}
                   </span>
-                  <span className="text-xs font-bold text-slate-400 font-mono">ouvertes</span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">{t('dashboard.tech.openUnit')}</span>
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] font-mono border border-emerald-200/80">
-                    {techScope.liveCorrective.length} en cours
+                    {techScope.liveCorrective.length} {t('dashboard.tech.inProgress')}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold text-[10px] font-mono border border-blue-200/80">
-                    {techScope.plannedBtCorrective.length} BT planifiés
+                    {techScope.plannedBtCorrective.length} {t('dashboard.tech.plannedBt')}
                   </span>
                   {techScope.pendingValidationCorrective?.length > 0 && (
                     <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px] font-mono border border-purple-200">
-                      {techScope.pendingValidationCorrective.length} en attente val.
+                      {techScope.pendingValidationCorrective.length} {t('dashboard.tech.pendingValidation')}
                     </span>
                   )}
                   {techScope.needsClarificationCorrective?.length > 0 && (
                     <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 font-bold text-[10px] font-mono border border-rose-200 animate-pulse">
-                      {techScope.needsClarificationCorrective.length} à clarifier
+                      {techScope.needsClarificationCorrective.length} {t('dashboard.tech.toClarify')}
                     </span>
                   )}
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Clôturées par moi :</span>
+                <span className="text-slate-400 font-medium">{t('dashboard.tech.closedByMe')}</span>
                 <span className="font-mono font-bold text-amber-700">
-                  {techScope.closedCorrective.length} rapports
+                  {techScope.closedCorrective.length} {t('dashboard.tech.reportsUnit')}
                 </span>
               </div>
             </div>
@@ -934,7 +1049,7 @@ export default function DashboardView({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                    Mes Exécutions Validées
+                    {t('dashboard.tech.myValidatedExecutions')}
                   </span>
                   <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0 group-hover:scale-110 transition-transform" />
                 </div>
@@ -942,17 +1057,17 @@ export default function DashboardView({
                   <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-emerald-600 transition-colors">
                     {techScope.myPreventiveExecutions.length}
                   </span>
-                  <span className="text-xs font-bold text-slate-400 font-mono">historique</span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">{t('dashboard.tech.historyUnit')}</span>
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold text-[10px] font-mono border border-emerald-200/80">
-                    {techScope.doneTasks.length} tâches marquées Fait
+                    {techScope.doneTasks.length} {t('dashboard.tech.tasksMarkedDone')}
                   </span>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Traçabilité :</span>
-                <span className="font-mono font-bold text-emerald-700">Registre personnel</span>
+                <span className="text-slate-400 font-medium">{t('dashboard.tech.traceability')}</span>
+                <span className="font-mono font-bold text-emerald-700">{t('dashboard.tech.personalRegistry')}</span>
               </div>
             </div>
 
@@ -964,7 +1079,7 @@ export default function DashboardView({
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-wider">
-                    Mes Mouvements & Sorties PDR
+                    {t('dashboard.tech.myMovementsSpares')}
                   </span>
                   <SortieEntreeIcon className="w-6 h-6 text-teal-600 shrink-0 group-hover:scale-110 transition-transform" />
                 </div>
@@ -972,17 +1087,17 @@ export default function DashboardView({
                   <span className="text-3xl font-black text-slate-900 font-mono tracking-tight group-hover:text-teal-600 transition-colors">
                     {techScope.myMouvements.length}
                   </span>
-                  <span className="text-xs font-bold text-slate-400 font-mono">bons validés</span>
+                  <span className="text-xs font-bold text-slate-400 font-mono">{t('dashboard.tech.validatedVouchers')}</span>
                 </div>
                 <div className="mt-2 text-[11px] text-slate-500 flex items-center gap-1.5 flex-wrap">
                   <span className="px-2 py-0.5 rounded bg-rose-50 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
-                    -{techScope.totalMySortiePieces} pcs sorties
+                    -{techScope.totalMySortiePieces} {t('dashboard.tech.piecesIssued')}
                   </span>
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                <span className="text-slate-400 font-medium">Registre magasin :</span>
-                <span className="font-mono font-bold text-teal-700">Consulter mes bons →</span>
+                <span className="text-slate-400 font-medium">{t('dashboard.tech.storeRegistry')}</span>
+                <span className="font-mono font-bold text-teal-700">{t('dashboard.tech.viewMyVouchers')}</span>
               </div>
             </div>
           </div>
@@ -997,14 +1112,14 @@ export default function DashboardView({
                 <div>
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <h2 className="text-base font-black text-slate-900 tracking-tight">
-                      Poste Correctif Terrain · {techScope.badgeLabel}
+                      {t('dashboard.tech.fieldCorrectiveHub')} · {techScope.badgeLabel}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white tracking-wider font-mono">
-                      Mes Interventions
+                      {t('dashboard.tech.myInterventionsBadge')}
                     </span>
                   </div>
                   <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                    Accès direct aux demandes d’intervention (DI), à vos bons de travail (BT), au chronomètre Live et à vos rapports clôturés.
+                    {t('dashboard.tech.fieldCorrectiveDesc')}
                   </p>
                 </div>
               </div>
@@ -1015,7 +1130,7 @@ export default function DashboardView({
                   className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-md shadow-amber-600/25 hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer active:scale-95"
                 >
                   <Wrench className="w-3.5 h-3.5" />
-                  <span>Ouvrir Mes BT</span>
+                  <span>{t('dashboard.tech.openMyBt')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -1026,9 +1141,9 @@ export default function DashboardView({
                 onClick={() => onNavigateToCorrective?.('corrective_di')}
                 className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">1. Demandes</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase">{t('dashboard.tech.step1Requests')}</div>
                 <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-                  <span>Signaler / DI</span>
+                  <span>{t('dashboard.tech.reportDi')}</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
                     {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
                   </span>
@@ -1039,9 +1154,9 @@ export default function DashboardView({
                 onClick={() => onNavigateToCorrective?.('corrective_bt')}
                 className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">2. Mes Bons Travail</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase">{t('dashboard.tech.step2MyBt')}</div>
                 <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-                  <span>BT Assignés</span>
+                  <span>{t('dashboard.tech.assignedBt')}</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
                     {techScope.plannedBtCorrective.length}
                   </span>
@@ -1052,11 +1167,11 @@ export default function DashboardView({
                 onClick={() => onNavigateToCorrective?.('corrective_live')}
                 className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">3. Chrono Live</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase">{t('dashboard.tech.step3LiveTimer')}</div>
                 <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-                  <span>Mon Live</span>
+                  <span>{t('dashboard.tech.myLive')}</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {techScope.liveCorrective.length} en cours
+                    {techScope.liveCorrective.length} {t('dashboard.tech.inProgress')}
                   </span>
                 </div>
               </button>
@@ -1065,9 +1180,9 @@ export default function DashboardView({
                 onClick={() => onNavigateToCorrective?.('corrective_cloture')}
                 className="p-2.5 rounded-xl bg-white/90 hover:bg-white border border-amber-200/80 hover:border-amber-400 text-left transition-all group cursor-pointer shadow-2xs hover:shadow-xs"
               >
-                <div className="text-[10px] font-bold text-slate-400 uppercase">4. Mes Rapports</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase">{t('dashboard.tech.step4MyReports')}</div>
                 <div className="text-xs font-black text-slate-800 group-hover:text-amber-600 flex items-center justify-between mt-0.5">
-                  <span>Clôturées</span>
+                  <span>{t('dashboard.tech.closedLabel')}</span>
                   <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200">
                     {techScope.closedCorrective.length}
                   </span>
@@ -1482,28 +1597,28 @@ export default function DashboardView({
 
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
                   <span className="font-extrabold text-xs text-slate-900">
-                    Confiance Opérationnelle & Synchronisation LAN
+                    {t('dashboard.trust.title')}
                   </span>
 
                   {syncTrust.hasUnresolvedConflict ? (
                     <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-mono text-[10.5px] font-extrabold border border-amber-300 flex items-center gap-1">
                       <AlertTriangle className="w-3 h-3 text-amber-600" />
-                      Conflit LAN à résoudre
+                      {t('dashboard.trust.conflictBadge')}
                     </span>
                   ) : syncTrust.lastSyncStatus === 'ERROR' ? (
                     <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-900 font-mono text-[10.5px] font-extrabold border border-rose-300 flex items-center gap-1">
                       <XCircle className="w-3 h-3 text-rose-600" />
-                      Échec dernière synchro
+                      {t('dashboard.trust.errorBadge')}
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 font-mono text-[10.5px] font-bold border border-emerald-200 flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                       {syncTrust.lastSyncAt
-                        ? `Synchro OK (${new Date(syncTrust.lastSyncAt).toLocaleTimeString('fr-FR', {
+                        ? `${t('dashboard.trust.syncedOk')} (${new Date(syncTrust.lastSyncAt).toLocaleTimeString('fr-FR', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}${syncTrust.lastServerVersion ? ` · v${syncTrust.lastServerVersion}` : ''})`
-                        : 'Prêt (Local / LAN)'}
+                        : t('dashboard.trust.readyLocalLan')}
                     </span>
                   )}
 
@@ -1517,9 +1632,9 @@ export default function DashboardView({
                       >
                         <ShieldAlert className="w-3 h-3 text-amber-600" />
                         <span>
-                          Écarts Référentiels ({referentialAudit.summary.totalOrphanErrors || 0}) · Santé {referentialAudit.healthScore ?? 100}%
+                          {t('dashboard.trust.referentialGaps')} ({referentialAudit.summary.totalOrphanErrors || 0}) · {t('dashboard.trust.health')} {referentialAudit.healthScore ?? 100}%
                         </span>
-                        <span className="underline ml-0.5">Appairer</span>
+                        <span className="underline ml-0.5">{t('dashboard.trust.pairAction')}</span>
                       </button>
                     ) : (
                       <span
@@ -1528,7 +1643,7 @@ export default function DashboardView({
                       >
                         <ShieldAlert className="w-3 h-3 text-amber-600" />
                         <span>
-                          Écarts Référentiels ({referentialAudit.summary.totalOrphanErrors || 0}) · Santé {referentialAudit.healthScore ?? 100}%
+                          {t('dashboard.trust.referentialGaps')} ({referentialAudit.summary.totalOrphanErrors || 0}) · {t('dashboard.trust.health')} {referentialAudit.healthScore ?? 100}%
                         </span>
                       </span>
                     )
@@ -1540,20 +1655,20 @@ export default function DashboardView({
                 {/* Live PENDING Queue Counters */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] font-bold text-slate-500">
-                    File d&apos;attente À valider ({validationQueues.totalPending}) :
+                    {t('dashboard.trust.pendingQueueLabel')} ({validationQueues.totalPending}) :
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
-                    BT Correctif : <b className="text-amber-700">{validationQueues.pendingCorrective.length}</b>
+                    {t('dashboard.trust.correctiveBt')} <b className="text-amber-700">{validationQueues.pendingCorrective.length}</b>
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
-                    Préventif : <b className="text-indigo-700">{validationQueues.pendingPreventive.length}</b>
+                    {t('dashboard.trust.preventive')} <b className="text-indigo-700">{validationQueues.pendingPreventive.length}</b>
                   </span>
                   <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-mono font-bold text-[10.5px]">
-                    Sorties PDR : <b className="text-teal-700">{validationQueues.pendingSortieDemands.length}</b>
+                    {t('dashboard.trust.spareIssues')} <b className="text-teal-700">{validationQueues.pendingSortieDemands.length}</b>
                   </span>
                   {validationQueues.totalClarification > 0 && (
                     <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-900 border border-rose-200 font-mono font-bold text-[10.5px]">
-                      À clarifier : {validationQueues.totalClarification}
+                      {t('dashboard.trust.toClarify')} {validationQueues.totalClarification}
                     </span>
                   )}
                 </div>
@@ -1568,7 +1683,7 @@ export default function DashboardView({
                     className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <AlertTriangle className="w-3.5 h-3.5" />
-                    <span>Résoudre conflit LAN</span>
+                    <span>{t('dashboard.trust.resolveLanConflict')}</span>
                   </button>
                 )}
 
@@ -1578,7 +1693,7 @@ export default function DashboardView({
                     onClick={() => setIsRadarExpanded((prev) => !prev)}
                     className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    <span>Radar terrain ({validationRadar.totalPendingCount})</span>
+                    <span>{t('dashboard.trust.fieldRadar')} ({validationRadar.totalPendingCount})</span>
                     <ChevronDown
                       className={`w-3.5 h-3.5 transition-transform duration-200 ${
                         isRadarExpanded ? 'rotate-180' : ''
@@ -1596,7 +1711,7 @@ export default function DashboardView({
                     title="Fusionner intelligemment avec le serveur LAN sans écraser les données"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isSyncBusy ? 'animate-spin text-emerald-600' : 'text-slate-600'}`} />
-                    <span>Sync LAN</span>
+                    <span>{t('dashboard.trust.syncLanBtn')}</span>
                   </button>
                 )}
 
@@ -1607,7 +1722,7 @@ export default function DashboardView({
                     className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Centre À valider ({validationQueues.totalPending})</span>
+                    <span>{t('dashboard.trust.validationCenterBtn')} ({validationQueues.totalPending})</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1616,7 +1731,7 @@ export default function DashboardView({
 
             {syncTrust.lastSyncError && (
               <div className="text-[11px] font-semibold text-rose-700 truncate pt-1 border-t border-slate-100">
-                Dernière erreur : {syncTrust.lastSyncError}
+                {t('dashboard.trust.lastError')} {syncTrust.lastSyncError}
               </div>
             )}
 
@@ -1802,15 +1917,134 @@ export default function DashboardView({
             onNavigateToMachines={canAccessMachinesTab ? onNavigateToMachines : undefined}
           />
 
+          {/* 2.5 Executive Maintenance & Reliability Pulse Strip (DB-11: Balances Stock KPIs with Maintenance KPIs) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* Card 1: Conformité Préventive */}
+            <div
+              onClick={canAccessPreventiveTab ? onNavigateToPreventive : undefined}
+              className={`bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 transition ${
+                canAccessPreventiveTab ? 'hover:border-indigo-300 cursor-pointer' : ''
+              }`}
+            >
+              <div className="space-y-1 min-w-0">
+                <div className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {t('dashboard.execPulse.preventiveCompliance')}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black font-mono text-indigo-700">
+                    {executiveMaintenanceSummary.pmComplianceRate}%
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    ({executiveMaintenanceSummary.pmDoneCount}/{executiveMaintenanceSummary.pmTotalCount} {t('dashboard.execPulse.doneShort')})
+                  </span>
+                </div>
+                <div className="text-[10.5px] font-mono text-rose-700 font-bold">
+                  {executiveMaintenanceSummary.pmOverdueCount} {t('dashboard.execPulse.overdueShort')}
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-700 shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Card 2: Charge Corrective Active */}
+            <div
+              onClick={canAccessCorrectiveTab ? () => onNavigateToCorrective?.('corrective') : undefined}
+              className={`bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 transition ${
+                canAccessCorrectiveTab ? 'hover:border-amber-300 cursor-pointer' : ''
+              }`}
+            >
+              <div className="space-y-1 min-w-0">
+                <div className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {t('dashboard.execPulse.activeCorrectiveLoad')}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black font-mono text-amber-700">
+                    {executiveMaintenanceSummary.activeCorrectiveTotal}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {t('dashboard.execPulse.openDiShort')} : {executiveMaintenanceSummary.openDiCount}
+                  </span>
+                </div>
+                <div className="text-[10.5px] font-mono text-emerald-700 font-bold">
+                  {executiveMaintenanceSummary.liveBtCount} {t('dashboard.execPulse.liveBtShort')}
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200/80 flex items-center justify-center text-amber-700 shrink-0">
+                <Wrench className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Card 3: MTTR Moyen & Clôtures */}
+            <div
+              onClick={canAccessCorrectiveAnalyticsTab ? () => onNavigateToCorrective?.('corrective_analytics') : undefined}
+              className={`bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 transition ${
+                canAccessCorrectiveAnalyticsTab ? 'hover:border-purple-300 cursor-pointer' : ''
+              }`}
+            >
+              <div className="space-y-1 min-w-0">
+                <div className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {t('dashboard.execPulse.meanRepairTime')}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black font-mono text-purple-700">
+                    {executiveMaintenanceSummary.mttrDisplay}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    ({executiveMaintenanceSummary.closedBtCount} {t('dashboard.execPulse.closedInterventions')})
+                  </span>
+                </div>
+                <div className="text-[10.5px] font-mono text-slate-500 font-semibold">
+                  {t('dashboard.execPulse.availabilityLabel')} :{' '}
+                  {machineHealth.total > 0
+                    ? Math.round((machineHealth.enService / machineHealth.total) * 100)
+                    : 100}
+                  %
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200/80 flex items-center justify-center text-purple-700 shrink-0">
+                <Activity className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Card 4: Flux Logistiques & Réparations Externes */}
+            <div
+              onClick={canAccessSortieTab ? onNavigateToSortie : undefined}
+              className={`bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 transition ${
+                canAccessSortieTab ? 'hover:border-teal-300 cursor-pointer' : ''
+              }`}
+            >
+              <div className="space-y-1 min-w-0">
+                <div className="text-[10.5px] font-extrabold uppercase tracking-wider text-slate-500">
+                  {t('dashboard.execPulse.openLogisticsFlows')}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-black font-mono text-teal-700">
+                    {pendingOrders.length + pendingExternalRepairs.length}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {pendingOrders.length} {t('dashboard.execPulse.pendingOrdersShort')}
+                  </span>
+                </div>
+                <div className="text-[10.5px] font-mono text-purple-700 font-bold">
+                  {pendingExternalRepairs.length} {t('dashboard.execPulse.externalRepairsShort')}
+                </div>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-200/80 flex items-center justify-center text-teal-700 shrink-0">
+                <Truck className="w-5 h-5" />
+              </div>
+            </div>
+          </div>
+
           {/* 3. Accès Rapide aux Modules GMAO (Placed at the top for immediate engineer navigation) */}
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2 tracking-tight">
                 <Zap className="w-4 h-4 text-amber-500" />
-                <span>Accès Rapide aux Modules GMAO</span>
+                <span>{t('dashboard.quickNav.title')}</span>
               </h3>
               <span className="text-[10.5px] font-mono font-bold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/80">
-                Navigation Directe
+                {t('dashboard.quickNav.badge')}
               </span>
             </div>
 
@@ -1823,8 +2057,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Package className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">Magasin Stock</div>
-                  <div className="text-[10px] text-slate-500">Gestion des articles</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">{t('dashboard.quickNav.stockTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.stockDesc')}</div>
                 </button>
               )}
 
@@ -1836,8 +2070,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <SortieEntreeIcon className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">Sorties & Entrées</div>
-                  <div className="text-[10px] text-slate-500">Enregistrer un bon</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-emerald-700 transition-colors">{t('dashboard.quickNav.movementsTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.movementsDesc')}</div>
                 </button>
               )}
 
@@ -1849,8 +2083,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Factory className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">Parc Machines</div>
-                  <div className="text-[10px] text-slate-500">Arborescence actifs</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-purple-700 transition-colors">{t('dashboard.quickNav.machinesTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.machinesDesc')}</div>
                 </button>
               )}
 
@@ -1862,8 +2096,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Warehouse className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">Entrepôt</div>
-                  <div className="text-[10px] text-slate-500">Éléments & Moteurs</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-teal-700 transition-colors">{t('dashboard.quickNav.warehouseTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.warehouseDesc')}</div>
                 </button>
               )}
 
@@ -1875,8 +2109,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Layers className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">Zones & Ateliers</div>
-                  <div className="text-[10px] text-slate-500">Emplacements usine</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-amber-700 transition-colors">{t('dashboard.quickNav.zonesTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.zonesDesc')}</div>
                 </button>
               )}
 
@@ -1888,8 +2122,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <UserCheck className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">Personnel GMAO</div>
-                  <div className="text-[10px] text-slate-500">Techniciens & Chefs</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-indigo-700 transition-colors">{t('dashboard.quickNav.usersTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.usersDesc')}</div>
                 </button>
               )}
 
@@ -1901,8 +2135,8 @@ export default function DashboardView({
                   <div className="w-9 h-9 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center group-hover:scale-105 transition-transform">
                     <FileSpreadsheet className="w-5 h-5" />
                   </div>
-                  <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">Excel Twin</div>
-                  <div className="text-[10px] text-slate-500">Sauvegardes & Sync</div>
+                  <div className="font-bold text-xs text-slate-900 group-hover:text-slate-950 transition-colors">{t('dashboard.quickNav.excelTwinTitle')}</div>
+                  <div className="text-[10px] text-slate-500">{t('dashboard.quickNav.excelTwinDesc')}</div>
                 </button>
               )}
             </div>
@@ -1919,17 +2153,17 @@ export default function DashboardView({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
-                        Maintenance Corrective Nexus
+                        {t('dashboard.correctiveHub.title')}
                       </h2>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-200/80 tracking-wider font-mono">
-                        Hub Dédié
+                        {t('dashboard.correctiveHub.dedicatedBadge')}
                       </span>
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-600 border border-slate-200 font-mono">
-                        5 Sous-sections
+                        {t('dashboard.correctiveHub.subSectionsBadge')}
                       </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5 max-w-3xl leading-relaxed">
-                      Pilotage complet des pannes : Demandes (DI), Ordres de Travail (BT), Chronomètre d’Atelier avec déduction automatique de pause, Clôture avec sortie PDR et Pareto 80/20.
+                      {t('dashboard.correctiveHub.description')}
                     </p>
                   </div>
                 </div>
@@ -1940,7 +2174,7 @@ export default function DashboardView({
                     className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 shadow-2xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
                   >
                     <Wrench className="w-3.5 h-3.5" />
-                    <span>Ouvrir Correctif Nexus</span>
+                    <span>{t('dashboard.correctiveHub.openBtn')}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
@@ -1953,9 +2187,9 @@ export default function DashboardView({
                     onClick={() => onNavigateToCorrective?.('corrective_di')}
                     className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">1. Demandes</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">{t('dashboard.correctiveHub.step1Title')}</div>
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
-                      <span>DI Usine</span>
+                      <span>{t('dashboard.correctiveHub.step1Sub')}</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
                         {(correctiveInterventions || []).filter((i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION').length}
                       </span>
@@ -1968,9 +2202,9 @@ export default function DashboardView({
                     onClick={() => onNavigateToCorrective?.('corrective_bt')}
                     className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">2. Bons Travail</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">{t('dashboard.correctiveHub.step2Title')}</div>
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
-                      <span>BT Planifiés</span>
+                      <span>{t('dashboard.correctiveHub.step2Sub')}</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
                         {(correctiveInterventions || []).filter((i) => i.statut === 'BT_PLANIFIE' || i.statut === 'EN_ATTENTE_PDR').length}
                       </span>
@@ -1983,11 +2217,11 @@ export default function DashboardView({
                     onClick={() => onNavigateToCorrective?.('corrective_live')}
                     className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">3. Chrono Live</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">{t('dashboard.correctiveHub.step3Title')}</div>
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
-                      <span>Intervention Live</span>
+                      <span>{t('dashboard.correctiveHub.step3Sub')}</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {(correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length} en cours
+                        {(correctiveInterventions || []).filter((i) => i.statut === 'EN_COURS').length} {t('dashboard.tech.inProgress')}
                       </span>
                     </div>
                   </button>
@@ -1998,9 +2232,9 @@ export default function DashboardView({
                     onClick={() => onNavigateToCorrective?.('corrective_cloture')}
                     className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">4. Rapports</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">{t('dashboard.correctiveHub.step4Title')}</div>
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
-                      <span>Clôturées</span>
+                      <span>{t('dashboard.correctiveHub.step4Sub')}</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-white text-slate-700 border border-slate-200">
                         {(correctiveInterventions || []).filter((i) => i.statut === 'CLOTURE').length}
                       </span>
@@ -2013,9 +2247,9 @@ export default function DashboardView({
                     onClick={() => onNavigateToCorrective?.('corrective_analytics')}
                     className="p-2.5 rounded-xl bg-slate-50/80 hover:bg-amber-50/50 border border-slate-200/90 hover:border-amber-300 text-left transition-all group cursor-pointer shadow-2xs"
                   >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">5. Décisionnel</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase font-mono">{t('dashboard.correctiveHub.step5Title')}</div>
                     <div className="text-xs font-extrabold text-slate-800 group-hover:text-amber-700 flex items-center justify-between mt-1">
-                      <span>Pareto 80/20</span>
+                      <span>{t('dashboard.correctiveHub.step5Sub')}</span>
                       <span className="text-[11px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200">
                         MTTR
                       </span>
@@ -2038,10 +2272,10 @@ export default function DashboardView({
                     </div>
                     <div>
                       <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                        Articles Sous Seuil Critique ({alertAndRuptureItems.length})
+                        {t('dashboard.watchlist.title')} ({alertAndRuptureItems.length})
                       </h3>
                       <p className="text-[11px] text-slate-500">
-                        Pièces nécessitant un réapprovisionnement urgent
+                        {t('dashboard.watchlist.subtitle')}
                       </p>
                     </div>
                   </div>
@@ -2051,7 +2285,7 @@ export default function DashboardView({
                       onClick={onNavigateToStock}
                       className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
                     >
-                      <span>Voir tout le Stock</span>
+                      <span>{t('dashboard.watchlist.viewAllStock')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -2061,13 +2295,13 @@ export default function DashboardView({
                   <table className="w-full text-left text-xs border-collapse">
                     <thead className="bg-slate-50 text-[10.5px] font-bold text-slate-600 uppercase tracking-wider border-b border-slate-200">
                       <tr>
-                        <th className="py-2.5 px-3.5">Ref</th>
-                        <th className="py-2.5 px-3.5">Désignation</th>
-                        <th className="py-2.5 px-2 text-right">Stock Actuel</th>
-                        <th className="py-2.5 px-2 text-right">Seuil</th>
-                        <th className="py-2.5 px-3 text-center">État</th>
-                        <th className="py-2.5 px-3">Emplacement</th>
-                        <th className="py-2.5 px-3 text-center">Actions Rapides</th>
+                        <th className="py-2.5 px-3.5">{t('dashboard.watchlist.colRef')}</th>
+                        <th className="py-2.5 px-3.5">{t('dashboard.watchlist.colDesignation')}</th>
+                        <th className="py-2.5 px-2 text-right">{t('dashboard.watchlist.colCurrentStock')}</th>
+                        <th className="py-2.5 px-2 text-right">{t('dashboard.watchlist.colThreshold')}</th>
+                        <th className="py-2.5 px-3 text-center">{t('dashboard.watchlist.colState')}</th>
+                        <th className="py-2.5 px-3">{t('dashboard.watchlist.colLocation')}</th>
+                        <th className="py-2.5 px-3 text-center">{t('dashboard.watchlist.colQuickActions')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -2078,8 +2312,8 @@ export default function DashboardView({
                           <td colSpan={7} className="py-8 text-center text-slate-400">
                             <div className="flex flex-col items-center justify-center gap-1.5">
                               <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-                              <span className="font-semibold text-slate-700">Aucun article en alerte ou rupture</span>
-                              <span className="text-xs text-slate-500">Tous les niveaux de stock sont optimaux</span>
+                              <span className="font-semibold text-slate-700">{t('dashboard.watchlist.emptyTitle')}</span>
+                              <span className="text-xs text-slate-500">{t('dashboard.watchlist.emptySubtitle')}</span>
                             </div>
                           </td>
                         </tr>
@@ -2096,12 +2330,12 @@ export default function DashboardView({
                               {item.alerte === 'RUPTURE' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200 shadow-2xs">
                                   <XCircle className="w-3 h-3" />
-                                  <span>RUPTURE</span>
+                                  <span>{t('dashboard.watchlist.ruptureBadge')}</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 shadow-2xs">
                                   <AlertTriangle className="w-3 h-3" />
-                                  <span>ALERTE</span>
+                                  <span>{t('dashboard.watchlist.alertBadge')}</span>
                                 </span>
                               )}
                             </td>
@@ -2125,12 +2359,12 @@ export default function DashboardView({
                                       className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-black text-white text-[11px] font-bold shadow-2xs transition cursor-pointer active:scale-95"
                                       title="Faire une sortie"
                                     >
-                                      Sortie
+                                      {t('dashboard.watchlist.issueBtn')}
                                     </button>
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-[10px] font-mono text-slate-400">Lecture seule</span>
+                                <span className="text-[10px] font-mono text-slate-400">{t('dashboard.watchlist.readOnlyLabel')}</span>
                               )}
                             </td>
                           </tr>
@@ -2151,8 +2385,8 @@ export default function DashboardView({
                       <SortieEntreeIcon className="w-4 h-4 text-slate-800" strokeWidth={2.25} />
                     </div>
                     <div>
-                      <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">Derniers Mouvements</h3>
-                      <p className="text-[11px] text-slate-500">Flux récents de magasin</p>
+                      <h3 className="font-extrabold text-sm text-slate-900 tracking-tight">{t('dashboard.watchlist.recentMovementsTitle')}</h3>
+                      <p className="text-[11px] text-slate-500">{t('dashboard.watchlist.recentMovementsSubtitle')}</p>
                     </div>
                   </div>
                   {!isReadOnlyUser && canAccessSortieTab && onNavigateToSortie && (
@@ -2161,7 +2395,7 @@ export default function DashboardView({
                       className="text-xs font-bold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Sortie</span>
+                      <span>{t('dashboard.watchlist.issueBtn')}</span>
                     </button>
                   )}
                 </div>
@@ -2212,14 +2446,15 @@ export default function DashboardView({
                   </div>
                 ) : (
                   <div className="text-xs text-slate-400 text-center py-8 bg-slate-50/60 rounded-xl border border-slate-100">
-                    Aucun mouvement récent enregistré.
+                    {t('dashboard.watchlist.noRecentMovements')}
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* 5. Side-by-Side Logistics Hub: Commandes & Réappro (Left) + Réparations Externes (Right) */}
+          {/* 5. Side-by-Side Logistics Hub: Commandes & Réappro (Left) + Réparations Externes (Right) — Hidden for OPERATEUR (DB-11) */}
+          {!isOperatorRole && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
             {/* Left Column: Suivi des Commandes & Réapprovisionnements */}
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-5 space-y-4 flex flex-col justify-between">
@@ -2233,19 +2468,19 @@ export default function DashboardView({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                            Suivi des Commandes & Réapprovisionnements
+                            {t('dashboard.logistics.ordersTitle')}
                           </h2>
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-amber-100/90 text-amber-950 border border-amber-200/80">
-                            {pendingOrders.length} en attente
+                            {pendingOrders.length} {t('dashboard.logistics.pendingBadge')}
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">
                           {canEditMovement ? (
                             <>
-                              Cliquez sur <b className="text-emerald-700">"Valider Réception"</b> pour convertir en Entrée de Stock.
+                              Cliquez sur <b className="text-emerald-700">&quot;{t('dashboard.logistics.validateReceiptBtn')}&quot;</b>
                             </>
                           ) : (
-                            'Suivi en lecture des commandes et réceptions de magasin.'
+                            t('dashboard.logistics.ordersReadOnlyHint')
                           )}
                         </p>
                       </div>
@@ -2257,7 +2492,7 @@ export default function DashboardView({
                         showAddBadge={true}
                         variant="circle"
                         color="amber"
-                        title="Créer une nouvelle commande"
+                        title={t('dashboard.logistics.createPurchaseOrderBtn')}
                         onClick={handleOpenNewOrder}
                       />
                     )}
@@ -2274,7 +2509,7 @@ export default function DashboardView({
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        Toutes ({allOrders.length})
+                        {t('dashboard.logistics.tabAll')} ({allOrders.length})
                       </button>
                       <button
                         onClick={() => setOrderFilterTab('PENDING')}
@@ -2284,7 +2519,7 @@ export default function DashboardView({
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        En cours ({pendingOrders.length})
+                        {t('dashboard.logistics.tabPending')} ({pendingOrders.length})
                       </button>
                       <button
                         onClick={() => setOrderFilterTab('RECEIVED')}
@@ -2294,12 +2529,12 @@ export default function DashboardView({
                             : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
-                        Réceptionnées ({completedOrders.length})
+                        {t('dashboard.logistics.tabReceived')} ({completedOrders.length})
                       </button>
                     </div>
 
                     <div className="text-[10.5px] text-slate-400 font-mono">
-                      {displayedOrders.length} commande(s)
+                      {displayedOrders.length} {t('dashboard.logistics.ordersCountUnit')}
                     </div>
                   </div>
                 </div>
@@ -2337,12 +2572,12 @@ export default function DashboardView({
                               {isReceived ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  <span>Reçu</span>
+                                  <span>{t('dashboard.logistics.receivedBadge')}</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-200/80">
                                   <Clock className="w-3 h-3 text-amber-600" />
-                                  <span>Attente</span>
+                                  <span>{t('dashboard.logistics.waitingBadge')}</span>
                                 </span>
                               )}
                             </div>
@@ -2385,16 +2620,16 @@ export default function DashboardView({
                                   className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
                                 >
                                   <Check className="w-3.5 h-3.5" />
-                                  <span>Valider Réception</span>
+                                  <span>{t('dashboard.logistics.validateReceiptBtn')}</span>
                                 </button>
                               ) : (
                                 <div className="flex-1 py-1.5 text-center text-amber-900 font-bold text-[11px] bg-amber-50 border border-amber-200/80 rounded-lg">
-                                  En attente de réception
+                                  {t('dashboard.logistics.awaitingReceipt')}
                                 </div>
                               )
                             ) : (
                               <div className="flex-1 py-1.5 text-center text-emerald-900 font-bold text-[11px] bg-emerald-100/70 border border-emerald-200/80 rounded-lg">
-                                ✓ Entrée enregistrée
+                                {t('dashboard.logistics.entryRecorded')}
                               </div>
                             )}
 
@@ -2417,9 +2652,9 @@ export default function DashboardView({
                     <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 mx-auto flex items-center justify-center">
                       <ShoppingCart className="w-4 h-4" />
                     </div>
-                    <h4 className="text-xs font-bold text-slate-800">Aucune commande répertoriée</h4>
+                    <h4 className="text-xs font-bold text-slate-800">{t('dashboard.logistics.noOrdersTitle')}</h4>
                     <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      Initiez une commande d&apos;achat ou un réassort pour vos pièces sous seuil d&apos;alerte.
+                      {t('dashboard.logistics.noOrdersSubtitle')}
                     </p>
                     {canCreateMovement && (
                       <button
@@ -2427,7 +2662,7 @@ export default function DashboardView({
                         className="mt-1 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs transition inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Créer une Commande d&apos;Achat</span>
+                        <span>{t('dashboard.logistics.createPurchaseOrderBtn')}</span>
                       </button>
                     )}
                   </div>
@@ -2446,20 +2681,20 @@ export default function DashboardView({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="font-extrabold text-sm text-slate-900 tracking-tight">
-                          Matériels en Réparation Externe (Bons de Sortie)
+                          {t('dashboard.logistics.externalRepairsTitle')}
                         </h2>
                         <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-purple-100/90 text-purple-950 border border-purple-200/80">
-                          {pendingExternalRepairs.length} en cours
+                          {pendingExternalRepairs.length} {t('dashboard.tech.inProgress')}
                         </span>
                         {overdueRepairs.length > 0 && (
                           <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-extrabold bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1 animate-pulse">
                             <AlertTriangle className="w-3 h-3 text-rose-600" />
-                            <span>{overdueRepairs.length} en retard</span>
+                            <span>{overdueRepairs.length} {t('dashboard.tech.overdue')}</span>
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        Suivi des moteurs, pompes et pièces envoyés en usinage/bobinage externe.
+                        {t('dashboard.logistics.externalRepairsSubtitle')}
                       </p>
                     </div>
                   </div>
@@ -2503,12 +2738,12 @@ export default function DashboardView({
                               {isLate ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300">
                                   <AlertTriangle className="w-3 h-3 text-rose-600" />
-                                  <span>Retard</span>
+                                  <span>{t('dashboard.logistics.overdueBadge')}</span>
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200/80">
                                   <Clock className="w-3 h-3 text-purple-600" />
-                                  <span>Externe</span>
+                                  <span>{t('dashboard.logistics.externalBadge')}</span>
                                 </span>
                               )}
                             </div>
@@ -2520,7 +2755,7 @@ export default function DashboardView({
                               <div className="text-[11px] text-slate-500 font-mono mt-0.5 flex items-center justify-between">
                                 <span>Qté : <b className="text-slate-900 font-black">{rep.quantite} pcs</b></span>
                                 <span className={isLate ? 'text-rose-700 font-bold font-mono' : 'text-purple-950 font-semibold'}>
-                                  Retour : {rep.date_retour_prevue || 'Non fixé'}
+                                  {t('dashboard.logistics.returnLabel')} : {rep.date_retour_prevue || t('dashboard.logistics.notSet')}
                                 </span>
                               </div>
                             </div>
@@ -2550,7 +2785,7 @@ export default function DashboardView({
                                 className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer"
                               >
                                 <Inbox className="w-3.5 h-3.5" />
-                                <span>Réceptionner le Retour</span>
+                                <span>{t('dashboard.logistics.receiveReturnBtn')}</span>
                               </button>
                             </div>
                           )}
@@ -2561,15 +2796,16 @@ export default function DashboardView({
                 ) : (
                   <div className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-6 text-center space-y-2 min-h-[190px] flex flex-col items-center justify-center">
                     <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500" />
-                    <div className="text-xs font-bold text-slate-800">Aucune pièce en réparation externe</div>
+                    <div className="text-xs font-bold text-slate-800">{t('dashboard.logistics.noExternalRepairsTitle')}</div>
                     <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
-                      Tous les moteurs et équipements sont présents au sein du site.
+                      {t('dashboard.logistics.noExternalRepairsSubtitle')}
                     </p>
                   </div>
                 )}
               </div>
             </div>
           </div>
+          )}
 
           {/* 6. GMAO Flux Intelligence & Action Distribution (3-Column Grid) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">

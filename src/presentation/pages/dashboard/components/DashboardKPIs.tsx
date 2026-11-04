@@ -9,6 +9,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../../components/common/GmaoKpiCard';
+import { useTranslation } from '../../../../i18n/I18nContext';
 
 export default function DashboardKPIs({
   stockKPIs = {
@@ -30,6 +31,8 @@ export default function DashboardKPIs({
   onNavigateToStock,
   onNavigateToMachines,
 }) {
+  const { t } = useTranslation();
+
   const totalArts = Number(stockKPIs.totalArticles) || 1;
   const normalStockRate = Math.round(((Number(stockKPIs.ok) || 0) / totalArts) * 100);
 
@@ -43,25 +46,25 @@ export default function DashboardKPIs({
       {/* 1. Total Catalog Articles */}
       <GmaoKpiCard
         id="kpi-card-total-articles"
-        title="Articles au Catalogue"
+        title={t('dashboard.kpis.catalogArticles')}
         value={stockKPIs.totalArticles}
-        unit="réfs"
+        unit={t('dashboard.kpis.refsUnit')}
         icon={Package}
         color="blue"
         valueColored={false}
-        badgePrefix={`${types.length} catégories`}
-        badgeText={`${stockKPIs.ok} normaux`}
-        footerLabel="Santé stock :"
-        footerValue={`${normalStockRate}% conforme`}
+        badgePrefix={`${types.length} ${t('dashboard.kpis.categoriesCount')}`}
+        badgeText={`${stockKPIs.ok} ${t('dashboard.kpis.normalItems')}`}
+        footerLabel={t('dashboard.kpis.stockHealth')}
+        footerValue={`${normalStockRate}% ${t('dashboard.kpis.compliant')}`}
         onClick={onNavigateToStock}
       />
 
       {/* 2. Physical Stock Balance */}
       <GmaoKpiCard
         id="kpi-card-stock-balance"
-        title="Unités Physiques en Stock"
+        title={t('dashboard.kpis.physicalStockUnits')}
         value={stockKPIs.totalStockActuel}
-        unit="pièces"
+        unit={t('dashboard.kpis.piecesUnit')}
         icon={Boxes}
         color="emerald"
         valueColored={false}
@@ -75,17 +78,17 @@ export default function DashboardKPIs({
             </span>
           </>
         }
-        footerLabel="Flux cumulés :"
-        footerValue={`Net : ${(Number(stockKPIs.totalEntrees) || 0) - (Number(stockKPIs.totalSorties) || 0)}`}
+        footerLabel={t('dashboard.kpis.cumulativeFlows')}
+        footerValue={`${t('dashboard.kpis.net')} : ${(Number(stockKPIs.totalEntrees) || 0) - (Number(stockKPIs.totalSorties) || 0)}`}
         onClick={onNavigateToStock}
       />
 
       {/* 3. Critical Alerts & Ruptures */}
       <GmaoKpiCard
         id="kpi-card-critical-alerts"
-        title="Seuils Critiques & Alertes"
+        title={t('dashboard.kpis.criticalThresholds')}
         value={totalAlerts}
-        unit="articles"
+        unit={t('dashboard.kpis.articlesUnit')}
         icon={totalAlerts > 0 ? AlertTriangle : CheckCircle2}
         color={totalAlerts > 0 ? 'rose' : 'emerald'}
         valueColored={true}
@@ -93,17 +96,17 @@ export default function DashboardKPIs({
         badges={
           <>
             <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] font-mono border border-rose-200/80">
-              {stockKPIs.ruptures} Ruptures
+              {stockKPIs.ruptures} {t('dashboard.kpis.ruptures')}
             </span>
             <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px] font-mono border border-amber-200/80">
-              {stockKPIs.alertes} Alertes
+              {stockKPIs.alertes} {t('dashboard.kpis.alerts')}
             </span>
           </>
         }
-        footerLabel="Réappro :"
+        footerLabel={t('dashboard.kpis.restock')}
         footerValue={
           <span className="flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-            <span>Traiter les alertes</span>
+            <span>{t('dashboard.kpis.handleAlerts')}</span>
             <ArrowUpRight className="w-3 h-3" />
           </span>
         }
@@ -113,27 +116,28 @@ export default function DashboardKPIs({
       {/* 4. Machines & Asset Fleet */}
       <GmaoKpiCard
         id="kpi-card-machines-fleet"
-        title="Parc Machines Actif"
+        title={t('dashboard.kpis.activeFleet')}
         value={machineHealth.total}
-        unit="équipements"
+        unit={t('dashboard.kpis.equipmentUnit')}
         icon={Factory}
         color="purple"
         valueColored={false}
         badges={
           <>
             <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/80 font-mono">
-              {machineHealth.enService} en service
+              {machineHealth.enService} {t('dashboard.kpis.inService')}
             </span>
             <span>•</span>
             <span className="text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/80 font-mono">
-              {machineHealth.enMaintenance} en maint.
+              {machineHealth.enMaintenance} {t('dashboard.kpis.inMaint')}
             </span>
           </>
         }
-        footerLabel="Disponibilité :"
-        footerValue={`${machineAvailability}% dispo`}
+        footerLabel={t('dashboard.kpis.availability')}
+        footerValue={`${machineAvailability}% ${t('dashboard.kpis.availShort')}`}
         onClick={onNavigateToMachines}
       />
     </GmaoKpiGrid>
   );
 }
+
