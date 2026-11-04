@@ -6,27 +6,44 @@ import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
-import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, Calculator, RotateCcw, X } from 'lucide-react';
+import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, Calculator, RotateCcw, X, FileSpreadsheet } from 'lucide-react';
 import { useTranslation } from '../../../i18n/I18nContext';
+import { usePermission } from '../../components/common/PermissionGate';
 
 export default function ZonesView({
   zones = [],
   technicians = [],
   operations = [],
   machines = [],
+  warehouseItems = [],
+  search: externalSearch = '',
+  setSearch: setExternalSearch,
   onAddZone,
   onUpdateZone,
   onDeleteZone,
   onNavigateToTechs,
   onNavigateToMachines,
+  showToast,
 }) {
   const { t } = useTranslation();
-  const [localSearch, setLocalSearch] = useState('');
-  const [search, setSearch] = useState('');
+  const canCreate = usePermission('CREATE');
+  const canEdit = usePermission('EDIT');
+  const canDelete = usePermission('DELETE');
+
+  const [localSearch, setLocalSearch] = useState(externalSearch || '');
+  const [search, setSearch] = useState(externalSearch || '');
+
+  useEffect(() => {
+    if (externalSearch !== undefined && externalSearch !== localSearch) {
+      setLocalSearch(externalSearch);
+      setSearch(externalSearch);
+    }
+  }, [externalSearch]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
       setSearch(localSearch);
+      if (setExternalSearch) setExternalSearch(localSearch);
     }, 200);
     return () => clearTimeout(handler);
   }, [localSearch]);
@@ -41,6 +58,7 @@ export default function ZonesView({
   const safeTechs = Array.isArray(technicians) ? technicians : [];
   const safeOps = Array.isArray(operations) ? operations : [];
   const safeMachines = Array.isArray(machines) ? machines : [];
+  const safeWarehouse = Array.isArray(warehouseItems) ? warehouseItems : [];
 
   // Auto-calculation of next Code Zone (e.g. ZONE-01)
   const autoCodeZone = useMemo(() => {
@@ -157,12 +175,71 @@ export default function ZonesView({
     );
   };
 
+  const handleExportExcel = () => {
+    const headers = [
+      'Code Zone (B.1)',
+      'ID Zone (B.2)',
+      'Libellé / Atelier (C)',
+      'Type',
+      'Description',
+      'Nb Techniciens (D)',
+      'Nb Opérations/Responsables (E)',
+      'Nb Machines (F)',
+    ];
+    const rows = filtered.map((z) => {
+      const zId = z.id_zone || z.code_zone;
+      const nbTechs = safeTechs.filter((t) => t.id_zone === z.id_zone || t.id_zone === z.code_zone).length;
+      const nbOps = safeOps.filter(
+        (op) =>
+          op.id_zone === z.id_zone ||
+          op.id_zone === z.code_zone ||
+          (Array.isArray(op.zones) && op.zones.includes(z.id_zone))
+      ).length;
+      const nbMachines = safeMachines.filter((m) => {
+        const mZ = String(m.id_zone_default || m.id_zone || '').trim().toLowerCase();
+        const idZ = String(z.id_zone || '').trim().toLowerCase();
+        const codeZ = String(z.code_zone || z.code || '').trim().toLowerCase();
+        const libZ = String(z.libelle || '').trim().toLowerCase();
+        return Boolean(mZ && (mZ === idZ || mZ === codeZ || mZ === libZ));
+      }).length;
+      return [
+        z.code_zone || z.code || zId || '',
+        z.id_zone || '',
+        z.libelle || '',
+        z.type || '',
+        z.description || '',
+        nbTechs,
+        nbOps,
+        nbMachines,
+      ];
+    });
+    const csvContent =
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [
+        headers.join(';'),
+        ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')),
+      ].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `zones_ateliers_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!canCreate) return;
     if (!form.code_zone || !form.id_zone || !form.libelle) return;
+    const cleanId = form.id_zone.trim().toUpperCase();
+    if (safeZones.some((z) => String(z.id_zone || '').trim().toUpperCase() === cleanId)) {
+      showToast?.(`L'identifiant de zone "${cleanId}" existe déjà.`, 'warning');
+      return;
+    }
     onAddZone({
       code_zone: form.code_zone.trim().toUpperCase(),
-      id_zone: form.id_zone.trim().toUpperCase(),
+      id_zone: cleanId,
       libelle: form.libelle.trim(),
       type: form.type,
       description: form.description || '',
@@ -264,7 +341,7 @@ export default function ZonesView({
                 <div className="flex flex-col gap-0.5 mt-0.5">
                   <button
                     type="button"
-                    onClick={() => onNavigateToTechs && onNavigateToTechs(z.code_zone || z.id_zone)}
+                    onClick={() => onNavigateToTechs && onNavigateToTechs(z.id_zone || z.code_zone)}
                     className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase text-slate-400 hover:text-blue-600 transition text-left cursor-pointer"
                   >
                     <Wrench className="w-3 h-3 text-slate-400 shrink-0" />
@@ -275,7 +352,7 @@ export default function ZonesView({
                       <button
                         key={i}
                         type="button"
-                        onClick={() => onNavigateToTechs && onNavigateToTechs(z.code_zone || z.id_zone)}
+                        onClick={() => onNavigateToTechs && onNavigateToTechs(z.id_zone || z.code_zone)}
                         className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700 shadow-2xs cursor-pointer transition"
                       >
                         {tech.id_technician || tech.code || 'TECH'}
@@ -295,7 +372,7 @@ export default function ZonesView({
         icon: Wrench,
         render: (z) => {
           const mCount = safeMachines.filter((m) => {
-            const mZ = String(m.id_zone_default || '').trim().toLowerCase();
+            const mZ = String(m.id_zone_default || m.id_zone || '').trim().toLowerCase();
             const idZ = String(z.id_zone || '').trim().toLowerCase();
             const codeZ = String(z.code_zone || z.code || '').trim().toLowerCase();
             const libZ = String(z.libelle || '').trim().toLowerCase();
@@ -304,7 +381,7 @@ export default function ZonesView({
           return (
             <button
               type="button"
-              onClick={() => onNavigateToMachines && onNavigateToMachines(z.code_zone || z.id_zone)}
+              onClick={() => onNavigateToMachines && onNavigateToMachines(z.id_zone || z.code_zone)}
               className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition group cursor-pointer shadow-2xs"
               title={t('zones.columns.machines')}
             >
@@ -322,27 +399,31 @@ export default function ZonesView({
         headerClassName: 'w-24 text-center font-bold text-slate-400 tracking-widest select-none',
         render: (z) => (
           <div className="flex items-center justify-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setToEdit(z)}
-              className="p-1.5 bg-white hover:bg-purple-50 text-slate-600 hover:text-purple-700 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
-              title={t('zones.buttons.edit')}
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setToDelete(z)}
-              className="p-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
-              title={t('zones.buttons.delete')}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setToEdit(z)}
+                className="p-1.5 bg-white hover:bg-purple-50 text-slate-600 hover:text-purple-700 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
+                title={t('zones.buttons.edit')}
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => setToDelete(z)}
+                className="p-1.5 bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-700 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
+                title={t('zones.buttons.delete')}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         ),
       },
     ],
-    [safeOps, safeTechs, safeMachines, onNavigateToTechs, onNavigateToMachines, t]
+    [safeOps, safeTechs, safeMachines, onNavigateToTechs, onNavigateToMachines, t, canEdit, canDelete]
   );
 
   return (
@@ -370,14 +451,16 @@ export default function ZonesView({
             title={t('zones.buttons.view_formulas')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="purple"
-            icon={MapPin}
-            showAddBadge={true}
-            onClick={() => setShowAddModal(true)}
-            title={t('zones.buttons.add_zone')}
-          />
+          {canCreate && (
+            <Action3DButton
+              variant="circle"
+              color="purple"
+              icon={MapPin}
+              showAddBadge={true}
+              onClick={() => setShowAddModal(true)}
+              title={t('zones.buttons.add_zone')}
+            />
+          )}
         </div>
       </div>
 
@@ -450,15 +533,30 @@ export default function ZonesView({
             </div>
           </div>
 
-          {localSearch && (
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setLocalSearch('')}
-              title={t('zones.filters.reset_tooltip')}
-              className="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:text-purple-700 hover:bg-purple-50 hover:border-purple-200 flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0"
+              type="button"
+              onClick={handleExportExcel}
+              className="h-8 px-3 rounded-xl border border-emerald-200/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title={t('common.filters.export_excel', 'Exporter le tableau vers Excel / CSV')}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{t('common.filters.export_excel', 'Export Excel')}</span>
             </button>
-          )}
+
+            {localSearch && (
+              <button
+                onClick={() => {
+                  setLocalSearch('');
+                  if (setExternalSearch) setExternalSearch('');
+                }}
+                title={t('zones.filters.reset_tooltip')}
+                className="w-8 h-8 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 hover:text-purple-700 hover:bg-purple-50 hover:border-purple-200 flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
@@ -850,36 +948,69 @@ export default function ZonesView({
           </div>
         </div>
       )}
-      {toDelete && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-5 space-y-4">
-            <div className="flex flex-col items-center text-center">
-              <AlertTriangle className="w-8 h-8 text-rose-600 mb-2" />
-              <h3 className="font-bold text-lg text-slate-900">{t('zones.modal.delete_title')}</h3>
-            </div>
-            <p className="text-sm text-center text-slate-600">
-              {t('zones.modal.delete_confirm')}
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setToDelete(null)}
-                className="flex-1 h-10 rounded-xl bg-slate-100 text-slate-700 text-xs font-medium"
-              >
-                {t('zones.buttons.cancel')}
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteZone(toDelete.id_zone);
-                  setToDelete(null);
-                }}
-                className="flex-1 h-10 rounded-xl bg-rose-600 text-white text-xs font-semibold"
-              >
-                {t('zones.buttons.delete')}
-              </button>
+      {toDelete && (() => {
+        const zIdNorm = String(toDelete.id_zone || '').trim().toUpperCase();
+        const matchesZ = (val: unknown) => String(val || '').trim().toUpperCase() === zIdNorm;
+        const linkedMachinesCount = safeMachines.filter(
+          (m) => matchesZ(m.id_zone_default) || matchesZ(m.id_zone)
+        ).length;
+        const linkedTechsCount = safeTechs.filter((t) => matchesZ(t.id_zone)).length;
+        const linkedOpsCount = safeOps.filter(
+          (o) =>
+            matchesZ(o.id_zone) ||
+            (Array.isArray(o.zones) && o.zones.some((zId) => matchesZ(zId)))
+        ).length;
+        const linkedWhCount = safeWarehouse.filter((w) => matchesZ(w.id_zone)).length;
+        const totalLinked = linkedMachinesCount + linkedTechsCount + linkedOpsCount + linkedWhCount;
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-5 space-y-4">
+              <div className="flex flex-col items-center text-center">
+                <AlertTriangle className="w-8 h-8 text-rose-600 mb-2" />
+                <h3 className="font-bold text-lg text-slate-900">{t('zones.modal.delete_title')}</h3>
+              </div>
+              <p className="text-sm text-center text-slate-600">
+                {t('zones.modal.delete_confirm')}
+              </p>
+              {totalLinked > 0 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-semibold text-amber-800 space-y-1">
+                  <div className="font-bold">Suppression bloquée (éléments rattachés) :</div>
+                  <ul className="list-disc list-inside text-[11px] font-medium space-y-0.5">
+                    {linkedMachinesCount > 0 && <li>{linkedMachinesCount} machine(s)</li>}
+                    {linkedTechsCount > 0 && <li>{linkedTechsCount} technicien(s)</li>}
+                    {linkedOpsCount > 0 && <li>{linkedOpsCount} opérateur(s) / responsable(s)</li>}
+                    {linkedWhCount > 0 && <li>{linkedWhCount} élément(s) d&apos;entrepôt</li>}
+                  </ul>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setToDelete(null)}
+                  className="flex-1 h-10 rounded-xl bg-slate-100 text-slate-700 text-xs font-medium cursor-pointer"
+                >
+                  {t('zones.buttons.cancel')}
+                </button>
+                <button
+                  disabled={totalLinked > 0}
+                  onClick={() => {
+                    if (!canDelete || totalLinked > 0) return;
+                    onDeleteZone(toDelete.id_zone);
+                    setToDelete(null);
+                  }}
+                  className={`flex-1 h-10 rounded-xl text-white text-xs font-semibold ${
+                    totalLinked > 0
+                      ? 'bg-slate-300 cursor-not-allowed'
+                      : 'bg-rose-600 hover:bg-rose-700 cursor-pointer'
+                  }`}
+                >
+                  {t('zones.buttons.delete')}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Excel Formulas Preview Modal */}
       {showFormulasModal && (

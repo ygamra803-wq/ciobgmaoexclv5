@@ -46,11 +46,16 @@ import {
 } from '../../../data/responsableTemplates';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
+import { usePermission } from '../../components/common/PermissionGate';
 
 export default function UtilisateursView({
-  technicians,
-  operations,
-  zones,
+  technicians = [],
+  operations = [],
+  zones = [],
+  techZoneFilter,
+  setTechZoneFilter,
+  opZoneFilter,
+  setOpZoneFilter,
   onAddTechnician,
   onUpdateTechnician,
   onDeleteTechnician,
@@ -58,6 +63,8 @@ export default function UtilisateursView({
   onUpdateOperation,
   onDeleteOperation,
   onOpenAddZoneModal,
+  onOpenAddZone,
+  showToast,
 }) {
   const { t } = useTranslation();
   const {
@@ -68,6 +75,9 @@ export default function UtilisateursView({
     removePersonnelAuthAccount,
   } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
+  const canManageUsersPerm = usePermission('users.manage');
+  const canManageUsers = Boolean(currentUser) && (isAdmin || canManageUsersPerm);
+  const handleOpenZoneModal = onOpenAddZoneModal || onOpenAddZone;
 
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
@@ -81,6 +91,22 @@ export default function UtilisateursView({
 
   const [profileFilter, setProfileFilter] = useState('ALL'); // ALL, TECHNICIEN, OPERATEUR, RESPONSABLE, RMT, RZN, RPD, RMG
   const [zoneFilter, setZoneFilter] = useState('ALL');
+
+  // Sync incoming zone navigation filters from ZonesView
+  useEffect(() => {
+    if (techZoneFilter !== undefined && techZoneFilter !== 'ALL') {
+      setZoneFilter(techZoneFilter || 'ALL');
+      setProfileFilter(techZoneFilter ? 'TECHNICIEN' : 'ALL');
+      if (setTechZoneFilter) setTechZoneFilter('ALL');
+    }
+  }, [techZoneFilter]);
+
+  useEffect(() => {
+    if (opZoneFilter !== undefined && opZoneFilter !== 'ALL') {
+      setZoneFilter(opZoneFilter || 'ALL');
+      if (setOpZoneFilter) setOpZoneFilter('ALL');
+    }
+  }, [opZoneFilter]);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -258,6 +284,8 @@ export default function UtilisateursView({
 
     // Add technicians
     technicians.forEach((t) => {
+      const isArchived =
+        t.is_active === false || t.actif === false || t.statut === 'ARCHIVE';
       list.push({
         id: t.id_technician,
         nom: t.nom,
@@ -269,12 +297,15 @@ export default function UtilisateursView({
         template_ids: [],
         template_id: null,
         template_label: null,
+        isArchived,
         raw: t,
       });
     });
 
     // Add operations (Operators and Responsables)
     operations.forEach((o) => {
+      const isArchived =
+        o.is_active === false || o.actif === false || o.statut === 'ARCHIVE';
       const isResp =
         o.type_profil === 'RESPONSABLE' ||
         o.type_profil === 'CHEF' ||
@@ -307,6 +338,7 @@ export default function UtilisateursView({
         specialite: isResp
           ? userTemplates.map((t) => t.description).join(' • ') || 'Responsabilité & Coordination'
           : 'Opérateur Ligne de Production',
+        isArchived,
         raw: o,
       });
     });
@@ -384,6 +416,7 @@ export default function UtilisateursView({
   // Submit Handler
   const handleSave = (e) => {
     e.preventDefault();
+    if (!canManageUsers) return;
     if (!form.nom.trim()) return;
 
     if (userToEdit) {
@@ -391,8 +424,9 @@ export default function UtilisateursView({
       const isTech = userToEdit.id.startsWith('TECH-');
       if (isTech) {
         onUpdateTechnician(userToEdit.id, {
+          ...userToEdit.raw,
           id_technician: userToEdit.id,
-          nom: form.nom,
+          nom: form.nom.trim(),
           id_zone: form.id_zone,
           specialite: form.specialite,
         });
@@ -400,7 +434,7 @@ export default function UtilisateursView({
         if (existingAcc && upsertPersonnelAuthAccount) {
           upsertPersonnelAuthAccount({
             personnelId: userToEdit.id,
-            nom: form.nom,
+            nom: form.nom.trim(),
             id_zone: form.id_zone,
             specialite: form.specialite,
             role: existingAcc.role,
@@ -418,8 +452,9 @@ export default function UtilisateursView({
           : [];
         const tplLabel = isResp ? formatTemplateLabels(selectedTpls) : null;
         onUpdateOperation(userToEdit.id, {
+          ...userToEdit.raw,
           id_operation: userToEdit.id,
-          nom: form.nom,
+          nom: form.nom.trim(),
           id_zone: isResp ? (isAll ? 'ALL' : form.zones.join(', ')) : form.id_zone,
           zones: isResp ? form.zones : [form.id_zone],
           type_profil: isResp ? 'RESPONSABLE' : 'OPERATEUR',
@@ -430,20 +465,35 @@ export default function UtilisateursView({
         });
       }
       setUserToEdit(null);
+      setShowAddModal(false);
     } else {
       // Add mode - Auto calculate ID on submission or use picked custom code
-      const nextId = form.customCode || getNextId(form.type);
+      const nextId = (form.customCode || getNextId(form.type)).trim().toUpperCase();
+      const cleanName = form.nom.trim();
+      const duplicateExists = combinedUsers.some(
+        (u) =>
+          String(u.id || '').trim().toUpperCase() === nextId ||
+          (u.type === form.type && String(u.nom || '').trim().toLowerCase() === cleanName.toLowerCase())
+      );
+      if (duplicateExists) {
+        showToast?.(
+          `Un membre avec le code "${nextId}" ou le nom "${cleanName}" existe déjà.`,
+          'warning'
+        );
+        return;
+      }
+
       if (form.type === 'TECHNICIEN') {
         onAddTechnician({
           id_technician: nextId,
-          nom: form.nom,
+          nom: cleanName,
           id_zone: form.id_zone,
           specialite: form.specialite || 'Spécialité Maintenance',
         });
       } else if (form.type === 'OPERATEUR') {
         onAddOperation({
           id_operation: nextId,
-          nom: form.nom,
+          nom: cleanName,
           id_zone: form.id_zone,
           type_profil: 'OPERATEUR',
         });
@@ -456,7 +506,7 @@ export default function UtilisateursView({
         const tplLabel = formatTemplateLabels(selectedTpls);
         onAddOperation({
           id_operation: nextId,
-          nom: form.nom,
+          nom: cleanName,
           id_zone: isAll ? 'ALL' : form.zones.join(', '),
           zones: form.zones,
           type_profil: 'RESPONSABLE',
@@ -484,7 +534,7 @@ export default function UtilisateursView({
 
   // Delete Handler
   const confirmDelete = () => {
-    if (!userToDelete) return;
+    if (!canManageUsers || !userToDelete) return;
     const isTech = userToDelete.id.startsWith('TECH-');
     if (isTech) {
       onDeleteTechnician(userToDelete.id);
@@ -497,15 +547,49 @@ export default function UtilisateursView({
     setUserToDelete(null);
   };
 
+  const handleReactivateUser = (user) => {
+    if (!canManageUsers || !user) return;
+    const isTech = user.id.startsWith('TECH-');
+    if (isTech) {
+      onUpdateTechnician(user.id, {
+        ...user.raw,
+        is_active: true,
+        actif: true,
+        statut: 'ACTIF',
+      });
+    } else {
+      onUpdateOperation(user.id, {
+        ...user.raw,
+        is_active: true,
+        actif: true,
+        statut: 'ACTIF',
+      });
+    }
+    showToast?.(`Membre ${user.nom} réactivé avec succès.`, 'success');
+  };
+
   const handleExportExcel = () => {
-    const headers = ['ID Utilisateur', 'Nom & Prénom', 'Rôle / Profil', 'Zone d\'affectation', 'Spécialité / Templates'];
-    const rows = filtered.map((u) => [
-      u.id || '',
-      u.nom || '',
-      u.type || '',
-      u.id_zone || '',
-      u.template_label || u.specialite || '',
-    ]);
+    const headers = [
+      'ID Utilisateur',
+      'Nom & Prénom',
+      'Rôle / Profil',
+      "Zone d'affectation",
+      'Spécialité / Templates',
+      'Statut Fiche',
+      'Accès GMAO',
+    ];
+    const rows = filtered.map((u) => {
+      const acc = getAccountForPersonnel ? getAccountForPersonnel(u.id) : null;
+      return [
+        u.id || '',
+        u.nom || '',
+        u.type || '',
+        u.id_zone || '',
+        u.template_label || u.specialite || '',
+        u.isArchived ? 'ARCHIVÉ' : 'ACTIF',
+        acc ? (acc.isActive !== false ? `@${acc.username} (${acc.role})` : 'Désactivé') : 'Non activé',
+      ];
+    });
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
       [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
@@ -576,9 +660,20 @@ export default function UtilisateursView({
                 )}
               </div>
               <div>
-                <span className="font-bold text-slate-900 text-xs sm:text-[12.5px] block leading-tight">
-                  {user.nom}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className={`font-bold text-xs sm:text-[12.5px] leading-tight ${
+                      user.isArchived ? 'text-slate-400 line-through' : 'text-slate-900'
+                    }`}
+                  >
+                    {user.nom}
+                  </span>
+                  {user.isArchived && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[9.5px] font-mono font-bold uppercase">
+                      Archivé
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
                   <User className="w-2.5 h-2.5 text-slate-400" />
                   <span>
@@ -754,51 +849,68 @@ export default function UtilisateursView({
                 <Key className="w-3.5 h-3.5" />
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                const userTpls = normalizeTemplateIds(
-                  user.templates || user.template_ids || user.template_id
-                );
-                setUserToEdit(user);
-                setForm({
-                  type: user.type,
-                  nom: user.nom,
-                  id_zone: user.id_zone,
-                  zones:
-                    user.zones && user.zones.length > 0
-                      ? user.zones
-                      : [user.id_zone || 'ALL'],
-                  templates: userTpls.length > 0 ? userTpls : ['RMT'],
-                  template_id: userTpls.join(', ') || 'RMT',
-                  specialite:
-                    user.specialite === 'Spécialité Maintenance' ||
-                    user.specialite?.includes('Opérateur') ||
-                    user.specialite?.includes('Supervision') ||
-                    user.specialite?.includes('Responsabilité')
-                      ? ''
-                      : user.specialite || '',
-                });
-                setShowAddModal(true);
-              }}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 transition cursor-pointer shadow-2xs"
-              title="Modifier l'utilisateur"
-            >
-              <Edit2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setUserToDelete(user)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition cursor-pointer shadow-2xs"
-              title="Supprimer l'utilisateur"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
+            {canManageUsers && user.isArchived && (
+              <button
+                type="button"
+                onClick={() => handleReactivateUser(user)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-emerald-600 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs"
+                title="Réactiver ce membre archivé"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canManageUsers && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const userTpls = normalizeTemplateIds(
+                      user.templates || user.template_ids || user.template_id
+                    );
+                    setUserToEdit(user);
+                    setForm({
+                      type: user.type,
+                      nom: user.nom,
+                      id_zone: user.id_zone,
+                      zones:
+                        user.zones && user.zones.length > 0
+                          ? user.zones
+                          : [user.id_zone || 'ALL'],
+                      templates: userTpls.length > 0 ? userTpls : ['RMT'],
+                      template_id: userTpls.join(', ') || 'RMT',
+                      specialite:
+                        user.specialite === 'Spécialité Maintenance' ||
+                        user.specialite?.includes('Opérateur') ||
+                        user.specialite?.includes('Supervision') ||
+                        user.specialite?.includes('Responsabilité')
+                          ? ''
+                          : user.specialite || '',
+                      customCode: user.id,
+                    });
+                    setShowAddModal(true);
+                  }}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 transition cursor-pointer shadow-2xs"
+                  title="Modifier l'utilisateur"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                {!user.isArchived && (
+                  <button
+                    type="button"
+                    onClick={() => setUserToDelete(user)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition cursor-pointer shadow-2xs"
+                    title="Supprimer / Archiver l'utilisateur"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
           </div>
         ),
       },
     ],
-    [zones, authAccounts, isAdmin, getAccountForPersonnel]
+    [zones, authAccounts, isAdmin, canManageUsers, getAccountForPersonnel]
   );
 
   return (
@@ -826,27 +938,29 @@ export default function UtilisateursView({
               title={t('utilisateurs.buttons.view_formulas')}
             />
 
-            <Action3DButton
-              variant="circle"
-              color="indigo"
-              icon={Users}
-              showAddBadge={true}
-              onClick={() => {
-                setForm({
-                  type: 'TECHNICIEN',
-                  nom: '',
-                  id_zone: zones[0]?.id_zone || '',
-                  zones: ['ALL'],
-                  templates: ['RMT'],
-                  template_id: 'RMT',
-                  specialite: '',
-                  customCode: getNextId('TECHNICIEN'),
-                });
-                setUserToEdit(null);
-                setShowAddModal(true);
-              }}
-              title={t('utilisateurs.buttons.add_user')}
-            />
+            {canManageUsers && (
+              <Action3DButton
+                variant="circle"
+                color="indigo"
+                icon={Users}
+                showAddBadge={true}
+                onClick={() => {
+                  setForm({
+                    type: 'TECHNICIEN',
+                    nom: '',
+                    id_zone: zones[0]?.id_zone || '',
+                    zones: ['ALL'],
+                    templates: ['RMT'],
+                    template_id: 'RMT',
+                    specialite: '',
+                    customCode: getNextId('TECHNICIEN'),
+                  });
+                  setUserToEdit(null);
+                  setShowAddModal(true);
+                }}
+                title={t('utilisateurs.buttons.add_user')}
+              />
+            )}
           </div>
         </div>
 
@@ -1456,10 +1570,10 @@ export default function UtilisateursView({
                         <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500">
                           {t('utilisateurs.modal.zones_assignment')}
                         </label>
-                        {onOpenAddZoneModal && (
+                        {handleOpenZoneModal && (
                           <button
                             type="button"
-                            onClick={onOpenAddZoneModal}
+                            onClick={handleOpenZoneModal}
                             className="text-[10px] text-indigo-600 hover:text-indigo-800 hover:underline font-bold flex items-center gap-0.5 cursor-pointer"
                           >
                             <Plus className="w-3 h-3" />
@@ -1521,17 +1635,19 @@ export default function UtilisateursView({
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
                       <span>{t('utilisateurs.modal.single_zone_assignment')}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAddModal(false);
-                          onOpenAddZoneModal();
-                        }}
-                        className="text-[10px] text-indigo-600 hover:underline font-bold inline-flex items-center gap-0.5"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>{t('utilisateurs.modal.new_zone')}</span>
-                      </button>
+                      {handleOpenZoneModal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddModal(false);
+                            handleOpenZoneModal();
+                          }}
+                          className="text-[10px] text-indigo-600 hover:underline font-bold inline-flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>{t('utilisateurs.modal.new_zone')}</span>
+                        </button>
+                      )}
                     </label>
                     <select
                       value={form.id_zone}

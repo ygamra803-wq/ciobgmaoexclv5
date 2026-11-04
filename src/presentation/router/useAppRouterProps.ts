@@ -598,6 +598,7 @@ export function useAppRouterProps({
       machines,
       technicians,
       operations,
+      warehouseItems: warehouseItemsComputed,
       search: filters.whSearch,
       setSearch: filters.setWhSearch,
       onAddZone: handleAddZone,
@@ -607,6 +608,7 @@ export function useAppRouterProps({
       onNavigateToOps: navigation.handleNavigateToOpsByZone,
       onNavigateToMachines: navigation.handleNavigateToMachinesByZone,
       onOpenAddZoneModal: () => setShowAddZoneModal(true),
+      showToast: showToast || navigation?.showToast,
     },
 
     utilisateurs: {
@@ -627,6 +629,8 @@ export function useAppRouterProps({
       onOpenAddArticle: () => setShowAddArticleModal(true),
       onOpenAddMachine: () => setShowAddMachineModal(true),
       onOpenAddZone: () => setShowAddZoneModal(true),
+      onOpenAddZoneModal: () => setShowAddZoneModal(true),
+      showToast: showToast || navigation?.showToast,
       onOpenAddTechModal: () => {
         setAddUserModalType('TECHNICIEN');
         setShowAddUserModal(true);

@@ -58,27 +58,63 @@ export function useAppComplexHandlers({
     setZones((prev) => prev.map((z) => (z.id_zone === id ? updatedZone : z)));
     const oldZone = zones.find((z) => z.id_zone === id);
     if (oldZone && oldZone.id_zone !== updatedZone.id_zone) {
+      const nextZoneId = updatedZone.id_zone;
       setTechnicians((prev) =>
-        prev.map((t) => (t.id_zone === id ? { ...t, id_zone: updatedZone.id_zone } : t))
+        prev.map((t) => (t.id_zone === id ? { ...t, id_zone: nextZoneId } : t))
       );
       setOperations((prev) =>
-        prev.map((o) => (o.id_zone === id ? { ...o, id_zone: updatedZone.id_zone } : o))
+        prev.map((o) => {
+          const hasZoneInArr = Array.isArray(o.zones) && o.zones.includes(id);
+          const nextZones = hasZoneInArr
+            ? o.zones.map((zId) => (zId === id ? nextZoneId : zId))
+            : o.zones;
+          if (o.id_zone === id || hasZoneInArr) {
+            return {
+              ...o,
+              id_zone: o.id_zone === id ? nextZoneId : hasZoneInArr ? nextZones.join(', ') : o.id_zone,
+              ...(nextZones ? { zones: nextZones } : {}),
+            };
+          }
+          return o;
+        })
       );
       setMachines((prev) =>
         prev.map((m) =>
-          m.id_zone_default === id ? { ...m, id_zone_default: updatedZone.id_zone } : m
+          m.id_zone_default === id || m.id_zone === id
+            ? {
+                ...m,
+                ...(m.id_zone_default === id ? { id_zone_default: nextZoneId } : {}),
+                ...(m.id_zone === id ? { id_zone: nextZoneId } : {}),
+              }
+            : m
         )
       );
+      setWarehouseItems?.((prev) =>
+        (prev || []).map((w) => (w.id_zone === id ? { ...w, id_zone: nextZoneId } : w))
+      );
       setMouvements((prev) =>
-        prev.map((m) => (m.id_zone === id ? { ...m, id_zone: updatedZone.id_zone } : m))
+        prev.map((m) => (m.id_zone === id ? { ...m, id_zone: nextZoneId } : m))
       );
     }
   };
   const handleDeleteZone = (id) => {
-    const hasMachines = activeMachines.some((m) => m.id_zone_default === id || m.id_zone === id);
-    const hasTechs = (technicians || []).some((t) => t.id_zone === id);
-    if (hasMachines || hasTechs) {
-      showToast?.(`Zone ${id} contient des machines ou techniciens actifs. Supprimez ou réaffectez-les d'abord.`, 'warning');
+    const zNorm = String(id || '').trim().toUpperCase();
+    const matchesZone = (val: unknown) => String(val || '').trim().toUpperCase() === zNorm;
+    const hasMachines = activeMachines.some(
+      (m) => matchesZone(m.id_zone_default) || matchesZone(m.id_zone)
+    );
+    const hasTechs = (technicians || []).some((t) => matchesZone(t.id_zone));
+    const hasOps = (operations || []).some(
+      (o) =>
+        matchesZone(o.id_zone) ||
+        (Array.isArray(o.zones) && o.zones.some((zId) => matchesZone(zId)))
+    );
+    const hasWarehouse = (warehouseItems || []).some((w) => matchesZone(w.id_zone));
+    if (hasMachines || hasTechs || hasOps || hasWarehouse) {
+      showToast?.(
+        `Suppression refusée : la zone ${id} contient des machines, membres ou articles d'entrepôt actifs. Réaffectez-les d'abord.`,
+        'warning'
+      );
       return;
     }
     setZones((prev) => prev.filter((z) => z.id_zone !== id));
@@ -94,8 +130,66 @@ export function useAppComplexHandlers({
       );
     }
   };
-  const handleDeleteOperation = (id) =>
-    setOperations((prev) => prev.filter((o) => o.id_operation !== id));
+  const handleDeleteOperation = (id) => {
+    const targetOp = (operations || []).find((o) => o.id_operation === id || o.id === id);
+    const opName = String(targetOp?.nom || targetOp?.name || id || '').trim();
+    const opIdNorm = String(id || '').trim().toUpperCase();
+    const opNameNorm = opName.toUpperCase();
+
+    const matchesOpRef = (val: unknown) => {
+      const v = String(val || '').trim().toUpperCase();
+      return Boolean(v && (v === opIdNorm || (opNameNorm && v === opNameNorm)));
+    };
+
+    const hasMovements = (mouvements || []).some(
+      (m) =>
+        matchesOpRef(m?.operation) ||
+        matchesOpRef(m?.demandeur) ||
+        matchesOpRef(m?.responsable) ||
+        matchesOpRef(m?.technicien)
+    );
+    const hasCorrective = (correctiveInterventions || []).some(
+      (ci) =>
+        matchesOpRef(ci?.demandeur) ||
+        matchesOpRef(ci?.intervenant) ||
+        matchesOpRef(ci?.submitted_by_id) ||
+        matchesOpRef(ci?.submitted_by_name) ||
+        matchesOpRef(ci?.validated_by_id)
+    );
+    const hasPreventiveTasks = (preventiveTasks || []).some(
+      (pt) => matchesOpRef(pt?.responsable) || matchesOpRef(pt?.technicien)
+    );
+    const hasSortieDemands = (sortieDemands || []).some(
+      (sd) =>
+        matchesOpRef(sd?.demandeur_id) ||
+        matchesOpRef(sd?.demandeur_nom) ||
+        matchesOpRef(sd?.validated_by_id)
+    );
+
+    if (hasMovements || hasCorrective || hasPreventiveTasks || hasSortieDemands) {
+      setOperations((prev) =>
+        prev.map((o) =>
+          o.id_operation === id || o.id === id
+            ? {
+                ...o,
+                is_active: false,
+                actif: false,
+                statut: 'ARCHIVE',
+                date_archivage: new Date().toISOString(),
+              }
+            : o
+        )
+      );
+      showToast?.(
+        `Membre ${opName} archivé (désactivé) pour préserver l'historique des opérations et interventions.`,
+        'info'
+      );
+      return;
+    }
+
+    setOperations((prev) => prev.filter((o) => o.id_operation !== id && o.id !== id));
+    showToast?.(`Membre ${opName} supprimé avec succès.`, 'success');
+  };
 
   const handleUpdateMachine = (id, updatedMch) => {
     const oldCodeNorm = String(id || '').trim().toUpperCase();
