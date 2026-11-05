@@ -31,6 +31,7 @@ import { normalizeDateToYMD } from '../../../utils/datePeriodUtils';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { useCurrency } from '../../../utils/currencyService';
 
 interface MonthlyExecutiveReportViewProps {
   stockItems?: any[];
@@ -99,6 +100,7 @@ export default function MonthlyExecutiveReportView({
   showToast,
 }: MonthlyExecutiveReportViewProps) {
   const { user } = useAuth();
+  const { formatCurrency, currencySymbol } = useCurrency();
   const canViewReport =
     Boolean(user) && AuthorizationService.canAccessTab(user, 'executive_report');
   const canExportReport =
@@ -323,14 +325,14 @@ export default function MonthlyExecutiveReportView({
             <span>
               Coût Total Maintenance Officiel ({selectedMonth}) :{' '}
               <strong className="text-slate-900 font-black">
-                {currentReport.totalOfficialMaintenanceCost.toLocaleString('fr-FR')} DT
+                {formatCurrency(currentReport.totalOfficialMaintenanceCost)}
               </strong>
             </span>
             {comparison.totalOfficialCostDelta && (
               <DeltaBadge
                 delta={comparison.totalOfficialCostDelta}
                 invertGoodBad={true}
-                unit=" DT"
+                unit={` ${currencySymbol}`}
               />
             )}
           </div>
@@ -350,9 +352,9 @@ export default function MonthlyExecutiveReportView({
             </div>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-2xl font-black font-mono text-slate-900">
-                {currentReport.stockValuationTotal.toLocaleString()}
+                {formatCurrency(currentReport.stockValuationTotal)}
               </span>
-              <span className="text-xs font-bold font-mono text-slate-400">DT (Stock Actuel)</span>
+              <span className="text-xs font-bold font-mono text-slate-400">(Stock Actuel)</span>
             </div>
           </div>
 
@@ -361,19 +363,19 @@ export default function MonthlyExecutiveReportView({
               <span className="text-slate-500">Consommation du mois :</span>
               <div className="flex items-center gap-1.5">
                 <span className="font-mono font-bold text-slate-900">
-                  {currentReport.monthConsumptionCost.toLocaleString()} DT
+                  {formatCurrency(currentReport.monthConsumptionCost)}
                 </span>
                 <DeltaBadge
                   delta={comparison.consumptionCostDelta}
                   invertGoodBad={true}
-                  unit=" DT"
+                  unit={` ${currencySymbol}`}
                 />
               </div>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500">Commandes ouvertes ({currentReport.openOrdersCount}) :</span>
               <span className="font-mono font-bold text-indigo-700">
-                {currentReport.openOrdersValue.toLocaleString()} DT
+                {formatCurrency(currentReport.openOrdersValue)}
               </span>
             </div>
           </div>
@@ -415,7 +417,7 @@ export default function MonthlyExecutiveReportView({
             <div className="flex items-center justify-between">
               <span className="text-slate-500">Coût Préventif du mois :</span>
               <span className="font-mono font-bold text-emerald-700">
-                {currentReport.preventiveTotalCost.toLocaleString()} DT
+                {formatCurrency(currentReport.preventiveTotalCost)}
               </span>
             </div>
           </div>
@@ -540,7 +542,7 @@ export default function MonthlyExecutiveReportView({
                     <th className="py-2 px-2">Référence</th>
                     <th className="py-2 px-2">Désignation</th>
                     <th className="py-2 px-2 text-right">Quantité</th>
-                    <th className="py-2 px-2 text-right">P.U (DT)</th>
+                    <th className="py-2 px-2 text-right">P.U ({currencySymbol})</th>
                     <th className="py-2 px-2 text-right">Coût Total</th>
                   </tr>
                 </thead>
@@ -553,10 +555,10 @@ export default function MonthlyExecutiveReportView({
                         {part.quantity} {part.unit}
                       </td>
                       <td className="py-2 px-2 text-right font-mono text-slate-500">
-                        {part.unitPrice.toLocaleString()}
+                        {formatCurrency(part.unitPrice)}
                       </td>
                       <td className="py-2 px-2 text-right font-mono font-black text-indigo-700">
-                        {part.totalCost.toLocaleString()} DT
+                        {formatCurrency(part.totalCost)}
                       </td>
                     </tr>
                   ))}
@@ -632,7 +634,7 @@ export default function MonthlyExecutiveReportView({
             <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80">
               <div className="text-[10px] font-bold text-slate-400 uppercase">Coût PDR Pannes</div>
               <div className="text-sm font-black font-mono text-purple-700">
-                {currentReport.correctiveSparesCost.toLocaleString()} DT
+                {formatCurrency(currentReport.correctiveSparesCost)}
               </div>
             </div>
           </div>
@@ -780,7 +782,7 @@ export default function MonthlyExecutiveReportView({
           </div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono font-black">
-              Total C1 ({selectedMonth}) : {(currentReport.totalOfficialMaintenanceCost ?? 0).toLocaleString()} DT
+              Total C1 ({selectedMonth}) : {formatCurrency(currentReport.totalOfficialMaintenanceCost ?? 0)}
             </span>
             {onNavigateToTab && (
               <button
@@ -837,16 +839,16 @@ export default function MonthlyExecutiveReportView({
                       {m.totalDowntimeHours > 0 ? ` (${m.totalDowntimeHours}h)` : ''}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-slate-700">
-                      {m.correctivePdrCost.toLocaleString()} DT
+                      {formatCurrency(m.correctivePdrCost)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-slate-700">
-                      {m.preventiveCost.toLocaleString()} DT
+                      {formatCurrency(m.preventiveCost)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono text-slate-700">
-                      {m.externalBobinageCost.toLocaleString()} DT
+                      {formatCurrency(m.externalBobinageCost)}
                     </td>
                     <td className="py-2 px-2 text-right font-mono font-black text-emerald-800">
-                      {m.totalOfficialCost.toLocaleString()} DT
+                      {formatCurrency(m.totalOfficialCost)}
                     </td>
                   </tr>
                 ))}
@@ -857,16 +859,16 @@ export default function MonthlyExecutiveReportView({
                     TOTAL CONSOLIDÉ ({currentReport.machineCostBreakdown.length} équipement(s))
                   </td>
                   <td className="py-2.5 px-2 text-right">
-                    {currentReport.correctiveSparesCost.toLocaleString()} DT
+                    {formatCurrency(currentReport.correctiveSparesCost)}
                   </td>
                   <td className="py-2.5 px-2 text-right">
-                    {currentReport.preventiveTotalCost.toLocaleString()} DT
+                    {formatCurrency(currentReport.preventiveTotalCost)}
                   </td>
                   <td className="py-2.5 px-2 text-right">
-                    {(currentReport.externalBobinageTotalCost ?? 0).toLocaleString()} DT
+                    {formatCurrency(currentReport.externalBobinageTotalCost ?? 0)}
                   </td>
                   <td className="py-2.5 px-2 text-right text-emerald-800">
-                    {(currentReport.totalOfficialMaintenanceCost ?? 0).toLocaleString()} DT
+                    {formatCurrency(currentReport.totalOfficialMaintenanceCost ?? 0)}
                   </td>
                 </tr>
               </tfoot>

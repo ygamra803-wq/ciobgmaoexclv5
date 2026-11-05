@@ -817,7 +817,7 @@ export default function TabMainView({
       'Statut',
       'Prochaine Échéance',
       'Dernière Réalisation',
-      'Coût Cumulé (DT)',
+      'Coût Cumulé (MAD)',
       ...allWeeks,
       'Consignes / Remarques',
     ];
@@ -979,7 +979,7 @@ export default function TabMainView({
         <GmaoKpiCard
           title={t('preventive.kpis.pdr_budget', 'Budget PDR Réalisé')}
           value={stats.totalCost.toFixed(2)}
-          unit="DT"
+          unit="DH"
           icon={DollarSign}
           color="amber"
           valueColored={false}

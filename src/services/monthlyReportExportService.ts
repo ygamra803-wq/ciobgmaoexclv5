@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { normalizeDateToYMD } from '../utils/datePeriodUtils';
+import { getCurrencyCode } from '../utils/currencyService';
 import {
   isUnapprovedFieldClaim,
   type MonthOverMonthComparison,
@@ -43,6 +44,7 @@ export class MonthlyReportExportService {
     raw: MonthlyExportRawData = {}
   ): string {
     const { currentMonth, previousMonth, currentReport, previousReport } = comparison;
+    const isoCode = getCurrencyCode();
     const wb = XLSX.utils.book_new();
 
     // 1. Sheet: Synthese_Direction
@@ -53,61 +55,61 @@ export class MonthlyReportExportService {
         currentMonth,
         'Comparaison vs Mois Précédent',
         previousMonth,
-        `Périmètre: ${currentReport.assetClassFilter || 'ALL'}`,
+        `Périmètre: ${currentReport.assetClassFilter || 'ALL'} • Devise ISO: ${isoCode}`,
       ],
       [],
       ['INDICATEUR EXÉCUTIF', `Mois (${currentMonth})`, `Mois Précédent (${previousMonth})`, 'Écart (Delta)', 'Tendance (%)'],
       [
-        'Valorisation Totale du Stock (DT)',
+        `Valorisation Totale du Stock (${isoCode})`,
         currentReport.stockValuationTotal,
         previousReport.stockValuationTotal,
         comparison.stockValuationDelta.diff,
         `${comparison.stockValuationDelta.percent}%`,
       ],
       [
-        'Coût Consommation PDR Magasin du Mois (DT)',
+        `Coût Consommation PDR Magasin du Mois (${isoCode})`,
         currentReport.monthConsumptionCost,
         previousReport.monthConsumptionCost,
         comparison.consumptionCostDelta.diff,
         `${comparison.consumptionCostDelta.percent}%`,
       ],
       [
-        'Coût PDR Correctif Approuvé (DT)',
+        `Coût PDR Correctif Approuvé (${isoCode})`,
         currentReport.correctiveSparesCost,
         previousReport.correctiveSparesCost,
         Number((currentReport.correctiveSparesCost - previousReport.correctiveSparesCost).toFixed(2)),
         '-',
       ],
       [
-        'Coût Préventif Approuvé du Mois (DT)',
+        `Coût Préventif Approuvé du Mois (${isoCode})`,
         currentReport.preventiveTotalCost,
         previousReport.preventiveTotalCost,
         Number((currentReport.preventiveTotalCost - previousReport.preventiveTotalCost).toFixed(2)),
         '-',
       ],
       [
-        'Coût Bobinage / Sous-traitance Externe (DT)',
+        `Coût Bobinage / Sous-traitance Externe (${isoCode})`,
         currentReport.externalBobinageCost || 0,
         previousReport.externalBobinageCost || 0,
         Number(((currentReport.externalBobinageCost || 0) - (previousReport.externalBobinageCost || 0)).toFixed(2)),
         `${currentReport.externalBobinageCount || 0} dossier(s)`,
       ],
       [
-        'Coût Total Maintenance Officiel (C1: BT + PM + Externe) (DT)',
+        `Coût Total Maintenance Officiel (C1: BT + PM + Externe) (${isoCode})`,
         currentReport.totalOfficialMaintenanceCost,
         previousReport.totalOfficialMaintenanceCost,
         Number((currentReport.totalOfficialMaintenanceCost - previousReport.totalOfficialMaintenanceCost).toFixed(2)),
         comparison.totalOfficialCostDelta ? `${comparison.totalOfficialCostDelta.percent}%` : '-',
       ],
       [
-        'Coût Réceptions / Entrées du Mois (DT)',
+        `Coût Réceptions / Entrées du Mois (${isoCode})`,
         currentReport.monthEntriesCost,
         previousReport.monthEntriesCost,
         Number((currentReport.monthEntriesCost - previousReport.monthEntriesCost).toFixed(2)),
         '-',
       ],
       [
-        'Commandes Ouvertes en Attente (DT)',
+        `Commandes Ouvertes en Attente (${isoCode})`,
         currentReport.openOrdersValue,
         previousReport.openOrdersValue,
         currentReport.openOrdersCount,
@@ -187,12 +189,12 @@ export class MonthlyReportExportService {
       'Désignation Équipement',
       'Classe Actif',
       'Nb BT Correctifs',
-      'Coût BT Approuvé (DT)',
+      `Coût BT Approuvé (${isoCode})`,
       'Nb Exécutions PM',
-      'Coût PM Approuvé (DT)',
+      `Coût PM Approuvé (${isoCode})`,
       'Nb Bobinage Externe',
-      'Coût Bobinage Externe (DT)',
-      'Coût Total Officiel (DT)',
+      `Coût Bobinage Externe (${isoCode})`,
+      `Coût Total Officiel (${isoCode})`,
       'Arrêt Cumulé (h)',
     ];
     const c1Rows = (currentReport.machineCostBreakdown || []).map((m) => [
@@ -221,8 +223,8 @@ export class MonthlyReportExportService {
       'Stock Actuel',
       'Seuil Minimum',
       'Quantité à Commander Conseillée',
-      'Prix Unitaire (DT)',
-      'Budget Estimé (DT)',
+      `Prix Unitaire (${isoCode})`,
+      `Budget Estimé (${isoCode})`,
     ];
     const shortagesRows = [
       ...currentReport.ruptureItems.map((it) => {
@@ -263,7 +265,7 @@ export class MonthlyReportExportService {
       const d = normalizeDateToYMD(m.date);
       return d && d.startsWith(currentMonth);
     });
-    const mvtHeader = ['Date', 'Code Bon', 'Type', 'Référence', 'Quantité', 'Prix Unitaire (DT)', 'Machine', 'Technicien', 'Commentaire'];
+    const mvtHeader = ['Date', 'Code Bon', 'Type', 'Référence', 'Quantité', `Prix Unitaire (${isoCode})`, 'Machine', 'Technicien', 'Commentaire'];
     const mvtRows = monthMovements.map((m) => [
       normalizeDateToYMD(m.date),
       m.code_bon || '',
@@ -325,7 +327,7 @@ export class MonthlyReportExportService {
       const d = normalizeDateToYMD(ex.executedAt);
       return (ex.periodMonth && ex.periodMonth === currentMonth) || (d && d.startsWith(currentMonth));
     });
-    const prevHeader = ['ID Exécution', 'Date Exécution', 'Code Machine', 'Tâche ID', 'Exécutant', 'Durée (min)', 'Coût Total (DT)', 'Notes'];
+    const prevHeader = ['ID Exécution', 'Date Exécution', 'Code Machine', 'Tâche ID', 'Exécutant', 'Durée (min)', `Coût Total (${isoCode})`, 'Notes'];
     const prevRows = monthExecs.map((ex) => [
       ex.id || '',
       normalizeDateToYMD(ex.executedAt),
@@ -356,11 +358,12 @@ export class MonthlyReportExportService {
    */
   static exportShiftWeeklyReportToExcel(report: ShiftOrWeeklyReportData): string {
     const wb = XLSX.utils.book_new();
+    const isoCode = getCurrencyCode();
 
     // 1. Sheet: Synthese_Exploitation
     const syntheseRows = [
       ['RAPPORT OPÉRATIONNEL DE VACATION & HEBDOMADAIRE — CIOB GMAO v4'],
-      ['Période Début', report.fromYMD, 'Période Fin', report.toYMD, `${report.daysCount} jour(s)`],
+      ['Période Début', report.fromYMD, 'Période Fin', report.toYMD, `${report.daysCount} jour(s) • Devise ISO: ${isoCode}`],
       ['Périmètre Actifs', report.assetClassFilter, 'Machines Production Actives', report.productionMachinesCount, ''],
       [],
       ['INDICATEUR OPÉRATIONNEL (APPROUVÉS UNIQUEMENT)', 'VALEUR', 'UNITÉ / DÉTAIL', 'PÉRIMÈTRE'],
@@ -368,18 +371,18 @@ export class MonthlyReportExportService {
       ['Correctif Total sur la Période', report.correctiveTotalInPeriodCount, 'BT enregistrés', report.assetClassFilter],
       ['Correctif Ouverts Actuellement (Snapshot)', report.correctiveOpenSnapshotCount, 'BT en cours', report.assetClassFilter],
       ['Temps d’Arrêt Correctif Cumulé', report.totalDowntimeHours, 'heures', report.assetClassFilter],
-      ['Coût PDR Correctif Approuvé', report.correctiveSparesCost, 'DT', report.assetClassFilter],
+      ['Coût PDR Correctif Approuvé', report.correctiveSparesCost, isoCode, report.assetClassFilter],
       ['Exécutions Préventives Approuvées', report.preventiveExecutedInPeriodCount, `${report.preventiveLaborHours}h MO`, report.assetClassFilter],
-      ['Coût Préventif Approuvé', report.preventiveTotalCost, 'DT', report.assetClassFilter],
+      ['Coût Préventif Approuvé', report.preventiveTotalCost, isoCode, report.assetClassFilter],
       ['Dossiers Bobinage / Externe Approuvés', report.externalBobinageCount || 0, 'dossiers', report.assetClassFilter],
-      ['Coût Bobinage / Externe Approuvé', report.externalBobinageCost || 0, 'DT', report.assetClassFilter],
-      ['Coût Total Maintenance Officiel (C1: BT + PM + Externe)', report.totalOfficialMaintenanceCost, 'DT', report.assetClassFilter],
+      ['Coût Bobinage / Externe Approuvé', report.externalBobinageCost || 0, isoCode, report.assetClassFilter],
+      ['Coût Total Maintenance Officiel (C1: BT + PM + Externe)', report.totalOfficialMaintenanceCost, isoCode, report.assetClassFilter],
       ['Conformité PM À Temps (ON_TIME)', report.pmCompliance.onTimeCount, `${report.pmCompliance.onTimeComplianceRate}%`, report.assetClassFilter],
       ['Conformité PM Fait en Retard (LATE)', report.pmCompliance.lateCompletedCount, 'tâches', report.assetClassFilter],
       ['Conformité PM Non Réalisé / En Retard (OVERDUE)', report.pmCompliance.overdueCount, 'tâches', report.assetClassFilter],
       ['Discipline Préventive Globale', `${report.preventiveDisciplineRate}%`, `${report.pmCompliance.totalEligibleCount} tâche(s) éligible(s)`, report.assetClassFilter],
       ['Sorties Magasin Validées', report.sortiesCount, `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
-      ['Coût Consommation Magasin Validé', report.consumptionCost, 'DT', report.assetClassFilter],
+      ['Coût Consommation Magasin Validé', report.consumptionCost, isoCode, report.assetClassFilter],
       ['MTTR Production', report.mttrFormatted, `${report.mttrHours}h`, 'PRODUCTION'],
       ['MTBF Production', `${report.mtbfHours}h`, `${report.scheduledProductionHours}h planifiées`, 'PRODUCTION'],
       ['Disponibilité Opérationnelle Production', `${report.availabilityRate}%`, 'Cible >= 95%', 'PRODUCTION'],
@@ -397,12 +400,12 @@ export class MonthlyReportExportService {
       'Désignation Équipement',
       'Classe Actif',
       'Nb BT',
-      'Coût BT Approuvé (DT)',
+      `Coût BT Approuvé (${isoCode})`,
       'Nb PM',
-      'Coût PM Approuvé (DT)',
+      `Coût PM Approuvé (${isoCode})`,
       'Nb Bobinage Externe',
-      'Coût Bobinage Externe (DT)',
-      'Coût Total Officiel (DT)',
+      `Coût Bobinage Externe (${isoCode})`,
+      `Coût Total Officiel (${isoCode})`,
       'Heures d’Arrêt (h)',
     ];
     const c1Rows = (report.machineCostBreakdown || []).map((m) => [
@@ -464,8 +467,8 @@ export class MonthlyReportExportService {
       'Désignation',
       'Quantité',
       'Unité',
-      'Prix Unitaire (DT)',
-      'Coût Total (DT)',
+      `Prix Unitaire (${isoCode})`,
+      `Coût Total (${isoCode})`,
     ];
     const c2Rows = (report.officialMovementsInPeriod || []).map((mvt) => [
       mvt.id,

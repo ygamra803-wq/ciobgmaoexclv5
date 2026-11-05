@@ -46,6 +46,7 @@ import SettingsMatchingTab from './components/SettingsMatchingTab';
 import SettingsJsonEditorTab from './components/SettingsJsonEditorTab';
 import SettingsBackupAuditTab from './components/SettingsBackupAuditTab';
 import SettingsAdminTab from './components/SettingsAdminTab';
+import SettingsCurrencyTab from './components/SettingsCurrencyTab';
 import {
   AuditZoneModal,
   AuditUserModal,
@@ -261,7 +262,7 @@ export default function SettingsView({
     if (canViewSettings) {
       ids.push('performance');
     }
-    ids.push('appearance');
+    ids.push('appearance', 'currency');
     return ids;
   }, [canManageSettings, canManageUsers, canBackupSettings, canViewSettings]);
 
@@ -1977,6 +1978,8 @@ export default function SettingsView({
         )}
 
         {activeTab === 'appearance' && <AppearanceLayoutSelector showToast={showToast} />}
+
+        {activeTab === 'currency' && <SettingsCurrencyTab showToast={showToast} />}
       </div>
 
       {/* Modular Audit & Relink Modals */}

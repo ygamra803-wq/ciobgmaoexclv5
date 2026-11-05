@@ -518,7 +518,7 @@ export default function MonthlyCalendarView({
             <div className="flex items-center gap-1.5 font-medium text-slate-600">
               <DollarSign className="w-3.5 h-3.5 text-amber-600" />
               <span>Coût cumulé :</span>
-              <b className="text-amber-900 font-mono font-bold">{monthStats.totalCost} DT</b>
+              <b className="text-amber-900 font-mono font-bold">{monthStats.totalCost} DH</b>
             </div>
           </div>
 
@@ -865,7 +865,7 @@ export default function MonthlyCalendarView({
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Interventions programmées · Charge totale : <b>{activeDayDetail.totalEstMinutes} min</b> ({Number(activeDayDetail.totalCostDT).toFixed(2)} DT)
+                    Interventions programmées · Charge totale : <b>{activeDayDetail.totalEstMinutes} min</b> ({Number(activeDayDetail.totalCostDT).toFixed(2)} DH)
                   </p>
                 </div>
               </div>
@@ -994,7 +994,7 @@ export default function MonthlyCalendarView({
                                   </span>
                                   <span className="flex items-center gap-1">
                                     <DollarSign className="w-3 h-3 text-slate-400" />
-                                    {Number(task.cout_cumule || 0).toFixed(2)} DT
+                                    {Number(task.cout_cumule || 0).toFixed(2)} DH
                                   </span>
                                 </div>
                               </div>

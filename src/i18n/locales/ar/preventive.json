@@ -102,7 +102,7 @@
     "col_machine_zone": "الآلة والمنطقة",
     "col_composant_instructions": "المكون والتعليمات",
     "col_echeance": "الاستحقاق",
-    "col_cout": "التكلفة (د.ت)",
+    "col_cout": "التكلفة (د.م.)",
     "col_duree": "المدة",
     "empty_tasks": "لم يتم العثور على أي مهمة وقائية",
     "empty_tasks_sub": "يرجى تعديل معايير البحث أو تصفية البيانات.",

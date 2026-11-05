@@ -2621,7 +2621,7 @@ export default function MachinesRegisteredView({
                   <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
                     <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Coût Préventif Cumulé</span>
                     <span className="text-base font-black text-emerald-700 font-mono mt-0.5 block">
-                      {Number(profile.cout_total_preventif || 0).toFixed(2)} DT
+                      {Number(profile.cout_total_preventif || 0).toFixed(2)} DH
                     </span>
                     <span className="text-[10px] text-slate-500">Main d'œuvre & PDR</span>
                   </div>

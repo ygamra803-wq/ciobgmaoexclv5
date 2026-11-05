@@ -281,7 +281,7 @@ export default function GroupedMachinesView({
                           <>
                             <span>·</span>
                             <span className="text-amber-700 font-bold font-mono">
-                              {group.totalCost.toFixed(2)} DT
+                              {group.totalCost.toFixed(2)} DH
                             </span>
                           </>
                         )}

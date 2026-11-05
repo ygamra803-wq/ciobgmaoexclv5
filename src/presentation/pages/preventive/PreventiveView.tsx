@@ -667,10 +667,10 @@ export default function PreventiveView({
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 truncate">
                       <DollarSign className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span className="truncate">Coût Cumulé Préventif (DT)</span>
+                      <span className="truncate">Coût Cumulé Préventif (DH / MAD)</span>
                     </div>
                     <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100/80 text-blue-800 border border-blue-200 shrink-0">
-                      Coût (DT)
+                      Coût (DH)
                     </span>
                   </div>
                   <div className="font-mono text-xs text-blue-800 font-bold bg-white p-2 rounded-lg border border-blue-100">

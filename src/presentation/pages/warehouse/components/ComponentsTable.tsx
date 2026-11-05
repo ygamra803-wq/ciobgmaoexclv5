@@ -304,7 +304,7 @@ export default function ComponentsTable({
                                       setSelectedDetails?.(item);
                                     }}
                                     className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-[10px] transition cursor-pointer"
-                                    title={`${wearInfo.recommendation}\nCoût cumulé : ${wearInfo.cumulativeRepairCost.toFixed(0)} DT / ${wearInfo.replacementValue.toFixed(0)} DT (${wearInfo.costRatioPercent}%)`}
+                                    title={`${wearInfo.recommendation}\nCoût cumulé : ${wearInfo.cumulativeRepairCost.toFixed(0)} DH / ${wearInfo.replacementValue.toFixed(0)} DH (${wearInfo.costRatioPercent}%)`}
                                   >
                                     <Activity className="w-3 h-3 text-amber-600 shrink-0" />
                                     <span>Usure {wearInfo.costRatioPercent}%</span>

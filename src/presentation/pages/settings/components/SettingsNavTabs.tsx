@@ -9,6 +9,7 @@ import {
   UserCheck,
   Activity,
   Palette,
+  Coins,
 } from 'lucide-react';
 import { useTranslation } from '../../../../i18n/I18nContext';
 
@@ -65,6 +66,11 @@ const TAB_TRANSLATIONS: Record<
     fr: { label: 'Apparence', sub: 'Thème, disposition & interface' },
     ar: { label: 'المظهر والواجهة', sub: 'السمة، التخطيط والواجهة' },
     en: { label: 'Appearance', sub: 'Theme, Layout & UI' },
+  },
+  currency: {
+    fr: { label: 'Devise & Finance', sub: 'ISO 4217 (MAD, USD, EUR)' },
+    ar: { label: 'العملة والمالية', sub: 'معيار ISO 4217 (MAD, USD, EUR)' },
+    en: { label: 'Currency & Finance', sub: 'ISO 4217 (MAD, USD, EUR)' },
   },
 };
 
@@ -196,6 +202,16 @@ export default function SettingsNavTabs({
       activeBorder: 'border-purple-500',
       activeText: 'text-purple-950',
       activeIconBg: 'bg-purple-100/80',
+    },
+    {
+      id: 'currency',
+      ...getTabCopy('currency'),
+      icon: Coins,
+      color: 'text-emerald-700',
+      activeBg: 'bg-emerald-50/70',
+      activeBorder: 'border-emerald-600',
+      activeText: 'text-emerald-950',
+      activeIconBg: 'bg-emerald-100/80',
     },
   ];
 

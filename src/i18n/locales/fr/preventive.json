@@ -97,7 +97,7 @@
     "col_machine_zone": "MACHINE & ZONE",
     "col_composant_instructions": "COMPOSANT & INSTRUCTIONS",
     "col_echeance": "ÉCHÉANCE",
-    "col_cout": "COÛT (DT)",
+    "col_cout": "COÛT (DH)",
     "col_duree": "DURÉE",
     "empty_tasks": "Aucune tâche préventive trouvée",
     "empty_tasks_sub": "Ajustez vos critères de recherche ou vos filtres.",

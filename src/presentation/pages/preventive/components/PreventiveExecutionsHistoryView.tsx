@@ -284,8 +284,8 @@ export default function PreventiveExecutionsHistoryView({
         'Durée (min)': Number(exec.durationMinutes || 0),
         'PDR Utilisées / Proposées': sparesFormatted,
         'N° Bon': exec.num_bon_saisi_par_tech || '',
-        'Coût PDR (DT)': Number(Number(exec.sparesCost || 0).toFixed(2)),
-        'Coût Total (DT)': Number(Number(exec.totalCost || 0).toFixed(2)),
+        'Coût PDR (MAD)': Number(Number(exec.sparesCost || 0).toFixed(2)),
+        'Coût Total (MAD)': Number(Number(exec.totalCost || 0).toFixed(2)),
         'Statut Validation': exec.validation_status || 'APPROVED',
         'Validé Par': exec.validated_by_name || '',
         'DI Corrective Liée': exec.generated_di_id || '',
@@ -344,7 +344,7 @@ export default function PreventiveExecutionsHistoryView({
               <span>{language === 'ar' ? 'تكلفة قطع الغيار المعتمدة' : 'Coût PDR Consommée'}</span>
             </div>
             <div className="text-xl font-extrabold text-amber-600 mt-1 font-mono">
-              {metrics.totalSparesCost.toFixed(2)} <span className="text-xs font-normal text-slate-500">DT</span>
+              {metrics.totalSparesCost.toFixed(2)} <span className="text-xs font-normal text-slate-500">DH</span>
             </div>
           </div>
 
@@ -354,7 +354,7 @@ export default function PreventiveExecutionsHistoryView({
               <span>{language === 'ar' ? 'التكلفة الإجمالية' : 'Coût Total Préventif'}</span>
             </div>
             <div className="text-xl font-extrabold text-slate-900 mt-1 font-mono">
-              {metrics.totalCost.toFixed(2)} <span className="text-xs font-normal text-slate-500">DT</span>
+              {metrics.totalCost.toFixed(2)} <span className="text-xs font-normal text-slate-500">DH</span>
             </div>
           </div>
         </div>
@@ -575,7 +575,7 @@ export default function PreventiveExecutionsHistoryView({
                         )}
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap font-mono font-extrabold text-slate-900">
-                        {exec.totalCost.toFixed(2)} DT
+                        {exec.totalCost.toFixed(2)} DH
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">

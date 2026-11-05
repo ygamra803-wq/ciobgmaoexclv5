@@ -95,7 +95,7 @@ export default function PreventiveAnalyticsView({
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800">{act.code} - {act.libelle}</span>
                   </div>
-                  <p className="font-mono font-black text-slate-900 text-sm">{actCost.toFixed(2)} DT</p>
+                  <p className="font-mono font-black text-slate-900 text-sm">{actCost.toFixed(2)} DH</p>
                   <span className="text-[10px] text-slate-400">{actTasks.length} intervention(s)</span>
                 </div>
               );

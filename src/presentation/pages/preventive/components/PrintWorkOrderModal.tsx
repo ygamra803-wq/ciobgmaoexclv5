@@ -297,7 +297,7 @@ export default function PrintWorkOrderModal({
                     <th className="p-2.5">Réf PDR</th>
                     <th className="p-2.5">Désignation Consommable / Pièce</th>
                     <th className="p-2.5 w-24 text-center">Quantité</th>
-                    <th className="p-2.5 w-20 text-right">P.U (DT)</th>
+                    <th className="p-2.5 w-20 text-right">P.U (DH)</th>
                     <th className="p-2.5 w-20 text-center">Pointé</th>
                   </tr>
                 </thead>

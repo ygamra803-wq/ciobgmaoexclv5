@@ -527,7 +527,7 @@ export default function AnalyseCorrectiveTab({
               <span className="text-2xl sm:text-3xl font-black text-purple-600 font-mono tracking-tight">
                 {executiveKpis.pdrCost.toLocaleString()}
               </span>
-              <span className="text-[11px] font-bold text-slate-400 font-mono">DT</span>
+              <span className="text-[11px] font-bold text-slate-400 font-mono">DH</span>
             </div>
             <div className="mt-2 text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
               <span className="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-mono">

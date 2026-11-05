@@ -2748,10 +2748,10 @@ export default function EntrepotView({
                               Coût Cumulé Répar.
                             </span>
                             <span className="font-mono font-black text-slate-900">
-                              {wearAnalysis.cumulativeRepairCost.toFixed(0)} DT
+                              {wearAnalysis.cumulativeRepairCost.toFixed(0)} DH
                             </span>
                             <span className="text-[9.5px] text-slate-500 block font-mono">
-                              ({wearAnalysis.costRatioPercent}% de {wearAnalysis.replacementValue.toFixed(0)} DT)
+                              ({wearAnalysis.costRatioPercent}% de {wearAnalysis.replacementValue.toFixed(0)} DH)
                             </span>
                           </div>
 
@@ -2785,7 +2785,7 @@ export default function EntrepotView({
                               {wearAnalysis.bobinageCount} cycle(s)
                             </span>
                             <span className="text-[9.5px] text-slate-500 block">
-                              Coût Ext: {wearAnalysis.externalCost.toFixed(0)} DT
+                              Coût Ext: {wearAnalysis.externalCost.toFixed(0)} DH
                             </span>
                           </div>
                         </div>

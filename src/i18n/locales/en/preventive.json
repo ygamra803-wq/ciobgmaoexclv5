@@ -97,7 +97,7 @@
     "col_machine_zone": "MACHINE & ZONE",
     "col_composant_instructions": "COMPONENT & INSTRUCTIONS",
     "col_echeance": "DUE DATE",
-    "col_cout": "COST (TND)",
+    "col_cout": "COST (MAD)",
     "col_duree": "DURATION",
     "empty_tasks": "No preventive tasks found",
     "empty_tasks_sub": "Adjust your search criteria or filters.",

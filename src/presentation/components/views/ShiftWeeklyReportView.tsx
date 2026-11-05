@@ -28,6 +28,7 @@ import { useGmaoStore } from '../../../store/useGmaoStore';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
+import { useCurrency } from '../../../utils/currencyService';
 
 export type PeriodPreset = 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_12_MONTHS' | 'CUSTOM';
 
@@ -66,6 +67,7 @@ export default function ShiftWeeklyReportView({
   showToast,
 }: ShiftWeeklyReportViewProps) {
   const { user: currentUser } = useAuth();
+  const { formatCurrency } = useCurrency();
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
   const storeSortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const sortieDemands = propSortieDemands ?? storeSortieDemands ?? [];
@@ -549,7 +551,7 @@ export default function ShiftWeeklyReportView({
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Coût PDR validé :</span>
             <span className="font-mono font-bold text-slate-800">
-              {report.correctiveSparesCost.toLocaleString('fr-FR')} DT
+              {formatCurrency(report.correctiveSparesCost)}
             </span>
           </div>
         </div>
@@ -597,7 +599,7 @@ export default function ShiftWeeklyReportView({
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Coût PDR préventif validé :</span>
             <span className="font-mono font-bold text-slate-800">
-              {report.preventiveTotalCost.toLocaleString('fr-FR')} DT
+              {formatCurrency(report.preventiveTotalCost)}
             </span>
           </div>
         </div>
@@ -623,7 +625,7 @@ export default function ShiftWeeklyReportView({
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
               <span className="px-2 py-0.5 rounded-md bg-cyan-50 text-cyan-900 border border-cyan-200 font-mono font-bold">
-                Consommation : {report.consumptionCost.toLocaleString('fr-FR')} DT
+                Consommation : {formatCurrency(report.consumptionCost)}
               </span>
               {report.pendingSortieDemandsWarningCount > 0 ? (
                 <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-300 font-mono font-bold">
@@ -639,7 +641,7 @@ export default function ShiftWeeklyReportView({
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
             <span>Entrées stock sur la période :</span>
             <span className="font-mono font-bold text-slate-800">
-              {report.entreesCount} ({report.entriesCost.toLocaleString('fr-FR')} DT)
+              {report.entreesCount} ({formatCurrency(report.entriesCost)})
             </span>
           </div>
         </div>
@@ -700,7 +702,7 @@ export default function ShiftWeeklyReportView({
             </div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono font-black">
-                Total Officiel : {report.totalOfficialMaintenanceCost} DT
+                Total Officiel : {formatCurrency(report.totalOfficialMaintenanceCost)}
               </span>
               {onNavigateToTab && (
                 <button
@@ -763,16 +765,16 @@ export default function ShiftWeeklyReportView({
                           )}
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono text-slate-700">
-                          {m.correctivePdrCost} DT
+                          {formatCurrency(m.correctivePdrCost)}
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono text-slate-700">
-                          {m.preventiveCost} DT
+                          {formatCurrency(m.preventiveCost)}
                         </td>
                         <td className="py-2.5 px-2 text-right font-mono text-slate-700">
-                          {m.externalBobinageCost} DT
+                          {formatCurrency(m.externalBobinageCost)}
                         </td>
                         <td className="py-2.5 pl-2 text-right font-mono font-black text-emerald-800">
-                          {m.totalOfficialCost} DT
+                          {formatCurrency(m.totalOfficialCost)}
                         </td>
                       </tr>
                     ))}
@@ -783,25 +785,28 @@ export default function ShiftWeeklyReportView({
                         TOTAL PÉRIODE ({report.machineCostBreakdown.length} machine(s))
                       </td>
                       <td className="py-2.5 px-2 text-right">
-                        {Math.round(
-                          report.machineCostBreakdown.reduce((s, r) => s + r.correctivePdrCost, 0) * 100
-                        ) / 100}{' '}
-                        DT
+                        {formatCurrency(
+                          Math.round(
+                            report.machineCostBreakdown.reduce((s, r) => s + r.correctivePdrCost, 0) * 100
+                          ) / 100
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-right">
-                        {Math.round(
-                          report.machineCostBreakdown.reduce((s, r) => s + r.preventiveCost, 0) * 100
-                        ) / 100}{' '}
-                        DT
+                        {formatCurrency(
+                          Math.round(
+                            report.machineCostBreakdown.reduce((s, r) => s + r.preventiveCost, 0) * 100
+                          ) / 100
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-right">
-                        {Math.round(
-                          report.machineCostBreakdown.reduce((s, r) => s + r.externalBobinageCost, 0) * 100
-                        ) / 100}{' '}
-                        DT
+                        {formatCurrency(
+                          Math.round(
+                            report.machineCostBreakdown.reduce((s, r) => s + r.externalBobinageCost, 0) * 100
+                          ) / 100
+                        )}
                       </td>
                       <td className="py-2.5 pl-2 text-right text-emerald-800">
-                        {report.totalOfficialMaintenanceCost} DT
+                        {formatCurrency(report.totalOfficialMaintenanceCost)}
                       </td>
                     </tr>
                   </tfoot>
@@ -1068,7 +1073,7 @@ export default function ShiftWeeklyReportView({
                           {part.quantity} {part.unit}
                         </td>
                         <td className="py-2 pl-3 text-right font-mono font-bold text-cyan-800">
-                          {part.totalCost.toLocaleString('fr-FR')} DT
+                          {formatCurrency(part.totalCost)}
                         </td>
                       </tr>
                     ))}

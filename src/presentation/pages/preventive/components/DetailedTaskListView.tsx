@@ -324,7 +324,7 @@ export default function DetailedTaskListView({
         </td>
 
         <td className="py-2.5 px-3 font-mono font-bold text-slate-900 border-r border-slate-200/70 whitespace-nowrap">
-          {Number(tItem.cout_cumule || 0).toFixed(2)} DT
+          {Number(tItem.cout_cumule || 0).toFixed(2)} DH
         </td>
 
         <td className="py-2.5 px-3 text-center border-r border-slate-200/70 whitespace-nowrap">
@@ -468,7 +468,7 @@ export default function DetailedTaskListView({
                 <th className="py-3 px-3 min-w-[90px] border-r border-slate-200">
                   <div className="flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{t('preventive.table.col_cout', 'COÛT (DT)')}</span>
+                    <span>{t('preventive.table.col_cout', 'COÛT (DH)')}</span>
                   </div>
                 </th>
                 <th className="py-3 px-3 min-w-[90px] text-center border-r border-slate-200">
