@@ -949,7 +949,9 @@ export function useAppRouterProps({
       onAddMouvement: handleAddMouvement,
       onAddPreventiveTask: (recOrTask) => {
         const machineId = String(recOrTask?.code_machine || recOrTask?.machine || '').trim().toUpperCase();
-        if (!machineId || typeof handleCreatePlanWithTasks !== 'function') return;
+        if (!machineId || typeof handleCreatePlanWithTasks !== 'function') {
+          return { created: false };
+        }
         const anomClean = String(recOrTask?.anomalie || recOrTask?.titre || 'inspection_generale')
           .replace(/^Maintenance Préventive Ciblée\s*:\s*/i, '')
           .replace(/_/g, ' ')
@@ -960,17 +962,20 @@ export function useAppRouterProps({
             String(t.id_machine || '').trim().toUpperCase() === machineId &&
             String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase()
         );
-        if (alreadyExists) return;
+        if (alreadyExists) {
+          return { created: false, duplicate: true };
+        }
         const matchedMachine = (machines || []).find(
           (m) => String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase() === machineId
         );
         const zoneId = matchedMachine?.id_zone_default || matchedMachine?.id_zone || recOrTask?.zone || 'Atelier';
+        const resolvedTech = matchedMachine?.technician || matchedMachine?.technicien || 'Technicien';
         handleCreatePlanWithTasks(
           {
             id_machine: machineId,
             nom_machine: matchedMachine?.designation || `Machine ${machineId}`,
             id_zone: zoneId,
-            id_technicien: 'Technicien',
+            id_technicien: resolvedTech,
             semaine_cible: 'S1',
             description: recOrTask?.description || `Plan préventif ciblé (${anomClean}) pour ${machineId}`,
           },
@@ -985,6 +990,7 @@ export function useAppRouterProps({
             },
           ]
         );
+        return { created: true };
       },
       showToast: showToast || navigation?.showToast,
       onNavigateToTab: navigateTo,

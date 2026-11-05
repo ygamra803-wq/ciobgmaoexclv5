@@ -83,13 +83,25 @@ export default function ReferentielPannesTravauxTab({
   const [copiedIndex, setCopiedIndex] = useState(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Dynamic Relational Formula for Intervenants (Utilisateurs SSOT)
+  // Dynamic Relational Formula for Intervenants (Utilisateurs SSOT — active only)
   const resolvedIntervenants = useMemo(() => {
-    const baseList = Array.isArray(technicians) && technicians.length > 0 
-      ? technicians 
-      : (Array.isArray(intervenants) && intervenants.length > 0 ? intervenants : []);
+    const rawList =
+      Array.isArray(technicians) && technicians.length > 0
+        ? technicians
+        : Array.isArray(intervenants) && intervenants.length > 0
+        ? intervenants
+        : [];
 
-    return baseList.map((tech) => {
+    const activeList = rawList.filter(
+      (tech) =>
+        !(
+          tech?.is_active === false ||
+          tech?.actif === false ||
+          String(tech?.statut || tech?.status || '').toUpperCase().startsWith('ARCHIV')
+        )
+    );
+
+    return activeList.map((tech) => {
       const techName = String(tech.nom || tech.name || '').trim().toLowerCase();
       const count = (interventions || []).filter((bt) => {
         const btTech = String(bt.intervenant || '').trim().toLowerCase();

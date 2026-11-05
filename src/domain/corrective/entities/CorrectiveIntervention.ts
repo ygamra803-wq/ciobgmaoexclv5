@@ -73,6 +73,16 @@ export class CorrectiveIntervention {
   constructor(data: Record<string, any> = {}) {
     this.id = data.id || `BT-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
     Object.assign(this, data);
+    const syncedDateDemande = data.date_demande || data.demande_date || data.date || '';
+    if (syncedDateDemande) {
+      this.date_demande = syncedDateDemande;
+      this.demande_date = syncedDateDemande;
+    }
+    const syncedHeureDemande = data.heure_demande || data.demande_heure || data.heure || '';
+    if (syncedHeureDemande) {
+      this.heure_demande = syncedHeureDemande;
+      this.demande_heure = syncedHeureDemande;
+    }
     if (!this.action_fermee) {
       this.action_fermee = data.action_fermee || 'NON';
     }

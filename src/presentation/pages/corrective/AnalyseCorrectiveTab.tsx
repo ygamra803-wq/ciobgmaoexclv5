@@ -19,6 +19,8 @@ import * as XLSX from 'xlsx';
 import { AvailabilityCalculationService } from '../../../domain/services/AvailabilityCalculationService';
 import { filterActiveMachines, getMachineAssetClass } from '../../../utils/activeMachines';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 
 export default function AnalyseCorrectiveTab({
   interventions = [],
@@ -33,6 +35,9 @@ export default function AnalyseCorrectiveTab({
   showToast,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canManagePreventive =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'preventive.manage');
   const [selectedAssetClass, setSelectedAssetClass] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedTypePanne, setSelectedTypePanne] = useState('ALL');
@@ -124,7 +129,7 @@ export default function AnalyseCorrectiveTab({
 
   // Recalculated Pareto Anomalies from filtered dataset
   const dynamicParetoAnomalies = useMemo(() => {
-    if (filteredInterventions.length === 0) return paretoAnomalies.slice(0, 10);
+    if (filteredInterventions.length === 0) return [];
 
     const counts = {};
     filteredInterventions.forEach((item) => {
@@ -150,11 +155,11 @@ export default function AnalyseCorrectiveTab({
         isPareto80: cumulativePercentage <= 80,
       };
     });
-  }, [filteredInterventions, paretoAnomalies]);
+  }, [filteredInterventions]);
 
   // Recalculated Pareto Machines from filtered dataset
   const dynamicParetoMachines = useMemo(() => {
-    if (filteredInterventions.length === 0) return paretoMachines.slice(0, 10);
+    if (filteredInterventions.length === 0) return [];
 
     const counts = {};
     filteredInterventions.forEach((item) => {
@@ -180,7 +185,7 @@ export default function AnalyseCorrectiveTab({
         isPareto80: cumulativePercentage <= 80,
       };
     });
-  }, [filteredInterventions, paretoMachines]);
+  }, [filteredInterventions]);
 
   // Breakdown by Type Panne (E, H, P, M, etc.)
   const typePanneBreakdown = useMemo(() => {
@@ -288,6 +293,20 @@ export default function AnalyseCorrectiveTab({
       const explicitCost = Number(item.pdr_cost ?? item.cout_pdr ?? item.cout_total ?? 0);
       if (explicitCost > 0) {
         totalPdrCost += explicitCost;
+      } else if (Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0) {
+        item.pieces_utilisees.forEach((piece) => {
+          const refKey = String(piece.ref || piece.code || '').trim().toUpperCase();
+          const stockItem = refKey ? stockMap.get(refKey) : undefined;
+          const price =
+            Number(piece.prix_unitaire) ||
+            Number(piece.prix) ||
+            Number(stockItem?.prix_unitaire) ||
+            Number(stockItem?.prix_achat_ht) ||
+            Number(stockItem?.prix) ||
+            0;
+          const qty = Number(piece.quantite) || 1;
+          totalPdrCost += price * qty;
+        });
       } else {
         const pdrKey = String(item.pdr_ref || item.pdr || '').trim().toUpperCase();
         if (pdrKey) {
@@ -333,8 +352,12 @@ export default function AnalyseCorrectiveTab({
 
   // Generate intelligent preventive task from recommendation
   const handleAdoptRecommendation = (rec) => {
+    if (!canManagePreventive) {
+      showToast?.('Droits insuffisants pour créer un plan préventif.', 'warning');
+      return;
+    }
     if (onAddPreventiveTask) {
-      onAddPreventiveTask({
+      const result = onAddPreventiveTask({
         titre: `Maintenance Préventive Ciblée : ${rec.anomalie}`,
         code_machine: rec.code_machine,
         zone: rec.zone || 'Atelier',
@@ -342,10 +365,17 @@ export default function AnalyseCorrectiveTab({
         priorite: 'HAUTE',
         description: `Plan préventif généré suite à la détection de ${rec.count} pannes récurrentes (${rec.anomalie}) sur la machine ${rec.code_machine}.`,
       });
-      showToast?.(
-        `Plan préventif créé avec succès pour ${rec.code_machine} (${rec.anomalie})`,
-        'success'
-      );
+      if (result && result.duplicate) {
+        showToast?.(
+          `Un plan préventif existe déjà pour ${rec.code_machine} (${rec.anomalie})`,
+          'info'
+        );
+      } else {
+        showToast?.(
+          `Plan préventif créé avec succès pour ${rec.code_machine} (${rec.anomalie})`,
+          'success'
+        );
+      }
       if (onNavigateToTab) {
         onNavigateToTab('preventive');
       }
@@ -841,15 +871,17 @@ export default function AnalyseCorrectiveTab({
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleAdoptRecommendation(rec)}
-                className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-sm shadow-amber-600/25 flex items-center justify-center gap-1.5 active:scale-95"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                <span>Créer la Tâche Préventive</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
+              {canManagePreventive && (
+                <button
+                  type="button"
+                  onClick={() => handleAdoptRecommendation(rec)}
+                  className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-sm shadow-amber-600/25 flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>Créer la Tâche Préventive</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
             </div>
           ))}
         </div>

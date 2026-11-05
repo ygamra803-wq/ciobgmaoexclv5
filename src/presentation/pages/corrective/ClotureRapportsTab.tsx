@@ -68,6 +68,24 @@ export default function ClotureRapportsTab({
   };
 
   const resolvePdrDisplay = (item) => {
+    if (Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0) {
+      const first = item.pieces_utilisees[0];
+      const firstRef = first.ref || first.code || first.nom || 'PDR';
+      const firstQty = Number(first.quantite || 1);
+      const extraCount = item.pieces_utilisees.length - 1;
+      const summaryLabel = item.pieces_utilisees
+        .map((p) => {
+          const r = p.ref || p.code || '';
+          const d = p.designation || p.nom || r;
+          const q = Number(p.quantite || 1);
+          return `${r ? `${r} — ` : ''}${d} (x${q})`;
+        })
+        .join(' | ');
+      return {
+        ref: extraCount > 0 ? `${firstRef} x${firstQty} (+${extraCount})` : `${firstRef}${firstQty > 1 ? ` x${firstQty}` : ''}`,
+        designation: summaryLabel,
+      };
+    }
     const ref = item.pdr_ref || item.pdr;
     if (!ref) return null;
     const stockFound = (stockItems || []).find((s) => s.ref === ref || s.code_article === ref);
@@ -156,7 +174,9 @@ export default function ClotureRapportsTab({
     const total = scopedInterventions.length;
     const closed = scopedInterventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
     const arret = scopedInterventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
-    const withPdr = scopedInterventions.filter((i) => Boolean(i.pdr || i.pdr_ref)).length;
+    const withPdr = scopedInterventions.filter(
+      (i) => Boolean(i.pdr || i.pdr_ref || (Array.isArray(i.pieces_utilisees) && i.pieces_utilisees.length > 0))
+    ).length;
 
     // MTTR calculation
     let totalMinutes = 0;
@@ -187,7 +207,14 @@ export default function ClotureRapportsTab({
     return scopedInterventions.filter((item) => {
       if (selectedStatus === 'CLOTURE' && item.statut !== 'CLOTURE') return false;
       if (selectedStatus === 'ARRET' && !item.arret_machine) return false;
-      if (selectedStatus === 'PDR' && !item.pdr && !item.pdr_ref) return false;
+      if (
+        selectedStatus === 'PDR' &&
+        !item.pdr &&
+        !item.pdr_ref &&
+        !(Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0)
+      ) {
+        return false;
+      }
 
       if (selectedMachine !== 'ALL' && item.code_machine !== selectedMachine) return false;
       if (selectedTech !== 'ALL' && item.intervenant !== selectedTech) return false;
@@ -200,7 +227,13 @@ export default function ClotureRapportsTab({
         const anom = String(item.anomalie || '').toLowerCase();
         const desc = String(item.travail_a_faire || item.action_realisee || '').toLowerCase();
         const tech = String(item.intervenant || '').toLowerCase();
-        const pdr = String(item.pdr || item.pdr_ref || '').toLowerCase();
+        const multiPdrStr = Array.isArray(item.pieces_utilisees)
+          ? item.pieces_utilisees
+              .map((p) => `${p.ref || ''} ${p.designation || p.nom || ''}`)
+              .join(' ')
+              .toLowerCase()
+          : '';
+        const pdr = `${String(item.pdr || item.pdr_ref || '').toLowerCase()} ${multiPdrStr}`;
         if (
           !code.includes(term) &&
           !bt.includes(term) &&
@@ -220,8 +253,30 @@ export default function ClotureRapportsTab({
   const sortedInterventions = useMemo(() => {
     const list = [...filteredInterventions];
     list.sort((a, b) => {
-      let valA = a[sortField] || '';
-      let valB = b[sortField] || '';
+      if (sortField === 'temps_intervention_calc') {
+        const minsA =
+          a.temps_intervention_mins ??
+          a.temps_minutes ??
+          CorrectiveCalculationService.timeStringToMinutes(
+            a.temps_intervention_calc || a.temps_intervention || '00:00'
+          );
+        const minsB =
+          b.temps_intervention_mins ??
+          b.temps_minutes ??
+          CorrectiveCalculationService.timeStringToMinutes(
+            b.temps_intervention_calc || b.temps_intervention || '00:00'
+          );
+        return sortOrder === 'asc' ? minsA - minsB : minsB - minsA;
+      }
+
+      let valA =
+        sortField === 'date_demande'
+          ? a.date_demande || a.demande_date || a.date || ''
+          : a[sortField] || '';
+      let valB =
+        sortField === 'date_demande'
+          ? b.date_demande || b.demande_date || b.date || ''
+          : b[sortField] || '';
 
       if (typeof valA === 'string') valA = valA.toLowerCase();
       if (typeof valB === 'string') valB = valB.toLowerCase();
@@ -297,23 +352,32 @@ export default function ClotureRapportsTab({
         'Marque (M)',
         'État (N)',
       ];
-      const dataRows = filteredInterventions.map((item) => [
-        item.num_bt || '',
-        item.code_machine || '',
-        item.demandeur || 'Production',
-        item.date_demande || '',
-        item.intervenant || '',
-        `${item.date_debut || ''} ${item.heure_debut || ''}`.trim(),
-        `${item.date_fin || ''} ${item.heure_fin || ''}`.trim(),
-        item.temps_intervention_calc || item.temps_intervention || '',
-        item.arret_machine ? 'OUI' : 'NON',
-        item.type_panne || '',
-        item.anomalie || '',
-        item.action_realisee || item.travail_a_faire || '',
-        item.pdr || item.pdr_ref || '',
-        item.marque || '',
-        item.etat_piece || 'Neuve',
-      ]);
+      const dataRows = filteredInterventions.map((item) => {
+        const pdrSummary =
+          Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0
+            ? item.pieces_utilisees
+                .map((p) => `${p.ref || p.designation || p.nom || ''} (x${p.quantite || 1})`)
+                .join(' ; ')
+            : item.pdr || item.pdr_ref || '';
+
+        return [
+          item.num_bt || '',
+          item.code_machine || '',
+          item.demandeur || 'Production',
+          item.date_demande || item.demande_date || item.date || '',
+          item.intervenant || '',
+          `${item.date_debut || ''} ${item.heure_debut || ''}`.trim(),
+          `${item.date_fin || ''} ${item.heure_fin || ''}`.trim(),
+          item.temps_intervention_calc || item.temps_intervention || '',
+          item.arret_machine ? 'OUI' : 'NON',
+          item.type_panne || '',
+          item.anomalie || '',
+          item.action_realisee || item.travail_a_faire || '',
+          pdrSummary,
+          item.marque || '',
+          item.etat_piece || 'Neuve',
+        ];
+      });
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
       const wb = XLSX.utils.book_new();
@@ -1133,8 +1197,37 @@ export default function ClotureRapportsTab({
                         Pièce de Rechange (PDR) Consommée & Magasin
                       </span>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                        <div>
-                          {previewItem.pdr_ref || previewItem.pdr ? (
+                        <div className="w-full">
+                          {Array.isArray(previewItem.pieces_utilisees) &&
+                          previewItem.pieces_utilisees.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {previewItem.pieces_utilisees.map((piece, idx) => {
+                                const pieceRef = piece.ref || piece.code || '';
+                                const pieceDes = piece.designation || piece.nom || pieceRef || 'Pièce';
+                                const pieceQty = Number(piece.quantite || 1);
+                                return (
+                                  <div
+                                    key={`${pieceRef}-${idx}`}
+                                    className="flex items-center justify-between gap-2 bg-white/80 px-2.5 py-1 rounded-lg border border-cyan-200/80"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      {pieceRef && (
+                                        <span className="font-mono font-bold text-cyan-950 bg-cyan-50 px-1.5 py-0.5 rounded border border-cyan-300 shrink-0">
+                                          {pieceRef}
+                                        </span>
+                                      )}
+                                      <span className="font-bold text-slate-900 truncate">
+                                        {pieceDes}
+                                      </span>
+                                    </div>
+                                    <span className="font-mono font-extrabold text-cyan-900 bg-cyan-100/80 px-2 py-0.5 rounded shrink-0">
+                                      Qté: {pieceQty}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : previewItem.pdr_ref || previewItem.pdr ? (
                             <div className="flex items-center gap-2">
                               <span className="font-mono font-bold text-cyan-950 bg-white px-2 py-0.5 rounded border border-cyan-300">
                                 {previewItem.pdr_ref || previewItem.pdr}

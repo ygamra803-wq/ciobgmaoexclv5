@@ -187,6 +187,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective_di',
     'corrective_bt',
     'corrective_cloture',
+    'corrective_analyse',
     'corrective_analytics',
     'zones',
     'guide',

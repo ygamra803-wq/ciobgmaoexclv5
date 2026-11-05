@@ -2383,10 +2383,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       let updated: any = null;
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
-          const dDebut = item.date_debut || submissionData.date_debut || today;
-          const hDebut = item.heure_debut || submissionData.heure_debut || '08:00';
           const dFin = submissionData.date_fin_proposee || submissionData.date_fin || today;
           const hFin = submissionData.heure_fin_proposee || submissionData.heure_fin || timeNow;
+          const dDebut =
+            item.date_debut ||
+            submissionData.date_debut ||
+            item.date_demande ||
+            item.demande_date ||
+            item.date ||
+            dFin ||
+            today;
+          const hDebut = item.heure_debut || submissionData.heure_debut || '08:00';
           const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
 
           const rawProposed = Array.isArray(submissionData.pieces_proposees)
@@ -2659,10 +2666,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       const next = get().correctiveInterventions.map((item) => {
         if (item.id === id) {
-          const dDebut = item.date_debut || clotureData.date_debut || today;
-          const hDebut = item.heure_debut || clotureData.heure_debut || '08:00';
           const dFin = clotureData.date_fin || item.date_fin_proposee || today;
           const hFin = clotureData.heure_fin || item.heure_fin_proposee || timeNow;
+          const dDebut =
+            item.date_debut ||
+            clotureData.date_debut ||
+            item.date_demande ||
+            item.demande_date ||
+            item.date ||
+            dFin ||
+            today;
+          const hDebut = item.heure_debut || clotureData.heure_debut || '08:00';
           const timeCalc = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
 
           // Normalize multi-PDR consumption (pieces_utilisees + fallback to pieces_proposees + backward-compatible single pdr_ref)

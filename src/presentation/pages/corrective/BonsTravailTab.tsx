@@ -32,6 +32,7 @@ import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePerio
 import { useI18n } from '../../../i18n/I18nContext';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   isTechnicianRole,
@@ -60,6 +61,9 @@ export default function BonsTravailTab({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
+  const canExecuteBt = Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.execute');
+  const canValidateBt = Boolean(user) && !isTechUser && !isReadOnlyUser;
   const storeReviewValidation = useGmaoStore((s) => s.handleReviewInterventionValidation);
   const storeMouvements = useGmaoStore((s) => s.mouvements);
   const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions);
@@ -728,7 +732,7 @@ export default function BonsTravailTab({
 
           return !isClosed ? (
             <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              {!isTechUser && isPendingVal && (
+              {canValidateBt && isPendingVal && (
                 <button
                   type="button"
                   data-testid={`review-bt-${bt.id}`}
@@ -741,31 +745,33 @@ export default function BonsTravailTab({
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => handleStartLiveIntervention(bt)}
-                className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 ${
-                  isClarif
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                    : isPendingVal && isTechUser
-                    ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300'
-                    : 'bg-amber-600 hover:bg-amber-700 text-white'
-                }`}
-                title="Lancer ou reprendre le Chrono Live"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                <span>
-                  {isClarif
-                    ? 'Corriger'
-                    : isPendingVal && isTechUser
-                    ? 'Modifier'
-                    : isWaitingPdr
-                    ? 'Reprendre'
-                    : 'Chrono Live'}
-                </span>
-              </button>
+              {canExecuteBt && (
+                <button
+                  type="button"
+                  onClick={() => handleStartLiveIntervention(bt)}
+                  className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer shadow-2xs active:scale-95 ${
+                    isClarif
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                      : isPendingVal && isTechUser
+                      ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                  title="Lancer ou reprendre le Chrono Live"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>
+                    {isClarif
+                      ? 'Corriger'
+                      : isPendingVal && isTechUser
+                      ? 'Modifier'
+                      : isWaitingPdr
+                      ? 'Reprendre'
+                      : 'Chrono Live'}
+                  </span>
+                </button>
+              )}
 
-              {typeof onUpdateIntervention === 'function' && !isPendingVal && (
+              {canExecuteBt && typeof onUpdateIntervention === 'function' && !isPendingVal && (
                 <button
                   type="button"
                   onClick={() => {
@@ -788,6 +794,13 @@ export default function BonsTravailTab({
                   {isWaitingPdr ? 'Activer' : 'Att. PDR'}
                 </button>
               )}
+
+              {!canExecuteBt && !canValidateBt && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 font-mono font-bold text-[10.5px]">
+                  <Lock className="w-3 h-3 text-slate-400" />
+                  Lecture seule
+                </span>
+              )}
             </div>
           ) : (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono font-bold text-xs shadow-2xs">
@@ -798,7 +811,7 @@ export default function BonsTravailTab({
         },
       },
     ],
-    [technicians, stockItems, onUpdateIntervention, isTechUser, t]
+    [technicians, stockItems, onUpdateIntervention, isTechUser, canExecuteBt, canValidateBt, t]
   );
 
   return (
@@ -865,7 +878,7 @@ export default function BonsTravailTab({
       </GmaoKpiGrid>
 
       {/* Maker-Checker Validation Queue Banner (Admin) & Clarification Alert Banner (Technician) */}
-      {!isTechUser && kpiStats.pendingValidation > 0 && (
+      {canValidateBt && kpiStats.pendingValidation > 0 && (
         <div
           data-testid="bt-admin-validation-queue-banner"
           className="bg-purple-50/90 border border-purple-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"

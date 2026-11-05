@@ -12,6 +12,8 @@ import ReferentielPannesTravauxTab from './ReferentielPannesTravauxTab';
 import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import * as XLSX from 'xlsx';
 
 export default function CatalogueDonneesView({
@@ -40,18 +42,33 @@ export default function CatalogueDonneesView({
   onNavigateToTab,
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canManageCatalog =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.manage');
   const [activeSubTab, setActiveSubTab] = useState('pannes'); // 'pannes', 'travaux', 'actions', 'intervenants'
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Dynamic Relational Formula:
-  // Intervenants = FILTER(Utilisateurs/Technicians)
+  // Intervenants = FILTER(Utilisateurs/Technicians, active)
   // TotalInterventions = COUNTIFS(Interventions, intervenant === tech.nom)
   const resolvedIntervenants = useMemo(() => {
-    const baseList = Array.isArray(technicians) && technicians.length > 0 
-      ? technicians 
-      : (Array.isArray(intervenants) && intervenants.length > 0 ? intervenants : []);
+    const rawList =
+      Array.isArray(technicians) && technicians.length > 0
+        ? technicians
+        : Array.isArray(intervenants) && intervenants.length > 0
+        ? intervenants
+        : [];
 
-    return baseList.map((tech) => {
+    const activeList = rawList.filter(
+      (tech) =>
+        !(
+          tech?.is_active === false ||
+          tech?.actif === false ||
+          String(tech?.statut || tech?.status || '').toUpperCase().startsWith('ARCHIV')
+        )
+    );
+
+    return activeList.map((tech) => {
       const techName = String(tech.nom || tech.name || '').trim().toLowerCase();
       const count = (interventions || []).filter((bt) => {
         const btTech = String(bt.intervenant || '').trim().toLowerCase();
@@ -209,15 +226,17 @@ export default function CatalogueDonneesView({
           {/* Right Column: Iconic 3D Circular Action Buttons */}
           <div className="flex items-center justify-end gap-2 shrink-0">
             {/* 3D Circular Refresh/Sync Button */}
-            <Action3DButton
-              variant="circle"
-              color="amber"
-              icon={RefreshCw}
-              onClick={handleForceSync}
-              disabled={isSyncing}
-              title={t('corrective.catalogue.sync_data', 'Actualiser & Synchroniser les Données Usine')}
-              ariaLabel="Actualiser Données"
-            />
+            {canManageCatalog && (
+              <Action3DButton
+                variant="circle"
+                color="amber"
+                icon={RefreshCw}
+                onClick={handleForceSync}
+                disabled={isSyncing}
+                title={t('corrective.catalogue.sync_data', 'Actualiser & Synchroniser les Données Usine')}
+                ariaLabel="Actualiser Données"
+              />
+            )}
 
             {/* 3D Circular Export Excel Button */}
             <Action3DButton

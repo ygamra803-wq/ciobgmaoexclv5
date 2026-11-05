@@ -34,6 +34,7 @@ import { getBlueprintCommonFailuresForMachine, rankStockItemsByMachineBom } from
 import { isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import {
   isTechnicianRole,
   getTechnicianDisplayName,
@@ -64,6 +65,8 @@ export default function DemandesInterventionTab({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const canCreateDi = Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.execute');
+  const canConvertBt = Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.manage');
   const techDisplayName = useMemo(
     () => getTechnicianDisplayName(user, technicians),
     [user, technicians]
@@ -159,18 +162,25 @@ export default function DemandesInterventionTab({
     }));
   }, [machines]);
 
-  // Combined technician list from registered state or seeded intervenants (SSOT)
+  // Combined technician list from registered state or seeded intervenants (SSOT — active only)
   const allTechnicianOptions = useMemo(() => {
     const list = [];
     const seen = new Set();
 
-    // 1. Add real registered technicians from userSub (SSOT)
+    const isArchivedTech = (t) =>
+      t?.is_active === false ||
+      t?.actif === false ||
+      String(t?.statut || t?.status || '').toUpperCase().startsWith('ARCHIV');
+
+    // 1. Add real registered active technicians from userSub (SSOT)
     if (Array.isArray(technicians) && technicians.length > 0) {
       technicians.forEach((t) => {
+        if (typeof t === 'object' && t !== null && isArchivedTech(t)) return;
         const nom = t.nom || t.name || String(t);
         if (nom && !seen.has(nom.toLowerCase())) {
           seen.add(nom.toLowerCase());
           list.push({
+            id_technician: t.id_technician || t.id || '',
             nom,
             name: nom,
             role: t.specialite || t.role || 'Technicien Maintenance',
@@ -179,13 +189,15 @@ export default function DemandesInterventionTab({
       });
     }
 
-    // 2. Add fallback intervenants if present
+    // 2. Add fallback intervenants if present (excluding archived entries)
     if (Array.isArray(intervenants)) {
       intervenants.forEach((i) => {
+        if (typeof i === 'object' && i !== null && isArchivedTech(i)) return;
         const nom = i.nom || i.name || String(i);
         if (nom && !seen.has(nom.toLowerCase())) {
           seen.add(nom.toLowerCase());
           list.push({
+            id_technician: i.id_technician || i.id || '',
             nom,
             name: nom,
             role: i.total ? `${i.total} interventions` : 'Intervenant Usine',
@@ -602,7 +614,7 @@ export default function DemandesInterventionTab({
       heure_demande: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
     });
 
-    showToast?.(`Demande d'intervention enregistrée pour ${created.code_machine}`, 'success');
+    showToast?.(`Demande d'intervention enregistrée pour ${created?.code_machine || newForm.code_machine}`, 'success');
     setShowCreateModal(false);
   };
 
@@ -625,9 +637,24 @@ export default function DemandesInterventionTab({
     e.preventDefault();
     if (!showConvertModal) return;
 
+    const selectedNameLower = String(convertForm.intervenant || '').trim().toLowerCase();
+    const matchedTech =
+      allTechnicianOptions.find(
+        (t) => String(t.nom || t.name || '').trim().toLowerCase() === selectedNameLower
+      ) ||
+      (Array.isArray(technicians)
+        ? technicians.find(
+            (t) => String(t.nom || t.name || '').trim().toLowerCase() === selectedNameLower
+          )
+        : null);
+    const resolvedMatricule =
+      matchedTech?.id_technician ||
+      matchedTech?.id ||
+      (isTechUser && user?.personnelId ? user.personnelId : undefined);
+
     onConvertToBt(showConvertModal.id, {
       ...convertForm,
-      ...(isTechUser && user?.personnelId ? { technicien_matricule: user.personnelId } : {}),
+      ...(resolvedMatricule ? { technicien_matricule: resolvedMatricule } : {}),
     });
 
     showToast?.(`DI convertie en Bon de Travail ${convertForm.num_bt}`, 'success');
@@ -803,15 +830,22 @@ export default function DemandesInterventionTab({
             di.statut === 'DEMANDE_CREEE' ||
             di.statut === 'EN_ATTENTE_VALIDATION';
           return isPending ? (
-            <button
-              onClick={() => handleOpenConvert(di)}
-              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer shadow-2xs active:scale-95"
-              title="Convertir en Bon de Travail (BT) et affecter un technicien"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              <span>{t('corrective.di.generate_bt', 'Générer BT')}</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
+            canConvertBt ? (
+              <button
+                onClick={() => handleOpenConvert(di)}
+                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer shadow-2xs active:scale-95"
+                title="Convertir en Bon de Travail (BT) et affecter un technicien"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>{t('corrective.di.generate_bt', 'Générer BT')}</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 font-mono font-bold text-[10.5px]">
+                <Clock className="w-3 h-3 text-amber-600" />
+                Attente BT
+              </span>
+            )
           ) : (
             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 font-mono font-bold text-xs shadow-2xs">
               <Check className="w-3 h-3 text-indigo-600" />
@@ -821,7 +855,7 @@ export default function DemandesInterventionTab({
         },
       },
     ],
-    [t]
+    [t, canConvertBt]
   );
 
   return (
@@ -932,13 +966,15 @@ export default function DemandesInterventionTab({
               </button>
             )}
 
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="h-8 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-amber-600/25 active:scale-95"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{t('corrective.filters.create_di')}</span>
-            </button>
+            {canCreateDi && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="h-8 px-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm shadow-amber-600/25 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{t('corrective.filters.create_di')}</span>
+              </button>
+            )}
           </div>
         </div>
 

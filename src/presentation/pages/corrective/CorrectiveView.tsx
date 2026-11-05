@@ -94,6 +94,15 @@ export default function CorrectiveView({
     setTriggerCreateDiModal(true);
   };
 
+  // Badge counts (scoped to technician for BTs & closed reports when role is TECHNICIEN)
+  const techScopedInterventions = isTechUser
+    ? interventions.filter((i) => matchesTechnicianRecord(i, user, technicians))
+    : interventions;
+
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
+  const canCreateDi = Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.execute');
+  const canManageCorrective = Boolean(user) && !isTechUser && !isReadOnlyUser;
+
   // Quick export all corrective interventions to Excel (.xlsx)
   const handleExportAllCorrective = () => {
     try {
@@ -120,28 +129,40 @@ export default function CorrectiveView({
         'Statut',
       ];
 
-      const dataRows = (interventions || []).map((item) => [
-        item.id || '',
-        item.num_bt || '',
-        item.code_machine || '',
-        item.demandeur || 'Production',
-        item.date_demande || '',
-        item.heure_demande || '',
-        item.intervenant || '',
-        item.date_debut || '',
-        item.heure_debut || '',
-        item.date_fin || '',
-        item.heure_fin || '',
-        item.temps_intervention_calc || item.temps_intervention || '',
-        item.arret_machine ? 'OUI' : 'NON',
-        item.type_panne || '',
-        item.anomalie || '',
-        item.travail_a_faire || item.action_realisee || '',
-        item.pdr || (item.pdr_ref ? `${item.pdr_ref} - ${item.pdr_designation || ''}` : ''),
-        item.marque || '',
-        item.etat_piece || 'Neuve',
-        item.statut || '',
-      ]);
+      const dataRows = (techScopedInterventions || []).map((item) => {
+        const multiPdrText =
+          Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0
+            ? item.pieces_utilisees
+                .map(
+                  (p) =>
+                    `${p.ref}${p.designation ? ` - ${p.designation}` : ''} (x${p.quantite || 1})`
+                )
+                .join(' | ')
+            : item.pdr || (item.pdr_ref ? `${item.pdr_ref} - ${item.pdr_designation || ''}` : '');
+
+        return [
+          item.id || '',
+          item.num_bt || '',
+          item.code_machine || '',
+          item.demandeur || 'Production',
+          item.date_demande || item.demande_date || item.date || '',
+          item.heure_demande || item.demande_heure || item.heure || '',
+          item.intervenant || '',
+          item.date_debut || '',
+          item.heure_debut || '',
+          item.date_fin || '',
+          item.heure_fin || '',
+          item.temps_intervention_calc || item.temps_intervention || '',
+          item.arret_machine ? 'OUI' : 'NON',
+          item.type_panne || '',
+          item.anomalie || '',
+          item.action_realisee || item.travail_a_faire || '',
+          multiPdrText,
+          item.marque || '',
+          item.etat_piece || 'Neuve',
+          item.statut || '',
+        ];
+      });
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
       const wb = XLSX.utils.book_new();
@@ -154,11 +175,6 @@ export default function CorrectiveView({
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };
-
-  // Badge counts (scoped to technician for BTs & closed reports when role is TECHNICIEN)
-  const techScopedInterventions = isTechUser
-    ? interventions.filter((i) => matchesTechnicianRecord(i, user, technicians))
-    : interventions;
 
   const pendingDiCount = interventions.filter(
     (i) => i.statut === 'DEMANDE' || i.statut === 'DEMANDE_CREEE' || i.statut === 'EN_ATTENTE_VALIDATION'
@@ -212,8 +228,8 @@ export default function CorrectiveView({
     },
   ];
 
-  const tabs = allTabs.filter((tab) =>
-    AuthorizationService.canAccessTab(user?.role || 'VIEWER', tab.id)
+  const tabs = allTabs.filter(
+    (tab) => Boolean(user) && AuthorizationService.canAccessTab(user, tab.id)
   );
 
   return (
@@ -243,7 +259,7 @@ export default function CorrectiveView({
                   Mes Interventions · {getTechnicianBadgeLabel(user, technicians)}
                 </span>
               )}
-              {!isTechUser && pendingValidationCount > 0 && (
+              {canManageCorrective && pendingValidationCount > 0 && (
                 <button
                   type="button"
                   onClick={() => handleTabChange('corrective_bt')}
@@ -281,18 +297,20 @@ export default function CorrectiveView({
             )}
 
             {/* 3D Circular Nouvelle Demande DI Button */}
-            <Action3DButton
-              variant="circle"
-              color="amber"
-              icon={Flame}
-              showAddBadge={true}
-              onClick={() => {
-                handleTabChange('corrective_di');
-                setTriggerCreateDiModal(true);
-              }}
-              title={t('corrective.buttons.new_di')}
-              ariaLabel={t('corrective.buttons.new_di')}
-            />
+            {canCreateDi && (
+              <Action3DButton
+                variant="circle"
+                color="amber"
+                icon={Flame}
+                showAddBadge={true}
+                onClick={() => {
+                  handleTabChange('corrective_di');
+                  setTriggerCreateDiModal(true);
+                }}
+                title={t('corrective.buttons.new_di')}
+                ariaLabel={t('corrective.buttons.new_di')}
+              />
+            )}
 
             {/* 3D Circular Exporter Excel Button */}
             <Action3DButton
@@ -305,7 +323,7 @@ export default function CorrectiveView({
             />
 
             {/* 3D Circular Reset Seed Button */}
-            {!isTechUser && (
+            {canManageCorrective && (
               <Action3DButton
                 variant="circle"
                 color="slate"
