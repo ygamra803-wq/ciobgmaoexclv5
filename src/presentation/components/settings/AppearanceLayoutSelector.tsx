@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Sun,
   Moon,
@@ -80,6 +80,11 @@ export function AppearanceLayoutSelector({
     document.documentElement.setAttribute('data-device-mode', currentDeviceMode);
     document.documentElement.setAttribute('data-sidebar-style', currentSidebarStyle);
   }, []);
+
+  // Ensure DOM is synced when mounting Settings view
+  useEffect(() => {
+    applyDOMPreferences(density, accentColor, deviceMode, sidebarStyle);
+  }, [applyDOMPreferences, density, accentColor, deviceMode, sidebarStyle]);
 
   // Sauvegarde globale et notification de tous les composants (Header, Sidebar, MainLayout)
   const persistAndDispatch = (
@@ -592,7 +597,7 @@ export function AppearanceLayoutSelector({
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="w-2 h-2 rounded-full bg-accent-main" />
                   <span className="font-bold text-slate-900">CIOB GMAO</span>
                   <span className="text-slate-300">|</span>
                   <span className="text-[10px] text-slate-500 font-normal">Supervision Ateliers</span>
@@ -601,11 +606,11 @@ export function AppearanceLayoutSelector({
                 <div className="flex items-center gap-2 font-mono text-[10px] text-slate-600">
                   {headerClockEnabled && (
                     <span className="flex items-center gap-1 text-slate-700 font-bold bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                      <Clock className="w-3 h-3 text-emerald-600" />
+                      <Clock className="w-3 h-3 text-accent-main" />
                       <span>14:30:00</span>
                     </span>
                   )}
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-accent-subtle text-accent-main border border-accent-subtle font-bold">
                     <FileSpreadsheet className="w-2.5 h-2.5" />
                     <span>Excel Twin</span>
                   </span>
@@ -618,12 +623,12 @@ export function AppearanceLayoutSelector({
                 <div
                   className={`transition-all duration-300 flex flex-col justify-between p-2 shrink-0 ${
                     sidebarStyle === 'floating'
-                      ? 'w-12 rounded-xl border border-emerald-200 bg-white shadow-xs text-emerald-700'
+                      ? 'w-12 rounded-xl border border-accent-subtle bg-white shadow-xs text-accent-main'
                       : 'w-28 rounded-none border-r border-slate-200 bg-white text-slate-800'
                   } ${sidebarStyle === 'floating' && sidebarBehavior === 'overlay' ? 'absolute top-0 left-0 bottom-0 z-20 shadow-lg' : ''}`}
                 >
                   <div className="space-y-1.5">
-                    <div className="h-2 w-3/4 rounded bg-emerald-600/80" />
+                    <div className="h-2 w-3/4 rounded bg-accent-main opacity-85" />
                     <div className="h-1.5 w-full rounded bg-slate-200" />
                     <div className="h-1.5 w-5/6 rounded bg-slate-200" />
                   </div>
@@ -634,10 +639,10 @@ export function AppearanceLayoutSelector({
                 <div className="flex-1 rounded-xl p-3 space-y-2 border border-slate-200 bg-white shadow-2xs">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      <span className="h-2 w-2 rounded-full bg-accent-main" />
                       <span className="text-[10px] font-bold text-slate-700 font-mono">STOCK_PDR_ACTIF.XLSX</span>
                     </div>
-                    <div className="text-[9px] font-mono text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">
+                    <div className="text-[9px] font-mono text-accent-main bg-accent-subtle px-1.5 py-0.5 rounded border border-accent-subtle font-semibold">
                       10 000+ Lignes
                     </div>
                   </div>
@@ -646,11 +651,11 @@ export function AppearanceLayoutSelector({
                   <div className={density === 'compact' ? 'space-y-1' : 'space-y-1.5'}>
                     <div className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-200/80 text-[10px] font-mono">
                       <span className="font-semibold text-slate-700">ROUL-SKF-6204-2RS</span>
-                      <span className="font-bold text-emerald-700">142 unités</span>
+                      <span className="font-bold text-accent-main">142 unités</span>
                     </div>
                     <div className="flex items-center justify-between p-1.5 rounded bg-slate-50 border border-slate-200/80 text-[10px] font-mono">
                       <span className="font-semibold text-slate-700">JOINT-TOR-NBR-45</span>
-                      <span className="font-bold text-emerald-700">85 unités</span>
+                      <span className="font-bold text-accent-main">85 unités</span>
                     </div>
                   </div>
                 </div>

@@ -1,1 +1,147 @@
 @import "tailwindcss";
+
+@theme {
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+  --color-accent-800: var(--color-accent-800);
+  --color-accent-900: var(--color-accent-900);
+  --color-accent-950: var(--color-accent-950);
+}
+
+/* =========================================================================
+   60-30-10 COLOR ARCHITECTURE: 10% ACCENT THEME TOKENS
+   - 60% Dominant Canvas: #FAFAF9 / white / slate-50 (unchanged)
+   - 30% Structural: Slate borders, muted text, table headers (unchanged)
+   - 10% Dynamic Accent: Emerald | Blue | Indigo | Slate
+   * CRITICAL: Operational safety colors (amber/rose/green) remain static.
+   ========================================================================= */
+
+:root,
+[data-accent="emerald"] {
+  --color-accent-50: #ecfdf5;
+  --color-accent-100: #d1fae5;
+  --color-accent-200: #a7f3d0;
+  --color-accent-300: #6ee7b7;
+  --color-accent-400: #34d399;
+  --color-accent-500: #10b981;
+  --color-accent-600: #059669;
+  --color-accent-700: #047857;
+  --color-accent-800: #065f46;
+  --color-accent-900: #064e3b;
+  --color-accent-950: #022c22;
+  --color-accent-rgb: 5, 150, 105;
+  --color-accent-glow: rgba(5, 150, 105, 0.25);
+  --color-accent-subtle-glow: rgba(16, 185, 129, 0.08);
+}
+
+[data-accent="blue"] {
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
+  --color-accent-950: #172554;
+  --color-accent-rgb: 37, 99, 235;
+  --color-accent-glow: rgba(37, 99, 235, 0.25);
+  --color-accent-subtle-glow: rgba(59, 130, 246, 0.08);
+}
+
+[data-accent="indigo"] {
+  --color-accent-50: #eef2ff;
+  --color-accent-100: #e0e7ff;
+  --color-accent-200: #c7d2fe;
+  --color-accent-300: #a5b4fc;
+  --color-accent-400: #818cf8;
+  --color-accent-500: #6366f1;
+  --color-accent-600: #4f46e5;
+  --color-accent-700: #4338ca;
+  --color-accent-800: #3730a3;
+  --color-accent-900: #312e81;
+  --color-accent-950: #1e1b4b;
+  --color-accent-rgb: 79, 70, 229;
+  --color-accent-glow: rgba(79, 70, 229, 0.25);
+  --color-accent-subtle-glow: rgba(99, 102, 241, 0.08);
+}
+
+[data-accent="slate"] {
+  --color-accent-50: #f8fafc;
+  --color-accent-100: #f1f5f9;
+  --color-accent-200: #e2e8f0;
+  --color-accent-300: #cbd5e1;
+  --color-accent-400: #94a3b8;
+  --color-accent-500: #64748b;
+  --color-accent-600: #475569;
+  --color-accent-700: #334155;
+  --color-accent-800: #1e293b;
+  --color-accent-900: #0f172a;
+  --color-accent-950: #020617;
+  --color-accent-rgb: 71, 85, 105;
+  --color-accent-glow: rgba(71, 85, 105, 0.25);
+  --color-accent-subtle-glow: rgba(100, 116, 139, 0.08);
+}
+
+/* =========================================================================
+   SEMANTIC 10% ACCENT UTILITIES
+   ========================================================================= */
+
+.bg-accent-main {
+  background-color: var(--color-accent-600) !important;
+  color: #ffffff !important;
+}
+
+.hover\:bg-accent-hover:hover {
+  background-color: var(--color-accent-700) !important;
+}
+
+.text-accent-main {
+  color: var(--color-accent-600) !important;
+}
+
+.text-accent-dark {
+  color: var(--color-accent-800) !important;
+}
+
+.bg-accent-subtle {
+  background-color: var(--color-accent-50) !important;
+}
+
+.bg-accent-badge {
+  background-color: var(--color-accent-100) !important;
+  color: var(--color-accent-800) !important;
+  border-color: var(--color-accent-200) !important;
+}
+
+.border-accent-main {
+  border-color: var(--color-accent-600) !important;
+}
+
+.border-accent-subtle {
+  border-color: var(--color-accent-200) !important;
+}
+
+.ring-accent {
+  --tw-ring-color: var(--color-accent-500) !important;
+}
+
+.focus-accent:focus-visible {
+  outline: 2px solid var(--color-accent-600) !important;
+  outline-offset: 2px !important;
+}
+
+/* Active text/background selection highlight */
+[data-accent] ::selection,
+[data-accent]::selection {
+  background-color: var(--color-accent-200);
+  color: var(--color-accent-900);
+}

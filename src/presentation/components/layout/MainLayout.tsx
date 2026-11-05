@@ -73,6 +73,12 @@ export default function MainLayout({
       if (e?.detail?.sidebarBehavior !== undefined) {
         setSidebarBehavior(e.detail.sidebarBehavior);
       }
+      if (e?.detail?.accentColor !== undefined && typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-accent', e.detail.accentColor);
+      }
+      if (e?.detail?.density !== undefined && typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-density', e.detail.density);
+      }
     };
     window.addEventListener('gmao_appearance_changed', handleAppearanceChanged);
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
@@ -378,13 +384,13 @@ export default function MainLayout({
       {/* Accessible Skip Link for Keyboard & Screen-reader navigation */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-emerald-700 focus:text-white focus:rounded-full focus:shadow-xl focus:outline-hidden font-bold text-xs tracking-tight transition"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-accent-main focus:text-white focus:rounded-full focus:shadow-xl focus:outline-hidden font-bold text-xs tracking-tight transition"
       >
         Passer directement au contenu principal
       </a>
 
       {/* Subtle Background Accent Glows */}
-      <div className="fixed -top-32 -right-32 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="fixed -top-32 -right-32 w-96 h-96 bg-accent-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
       <div className="fixed -bottom-32 -left-32 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl pointer-events-none -z-10" />
 
       {/* Heavy Operation Progress Overlay */}
@@ -392,8 +398,8 @@ export default function MainLayout({
         <div className="fixed inset-0 z-100 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 select-none">
           <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 border border-slate-200 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0">
-                <FileSpreadsheet className="w-6 h-6 text-emerald-600 animate-pulse" />
+              <div className="w-12 h-12 rounded-2xl bg-accent-subtle flex items-center justify-center shrink-0">
+                <FileSpreadsheet className="w-6 h-6 text-accent-main animate-pulse" />
               </div>
               <div>
                 <h3 className="text-sm font-black text-slate-900 leading-tight uppercase tracking-tight">
@@ -412,7 +418,7 @@ export default function MainLayout({
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
                 <div 
-                  className="h-full bg-emerald-500 transition-all duration-300 ease-out shadow-sm"
+                  className="h-full bg-accent-main transition-all duration-300 ease-out shadow-sm"
                   style={{ width: `${operationProgress.percent}%` }}
                 />
               </div>

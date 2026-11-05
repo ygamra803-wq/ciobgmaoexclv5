@@ -11,6 +11,13 @@ import { errorTracker } from './services/ErrorTrackingService';
 import { analytics } from './services/AnalyticsService';
 import { migrateStorageOnce } from './infrastructure/persistence/migrateStorage';
 import { vaultService } from './utils/vaultService';
+import { STORAGE_KEYS } from './infrastructure/persistence/storageKeys';
+
+// Ensure visual attributes are initialized on root DOM element
+const initialAccent = storageService.getItem(STORAGE_KEYS.ACCENT_COLOR) || 'emerald';
+if (typeof document !== 'undefined') {
+  document.documentElement.setAttribute('data-accent', initialAccent);
+}
 
 // 1. Run one-time SSOT storage migration before any hook reads storage
 migrateStorageOnce();

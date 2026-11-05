@@ -53,7 +53,7 @@ function HeaderShiftClock({ tooltip }: { tooltip?: string }) {
       title={tooltip || 'Horloge de poste industrielle (Temps Réel)'}
       aria-label={`Heure locale de poste : ${currentTime}`}
     >
-      <Clock className="w-3.5 h-3.5 text-emerald-600 animate-pulse shrink-0" aria-hidden="true" />
+      <Clock className="w-3.5 h-3.5 text-accent-main animate-pulse shrink-0" aria-hidden="true" />
       <span>{currentTime}</span>
     </div>
   );
@@ -849,16 +849,16 @@ export default function Header({
             linkedFileName ? (
               <div className="flex items-center gap-1 shrink-0">
                 <span
-                  className="hidden 2xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/90 shadow-2xs truncate max-w-[130px]"
+                  className="hidden 2xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold text-accent-main bg-accent-subtle border border-accent-subtle shadow-2xs truncate max-w-[130px]"
                   title={`${t('header.linked_file', 'Fichier lié')} : ${linkedFileName}`}
                   aria-label={`${t('header.linked_file', 'Fichier lié')} : ${linkedFileName}`}
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" aria-hidden="true" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-accent-main shrink-0" aria-hidden="true" />
                   <span className="truncate">{linkedFileName}</span>
                 </span>
                 <button
                   onClick={onSaveWithTracking}
-                  className="w-8 h-8 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center transition shadow-[0_2px_8px_rgba(4,120,87,0.25)] cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                  className="w-8 h-8 rounded-full bg-accent-main hover:bg-accent-hover text-white flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden"
                   title={`${t('header.save_to_excel', 'Enregistrer vers Excel')} (${linkedFileName})`}
                   aria-label="Sauvegarder dans le fichier Excel lié"
                 >
@@ -868,11 +868,11 @@ export default function Header({
             ) : (
               <button
                 onClick={onDirectLink}
-                className="w-8 h-8 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/90 flex items-center justify-center text-emerald-700 hover:text-emerald-900 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+                className="w-8 h-8 rounded-full bg-accent-subtle hover:bg-accent-100 border border-accent-subtle flex items-center justify-center text-accent-main transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden"
                 title={t('header.link_excel', 'Lier un fichier Excel (.xlsx)')}
                 aria-label="Lier directement un fichier Excel .xlsx"
               >
-                <Link size={15} className="text-emerald-600 shrink-0" aria-hidden="true" />
+                <Link size={15} className="text-accent-main shrink-0" aria-hidden="true" />
               </button>
             )
           )}
@@ -885,20 +885,20 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => setSyncMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-emerald-50/90 hover:bg-emerald-100/90 border border-emerald-200/90 text-emerald-800 text-xs font-bold transition shadow-[0_2px_6px_rgba(4,120,87,0.08)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-accent-subtle hover:bg-accent-100 border border-accent-subtle text-accent-main text-xs font-bold transition shadow-xs hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden group"
                 title={t('header.sync_server', 'Synchronisation Serveur (Sauvegarde / Restauration)')}
                 aria-label="Synchronisation Serveur gmao_state.json"
                 aria-expanded={syncMenuOpen}
               >
                 <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-main" />
                 </span>
-                <Cloud size={14} className="text-emerald-700 group-hover:scale-110 transition-transform shrink-0" />
+                <Cloud size={14} className="text-accent-main group-hover:scale-110 transition-transform shrink-0" />
                 <span className="hidden 2xl:inline text-[11px] font-extrabold tracking-tight">{t('header.sync_server', 'Sync Serveur')}</span>
                 <ChevronDown
                   size={12}
-                  className={`text-emerald-600 transition-transform duration-200 shrink-0 ${syncMenuOpen ? 'rotate-180' : ''}`}
+                  className={`text-accent-main transition-transform duration-200 shrink-0 ${syncMenuOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -1167,9 +1167,9 @@ export default function Header({
                 }
                 aria-label={`Compte utilisateur de ${currentUser?.name || 'Administrateur'}`}
               >
-                {/* Rounded Emerald Avatar Icon matching sidebar */}
+                {/* Rounded Avatar Icon matching sidebar accent */}
                 <div
-                  className="w-6.5 h-6.5 rounded-lg bg-emerald-700 text-white font-extrabold text-[10px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform"
+                  className="w-6.5 h-6.5 rounded-lg bg-accent-main text-white font-extrabold text-[10px] flex items-center justify-center shadow-2xs shrink-0 group-hover:scale-105 transition-transform"
                   aria-hidden="true"
                 >
                   {currentUser?.avatar || 'RM'}
@@ -1184,7 +1184,7 @@ export default function Header({
                       </span>
                     )}
                   </div>
-                  <div className="text-[9.5px] font-semibold text-emerald-700 truncate">
+                  <div className="text-[9.5px] font-semibold text-accent-main truncate">
                     {currentUser?.titleFr || currentUser?.role || 'Administrateur'}
                   </div>
                 </div>
@@ -1202,7 +1202,7 @@ export default function Header({
                 >
                   <div className="px-3.5 py-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center shadow-xs shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-accent-main text-white font-extrabold text-xs flex items-center justify-center shadow-xs shrink-0">
                         {currentUser?.avatar || 'RM'}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -1214,7 +1214,7 @@ export default function Header({
                             </span>
                           )}
                         </div>
-                        <div className="text-[10.5px] font-semibold text-emerald-700 truncate mt-0.5 flex items-center gap-1">
+                        <div className="text-[10.5px] font-semibold text-accent-main truncate mt-0.5 flex items-center gap-1">
                           <ShieldCheck size={11} className="shrink-0" />
                           <span className="truncate">{currentUser?.titleFr || currentUser?.role || 'Administrateur'}</span>
                         </div>
