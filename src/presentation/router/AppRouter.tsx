@@ -7,6 +7,7 @@ import usePageOrchestrator from '../components/common/usePageOrchestrator';
 import DashboardView from '../pages/dashboard/DashboardView';
 
 const ValidationCenterView = lazy(() => import('../pages/validation/ValidationCenterView'));
+const FinanceView = lazy(() => import('../pages/finance/FinanceView'));
 const ShiftWeeklyReportView = lazy(() => import('../components/views/ShiftWeeklyReportView'));
 const MonthlyExecutiveReportView = lazy(() => import('../components/views/MonthlyExecutiveReportView'));
 const StockView = lazy(() => import('../pages/stock/StockView'));
@@ -108,6 +109,12 @@ export default function AppRouter({
                       {currentTab === 'dashboard' && (
                         <ErrorBoundary sectionName="Tableau de Bord Operations">
                           <DashboardView {...props.dashboard} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'finance' && (
+                        <ErrorBoundary sectionName="Direction Financière & Multi-Devises">
+                          <FinanceView {...props.finance} />
                         </ErrorBoundary>
                       )}
 

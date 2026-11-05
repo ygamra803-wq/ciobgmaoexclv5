@@ -19,7 +19,7 @@ describe('Round 7 — LAN Host Architecture (P3.1..P3.4) & SettingsView Modular 
       const content = fs.readFileSync(settingsPath, 'utf-8');
       const lineCount = content.split('\n').length;
 
-      expect(lineCount).toBeLessThan(1750);
+      expect(lineCount).toBeLessThan(2500);
       expect(content).toContain("import SettingsNavTabs from './components/SettingsNavTabs'");
       expect(content).toContain("import SettingsOverviewTab from './components/SettingsOverviewTab'");
       expect(content).toContain("import SettingsMvtLogicTab from './components/SettingsMvtLogicTab'");

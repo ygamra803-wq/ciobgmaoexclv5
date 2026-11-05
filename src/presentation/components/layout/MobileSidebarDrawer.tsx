@@ -28,6 +28,7 @@ import {
   Wrench,
   Download,
   Upload,
+  Landmark,
 } from 'lucide-react';
 import { HubIcon } from '../common/icons/HubIcon';
 import { CategoryIcon } from '../common/icons/CategoryIcon';
@@ -384,6 +385,24 @@ export default function MobileSidebarDrawer({
                   <span>{t('nav.subtabs.executive_report', 'Rapport Mensuel Exécutif')}</span>
                 </span>
                 <span className={getBadgeClass('executive_report')}>Direction</span>
+              </button>
+            )}
+
+            {/* Direction Financière & Multi-Devises (Page Dédiée) */}
+            {canAccess('finance') && (
+              <button
+                onClick={() => navTo('finance')}
+                className={getTabClass('finance', true)}
+              >
+                <span className="flex items-center gap-2">
+                  <Landmark
+                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                  />
+                  <span>{t('nav.finance', 'Direction Financière & Devises')}</span>
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-emerald-100 text-emerald-800 font-bold">
+                  ISO 4217
+                </span>
               </button>
             )}
 

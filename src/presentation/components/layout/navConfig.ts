@@ -8,7 +8,8 @@ import {
   GitBranch,
   BookOpen,
   Calendar,
-  Wrench
+  Wrench,
+  Landmark
 } from 'lucide-react';
 
 export const PARENT_MODULES = [
@@ -24,6 +25,17 @@ export const PARENT_MODULES = [
       { id: 'validation_center', label: 'Centre de Validation (À valider)' },
       { id: 'shift_weekly_report', label: 'Rapport Vacation / Hebdo' },
       { id: 'executive_report', label: 'Rapport Mensuel Direction' }
+    ]
+  },
+  {
+    id: 'finance',
+    label: 'Finance & Devises',
+    icon: Landmark,
+    color: 'text-emerald-500',
+    colorDark: 'text-emerald-400',
+    bgLight: 'bg-emerald-50',
+    children: [
+      { id: 'finance', label: 'Finance & Multi-Devises' }
     ]
   },
   {

@@ -79,7 +79,7 @@ describe('Round 6: Work Order FSM (M-03), Reliability Metrics MTTR/MTBF/OEE (M-0
       const liveTabPath = path.resolve(process.cwd(), 'src/presentation/pages/corrective/InterventionLiveTab.tsx');
       const content = fs.readFileSync(liveTabPath, 'utf-8');
       // handleClotureSubmit should delegate to onClotureIntervention and not call onAddMouvement directly inside handleClotureSubmit
-      const submitBlock = content.slice(content.indexOf('const handleClotureSubmit'));
+      const submitBlock = content.slice(content.indexOf('const executeClotureOrSubmit'));
       expect(submitBlock).toContain('onClotureIntervention(activeIntervention.id');
       expect(submitBlock).not.toContain("type: 'SORTIE'");
     });

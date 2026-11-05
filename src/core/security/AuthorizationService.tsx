@@ -128,6 +128,16 @@ export const PERMISSIONS: Record<string, string[]> = {
   ],
   'report.export': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.RESPONSABLE_MAGASIN],
 
+  // الإدارة والتقارير المالية (Financial Management & Multi-Currency Hub)
+  'finance.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.VIEWER,
+  ],
+  'finance.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+
   // إعدادات النظام والنسخ الاحتياطي (Settings & Backup)
   'settings.view': [ROLES.ADMIN],
   'settings.edit': [ROLES.ADMIN],
@@ -142,6 +152,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   [ROLES.RESPONSABLE_MAINTENANCE]: '*',
   [ROLES.RESPONSABLE_MAGASIN]: new Set([
     'dashboard',
+    'finance',
     'validation_center',
     'shift_weekly_report',
     'executive_report',
@@ -191,6 +202,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   ]),
   [ROLES.VIEWER]: new Set([
     'dashboard',
+    'finance',
     'shift_weekly_report',
     'executive_report',
     'stock',
