@@ -97,9 +97,17 @@ export default function Action3DButton({
       glow: 'hover:shadow-[0_8px_20px_-3px_rgba(244,63,94,0.3),0_3px_8px_-2px_rgba(244,63,94,0.15)]',
       solidBg: 'bg-gradient-to-b from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white border-rose-500/50 shadow-[0_4px_14px_rgba(244,63,94,0.35)]',
     },
+    accent: {
+      border: 'border-slate-200/90 hover:border-accent-main',
+      bgHover: 'hover:bg-accent-subtle',
+      text: 'text-accent-main hover:text-accent-dark',
+      iconText: 'text-accent-main group-hover:text-accent-dark',
+      glow: 'hover:shadow-[0_8px_20px_-3px_rgba(var(--color-accent-rgb),0.3),0_3px_8px_-2px_rgba(var(--color-accent-rgb),0.15)]',
+      solidBg: 'bg-accent-main hover:bg-accent-hover text-white border-accent-subtle shadow-xs',
+    },
   };
 
-  const theme = colorThemes[color] || colorThemes.cyan;
+  const theme = colorThemes[color] || colorThemes.accent || colorThemes.cyan;
 
   // Base 3D elevation + tactile interaction styles
   const base3DStyles = `
@@ -136,7 +144,7 @@ export default function Action3DButton({
         <div className="relative inline-flex items-center justify-center shrink-0">
           <Icon className={`w-5 h-5 transition-transform duration-300 group-hover:scale-110 shrink-0 ${variant === 'solid' ? 'text-white' : theme.iconText}`} />
           {showAddBadge && (
-            <span className="absolute -top-1.5 -right-2 bg-emerald-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black shadow-[0_2px_6px_rgba(0,0,0,0.22)] ring-2 ring-white transform scale-95 group-hover:scale-110 transition-transform">
+            <span className="absolute -top-1.5 -right-2 bg-accent-main text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black shadow-[0_2px_6px_rgba(0,0,0,0.22)] ring-2 ring-white transform scale-95 group-hover:scale-110 transition-transform">
               +
             </span>
           )}

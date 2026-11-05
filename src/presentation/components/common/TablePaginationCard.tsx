@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from '../../../i18n/I18nContext';
 
 const COLOR_CLASSES = {
+  accent: 'text-accent-main font-black',
   emerald: 'text-emerald-800',
   indigo: 'text-indigo-800',
   cyan: 'text-cyan-800',
@@ -19,7 +20,7 @@ export default function TablePaginationCard({
   setPageSize,
   totalItems = 0,
   pageSizeOptions = [25, 50, 100, 200, 0],
-  color = 'cyan',
+  color = 'accent',
   itemLabel = '',
   className = '',
 }) {
@@ -28,7 +29,7 @@ export default function TablePaginationCard({
   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
   const startIndex = (currentPage - 1) * effectivePageSize;
 
-  const activeColorClass = COLOR_CLASSES[color] || COLOR_CLASSES.cyan;
+  const activeColorClass = COLOR_CLASSES[color] || COLOR_CLASSES.accent || COLOR_CLASSES.cyan;
 
   return (
     <div
@@ -50,7 +51,7 @@ export default function TablePaginationCard({
               }}
               className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                 pageSize === size
-                  ? `bg-white ${activeColorClass} shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/50`
+                  ? `bg-accent-subtle ${activeColorClass} shadow-xs border border-accent-subtle`
                   : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
               }`}
             >
@@ -81,7 +82,7 @@ export default function TablePaginationCard({
               <span className="hidden sm:inline">{t('common.pagination.previous')}</span>
             </button>
 
-            <span className="px-2.5 py-1 font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg select-none">
+            <span className="px-2.5 py-1 font-mono text-xs font-bold text-accent-main bg-accent-subtle border border-accent-subtle rounded-lg select-none">
               {pageSize === 0 ? '1 / 1' : `${currentPage} / ${totalPages || 1}`}
             </span>
 

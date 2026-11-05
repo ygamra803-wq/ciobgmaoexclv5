@@ -41,6 +41,7 @@ import {
   BookOpen,
   User,
   RefreshCw,
+  Compass,
 } from 'lucide-react';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { useAuth } from '../../../context/AuthContext';
@@ -850,9 +851,10 @@ export default function DashboardView({
                   type="button"
                   onClick={() => setForceShowOnboarding((prev) => !prev)}
                   data-testid="c4-open-onboarding-btn"
-                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 font-mono transition cursor-pointer"
+                  className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-mono transition cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  {t('dashboard.header.factoryWizardBtn')}
+                  <Compass className="w-3 h-3 text-slate-600" />
+                  <span>{t('dashboard.header.factoryWizardBtn')}</span>
                 </button>
               )}
             </div>
@@ -2048,10 +2050,10 @@ export default function DashboardView({
           <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-2xs space-y-3.5">
             <div className="flex items-center justify-between">
               <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2 tracking-tight">
-                <Zap className="w-4 h-4 text-amber-500" />
+                <Zap className="w-4 h-4 text-accent-main" />
                 <span>{t('dashboard.quickNav.title')}</span>
               </h3>
-              <span className="text-[10.5px] font-mono font-bold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/80">
+              <span className="text-[10.5px] font-mono font-bold text-accent-main bg-accent-subtle px-2.5 py-0.5 rounded-full border border-accent-subtle">
                 {t('dashboard.quickNav.badge')}
               </span>
             </div>
@@ -2625,7 +2627,7 @@ export default function DashboardView({
                               canEditMovement ? (
                                 <button
                                   onClick={() => handleValidateReception(cmd)}
-                                  className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
+                                  className="flex-1 py-1.5 btn-primary-accent font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center justify-center gap-1 cursor-pointer"
                                 >
                                   <Check className="w-3.5 h-3.5" />
                                   <span>{t('dashboard.logistics.validateReceiptBtn')}</span>

@@ -55,10 +55,11 @@ export default function AutoSaveIndicator() {
               </>
             ) : (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-300">
+                <Check className="w-3.5 h-3.5 text-accent-main" />
+                <span className="text-white font-bold">
                   Enregistré {lastSaved ? `(${lastSaved.toLocaleTimeString()})` : ''}
                 </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-main animate-pulse shrink-0" />
               </>
             )}
           </div>

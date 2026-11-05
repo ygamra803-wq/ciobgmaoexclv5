@@ -145,3 +145,114 @@
   background-color: var(--color-accent-200);
   color: var(--color-accent-900);
 }
+
+/* Primary Action Button (10% Interactive Focal Point) */
+.btn-primary-accent {
+  background-color: var(--color-accent-600) !important;
+  color: #ffffff !important;
+  transition: all 0.15s ease-in-out;
+}
+.btn-primary-accent:hover {
+  background-color: var(--color-accent-700) !important;
+}
+.btn-primary-accent:active {
+  transform: scale(0.98);
+}
+.btn-primary-accent:focus-visible {
+  outline: 2px solid var(--color-accent-500) !important;
+  outline-offset: 2px !important;
+}
+
+/* Secondary Interactive Pill */
+.btn-subtle-accent {
+  background-color: var(--color-accent-50) !important;
+  color: var(--color-accent-800) !important;
+  border: 1px solid var(--color-accent-200) !important;
+  transition: all 0.15s ease-in-out;
+}
+.btn-subtle-accent:hover {
+  background-color: var(--color-accent-100) !important;
+  border-color: var(--color-accent-300) !important;
+}
+
+/* Active Filter Pill / Tab */
+.pill-active-accent {
+  background-color: var(--color-accent-600) !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Global Input / Select / Textarea Focus Ring Adaptation */
+[data-accent] input:focus,
+[data-accent] select:focus,
+[data-accent] textarea:focus,
+[data-accent] input:focus-visible,
+[data-accent] select:focus-visible,
+[data-accent] textarea:focus-visible {
+  --tw-ring-color: var(--color-accent-500) !important;
+  border-color: var(--color-accent-500) !important;
+}
+
+/* =========================================================================
+   GROUP 1: TWIN TABLES DATA ERGONOMICS & SELECTION
+   ========================================================================= */
+
+/* Active selected table row left border accent */
+[data-accent] tr.selected,
+[data-accent] tr.active-row,
+[data-accent] tr[aria-selected="true"],
+[data-accent] .table-row-selected {
+  border-left: 3px solid var(--color-accent-600) !important;
+  background-color: color-mix(in srgb, var(--color-accent-50) 45%, transparent) !important;
+}
+
+/* Tactile row selection and hover border highlight */
+[data-accent] tbody tr:hover td:first-child {
+  border-left-color: var(--color-accent-500);
+}
+
+/* Bulk selection checkbox & radio styling */
+[data-accent] input[type="checkbox"]:checked {
+  background-color: var(--color-accent-600) !important;
+  border-color: var(--color-accent-600) !important;
+  accent-color: var(--color-accent-600) !important;
+}
+
+[data-accent] input[type="radio"]:checked {
+  accent-color: var(--color-accent-600) !important;
+}
+
+/* =========================================================================
+   GROUP 3 & 4: LIVE INDICATORS, TOGGLES & CALENDAR SCHEDULER
+   ========================================================================= */
+
+/* Accessible Switch Toggles (Theme Responsive) */
+[data-accent] [role="switch"][aria-checked="true"] {
+  background-color: var(--color-accent-600) !important;
+}
+
+/* Calendar Scheduler Today and Selected Indicators */
+[data-accent] .calendar-today-indicator {
+  border-color: var(--color-accent-600) !important;
+  color: var(--color-accent-600) !important;
+}
+
+[data-accent] .calendar-day-selected {
+  background-color: var(--color-accent-600) !important;
+  color: #ffffff !important;
+}
+
+/* =========================================================================
+   TABLE DENSITY ARCHITECTURE (data-density="compact" | "comfortable")
+   ========================================================================= */
+
+[data-density="compact"] table thead th {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+
+[data-density="compact"] table tbody td {
+  padding-top: 0.35rem !important;
+  padding-bottom: 0.35rem !important;
+  line-height: 1.25 !important;
+}

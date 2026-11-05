@@ -86,6 +86,24 @@ export function AppearanceLayoutSelector({
     applyDOMPreferences(density, accentColor, deviceMode, sidebarStyle);
   }, [applyDOMPreferences, density, accentColor, deviceMode, sidebarStyle]);
 
+  // Listen for external appearance changes (e.g. Sidebar Sun/Moon theme toggle)
+  useEffect(() => {
+    const handleExternalAppearanceChange = (e) => {
+      const detail = e?.detail;
+      if (!detail) return;
+      if (detail.theme !== undefined) setTheme(detail.theme);
+      if (detail.deviceMode !== undefined) setDeviceMode(detail.deviceMode);
+      if (detail.sidebarStyle !== undefined) setSidebarStyle(detail.sidebarStyle);
+      if (detail.sidebarBehavior !== undefined) setSidebarBehavior(detail.sidebarBehavior);
+      if (detail.density !== undefined) setDensity(detail.density);
+      if (detail.accentColor !== undefined) setAccentColor(detail.accentColor);
+      if (detail.animationsEnabled !== undefined) setAnimationsEnabled(Boolean(detail.animationsEnabled));
+      if (detail.headerClockEnabled !== undefined) setHeaderClockEnabled(Boolean(detail.headerClockEnabled));
+    };
+    window.addEventListener('gmao_appearance_changed', handleExternalAppearanceChange);
+    return () => window.removeEventListener('gmao_appearance_changed', handleExternalAppearanceChange);
+  }, []);
+
   // Sauvegarde globale et notification de tous les composants (Header, Sidebar, MainLayout)
   const persistAndDispatch = (
     newDeviceMode,
@@ -233,12 +251,17 @@ export function AppearanceLayoutSelector({
     }
   };
 
+  const activeOptionCardClass =
+    'border-accent-main bg-accent-subtle/50 ring-2 ring-accent/20 shadow-xs';
+  const inactiveOptionCardClass =
+    'border-slate-200 bg-white hover:border-slate-300';
+
   return (
     <div className={`w-full space-y-6 text-slate-800 ${className}`}>
       {/* 1. EN-TÊTE PRINCIPAL (Format Light UI Excel - Pleine Largeur) */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-start sm:items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+          <div className="w-12 h-12 rounded-xl bg-accent-main text-white flex items-center justify-center shrink-0 shadow-xs">
             <Palette className="w-6 h-6" />
           </div>
           <div>
@@ -247,7 +270,7 @@ export function AppearanceLayoutSelector({
                 Personnalisation de l'Apparence & Ergonomie
               </h3>
               <span className="text-xs text-slate-400">·</span>
-              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+              <span className="text-xs font-semibold text-accent-main bg-accent-subtle px-2.5 py-0.5 rounded-md border border-accent-subtle">
                 CIOB GMAO v4
               </span>
             </div>
@@ -275,7 +298,7 @@ export function AppearanceLayoutSelector({
           <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent-main border border-accent-subtle flex items-center justify-center shrink-0">
                   <Monitor className="w-4 h-4" />
                 </div>
                 <div>
@@ -295,19 +318,17 @@ export function AppearanceLayoutSelector({
                 type="button"
                 onClick={() => handleDeviceModeChange('auto')}
                 className={`group relative rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  deviceMode === 'auto'
-                    ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  deviceMode === 'auto' ? activeOptionCardClass : inactiveOptionCardClass
                 }`}
               >
                 {deviceMode === 'auto' && (
-                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                     <CheckCircle2 className="h-3 w-3" />
                   </div>
                 )}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Laptop className="w-4 h-4 text-emerald-600" />
+                    <Laptop className="w-4 h-4 text-accent-main" />
                     <span className="font-bold text-xs text-slate-900">
                       Mode Auto
                     </span>
@@ -323,13 +344,11 @@ export function AppearanceLayoutSelector({
                 type="button"
                 onClick={() => handleDeviceModeChange('desktop')}
                 className={`group relative rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  deviceMode === 'desktop'
-                    ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  deviceMode === 'desktop' ? activeOptionCardClass : inactiveOptionCardClass
                 }`}
               >
                 {deviceMode === 'desktop' && (
-                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                     <CheckCircle2 className="h-3 w-3" />
                   </div>
                 )}
@@ -351,13 +370,11 @@ export function AppearanceLayoutSelector({
                 type="button"
                 onClick={() => handleDeviceModeChange('mobile')}
                 className={`group relative rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  deviceMode === 'mobile'
-                    ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  deviceMode === 'mobile' ? activeOptionCardClass : inactiveOptionCardClass
                 }`}
               >
                 {deviceMode === 'mobile' && (
-                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                  <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                     <CheckCircle2 className="h-3 w-3" />
                   </div>
                 )}
@@ -402,13 +419,11 @@ export function AppearanceLayoutSelector({
                   type="button"
                   onClick={() => handleSidebarStyleChange('floating')}
                   className={`relative rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer ${
-                    sidebarStyle === 'floating'
-                      ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                    sidebarStyle === 'floating' ? activeOptionCardClass : inactiveOptionCardClass
                   }`}
                 >
                   {sidebarStyle === 'floating' && (
-                    <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                    <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                       <CheckCircle2 className="h-3 w-3" />
                     </div>
                   )}
@@ -425,13 +440,11 @@ export function AppearanceLayoutSelector({
                   type="button"
                   onClick={() => handleSidebarStyleChange('standard')}
                   className={`relative rounded-xl border-2 p-3.5 text-left transition-all cursor-pointer ${
-                    sidebarStyle === 'standard'
-                      ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                    sidebarStyle === 'standard' ? activeOptionCardClass : inactiveOptionCardClass
                   }`}
                 >
                   {sidebarStyle === 'standard' && (
-                    <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                    <div className="absolute top-2.5 right-2.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                       <CheckCircle2 className="h-3 w-3" />
                     </div>
                   )}
@@ -458,13 +471,11 @@ export function AppearanceLayoutSelector({
                       type="button"
                       onClick={() => handleSidebarBehaviorChange('overlay')}
                       className={`relative rounded-xl border-2 p-3 text-left transition-all cursor-pointer ${
-                        sidebarBehavior === 'overlay'
-                          ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
+                        sidebarBehavior === 'overlay' ? activeOptionCardClass : inactiveOptionCardClass
                       }`}
                     >
                       {sidebarBehavior === 'overlay' && (
-                        <div className="absolute top-2 right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                        <div className="absolute top-2 right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                           <CheckCircle2 className="h-2.5 w-2.5" />
                         </div>
                       )}
@@ -480,13 +491,11 @@ export function AppearanceLayoutSelector({
                       type="button"
                       onClick={() => handleSidebarBehaviorChange('push')}
                       className={`relative rounded-xl border-2 p-3 text-left transition-all cursor-pointer ${
-                        sidebarBehavior === 'push'
-                          ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                          : 'border-slate-200 bg-white hover:border-slate-300'
+                        sidebarBehavior === 'push' ? activeOptionCardClass : inactiveOptionCardClass
                       }`}
                     >
                       {sidebarBehavior === 'push' && (
-                        <div className="absolute top-2 right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-600 text-white shadow-xs">
+                        <div className="absolute top-2 right-2 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-main text-white shadow-xs">
                           <CheckCircle2 className="h-2.5 w-2.5" />
                         </div>
                       )}
@@ -531,9 +540,7 @@ export function AppearanceLayoutSelector({
                 type="button"
                 onClick={() => handleThemeChange('light')}
                 className={`flex items-center justify-between p-3.5 rounded-xl border-2 transition-all cursor-pointer ${
-                  theme === 'light'
-                    ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  theme === 'light' ? activeOptionCardClass : inactiveOptionCardClass
                 }`}
               >
                 <div className="flex items-center gap-2.5">
@@ -543,7 +550,7 @@ export function AppearanceLayoutSelector({
                     <span className="block text-[10.5px] text-slate-500">Haute lisibilité en atelier</span>
                   </div>
                 </div>
-                {theme === 'light' && <CheckCircle2 className="w-4 h-4 text-emerald-600" />}
+                {theme === 'light' && <CheckCircle2 className="w-4 h-4 text-accent-main" />}
               </button>
 
               <button
@@ -574,7 +581,7 @@ export function AppearanceLayoutSelector({
           <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-emerald-600" />
+                <Eye className="w-4 h-4 text-accent-main" />
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Aperçu en direct de l'espace de travail
                 </h4>
@@ -667,7 +674,7 @@ export function AppearanceLayoutSelector({
           <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="pb-3 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 border border-teal-200 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent-main border border-accent-subtle flex items-center justify-center shrink-0">
                   <Table className="w-4 h-4" />
                 </div>
                 <div>
@@ -688,14 +695,12 @@ export function AppearanceLayoutSelector({
                   type="button"
                   onClick={() => handleDensityChange('comfortable')}
                   className={`rounded-xl border-2 p-3 text-left transition-all cursor-pointer ${
-                    density === 'comfortable'
-                      ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                    density === 'comfortable' ? activeOptionCardClass : inactiveOptionCardClass
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-xs text-slate-900">Confortable</span>
-                    {density === 'comfortable' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    {density === 'comfortable' && <CheckCircle2 className="w-3.5 h-3.5 text-accent-main" />}
                   </div>
                   <p className="text-[10.5px] text-slate-500 leading-normal">
                     Espacement aéré adapté au tactile.
@@ -706,14 +711,12 @@ export function AppearanceLayoutSelector({
                   type="button"
                   onClick={() => handleDensityChange('compact')}
                   className={`rounded-xl border-2 p-3 text-left transition-all cursor-pointer ${
-                    density === 'compact'
-                      ? 'border-emerald-600 bg-emerald-50/40 ring-2 ring-emerald-500/20 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                    density === 'compact' ? activeOptionCardClass : inactiveOptionCardClass
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-xs text-slate-900">Compacte</span>
-                    {density === 'compact' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    {density === 'compact' && <CheckCircle2 className="w-3.5 h-3.5 text-accent-main" />}
                   </div>
                   <p className="text-[10.5px] text-slate-500 leading-normal">
                     Haute densité de lignes par écran.
@@ -779,7 +782,7 @@ export function AppearanceLayoutSelector({
               {/* Option Horloge en direct */}
               <div className="py-2.5 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <Clock className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                  <Clock className="w-4 h-4 text-accent-main mt-0.5 shrink-0" />
                   <div>
                     <span className="text-xs font-bold text-slate-900 block">
                       Horloge industrielle en direct (Barre Supérieure)
@@ -796,7 +799,7 @@ export function AppearanceLayoutSelector({
                   role="switch"
                   aria-checked={headerClockEnabled}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
-                    headerClockEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+                    headerClockEnabled ? 'bg-accent-main' : 'bg-slate-200'
                   }`}
                 >
                   <span
@@ -827,7 +830,7 @@ export function AppearanceLayoutSelector({
                   role="switch"
                   aria-checked={animationsEnabled}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer shrink-0 ${
-                    animationsEnabled ? 'bg-emerald-600' : 'bg-slate-200'
+                    animationsEnabled ? 'bg-accent-main' : 'bg-slate-200'
                   }`}
                 >
                   <span

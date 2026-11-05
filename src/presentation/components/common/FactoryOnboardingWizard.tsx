@@ -10,7 +10,7 @@ import {
   ArrowRight,
   Plus,
   X,
-  Sparkles,
+  Compass,
   Calendar,
 } from 'lucide-react';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -369,20 +369,20 @@ export default function FactoryOnboardingWizard({
   return (
     <div
       data-testid="c4-factory-onboarding-wizard"
-      className="bg-white rounded-3xl border-2 border-indigo-200/90 shadow-[0_12px_32px_-8px_rgba(79,70,229,0.12)] p-5 md:p-6 space-y-5"
+      className="bg-white rounded-3xl border border-slate-200/90 shadow-[0_8px_30px_rgba(0,0,0,0.04)] p-5 md:p-6 space-y-5"
     >
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Sparkles className="w-5 h-5" />
+        <div className="flex items-start sm:items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0">
+            <Compass className="w-4 h-4 text-slate-800" strokeWidth={2.25} />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-black text-slate-900">
                 Assistant de Démarrage Usine Vierge (C4 — Onboarding Réel)
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
+              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
                 Socle minimum : {status.completedMandatoryCount} / 3 complété(s)
               </span>
               {status.isMinimumComplete && (
@@ -422,7 +422,7 @@ export default function FactoryOnboardingWizard({
               onClick={() => setActiveStep(st.num)}
               className={`p-3 rounded-2xl border text-left transition cursor-pointer flex flex-col justify-between gap-1.5 ${
                 isCurrent
-                  ? 'bg-indigo-50/90 border-indigo-400 shadow-2xs'
+                  ? 'bg-slate-100 border-slate-300 shadow-2xs ring-1 ring-slate-300'
                   : st.done
                   ? 'bg-emerald-50/60 border-emerald-200 hover:bg-emerald-50'
                   : 'bg-slate-50/80 border-slate-200/80 hover:bg-slate-100/70'
@@ -432,7 +432,7 @@ export default function FactoryOnboardingWizard({
                 <Icon
                   className={`w-4 h-4 ${
                     isCurrent
-                      ? 'text-indigo-700'
+                      ? 'text-slate-900'
                       : st.done
                       ? 'text-emerald-600'
                       : 'text-slate-400'

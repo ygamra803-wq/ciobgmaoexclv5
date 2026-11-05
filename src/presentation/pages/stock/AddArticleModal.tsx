@@ -229,7 +229,7 @@ export default function AddArticleModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
+              className="px-5 py-2 rounded-xl btn-primary-accent font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Enregistrer l'Article</span>

@@ -422,7 +422,7 @@ export default function MonthlyCalendarView({
             <button
               type="button"
               onClick={handleToday}
-              className="h-8 px-3 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200/90 text-teal-800 text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
+              className="h-8 px-3 rounded-xl bg-accent-subtle hover:bg-accent-100 border border-accent-subtle text-accent-main text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
             >
               Aujourd'hui
             </button>
@@ -437,7 +437,7 @@ export default function MonthlyCalendarView({
                     onClick={() => setSelectedWeekIndex(idx)}
                     className={`px-2 py-0.5 rounded-lg font-mono text-xs font-bold transition cursor-pointer ${
                       selectedWeekIndex === idx
-                        ? 'bg-teal-600 text-white shadow-2xs'
+                        ? 'bg-accent-main text-white shadow-2xs'
                         : 'text-slate-600 hover:bg-slate-200/60'
                     }`}
                   >
@@ -456,7 +456,7 @@ export default function MonthlyCalendarView({
               <select
                 value={techFilter}
                 onChange={(e) => setTechFilter(e.target.value)}
-                className="h-8 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-teal-500 cursor-pointer"
+                className="h-8 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 focus:bg-white focus:ring-2 focus:ring-accent cursor-pointer"
               >
                 <option value="ALL">Tous les techniciens</option>
                 {techniciansList.map((tech) => (
@@ -475,7 +475,7 @@ export default function MonthlyCalendarView({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Filtrer machine / organe..."
-                className="h-8 w-full pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-teal-500 transition"
+                className="h-8 w-full pl-8 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:ring-2 focus:ring-accent transition"
               />
               {searchTerm && (
                 <button
@@ -587,9 +587,9 @@ export default function MonthlyCalendarView({
                     }}
                     className={`min-h-[115px] md:min-h-[130px] p-2 transition-all flex flex-col justify-between group relative ${
                       cell.isToday
-                        ? 'bg-teal-50/40 hover:bg-teal-50/80 ring-2 ring-teal-500 ring-inset'
+                        ? 'bg-accent-subtle/50 hover:bg-accent-subtle/80 ring-2 ring-accent ring-inset'
                         : isSelectedDay
-                        ? 'bg-teal-100/60 ring-2 ring-teal-600 ring-inset'
+                        ? 'bg-accent-subtle/80 ring-2 ring-accent ring-inset'
                         : hasMachines
                         ? 'bg-white hover:bg-slate-50/90 cursor-pointer'
                         : 'bg-white/80'
@@ -601,14 +601,14 @@ export default function MonthlyCalendarView({
                         <span
                           className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black font-mono shadow-2xs ${
                             cell.isToday
-                              ? 'bg-teal-600 text-white'
+                              ? 'bg-accent-main text-white'
                               : 'bg-slate-100 text-slate-700 group-hover:bg-slate-200'
                           }`}
                         >
                           {cell.dayNumber}
                         </span>
                         {cell.isToday && (
-                          <span className="text-[9px] font-bold text-teal-700 uppercase tracking-tight hidden sm:inline">
+                          <span className="text-[9px] font-bold text-accent-main uppercase tracking-tight hidden sm:inline">
                             Aujourd'hui
                           </span>
                         )}
@@ -727,9 +727,9 @@ export default function MonthlyCalendarView({
                     key={day.key}
                     className={`rounded-2xl border p-3 flex flex-col justify-between transition-all ${
                       day.isToday
-                        ? 'bg-teal-50/30 border-teal-400 shadow-sm ring-1 ring-teal-400'
+                        ? 'bg-accent-subtle/40 border-accent-subtle shadow-xs ring-1 ring-accent'
                         : hasTasks
-                        ? 'bg-white border-slate-200 hover:border-teal-300 shadow-2xs'
+                        ? 'bg-white border-slate-200 hover:border-accent-subtle shadow-2xs'
                         : 'bg-slate-50/60 border-slate-200/70'
                     }`}
                   >
@@ -746,7 +746,7 @@ export default function MonthlyCalendarView({
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
                           hasTasks
-                            ? 'bg-teal-100 text-teal-900 border border-teal-200'
+                            ? 'bg-accent-subtle text-accent-main border border-accent-subtle'
                             : 'bg-slate-100 text-slate-400'
                         }`}
                       >
@@ -852,7 +852,7 @@ export default function MonthlyCalendarView({
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/90 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-teal-600 text-white flex items-center justify-center font-mono font-black text-base shadow-md">
+                <div className="w-11 h-11 rounded-2xl bg-accent-main text-white flex items-center justify-center font-mono font-black text-base shadow-md">
                   {activeDayDetail.dayNumber}
                 </div>
                 <div>
@@ -860,7 +860,7 @@ export default function MonthlyCalendarView({
                     <h3 className="text-base font-black text-slate-900 tracking-tight font-sans">
                       Planning Préventif : {activeDayDetail.isoDateStr} ({activeDayDetail.isoWeek})
                     </h3>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-teal-100 text-teal-950 border border-teal-200">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-accent-subtle text-accent-main border border-accent-subtle">
                       {activeDayDetail.totalMachinesCount} Machine{activeDayDetail.totalMachinesCount > 1 ? 's' : ''} · {activeDayDetail.totalTasksCount} Tâche{activeDayDetail.totalTasksCount > 1 ? 's' : ''}
                     </span>
                   </div>

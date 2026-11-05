@@ -11,6 +11,17 @@ import {
 import { useTranslation } from '../../../i18n/I18nContext';
 
 const COLOR_MAP = {
+  accent: {
+    iconBg: 'bg-accent-subtle',
+    iconBorder: 'border-accent-subtle',
+    iconText: 'text-accent-main',
+    badgeBg: 'bg-accent-subtle',
+    badgeText: 'text-accent-main',
+    badgeBorder: 'border-accent-subtle',
+    btnBg: 'bg-accent-subtle hover:bg-accent-100',
+    btnText: 'text-accent-main',
+    btnBorder: 'border-accent-subtle',
+  },
   emerald: {
     iconBg: 'bg-emerald-500/10',
     iconBorder: 'border-emerald-200/80',
@@ -112,6 +123,7 @@ export function FilterField({
   className = '',
 }) {
   const badgeClasses = {
+    accent: 'bg-accent-subtle text-accent-main border-accent-subtle font-bold',
     slate: 'bg-slate-100 text-slate-600 border-slate-200/80',
     cyan: 'bg-cyan-50 text-cyan-700 border-cyan-200/80',
     teal: 'bg-teal-50 text-teal-700 border-teal-200/80',
@@ -160,7 +172,7 @@ export function FilterSearchInput({
   label,
   colBadge = 'Omni',
   colBadgeColor = 'slate',
-  focusRingColor = 'focus:ring-cyan-500',
+  focusRingColor = 'focus:ring-accent-500/30 focus:border-accent-main',
   className = '',
 }) {
   const { t } = useTranslation();
@@ -174,8 +186,8 @@ export function FilterSearchInput({
       colBadgeColor={colBadgeColor}
       className={className}
     >
-      <div className="relative">
-        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-2xs pointer-events-none">
+      <div className="relative group">
+        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 group-focus-within:text-accent-main group-focus-within:border-accent-subtle shadow-2xs pointer-events-none transition-colors">
           <Search className="w-3 h-3" />
         </div>
         <input
@@ -219,7 +231,7 @@ export default function IndustrialFilterCard({
   title,
   subtitle,
   icon: Icon = SlidersHorizontal,
-  color = 'cyan',
+  color = 'accent',
   filteredCount,
   totalCount,
   countBadge,
@@ -238,7 +250,7 @@ export default function IndustrialFilterCard({
   className = '',
 }) {
   const { t } = useTranslation();
-  const theme = COLOR_MAP[color] || COLOR_MAP.cyan;
+  const theme = COLOR_MAP[color] || COLOR_MAP.accent || COLOR_MAP.cyan;
 
   const effectiveTitle = title || t('common.filters.title');
   const effectiveResetTooltip = resetTooltip || t('common.filters.reset_tooltip');
@@ -326,7 +338,7 @@ export default function IndustrialFilterCard({
               onClick={preset.onClick}
               className={`h-7 px-2.5 rounded-lg border text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 preset.isActive
-                  ? preset.activeBg || 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  ? preset.activeBg || 'pill-active-accent border-accent-main shadow-xs'
                   : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200'
               }`}
             >
@@ -367,7 +379,7 @@ export default function IndustrialFilterCard({
           {activeFilters.map((af) => (
             <span
               key={af.key}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-accent-subtle text-accent-main text-xs font-semibold border border-accent-subtle shadow-2xs"
             >
               <span>{af.label}</span>
               {af.onRemove && (

@@ -697,7 +697,7 @@ export default function StockView({
           {canCreateStock && (
             <Action3DButton
               variant="circle"
-              color="cyan"
+              color="accent"
               icon={Package}
               showAddBadge={true}
               onClick={onOpenAddArticle}

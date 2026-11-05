@@ -1211,7 +1211,7 @@ export default function AddMachineModal({
               <button
                 type="submit"
                 disabled={isSubmittingMachine || (isSystemGeneral && !form.id_general_system_type)}
-                className="px-5 py-2.5 rounded-xl bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
+                className="px-5 py-2.5 rounded-xl btn-primary-accent disabled:opacity-50 text-white font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
               >
                 <Plus className="w-4 h-4" />
                 <span>{isSystemGeneral ? 'Enregistrer le Système Général' : 'Enregistrer la Machine'}</span>

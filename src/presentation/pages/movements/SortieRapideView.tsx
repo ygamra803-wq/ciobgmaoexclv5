@@ -5415,7 +5415,7 @@ export default function SortieRapideView({
                       getFormValidationState().isPristine
                         ? 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 hover:text-slate-700'
                         : getFormValidationState().isValid
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20'
+                          ? 'btn-primary-accent shadow-xs'
                           : 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
                     }`}
                   >

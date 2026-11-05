@@ -2,6 +2,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 export type GmaoKpiColor =
+  | 'accent'
   | 'blue'
   | 'emerald'
   | 'amber'
@@ -58,6 +59,18 @@ interface ColorThemeStyles {
 }
 
 const COLOR_MAP: Record<GmaoKpiColor, ColorThemeStyles> = {
+  accent: {
+    activeBorder: 'border-accent-600 ring-2 ring-accent/30 shadow-md',
+    hoverBorder: 'border-slate-200/90 hover:border-accent-subtle shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-xs',
+    glow: 'bg-accent-subtle/40 group-hover:bg-accent-subtle/80',
+    iconText: 'text-accent-main',
+    valueText: 'text-accent-main',
+    valueHover: 'text-slate-900 group-hover:text-accent-main',
+    badgeBg: 'text-accent-main bg-accent-subtle border-accent-subtle',
+    footerText: 'text-accent-main',
+    progressBarBg: 'bg-accent-subtle',
+    progressBarFill: 'bg-accent-main',
+  },
   blue: {
     activeBorder: 'border-blue-400 ring-2 ring-blue-400/30 shadow-md',
     hoverBorder: 'border-slate-200/90 hover:border-blue-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(59,130,246,0.12)]',
