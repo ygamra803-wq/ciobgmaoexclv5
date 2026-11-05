@@ -26,9 +26,9 @@ export default function ZonesView({
   showToast,
 }) {
   const { t } = useTranslation();
-  const canCreate = usePermission('CREATE');
-  const canEdit = usePermission('EDIT');
-  const canDelete = usePermission('DELETE');
+  const canCreate = usePermission('zone.create');
+  const canEdit = usePermission('zone.edit');
+  const canDelete = usePermission('zone.delete');
 
   const [localSearch, setLocalSearch] = useState(externalSearch || '');
   const [search, setSearch] = useState(externalSearch || '');

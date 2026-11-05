@@ -71,6 +71,19 @@ export const PERMISSIONS: Record<string, string[]> = {
   'machine.update': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
   'machine.delete': [ROLES.ADMIN],
 
+  // إدارة المناطق والورشات (Zones & Ateliers)
+  'zone.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'zone.create': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'zone.edit': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'zone.delete': [ROLES.ADMIN],
+
   // الصيانة الوقائية والعلاجية (Preventive & Corrective)
   'preventive.view': [
     ROLES.ADMIN,
