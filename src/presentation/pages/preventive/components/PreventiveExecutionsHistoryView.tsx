@@ -11,13 +11,16 @@ import {
   ShieldCheck,
   AlertTriangle,
   X,
+  FileSpreadsheet,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import type { PreventiveExecutionRecord } from '../../../../types/preventive';
 import PeriodFilterBar from '../../../components/common/PeriodFilterBar';
 import { type PeriodFilterState, isDateInPeriod } from '../../../../utils/datePeriodUtils';
 import { useI18n } from '../../../../i18n/I18nContext';
 import { confirmAction } from '../../../../utils/confirmAction';
 import { useAuth } from '../../../../context/AuthContext';
+import { AuthorizationService } from '../../../../core/security/AuthorizationService';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
@@ -43,6 +46,11 @@ export default function PreventiveExecutionsHistoryView({
 }: PreventiveExecutionsHistoryViewProps) {
   const { language } = useI18n();
   const { user } = useAuth();
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
+  const canManageExecutions =
+    !isReadOnlyUser &&
+    !isTechUser &&
+    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterState>({ preset: 'ALL' });
   const [validationFilter, setValidationFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
@@ -144,6 +152,7 @@ export default function PreventiveExecutionsHistoryView({
   }, [filteredExecutions]);
 
   const handleOpenReviewModal = (exec: PreventiveExecutionRecord) => {
+    if (!canManageExecutions) return;
     setReviewExecution(exec);
     const initialSpares =
       Array.isArray(exec.sparesProposed) && exec.sparesProposed.length > 0
@@ -227,6 +236,7 @@ export default function PreventiveExecutionsHistoryView({
   };
 
   const handleDelete = async (id: string) => {
+    if (!canManageExecutions) return;
     const msg =
       language === 'ar'
         ? 'هل أنت متأكد من حذف سجل التنفيذ هذا؟'
@@ -241,6 +251,58 @@ export default function PreventiveExecutionsHistoryView({
       onDeleteExecution?.(id);
       setDeletingId(null);
     }
+  };
+
+  const handleExportExcel = () => {
+    if (filteredExecutions.length === 0) {
+      showToast?.("Aucun enregistrement d'exécution à exporter.", 'warning');
+      return;
+    }
+
+    const rows = filteredExecutions.map((exec) => {
+      const sparesList =
+        exec.sparesUsed && exec.sparesUsed.length > 0
+          ? exec.sparesUsed
+          : exec.sparesProposed || [];
+      const sparesFormatted = sparesList
+        .map((s) => `${s.ref || s.designation} x${s.qty}`)
+        .join(', ');
+
+      return {
+        'ID Exécution': exec.id || '',
+        'Date Exécution': exec.executedAt || '',
+        'Période': exec.periodMonth || '',
+        'Semaine ISO': exec.periodWeek || '',
+        'Code Machine': exec.machineCode || '',
+        'Désignation Machine': exec.machineName || '',
+        'Zone': exec.zone || '',
+        'Organe / Composant': exec.organe || '',
+        'ID Composant': exec.id_composant || '',
+        'ID Part': exec.id_part || '',
+        'Action': exec.actionCode || '',
+        'Fréquence': exec.frequence || '',
+        'Exécutant': exec.executorName || '',
+        'Durée (min)': Number(exec.durationMinutes || 0),
+        'PDR Utilisées / Proposées': sparesFormatted,
+        'N° Bon': exec.num_bon_saisi_par_tech || '',
+        'Coût PDR (DT)': Number(Number(exec.sparesCost || 0).toFixed(2)),
+        'Coût Total (DT)': Number(Number(exec.totalCost || 0).toFixed(2)),
+        'Statut Validation': exec.validation_status || 'APPROVED',
+        'Validé Par': exec.validated_by_name || '',
+        'DI Corrective Liée': exec.generated_di_id || '',
+        'Observations': exec.notes || '',
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Historique_Executions_PM');
+    const dateStamp = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `GMAO_Historique_Executions_Preventives_${dateStamp}.xlsx`);
+    showToast?.(
+      `Export Excel réussi (${filteredExecutions.length} exécution(s) exportée(s)).`,
+      'success'
+    );
   };
 
   return (
@@ -339,6 +401,16 @@ export default function PreventiveExecutionsHistoryView({
               );
             })}
           </div>
+
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="h-8 px-3 rounded-xl border border-emerald-300/90 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+            title="Exporter l'historique des exécutions préventives vers Excel (.xlsx)"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+            <span>{language === 'ar' ? 'تصدير Excel' : 'Exporter Excel (.xlsx)'}</span>
+          </button>
         </div>
 
         {/* Search bar */}
@@ -508,7 +580,7 @@ export default function PreventiveExecutionsHistoryView({
                       </td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
-                          {!isTechUser &&
+                          {canManageExecutions &&
                             onReviewPreventiveExecution &&
                             (isPending || isClarify) && (
                               <button
@@ -519,7 +591,7 @@ export default function PreventiveExecutionsHistoryView({
                                 Valider
                               </button>
                             )}
-                          {onDeleteExecution && (
+                          {canManageExecutions && onDeleteExecution && (
                             <button
                               type="button"
                               onClick={() => handleDelete(exec.id)}

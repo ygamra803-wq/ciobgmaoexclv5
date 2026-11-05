@@ -771,6 +771,11 @@ export function useAppRouterProps({
           (m) => String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase() === machineId
         );
         const zoneId = matchedMachine?.id_zone_default || matchedMachine?.id_zone || rec?.zone || 'Atelier';
+        const techName =
+          matchedMachine?.technician ||
+          matchedMachine?.technicien_responsable ||
+          matchedMachine?.technicien ||
+          'Technicien';
         const freq = rec?.suggestedIntervalDays && Number(rec.suggestedIntervalDays) <= 10 ? 'Hebdo' : 'Mensuel';
         if (typeof handleCreatePlanWithTasks === 'function') {
           handleCreatePlanWithTasks(
@@ -778,7 +783,7 @@ export function useAppRouterProps({
               id_machine: machineId,
               nom_machine: matchedMachine?.designation || `Machine ${machineId}`,
               id_zone: zoneId,
-              id_technicien: 'Technicien',
+              id_technicien: techName,
               semaine_cible: 'S1',
               description: rec?.recommendation || rec?.description || `Routine anti-récidive (${anomClean}) pour ${machineId}`,
             },

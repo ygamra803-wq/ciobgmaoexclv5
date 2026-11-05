@@ -18,6 +18,7 @@ import {
 import Action3DButton from '../../../components/common/Action3DButton';
 import PageHeaderIcon from '../../../components/common/PageHeaderIcon';
 import { confirmAction } from '../../../../utils/confirmAction';
+import { buildConsumablePdrInventory } from '../../../../core/domain';
 
 const ACTION_COLORS = {
   C: 'bg-blue-500/10 text-blue-800 border-blue-200/80',
@@ -40,16 +41,18 @@ export default function TabGuide({
   guides = [],
   actions = [],
   stockItems = [],
-  warehouseItems = [],
+  warehouseItems: _warehouseItems = [],
   onAddGuide,
   onUpdateGuide,
   onDeleteGuide,
+  showToast = null,
 }) {
   const [search, setSearch] = useState('');
   const [selectedFamille, setSelectedFamille] = useState('ALL');
   const [expandedGuideId, setExpandedGuideId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingGuide, setEditingGuide] = useState(null);
+  const [formError, setFormError] = useState('');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -69,38 +72,10 @@ export default function TabGuide({
   const [customPdrRef, setCustomPdrRef] = useState('');
   const [customPdrDesignation, setCustomPdrDesignation] = useState('');
 
-  const allInventory = useMemo(() => {
-    const list = [];
-    (stockItems || []).forEach((item) => {
-      const ref = String(item.ref || item.reference || item.code || '').trim();
-      if (ref) {
-        list.push({
-          id_article: `PDR-${ref}`,
-          ref,
-          reference: ref,
-          designation: item.designation || 'Pièce PDR',
-          stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? 0),
-          seuil: Number(item.seuil ?? 2),
-          source: 'PDR Magasin',
-        });
-      }
-    });
-    (warehouseItems || []).forEach((item) => {
-      const ref = String(item.ref || item.reference || item.id_warehouse_item || '').trim();
-      if (ref) {
-        list.push({
-          id_article: `WH-${ref}`,
-          ref,
-          reference: ref,
-          designation: item.designation || 'Composant Entrepôt',
-          stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? 0),
-          seuil: Number(item.seuil ?? 2),
-          source: 'Entrepôt',
-        });
-      }
-    });
-    return list;
-  }, [stockItems, warehouseItems]);
+  const allInventory = useMemo(
+    () => buildConsumablePdrInventory(stockItems),
+    [stockItems]
+  );
 
   const getPdrStockStatus = (pdrRef, _pdrId) => {
     const cleanRef = (pdrRef || '').trim().toLowerCase();
@@ -144,6 +119,7 @@ export default function TabGuide({
 
   const handleOpenAdd = () => {
     setEditingGuide(null);
+    setFormError('');
     setFormData({
       composant_nom: '',
       code: '',
@@ -165,6 +141,7 @@ export default function TabGuide({
 
   const handleOpenEdit = (guide) => {
     setEditingGuide(guide);
+    setFormError('');
     setFormData({
       composant_nom: guide.composant_nom || '',
       code: guide.code || '',
@@ -249,11 +226,14 @@ export default function TabGuide({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.composant_nom || (formData.actions_liees || []).length === 0) {
-      alert('Veuillez renseigner le nom du composant et associer au moins une action.');
+    if (!String(formData.composant_nom || '').trim() || (formData.actions_liees || []).length === 0) {
+      const msg = 'Veuillez renseigner le nom du composant et associer au moins une action.';
+      setFormError(msg);
+      showToast?.(msg, 'warning');
       return;
     }
 
+    setFormError('');
     if (editingGuide) {
       onUpdateGuide(editingGuide.id, formData);
     } else {
@@ -537,6 +517,12 @@ export default function TabGuide({
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              {formError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 uppercase mb-1">Nom du Composant * :</label>

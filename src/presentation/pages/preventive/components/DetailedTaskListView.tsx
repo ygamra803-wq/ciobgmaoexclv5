@@ -343,21 +343,25 @@ export default function DetailedTaskListView({
             >
               <Printer className="w-3.5 h-3.5" />
             </button>
-            <button
-              type="button"
-              onClick={() => onOpenCorrective(tItem)}
-              className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
-              title={t('preventive.buttons.create_corrective_bt', "Déclencher un BT Correctif en cas d'anomalie")}
-            >
-              BT
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenValidate(tItem)}
-              className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition cursor-pointer"
-            >
-              {t('common.confirm', 'Valider')}
-            </button>
+            {onOpenCorrective && (
+              <button
+                type="button"
+                onClick={() => onOpenCorrective(tItem)}
+                className="px-2.5 py-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition cursor-pointer"
+                title={t('preventive.buttons.create_corrective_bt', "Déclencher un BT Correctif en cas d'anomalie")}
+              >
+                BT
+              </button>
+            )}
+            {onOpenValidate && (
+              <button
+                type="button"
+                onClick={() => onOpenValidate(tItem)}
+                className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition cursor-pointer"
+              >
+                {t('common.confirm', 'Valider')}
+              </button>
+            )}
           </div>
         </td>
       </Fragment>

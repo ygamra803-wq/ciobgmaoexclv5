@@ -37,6 +37,7 @@ import {
   getTechnicianBadgeLabel,
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
 
 export default function PreventiveView({
   tasks = [],
@@ -73,6 +74,13 @@ export default function PreventiveView({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
+  const canExecutePreventive =
+    !isReadOnlyUser && (!user || AuthorizationService.hasPermission(user, 'preventive.execute'));
+  const canManagePreventive =
+    !isReadOnlyUser &&
+    !isTechUser &&
+    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -86,6 +94,7 @@ export default function PreventiveView({
   ).length;
 
   const handleRestoreBaseline = async () => {
+    if (!canManagePreventive) return;
     if (onResetToBaseline) {
       const result = await onResetToBaseline({ machines });
       if (!result || result.cancelled) return;
@@ -116,6 +125,7 @@ export default function PreventiveView({
   };
 
   const runClearRealFactory = async () => {
+    if (!canManagePreventive) return;
     const result = await onClearPreventiveForRealFactory?.({ machines });
     if (!result || result.cancelled) return;
     showToast?.(`Préventif vidé (${result.clearedCount || 0} tâches).`, 'info');
@@ -125,6 +135,7 @@ export default function PreventiveView({
   // MAIN VIEW HANDLERS (PRIMARY VIEW)
   // ==========================================
   const handleMarkTaskDone = (id, validationData) => {
+    if (!canExecutePreventive) return;
     const targetTask = tasks.find((t) => t.id === id);
     const shouldSubmitForValidation =
       isTechUser || validationData?.submitForValidation === true;
@@ -227,6 +238,7 @@ export default function PreventiveView({
   };
 
   const handleDeleteTask = (id) => {
+    if (!canManagePreventive) return;
     if (onDeleteTaskProp) {
       onDeleteTaskProp(id);
     } else {
@@ -236,6 +248,7 @@ export default function PreventiveView({
   };
 
   const handleUpdateTaskCounter = (id, newCounterValue) => {
+    if (!canExecutePreventive) return;
     if (onUpdateTaskCounterProp) {
       onUpdateTaskCounterProp(id, newCounterValue);
     } else {
@@ -245,6 +258,7 @@ export default function PreventiveView({
   };
 
   const handleUpdateTaskStatus = (id, newStatus) => {
+    if (!canExecutePreventive) return;
     if (onUpdateTask) {
       onUpdateTask(id, { etat: newStatus });
     } else {
@@ -278,7 +292,7 @@ export default function PreventiveView({
                     Mes Tâches · {getTechnicianBadgeLabel(user, technicians)}
                   </span>
                 )}
-                {!isTechUser && pendingPreventiveValidationCount > 0 && (
+                {canManagePreventive && pendingPreventiveValidationCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setViewMode('executions')}
@@ -364,7 +378,7 @@ export default function PreventiveView({
             />
 
             {/* 3D Reset Baseline Button */}
-            {!isTechUser && (
+            {canManagePreventive && (
               <Action3DButton
                 variant="circle"
                 color="amber"
@@ -376,7 +390,7 @@ export default function PreventiveView({
             )}
 
             {/* 3D Clear for Real Factory Button */}
-            {!isTechUser && onClearPreventiveForRealFactory && (
+            {canManagePreventive && onClearPreventiveForRealFactory && (
               <Action3DButton
                 variant="circle"
                 color="rose"
@@ -388,7 +402,7 @@ export default function PreventiveView({
             )}
 
             {/* 3D Import Tasks Button */}
-            {!isTechUser && (
+            {canManagePreventive && (
               <Action3DButton
                 variant="circle"
                 color="emerald"
@@ -400,7 +414,7 @@ export default function PreventiveView({
             )}
 
             {/* 3D Primary Add Plan / Action Button */}
-            {!isTechUser && (
+            {canManagePreventive && (
               <Action3DButton
                 variant="circle"
                 color="indigo"
@@ -414,7 +428,7 @@ export default function PreventiveView({
         </div>
 
         {/* Empty State Warning Banner (1-Click Restore 1,175 Tasks) */}
-        {!isTechUser && (!tasks || tasks.length === 0) && (
+        {canManagePreventive && (!tasks || tasks.length === 0) && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -441,7 +455,7 @@ export default function PreventiveView({
         )}
 
         {/* Anti-Recurrence Predictive Suggestions from Corrective Nexus */}
-        {!isTechUser && preventiveRecommendations && preventiveRecommendations.length > 0 && (
+        {canManagePreventive && preventiveRecommendations && preventiveRecommendations.length > 0 && (
           <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -455,15 +469,26 @@ export default function PreventiveView({
                   </span>
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Machines ayant subi ≥ 3 pannes récentes sur un même organe ({preventiveRecommendations.map((r) => r.machine).join(', ')}). Créer des routines de contrôle pour éradiquer ces pannes.
+                  Machines ayant subi ≥ 3 pannes récentes sur un même organe ({preventiveRecommendations.map((r) => r.code_machine || r.machine).join(', ')}). Créer des routines de contrôle pour éradiquer ces pannes.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               {preventiveRecommendations.slice(0, 2).map((rec, i) => {
-                const machineLabel = rec.machine || rec.code_machine || 'Machine';
+                const machineLabel = rec.code_machine || rec.machine || 'Machine';
                 const anomClean = String(rec.anomalie || 'inspection_generale').replace(/_/g, ' ');
+                const matchedMach = (machines || []).find(
+                  (m) =>
+                    String(m.id_machine_registered || m.id || m.code || '')
+                      .trim()
+                      .toUpperCase() === String(machineLabel).trim().toUpperCase()
+                );
+                const resolvedTech =
+                  matchedMach?.technician ||
+                  matchedMach?.technicien_responsable ||
+                  matchedMach?.technicien ||
+                  'Technicien';
                 return (
                   <button
                     key={i}
@@ -476,9 +501,9 @@ export default function PreventiveView({
                         onCreatePlanWithTasks(
                           {
                             id_machine: machineLabel,
-                            nom_machine: `Machine ${machineLabel}`,
-                            id_zone: rec.zone || 'Atelier',
-                            id_technicien: 'Technicien',
+                            nom_machine: matchedMach?.designation || `Machine ${machineLabel}`,
+                            id_zone: matchedMach?.id_zone_default || matchedMach?.id_zone || rec.zone || 'Atelier',
+                            id_technicien: resolvedTech,
                             semaine_cible: 'S1',
                             description: rec.recommendation || `Routine anti-récidive (${anomClean})`,
                           },
@@ -535,15 +560,15 @@ export default function PreventiveView({
             warehouseItems={warehouseItems}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
-            onMarkTaskDone={handleMarkTaskDone}
-            onReviewPreventiveExecution={onReviewPreventiveExecution}
+            onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
+            onReviewPreventiveExecution={canManagePreventive ? onReviewPreventiveExecution : null}
             showToast={showToast}
-            onDeleteExecution={isTechUser ? null : onDeleteExecution}
-            onDeleteTask={handleDeleteTask}
-            onUpdateTaskCounter={handleUpdateTaskCounter}
-            onUpdateTaskStatus={handleUpdateTaskStatus}
-            onNavigateToPlanBuilder={onNavigateToReferentiel}
-            onCreateCorrective={onCreateCorrective}
+            onDeleteExecution={canManagePreventive ? onDeleteExecution : null}
+            onDeleteTask={canManagePreventive ? handleDeleteTask : null}
+            onUpdateTaskCounter={canExecutePreventive ? handleUpdateTaskCounter : null}
+            onUpdateTaskStatus={canExecutePreventive ? handleUpdateTaskStatus : null}
+            onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
+            onCreateCorrective={canExecutePreventive ? onCreateCorrective : null}
             onNavigateToMachine={onNavigateToMachine}
           />
         </ErrorBoundary>

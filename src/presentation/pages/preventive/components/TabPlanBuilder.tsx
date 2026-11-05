@@ -201,18 +201,38 @@ export default function TabPlanBuilder({
     setTypeDeclencheur('CALENDRIER');
   };
 
+  const activeZones = useMemo(
+    () => (zones || []).filter((z) => String(z?.status || 'ACTIVE').toUpperCase() !== 'ARCHIVEE'),
+    [zones]
+  );
+
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (t) =>
+          t?.is_active !== false &&
+          t?.actif !== false &&
+          String(t?.statut || '').toUpperCase() !== 'ARCHIVE'
+      ),
+    [technicians]
+  );
+
   // When a machine is selected, automatically discover its Zone, Technician and Components
   useEffect(() => {
     if (!selectedMachineId) return;
 
     const mach = machines.find((m) => m.id_machine_registered === selectedMachineId || m.code_machine === selectedMachineId || m.id === selectedMachineId);
     
-    // 1. Auto-discover Zone from machine or zones table
-    const autoZone = mach?.id_zone || mach?.zone || (zones[0]?.id_zone || zones[0]?.nom || 'AFM');
+    // 1. Auto-discover Zone from machine or active zones table
+    const autoZone = mach?.id_zone || mach?.zone || (activeZones[0]?.id_zone || activeZones[0]?.nom || 'AFM');
     setTargetZone(autoZone);
 
-    // 2. Auto-discover Technician assigned to this machine or technicians table (SSOT Utilisateurs)
-    const autoTech = mach?.technicien_responsable || mach?.technicien || (technicians[0]?.nom || technicians[0]?.name || 'Technicien');
+    // 2. Auto-discover Technician assigned to this machine or active technicians table (SSOT Utilisateurs)
+    const autoTech =
+      mach?.technician ||
+      mach?.technicien_responsable ||
+      mach?.technicien ||
+      (activeTechnicians[0]?.nom || activeTechnicians[0]?.name || 'Technicien');
     setTargetTechnician(autoTech);
 
     // 3. Auto-generate Reference with current year
@@ -528,7 +548,7 @@ export default function TabPlanBuilder({
             className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer"
           >
             <option value="">-- Sélectionner Zone --</option>
-            {zones.map((z) => {
+            {activeZones.map((z) => {
               const zName = z.id_zone || z.nom || z.code_zone || 'Zone';
               return (
                 <option key={zName} value={zName}>
@@ -549,7 +569,7 @@ export default function TabPlanBuilder({
             className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-emerald-500 truncate cursor-pointer"
           >
             <option value="">-- Sélectionner Technicien --</option>
-            {technicians.map((t) => {
+            {activeTechnicians.map((t) => {
               const tName = t.nom || t.name || 'Technicien';
               return (
                 <option key={t.id_technician || t.id || tName} value={tName}>

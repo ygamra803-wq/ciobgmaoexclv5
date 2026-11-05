@@ -305,6 +305,7 @@ export default function PreventiveSecondaryView({
                   onAddGuide={handleAddGuide}
                   onUpdateGuide={handleUpdateGuide}
                   onDeleteGuide={handleDeleteGuide}
+                  showToast={showToast}
                 />
               </ErrorBoundary>
             </motion.div>

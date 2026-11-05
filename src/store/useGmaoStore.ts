@@ -1714,6 +1714,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     handleCreatePlanWithTasks: (planData, taskItems) => {
+      PreventiveService.saveTasks(get().preventiveTasks);
       const result = PreventiveService.createPlanWithTasks(planData, taskItems);
       const nextPlans = [result.plan, ...get().preventivePlans];
       const nextTasks = [...result.tasks, ...get().preventiveTasks];

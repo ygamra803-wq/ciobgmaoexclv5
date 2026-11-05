@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
+import { buildConsumablePdrInventory } from '../../../../core/domain';
 
 export type RoundPointOutcome = 'CONFORME' | 'ANOMALIE' | 'PDR';
 
@@ -73,6 +74,27 @@ export default function SystemGeneralRoundModal({
       setRoundTech(defaultTechName);
     }
   }, [defaultTechName, roundTech]);
+
+  const activeZones = useMemo(
+    () => (zones || []).filter((z: any) => String(z?.status || 'ACTIVE').toUpperCase() !== 'ARCHIVEE'),
+    [zones]
+  );
+
+  const activeTechnicians = useMemo(
+    () =>
+      (technicians || []).filter(
+        (t: any) =>
+          t?.is_active !== false &&
+          t?.actif !== false &&
+          String(t?.statut || '').toUpperCase() !== 'ARCHIVE'
+      ),
+    [technicians]
+  );
+
+  const consumableStockItems = useMemo(
+    () => buildConsumablePdrInventory(stockItems),
+    [stockItems]
+  );
 
   // Build machine lookup map
   const machineMap = useMemo(() => {
@@ -203,8 +225,8 @@ export default function SystemGeneralRoundModal({
 
       let usedPDR: any[] = [];
       if (st.outcome === 'PDR' && st.pdrRef) {
-        const matchedStock = (stockItems || []).find(
-          (s) => String(s.ref || '').toLowerCase() === st.pdrRef.toLowerCase()
+        const matchedStock = consumableStockItems.find(
+          (s: any) => String(s.ref || '').toLowerCase() === st.pdrRef.toLowerCase()
         );
         usedPDR = [
           {
@@ -330,7 +352,7 @@ export default function SystemGeneralRoundModal({
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-indigo-500 outline-none"
               >
                 <option value="ALL">Toutes les Zones</option>
-                {(zones || []).map((z: any) => {
+                {activeZones.map((z: any) => {
                   const zCode = z.code_zone || z.code || z.id_zone;
                   return (
                     <option key={zCode} value={zCode}>
@@ -357,7 +379,7 @@ export default function SystemGeneralRoundModal({
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 disabled:bg-slate-100"
               />
               <datalist id="round-tech-list">
-                {(technicians || []).map((t: any) => (
+                {activeTechnicians.map((t: any) => (
                   <option key={t.id_technician || t.nom} value={t.nom} />
                 ))}
               </datalist>
@@ -596,7 +618,7 @@ export default function SystemGeneralRoundModal({
                             className="w-full h-8 px-2.5 rounded-xl border border-amber-300 bg-white text-xs font-mono font-bold text-slate-800"
                           >
                             <option value="">— Choisir Pièce PDR (Stock) —</option>
-                            {(stockItems || []).map((item: any) => (
+                            {consumableStockItems.map((item: any) => (
                               <option key={item.ref} value={item.ref}>
                                 {item.ref} — {item.designation} (Stock: {item.stockActuel})
                               </option>

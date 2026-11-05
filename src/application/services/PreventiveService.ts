@@ -176,16 +176,22 @@ export class PreventiveService {
   }
 
   static getMachinePreventiveProfile(machineId: string) {
-    const id = String(machineId || '').trim();
+    const idUpper = String(machineId || '').trim().toUpperCase();
     const allTasks = Array.isArray(this.getTasks()) ? this.getTasks() : [];
     const allExecutions = Array.isArray(this.getExecutions()) ? this.getExecutions() : [];
 
     const tasks = allTasks.filter(
-      (t: any) => String(t.id_machine || t.machine || '').trim() === id
+      (t: any) => String(t.id_machine || t.machine || '').trim().toUpperCase() === idUpper
     );
-    const executions = allExecutions.filter(
-      (ex: any) => String(ex.id_machine || ex.machine || '').trim() === id
-    );
+    const executions = allExecutions.filter((ex: any) => {
+      const exMach = String(ex.machineCode || ex.id_machine || ex.machine || '').trim().toUpperCase();
+      if (exMach !== idUpper) return false;
+      const valStatus = String(ex.validation_status || 'APPROVED').toUpperCase();
+      if (valStatus === 'PENDING_VALIDATION' || valStatus === 'NEEDS_CLARIFICATION' || valStatus === 'REJECTED') {
+        return false;
+      }
+      return ex.status !== 'SKIPPED';
+    });
 
     const total_tasks = tasks.length;
     const fait_tasks = tasks.filter(
@@ -208,21 +214,27 @@ export class PreventiveService {
     const pendingTask = tasks.find(
       (t: any) => String(t.etat || '').toLowerCase() !== 'fait'
     );
+    const lastRealisation =
+      pendingTask?.derniere_realisation ||
+      pendingTask?.lastExecutedAt ||
+      pendingTask?.derniere_execution;
     const prochaine_intervention = pendingTask
       ? {
           semaine: pendingTask.prochaine_echeance || pendingTask.frequence || 'Planifié',
-          date: pendingTask.derniere_execution
-            ? `Dernière: ${pendingTask.derniere_execution}`
+          date: lastRealisation
+            ? `Dernière: ${lastRealisation}`
             : 'Calendrier annuel',
         }
       : null;
 
     const tasksCost = tasks.reduce(
-      (sum: number, t: any) => sum + (Number(t.cout_total) || Number(t.cout_pdr) || 0),
+      (sum: number, t: any) =>
+        sum + (Number(t.cout_cumule ?? t.cout_total ?? t.cout_pdr ?? 0) || 0),
       0
     );
     const execsCost = executions.reduce(
-      (sum: number, ex: any) => sum + (Number(ex.cout_total) || Number(ex.cout_pdr) || 0),
+      (sum: number, ex: any) =>
+        sum + (Number(ex.totalCost ?? ex.sparesCost ?? ex.cout_total ?? ex.cout_pdr ?? 0) || 0),
       0
     );
 
@@ -234,7 +246,7 @@ export class PreventiveService {
       compliance_rate,
       health_status,
       prochaine_intervention,
-      cout_total_preventif: execsCost > 0 ? execsCost : tasksCost,
+      cout_total_preventif: Number((execsCost > 0 ? execsCost : tasksCost).toFixed(2)),
     };
   }
 }

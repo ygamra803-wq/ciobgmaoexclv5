@@ -503,14 +503,16 @@ export default function MatrixWeeksView({
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        onOpenValidate(weekActions[0].task);
+                                        if (onOpenValidate) onOpenValidate(weekActions[0].task);
                                       }}
-                                      className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[10.5px] mx-auto transition-all hover:scale-110 active:scale-95 cursor-pointer shadow-2xs ${
+                                      className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[10.5px] mx-auto transition-all shadow-2xs ${
+                                        onOpenValidate ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'
+                                      } ${
                                         weekActions[0].task.etat === 'En retard'
                                           ? 'bg-rose-600 text-white animate-pulse shadow-rose-200'
                                           : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-600 hover:text-white border border-indigo-200'
                                       }`}
-                                      title={`${weekActions[0].task.action_code} sur ${group.nom_machine} (${weekActions[0].task.composant || 'Général'}) - Cliquer pour valider`}
+                                      title={`${weekActions[0].task.action_code} sur ${group.nom_machine} (${weekActions[0].task.composant || 'Général'})`}
                                     >
                                       {weekActions[0].val}
                                     </button>
@@ -691,13 +693,17 @@ export default function MatrixWeeksView({
                                     ) : hasAction ? (
                                       <button
                                         type="button"
-                                        onClick={() => onOpenValidate(task)}
-                                        className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[10.5px] mx-auto transition-all hover:scale-110 active:scale-95 cursor-pointer shadow-2xs ${
+                                        onClick={() => {
+                                          if (onOpenValidate) onOpenValidate(task);
+                                        }}
+                                        className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[10.5px] mx-auto transition-all shadow-2xs ${
+                                          onOpenValidate ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'
+                                        } ${
                                           task.etat === 'En retard'
                                             ? 'bg-rose-600 text-white animate-pulse shadow-rose-200'
                                             : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-600 hover:text-white border border-indigo-200'
                                         }`}
-                                        title={`${task.action_code} (${task.composant}) - ${t('buttons.validate_task', 'Valider')}`}
+                                        title={`${task.action_code} (${task.composant})`}
                                       >
                                         {cellVal}
                                       </button>
@@ -736,7 +742,7 @@ export default function MatrixWeeksView({
                                   >
                                     <Printer className="w-3.5 h-3.5" />
                                   </button>
-                                  {task.etat !== 'Fait' && (
+                                  {onOpenValidate && task.etat !== 'Fait' && (
                                     <button
                                       type="button"
                                       onClick={() => onOpenValidate(task)}

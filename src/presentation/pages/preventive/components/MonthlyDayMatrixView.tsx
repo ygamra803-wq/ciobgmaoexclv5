@@ -76,8 +76,9 @@ function getISOWeekNumber(d) {
  */
 export default function MonthlyDayMatrixView({
   tasks = [],
-  onOpenValidate = () => {},
-  onOpenCorrective = () => {},
+  machines = [],
+  onOpenValidate = null,
+  onOpenCorrective = null,
   onOpenPrint = () => {},
   onSwitchView = () => {},
   hasActiveFilters = false,
@@ -225,18 +226,39 @@ export default function MonthlyDayMatrixView({
     [selectedYear, selectedMonth]
   );
 
-  // Group tasks by Machine
+  const machineMap = useMemo(() => {
+    const map = new Map();
+    (machines || []).forEach((m) => {
+      const code = String(m?.code_machine || m?.id_machine_registered || m?.id || m?.code || '').trim().toUpperCase();
+      if (code) map.set(code, m);
+    });
+    return map;
+  }, [machines]);
+
+  // Group tasks by Machine with live SSOT resolution
   const machineGroups = useMemo(() => {
     const map = new Map();
 
     tasks.forEach((task) => {
       const machineKey = task.id_machine || task.nom_machine || 'AUTRE';
+      const liveMach = machineMap.get(String(machineKey).trim().toUpperCase());
       if (!map.has(machineKey)) {
         map.set(machineKey, {
           id: machineKey,
           id_machine: task.id_machine || machineKey,
-          nom_machine: task.nom_machine || machineKey,
-          id_zone: task.id_zone || task.zone || '',
+          nom_machine:
+            liveMach?.designation ||
+            liveMach?.nom_machine ||
+            liveMach?.nom ||
+            task.nom_machine ||
+            machineKey,
+          id_zone:
+            liveMach?.id_zone_default ||
+            liveMach?.id_zone ||
+            liveMach?.zone ||
+            task.id_zone ||
+            task.zone ||
+            '',
           tasks: [],
         });
       }
@@ -894,9 +916,11 @@ export default function MonthlyDayMatrixView({
                                     type="button"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      onOpenValidate(dayActions[0].task);
+                                      if (onOpenValidate) onOpenValidate(dayActions[0].task);
                                     }}
-                                    className={`w-6 h-6 mx-auto rounded-md flex items-center justify-center text-[11px] font-mono font-black border transition-all cursor-pointer shadow-2xs hover:scale-110 active:scale-95 ${
+                                    className={`w-6 h-6 mx-auto rounded-md flex items-center justify-center text-[11px] font-mono font-black border transition-all shadow-2xs ${
+                                      onOpenValidate ? 'cursor-pointer hover:scale-110 active:scale-95' : 'cursor-default'
+                                    } ${
                                       dayActions[0].act.isDone
                                         ? 'bg-emerald-600 text-white border-emerald-700'
                                         : dayActions[0].act.isOverdue
@@ -1045,22 +1069,26 @@ export default function MonthlyDayMatrixView({
                               {/* OT Action Buttons */}
                               <td className="py-1.5 px-1.5 text-center border-r-2 border-slate-300">
                                 <div className="flex items-center justify-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenValidate(task)}
-                                    className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
-                                    title="Valider intervention & Déstocker PDR"
-                                  >
-                                    <Check className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenCorrective(task)}
-                                    className="w-6 h-6 rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
-                                    title="Créer Bon de Travail correctif"
-                                  >
-                                    <Wrench className="w-3.5 h-3.5" />
-                                  </button>
+                                  {onOpenValidate && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenValidate(task)}
+                                      className="w-6 h-6 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
+                                      title="Valider intervention & Déstocker PDR"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {onOpenCorrective && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenCorrective(task)}
+                                      className="w-6 h-6 rounded-md bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-600 hover:text-white flex items-center justify-center transition cursor-pointer shadow-2xs"
+                                      title="Créer Bon de Travail correctif"
+                                    >
+                                      <Wrench className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => onOpenPrint(task)}
@@ -1090,8 +1118,12 @@ export default function MonthlyDayMatrixView({
                                     {act && act.hasAction ? (
                                       <button
                                         type="button"
-                                        onClick={() => onOpenValidate(task)}
-                                        className={`w-6 h-6 mx-auto rounded-md flex items-center justify-center text-[11px] font-mono font-black border transition-all cursor-pointer shadow-2xs hover:scale-110 active:scale-95 ${
+                                        onClick={() => {
+                                          if (onOpenValidate) onOpenValidate(task);
+                                        }}
+                                        className={`w-6 h-6 mx-auto rounded-md flex items-center justify-center text-[11px] font-mono font-black border transition-all shadow-2xs ${
+                                          onOpenValidate ? 'cursor-pointer hover:scale-110 active:scale-95' : 'cursor-default'
+                                        } ${
                                           act.isDone
                                             ? 'bg-emerald-600 text-white border-emerald-700'
                                             : act.isOverdue

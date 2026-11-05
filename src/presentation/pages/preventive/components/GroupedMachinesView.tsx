@@ -13,6 +13,7 @@ import {
   Printer,
   User,
   Search,
+  Wrench,
 } from 'lucide-react';
 import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 
@@ -35,7 +36,7 @@ export default function GroupedMachinesView({
   tasks = [],
   machines = [],
   onOpenValidate = null,
-  _onOpenCorrective = null,
+  onOpenCorrective = null,
   onOpenPrint = null,
   _onNavigateToMachine = null,
   onSwitchView = () => {},
@@ -429,6 +430,17 @@ export default function GroupedMachinesView({
                                       title="Imprimer Ordre de Travail"
                                     >
                                       <Printer className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  {onOpenCorrective && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenCorrective(task)}
+                                      className="px-2 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition cursor-pointer shadow-2xs flex items-center gap-1"
+                                      title="Déclencher un BT Correctif en cas d'anomalie"
+                                    >
+                                      <Wrench className="w-3 h-3" />
+                                      BT
                                     </button>
                                   )}
                                   {onOpenValidate && task.etat !== 'Fait' && (

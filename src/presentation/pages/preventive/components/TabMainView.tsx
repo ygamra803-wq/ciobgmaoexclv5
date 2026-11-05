@@ -57,6 +57,7 @@ import {
   getTechnicianDisplayName,
   getTechnicianBadgeLabel,
 } from '../../../../core/security/technicianScope';
+import { AuthorizationService } from '../../../../core/security/AuthorizationService';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
@@ -100,6 +101,19 @@ export default function TabMainView({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
+  const canExecutePreventive =
+    !isReadOnlyUser &&
+    Boolean(onMarkTaskDone) &&
+    (!user || AuthorizationService.hasPermission(user, 'preventive.execute'));
+  const canManagePreventive =
+    !isReadOnlyUser &&
+    !isTechUser &&
+    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
+  const canTriggerCorrective =
+    !isReadOnlyUser &&
+    Boolean(onCreateCorrective) &&
+    (!user || AuthorizationService.hasPermission(user, 'corrective.execute'));
   const techDisplayName = useMemo(
     () => getTechnicianDisplayName(user, technicians),
     [user, technicians]
@@ -625,6 +639,7 @@ export default function TabMainView({
 
   // Open Validation Modal with prefilled recommended PDR (or proposed PDR on clarification) & auto-resolved id_composant / id_part
   const handleOpenValidate = (task) => {
+    if (!canExecutePreventive) return;
     setSelectedTaskForValidation(task);
     const hasPriorProposed =
       (task.validation_status === 'NEEDS_CLARIFICATION' ||
@@ -771,6 +786,7 @@ export default function TabMainView({
 
   // Open Corrective Trigger Modal
   const handleOpenCorrective = (task) => {
+    if (!canTriggerCorrective) return;
     setSelectedTaskForBT(task);
     setBtData({
       description: `Anomalie décelée lors du contrôle ${task.action_code} sur ${task.composant} (${task.id_machine}) : Nécessite une intervention corrective immédiate.`,
@@ -843,7 +859,7 @@ export default function TabMainView({
   return (
     <div className="space-y-5">
       {/* V3 MAKER-CHECKER ALERT BANNERS */}
-      {!isTechUser && pendingValidationExecutions.length > 0 && (
+      {canManagePreventive && pendingValidationExecutions.length > 0 && (
         <div className="bg-purple-50/90 border border-purple-300 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 font-black font-mono text-sm">
@@ -1185,18 +1201,20 @@ export default function TabMainView({
           })}
 
           {/* Mode Ronde d'Inspection Système Général Button */}
-          <button
-            type="button"
-            onClick={() => setShowSystemGeneralRoundModal(true)}
-            className="ml-auto h-7 px-3 rounded-lg text-xs font-black bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition active:scale-95"
-            title="Lancer une Ronde d'Inspection Groupée (Sécurité Incendie, Air Comprimé, Eau, Utilités)"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5 text-indigo-100" />
-            <span>Mode Ronde (Système Général)</span>
-            <span className="px-1.5 py-0.2 rounded bg-white/20 text-white text-[10px] font-mono font-bold">
-              {assetClassCounts.sysGen}
-            </span>
-          </button>
+          {canExecutePreventive && (
+            <button
+              type="button"
+              onClick={() => setShowSystemGeneralRoundModal(true)}
+              className="ml-auto h-7 px-3 rounded-lg text-xs font-black bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition active:scale-95"
+              title="Lancer une Ronde d'Inspection Groupée (Sécurité Incendie, Air Comprimé, Eau, Utilités)"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-indigo-100" />
+              <span>Mode Ronde (Système Général)</span>
+              <span className="px-1.5 py-0.2 rounded bg-white/20 text-white text-[10px] font-mono font-bold">
+                {assetClassCounts.sysGen}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* QUICK STATUS PRESETS BAR (Bandeau Statut Rapide) */}
@@ -1617,8 +1635,9 @@ export default function TabMainView({
       {viewMode === 'monthly_grid' && (
         <MonthlyDayMatrixView
           tasks={filteredTasks}
-          onOpenValidate={handleOpenValidate}
-          onOpenCorrective={handleOpenCorrective}
+          machines={machines}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
+          onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
@@ -1634,7 +1653,7 @@ export default function TabMainView({
           weekRange={weekRange}
           onWeekRangeChange={setWeekRange}
           currentWeekNumber={currentWeekNumber}
-          onOpenValidate={handleOpenValidate}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
@@ -1647,8 +1666,8 @@ export default function TabMainView({
         <GroupedMachinesView
           tasks={filteredTasks}
           machines={machines}
-          onOpenValidate={handleOpenValidate}
-          onOpenCorrective={handleOpenCorrective}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
+          onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onNavigateToMachine={_onNavigateToMachine}
           onSwitchView={(mode) => setViewMode(mode)}
@@ -1660,8 +1679,8 @@ export default function TabMainView({
         <MonthlyCalendarView
           tasks={filteredTasks}
           machines={machines}
-          onOpenValidate={handleOpenValidate}
-          onOpenCorrective={handleOpenCorrective}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
+          onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onSwitchView={(mode) => setViewMode(mode)}
         />
@@ -1672,8 +1691,8 @@ export default function TabMainView({
         <DetailedTaskListView
           tasks={filteredTasks}
           machines={machines}
-          onOpenValidate={handleOpenValidate}
-          onOpenCorrective={handleOpenCorrective}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
+          onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
