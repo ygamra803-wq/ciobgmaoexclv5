@@ -17,13 +17,20 @@ import {
   PackageCheck,
   Users,
   Factory,
+  Filter,
+  Flame,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   MonthlyReportCalculationService,
   type MonthOverMonthDelta,
+  type ReportAssetClassFilter,
 } from '../../../application/services/MonthlyReportCalculationService';
 import { MonthlyReportExportService } from '../../../services/monthlyReportExportService';
 import { normalizeDateToYMD } from '../../../utils/datePeriodUtils';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 
 interface MonthlyExecutiveReportViewProps {
   stockItems?: any[];
@@ -31,6 +38,7 @@ interface MonthlyExecutiveReportViewProps {
   correctiveInterventions?: any[];
   preventiveTasks?: any[];
   preventiveExecutions?: any[];
+  sortiesExterne?: any[];
   machines?: any[];
   onNavigateToTab?: (tab: string) => void;
   showToast?: (msg: string, type?: string) => void;
@@ -85,10 +93,24 @@ export default function MonthlyExecutiveReportView({
   correctiveInterventions = [],
   preventiveTasks = [],
   preventiveExecutions = [],
-  machines = [],
+  sortiesExterne: propSortiesExterne,
+  machines: propMachines,
   onNavigateToTab,
   showToast,
 }: MonthlyExecutiveReportViewProps) {
+  const { user } = useAuth();
+  const canViewReport =
+    Boolean(user) && AuthorizationService.canAccessTab(user, 'executive_report');
+  const canExportReport =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'report.export');
+
+  const storeSortiesExterne = useGmaoStore((s) => s.sortiesExterne || []);
+  const storeMachines = useGmaoStore((s) => s.machines || []);
+  const sortiesExterne = propSortiesExterne ?? storeSortiesExterne;
+  const machines = propMachines && propMachines.length > 0 ? propMachines : storeMachines;
+
+  const [assetClass, setAssetClass] = useState<ReportAssetClassFilter>('ALL');
+
   // Detect most recent active data month or default to current YYYY-MM
   const detectedActiveMonths = useMemo(() => {
     const months = new Set<string>();
@@ -125,24 +147,31 @@ export default function MonthlyExecutiveReportView({
   const comparison = useMemo(() => {
     return MonthlyReportCalculationService.calculateMonthOverMonthComparison({
       month: selectedMonth,
+      assetClass,
       stockItems,
       mouvements,
       correctiveInterventions,
       preventiveTasks,
       preventiveExecutions,
+      sortiesExterne,
+      machines,
     });
   }, [
     selectedMonth,
+    assetClass,
     stockItems,
     mouvements,
     correctiveInterventions,
     preventiveTasks,
     preventiveExecutions,
+    sortiesExterne,
+    machines,
   ]);
 
   const { currentReport, previousMonth } = comparison;
 
   const handleExportExcel = () => {
+    if (!canExportReport) return;
     try {
       const file = MonthlyReportExportService.exportMonthlyReportToExcel(comparison, {
         mouvements,
@@ -174,76 +203,137 @@ export default function MonthlyExecutiveReportView({
     return [...ruptures, ...alertes].slice(0, 10);
   }, [currentReport]);
 
+  if (!canViewReport) {
+    return (
+      <div className="p-8 bg-white rounded-2xl border border-rose-200 text-center space-y-3 max-w-lg mx-auto mt-10">
+        <ShieldAlert className="w-10 h-10 text-rose-600 mx-auto" />
+        <h2 className="text-lg font-black text-slate-900">Accès Restreint</h2>
+        <p className="text-xs text-slate-600">
+          Le Rapport Mensuel Exécutif est réservé aux profils Direction, Responsables et Observateurs autorisés.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-[2200px] mx-auto pb-14 print:p-0 print:space-y-4">
       {/* Top Executive Header & Controls */}
-      <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 print:shadow-none print:border-b-2 print:border-slate-900 print:rounded-none">
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0 print:hidden">
-            <FileBarChart2 className="w-6 h-6 text-indigo-700" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                Rapport Mensuel Exécutif — Direction d’Usine
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
-                Période : {selectedMonth}
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                Comparé à {previousMonth}
-              </span>
+      <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.08)] space-y-4 print:shadow-none print:border-b-2 print:border-slate-900 print:rounded-none">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0 print:hidden">
+              <FileBarChart2 className="w-6 h-6 text-indigo-700" />
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Synthèse financière du stock, discipline préventive, fiabilité (MTBF/MTTR/OEE) et liste d’achat prioritaire.
-            </p>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                  Rapport Mensuel Exécutif — Direction d’Usine
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
+                  Période : {selectedMonth}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                  Comparé à {previousMonth}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Synthèse financière du stock, coûts officiels (BT + PM + Bobinage), discipline préventive, fiabilité Production (MTBF/MTTR/OEE) et liste d’achat prioritaire.
+              </p>
+            </div>
+          </div>
+
+          {/* Period Picker + Print PDF + Export Excel */}
+          <div className="flex flex-wrap items-center gap-2.5 print:hidden">
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <Calendar className="w-4 h-4 text-slate-500 ml-2" />
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
+                aria-label="Mois du rapport"
+                className="bg-white px-2.5 py-1 rounded-lg text-xs font-mono font-bold text-slate-800 border border-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+              {detectedActiveMonths.slice(0, 3).map((ym) => (
+                <button
+                  key={ym}
+                  type="button"
+                  onClick={() => setSelectedMonth(ym)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition cursor-pointer ${
+                    selectedMonth === ym
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:bg-slate-200/70'
+                  }`}
+                >
+                  {ym}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={handlePrintPdf}
+              className="h-9 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition cursor-pointer active:scale-95"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Imprimer / PDF</span>
+            </button>
+
+            {canExportReport && (
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition cursor-pointer active:scale-95"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Excel Mensuel (6 Feuilles)</span>
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Period Picker + Print PDF + Export Excel */}
-        <div className="flex flex-wrap items-center gap-2.5 print:hidden">
+        {/* Asset Class Filter Strip */}
+        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 print:hidden">
           <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <Calendar className="w-4 h-4 text-slate-500 ml-2" />
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => e.target.value && setSelectedMonth(e.target.value)}
-              aria-label="Mois du rapport"
-              className="bg-white px-2.5 py-1 rounded-lg text-xs font-mono font-bold text-slate-800 border border-slate-200 focus:outline-none focus:border-indigo-500"
-            />
-            {detectedActiveMonths.slice(0, 3).map((ym) => (
+            <Filter className="w-3.5 h-3.5 text-slate-500 ml-2 mr-1" />
+            {(
+              [
+                { id: 'ALL', label: 'Tous les actifs' },
+                { id: 'PRODUCTION', label: 'Production uniquement' },
+                { id: 'SYSTEM_GENERAL', label: 'Système Général' },
+              ] as Array<{ id: ReportAssetClassFilter; label: string }>
+            ).map((opt) => (
               <button
-                key={ym}
+                key={opt.id}
                 type="button"
-                onClick={() => setSelectedMonth(ym)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold transition cursor-pointer ${
-                  selectedMonth === ym
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-200/70'
+                onClick={() => setAssetClass(opt.id)}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  assetClass === opt.id
+                    ? opt.id === 'SYSTEM_GENERAL'
+                      ? 'bg-amber-600 text-white shadow-2xs'
+                      : 'bg-indigo-600 text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-white/60'
                 }`}
               >
-                {ym}
+                {opt.label}
               </button>
             ))}
           </div>
 
-          <button
-            type="button"
-            onClick={handlePrintPdf}
-            className="h-9 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition cursor-pointer active:scale-95"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Imprimer / PDF</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleExportExcel}
-            className="h-9 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs transition cursor-pointer active:scale-95"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Excel Mensuel (5 Feuilles)</span>
-          </button>
+          <div className="flex items-center gap-3 text-xs font-mono text-slate-600">
+            <span>
+              Coût Total Maintenance Officiel ({selectedMonth}) :{' '}
+              <strong className="text-slate-900 font-black">
+                {currentReport.totalOfficialMaintenanceCost.toLocaleString('fr-FR')} DT
+              </strong>
+            </span>
+            {comparison.totalOfficialCostDelta && (
+              <DeltaBadge
+                delta={comparison.totalOfficialCostDelta}
+                invertGoodBad={true}
+                unit=" DT"
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -672,6 +762,117 @@ export default function MonthlyExecutiveReportView({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Section C1: Official Machine Cost Breakdown (BT + PM + Bobinage Externe) */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2">
+            <Factory className="w-4 h-4 text-emerald-700" />
+            <div>
+              <h2 className="text-xs font-black uppercase tracking-wider text-slate-900">
+                Ventilation des Coûts Officiels par Équipement (C1 : BT + PM + Bobinage Externe)
+              </h2>
+              <p className="text-[11px] text-slate-500">
+                Synthèse financière mensuelle consolidée par machine active (hors déclarations terrain non validées).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono font-black">
+              Total C1 ({selectedMonth}) : {(currentReport.totalOfficialMaintenanceCost ?? 0).toLocaleString()} DT
+            </span>
+            {onNavigateToTab && (
+              <button
+                type="button"
+                onClick={() => onNavigateToTab('machines')}
+                className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1 cursor-pointer print:hidden"
+              >
+                <span>Parc Machines</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!currentReport.machineCostBreakdown || currentReport.machineCostBreakdown.length === 0 ? (
+          <div className="py-6 text-center text-xs text-slate-400">
+            Aucun coût officiel (BT approuvé, exécution PM validée ou bobinage externe) enregistré sur {selectedMonth}.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 text-[10px] font-extrabold uppercase text-slate-500">
+                  <th className="py-2 px-2">Code</th>
+                  <th className="py-2 px-2">Désignation Équipement</th>
+                  <th className="py-2 px-2">Classe</th>
+                  <th className="py-2 px-2 text-right">BT / Arrêt</th>
+                  <th className="py-2 px-2 text-right">Coût PDR BT</th>
+                  <th className="py-2 px-2 text-right">Coût PM</th>
+                  <th className="py-2 px-2 text-right">Bobinage Ext.</th>
+                  <th className="py-2 px-2 text-right">Total Officiel (C1)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {currentReport.machineCostBreakdown.slice(0, 12).map((m) => (
+                  <tr key={m.machineCode} className="hover:bg-slate-50">
+                    <td className="py-2 px-2 font-mono font-bold text-slate-900">{m.machineCode}</td>
+                    <td className="py-2 px-2 font-semibold text-slate-700 truncate max-w-[220px]" title={m.machineName}>
+                      {m.machineName}
+                    </td>
+                    <td className="py-2 px-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border ${
+                          m.assetClass === 'SYSTEM_GENERAL'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        }`}
+                      >
+                        {m.assetClass === 'SYSTEM_GENERAL' ? 'SYS. GÉNÉRAL' : 'PRODUCTION'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono text-slate-700">
+                      <span className="font-bold text-slate-900">{m.failureCount}</span> BT
+                      {m.totalDowntimeHours > 0 ? ` (${m.totalDowntimeHours}h)` : ''}
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono text-slate-700">
+                      {m.correctivePdrCost.toLocaleString()} DT
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono text-slate-700">
+                      {m.preventiveCost.toLocaleString()} DT
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono text-slate-700">
+                      {m.externalBobinageCost.toLocaleString()} DT
+                    </td>
+                    <td className="py-2 px-2 text-right font-mono font-black text-emerald-800">
+                      {m.totalOfficialCost.toLocaleString()} DT
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-50 font-mono text-xs font-black text-slate-900">
+                  <td colSpan={4} className="py-2.5 px-2">
+                    TOTAL CONSOLIDÉ ({currentReport.machineCostBreakdown.length} équipement(s))
+                  </td>
+                  <td className="py-2.5 px-2 text-right">
+                    {currentReport.correctiveSparesCost.toLocaleString()} DT
+                  </td>
+                  <td className="py-2.5 px-2 text-right">
+                    {currentReport.preventiveTotalCost.toLocaleString()} DT
+                  </td>
+                  <td className="py-2.5 px-2 text-right">
+                    {(currentReport.externalBobinageTotalCost ?? 0).toLocaleString()} DT
+                  </td>
+                  <td className="py-2.5 px-2 text-right text-emerald-800">
+                    {(currentReport.totalOfficialMaintenanceCost ?? 0).toLocaleString()} DT
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Print-Only Official Signature Block (P2.2) */}

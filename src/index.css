@@ -256,3 +256,73 @@
   padding-bottom: 0.35rem !important;
   line-height: 1.25 !important;
 }
+
+/* =========================================================================
+   CANONICAL PAGE & DOMAIN ICON COLOR REGISTRY (SSOT PER ICON SHAPE)
+   Ensures every page/entity icon shape maintains its single official
+   identity color everywhere in the application without code duplication.
+   ========================================================================= */
+
+/* 1. Dashboard & Executive Analytics (Blue) */
+svg.lucide-layout-dashboard:not(.text-white),
+svg.lucide-file-bar-chart-2:not(.text-white),
+svg.gmao-icon-part-info:not(.text-white) {
+  color: #2563eb !important;
+}
+
+/* 2. Stock PDR & Types PDR (Cyan) */
+svg.lucide-package:not(.text-white),
+svg.lucide-tag:not(.text-white),
+svg.gmao-icon-hub:not(.text-white) {
+  color: #0891b2 !important;
+}
+
+/* 3. Machines Registered, Types Parts & Nexus Matrix (Emerald) */
+svg.lucide-factory:not(.text-white),
+svg.lucide-git-branch:not(.text-white),
+svg.lucide-layers:not(.text-white),
+svg.gmao-icon-layers:not(.text-white) {
+  color: #059669 !important;
+}
+
+/* 4. Preventive Planning, Entrepôt, Blueprints, Groupes, Désignations & Utilisateurs (Indigo) */
+svg.lucide-calendar:not(.text-white),
+svg.lucide-calendar-days:not(.text-white),
+svg.lucide-warehouse:not(.text-white),
+svg.lucide-boxes:not(.text-white),
+svg.lucide-fingerprint-pattern:not(.text-white),
+svg.gmao-icon-blueprint-plus:not(.text-white),
+svg.lucide-badge-check:not(.text-white),
+svg.lucide-users:not(.text-white),
+svg.lucide-user-check:not(.text-white),
+svg.gmao-icon-supervisor:not(.text-white) {
+  color: #4f46e5 !important;
+}
+
+/* 5. Corrective Maintenance, Catalogue, Machine/Comp Templates & Guide (Amber) */
+svg.lucide-wrench:not(.text-white),
+svg.lucide-database:not(.text-white),
+svg.lucide-book-open:not(.text-white),
+svg.gmao-icon-category:not(.text-white),
+svg.gmao-icon-category-plus:not(.text-white),
+svg.gmao-icon-spoke:not(.text-white) {
+  color: #d97706 !important;
+}
+
+/* 6. Zones & Ateliers, Preventive Engineering & Component Templates (Purple) */
+svg.lucide-map-pin:not(.text-white),
+svg.lucide-settings-2:not(.text-white),
+svg.gmao-icon-cube:not(.text-white),
+svg.gmao-icon-cube-plus:not(.text-white) {
+  color: #9333ea !important;
+}
+
+/* Contrast Guard: Keep icons white when rendered inside solid dark/colored buttons */
+.text-white > svg.lucide,
+.text-white > svg[class*="gmao-icon-"],
+.bg-accent-main svg.lucide,
+.bg-accent-main svg[class*="gmao-icon-"],
+.btn-primary-accent svg.lucide,
+.btn-primary-accent svg[class*="gmao-icon-"] {
+  color: #ffffff !important;
+}

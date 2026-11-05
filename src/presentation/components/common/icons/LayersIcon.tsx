@@ -16,7 +16,7 @@ export function LayersIcon({
       width={size || 24}
       height={size || 24}
       fill={color}
-      className={className}
+      className={`gmao-icon-layers ${className}`.trim()}
       {...props}
     >
       <path d="M480-118 120-398l66-50 294 228 294-228 66 50-360 280Zm0-202L120-600l360-280 360 280-360 280Zm0-280Zm0 178 230-178-230-178-230 178 230 178Z" />

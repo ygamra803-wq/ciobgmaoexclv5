@@ -15,7 +15,7 @@ export function CategoryPlusIcon({
       viewBox="0 0 24 24"
       width={size || 24}
       height={size || 24}
-      className={className}
+      className={`gmao-icon-category-plus ${className}`.trim()}
       {...props}
     >
       {/* Triangle at top */}

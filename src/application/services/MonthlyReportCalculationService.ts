@@ -49,6 +49,7 @@ export interface TechnicianMonthlySummary {
 
 export interface MonthlyFactoryReportData {
   periodMonth: string; // 'YYYY-MM'
+  assetClassFilter?: ReportAssetClassFilter;
   
   // 1. Inventory & Valuation
   stockValuationTotal: number;
@@ -77,7 +78,7 @@ export interface MonthlyFactoryReportData {
   mttrFormatted: string;
   mtbfHours: number;
   availabilityRate: number;
-  topFailingMachines: FailingMachineSummary[];
+  topFailingMachines: Array<FailingMachineSummary & { assetClass?: 'PRODUCTION' | 'SYSTEM_GENERAL' }>;
 
   // 4. Preventive Maintenance Discipline & Technician Breakdown
   preventiveScheduledCount: number;
@@ -87,9 +88,11 @@ export interface MonthlyFactoryReportData {
   preventiveLaborHours: number;
   technicianBreakdown: TechnicianMonthlySummary[];
 
-  // 5. External Subcontracting / Bobinage (Sorties Externe)
-  externalBobinageCount?: number;
-  externalBobinageCost?: number;
+  // 5. External Subcontracting / Bobinage (Sorties Externe) & C1 Total Official Maintenance Cost
+  externalBobinageCount: number;
+  externalBobinageCost: number;
+  totalOfficialMaintenanceCost: number;
+  machineCostBreakdown: MachineOfficialCostRow[];
 }
 
 export interface MonthOverMonthDelta {
@@ -108,6 +111,7 @@ export interface MonthOverMonthComparison {
   downtimeHoursDelta: MonthOverMonthDelta;
   preventiveDisciplineDelta: MonthOverMonthDelta;
   stockValuationDelta: MonthOverMonthDelta;
+  totalOfficialCostDelta?: MonthOverMonthDelta;
 }
 
 export class MonthlyReportCalculationService {
@@ -116,6 +120,7 @@ export class MonthlyReportCalculationService {
    */
   static calculateMonthlyReport({
     month,
+    assetClass = 'ALL',
     stockItems = [],
     mouvements = [],
     correctiveInterventions = [],
@@ -125,6 +130,7 @@ export class MonthlyReportCalculationService {
     machines = [],
   }: {
     month: string;
+    assetClass?: ReportAssetClassFilter;
     stockItems?: any[];
     mouvements?: any[];
     correctiveInterventions?: any[];
@@ -134,6 +140,75 @@ export class MonthlyReportCalculationService {
     machines?: any[];
   }): MonthlyFactoryReportData {
     const targetMonth = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+
+    // Build Machine Lookup Map from SSOT
+    const activeMachinesList = filterActiveMachines(machines || []);
+    const activeProductionMachines = filterProductionMachines(machines || []);
+    const activeMachineCodes = new Set<string>();
+    activeMachinesList.forEach((m) => {
+      [m?.id_machine_registered, m?.id, m?.code, m?.id_machine, m?.code_machine]
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((code) => activeMachineCodes.add(code));
+    });
+
+    const allRegisteredMachineCodes = new Set<string>();
+    const machineInfoMap = new Map<
+      string,
+      { code: string; name: string; assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL'; isActive: boolean }
+    >();
+
+    (machines || []).forEach((m) => {
+      if (!m) return;
+      const rawCodes = [m.id_machine_registered, m.id, m.code, m.id_machine, m.code_machine]
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean);
+      if (rawCodes.length === 0) return;
+      const mClass = getMachineAssetClass(m);
+      const mName = String(m.nom || m.designation || m.name || rawCodes[0]).trim();
+      const isAct = rawCodes.some((c) => activeMachineCodes.has(c));
+      rawCodes.forEach((c) => {
+        allRegisteredMachineCodes.add(c);
+        machineInfoMap.set(c, { code: rawCodes[0], name: mName, assetClass: mClass, isActive: isAct });
+      });
+    });
+
+    const resolveRecordAssetMeta = (record: any, primaryField?: string) => {
+      const explicitClass = String(record?.asset_class || '').trim().toUpperCase();
+      const rawCode = String(
+        (primaryField ? record?.[primaryField] : '') ||
+          record?.code_machine ||
+          record?.id_machine ||
+          record?.machineCode ||
+          record?.id_machine_registered ||
+          record?.machine ||
+          ''
+      )
+        .trim()
+        .toUpperCase();
+      const info = rawCode ? machineInfoMap.get(rawCode) : undefined;
+      const resolvedClass: 'PRODUCTION' | 'SYSTEM_GENERAL' =
+        explicitClass === 'SYSTEM_GENERAL'
+          ? 'SYSTEM_GENERAL'
+          : explicitClass === 'PRODUCTION'
+          ? 'PRODUCTION'
+          : info?.assetClass || 'PRODUCTION';
+      const isArchived =
+        allRegisteredMachineCodes.size > 0 &&
+        Boolean(rawCode && allRegisteredMachineCodes.has(rawCode) && !activeMachineCodes.has(rawCode));
+
+      return {
+        assetClass: resolvedClass,
+        machineCode: info?.code || rawCode || 'GLOBAL',
+        machineName: String(info?.name || record?.nom_machine || record?.machineName || rawCode || 'GLOBAL'),
+        isArchived,
+      };
+    };
+
+    const matchesClassFilter = (recClass: 'PRODUCTION' | 'SYSTEM_GENERAL'): boolean => {
+      if (!assetClass || assetClass === 'ALL') return true;
+      return recClass === assetClass;
+    };
 
     // =========================================================================
     // 1. Inventory Valuation & Alerts
@@ -149,7 +224,7 @@ export class MonthlyReportCalculationService {
       const ref = String(item.ref || item.reference || item.code_article || 'REF').trim();
       const stock = Number(item.stockActuel ?? item.stock ?? item.stockInitial ?? 0);
       const seuil = Number(item.seuil ?? item.stockMin ?? 5);
-      const price = Number(item.prix_unitaire ?? item.prix_achat_ht ?? item.prix ?? item.unitPrice ?? 0);
+      const price = Number(item.prix_unitaire ?? item.prixUnitaire ?? item.prix_achat_ht ?? item.prix ?? item.unitPrice ?? 0);
 
       if (ref && price > 0) {
         stockPriceMap.set(ref.toUpperCase(), price);
@@ -190,6 +265,7 @@ export class MonthlyReportCalculationService {
     const consumedPartsMap = new Map<string, ConsumedPartSummary>();
 
     (mouvements || []).forEach((m) => {
+      if (!m || isUnapprovedFieldClaim(m)) return;
       const typeStr = String(m.type || '').trim().toLowerCase();
       const ref = String(m.ref || m.reference || m.id_article || 'PDR').trim();
       const fallbackPrice = stockPriceMap.get(ref.toUpperCase()) || 0;
@@ -210,6 +286,9 @@ export class MonthlyReportCalculationService {
 
       const mDate = normalizeDateToYMD(m.date);
       if (!mDate || !mDate.startsWith(targetMonth)) return;
+
+      const meta = resolveRecordAssetMeta(m, 'id_machine_registered');
+      if (!matchesClassFilter(meta.assetClass)) return;
 
       const isSortie = typeStr.includes('sortie') || typeStr === 'out';
       const isEntree = typeStr.includes('entrée') || typeStr.includes('entree') || typeStr === 'in';
@@ -250,9 +329,41 @@ export class MonthlyReportCalculationService {
     let correctiveInProgressCount = 0;
     let totalDowntimeHours = 0;
     let correctiveSparesCost = 0;
-    const machineFailuresMap = new Map<string, FailingMachineSummary>();
+    const machineFailuresMap = new Map<
+      string,
+      FailingMachineSummary & { assetClass?: 'PRODUCTION' | 'SYSTEM_GENERAL' }
+    >();
+    const machineCostMap = new Map<string, MachineOfficialCostRow>();
+    const ensureMachineCostRow = (meta: {
+      machineCode: string;
+      machineName: string;
+      assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL';
+    }): MachineOfficialCostRow => {
+      const code = meta.machineCode || 'GLOBAL';
+      let row = machineCostMap.get(code);
+      if (!row) {
+        row = {
+          machineCode: code,
+          machineName: meta.machineName || code,
+          assetClass: meta.assetClass,
+          failureCount: 0,
+          correctiveCount: 0,
+          correctiveCost: 0,
+          correctivePdrCost: 0,
+          preventiveCount: 0,
+          preventiveCost: 0,
+          externalBobinageCount: 0,
+          externalBobinageCost: 0,
+          totalOfficialCost: 0,
+          totalDowntimeHours: 0,
+        };
+        machineCostMap.set(code, row);
+      }
+      return row;
+    };
+
     const techMap = new Map<string, TechnicianMonthlySummary>();
-    const monthCorrectiveList: any[] = [];
+    const productionCorrectiveList: any[] = [];
 
     const ensureTech = (rawName: unknown): TechnicianMonthlySummary => {
       const name = String(rawName || 'Non assigné').trim() || 'Non assigné';
@@ -266,7 +377,10 @@ export class MonthlyReportCalculationService {
 
     (correctiveInterventions || []).forEach((ci) => {
       if (!ci || isUnapprovedFieldClaim(ci)) return;
+      const status = String(ci.statut || ci.etat || '').toUpperCase();
+      const isClosed = status === 'CLOTURE' || status === 'FERME' || status === 'TERMINE';
       const ciDate = normalizeDateToYMD(
+        (isClosed ? ci.date_cloture || ci.date_fin || ci.validated_at : '') ||
         ci.date_demande ||
         ci.demande_date ||
         ci.date ||
@@ -277,10 +391,17 @@ export class MonthlyReportCalculationService {
       );
       if (!ciDate || !ciDate.startsWith(targetMonth)) return;
 
-      monthCorrectiveList.push(ci);
+      const meta = resolveRecordAssetMeta(ci, 'code_machine');
+
+      // Isolate active PRODUCTION interventions for MTBF / MTTR / Availability
+      if (meta.assetClass === 'PRODUCTION' && !meta.isArchived) {
+        productionCorrectiveList.push(ci);
+      }
+
+      if (!matchesClassFilter(meta.assetClass)) return;
+
       correctiveCount++;
-      const status = String(ci.statut || ci.etat || '').toUpperCase();
-      if (status === 'CLOTURE' || status === 'FERME' || status === 'TERMINE') {
+      if (isClosed) {
         correctiveClosedCount++;
       } else {
         correctiveInProgressCount++;
@@ -314,9 +435,10 @@ export class MonthlyReportCalculationService {
       }
 
       // Spares cost calculation (supports explicit cost, multi-PDR pieces_utilisees, or single pdr_ref)
+      let btOfficialCost = 0;
       const explicitCost = Number(ci.pdr_cost ?? ci.cout_pdr ?? ci.cout_total ?? 0);
       if (Number.isFinite(explicitCost) && explicitCost > 0) {
-        correctiveSparesCost += explicitCost;
+        btOfficialCost = explicitCost;
       } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
         ci.pieces_utilisees.forEach((p: any) => {
           const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
@@ -325,7 +447,7 @@ export class MonthlyReportCalculationService {
             Number(p?.prix_unitaire ?? p?.prix ?? 0) ||
             (pRef ? stockPriceMap.get(pRef) || 0 : 0);
           if (pQty > 0 && pPrice > 0) {
-            correctiveSparesCost += pQty * pPrice;
+            btOfficialCost += pQty * pPrice;
           }
         });
       } else {
@@ -335,8 +457,23 @@ export class MonthlyReportCalculationService {
           Number(ci.pdr_prix ?? ci.prix_unitaire ?? 0) ||
           (pdrRef ? stockPriceMap.get(pdrRef) || 0 : 0);
         if (qty > 0 && unitPrice > 0) {
-          correctiveSparesCost += qty * unitPrice;
+          btOfficialCost = qty * unitPrice;
         }
+      }
+      correctiveSparesCost += btOfficialCost;
+
+      if (!meta.isArchived) {
+        const costRow = ensureMachineCostRow(meta);
+        costRow.failureCount++;
+        costRow.correctiveCount++;
+        costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
+        costRow.correctivePdrCost = costRow.correctiveCost;
+        costRow.totalDowntimeHours = Number(
+          (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
+        );
+        costRow.totalOfficialCost = Number(
+          (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+        );
       }
 
       // Track technician corrective workload
@@ -347,19 +484,21 @@ export class MonthlyReportCalculationService {
         tEntry.totalHours = Number((tEntry.totalHours + workMins / 60).toFixed(1));
       }
 
-      // Track failing machines
-      const mCode = String(ci.code_machine || ci.id_machine || 'GLOBAL').trim().toUpperCase();
-      const existingM = machineFailuresMap.get(mCode);
-      if (existingM) {
-        existingM.failureCount++;
-        existingM.totalDowntimeHours = Number((existingM.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1));
-      } else {
-        machineFailuresMap.set(mCode, {
-          machineCode: mCode,
-          machineName: String(ci.nom_machine || mCode),
-          failureCount: 1,
-          totalDowntimeHours: Number((dtHours > 0 ? dtHours : 0).toFixed(1)),
-        });
+      // Track failing machines (excluding archived machines)
+      if (!meta.isArchived) {
+        const existingM = machineFailuresMap.get(meta.machineCode);
+        if (existingM) {
+          existingM.failureCount++;
+          existingM.totalDowntimeHours = Number((existingM.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1));
+        } else {
+          machineFailuresMap.set(meta.machineCode, {
+            machineCode: meta.machineCode,
+            machineName: meta.machineName,
+            assetClass: meta.assetClass,
+            failureCount: 1,
+            totalDowntimeHours: Number((dtHours > 0 ? dtHours : 0).toFixed(1)),
+          });
+        }
       }
     });
 
@@ -367,28 +506,38 @@ export class MonthlyReportCalculationService {
       .sort((a, b) => b.failureCount - a.failureCount || b.totalDowntimeHours - a.totalDowntimeHours)
       .slice(0, 3);
 
-    const activeProductionMachines = filterProductionMachines(machines || []);
-    const activeMachinesList = filterActiveMachines(machines || []);
     const activeMachinesCount = Math.max(
       1,
       activeProductionMachines.length || activeMachinesList.length || machineFailuresMap.size || 1
     );
     const scheduledPlantHours = activeMachinesCount * 160;
-    const mttrHours = AvailabilityCalculationService.calculateMTTR(monthCorrectiveList);
-    const mttrFormatted = AvailabilityCalculationService.formatMTTR(monthCorrectiveList);
-    const mtbfHours = AvailabilityCalculationService.calculateMTBF(monthCorrectiveList, scheduledPlantHours);
-    const availabilityRate = AvailabilityCalculationService.calculateAvailability(monthCorrectiveList, scheduledPlantHours);
+    const mttrHours = AvailabilityCalculationService.calculateMTTR(productionCorrectiveList);
+    const mttrFormatted = AvailabilityCalculationService.formatMTTR(productionCorrectiveList);
+    const mtbfHours = AvailabilityCalculationService.calculateMTBF(productionCorrectiveList, scheduledPlantHours);
+    const availabilityRate = AvailabilityCalculationService.calculateAvailability(productionCorrectiveList, scheduledPlantHours);
 
     // =========================================================================
     // 4. Preventive Maintenance Discipline & Technician Distribution
     // =========================================================================
     const monthExecutions = (preventiveExecutions || []).filter((e) => {
       if (!e || isUnapprovedFieldClaim(e)) return false;
+      const meta = resolveRecordAssetMeta(e, 'machineCode');
+      if (!matchesClassFilter(meta.assetClass)) return false;
       const eDate = normalizeDateToYMD(e.executedAt);
       return (e.periodMonth && e.periodMonth === targetMonth) || (eDate && eDate.startsWith(targetMonth));
     });
 
     monthExecutions.forEach((exec) => {
+      const meta = resolveRecordAssetMeta(exec, 'machineCode');
+      const exOfficialCost = Number(exec.totalCost ?? (exec as any).sparesCost ?? 0) || 0;
+      if (!meta.isArchived) {
+        const costRow = ensureMachineCostRow(meta);
+        costRow.preventiveCount++;
+        costRow.preventiveCost = Number((costRow.preventiveCost + exOfficialCost).toFixed(2));
+        costRow.totalOfficialCost = Number(
+          (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+        );
+      }
       const tEntry = ensureTech(exec.executorName || 'Technicien');
       tEntry.preventiveCount++;
       tEntry.totalHours = Number((tEntry.totalHours + (Number(exec.durationMinutes) || 30) / 60).toFixed(1));
@@ -403,11 +552,6 @@ export class MonthlyReportCalculationService {
     const totalMinutes = monthExecutions.reduce((sum, e) => sum + (Number(e.durationMinutes) || 0), 0);
     const preventiveLaborHours = Number((totalMinutes / 60).toFixed(1));
 
-    const activeMachineCodes = new Set(
-      activeMachinesList
-        .map((m) => String(m?.id_machine_registered || m?.id || m?.code_machine || '').trim().toUpperCase())
-        .filter(Boolean)
-    );
     const hasRegisteredMachines = (machines || []).length > 0;
 
     const scheduledTasksForMonth = (preventiveTasks || []).filter((t) => {
@@ -416,14 +560,11 @@ export class MonthlyReportCalculationService {
       const st = String(t.statut || t.status || '').trim().toUpperCase();
       if (st === 'ARCHIVE' || st === 'ARCHIVEE' || st === 'INACTIF' || st === 'ANNULE') return false;
 
-      if (hasRegisteredMachines) {
-        const mCode = String(t.code_machine || t.id_machine || t.machineCode || '').trim().toUpperCase();
-        if (mCode && !activeMachineCodes.has(mCode)) {
-          const existsInAll = (machines || []).some(
-            (m) => String(m?.id_machine_registered || m?.id || m?.code_machine || '').trim().toUpperCase() === mCode
-          );
-          if (existsInAll) return false;
-        }
+      const meta = resolveRecordAssetMeta(t, 'code_machine');
+      if (!matchesClassFilter(meta.assetClass)) return false;
+
+      if (hasRegisteredMachines && meta.isArchived) {
+        return false;
       }
 
       if (t.periodMonth && String(t.periodMonth).trim() !== targetMonth) {
@@ -454,18 +595,50 @@ export class MonthlyReportCalculationService {
     let externalBobinageCount = 0;
     let externalBobinageCost = 0;
     (sortiesExterne || []).forEach((se) => {
-      if (!se) return;
+      if (!se || isUnapprovedFieldClaim(se)) return;
       const seDate = normalizeDateToYMD(
-        se.date_montage || se.date_arrivee_reelle || se.date_expedition || se.date_demontage || se.created_at
+        se.date_montage ||
+          se.date_arrivee_reelle ||
+          se.date_retour ||
+          se.date_expedition ||
+          se.date_sortie ||
+          se.date_demontage ||
+          se.date ||
+          se.created_at
       );
       if (seDate && seDate.startsWith(targetMonth)) {
+        const meta = resolveRecordAssetMeta(se, 'id_machine');
+        if (!matchesClassFilter(meta.assetClass)) return;
+        const extCost =
+          Number(se.cout_bobinage ?? se.cout_reparation ?? se.cout ?? se.montant ?? 0) || 0;
         externalBobinageCount++;
-        externalBobinageCost += Number(se.cout_bobinage || 0) || 0;
+        externalBobinageCost += extCost;
+        if (!meta.isArchived) {
+          const costRow = ensureMachineCostRow(meta);
+          costRow.externalBobinageCount++;
+          costRow.externalBobinageCost = Number((costRow.externalBobinageCost + extCost).toFixed(2));
+          costRow.totalOfficialCost = Number(
+            (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+          );
+        }
       }
     });
 
+    const machineCostBreakdown = Array.from(machineCostMap.values()).sort(
+      (a, b) =>
+        b.totalOfficialCost - a.totalOfficialCost ||
+        b.correctiveCount + b.preventiveCount + b.externalBobinageCount -
+          (a.correctiveCount + a.preventiveCount + a.externalBobinageCount) ||
+        b.totalDowntimeHours - a.totalDowntimeHours
+    );
+
+    const totalOfficialMaintenanceCost = Number(
+      (correctiveSparesCost + preventiveTotalCost + externalBobinageCost).toFixed(2)
+    );
+
     return {
       periodMonth: targetMonth,
+      assetClassFilter: assetClass,
       stockValuationTotal: Number(stockValuationTotal.toFixed(2)),
       stockItemsCount: (stockItems || []).length,
       ruptureCount,
@@ -501,6 +674,8 @@ export class MonthlyReportCalculationService {
 
       externalBobinageCount,
       externalBobinageCost: Number(externalBobinageCost.toFixed(2)),
+      totalOfficialMaintenanceCost,
+      machineCostBreakdown,
     };
   }
 
@@ -547,11 +722,13 @@ export class MonthlyReportCalculationService {
    */
   static calculateMonthOverMonthComparison(params: {
     month: string;
+    assetClass?: ReportAssetClassFilter;
     stockItems?: any[];
     mouvements?: any[];
     correctiveInterventions?: any[];
     preventiveTasks?: any[];
     preventiveExecutions?: PreventiveExecutionRecord[];
+    sortiesExterne?: any[];
     machines?: any[];
   }): MonthOverMonthComparison {
     const currentMonth = params.month && /^\d{4}-\d{2}$/.test(params.month)
@@ -593,6 +770,10 @@ export class MonthlyReportCalculationService {
       stockValuationDelta: this.calculateDelta(
         currentReport.stockValuationTotal,
         previousReport.stockValuationTotal
+      ),
+      totalOfficialCostDelta: this.calculateDelta(
+        currentReport.totalOfficialMaintenanceCost,
+        previousReport.totalOfficialMaintenanceCost
       ),
     };
   }

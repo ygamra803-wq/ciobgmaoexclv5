@@ -1,6 +1,10 @@
 import * as XLSX from 'xlsx';
 import { normalizeDateToYMD } from '../utils/datePeriodUtils';
-import type { MonthOverMonthComparison } from '../application/services/MonthlyReportCalculationService';
+import {
+  isUnapprovedFieldClaim,
+  type MonthOverMonthComparison,
+  type ShiftOrWeeklyReportData,
+} from '../application/services/MonthlyReportCalculationService';
 
 export interface MonthlyExportRawData {
   mouvements?: any[];
@@ -8,14 +12,31 @@ export interface MonthlyExportRawData {
   preventiveExecutions?: any[];
 }
 
+function applyAutoFitColumns(ws: XLSX.WorkSheet, rows: any[][]): void {
+  if (!rows || rows.length === 0) return;
+  const maxCols = rows.reduce((max, r) => Math.max(max, Array.isArray(r) ? r.length : 0), 0);
+  const cols: XLSX.ColInfo[] = [];
+  for (let c = 0; c < maxCols; c++) {
+    let maxLen = 12;
+    for (let r = 0; r < rows.length; r++) {
+      const cell = rows[r]?.[c];
+      const len = cell !== null && cell !== undefined ? String(cell).length : 0;
+      if (len > maxLen) maxLen = len;
+    }
+    cols.push({ wch: Math.min(48, maxLen + 4) });
+  }
+  ws['!cols'] = cols;
+}
+
 export class MonthlyReportExportService {
   /**
    * Generates a multi-sheet Excel workbook (.xlsx) for the selected month (P2.2):
-   * 1. Synthese_Direction (KPIs + Month-over-Month Deltas + MTTR/MTBF/OEE)
-   * 2. Ruptures_et_Alertes (Critical stock shortages requiring immediate purchase)
-   * 3. Mouvements_du_Mois (Filtered movements in YYYY-MM)
-   * 4. Pannes_Correctives_Mois (Filtered corrective interventions in YYYY-MM)
-   * 5. Executions_Preventives (Filtered preventive executions in YYYY-MM)
+   * 1. Synthese_Direction (KPIs + Month-over-Month Deltas + MTTR/MTBF/OEE + C1 Costs)
+   * 2. Couts_Machines_C1 (Per-machine official costs: BT + PM + External Bobinage)
+   * 3. Ruptures_et_Alertes (Critical stock shortages requiring immediate purchase)
+   * 4. Mouvements_du_Mois (Filtered APPROVED movements in YYYY-MM)
+   * 5. Pannes_Correctives_Mois (Filtered APPROVED corrective interventions in YYYY-MM)
+   * 6. Executions_Preventives (Filtered APPROVED preventive executions in YYYY-MM)
    */
   static exportMonthlyReportToExcel(
     comparison: MonthOverMonthComparison,
@@ -27,7 +48,13 @@ export class MonthlyReportExportService {
     // 1. Sheet: Synthese_Direction
     const syntheseRows = [
       ['RAPPORT MENSUEL EXÉCUTIF DIRECTION — CIOB GMAO v4'],
-      ['Période du Rapport', currentMonth, 'Comparaison vs Mois Précédent', previousMonth],
+      [
+        'Période du Rapport',
+        currentMonth,
+        'Comparaison vs Mois Précédent',
+        previousMonth,
+        `Périmètre: ${currentReport.assetClassFilter || 'ALL'}`,
+      ],
       [],
       ['INDICATEUR EXÉCUTIF', `Mois (${currentMonth})`, `Mois Précédent (${previousMonth})`, 'Écart (Delta)', 'Tendance (%)'],
       [
@@ -38,11 +65,39 @@ export class MonthlyReportExportService {
         `${comparison.stockValuationDelta.percent}%`,
       ],
       [
-        'Coût Consommation PDR du Mois (DT)',
+        'Coût Consommation PDR Magasin du Mois (DT)',
         currentReport.monthConsumptionCost,
         previousReport.monthConsumptionCost,
         comparison.consumptionCostDelta.diff,
         `${comparison.consumptionCostDelta.percent}%`,
+      ],
+      [
+        'Coût PDR Correctif Approuvé (DT)',
+        currentReport.correctiveSparesCost,
+        previousReport.correctiveSparesCost,
+        Number((currentReport.correctiveSparesCost - previousReport.correctiveSparesCost).toFixed(2)),
+        '-',
+      ],
+      [
+        'Coût Préventif Approuvé du Mois (DT)',
+        currentReport.preventiveTotalCost,
+        previousReport.preventiveTotalCost,
+        Number((currentReport.preventiveTotalCost - previousReport.preventiveTotalCost).toFixed(2)),
+        '-',
+      ],
+      [
+        'Coût Bobinage / Sous-traitance Externe (DT)',
+        currentReport.externalBobinageCost || 0,
+        previousReport.externalBobinageCost || 0,
+        Number(((currentReport.externalBobinageCost || 0) - (previousReport.externalBobinageCost || 0)).toFixed(2)),
+        `${currentReport.externalBobinageCount || 0} dossier(s)`,
+      ],
+      [
+        'Coût Total Maintenance Officiel (C1: BT + PM + Externe) (DT)',
+        currentReport.totalOfficialMaintenanceCost,
+        previousReport.totalOfficialMaintenanceCost,
+        Number((currentReport.totalOfficialMaintenanceCost - previousReport.totalOfficialMaintenanceCost).toFixed(2)),
+        comparison.totalOfficialCostDelta ? `${comparison.totalOfficialCostDelta.percent}%` : '-',
       ],
       [
         'Coût Réceptions / Entrées du Mois (DT)',
@@ -87,7 +142,7 @@ export class MonthlyReportExportService {
         `${currentReport.preventiveLaborHours}h MO`,
       ],
       [
-        'Total Interventions Correctives (Pannes)',
+        'Total Interventions Correctives (Pannes Approuvées)',
         currentReport.correctiveCount,
         previousReport.correctiveCount,
         comparison.correctiveCountDelta.diff,
@@ -101,21 +156,21 @@ export class MonthlyReportExportService {
         `${comparison.downtimeHoursDelta.percent}%`,
       ],
       [
-        'MTTR (Temps Moyen de Réparation)',
+        'MTTR Production (Temps Moyen de Réparation)',
         currentReport.mttrFormatted,
         previousReport.mttrFormatted,
         `${currentReport.mttrHours}h`,
         'Maintenabilité',
       ],
       [
-        'MTBF (Temps Moyen Entre Pannes)',
+        'MTBF Production (Temps Moyen Entre Pannes)',
         `${currentReport.mtbfHours}h`,
         `${previousReport.mtbfHours}h`,
         currentReport.mtbfHours - previousReport.mtbfHours,
-        'Fiabilité',
+        'Fiabilité Production',
       ],
       [
-        'Taux de Disponibilité Opérationnelle (OEE/TRS)',
+        'Taux de Disponibilité Opérationnelle Production (OEE/TRS)',
         `${currentReport.availabilityRate}%`,
         `${previousReport.availabilityRate}%`,
         `${Number((currentReport.availabilityRate - previousReport.availabilityRate).toFixed(2))}%`,
@@ -123,9 +178,42 @@ export class MonthlyReportExportService {
       ],
     ];
     const wsSynthese = XLSX.utils.aoa_to_sheet(syntheseRows);
+    applyAutoFitColumns(wsSynthese, syntheseRows);
     XLSX.utils.book_append_sheet(wb, wsSynthese, 'Synthese_Direction');
 
-    // 2. Sheet: Ruptures_et_Alertes
+    // 2. Sheet: Couts_Machines_C1
+    const c1Header = [
+      'Code Machine',
+      'Désignation Équipement',
+      'Classe Actif',
+      'Nb BT Correctifs',
+      'Coût BT Approuvé (DT)',
+      'Nb Exécutions PM',
+      'Coût PM Approuvé (DT)',
+      'Nb Bobinage Externe',
+      'Coût Bobinage Externe (DT)',
+      'Coût Total Officiel (DT)',
+      'Arrêt Cumulé (h)',
+    ];
+    const c1Rows = (currentReport.machineCostBreakdown || []).map((m) => [
+      m.machineCode,
+      m.machineName,
+      m.assetClass,
+      m.correctiveCount,
+      m.correctiveCost,
+      m.preventiveCount,
+      m.preventiveCost,
+      m.externalBobinageCount,
+      m.externalBobinageCost,
+      m.totalOfficialCost,
+      m.totalDowntimeHours,
+    ]);
+    const c1AllRows = [c1Header, ...c1Rows];
+    const wsC1 = XLSX.utils.aoa_to_sheet(c1AllRows);
+    applyAutoFitColumns(wsC1, c1AllRows);
+    XLSX.utils.book_append_sheet(wb, wsC1, 'Couts_Machines_C1');
+
+    // 3. Sheet: Ruptures_et_Alertes
     const shortagesHeader = [
       'Statut Critique',
       'Référence PDR',
@@ -164,15 +252,18 @@ export class MonthlyReportExportService {
         ];
       }),
     ];
-    const wsShortages = XLSX.utils.aoa_to_sheet([shortagesHeader, ...shortagesRows]);
+    const shortagesAllRows = [shortagesHeader, ...shortagesRows];
+    const wsShortages = XLSX.utils.aoa_to_sheet(shortagesAllRows);
+    applyAutoFitColumns(wsShortages, shortagesAllRows);
     XLSX.utils.book_append_sheet(wb, wsShortages, 'Ruptures_et_Alertes');
 
-    // 3. Sheet: Mouvements_du_Mois
+    // 4. Sheet: Mouvements_du_Mois (Approved only — never export PENDING_VALIDATION / REJECTED)
     const monthMovements = (raw.mouvements || []).filter((m) => {
+      if (!m || isUnapprovedFieldClaim(m)) return false;
       const d = normalizeDateToYMD(m.date);
       return d && d.startsWith(currentMonth);
     });
-    const mvtHeader = ['Date', 'Code Bon', 'Type', 'Référence', 'Quantité', 'Prix Unitaire', 'Machine', 'Technicien', 'Commentaire'];
+    const mvtHeader = ['Date', 'Code Bon', 'Type', 'Référence', 'Quantité', 'Prix Unitaire (DT)', 'Machine', 'Technicien', 'Commentaire'];
     const mvtRows = monthMovements.map((m) => [
       normalizeDateToYMD(m.date),
       m.code_bon || '',
@@ -184,11 +275,14 @@ export class MonthlyReportExportService {
       m.technicien || '',
       m.commentaire || m.observation || '',
     ]);
-    const wsMvt = XLSX.utils.aoa_to_sheet([mvtHeader, ...mvtRows]);
+    const mvtAllRows = [mvtHeader, ...mvtRows];
+    const wsMvt = XLSX.utils.aoa_to_sheet(mvtAllRows);
+    applyAutoFitColumns(wsMvt, mvtAllRows);
     XLSX.utils.book_append_sheet(wb, wsMvt, 'Mouvements_du_Mois');
 
-    // 4. Sheet: Pannes_Correctives_Mois
+    // 5. Sheet: Pannes_Correctives_Mois (Approved only)
     const monthCorrective = (raw.correctiveInterventions || []).filter((ci) => {
+      if (!ci || isUnapprovedFieldClaim(ci)) return false;
       const d = normalizeDateToYMD(
         ci.date_demande || ci.demande_date || ci.date || ci.date_cloture || ci.date_fin || ci.created_at
       );
@@ -220,11 +314,14 @@ export class MonthlyReportExportService {
       ci.pdr_ref || ci.pdr || '',
       Number(ci.pdr_quantite || 0),
     ]);
-    const wsCorr = XLSX.utils.aoa_to_sheet([corrHeader, ...corrRows]);
+    const corrAllRows = [corrHeader, ...corrRows];
+    const wsCorr = XLSX.utils.aoa_to_sheet(corrAllRows);
+    applyAutoFitColumns(wsCorr, corrAllRows);
     XLSX.utils.book_append_sheet(wb, wsCorr, 'Pannes_Correctives_Mois');
 
-    // 5. Sheet: Executions_Preventives
+    // 6. Sheet: Executions_Preventives (Approved only)
     const monthExecs = (raw.preventiveExecutions || []).filter((ex) => {
+      if (!ex || isUnapprovedFieldClaim(ex)) return false;
       const d = normalizeDateToYMD(ex.executedAt);
       return (ex.periodMonth && ex.periodMonth === currentMonth) || (d && d.startsWith(currentMonth));
     });
@@ -239,10 +336,180 @@ export class MonthlyReportExportService {
       Number(ex.totalCost || 0),
       ex.notes || '',
     ]);
-    const wsPrev = XLSX.utils.aoa_to_sheet([prevHeader, ...prevRows]);
+    const prevAllRows = [prevHeader, ...prevRows];
+    const wsPrev = XLSX.utils.aoa_to_sheet(prevAllRows);
+    applyAutoFitColumns(wsPrev, prevAllRows);
     XLSX.utils.book_append_sheet(wb, wsPrev, 'Executions_Preventives');
 
     const filename = `GMAO_Rapport_Mensuel_Direction_${currentMonth}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    return filename;
+  }
+
+  /**
+   * Generates a multi-sheet Excel workbook (.xlsx) for the Shift / Weekly Operational Report:
+   * 1. Synthese_Exploitation (All 5 operational sections + Maker-Checker queue + Production reliability)
+   * 2. Couts_Machines_C1 (Per-machine official costs: BT + PM + External Bobinage)
+   * 3. Conformite_PM_B3 (Temporal PM compliance: ON_TIME | LATE | OVERDUE)
+   * 4. Mouvements_Valides_C2 (Official validated store movements in period)
+   * 5. Alertes_Reappro_C3 (Rupture / Sous Seuil / Risque après réservation)
+   */
+  static exportShiftWeeklyReportToExcel(report: ShiftOrWeeklyReportData): string {
+    const wb = XLSX.utils.book_new();
+
+    // 1. Sheet: Synthese_Exploitation
+    const syntheseRows = [
+      ['RAPPORT OPÉRATIONNEL DE VACATION & HEBDOMADAIRE — CIOB GMAO v4'],
+      ['Période Début', report.fromYMD, 'Période Fin', report.toYMD, `${report.daysCount} jour(s)`],
+      ['Périmètre Actifs', report.assetClassFilter, 'Machines Production Actives', report.productionMachinesCount, ''],
+      [],
+      ['INDICATEUR OPÉRATIONNEL (APPROUVÉS UNIQUEMENT)', 'VALEUR', 'UNITÉ / DÉTAIL', 'PÉRIMÈTRE'],
+      ['Correctif Clôturés sur la Période', report.correctiveClosedInPeriodCount, 'BT clôturés', report.assetClassFilter],
+      ['Correctif Total sur la Période', report.correctiveTotalInPeriodCount, 'BT enregistrés', report.assetClassFilter],
+      ['Correctif Ouverts Actuellement (Snapshot)', report.correctiveOpenSnapshotCount, 'BT en cours', report.assetClassFilter],
+      ['Temps d’Arrêt Correctif Cumulé', report.totalDowntimeHours, 'heures', report.assetClassFilter],
+      ['Coût PDR Correctif Approuvé', report.correctiveSparesCost, 'DT', report.assetClassFilter],
+      ['Exécutions Préventives Approuvées', report.preventiveExecutedInPeriodCount, `${report.preventiveLaborHours}h MO`, report.assetClassFilter],
+      ['Coût Préventif Approuvé', report.preventiveTotalCost, 'DT', report.assetClassFilter],
+      ['Dossiers Bobinage / Externe Approuvés', report.externalBobinageCount || 0, 'dossiers', report.assetClassFilter],
+      ['Coût Bobinage / Externe Approuvé', report.externalBobinageCost || 0, 'DT', report.assetClassFilter],
+      ['Coût Total Maintenance Officiel (C1: BT + PM + Externe)', report.totalOfficialMaintenanceCost, 'DT', report.assetClassFilter],
+      ['Conformité PM À Temps (ON_TIME)', report.pmCompliance.onTimeCount, `${report.pmCompliance.onTimeComplianceRate}%`, report.assetClassFilter],
+      ['Conformité PM Fait en Retard (LATE)', report.pmCompliance.lateCompletedCount, 'tâches', report.assetClassFilter],
+      ['Conformité PM Non Réalisé / En Retard (OVERDUE)', report.pmCompliance.overdueCount, 'tâches', report.assetClassFilter],
+      ['Discipline Préventive Globale', `${report.preventiveDisciplineRate}%`, `${report.pmCompliance.totalEligibleCount} tâche(s) éligible(s)`, report.assetClassFilter],
+      ['Sorties Magasin Validées', report.sortiesCount, `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
+      ['Coût Consommation Magasin Validé', report.consumptionCost, 'DT', report.assetClassFilter],
+      ['MTTR Production', report.mttrFormatted, `${report.mttrHours}h`, 'PRODUCTION'],
+      ['MTBF Production', `${report.mtbfHours}h`, `${report.scheduledProductionHours}h planifiées`, 'PRODUCTION'],
+      ['Disponibilité Opérationnelle Production', `${report.availabilityRate}%`, 'Cible >= 95%', 'PRODUCTION'],
+      ['File Maker-Checker En Attente', report.makerCheckerQueue.totalPendingCount, `${report.makerCheckerQueue.totalClarificationCount} en clarification`, 'GLOBAL'],
+      ['Réservations Virtuelles Stock', report.makerCheckerQueue.totalReservedUnits, `${report.makerCheckerQueue.reservedRefsCount} réf. réservée(s)`, 'GLOBAL'],
+      ['Éléments Non Approuvés Exclus de la Période', report.excludedUnapprovedInPeriod.totalExcludedCount, 'exclus des coûts officiels', report.assetClassFilter],
+    ];
+    const wsSynthese = XLSX.utils.aoa_to_sheet(syntheseRows);
+    applyAutoFitColumns(wsSynthese, syntheseRows);
+    XLSX.utils.book_append_sheet(wb, wsSynthese, 'Synthese_Exploitation');
+
+    // 2. Sheet: Couts_Machines_C1
+    const c1Header = [
+      'Code Machine',
+      'Désignation Équipement',
+      'Classe Actif',
+      'Nb BT',
+      'Coût BT Approuvé (DT)',
+      'Nb PM',
+      'Coût PM Approuvé (DT)',
+      'Nb Bobinage Externe',
+      'Coût Bobinage Externe (DT)',
+      'Coût Total Officiel (DT)',
+      'Heures d’Arrêt (h)',
+    ];
+    const c1Rows = (report.machineCostBreakdown || []).map((m) => [
+      m.machineCode,
+      m.machineName,
+      m.assetClass,
+      m.correctiveCount,
+      m.correctiveCost,
+      m.preventiveCount,
+      m.preventiveCost,
+      m.externalBobinageCount,
+      m.externalBobinageCost,
+      m.totalOfficialCost,
+      m.totalDowntimeHours,
+    ]);
+    const c1All = [c1Header, ...c1Rows];
+    const wsC1 = XLSX.utils.aoa_to_sheet(c1All);
+    applyAutoFitColumns(wsC1, c1All);
+    XLSX.utils.book_append_sheet(wb, wsC1, 'Couts_Machines_C1');
+
+    // 3. Sheet: Conformite_PM_B3
+    const b3Header = [
+      'ID Tâche',
+      'Code Machine',
+      'Équipement',
+      'Classe',
+      'Tâche Préventive',
+      'Échéance Prévue',
+      'Exécution Approuvée',
+      'Statut Conformité',
+      'Intervenant',
+      'Réclamation En Attente',
+    ];
+    const b3Rows = (report.pmCompliance.items || []).map((item) => [
+      item.taskId,
+      item.machineCode,
+      item.machineName,
+      item.assetClass,
+      item.taskName,
+      item.dueDate,
+      item.approvedExecutedAt || '-',
+      item.statusLabelFr,
+      item.assignedTo,
+      item.hasPendingClaim ? 'OUI (Non approuvé)' : 'NON',
+    ]);
+    const b3All = [b3Header, ...b3Rows];
+    const wsB3 = XLSX.utils.aoa_to_sheet(b3All);
+    applyAutoFitColumns(wsB3, b3All);
+    XLSX.utils.book_append_sheet(wb, wsB3, 'Conformite_PM_B3');
+
+    // 4. Sheet: Mouvements_Valides_C2
+    const c2Header = [
+      'ID Mouvement',
+      'Date',
+      'N° Bon',
+      'Type',
+      'Code Machine',
+      'Référence PDR',
+      'Désignation',
+      'Quantité',
+      'Unité',
+      'Prix Unitaire (DT)',
+      'Coût Total (DT)',
+    ];
+    const c2Rows = (report.officialMovementsInPeriod || []).map((mvt) => [
+      mvt.id,
+      mvt.date,
+      mvt.codeBon,
+      mvt.type,
+      mvt.machineCode,
+      mvt.ref,
+      mvt.designation,
+      mvt.quantity,
+      mvt.unit,
+      mvt.unitPrice,
+      mvt.totalCost,
+    ]);
+    const c2All = [c2Header, ...c2Rows];
+    const wsC2 = XLSX.utils.aoa_to_sheet(c2All);
+    applyAutoFitColumns(wsC2, c2All);
+    XLSX.utils.book_append_sheet(wb, wsC2, 'Mouvements_Valides_C2');
+
+    // 5. Sheet: Alertes_Reappro_C3
+    const c3Header = [
+      'Référence PDR',
+      'Désignation',
+      'Stock Actuel',
+      'Réservé (En Attente)',
+      'Net Disponible',
+      'Seuil Minimum',
+      'Statut Alerte',
+    ];
+    const c3Rows = (report.stockReorderAlerts?.items || []).map((it) => [
+      it.ref,
+      it.designation,
+      it.stockActuel,
+      it.reservedQty,
+      it.netAvailable,
+      it.seuil,
+      it.statusLabelFr,
+    ]);
+    const c3All = [c3Header, ...c3Rows];
+    const wsC3 = XLSX.utils.aoa_to_sheet(c3All);
+    applyAutoFitColumns(wsC3, c3All);
+    XLSX.utils.book_append_sheet(wb, wsC3, 'Alertes_Reappro_C3');
+
+    const filename = `GMAO_Rapport_Exploitation_${report.fromYMD}_${report.toYMD}.xlsx`;
     XLSX.writeFile(wb, filename);
     return filename;
   }

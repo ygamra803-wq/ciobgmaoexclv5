@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import * as XLSX from 'xlsx';
 import {
   ShieldCheck,
   Wrench,
@@ -17,6 +18,8 @@ import {
   Layers,
   ArrowLeft,
   ShieldAlert,
+  FileSpreadsheet,
+  Lock,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -27,6 +30,7 @@ import {
   selectValidationCenterQueues,
 } from '../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
+import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
 
 interface ValidationCenterViewProps {
   stockItems?: any[];
@@ -45,7 +49,7 @@ interface ValidationCenterViewProps {
 
 export default function ValidationCenterView({
   stockItems: propStockItems,
-  machines: _propMachines = [],
+  machines: propMachines,
   mouvements: propMouvements,
   correctiveInterventions: propCorrective,
   preventiveExecutions: propPreventive,
@@ -59,7 +63,16 @@ export default function ValidationCenterView({
 }: ValidationCenterViewProps) {
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
-  const canAccess = !user || (!isTechUser && AuthorizationService.canAccessTab(user, 'validation_center'));
+  const canAccess =
+    Boolean(user) && !isTechUser && AuthorizationService.canAccessTab(user, 'validation_center');
+  const canValidateCorrective =
+    Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'corrective.manage');
+  const canValidatePreventive =
+    Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'preventive.manage');
+  const canValidateSortie =
+    Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'movement.create');
+  const canExportQueue =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'report.export');
 
   // Fallbacks to Zustand SSOT store so the center is always live-synchronized
   const storeCorrective = useGmaoStore((s) => s.correctiveInterventions || []);
@@ -67,6 +80,7 @@ export default function ValidationCenterView({
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands || []);
   const storeMouvements = useGmaoStore((s) => s.mouvements || []);
   const storeRawStock = useGmaoStore((s) => s.rawStock || []);
+  const storeMachines = useGmaoStore((s) => s.machines || []);
 
   const storeReviewCorrective = useGmaoStore((s) => s.handleReviewInterventionValidation);
   const storeReviewPreventive = useGmaoStore((s) => s.handleReviewPreventiveExecutionValidation);
@@ -77,6 +91,60 @@ export default function ValidationCenterView({
   const sortieDemands = propSortieDemands ?? storeSortieDemands;
   const mouvements = propMouvements ?? storeMouvements;
   const stockItems = propStockItems ?? storeRawStock;
+  const machines = propMachines && propMachines.length > 0 ? propMachines : storeMachines;
+
+  // Relational Machine Lookup Map from SSOT
+  const machineMetaMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        code: string;
+        name: string;
+        zone: string;
+        isSystemGeneral: boolean;
+        isArchived: boolean;
+      }
+    >();
+    (machines || []).forEach((m: any) => {
+      if (!m) return;
+      const codes = [
+        m.id_machine_registered,
+        m.id,
+        m.code,
+        m.id_machine,
+        m.code_machine,
+      ]
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean);
+      if (codes.length === 0) return;
+      const name = String(m.nom || m.designation || m.name || codes[0]).trim();
+      const zone = String(m.zone || m.id_zone || '').trim();
+      const isSystemGeneral = getMachineAssetClass(m) === 'SYSTEM_GENERAL';
+      const isArchived = isArchivedMachine(m);
+      codes.forEach((c) => {
+        map.set(c, {
+          code: codes[0],
+          name,
+          zone,
+          isSystemGeneral,
+          isArchived,
+        });
+      });
+    });
+    return map;
+  }, [machines]);
+
+  const resolveMachineMeta = (rawCode: unknown, fallbackName?: unknown) => {
+    const clean = String(rawCode || '').trim().toUpperCase();
+    const found = clean ? machineMetaMap.get(clean) : undefined;
+    return {
+      code: found?.code || clean || 'GLOBAL',
+      name: found?.name || String(fallbackName || '').trim() || '',
+      zone: found?.zone || '',
+      isSystemGeneral: Boolean(found?.isSystemGeneral),
+      isArchived: Boolean(found?.isArchived),
+    };
+  };
 
   // UI Filters
   const [sectionFilter, setSectionFilter] = useState<'ALL' | 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE'>('ALL');
@@ -124,14 +192,15 @@ export default function ValidationCenterView({
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((bt: any) => {
+      const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
       const code = String(bt.num_bt || bt.id || '').toLowerCase();
-      const machine = String(bt.code_machine || bt.nom_machine || '').toLowerCase();
+      const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone}`.toLowerCase();
       const tech = String(bt.submitted_by_name || bt.intervenant || '').toLowerCase();
       const anom = String(bt.action_realisee || bt.anomalie || bt.travail_a_faire || '').toLowerCase();
       const bon = String(bt.num_bon_saisi_par_tech || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || anom.includes(q) || bon.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery]);
+  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
 
   const visiblePreventive = useMemo(() => {
     const base = includeClarifications
@@ -140,14 +209,15 @@ export default function ValidationCenterView({
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((ex: any) => {
+      const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
       const code = String(ex.taskCode || ex.actionCode || ex.id || '').toLowerCase();
-      const machine = String(ex.machineCode || ex.machineName || '').toLowerCase();
+      const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone}`.toLowerCase();
       const tech = String(ex.submitted_by_name || ex.executorName || '').toLowerCase();
       const organe = String(ex.organe || ex.taskDescription || ex.notes || '').toLowerCase();
       const bon = String(ex.num_bon_saisi_par_tech || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || organe.includes(q) || bon.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery]);
+  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
 
   const visibleSortieDemands = useMemo(() => {
     const base = includeClarifications
@@ -156,13 +226,14 @@ export default function ValidationCenterView({
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((dem: any) => {
+      const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
       const code = String(dem.code_bon_tech || dem.code_bon_magasin || dem.id || '').toLowerCase();
-      const machine = String(dem.id_machine_registered || dem.id_zone || '').toLowerCase();
+      const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone} ${dem.id_zone || ''}`.toLowerCase();
       const tech = String(dem.submitted_by_name || dem.technicien || '').toLowerCase();
       const comm = String(dem.commentaire || dem.motif || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || comm.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery]);
+  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
 
   // Active Modal Reconciliations
   const activeBtReconciliation = useMemo(() => {
@@ -239,6 +310,10 @@ export default function ValidationCenterView({
 
   // Open & Submit Handlers for Section 1 (Corrective BT)
   const handleOpenBtModal = (bt: any) => {
+    if (!canValidateCorrective) {
+      showToast?.('Droits insuffisants : la validation des Bons de Travail est réservée au Responsable Maintenance ou Administrateur.', 'warning');
+      return;
+    }
     const initialPieces =
       Array.isArray(bt?.pieces_proposees) && bt.pieces_proposees.length > 0
         ? bt.pieces_proposees.map((p: any) => ({ ...p }))
@@ -265,7 +340,7 @@ export default function ValidationCenterView({
   };
 
   const handleConfirmBtDecision = (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => {
-    if (!reviewBt) return;
+    if (!reviewBt || !canValidateCorrective) return;
     if (
       (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') &&
       !String(btNote || '').trim()
@@ -320,6 +395,10 @@ export default function ValidationCenterView({
 
   // Open & Submit Handlers for Section 2 (Preventive Execution)
   const handleOpenExecModal = (exec: any) => {
+    if (!canValidatePreventive) {
+      showToast?.('Droits insuffisants : la validation des exécutions préventives est réservée au Responsable Maintenance ou Administrateur.', 'warning');
+      return;
+    }
     setReviewExec(exec);
     const initialSpares =
       Array.isArray(exec.sparesProposed) && exec.sparesProposed.length > 0
@@ -359,7 +438,7 @@ export default function ValidationCenterView({
   };
 
   const handleConfirmExecDecision = (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => {
-    if (!reviewExec) return;
+    if (!reviewExec || !canValidatePreventive) return;
     if ((decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') && !execNote.trim()) {
       showToast?.('Veuillez saisir un motif de clarification ou de rejet.', 'warning');
       return;
@@ -406,6 +485,10 @@ export default function ValidationCenterView({
 
   // Open & Submit Handlers for Section 3 (SortieDemand)
   const handleOpenDemandModal = (dem: any) => {
+    if (!canValidateSortie) {
+      showToast?.('Droits insuffisants pour valider les demandes de sortie magasin.', 'warning');
+      return;
+    }
     setReviewDemand(dem);
     setDemandCodeBonMagasin(dem.code_bon_magasin || dem.code_bon_tech || '');
     setDemandMergeMovementId('');
@@ -414,7 +497,7 @@ export default function ValidationCenterView({
   };
 
   const handleConfirmDemandDecision = (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => {
-    if (!reviewDemand) return;
+    if (!reviewDemand || !canValidateSortie) return;
     if (
       (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') &&
       !String(demandNote || '').trim()
@@ -456,6 +539,151 @@ export default function ValidationCenterView({
     }
 
     setReviewDemand(null);
+  };
+
+  // Export Multi-Sheet Validation Queue Excel (.xlsx)
+  const handleExportValidationQueueExcel = () => {
+    if (!canExportQueue) return;
+    try {
+      const wb = XLSX.utils.book_new();
+      const autoFit = (ws: XLSX.WorkSheet, rows: any[][]) => {
+        if (!rows.length) return;
+        const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+        ws['!cols'] = Array.from({ length: maxCols }, (_, c) => {
+          let maxLen = 12;
+          rows.forEach((r) => {
+            const len = r[c] !== undefined && r[c] !== null ? String(r[c]).length : 0;
+            if (len > maxLen) maxLen = len;
+          });
+          return { wch: Math.min(48, maxLen + 4) };
+        });
+      };
+
+      // Sheet 1: BT Correctifs
+      const btHeader = [
+        'N° BT',
+        'Statut Validation',
+        'Code Machine',
+        'Désignation Machine',
+        'Zone',
+        'Technicien',
+        'Date Soumission',
+        'N° Bon Tech',
+        'Action / Anomalie',
+        'Pièces Proposées',
+      ];
+      const btRows = visibleCorrective.map((bt: any) => {
+        const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
+        const pcs = (Array.isArray(bt.pieces_proposees) ? bt.pieces_proposees : [])
+          .map((p: any) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`)
+          .join(', ');
+        return [
+          bt.num_bt || bt.id || '',
+          bt.validation_status || 'PENDING_VALIDATION',
+          mMeta.code,
+          mMeta.name,
+          mMeta.zone,
+          bt.submitted_by_name || bt.intervenant || '',
+          bt.submitted_at || bt.date_demande || '',
+          bt.num_bon_saisi_par_tech || '',
+          bt.action_realisee || bt.anomalie || bt.travail_a_faire || '',
+          pcs || 'Aucune PDR',
+        ];
+      });
+      const btAll = [btHeader, ...btRows];
+      const wsBt = XLSX.utils.aoa_to_sheet(btAll);
+      autoFit(wsBt, btAll);
+      XLSX.utils.book_append_sheet(wb, wsBt, 'BT_Correctifs_A_Valider');
+
+      // Sheet 2: Exécutions Préventives
+      const pmHeader = [
+        'Code Tâche',
+        'Statut Validation',
+        'Code Machine',
+        'Désignation Machine',
+        'Zone',
+        'Exécutant',
+        'Date Exécution',
+        'N° Bon Tech',
+        'Organe',
+        'Observations',
+        'Pièces Proposées',
+      ];
+      const pmRows = visiblePreventive.map((ex: any) => {
+        const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
+        const pcs = (Array.isArray(ex.sparesProposed) ? ex.sparesProposed : [])
+          .map((p: any) => `${p.ref} x${p.qty ?? p.quantite ?? 1}`)
+          .join(', ');
+        return [
+          ex.taskCode || ex.actionCode || ex.id || '',
+          ex.validation_status || 'PENDING_VALIDATION',
+          mMeta.code,
+          mMeta.name,
+          mMeta.zone,
+          ex.submitted_by_name || ex.executorName || '',
+          ex.executedAt || '',
+          ex.num_bon_saisi_par_tech || '',
+          ex.organe || '',
+          ex.taskDescription || ex.notes || '',
+          pcs || 'Aucune PDR',
+        ];
+      });
+      const pmAll = [pmHeader, ...pmRows];
+      const wsPm = XLSX.utils.aoa_to_sheet(pmAll);
+      autoFit(wsPm, pmAll);
+      XLSX.utils.book_append_sheet(wb, wsPm, 'Executions_PM_A_Valider');
+
+      // Sheet 3: Demandes Sortie Magasin
+      const sdHeader = [
+        'N° Bon Tech',
+        'Statut Validation',
+        'Code Machine / Zone',
+        'Désignation Machine',
+        'Technicien',
+        'Date',
+        'Motif / Commentaire',
+        'Articles Demandés',
+      ];
+      const sdRows = visibleSortieDemands.map((dem: any) => {
+        const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
+        const pcs = (Array.isArray(dem.items) ? dem.items : [])
+          .map((it: any) => `${it.ref} x${it.quantite ?? it.qty ?? 1}`)
+          .join(', ');
+        return [
+          dem.code_bon_tech || dem.id || '',
+          dem.validation_status || 'PENDING_VALIDATION',
+          mMeta.code,
+          mMeta.name,
+          dem.submitted_by_name || dem.technicien || '',
+          dem.date || '',
+          dem.commentaire || dem.motif || '',
+          pcs,
+        ];
+      });
+      const sdAll = [sdHeader, ...sdRows];
+      const wsSd = XLSX.utils.aoa_to_sheet(sdAll);
+      autoFit(wsSd, sdAll);
+      XLSX.utils.book_append_sheet(wb, wsSd, 'Demandes_Sortie_Magasin');
+
+      // Sheet 4: Réservations Virtuelles PDR
+      const resHeader = ['Référence PDR', 'Quantité Réservée (En Attente)', 'Sources Réservation'];
+      const resRows = Array.from(queues.reservedStockMap.values()).map((entry) => [
+        entry.ref,
+        entry.reservedQty,
+        entry.sources.map((s) => s.code).join(', '),
+      ]);
+      const resAll = [resHeader, ...resRows];
+      const wsRes = XLSX.utils.aoa_to_sheet(resAll);
+      autoFit(wsRes, resAll);
+      XLSX.utils.book_append_sheet(wb, wsRes, 'Reservations_PDR_Virtuelles');
+
+      const today = new Date().toISOString().slice(0, 10);
+      const filename = `GMAO_Centre_Validation_File_${today}.xlsx`;
+      XLSX.writeFile(wb, filename);
+      showToast?.(`File de validation exportée (${filename})`, 'success');
+    } catch {
+      showToast?.("Erreur lors de l'export Excel de la file de validation.", 'error');
+    }
   };
 
   if (!canAccess) {
@@ -514,7 +742,7 @@ export default function ValidationCenterView({
             </div>
           </div>
 
-          {/* Search & Clarification Toggle */}
+          {/* Search, Clarification Toggle & Excel Export */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="relative min-w-[220px]">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -522,7 +750,7 @@ export default function ValidationCenterView({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher N° BT, machine, technicien, bon..."
+                placeholder="Rechercher N° BT, machine, zone, tech, bon..."
                 className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
               />
             </div>
@@ -539,6 +767,18 @@ export default function ValidationCenterView({
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>À clarifier ({queues.totalClarification})</span>
             </button>
+
+            {canExportQueue && (
+              <button
+                type="button"
+                data-testid="vc-export-excel-btn"
+                onClick={handleExportValidationQueueExcel}
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Exporter File (.xlsx)</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -786,17 +1026,23 @@ export default function ValidationCenterView({
           data-testid="vc-section-corrective"
           className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center">
                 <Wrench className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>1. Interventions correctives à valider</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-amber-100 text-amber-900">
                     {visibleCorrective.length}
                   </span>
+                  {!canValidateCorrective && (
+                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>Lecture seule — Responsable Maintenance / Admin</span>
+                    </span>
+                  )}
                 </h2>
                 <p className="text-[11px] text-slate-500">
                   Rapports Bons de Travail (BT) soumis par les techniciens • Approbation = Clôture + Sortie PDR officielle
@@ -835,6 +1081,7 @@ export default function ValidationCenterView({
                   sortieDemands,
                 });
                 const isClarify = bt.validation_status === 'NEEDS_CLARIFICATION';
+                const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
 
                 return (
                   <div
@@ -853,8 +1100,28 @@ export default function ValidationCenterView({
                         </span>
                         <span className="font-mono text-xs font-black text-slate-900 flex items-center gap-1">
                           <Factory className="w-3.5 h-3.5 text-slate-500" />
-                          {bt.code_machine || bt.id_machine_registered}
+                          {mMeta.code}
+                          {mMeta.name && mMeta.name !== mMeta.code && (
+                            <span className="font-sans font-bold text-slate-600 ml-1">
+                              ({mMeta.name})
+                            </span>
+                          )}
                         </span>
+                        {mMeta.zone && (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
+                            {mMeta.zone}
+                          </span>
+                        )}
+                        {mMeta.isSystemGeneral && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold">
+                            SYS. GÉNÉRAL
+                          </span>
+                        )}
+                        {mMeta.isArchived && (
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-mono text-[10px] font-black">
+                            MACHINE ARCHIVÉE
+                          </span>
+                        )}
                         <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-slate-400" />
                           {bt.submitted_by_name || bt.intervenant || 'Technicien'}
@@ -937,15 +1204,22 @@ export default function ValidationCenterView({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        data-testid={`vc-open-bt-review-${bt.id}`}
-                        onClick={() => handleOpenBtModal(bt)}
-                        className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                      >
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                        <span>Ouvrir revue</span>
-                      </button>
+                      {canValidateCorrective ? (
+                        <button
+                          type="button"
+                          data-testid={`vc-open-bt-review-${bt.id}`}
+                          onClick={() => handleOpenBtModal(bt)}
+                          className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                          <span>Ouvrir revue</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Lecture seule</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -963,17 +1237,23 @@ export default function ValidationCenterView({
           data-testid="vc-section-preventive"
           className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
                 <Calendar className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>2. Exécutions préventives à valider</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-100 text-indigo-900">
                     {visiblePreventive.length}
                   </span>
+                  {!canValidatePreventive && (
+                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>Lecture seule — Responsable Maintenance / Admin</span>
+                    </span>
+                  )}
                 </h2>
                 <p className="text-[11px] text-slate-500">
                   Inspections et rondes préventives exécutées sur le terrain • Approbation = Fait + Sortie PDR officielle
@@ -1012,6 +1292,7 @@ export default function ValidationCenterView({
                   sortieDemands,
                 });
                 const isClarify = ex.validation_status === 'NEEDS_CLARIFICATION';
+                const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
 
                 return (
                   <div
@@ -1030,8 +1311,28 @@ export default function ValidationCenterView({
                         </span>
                         <span className="font-mono text-xs font-black text-slate-900 flex items-center gap-1">
                           <Factory className="w-3.5 h-3.5 text-slate-500" />
-                          {ex.machineCode}
+                          {mMeta.code}
+                          {mMeta.name && mMeta.name !== mMeta.code && (
+                            <span className="font-sans font-bold text-slate-600 ml-1">
+                              ({mMeta.name})
+                            </span>
+                          )}
                         </span>
+                        {mMeta.zone && (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
+                            {mMeta.zone}
+                          </span>
+                        )}
+                        {mMeta.isSystemGeneral && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px] font-bold">
+                            SYS. GÉNÉRAL
+                          </span>
+                        )}
+                        {mMeta.isArchived && (
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-mono text-[10px] font-black">
+                            MACHINE ARCHIVÉE
+                          </span>
+                        )}
                         <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-slate-400" />
                           {ex.submitted_by_name || ex.executorName || 'Technicien'}
@@ -1113,15 +1414,22 @@ export default function ValidationCenterView({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        data-testid={`vc-open-prev-review-${ex.id}`}
-                        onClick={() => handleOpenExecModal(ex)}
-                        className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Ouvrir revue</span>
-                      </button>
+                      {canValidatePreventive ? (
+                        <button
+                          type="button"
+                          data-testid={`vc-open-prev-review-${ex.id}`}
+                          onClick={() => handleOpenExecModal(ex)}
+                          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Ouvrir revue</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Lecture seule</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -1139,13 +1447,13 @@ export default function ValidationCenterView({
           data-testid="vc-section-sortie"
           className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
         >
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 text-teal-600 flex items-center justify-center">
                 <Package className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>3. Demandes de sortie terrain</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-teal-100 text-teal-900">
                     {visibleSortieDemands.length}
@@ -1188,6 +1496,7 @@ export default function ValidationCenterView({
                   sortieDemands,
                 });
                 const isClarify = dem.validation_status === 'NEEDS_CLARIFICATION';
+                const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
 
                 return (
                   <div
@@ -1206,8 +1515,23 @@ export default function ValidationCenterView({
                         </span>
                         <span className="font-mono text-xs font-black text-slate-900 flex items-center gap-1">
                           <Factory className="w-3.5 h-3.5 text-slate-500" />
-                          {dem.id_machine_registered || dem.id_zone || 'MAGASIN'}
+                          {mMeta.code}
+                          {mMeta.name && mMeta.name !== mMeta.code && (
+                            <span className="font-sans font-bold text-slate-600 ml-1">
+                              ({mMeta.name})
+                            </span>
+                          )}
                         </span>
+                        {mMeta.zone && (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold">
+                            {mMeta.zone}
+                          </span>
+                        )}
+                        {mMeta.isArchived && (
+                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-900 border border-rose-300 font-mono text-[10px] font-black">
+                            MACHINE ARCHIVÉE
+                          </span>
+                        )}
                         <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                           <User className="w-3.5 h-3.5 text-slate-400" />
                           {dem.submitted_by_name || dem.technicien || 'Technicien'}
@@ -1272,15 +1596,22 @@ export default function ValidationCenterView({
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        data-testid={`vc-open-sortie-review-${dem.id}`}
-                        onClick={() => handleOpenDemandModal(dem)}
-                        className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                      >
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Ouvrir revue</span>
-                      </button>
+                      {canValidateSortie ? (
+                        <button
+                          type="button"
+                          data-testid={`vc-open-sortie-review-${dem.id}`}
+                          onClick={() => handleOpenDemandModal(dem)}
+                          className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>Ouvrir revue</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Lecture seule</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 );

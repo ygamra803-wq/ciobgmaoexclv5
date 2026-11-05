@@ -19,7 +19,7 @@ export function BlueprintPlusIcon({
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={className}
+      className={`gmao-icon-blueprint-plus ${className}`.trim()}
       {...props}
     >
       <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
