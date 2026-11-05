@@ -719,12 +719,121 @@ export function useAppRouterProps({
       warehouseItems: warehouseItemsComputed,
       mouvements,
       machineElementsLedger,
+      preventiveTasks,
+      correctiveInterventions,
       onAddMachineElement: addMachineElement,
       onUpdateMachineElement: updateMachineElement,
       onDeleteMachineElement: deleteMachineElement,
       onDuplicateBOMToTwins: duplicateBOMToTwins,
       onNavigateToQuickSortie: navigation.handleNavigateToQuickSortieFromNexus,
       setQuickSortiePreset: filters.setQuickSortiePreset,
+      onCreateCorrectiveFromNexus: (machine, element) => {
+        if (!machine || !element || typeof handleAddDemandeIntervention !== 'function') return;
+        const machineId = String(machine.id_machine_registered || machine.id || '').trim();
+        const zoneId = machine.id_zone_default || machine.id_zone || 'Atelier';
+        const techName =
+          element.technicien && element.technicien !== 'tech'
+            ? element.technicien
+            : machine.technician || machine.technicien_responsable || 'Technicien';
+        const isComp = element.element_type === 'COMPONENT';
+        const isPart = element.element_type === 'PART';
+        const parentKey = String(element.parent_component_key || '').trim();
+        const priorite =
+          element.criticalite === 'CRITIQUE'
+            ? 'Urgente'
+            : element.criticalite === 'MAJEURE'
+            ? 'Haute'
+            : 'Normale';
+
+        handleAddDemandeIntervention({
+          code_machine: machineId,
+          id_machine: machineId,
+          id_zone: zoneId,
+          zone: zoneId,
+          technicien: techName,
+          demandeur: `Nexus BOM (${techName})`,
+          priorite,
+          type_panne: isComp ? 'Électromécanique' : 'Mécanique',
+          id_composant: isComp ? element.ref_element : parentKey || undefined,
+          nom_composant: isComp
+            ? element.designation || element.ref_element
+            : parentKey || undefined,
+          id_part: isPart ? element.ref_element : undefined,
+          nom_part: isPart ? element.designation || element.ref_element : undefined,
+          anomalie: `Intervention BOM Nexus : ${element.ref_element} — ${element.designation || 'Élément monté'} (${element.statut || 'Usure'})`,
+          travail_a_faire:
+            element.element_type === 'PDR'
+              ? `Contrôler et remplacer la pièce PDR ${element.ref_element} (${element.designation || ''}) montée sur ${element.emplacement_machine || parentKey || machineId}.`
+              : `Inspecter / réviser l'organe ${element.ref_element} (${element.designation || ''}) sur ${machineId}.`,
+        });
+      },
+      onCreatePreventiveFromNexus: (machine, element) => {
+        if (!machine || !element || typeof handleCreatePlanWithTasks !== 'function') {
+          return { skipped: true };
+        }
+        const machineId = String(machine.id_machine_registered || machine.id || '').trim();
+        const composantLabel = `${element.designation || element.ref_element} (${element.ref_element})`;
+        const alreadyExists = (preventiveTasks || []).some(
+          (t) =>
+            String(t.id_machine || '').trim().toUpperCase() === machineId.toUpperCase() &&
+            (String(t.composant || '').trim().toLowerCase() === composantLabel.toLowerCase() ||
+              String(t.pdr_ref || '').trim().toUpperCase() ===
+                String(element.ref_element || '').trim().toUpperCase())
+        );
+        if (alreadyExists) {
+          return { skipped: true, reason: 'ALREADY_EXISTS', composantLabel };
+        }
+
+        const zoneId = machine.id_zone_default || machine.id_zone || 'Atelier';
+        const techName =
+          element.technicien && element.technicien !== 'tech'
+            ? element.technicien
+            : machine.technician || machine.technicien_responsable || 'Technicien';
+        const maxH = Number(element.duree_vie_estimee_heures) || 5000;
+        const frequence = maxH <= 1000 ? 'Hebdo' : maxH <= 3000 ? 'Mensuel' : 'Trimestriel';
+        const isComp = element.element_type === 'COMPONENT';
+        const isPart = element.element_type === 'PART';
+        const parentKey = String(element.parent_component_key || '').trim();
+
+        handleCreatePlanWithTasks(
+          {
+            id_machine: machineId,
+            nom_machine: machine.designation || machine.nom || `Machine ${machineId}`,
+            id_zone: zoneId,
+            id_technicien: techName,
+            semaine_cible: 'S1',
+            description: `Surveillance préventive BOM Nexus pour ${element.ref_element} sur ${machineId}`,
+          },
+          [
+            {
+              composant: composantLabel,
+              id_composant: isComp ? element.ref_element : parentKey || undefined,
+              nom_composant: isComp
+                ? element.designation || element.ref_element
+                : parentKey || undefined,
+              id_part: isPart ? element.ref_element : undefined,
+              nom_part: isPart ? element.designation || element.ref_element : undefined,
+              action_code: element.element_type === 'PDR' ? 'C' : 'V',
+              frequence,
+              duree_estimee: '20 min',
+              priorite: element.criticalite === 'CRITIQUE' ? 'Haute' : 'Moyenne',
+              consigne: `Contrôler l'usure (RUL max ${maxH}h) de ${element.ref_element} (${element.designation || ''}) à l'emplacement : ${element.emplacement_machine || parentKey || 'Machine'}.`,
+              pdr_requises:
+                element.element_type === 'PDR'
+                  ? [
+                      {
+                        ref: element.ref_element,
+                        nom: element.designation || element.ref_element,
+                        designation: element.designation || element.ref_element,
+                        quantite: Math.max(1, Number(element.qte_montee) || 1),
+                      },
+                    ]
+                  : [],
+            },
+          ]
+        );
+        return { skipped: false, frequence, composantLabel };
+      },
       onNavigate: navigateTo,
       showToast,
     },
