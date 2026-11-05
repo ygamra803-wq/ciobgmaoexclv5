@@ -74,13 +74,10 @@ export default function PreventiveView({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
-  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
   const canExecutePreventive =
-    !isReadOnlyUser && (!user || AuthorizationService.hasPermission(user, 'preventive.execute'));
+    Boolean(user) && AuthorizationService.hasPermission(user, 'preventive.execute');
   const canManagePreventive =
-    !isReadOnlyUser &&
-    !isTechUser &&
-    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
+    Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'preventive.manage');
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);

@@ -46,11 +46,10 @@ export default function PreventiveExecutionsHistoryView({
 }: PreventiveExecutionsHistoryViewProps) {
   const { language } = useI18n();
   const { user } = useAuth();
-  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
   const canManageExecutions =
-    !isReadOnlyUser &&
+    Boolean(user) &&
     !isTechUser &&
-    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
+    AuthorizationService.hasPermission(user, 'preventive.manage');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterState>({ preset: 'ALL' });
   const [validationFilter, setValidationFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');

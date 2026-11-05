@@ -101,19 +101,18 @@ export default function TabMainView({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
-  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
   const canExecutePreventive =
-    !isReadOnlyUser &&
+    Boolean(user) &&
     Boolean(onMarkTaskDone) &&
-    (!user || AuthorizationService.hasPermission(user, 'preventive.execute'));
+    AuthorizationService.hasPermission(user, 'preventive.execute');
   const canManagePreventive =
-    !isReadOnlyUser &&
+    Boolean(user) &&
     !isTechUser &&
-    (!user || AuthorizationService.hasPermission(user, 'preventive.manage'));
+    AuthorizationService.hasPermission(user, 'preventive.manage');
   const canTriggerCorrective =
-    !isReadOnlyUser &&
+    Boolean(user) &&
     Boolean(onCreateCorrective) &&
-    (!user || AuthorizationService.hasPermission(user, 'corrective.execute'));
+    AuthorizationService.hasPermission(user, 'corrective.execute');
   const techDisplayName = useMemo(
     () => getTechnicianDisplayName(user, technicians),
     [user, technicians]
