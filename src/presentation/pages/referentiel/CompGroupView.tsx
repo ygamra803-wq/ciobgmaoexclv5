@@ -21,6 +21,8 @@ import {
   Copy,
   Check,
   FileSpreadsheet,
+  FileText,
+  Hash,
   Boxes,
   FolderTree,
   MoreVertical,
@@ -315,6 +317,7 @@ export default function CompGroupView({
         key: 'description',
         label: t('components.group.col_description', 'DESCRIPTION & PÉRIMÈTRE'),
         colLetter: 'C',
+        icon: FileText,
         render: (group) => (
           <span className="max-w-xs text-slate-500 text-[11px] leading-relaxed line-clamp-2 block">
             {group.description || '—'}
@@ -371,6 +374,7 @@ export default function CompGroupView({
         key: 'passport_id',
         label: t('components.group.col_id', 'ID PASSPORT'),
         colLetter: 'F',
+        icon: Hash,
         render: (group) => {
           const gId = group.id || group.id_groupe;
           const isCopied = copiedId === gId;

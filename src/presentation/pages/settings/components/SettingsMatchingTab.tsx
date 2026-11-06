@@ -299,7 +299,7 @@ export default function SettingsMatchingTab({
                       }}
                       className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         auditPageSize === size
-                          ? 'bg-white text-teal-800 shadow-xs border border-slate-200/50'
+                          ? 'bg-white text-accent-dark shadow-xs border border-slate-200/50'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                       }`}
                     >

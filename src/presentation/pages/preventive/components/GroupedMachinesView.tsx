@@ -344,15 +344,50 @@ export default function GroupedMachinesView({
                 {isExpanded && (
                   <div className="overflow-x-auto border-t border-slate-100">
                     <table className="w-full text-left border-collapse text-xs">
-                      <thead className="bg-slate-100/80 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-200 select-none">
+                      <thead className="gmao-thead-header bg-slate-100/80 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-300 select-none">
                         <tr>
-                          <th className="py-2.5 px-3 min-w-[140px]">Organe / Composant</th>
-                          <th className="py-2.5 px-2.5 text-center min-w-[80px]">Action</th>
-                          <th className="py-2.5 px-3 min-w-[90px]">Fréquence</th>
-                          <th className="py-2.5 px-3 min-w-[95px]">Échéance</th>
-                          <th className="py-2.5 px-3 min-w-[110px]">Responsable</th>
-                          <th className="py-2.5 px-3 min-w-[180px]">Consignes & Mode Opératoire</th>
-                          <th className="py-2.5 px-3 text-center min-w-[85px]">Statut</th>
+                          <th className="py-2.5 px-3 min-w-[140px] border-r border-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Organe / Composant</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-2.5 text-center min-w-[80px] border-r border-slate-300">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <Wrench className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Action</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Fréquence</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 min-w-[95px] border-r border-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Échéance</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <User className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Responsable</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 min-w-[180px] border-r border-slate-300">
+                            <div className="flex items-center gap-1.5">
+                              <Search className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Consignes & Mode Opératoire</span>
+                            </div>
+                          </th>
+                          <th className="py-2.5 px-3 text-center min-w-[85px] border-r border-slate-300">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                              <span>Statut</span>
+                            </div>
+                          </th>
                           <th className="py-2.5 px-3 text-right min-w-[120px]">Actions</th>
                         </tr>
                       </thead>
@@ -484,7 +519,7 @@ export default function GroupedMachinesView({
                   }}
                   className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                     pageSize === size
-                      ? 'bg-white text-indigo-900 shadow-xs border border-slate-200/50'
+                      ? 'bg-white text-accent-dark shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/50'
                       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                   }`}
                 >

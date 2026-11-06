@@ -356,28 +356,46 @@ export default function TabActions({
 
           <div className="max-h-[62vh] overflow-y-auto overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse min-w-[1020px]">
-              <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 z-10 shadow-2xs select-none">
+              <thead className="gmao-thead-header sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-300 z-10 shadow-2xs select-none">
                 <tr>
-                  <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-200 shrink-0">
+                  <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0">
                     N°
                   </th>
-                  <th className="py-3 px-3.5 text-center w-24 border-r border-slate-200">
-                    CODE
+                  <th className="py-3 px-3.5 text-center w-24 border-r border-slate-300">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>CODE</span>
+                    </div>
                   </th>
-                  <th className="py-3 px-3.5">
-                    LIBELLÉ DE L'ACTION
+                  <th className="py-3 px-3.5 border-r border-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>LIBELLÉ DE L'ACTION</span>
+                    </div>
                   </th>
-                  <th className="py-3 px-3.5 font-mono">
-                    RÉFÉRENCE ISO
+                  <th className="py-3 px-3.5 font-mono border-r border-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <Settings2 className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>RÉFÉRENCE ISO</span>
+                    </div>
                   </th>
-                  <th className="py-3 px-3.5">
-                    CONSIGNE & DESCRIPTION STANDARD
+                  <th className="py-3 px-3.5 border-r border-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>CONSIGNE & DESCRIPTION STANDARD</span>
+                    </div>
                   </th>
-                  <th className="py-3 px-3.5">
-                    DURÉE EST.
+                  <th className="py-3 px-3.5 border-r border-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>DURÉE EST.</span>
+                    </div>
                   </th>
-                  <th className="py-3 px-3.5">
-                    OUTILLAGE REQUIS
+                  <th className="py-3 px-3.5 border-r border-slate-300">
+                    <div className="flex items-center gap-1.5">
+                      <Wrench className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <span>OUTILLAGE REQUIS</span>
+                    </div>
                   </th>
                   <th className="py-3 px-3.5 text-center w-28">
                     ACTIONS

@@ -424,55 +424,58 @@ export default function DetailedTaskListView({
           className="overflow-x-auto max-h-[64vh] overflow-y-auto"
         >
           <table className="w-full text-left border-collapse text-xs">
-            <thead className="sticky top-0 bg-slate-100 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-200 z-20 shadow-2xs select-none">
+            <thead className="gmao-thead-header sticky top-0 bg-slate-100 text-slate-700 uppercase font-black text-[10px] tracking-wider border-b border-slate-300 z-20 shadow-2xs select-none">
               <tr>
-                <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/70 border-r border-slate-200">
+                <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/70 border-r border-slate-300">
                   {t('preventive.table.col_num', 'N°')}
                 </th>
-                <th className="py-3 px-3.5 min-w-[150px] border-r border-slate-200">
+                <th className="py-3 px-3.5 min-w-[150px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Factory className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Factory className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_machine_zone', 'MACHINE & ZONE')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3.5 min-w-[180px] border-r border-slate-200">
+                <th className="py-3 px-3.5 min-w-[180px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Layers className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_composant_instructions', 'COMPOSANT & INSTRUCTIONS')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[90px] text-center border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[90px] text-center border-r border-slate-300">
                   <div className="flex items-center justify-center gap-1.5">
-                    <Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Wrench className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_action', 'ACTION')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[85px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[85px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_frequence', 'FRÉQ.')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[90px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[90px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Calendar className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_echeance', 'ÉCHÉANCE')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[110px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[110px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <User className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_responsable', 'RESPONSABLE')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[90px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[90px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <DollarSign className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <DollarSign className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_cout', 'COÛT (DH)')}</span>
                   </div>
                 </th>
-                <th className="py-3 px-3 min-w-[90px] text-center border-r border-slate-200">
-                  <span>{t('preventive.table.col_statut', 'STATUT')}</span>
+                <th className="py-3 px-3 min-w-[90px] text-center border-r border-slate-300">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                    <span>{t('preventive.table.col_statut', 'STATUT')}</span>
+                  </div>
                 </th>
                 <th className="py-3 px-3.5 text-center min-w-[120px]">
                   <span>{t('preventive.table.col_actions', 'ACTIONS')}</span>

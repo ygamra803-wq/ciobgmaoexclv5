@@ -11,6 +11,8 @@ import {
   ChevronDown,
   ChevronUp,
   Grid,
+  Factory,
+  MapPin,
 } from 'lucide-react';
 import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
@@ -265,35 +267,41 @@ export default function MatrixWeeksView({
                 </th>
 
                 {/* Machine (A) */}
-                <th className="py-3 px-3.5 w-[180px] min-w-[180px] max-w-[180px] sticky left-12 z-30 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
-                  <span>{t('preventive.table.col_machine', 'MACHINE (A)')}</span>
+                <th className="py-3 px-3.5 w-[180px] min-w-[180px] max-w-[180px] sticky left-12 z-30 bg-slate-100 border-r border-slate-300 shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
+                  <div className="flex items-center gap-1.5">
+                    <Factory className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                    <span>{t('preventive.table.col_machine', 'MACHINE (A)')}</span>
+                  </div>
                 </th>
 
                 {/* Zone (B) */}
-                <th className="py-3 px-3 w-[72px] min-w-[72px] max-w-[72px] border-r border-slate-200 md:sticky md:left-[228px] md:z-30 bg-slate-100">
-                  <span>{t('preventive.table.col_zone', 'ZONE (B)')}</span>
+                <th className="py-3 px-3 w-[72px] min-w-[72px] max-w-[72px] border-r border-slate-300 md:sticky md:left-[228px] md:z-30 bg-slate-100">
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                    <span>{t('preventive.table.col_zone', 'ZONE (B)')}</span>
+                  </div>
                 </th>
 
                 {/* Composant (C) */}
-                <th className="py-3 px-3.5 w-[175px] min-w-[175px] max-w-[175px] border-r border-slate-200 md:sticky md:left-[300px] md:z-30 bg-slate-100 md:shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
+                <th className="py-3 px-3.5 w-[175px] min-w-[175px] max-w-[175px] border-r border-slate-300 md:sticky md:left-[300px] md:z-30 bg-slate-100 md:shadow-[2px_0_5px_rgba(0,0,0,0.04)]">
                   <div className="flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Layers className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_composant', 'COMPOSANT (C)')}</span>
                   </div>
                 </th>
 
                 {/* Action (D) */}
-                <th className="py-3 px-3 min-w-[85px] text-center border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[85px] text-center border-r border-slate-300">
                   <div className="flex items-center justify-center gap-1.5">
-                    <Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Wrench className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_action', 'ACTION (D)')}</span>
                   </div>
                 </th>
 
                 {/* Fréquence (E) */}
-                <th className="py-3 px-3 min-w-[85px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[85px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Clock className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_frequence', 'FRÉQ. (E)')}</span>
                   </div>
                 </th>
@@ -305,7 +313,7 @@ export default function MatrixWeeksView({
                     <th
                       key={week}
                       data-week={week}
-                      className={`py-2 px-1 text-center font-mono text-[11px] min-w-[36px] border-r border-slate-200/80 transition-colors ${
+                      className={`py-2 px-1 text-center font-mono text-[11px] min-w-[36px] border-r border-slate-300 transition-colors ${
                         isCurrent ? 'bg-indigo-600 text-white font-black' : 'bg-slate-100 text-slate-700'
                       }`}
                       title={isCurrent ? `Semaine en cours (${week})` : `Semaine ${week}`}
@@ -316,17 +324,17 @@ export default function MatrixWeeksView({
                 })}
 
                 {/* Responsable (G) */}
-                <th className="py-3 px-3 min-w-[110px] border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[110px] border-r border-slate-300">
                   <div className="flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <User className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_responsable', 'RESP. (G)')}</span>
                   </div>
                 </th>
 
                 {/* Statut (H) */}
-                <th className="py-3 px-3 min-w-[95px] text-center border-r border-slate-200">
+                <th className="py-3 px-3 min-w-[95px] text-center border-r border-slate-300">
                   <div className="flex items-center justify-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Activity className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>{t('preventive.table.col_statut', 'STATUT (H)')}</span>
                   </div>
                 </th>

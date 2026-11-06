@@ -1135,21 +1135,21 @@ export default function MachinesRegisteredView({
 
         <div className="max-h-[62vh] overflow-y-auto overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse min-w-[980px]">
-            <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 z-10 shadow-2xs select-none">
+            <thead className="gmao-thead-header sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-300 z-10 shadow-2xs select-none">
               <tr>
                 {/* Row N° */}
-                <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-200 shrink-0 select-none">
+                <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0 select-none">
                   N°
                 </th>
 
                 {/* CODE MACHINE (B) */}
                 <th
                   onClick={() => handleSort('id_machine_registered')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group border-r border-slate-300"
                   title="Cliquer pour trier par Code Machine"
                 >
                   <div className="flex items-center gap-1.5">
-                    <Factory className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Factory className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>CODE MACHINE</span>
                     <span className="text-slate-400 font-normal text-[10px]">(B)</span>
                     {renderSortIcon('id_machine_registered')}
@@ -1159,11 +1159,11 @@ export default function MachinesRegisteredView({
                 {/* DÉSIGNATION (C) */}
                 <th
                   onClick={() => handleSort('designation')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[200px]"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[200px] border-r border-slate-300"
                   title="Cliquer pour trier par Désignation"
                 >
                   <div className="flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Cpu className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>DÉSIGNATION</span>
                     <span className="text-slate-400 font-normal text-[10px]">(C)</span>
                     {renderSortIcon('designation')}
@@ -1173,13 +1173,13 @@ export default function MachinesRegisteredView({
                 {/* MISE EN SERVICE / N° SÉRIE */}
                 <th
                   onClick={() => handleSort('serial_number')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[170px]"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[170px] border-r border-slate-300"
                   title="Cliquer pour trier par N° de Série / Mise en Service"
                 >
                   <div className="flex items-center gap-1.5">
                     <div className="flex items-center -space-x-1">
-                      <Hash className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <Hash className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     </div>
                     <span>MISE EN SERVICE</span>
                     <span className="text-slate-400 font-normal text-[10px]">(N° Série)</span>
@@ -1190,13 +1190,13 @@ export default function MachinesRegisteredView({
                 {/* FAMILLE & TEMPLATE (D + E) */}
                 <th
                   onClick={() => handleSort('id_family')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[200px]"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[200px] border-r border-slate-300"
                   title="Cliquer pour trier par Famille & Modèle"
                 >
                   <div className="flex items-center gap-1.5">
                     <div className="flex items-center -space-x-1">
-                      <HubIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <CategoryIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <HubIcon className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <CategoryIcon className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     </div>
                     <span>FAMILLE & TEMPLATE</span>
                     <span className="text-slate-400 font-normal text-[10px]">(D+E)</span>
@@ -1207,11 +1207,11 @@ export default function MachinesRegisteredView({
                 {/* BLUEPRINT (Plan / Schéma) */}
                 <th
                   onClick={() => handleSort('id_blueprint')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[170px]"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[170px] border-r border-slate-300"
                   title="Cliquer pour trier par Blueprint / Schéma"
                 >
                   <div className="flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>BLUEPRINT</span>
                     <span className="text-slate-400 font-normal text-[10px]">(Plan)</span>
                     {renderSortIcon('id_blueprint')}
@@ -1221,13 +1221,13 @@ export default function MachinesRegisteredView({
                 {/* ZONE & TECHNICIEN (F + G) */}
                 <th
                   onClick={() => handleSort('id_zone_default')}
-                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[210px]"
+                  className="py-3 px-3.5 cursor-pointer select-none hover:bg-slate-200/80 transition group min-w-[210px] border-r border-slate-300"
                   title="Cliquer pour trier par Zone & Technicien"
                 >
                   <div className="flex items-center gap-1.5">
                     <div className="flex items-center -space-x-1">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <Users className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-slate-700 shrink-0" />
+                      <Users className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     </div>
                     <span>ZONE & TECHNICIEN</span>
                     <span className="text-slate-400 font-normal text-[10px]">(F+G)</span>
@@ -1238,11 +1238,11 @@ export default function MachinesRegisteredView({
                 {/* STATUS (H) */}
                 <th
                   onClick={() => handleSort('status')}
-                  className="py-3 px-3 text-center cursor-pointer select-none hover:bg-slate-200/80 transition group"
+                  className="py-3 px-3 text-center cursor-pointer select-none hover:bg-slate-200/80 transition group border-r border-slate-300"
                   title="Cliquer pour trier par Statut"
                 >
                   <div className="flex items-center justify-center gap-1">
-                    <Radio className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Radio className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>STATUT</span>
                     <span className="text-slate-400 font-normal text-[10px]">(H)</span>
                     {renderSortIcon('status')}
@@ -1252,11 +1252,11 @@ export default function MachinesRegisteredView({
                 {/* INTERVENTIONS */}
                 <th
                   onClick={() => handleSort('sorties')}
-                  className="py-3 px-3 text-right cursor-pointer select-none hover:bg-slate-200/80 transition group"
+                  className="py-3 px-3 text-right cursor-pointer select-none hover:bg-slate-200/80 transition group border-r border-slate-300"
                   title="Cliquer pour trier par Nombre d'Interventions"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <Activity className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <Activity className="w-3.5 h-3.5 text-slate-700 shrink-0" />
                     <span>INTERVENTIONS</span>
                     <span className="text-slate-400 font-normal text-[10px]">(Flux)</span>
                     {renderSortIcon('sorties')}
@@ -1796,7 +1796,7 @@ export default function MachinesRegisteredView({
                 }}
                 className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                   pageSize === size
-                    ? 'bg-white text-emerald-800 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/50'
+                    ? 'bg-white text-accent-dark shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/50'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
               >

@@ -212,7 +212,7 @@ export default function GmaoIndustrialDataGrid({
     if (!ic) return null;
     if (isValidElement(ic)) return ic;
     const IconComponent = ic;
-    return <IconComponent className="w-3.5 h-3.5 text-slate-400 shrink-0" />;
+    return <IconComponent className="w-3.5 h-3.5 text-slate-700 shrink-0" />;
   };
 
   const totalCols = columns.length + (showRowNumber ? 1 : 0);
@@ -242,7 +242,7 @@ export default function GmaoIndustrialDataGrid({
         className="flex items-center w-full border-b border-slate-100 hover:bg-slate-50/80 transition-colors duration-150 text-xs box-border"
       >
         {showRowNumber && (
-          <div className="w-12 py-3 px-3 text-center text-slate-400 font-mono text-[10px] bg-slate-50/40 border-r border-slate-100 shrink-0 select-none">
+          <div className="w-12 py-3 px-3 text-center text-slate-400 font-mono text-[10px] bg-slate-50/40 border-r border-slate-200 shrink-0 select-none">
             {rowNumber}
           </div>
         )}
@@ -252,7 +252,7 @@ export default function GmaoIndustrialDataGrid({
             <div
               key={col.key}
               style={colStyle}
-              className={`py-3 px-3.5 truncate ${
+              className={`py-3 px-3.5 truncate border-r border-slate-200 last:border-r-0 ${
                 col.align === 'center'
                   ? 'text-center'
                   : col.align === 'right'
@@ -304,9 +304,9 @@ export default function GmaoIndustrialDataGrid({
         {useReactWindow && isVirtualized && !isLoading && data.length > 0 ? (
           <div className={`${maxHeight} overflow-x-auto`}>
             {/* Sticky Column Headers for react-window mode */}
-            <div className={`sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 z-10 shadow-2xs select-none flex items-center ${minWidth}`}>
+            <div className={`gmao-thead-header sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-300 z-10 shadow-2xs select-none flex items-center ${minWidth}`}>
               {showRowNumber && (
-                <div className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-200 shrink-0 select-none">
+                <div className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0 select-none">
                   N°
                 </div>
               )}
@@ -319,7 +319,7 @@ export default function GmaoIndustrialDataGrid({
                     key={col.key}
                     style={colStyle}
                     onClick={() => isSortable && onSort(col.key)}
-                    className={`py-3 px-3.5 select-none transition ${isSortable ? 'cursor-pointer hover:bg-slate-200/80 group' : ''} ${col.headerClassName || ''}`}
+                    className={`py-3 px-3.5 select-none transition border-r border-slate-300 last:border-r-0 ${isSortable ? 'cursor-pointer hover:bg-slate-200/80 group' : ''} ${col.headerClassName || ''}`}
                   >
                     <div className="flex items-center gap-1.5">
                       {renderColumnIcon(HeaderIcon)}
@@ -350,10 +350,10 @@ export default function GmaoIndustrialDataGrid({
           >
             <table className={`w-full text-left text-xs border-collapse ${minWidth} ${tableClassName}`}>
               {/* Sticky Table Header */}
-              <thead className="sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 z-10 shadow-2xs select-none">
+              <thead className="gmao-thead-header sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-300 z-10 shadow-2xs select-none">
                 <tr>
                   {showRowNumber && (
-                    <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-200 shrink-0 select-none">
+                    <th className="py-3 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0 select-none">
                       N°
                     </th>
                   )}
@@ -380,7 +380,7 @@ export default function GmaoIndustrialDataGrid({
                       <th
                         key={col.key}
                         onClick={() => isSortable && onSort(col.key)}
-                        className={`py-3 px-3.5 select-none transition ${alignmentClass} ${
+                        className={`py-3 px-3.5 select-none transition border-r border-slate-300 last:border-r-0 ${alignmentClass} ${
                           isSortable ? 'cursor-pointer hover:bg-slate-200/80 group' : ''
                         } ${col.headerClassName || ''}`}
                         title={isSortable ? `${t('common.filters.sort_by', 'Trier par')} ${typeof col.label === 'string' ? col.label : col.key}` : undefined}
@@ -402,7 +402,7 @@ export default function GmaoIndustrialDataGrid({
               </thead>
 
               {/* Table Body */}
-              <tbody className="divide-y divide-slate-100 text-xs">
+              <tbody className="divide-y divide-slate-200/80 text-xs">
                 {isLoading ? (
                   <TableSkeletonRows rows={loadingRowsCount} columnsCount={totalCols} />
                 ) : !data || data.length === 0 ? (
@@ -439,14 +439,14 @@ export default function GmaoIndustrialDataGrid({
                           className="hover:bg-slate-50/80 transition-colors duration-150 group"
                         >
                           {showRowNumber && (
-                            <td className="py-3 px-3 text-center text-slate-400 font-mono text-[10px] bg-slate-50/40 border-r border-slate-100 shrink-0 select-none">
+                            <td className="py-3 px-3 text-center text-slate-400 font-mono text-[10px] bg-slate-50/40 border-r border-slate-200 shrink-0 select-none">
                               {rowNumber}
                             </td>
                           )}
                           {columns.map((col) => (
                             <td
                               key={col.key}
-                              className={`py-3 px-3.5 ${
+                              className={`py-3 px-3.5 border-r border-slate-200 last:border-r-0 ${
                                 col.align === 'center'
                                   ? 'text-center'
                                   : col.align === 'right'

@@ -1207,7 +1207,7 @@ export default function MonthlyDayMatrixView({
                 }}
                 className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                   pageSize === size
-                    ? 'bg-white text-cyan-900 shadow-xs border border-slate-200/50'
+                    ? 'bg-white text-accent-dark shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/50'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
                 }`}
               >
@@ -1239,33 +1239,9 @@ export default function MonthlyDayMatrixView({
                 <span>Précédent</span>
               </button>
 
-              <div className="flex items-center gap-1 px-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum = i + 1;
-                  if (totalPages > 5 && currentPage > 3) {
-                    pageNum = currentPage - 3 + i;
-                    if (pageNum + (4 - i) > totalPages) {
-                      pageNum = totalPages - 4 + i;
-                    }
-                  }
-                  if (pageNum < 1 || pageNum > totalPages) return null;
-
-                  return (
-                    <button
-                      key={pageNum}
-                      type="button"
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        currentPage === pageNum
-                          ? 'bg-cyan-600 text-white shadow-xs'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
+              <span className="px-2 font-mono text-xs font-bold text-slate-600 select-none">
+                {currentPage} / {totalPages}
+              </span>
 
               <button
                 type="button"

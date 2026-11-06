@@ -293,7 +293,7 @@ svg.lucide-boxes:not(.text-white):not(.sidebar-l2-icon),
 svg.lucide-fingerprint-pattern:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-blueprint-plus:not(.text-white),
 svg.lucide-badge-check:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
-svg.lucide-users:not(.text-white):not(.sidebar-l2-icon),
+svg.lucide-users:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.lucide-user-check:not(.text-white),
 svg.gmao-icon-supervisor:not(.text-white) {
   color: #4f46e5 !important;
@@ -362,12 +362,51 @@ svg[class*="gmao-icon-"].page-header-icon.text-amber-600 {
   color: #b45309 !important; /* text-amber-700 (Corrective Maintenance) */
 }
 
+svg.page-header-icon.text-purple-700,
+svg.page-header-icon.text-purple-600,
+svg[class*="gmao-icon-"].page-header-icon.text-purple-700,
+svg[class*="gmao-icon-"].page-header-icon.text-purple-600 {
+  color: #7e22ce !important; /* text-purple-700 (Zones & Utilisateurs) */
+}
+
 /* 6. Zones & Ateliers, Preventive Engineering & Component Templates (Purple) */
-svg.lucide-map-pin:not(.text-white):not(.sidebar-group-icon),
+svg.lucide-map-pin:not(.text-white):not(.sidebar-group-icon):not(.page-header-icon),
 svg.lucide-settings-2:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-cube:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-cube-plus:not(.text-white) {
   color: #9333ea !important;
+}
+
+/* 7. Unified Amber Utility Preservation inside Filter Cards */
+.text-amber-700 > svg.lucide,
+.text-amber-700 > svg[class*="gmao-icon-"],
+.text-amber-600 > svg.lucide,
+.text-amber-600 > svg[class*="gmao-icon-"],
+svg.lucide.text-amber-700,
+svg.lucide.text-amber-600,
+svg[class*="gmao-icon-"].text-amber-700,
+svg[class*="gmao-icon-"].text-amber-600 {
+  color: #b45309 !important;
+}
+
+/* 8. Mature Excel Table Headers: Neutral Column Icons & Crisp Column Grid Borders */
+table thead th svg.lucide:not(.lucide-arrow-up):not(.lucide-arrow-down):not(.lucide-arrow-up-down),
+table thead th svg[class*="gmao-icon-"],
+.gmao-thead-header svg.lucide:not(.lucide-arrow-up):not(.lucide-arrow-down):not(.lucide-arrow-up-down),
+.gmao-thead-header svg[class*="gmao-icon-"] {
+  color: #334155 !important; /* text-slate-700 matching column header text */
+}
+
+table.border-collapse thead tr > th:not(:last-child) {
+  border-right: 1px solid #cbd5e1 !important; /* slate-300 crisp header column divider */
+}
+
+table.border-collapse tbody tr > td:not(:last-child) {
+  border-right: 1px solid #e2e8f0 !important; /* slate-200 clean data cell column divider */
+}
+
+table.border-collapse tbody tr:not(:last-child) > td {
+  border-bottom: 1px solid #e2e8f0;
 }
 
 /* Contrast Guard: Keep icons white when rendered inside solid dark/colored buttons */

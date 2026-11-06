@@ -577,6 +577,7 @@ export default function BlueprintMachineView({
         key: 'id_family',
         label: t('machines.blueprint.col_family_model', 'FAMILLE & MODÈLE (C+D)'),
         colLetter: 'C+D',
+        icon: HubIcon,
         sortable: true,
         headerClassName: 'min-w-[170px]',
       },
