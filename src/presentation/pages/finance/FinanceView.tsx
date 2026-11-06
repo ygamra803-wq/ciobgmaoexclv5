@@ -2,9 +2,13 @@
  * @file FinanceView.tsx
  * @module presentation/pages/finance/FinanceView
  * @description
- * لوحة التحكم في تكاليف الصيانة والميزانية والأصول (Pilotage des Coûts & Budgets Maintenance) لـ GMAO.
+ * لوحة التحكم في تكاليف الصيانة ورقابة الميزانية الدورية والأصول (Pilotage des Coûts & Budgets Maintenance) لـ GMAO.
  * تلتزم بمبدأ: Field Claim ≠ Coût Validé ≠ Écriture Comptable ERP.
- * تقرأ حصرياً من التدخلات والحركات المعتمدة دون أي قيم أصول افتراضية أو ميزانيات ديمو صامتة (FIN-P0).
+ * تضم ترقيات FIN-P0 / P1 / P2:
+ * - متابعة سنوية وشهرية (12 شهراً) وربع سنوية (T1-T4) داخل السنة المالية.
+ * - شريط إنذارات تجاوز الميزانية (WARNING ≥ burnWarningPercent و DEFICIT) وقائمة Top انحرافات دون إنذارات وهمية في الوضع الفارغ.
+ * - تكلفة الفترة الحالية لكل منطقة + رابط مباشر لبطاقة الآلة (onNavigateToMachine).
+ * - سجل تدقيق خفيف (budgetChangeLog — آخر 5 تعديلات).
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -23,6 +27,8 @@ import {
   Sliders,
   Search,
   ExternalLink,
+  Calendar,
+  History,
 } from 'lucide-react';
 import { useCurrency } from '../../../utils/currencyService';
 import { storageService } from '../../../utils/storageService';
@@ -30,6 +36,7 @@ import { DataGateway } from '../../../application/DataGateway';
 import {
   FiscalBudgetConfig,
   HistoricalExchangeRate,
+  BudgetPeriodMode,
   INITIAL_EXCHANGE_RATES,
 } from '../../../domain/finance/entities/FinancialBudget';
 import {
@@ -49,6 +56,7 @@ interface FinanceViewProps {
   preventiveExecutions?: any[];
   sortiesExterne?: any[];
   onNavigateToTab?: (tab: string) => void;
+  onNavigateToMachine?: (machineCode: string) => void;
   showToast?: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
@@ -60,6 +68,7 @@ export default function FinanceView({
   preventiveExecutions = [],
   sortiesExterne = [],
   onNavigateToTab,
+  onNavigateToMachine,
   showToast,
 }: FinanceViewProps) {
   const { user } = useAuth();
@@ -92,13 +101,40 @@ export default function FinanceView({
     return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_EXCHANGE_RATES;
   });
 
-  // Save budget changes via DataGateway with actor audit stamp
+  // P2-1 / P2-3: Period inspection mode & selected month/quarter
+  const [viewPeriodMode, setViewPeriodMode] = useState<BudgetPeriodMode>(
+    () => budget.periodMode || 'ANNUAL'
+  );
+  const [selectedMonthIdx, setSelectedMonthIdx] = useState<number>(() => new Date().getMonth() + 1); // 1..12
+  const [selectedQuarterIdx, setSelectedQuarterIdx] = useState<number>(
+    () => Math.floor(new Date().getMonth() / 3) + 1 // 1..4
+  );
+
+  useEffect(() => {
+    if (budget.periodMode) {
+      setViewPeriodMode(budget.periodMode);
+    }
+  }, [budget.periodMode]);
+
+  // Save budget changes via DataGateway with actor audit stamp (P2-5)
   const saveBudget = (updated: FiscalBudgetConfig) => {
     if (!canManage) return;
     const actor = user?.name || user?.nom || user?.username || user?.role || 'ADMIN';
     const saved = DataGateway.saveFinancialBudget(updated, actor);
     setBudget(saved);
-    if (showToast) showToast('Allocations budgétaires enregistrées avec succès.', 'success');
+    if (saved.periodMode) {
+      setViewPeriodMode(saved.periodMode);
+    }
+    if (showToast) showToast('Allocations budgétaires et paramètres de suivi enregistrés.', 'success');
+  };
+
+  // Navigate directly to a machine card (P2-4)
+  const handleOpenMachineCard = (machineCode: string) => {
+    if (onNavigateToMachine) {
+      onNavigateToMachine(machineCode);
+    } else if (onNavigateToTab) {
+      onNavigateToTab('machines');
+    }
   };
 
   // Active sub-tab
@@ -110,6 +146,7 @@ export default function FinanceView({
   const [tcoSearch, setTcoSearch] = useState('');
   const [tcoStatusFilter, setTcoStatusFilter] = useState<'ALL' | MachineBerStatus>('ALL');
   const [stockSearch, setStockSearch] = useState('');
+  const [zoneScopeMode, setZoneScopeMode] = useState<'ANNUAL' | 'CURRENT_PERIOD'>('ANNUAL');
 
   // Multi-Currency Simulator State
   const [simCurrency, setSimCurrency] = useState<'EUR' | 'USD'>('EUR');
@@ -143,6 +180,50 @@ export default function FinanceView({
       sortiesExterne,
     });
   }, [budget, exchangeRates, machines, stockItems, mouvements, correctiveInterventions, preventiveExecutions, sortiesExterne]);
+
+  // Active period summary for MONTHLY or QUARTERLY view
+  const activePeriodSummary = useMemo(() => {
+    if (viewPeriodMode === 'MONTHLY') {
+      return (
+        synthesis.monthlyBreakdown.find((m) => m.periodIndex === selectedMonthIdx) ||
+        synthesis.monthlyBreakdown[0]
+      );
+    }
+    if (viewPeriodMode === 'QUARTERLY') {
+      return (
+        synthesis.quarterlyBreakdown.find((q) => q.periodIndex === selectedQuarterIdx) ||
+        synthesis.quarterlyBreakdown[0]
+      );
+    }
+    return null;
+  }, [viewPeriodMode, selectedMonthIdx, selectedQuarterIdx, synthesis]);
+
+  const displayedVariances = activePeriodSummary ? activePeriodSummary.variances : synthesis.variances;
+  const displayedTotalAllocated = activePeriodSummary
+    ? activePeriodSummary.totalAllocated
+    : synthesis.totalAllocated;
+  const displayedTotalActual = activePeriodSummary
+    ? activePeriodSummary.totalActual
+    : synthesis.totalActual;
+  const displayedTotalVariance = activePeriodSummary
+    ? activePeriodSummary.totalVariance
+    : synthesis.totalVariance;
+  const displayedTotalBurnRate = activePeriodSummary
+    ? activePeriodSummary.totalBurnRate
+    : synthesis.totalBurnRate;
+
+  // Displayed Zone Cost Breakdown (Annual vs Current Selected Period)
+  const displayedZoneBreakdown = useMemo(() => {
+    if (zoneScopeMode === 'CURRENT_PERIOD') {
+      if (viewPeriodMode === 'QUARTERLY') {
+        const q = synthesis.quarterlyBreakdown.find((x) => x.periodIndex === selectedQuarterIdx);
+        if (q) return q.zoneCostBreakdown;
+      }
+      const m = synthesis.monthlyBreakdown.find((x) => x.periodIndex === selectedMonthIdx);
+      if (m) return m.zoneCostBreakdown;
+    }
+    return synthesis.zoneCostBreakdown;
+  }, [zoneScopeMode, viewPeriodMode, selectedMonthIdx, selectedQuarterIdx, synthesis]);
 
   // Filtered Machines TCO
   const filteredTcoMachines = useMemo(() => {
@@ -188,6 +269,9 @@ export default function FinanceView({
     }
   };
 
+  const deficitAlertsCount = synthesis.budgetAlerts.filter((a) => a.status === 'DEFICIT').length;
+  const warningAlertsCount = synthesis.budgetAlerts.filter((a) => a.status === 'WARNING').length;
+
   return (
     <div className="w-full space-y-6 pb-16">
       {/* 1. Header & Executive Strip */}
@@ -206,11 +290,11 @@ export default function FinanceView({
                   ISO 4217 / {currencyCode}
                 </span>
                 <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-700">
-                  Exercice {synthesis.fiscalYear}
+                  Exercice {synthesis.fiscalYear} · Mode {synthesis.periodMode}
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Contrôle budgétaire, coûts opérationnels validés (Maker-Checker), valorisation PMP et TCO réel par machine.
+                Contrôle budgétaire périodique, coûts opérationnels validés (Maker-Checker), valorisation PMP et TCO réel par machine.
               </p>
             </div>
           </div>
@@ -312,7 +396,7 @@ export default function FinanceView({
                 className={`h-full rounded-full transition-all duration-500 ${
                   synthesis.totalBurnRate > 100
                     ? 'bg-rose-500'
-                    : synthesis.totalBurnRate > 85
+                    : synthesis.totalBurnRate >= synthesis.burnWarningPercent
                     ? 'bg-amber-500'
                     : 'bg-emerald-500'
                 }`}
@@ -397,7 +481,12 @@ export default function FinanceView({
           }`}
         >
           <Receipt className="w-4 h-4" />
-          <span>Budgets & Variances</span>
+          <span>Budgets & Suivi Périodique</span>
+          {synthesis.budgetAlerts.length > 0 && (
+            <span className="rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+              {synthesis.budgetAlerts.length}
+            </span>
+          )}
         </button>
 
         <button
@@ -466,24 +555,90 @@ export default function FinanceView({
         </button>
       </div>
 
-      {/* 4. Tab 1: Maintenance Budgeting & Forecasting */}
+      {/* 4. Tab 1: Maintenance Budgeting, Period Tracking & Alerts (FIN-P2) */}
       {activeTab === 'budgets' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-black text-slate-900">
-                Suivi Budgétaire & Analyse des Écarts (Exercice {synthesis.fiscalYear})
+                Suivi Budgétaire & Contrôle Périodique (Exercice {synthesis.fiscalYear})
               </h2>
               <p className="text-xs text-slate-500">
-                Comparaison entre les plafonds budgétaires alloués et les coûts réels validés (Maker-Checker) sur l'exercice {synthesis.fiscalYear}.
+                Suivi annuel, mensuel (12 mois) ou trimestriel (T1–T4). Seuil d'alerte burn configuré à{' '}
+                <strong className="text-slate-700">{synthesis.burnWarningPercent}%</strong>.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              {budget.updatedBy && budget.updatedBy !== 'FACTORY_RESET' && (
-                <span className="text-[11px] text-slate-500 font-mono">
-                  Mis à jour par: <strong className="text-slate-700">{budget.updatedBy}</strong>
-                </span>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {/* P2-3: Period Mode Selector (Annuel | Mensuel | Trimestriel) */}
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
+                <Calendar className="w-3.5 h-3.5 text-slate-500 ml-1.5 mr-1" />
+                <button
+                  type="button"
+                  onClick={() => setViewPeriodMode('ANNUAL')}
+                  className={`rounded-lg px-2.5 py-1 font-bold transition cursor-pointer ${
+                    viewPeriodMode === 'ANNUAL'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Annuel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewPeriodMode('MONTHLY')}
+                  className={`rounded-lg px-2.5 py-1 font-bold transition cursor-pointer ${
+                    viewPeriodMode === 'MONTHLY'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Mensuel (12M)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewPeriodMode('QUARTERLY')}
+                  className={`rounded-lg px-2.5 py-1 font-bold transition cursor-pointer ${
+                    viewPeriodMode === 'QUARTERLY'
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Trimestriel (T1-T4)
+                </button>
+              </div>
+
+              {/* Specific Month or Quarter Dropdown when MONTHLY / QUARTERLY */}
+              {viewPeriodMode === 'MONTHLY' && (
+                <select
+                  value={selectedMonthIdx}
+                  onChange={(e) => setSelectedMonthIdx(Number(e.target.value) || 1)}
+                  aria-label="Mois sélectionné"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-hidden"
+                >
+                  {synthesis.monthlyBreakdown.map((m) => (
+                    <option key={m.periodCode} value={m.periodIndex}>
+                      {m.periodCode} — {m.labelFr} ({m.totalBurnRate}%)
+                    </option>
+                  ))}
+                </select>
               )}
+
+              {viewPeriodMode === 'QUARTERLY' && (
+                <select
+                  value={selectedQuarterIdx}
+                  onChange={(e) => setSelectedQuarterIdx(Number(e.target.value) || 1)}
+                  aria-label="Trimestre sélectionné"
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-900 focus:outline-hidden"
+                >
+                  {synthesis.quarterlyBreakdown.map((q) => (
+                    <option key={q.periodCode} value={q.periodIndex}>
+                      {q.labelFr} ({q.totalBurnRate}%)
+                    </option>
+                  ))}
+                </select>
+              )}
+
               {canManage && (
                 <button
                   type="button"
@@ -494,12 +649,13 @@ export default function FinanceView({
                   className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
                 >
                   <Sliders className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Configurer Plafonds Budgétaires</span>
+                  <span>Configurer Plafonds & Périodicité</span>
                 </button>
               )}
             </div>
           </div>
 
+          {/* Empty Factory Notice (Zero false alarms on EMPTY_FISCAL_BUDGET) */}
           {synthesis.totalAllocated === 0 && (
             <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-0.5">
@@ -507,7 +663,7 @@ export default function FinanceView({
                   Aucun plafond budgétaire alloué (Mode Usine Réelle — 0 {symbol})
                 </div>
                 <p className="text-[11px] text-amber-800">
-                  Conformément à la règle Zero Silent Seed, aucun budget fictif n'est injecté par défaut. Définissez vos allocations annuelles pour suivre les taux de consommation.
+                  Conformément à la règle Zero Silent Seed, aucune alerte fictive n'est déclenchée tant que le budget est à 0. Définissez vos allocations pour activer la surveillance mensuelle et annuelle.
                 </p>
               </div>
               {canManage && (
@@ -525,13 +681,75 @@ export default function FinanceView({
             </div>
           )}
 
+          {/* P2-3: Active Budget Alerts & Top Deviations Banner */}
+          {synthesis.totalAllocated > 0 && synthesis.budgetAlerts.length > 0 && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span className="text-xs font-black text-rose-950 uppercase tracking-wider">
+                    Alertes de Consommation Budgétaire & Top Écarts ({synthesis.fiscalYear})
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] font-bold">
+                  {deficitAlertsCount > 0 && (
+                    <span className="rounded-full bg-rose-600 px-2.5 py-0.5 text-white">
+                      {deficitAlertsCount} Dépassement(s) (DEFICIT)
+                    </span>
+                  )}
+                  {warningAlertsCount > 0 && (
+                    <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-slate-950">
+                      {warningAlertsCount} Alerte(s) Burn (≥{synthesis.burnWarningPercent}%)
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                {synthesis.budgetAlerts.slice(0, 4).map((alert) => (
+                  <div
+                    key={alert.id}
+                    className={`rounded-xl border p-3 bg-white shadow-2xs ${
+                      alert.status === 'DEFICIT' ? 'border-rose-300' : 'border-amber-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-black text-slate-900 truncate">{alert.labelFr}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-black font-mono ${
+                          alert.status === 'DEFICIT'
+                            ? 'bg-rose-100 text-rose-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}
+                      >
+                        {alert.burnRatePercent}%
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
+                      <span className="font-bold text-slate-700">{alert.periodLabelFr}</span>
+                      <span className="font-mono text-rose-600 font-bold">
+                        Écart: {formatCurrency(alert.variance)}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-500 font-mono">
+                      Réel: {formatCurrency(alert.actual)} / Plafond: {formatCurrency(alert.allocated)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 4 Category Cards (Dynamically scoped to Annual, Selected Month, or Selected Quarter) */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {synthesis.variances.map((item) => (
+            {displayedVariances.map((item) => (
               <div key={item.key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">{item.labelFr}</h3>
-                    <p className="text-[11px] text-slate-500">{item.labelAr}</p>
+                    <p className="text-[11px] text-slate-500">
+                      {activePeriodSummary ? `${activePeriodSummary.labelFr} ${synthesis.fiscalYear}` : item.labelAr}
+                    </p>
                   </div>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
@@ -577,7 +795,7 @@ export default function FinanceView({
                     className={`h-full rounded-full transition-all duration-500 ${
                       item.burnRatePercent > 100
                         ? 'bg-rose-500'
-                        : item.burnRatePercent > 85
+                        : item.burnRatePercent >= synthesis.burnWarningPercent
                         ? 'bg-amber-500'
                         : 'bg-emerald-500'
                     }`}
@@ -592,7 +810,10 @@ export default function FinanceView({
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
             <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 flex items-center justify-between">
               <span className="text-xs font-black uppercase tracking-wider text-slate-700">
-                Tableau Récapitulatif Budgétaire & Statut de Clôture ({synthesis.fiscalYear})
+                Tableau Récapitulatif Budgétaire —{' '}
+                {activePeriodSummary
+                  ? `${activePeriodSummary.periodCode} (${activePeriodSummary.labelFr} ${synthesis.fiscalYear})`
+                  : `Exercice Annuel ${synthesis.fiscalYear}`}
               </span>
               <span className="text-xs text-slate-500">Monnaie : {symbol} ({currencyCode})</span>
             </div>
@@ -609,7 +830,7 @@ export default function FinanceView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {synthesis.variances.map((v) => (
+                  {displayedVariances.map((v) => (
                     <tr key={v.key} className="hover:bg-slate-50 transition">
                       <td className="px-5 py-3.5">
                         <div className="font-bold text-slate-900">{v.labelFr}</div>
@@ -650,7 +871,7 @@ export default function FinanceView({
                           {v.status === 'FAVORABLE'
                             ? 'Favorable'
                             : v.status === 'WARNING'
-                            ? 'Sous Contrôle (>85%)'
+                            ? `Alerte Burn (≥${synthesis.burnWarningPercent}%)`
                             : v.status === 'UNCONFIGURED'
                             ? 'Plafond non défini'
                             : 'Déficit / Dépassement'}
@@ -659,27 +880,27 @@ export default function FinanceView({
                     </tr>
                   ))}
                   <tr className="bg-slate-50/80 font-black text-slate-900 border-t border-slate-300">
-                    <td className="px-5 py-4 uppercase">Total Général Usine</td>
-                    <td className="px-5 py-4 text-right font-mono">{formatCurrency(synthesis.totalAllocated)}</td>
-                    <td className="px-5 py-4 text-right font-mono">{formatCurrency(synthesis.totalActual)}</td>
+                    <td className="px-5 py-4 uppercase">Total Période</td>
+                    <td className="px-5 py-4 text-right font-mono">{formatCurrency(displayedTotalAllocated)}</td>
+                    <td className="px-5 py-4 text-right font-mono">{formatCurrency(displayedTotalActual)}</td>
                     <td
                       className={`px-5 py-4 text-right font-mono ${
-                        synthesis.totalVariance >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                        displayedTotalVariance >= 0 ? 'text-emerald-700' : 'text-rose-600'
                       }`}
                     >
-                      {synthesis.totalVariance >= 0 ? '+' : ''}
-                      {formatCurrency(synthesis.totalVariance)}
+                      {displayedTotalVariance >= 0 ? '+' : ''}
+                      {formatCurrency(displayedTotalVariance)}
                     </td>
                     <td className="px-5 py-4 text-right font-mono">
-                      {synthesis.totalAllocated > 0 ? `${synthesis.totalBurnRate}%` : '—'}
+                      {displayedTotalAllocated > 0 ? `${displayedTotalBurnRate}%` : '—'}
                     </td>
                     <td className="px-5 py-4 text-center">
                       <span className="text-[11px] font-bold text-slate-700">
-                        {synthesis.totalAllocated === 0 && synthesis.totalActual === 0
+                        {displayedTotalAllocated === 0 && displayedTotalActual === 0
                           ? 'Plafond 0 DH'
-                          : synthesis.totalVariance >= 0
+                          : displayedTotalVariance >= 0
                           ? 'Solde Positif'
-                          : 'Dépassement Global'}
+                          : 'Dépassement Période'}
                       </span>
                     </td>
                   </tr>
@@ -687,10 +908,141 @@ export default function FinanceView({
               </table>
             </div>
           </div>
+
+          {/* P2-2: Full 12-Month or 4-Quarter Matrix Overview */}
+          <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
+            <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 flex items-center justify-between">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-700">
+                {viewPeriodMode === 'QUARTERLY'
+                  ? `Matrice Trimestrielle (T1–T4 ${synthesis.fiscalYear})`
+                  : `Matrice d'Exécution Mensuelle (12 Mois — ${synthesis.fiscalYear})`}
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Cliquez sur une période pour filtrer le détail ci-dessus
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-100/60 font-bold text-slate-700">
+                  <tr>
+                    <th className="px-4 py-2.5">Période</th>
+                    <th className="px-4 py-2.5 text-right">Plafond Alloué</th>
+                    <th className="px-4 py-2.5 text-right">Préventif</th>
+                    <th className="px-4 py-2.5 text-right">Correctif</th>
+                    <th className="px-4 py-2.5 text-right">Externe</th>
+                    <th className="px-4 py-2.5 text-right">Achats PDR</th>
+                    <th className="px-4 py-2.5 text-right">Total Réel</th>
+                    <th className="px-4 py-2.5 text-right">Burn (%)</th>
+                    <th className="px-4 py-2.5 text-center">Statut</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(viewPeriodMode === 'QUARTERLY'
+                    ? synthesis.quarterlyBreakdown
+                    : synthesis.monthlyBreakdown
+                  ).map((p) => {
+                    const prev = p.variances.find((v) => v.key === 'preventive')?.actual || 0;
+                    const corr = p.variances.find((v) => v.key === 'corrective')?.actual || 0;
+                    const ext = p.variances.find((v) => v.key === 'external')?.actual || 0;
+                    const sp = p.variances.find((v) => v.key === 'spares')?.actual || 0;
+                    const isSelected =
+                      (viewPeriodMode === 'MONTHLY' && p.periodIndex === selectedMonthIdx) ||
+                      (viewPeriodMode === 'QUARTERLY' && p.periodIndex === selectedQuarterIdx);
+                    return (
+                      <tr
+                        key={p.periodCode}
+                        onClick={() => {
+                          if (viewPeriodMode === 'QUARTERLY') {
+                            setSelectedQuarterIdx(p.periodIndex);
+                          } else {
+                            setViewPeriodMode('MONTHLY');
+                            setSelectedMonthIdx(p.periodIndex);
+                          }
+                        }}
+                        className={`transition cursor-pointer ${
+                          isSelected ? 'bg-emerald-50/70 font-bold' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="px-4 py-2.5 font-mono text-slate-900">
+                          <span className="font-bold">{p.periodCode}</span> — {p.labelFr}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-600">
+                          {formatCurrency(p.totalAllocated)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-indigo-700">
+                          {formatCurrency(prev)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-amber-800">
+                          {formatCurrency(corr)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                          {formatCurrency(ext)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-sky-700">
+                          {formatCurrency(sp)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900">
+                          {formatCurrency(p.totalActual)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-bold">
+                          {p.totalAllocated > 0 ? `${p.totalBurnRate}%` : '—'}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-black ${
+                              p.status === 'FAVORABLE'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : p.status === 'WARNING'
+                                ? 'bg-amber-100 text-amber-800'
+                                : p.status === 'UNCONFIGURED'
+                                ? 'bg-slate-100 text-slate-500'
+                                : 'bg-rose-100 text-rose-800'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* P2-5: Lightweight Budget Audit Log (Last 5 Modifications) */}
+          {Array.isArray(budget.budgetChangeLog) && budget.budgetChangeLog.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-black text-slate-800 uppercase tracking-wider">
+                  <History className="w-3.5 h-3.5 text-slate-500" />
+                  Journal d'Audit des Allocations Budgétaires (5 dernières modifications)
+                </span>
+                <span className="text-[11px] font-mono text-slate-500">
+                  Dernier auteur: <strong className="text-slate-800">{budget.updatedBy}</strong>
+                </span>
+              </div>
+              <div className="divide-y divide-slate-100 text-xs">
+                {budget.budgetChangeLog.map((entry) => (
+                  <div key={entry.id} className="py-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-bold text-slate-700">
+                        {entry.updatedBy}
+                      </span>
+                      <span className="text-slate-700 font-medium">{entry.summary}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {new Date(entry.timestamp).toLocaleString('fr-FR')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 5. Tab 2: Asset TCO & Depreciation (Zero Synthetic Valuation + Per-Machine Preventive Cost) */}
+      {/* 5. Tab 2: Asset TCO & Depreciation (Zero Synthetic Valuation + Per-Machine Preventive Cost + Direct Machine Link) */}
       {activeTab === 'tco_assets' && (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -699,7 +1051,7 @@ export default function FinanceView({
                 TCO & Coûts Réels par Machine (Sans Hypothèses Synthétiques)
               </h2>
               <p className="text-xs text-slate-500">
-                Le coût préventif et correctif suit strictement chaque machine (`machineCode`). Les machines sans `valeur_a_neuf` sont affichées « Non évalué ».
+                Le coût préventif et correctif suit strictement chaque machine (`machineCode`). Cliquez sur le code machine pour ouvrir sa fiche technique.
               </p>
             </div>
 
@@ -756,7 +1108,15 @@ export default function FinanceView({
                     filteredTcoMachines.map((m) => (
                       <tr key={m.id} className="hover:bg-slate-50 transition">
                         <td className="px-4 py-3">
-                          <div className="font-bold text-slate-900 font-mono">{m.code}</div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenMachineCard(m.code)}
+                            className="font-bold text-emerald-700 hover:text-emerald-900 hover:underline font-mono inline-flex items-center gap-1 cursor-pointer"
+                            title={`Ouvrir la fiche machine ${m.code}`}
+                          >
+                            <span>{m.code}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </button>
                           <div className="text-[11px] text-slate-600">{m.name}</div>
                           <div className="text-[10px] text-slate-400">{m.zone}</div>
                         </td>
@@ -828,19 +1188,17 @@ export default function FinanceView({
                                 : m.berStatus === 'ATTENTION'
                                 ? 'Sous Surveillance'
                                 : m.berStatus === 'NON_EVALUE'
-                                ? 'À évaluer'
+                                ? 'Non évalué'
                                 : 'Rentable'}
                             </span>
-                            {onNavigateToTab && (
-                              <button
-                                type="button"
-                                onClick={() => onNavigateToTab('machines')}
-                                title={`Ouvrir la fiche machine ${m.code}`}
-                                className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMachineCard(m.code)}
+                              title={`Ouvrir la fiche machine ${m.code}`}
+                              className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1108,7 +1466,13 @@ export default function FinanceView({
                         <tr key={se.id || idx} className="hover:bg-slate-50">
                           <td className="px-3 py-2.5">
                             <div className="font-bold text-slate-900">{organeLabel}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">{machineLabel}</div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenMachineCard(machineLabel)}
+                              className="text-[10px] text-emerald-700 hover:underline font-mono cursor-pointer"
+                            >
+                              {machineLabel}
+                            </button>
                           </td>
                           <td className="px-3 py-2.5 text-slate-700 font-medium">{supplierLabel}</td>
                           <td className="px-3 py-2.5 text-center">
@@ -1130,7 +1494,7 @@ export default function FinanceView({
         </div>
       )}
 
-      {/* 8. Tab 5: Downtime Financial Impact & Zone Cost Breakdown */}
+      {/* 8. Tab 5: Downtime Financial Impact & Zone Cost Breakdown (P2-4 Period Zone Costs + Machine Links) */}
       {activeTab === 'downtime_roi' && (
         <div className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
@@ -1174,11 +1538,58 @@ export default function FinanceView({
             </div>
           </div>
 
-          {/* Zone Cost Breakdown Table */}
+          {/* P2-4: Zone Cost Breakdown Table (Annual vs Current Selected Period) */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
-            <h3 className="text-sm font-black text-slate-900">
-              Répartition des Coûts de Maintenance par Zone / Atelier ({synthesis.fiscalYear})
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-black text-slate-900">
+                  Répartition des Coûts de Maintenance par Zone / Atelier
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Comparez le coût annuel cumulé par zone ou le coût de la période sélectionnée.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setZoneScopeMode('ANNUAL')}
+                    className={`rounded-lg px-2.5 py-1 font-bold transition cursor-pointer ${
+                      zoneScopeMode === 'ANNUAL'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Exercice {synthesis.fiscalYear}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setZoneScopeMode('CURRENT_PERIOD')}
+                    className={`rounded-lg px-2.5 py-1 font-bold transition cursor-pointer ${
+                      zoneScopeMode === 'CURRENT_PERIOD'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Mois sélectionné (M{String(selectedMonthIdx).padStart(2, '0')})
+                  </button>
+                </div>
+                {zoneScopeMode === 'CURRENT_PERIOD' && (
+                  <select
+                    value={selectedMonthIdx}
+                    onChange={(e) => setSelectedMonthIdx(Number(e.target.value) || 1)}
+                    className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-900"
+                  >
+                    {synthesis.monthlyBreakdown.map((m) => (
+                      <option key={m.periodCode} value={m.periodIndex}>
+                        {m.periodCode} — {m.labelFr}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="border-b border-slate-200 bg-slate-100/60 font-bold text-slate-700">
@@ -1192,14 +1603,14 @@ export default function FinanceView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {synthesis.zoneCostBreakdown.length === 0 ? (
+                  {displayedZoneBreakdown.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
                         Aucune zone active enregistrée.
                       </td>
                     </tr>
                   ) : (
-                    synthesis.zoneCostBreakdown.map((z) => (
+                    displayedZoneBreakdown.map((z) => (
                       <tr key={z.zone} className="hover:bg-slate-50 transition">
                         <td className="px-4 py-2.5 font-bold text-slate-900">{z.zone}</td>
                         <td className="px-4 py-2.5 text-center font-mono text-slate-600">{z.machinesCount}</td>
@@ -1244,7 +1655,16 @@ export default function FinanceView({
                 <tbody className="divide-y divide-slate-100">
                   {synthesis.machinesTCO.slice(0, 8).map((m) => (
                     <tr key={m.id} className="hover:bg-slate-50 transition">
-                      <td className="px-4 py-3 font-mono font-bold text-slate-900">{m.code}</td>
+                      <td className="px-4 py-3 font-mono font-bold">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMachineCard(m.code)}
+                          className="text-emerald-700 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>{m.code}</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </button>
+                      </td>
                       <td className="px-4 py-3 font-medium text-slate-800">{m.name}</td>
                       <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
                         {formatCurrency(m.coutMaintenanceCumule)}
@@ -1358,24 +1778,68 @@ export default function FinanceView({
         </div>
       )}
 
-      {/* 10. Edit Budget Allocations Modal (Strictly guarded by canManage) */}
+      {/* 10. Edit Budget Allocations & Periodicity Modal (Strictly guarded by canManage) */}
       {isEditingBudget && canManage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <h3 className="text-base font-black text-slate-900">
-                Configurer les Plafonds Budgétaires ({editBudgetDraft.fiscalYear})
-              </h3>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  Configurer les Plafonds & le Suivi Budgétaire ({editBudgetDraft.fiscalYear})
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Les allocations mensuelles (1/12) ou trimestrielles (1/4) sont calculées automatiquement à partir des plafonds annuels.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsEditingBudget(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold"
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Mode de Pilotage Périodique (P2-1)
+                </label>
+                <select
+                  value={editBudgetDraft.periodMode || 'ANNUAL'}
+                  onChange={(e) =>
+                    setEditBudgetDraft({
+                      ...editBudgetDraft,
+                      periodMode: e.target.value as BudgetPeriodMode,
+                    })
+                  }
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-xs font-bold text-slate-900 focus:outline-hidden"
+                >
+                  <option value="ANNUAL">Annuel (Synthèse Exercice)</option>
+                  <option value="MONTHLY">Mensuel (12 Mois — 1/12 du plafond)</option>
+                  <option value="QUARTERLY">Trimestriel (4 Trimestres T1–T4)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Seuil d'Alerte Consommation Burn (%) (P2-2)
+                </label>
+                <input
+                  type="number"
+                  min="50"
+                  max="100"
+                  value={editBudgetDraft.burnWarningPercent ?? 90}
+                  onChange={(e) =>
+                    setEditBudgetDraft({
+                      ...editBudgetDraft,
+                      burnWarningPercent: Math.max(50, Math.min(100, Number(e.target.value) || 90)),
+                    })
+                  }
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Budget Maintenance Préventive ({symbol})

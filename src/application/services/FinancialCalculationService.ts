@@ -2,18 +2,20 @@
  * @file FinancialCalculationService.ts
  * @module application/services/FinancialCalculationService
  * @description
- * محرك ضبط وتحليل تكاليف الصيانة (Maintenance Cost Control, Budget Variance, TCO & PMP Valuation) لـ GMAO.
- * يلتزم بقواعد FIN-P0:
+ * محرك ضبط وتحليل تكاليف الصيانة ورقابة الميزانية الدورية (FIN-P0 / P1 / P2) لـ GMAO.
+ * يلتزم بـ:
  * 1. لا قيم أصول افتراضية وهمية (valeur_a_neuf = null و berStatus = 'NON_EVALUE' عند غياب التقييم).
  * 2. التكلفة الوقائية تتبع الآلة فعلياً عبر machineCode وليس التوزيع المتساوي.
- * 3. تصفية صارمة بالسنة المالية (fiscalYear) للمصاريف التشغيلية.
- * 4. توقف الإنتاج يُحتسب فقط عند وجود توقف مسجّل فعلياً على BT.
- * 5. تسعير قطع الغيار يستند إلى سعر السطر أو PMP المخزن من مصدر واحد.
+ * 3. تصفية صارمة بالسنة المالية (fiscalYear) وتجميع شهري (1..12) وربع سنوي (T1..T4) للمصاريف المعتمدة.
+ * 4. إنذارات استهلاك الميزانية (WARNING عند >= burnWarningPercent افتراضياً 90%، و DEFICIT عند تجاوز المخصص).
+ * 5. عدم إطلاق إنذارات وهمية عند كون الميزانية صفرية في وضع المصنع الفارغ (UNCONFIGURED).
  */
 
 import {
   FiscalBudgetConfig,
   HistoricalExchangeRate,
+  BudgetPeriodMode,
+  BudgetCategoryKey,
   EMPTY_FISCAL_BUDGET,
 } from '../../domain/finance/entities/FinancialBudget';
 import { isUnapprovedFieldClaim } from './MonthlyReportCalculationService';
@@ -24,7 +26,7 @@ export type BudgetVarianceStatus = 'FAVORABLE' | 'WARNING' | 'DEFICIT' | 'UNCONF
 export type MachineBerStatus = 'OPTIMAL' | 'ATTENTION' | 'REPLACE_RECOMMENDED' | 'NON_EVALUE';
 
 export interface BudgetVarianceItem {
-  key: string;
+  key: BudgetCategoryKey;
   labelFr: string;
   labelAr: string;
   allocated: number;
@@ -32,6 +34,45 @@ export interface BudgetVarianceItem {
   variance: number;         // allocated - actual (Positive = Under budget, Negative = Over budget)
   burnRatePercent: number;  // (actual / allocated) * 100, or 0 when allocated === 0
   status: BudgetVarianceStatus;
+}
+
+export interface ZoneCostSummary {
+  zone: string;
+  machinesCount: number;
+  correctiveCost: number;
+  preventiveCost: number;
+  externalCost: number;
+  totalCost: number;
+}
+
+export interface PeriodFinancialSummary {
+  periodIndex: number;      // 1..12 for MONTHLY, 1..4 for QUARTERLY
+  periodCode: string;       // 'M01'..'M12' or 'T1'..'T4'
+  labelFr: string;
+  labelAr: string;
+  variances: BudgetVarianceItem[];
+  totalAllocated: number;
+  totalActual: number;
+  totalVariance: number;
+  totalBurnRate: number;
+  status: BudgetVarianceStatus;
+  zoneCostBreakdown: ZoneCostSummary[];
+}
+
+export interface BudgetAlertItem {
+  id: string;
+  categoryKey: BudgetCategoryKey;
+  labelFr: string;
+  labelAr: string;
+  periodType: BudgetPeriodMode;
+  periodCode: string;       // 'ANNUAL' | 'M01'..'M12' | 'T1'..'T4'
+  periodLabelFr: string;
+  periodLabelAr: string;
+  allocated: number;
+  actual: number;
+  variance: number;
+  burnRatePercent: number;
+  status: 'WARNING' | 'DEFICIT';
 }
 
 export interface MachineTCOCalculation {
@@ -58,23 +99,21 @@ export interface MachineTCOCalculation {
   berStatus: MachineBerStatus;
 }
 
-export interface ZoneCostSummary {
-  zone: string;
-  machinesCount: number;
-  correctiveCost: number;
-  preventiveCost: number;
-  externalCost: number;
-  totalCost: number;
-}
-
 export interface FinancialSynthesis {
   fiscalYear: number;
+  periodMode: BudgetPeriodMode;
+  burnWarningPercent: number;
   budget: FiscalBudgetConfig;
   variances: BudgetVarianceItem[];
   totalAllocated: number;
   totalActual: number;
   totalVariance: number;
   totalBurnRate: number;
+
+  // P2-2 & P2-3: Monthly / Quarterly breakdowns & active budget alerts
+  monthlyBreakdown: PeriodFinancialSummary[];
+  quarterlyBreakdown: PeriodFinancialSummary[];
+  budgetAlerts: BudgetAlertItem[];
 
   // Spend breakdown (Strictly within fiscalYear)
   spendPreventive: number;
@@ -110,6 +149,73 @@ export interface FinancialSynthesis {
   zoneCostBreakdown: ZoneCostSummary[];
 }
 
+const MONTH_LABELS_FR = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
+
+const MONTH_LABELS_AR = [
+  'يناير',
+  'فبراير',
+  'مارس',
+  'أبريل',
+  'ماي',
+  'يونيو',
+  'يوليوز',
+  'غشت',
+  'شتنبر',
+  'أكتوبر',
+  'نونبر',
+  'دجنبر',
+];
+
+const QUARTER_LABELS_FR = [
+  'T1 (Jan–Mar)',
+  'T2 (Avr–Juin)',
+  'T3 (Juil–Sep)',
+  'T4 (Oct–Déc)',
+];
+
+const QUARTER_LABELS_AR = [
+  'الربع 1 (يناير–مارس)',
+  'الربع 2 (أبريل–يونيو)',
+  'الربع 3 (يوليوز–شتنبر)',
+  'الربع 4 (أكتوبر–دجنبر)',
+];
+
+const CATEGORY_META: Array<{ key: BudgetCategoryKey; labelFr: string; labelAr: string }> = [
+  {
+    key: 'preventive',
+    labelFr: 'Maintenance Préventive',
+    labelAr: 'الصيانة الوقائية والفحص الدوري',
+  },
+  {
+    key: 'corrective',
+    labelFr: 'Correctif & Pannes Urgentes',
+    labelAr: 'الصيانة التصحيحية وحالات الطوارئ',
+  },
+  {
+    key: 'external',
+    labelFr: 'Sous-traitance & Bobinage',
+    labelAr: 'المقاولات والبوبيناج الخارجي',
+  },
+  {
+    key: 'spares',
+    labelFr: 'Achats & Renouvellement PDR',
+    labelAr: 'مشتريات وتجديد قطع الغيار',
+  },
+];
+
 export function isUnapprovedFinancialRecord(record: any): boolean {
   if (!record) return true;
   if (isUnapprovedFieldClaim(record)) return true;
@@ -130,10 +236,10 @@ export function isUnapprovedFinancialRecord(record: any): boolean {
 }
 
 /**
- * Extracts a 4-digit calendar year from a record's date fields.
+ * Extracts calendar year and optional month (1..12) from a record's date fields.
  * Returns null if the record carries no date metadata at all.
  */
-export function extractRecordYear(record: any): number | null {
+export function extractRecordYearAndMonth(record: any): { year: number; month: number | null } | null {
   if (!record || typeof record !== 'object') return null;
   const candidates = [
     record.periodMonth,
@@ -153,18 +259,53 @@ export function extractRecordYear(record: any): number | null {
   for (const raw of candidates) {
     if (!raw) continue;
     const str = String(raw).trim();
-    const match = str.match(/^(\d{4})/);
-    if (match) {
-      const yr = Number(match[1]);
-      if (yr >= 1990 && yr <= 2100) return yr;
+    // 1. ISO YYYY-MM or YYYY-MM-DD
+    const ymMatch = str.match(/^(\d{4})[-/](\d{1,2})/);
+    if (ymMatch) {
+      const yr = Number(ymMatch[1]);
+      const mo = Number(ymMatch[2]);
+      if (yr >= 1990 && yr <= 2100) {
+        return { year: yr, month: mo >= 1 && mo <= 12 ? mo : null };
+      }
     }
+    // 2. DD/MM/YYYY or DD-MM-YYYY
+    const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmyMatch) {
+      const mo = Number(dmyMatch[2]);
+      const yr = Number(dmyMatch[3]);
+      if (yr >= 1990 && yr <= 2100) {
+        return { year: yr, month: mo >= 1 && mo <= 12 ? mo : null };
+      }
+    }
+    // 3. Bare 4-digit year
+    const yrOnlyMatch = str.match(/^(\d{4})$/);
+    if (yrOnlyMatch) {
+      const yr = Number(yrOnlyMatch[1]);
+      if (yr >= 1990 && yr <= 2100) {
+        return { year: yr, month: null };
+      }
+    }
+    // 4. Native Date fallback
     const parsed = new Date(str);
     if (!isNaN(parsed.getTime())) {
       const yr = parsed.getFullYear();
-      if (yr >= 1990 && yr <= 2100) return yr;
+      const mo = parsed.getMonth() + 1;
+      if (yr >= 1990 && yr <= 2100) {
+        return { year: yr, month: mo >= 1 && mo <= 12 ? mo : null };
+      }
     }
   }
   return null;
+}
+
+export function extractRecordYear(record: any): number | null {
+  const ym = extractRecordYearAndMonth(record);
+  return ym ? ym.year : null;
+}
+
+export function extractRecordMonth(record: any): number | null {
+  const ym = extractRecordYearAndMonth(record);
+  return ym ? ym.month : null;
 }
 
 export function matchesFiscalYear(record: any, fiscalYear: number): boolean {
@@ -197,7 +338,7 @@ export class FinancialCalculationService {
   }
 
   /**
-   * الحساب الشامل لكافة مؤشرات تكلفة الصيانة والميزانية والأصول
+   * الحساب الشامل لكافة مؤشرات تكلفة الصيانة والميزانية السنوية والدورية والأصول
    */
   static computeFinancialSynthesis(params: {
     budget?: FiscalBudgetConfig;
@@ -220,7 +361,22 @@ export class FinancialCalculationService {
     const techRate = Math.max(0, Number(budget.technicianHourlyRate ?? 55));
     const downtimeRatePerHour = Math.max(0, Number(budget.productionDowntimeCostPerHour ?? 2500));
     const berThreshold = Math.max(10, Number(budget.berThresholdPercent || 70));
+    const burnWarningPercent = Math.max(50, Math.min(100, Number(budget.burnWarningPercent ?? 90)));
+    const periodMode: BudgetPeriodMode =
+      budget.periodMode === 'MONTHLY' || budget.periodMode === 'QUARTERLY' ? budget.periodMode : 'ANNUAL';
     const currentYear = Number(budget.fiscalYear) || new Date().getFullYear();
+
+    // Map machine code -> zone for accurate zone-by-month cost aggregation
+    const machineZoneMap = new Map<string, string>();
+    const zoneMachinesCountMap = new Map<string, number>();
+    activeMachines.forEach((m) => {
+      const code = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
+      const zone = String(m.id_zone_default || m.id_zone || m.zone || 'Atelier').trim();
+      if (code) {
+        machineZoneMap.set(code, zone);
+      }
+      zoneMachinesCountMap.set(zone, (zoneMachinesCountMap.get(zone) || 0) + 1);
+    });
 
     // 0. فهرس أسعار قطع الغيار من المخزن (PMP / Prix Unitaire) لتوحيد مصدر التسعير
     const stockPriceMap = new Map<string, number>();
@@ -242,6 +398,33 @@ export class FinancialCalculationService {
     const machineCorrectiveLifetimeMap: Record<string, number> = {};
     const machineExternalFiscalMap: Record<string, number> = {};
     const machineExternalLifetimeMap: Record<string, number> = {};
+
+    // P2-2: Monthly actual spend accumulators (index 0..11 => months 1..12)
+    const monthlyActuals: Record<BudgetCategoryKey, number[]> = {
+      preventive: Array(12).fill(0),
+      corrective: Array(12).fill(0),
+      external: Array(12).fill(0),
+      spares: Array(12).fill(0),
+    };
+
+    // P2-4: Monthly zone cost accumulators (index 0..11 => Map<zone, { corrective, preventive, external }>)
+    const monthlyZoneCosts: Array<Map<string, { corrective: number; preventive: number; external: number }>> =
+      Array.from({ length: 12 }, () => new Map());
+
+    const addZoneMonthlyCost = (
+      monthOneBased: number | null,
+      mchId: string,
+      fallbackZone: string | undefined,
+      type: 'preventive' | 'corrective' | 'external',
+      amount: number
+    ) => {
+      if (!monthOneBased || monthOneBased < 1 || monthOneBased > 12 || amount <= 0) return;
+      const zone = (mchId && machineZoneMap.get(mchId)) || fallbackZone || 'Atelier';
+      const zMap = monthlyZoneCosts[monthOneBased - 1];
+      const entry = zMap.get(zone) || { corrective: 0, preventive: 0, external: 0 };
+      entry[type] += amount;
+      zMap.set(zone, entry);
+    };
 
     // 1. حساب مصاريف الصيانة الوقائية (Preventive Spend — Follows Machine Code)
     let spendPreventive = 0;
@@ -286,6 +469,12 @@ export class FinancialCalculationService {
         if (mchId) {
           machinePreventiveFiscalMap[mchId] = (machinePreventiveFiscalMap[mchId] || 0) + exTotal;
         }
+        const month = extractRecordMonth(ex);
+        if (month !== null && month >= 1 && month <= 12) {
+          monthlyActuals.preventive[month - 1] += exTotal;
+          addZoneMonthlyCost(month, mchId, ex.zone, 'preventive', exTotal);
+        }
+
         const tech = String(
           ex.executorName || ex.technicien || ex.executeur || ex.technicien_executant || 'Non assigné'
         ).trim();
@@ -375,6 +564,12 @@ export class FinancialCalculationService {
         if (mchId) {
           machineCorrectiveFiscalMap[mchId] = (machineCorrectiveFiscalMap[mchId] || 0) + ciTotal;
         }
+        const month = extractRecordMonth(ci);
+        if (month !== null && month >= 1 && month <= 12) {
+          monthlyActuals.corrective[month - 1] += ciTotal;
+          addZoneMonthlyCost(month, mchId, ci.zone, 'corrective', ciTotal);
+        }
+
         const tech = String(ci.technicien || ci.intervenant || 'Non assigné').trim();
         if (!techHoursMap[tech]) techHoursMap[tech] = { minutes: 0, count: 0 };
         techHoursMap[tech].minutes += durMin;
@@ -404,6 +599,11 @@ export class FinancialCalculationService {
         if (mchId) {
           machineExternalFiscalMap[mchId] = (machineExternalFiscalMap[mchId] || 0) + cost;
         }
+        const month = extractRecordMonth(se);
+        if (month !== null && month >= 1 && month <= 12) {
+          monthlyActuals.external[month - 1] += cost;
+          addZoneMonthlyCost(month, mchId, se.zone, 'external', cost);
+        }
       }
     });
 
@@ -417,7 +617,7 @@ export class FinancialCalculationService {
 
       const type = String(mvt.type || '').toUpperCase();
       const qte = Math.abs(Number(mvt.quantite || 0));
-      const refKey = String(mvt.ref || mvt.ref_article || '').trim().toUpperCase();
+      const refKey = String(mvt.ref || mvt.ref_article || mvt.code_article || '').trim().toUpperCase();
       const unitPrice = Math.max(
         0,
         Number(mvt.prix_unitaire ?? mvt.prix ?? (refKey ? stockPriceMap.get(refKey) : 0) ?? 0)
@@ -426,6 +626,10 @@ export class FinancialCalculationService {
 
       if (type.includes('ENTREE') || type.includes('ENTRÉE') || type === 'RECEPTION' || type === 'ACHAT') {
         spendSparesPurchased += total;
+        const month = extractRecordMonth(mvt);
+        if (month !== null && month >= 1 && month <= 12) {
+          monthlyActuals.spares[month - 1] += total;
+        }
       } else if (type.includes('SORTIE') || type === 'CONSOMMATION') {
         spendSparesConsumed += total;
       }
@@ -474,7 +678,7 @@ export class FinancialCalculationService {
         const code = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
         const name = m.designation || m.nom || `Machine ${code}`;
         const assetClass = m.asset_class || m.famille || 'PRODUCTION';
-        const zone = m.id_zone_default || m.id_zone || m.zone || 'Atelier';
+        const zone = String(m.id_zone_default || m.id_zone || m.zone || 'Atelier').trim();
 
         // FIN-P0: Never invent 120,000 DH or 2021 when machine valuation/year is absent
         const rawValeur = Number(m.valeur_a_neuf ?? m.prix_achat ?? m.valeur_acquisition ?? 0);
@@ -587,17 +791,17 @@ export class FinancialCalculationService {
       (a, b) => b.totalCost - a.totalCost
     );
 
-    // 9. مصفوفة مقارنة الميزانية مع المصاريف الفعلية (Safe Zero-Allocation Variance)
+    // 9. مصفوفة مقارنة الميزانية مع المصاريف الفعلية (Safe Zero-Allocation Variance + Configurable Warning Threshold)
     const buildVarianceItem = (
-      key: string,
+      key: BudgetCategoryKey,
       labelFr: string,
       labelAr: string,
       allocatedRaw: number,
       actualRaw: number
     ): BudgetVarianceItem => {
-      const allocated = Math.max(0, Math.round(Number(allocatedRaw) || 0));
-      const actual = Math.max(0, Math.round(Number(actualRaw) || 0));
-      const variance = allocated - actual;
+      const allocated = Math.max(0, Math.round((Number(allocatedRaw) || 0) * 100) / 100);
+      const actual = Math.max(0, Math.round((Number(actualRaw) || 0) * 100) / 100);
+      const variance = Math.round((allocated - actual) * 100) / 100;
 
       if (allocated === 0) {
         return {
@@ -614,7 +818,11 @@ export class FinancialCalculationService {
 
       const burnRatePercent = Math.round((actual / allocated) * 1000) / 10;
       const status: BudgetVarianceStatus =
-        actual > allocated ? 'DEFICIT' : actual > allocated * 0.85 ? 'WARNING' : 'FAVORABLE';
+        actual > allocated
+          ? 'DEFICIT'
+          : burnRatePercent >= burnWarningPercent
+          ? 'WARNING'
+          : 'FAVORABLE';
 
       return {
         key,
@@ -628,55 +836,304 @@ export class FinancialCalculationService {
       };
     };
 
-    const varianceItems: BudgetVarianceItem[] = [
-      buildVarianceItem(
-        'preventive',
-        'Maintenance Préventive',
-        'الصيانة الوقائية والفحص الدوري',
-        budget.allocatedPreventive,
-        spendPreventive
-      ),
-      buildVarianceItem(
-        'corrective',
-        'Correctif & Pannes Urgentes',
-        'الصيانة التصحيحية وحالات الطوارئ',
-        budget.allocatedCorrective,
-        spendCorrective
-      ),
-      buildVarianceItem(
-        'external',
-        'Sous-traitance & Bobinage',
-        'المقاولات والبوبيناج الخارجي',
-        budget.allocatedExternal,
-        spendExternal
-      ),
-      buildVarianceItem(
-        'spares',
-        'Achats & Renouvellement PDR',
-        'مشتريات وتجديد قطع الغيار',
-        budget.allocatedSparesStock,
-        spendSparesPurchased
-      ),
-    ];
+    const annualAllocationsByKey: Record<BudgetCategoryKey, number> = {
+      preventive: Math.max(0, Number(budget.allocatedPreventive) || 0),
+      corrective: Math.max(0, Number(budget.allocatedCorrective) || 0),
+      external: Math.max(0, Number(budget.allocatedExternal) || 0),
+      spares: Math.max(0, Number(budget.allocatedSparesStock) || 0),
+    };
 
-    const totalAllocated =
-      Math.max(0, Math.round(Number(budget.allocatedPreventive) || 0)) +
-      Math.max(0, Math.round(Number(budget.allocatedCorrective) || 0)) +
-      Math.max(0, Math.round(Number(budget.allocatedExternal) || 0)) +
-      Math.max(0, Math.round(Number(budget.allocatedSparesStock) || 0));
-    const totalActual = Math.round(spendPreventive + spendCorrective + spendExternal + spendSparesPurchased);
+    const annualActualsByKey: Record<BudgetCategoryKey, number> = {
+      preventive: spendPreventive,
+      corrective: spendCorrective,
+      external: spendExternal,
+      spares: spendSparesPurchased,
+    };
+
+    const varianceItems: BudgetVarianceItem[] = CATEGORY_META.map((cat) =>
+      buildVarianceItem(
+        cat.key,
+        cat.labelFr,
+        cat.labelAr,
+        annualAllocationsByKey[cat.key],
+        annualActualsByKey[cat.key]
+      )
+    );
+
+    const totalAllocated = Math.round(
+      annualAllocationsByKey.preventive +
+        annualAllocationsByKey.corrective +
+        annualAllocationsByKey.external +
+        annualAllocationsByKey.spares
+    );
+    const totalActual = Math.round(
+      spendPreventive + spendCorrective + spendExternal + spendSparesPurchased
+    );
     const totalVariance = totalAllocated - totalActual;
     const totalBurnRate =
       totalAllocated > 0 ? Math.round((totalActual / totalAllocated) * 1000) / 10 : 0;
 
+    // 10. P2-1 & P2-2: Monthly (1..12) and Quarterly (T1..T4) Breakdowns
+    const getMonthCategoryAllocated = (catKey: BudgetCategoryKey, monthIdxZero: number): number => {
+      const customSeries = budget.monthlyAllocations?.[catKey];
+      if (Array.isArray(customSeries) && customSeries.length === 12) {
+        const sumCustom = customSeries.reduce((acc, v) => acc + (Number(v) || 0), 0);
+        if (sumCustom > 0 || periodMode === 'MONTHLY') {
+          const val = Number(customSeries[monthIdxZero]);
+          if (Number.isFinite(val) && val >= 0 && sumCustom > 0) {
+            return Math.round(val * 100) / 100;
+          }
+        }
+      }
+      const annualVal = annualAllocationsByKey[catKey];
+      if (annualVal <= 0) return 0;
+      return Math.round((annualVal / 12) * 100) / 100;
+    };
+
+    const buildPeriodZoneBreakdown = (monthIndicesZeroBased: number[]): ZoneCostSummary[] => {
+      const zMap = new Map<string, ZoneCostSummary>();
+      // Seed all known zones from activeMachines so the table always shows active zones cleanly
+      zoneMachinesCountMap.forEach((mCount, zoneName) => {
+        zMap.set(zoneName, {
+          zone: zoneName,
+          machinesCount: mCount,
+          correctiveCost: 0,
+          preventiveCost: 0,
+          externalCost: 0,
+          totalCost: 0,
+        });
+      });
+
+      monthIndicesZeroBased.forEach((mIdx) => {
+        const monthMap = monthlyZoneCosts[mIdx];
+        if (!monthMap) return;
+        monthMap.forEach((costs, zoneName) => {
+          const entry = zMap.get(zoneName) || {
+            zone: zoneName,
+            machinesCount: zoneMachinesCountMap.get(zoneName) || 0,
+            correctiveCost: 0,
+            preventiveCost: 0,
+            externalCost: 0,
+            totalCost: 0,
+          };
+          entry.correctiveCost = Math.round((entry.correctiveCost + costs.corrective) * 100) / 100;
+          entry.preventiveCost = Math.round((entry.preventiveCost + costs.preventive) * 100) / 100;
+          entry.externalCost = Math.round((entry.externalCost + costs.external) * 100) / 100;
+          entry.totalCost = Math.round(
+            (entry.correctiveCost + entry.preventiveCost + entry.externalCost) * 100
+          ) / 100;
+          zMap.set(zoneName, entry);
+        });
+      });
+
+      return Array.from(zMap.values()).sort((a, b) => b.totalCost - a.totalCost);
+    };
+
+    const monthlyBreakdown: PeriodFinancialSummary[] = Array.from({ length: 12 }, (_, mIdx) => {
+      const mNum = mIdx + 1;
+      const periodCode = `M${String(mNum).padStart(2, '0')}`;
+      const mVariances = CATEGORY_META.map((cat) =>
+        buildVarianceItem(
+          cat.key,
+          cat.labelFr,
+          cat.labelAr,
+          getMonthCategoryAllocated(cat.key, mIdx),
+          monthlyActuals[cat.key][mIdx]
+        )
+      );
+
+      const mAllocated = Math.round(mVariances.reduce((s, v) => s + v.allocated, 0) * 100) / 100;
+      const mActual = Math.round(mVariances.reduce((s, v) => s + v.actual, 0) * 100) / 100;
+      const mVariance = Math.round((mAllocated - mActual) * 100) / 100;
+      const mBurnRate = mAllocated > 0 ? Math.round((mActual / mAllocated) * 1000) / 10 : 0;
+      const mStatus: BudgetVarianceStatus =
+        mAllocated === 0
+          ? mActual > 0
+            ? 'DEFICIT'
+            : 'UNCONFIGURED'
+          : mActual > mAllocated
+          ? 'DEFICIT'
+          : mBurnRate >= burnWarningPercent
+          ? 'WARNING'
+          : 'FAVORABLE';
+
+      return {
+        periodIndex: mNum,
+        periodCode,
+        labelFr: MONTH_LABELS_FR[mIdx],
+        labelAr: MONTH_LABELS_AR[mIdx],
+        variances: mVariances,
+        totalAllocated: mAllocated,
+        totalActual: mActual,
+        totalVariance: mVariance,
+        totalBurnRate: mBurnRate,
+        status: mStatus,
+        zoneCostBreakdown: buildPeriodZoneBreakdown([mIdx]),
+      };
+    });
+
+    const getQuarterCategoryAllocated = (catKey: BudgetCategoryKey, qIdxZero: number): number => {
+      const customQ = budget.quarterlyAllocations?.[catKey];
+      if (Array.isArray(customQ) && customQ.length === 4) {
+        const sumCustom = customQ.reduce((acc, v) => acc + (Number(v) || 0), 0);
+        if (sumCustom > 0) {
+          const val = Number(customQ[qIdxZero]);
+          if (Number.isFinite(val) && val >= 0) {
+            return Math.round(val * 100) / 100;
+          }
+        }
+      }
+      // Sum of the 3 constituent months
+      const mStart = qIdxZero * 3;
+      return (
+        Math.round(
+          (getMonthCategoryAllocated(catKey, mStart) +
+            getMonthCategoryAllocated(catKey, mStart + 1) +
+            getMonthCategoryAllocated(catKey, mStart + 2)) *
+            100
+        ) / 100
+      );
+    };
+
+    const quarterlyBreakdown: PeriodFinancialSummary[] = Array.from({ length: 4 }, (_, qIdx) => {
+      const qNum = qIdx + 1;
+      const periodCode = `T${qNum}`;
+      const mIndices = [qIdx * 3, qIdx * 3 + 1, qIdx * 3 + 2];
+
+      const qVariances = CATEGORY_META.map((cat) => {
+        const qActual = mIndices.reduce((s, mIdx) => s + monthlyActuals[cat.key][mIdx], 0);
+        return buildVarianceItem(
+          cat.key,
+          cat.labelFr,
+          cat.labelAr,
+          getQuarterCategoryAllocated(cat.key, qIdx),
+          qActual
+        );
+      });
+
+      const qAllocated = Math.round(qVariances.reduce((s, v) => s + v.allocated, 0) * 100) / 100;
+      const qActual = Math.round(qVariances.reduce((s, v) => s + v.actual, 0) * 100) / 100;
+      const qVariance = Math.round((qAllocated - qActual) * 100) / 100;
+      const qBurnRate = qAllocated > 0 ? Math.round((qActual / qAllocated) * 1000) / 10 : 0;
+      const qStatus: BudgetVarianceStatus =
+        qAllocated === 0
+          ? qActual > 0
+            ? 'DEFICIT'
+            : 'UNCONFIGURED'
+          : qActual > qAllocated
+          ? 'DEFICIT'
+          : qBurnRate >= burnWarningPercent
+          ? 'WARNING'
+          : 'FAVORABLE';
+
+      return {
+        periodIndex: qNum,
+        periodCode,
+        labelFr: QUARTER_LABELS_FR[qIdx],
+        labelAr: QUARTER_LABELS_AR[qIdx],
+        variances: qVariances,
+        totalAllocated: qAllocated,
+        totalActual: qActual,
+        totalVariance: qVariance,
+        totalBurnRate: qBurnRate,
+        status: qStatus,
+        zoneCostBreakdown: buildPeriodZoneBreakdown(mIndices),
+      };
+    });
+
+    // 11. P2-3: Active Budget Alerts & Top Deviations (Zero false alarms on EMPTY_FISCAL_BUDGET)
+    const budgetAlerts: BudgetAlertItem[] = [];
+    if (totalAllocated > 0) {
+      // 11a. Annual category alerts
+      varianceItems.forEach((v) => {
+        if (v.allocated > 0 && (v.status === 'WARNING' || v.status === 'DEFICIT')) {
+          budgetAlerts.push({
+            id: `alert-annual-${v.key}`,
+            categoryKey: v.key,
+            labelFr: v.labelFr,
+            labelAr: v.labelAr,
+            periodType: 'ANNUAL',
+            periodCode: 'ANNUAL',
+            periodLabelFr: `Annuel ${currentYear}`,
+            periodLabelAr: `السنوي ${currentYear}`,
+            allocated: v.allocated,
+            actual: v.actual,
+            variance: v.variance,
+            burnRatePercent: v.burnRatePercent,
+            status: v.status,
+          });
+        }
+      });
+
+      // 11b. Period-level alerts (Monthly or Quarterly)
+      if (periodMode === 'QUARTERLY') {
+        quarterlyBreakdown.forEach((q) => {
+          q.variances.forEach((v) => {
+            if (v.allocated > 0 && (v.status === 'WARNING' || v.status === 'DEFICIT')) {
+              budgetAlerts.push({
+                id: `alert-${q.periodCode}-${v.key}`,
+                categoryKey: v.key,
+                labelFr: v.labelFr,
+                labelAr: v.labelAr,
+                periodType: 'QUARTERLY',
+                periodCode: q.periodCode,
+                periodLabelFr: `${q.labelFr} ${currentYear}`,
+                periodLabelAr: `${q.labelAr} ${currentYear}`,
+                allocated: v.allocated,
+                actual: v.actual,
+                variance: v.variance,
+                burnRatePercent: v.burnRatePercent,
+                status: v.status,
+              });
+            }
+          });
+        });
+      } else {
+        // For MONTHLY or ANNUAL with dated monthly spend exceeding monthly envelope
+        monthlyBreakdown.forEach((m) => {
+          m.variances.forEach((v) => {
+            if (v.allocated > 0 && (v.status === 'WARNING' || v.status === 'DEFICIT')) {
+              budgetAlerts.push({
+                id: `alert-${m.periodCode}-${v.key}`,
+                categoryKey: v.key,
+                labelFr: v.labelFr,
+                labelAr: v.labelAr,
+                periodType: 'MONTHLY',
+                periodCode: m.periodCode,
+                periodLabelFr: `${m.labelFr} ${currentYear}`,
+                periodLabelAr: `${m.labelAr} ${currentYear}`,
+                allocated: v.allocated,
+                actual: v.actual,
+                variance: v.variance,
+                burnRatePercent: v.burnRatePercent,
+                status: v.status,
+              });
+            }
+          });
+        });
+      }
+
+      budgetAlerts.sort((a, b) => {
+        if (a.status !== b.status) {
+          return a.status === 'DEFICIT' ? -1 : 1;
+        }
+        return b.burnRatePercent - a.burnRatePercent;
+      });
+    }
+
     return {
       fiscalYear: currentYear,
+      periodMode,
+      burnWarningPercent,
       budget,
       variances: varianceItems,
       totalAllocated,
       totalActual,
       totalVariance,
       totalBurnRate,
+      monthlyBreakdown,
+      quarterlyBreakdown,
+      budgetAlerts,
       spendPreventive: Math.round(spendPreventive),
       spendCorrective: Math.round(spendCorrective),
       spendExternal: Math.round(spendExternal),

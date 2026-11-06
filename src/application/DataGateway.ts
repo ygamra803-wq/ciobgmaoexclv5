@@ -417,7 +417,14 @@ export const DataGateway = {
       if (startMode === 'empty' && saved.updatedBy === 'DEMO_SEED') {
         return { ...EMPTY_FISCAL_BUDGET };
       }
-      return saved as FiscalBudgetConfig;
+      return {
+        ...EMPTY_FISCAL_BUDGET,
+        ...saved,
+        periodMode:
+          saved.periodMode === 'MONTHLY' || saved.periodMode === 'QUARTERLY' ? saved.periodMode : 'ANNUAL',
+        burnWarningPercent: Math.max(50, Math.min(100, Number(saved.burnWarningPercent ?? 90))),
+        budgetChangeLog: Array.isArray(saved.budgetChangeLog) ? saved.budgetChangeLog.slice(0, 5) : [],
+      } as FiscalBudgetConfig;
     }
     const isDemo = storageService.getItem(STORAGE_KEYS.DEMO_MODE) === true;
     return isDemo && startMode !== 'empty' ? { ...DEMO_FISCAL_BUDGET } : { ...EMPTY_FISCAL_BUDGET };
@@ -425,12 +432,72 @@ export const DataGateway = {
 
   saveFinancialBudget(budget: Partial<FiscalBudgetConfig>, actorName?: string): FiscalBudgetConfig {
     const clean = this.sanitizePayload(budget || {}) as Partial<FiscalBudgetConfig>;
+    const prevSaved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS) as Partial<FiscalBudgetConfig> | null;
+
+    const fiscalYear = Number(clean.fiscalYear) || new Date().getFullYear();
+    const allocatedPreventive = Math.max(0, Number(clean.allocatedPreventive) || 0);
+    const allocatedCorrective = Math.max(0, Number(clean.allocatedCorrective) || 0);
+    const allocatedExternal = Math.max(0, Number(clean.allocatedExternal) || 0);
+    const allocatedSparesStock = Math.max(0, Number(clean.allocatedSparesStock) || 0);
+    const periodMode =
+      clean.periodMode === 'MONTHLY' || clean.periodMode === 'QUARTERLY' ? clean.periodMode : 'ANNUAL';
+    const burnWarningPercent = Math.max(50, Math.min(100, Number(clean.burnWarningPercent ?? 90)));
+    const updatedAt = clean.updatedAt || new Date().toISOString();
+    const updatedBy = actorName || clean.updatedBy || 'ADMIN';
+
+    const sanitizeSeries = (arr: unknown, len: number): number[] => {
+      if (!Array.isArray(arr)) return Array(len).fill(0);
+      return Array.from({ length: len }, (_, i) => Math.max(0, Math.round((Number(arr[i]) || 0) * 100) / 100));
+    };
+
+    const monthlyAllocations = clean.monthlyAllocations
+      ? {
+          preventive: sanitizeSeries(clean.monthlyAllocations.preventive, 12),
+          corrective: sanitizeSeries(clean.monthlyAllocations.corrective, 12),
+          external: sanitizeSeries(clean.monthlyAllocations.external, 12),
+          spares: sanitizeSeries(clean.monthlyAllocations.spares, 12),
+        }
+      : undefined;
+
+    const quarterlyAllocations = clean.quarterlyAllocations
+      ? {
+          preventive: sanitizeSeries(clean.quarterlyAllocations.preventive, 4),
+          corrective: sanitizeSeries(clean.quarterlyAllocations.corrective, 4),
+          external: sanitizeSeries(clean.quarterlyAllocations.external, 4),
+          spares: sanitizeSeries(clean.quarterlyAllocations.spares, 4),
+        }
+      : undefined;
+
+    const totalAllocated =
+      allocatedPreventive + allocatedCorrective + allocatedExternal + allocatedSparesStock;
+
+    let budgetChangeLog = Array.isArray(clean.budgetChangeLog)
+      ? clean.budgetChangeLog
+      : Array.isArray(prevSaved?.budgetChangeLog)
+      ? prevSaved.budgetChangeLog
+      : [];
+
+    if (updatedBy === 'FACTORY_RESET') {
+      budgetChangeLog = [];
+    } else if (updatedBy !== 'DEMO_SEED') {
+      const auditEntry = {
+        id: `bgt-log-${Date.now()}`,
+        timestamp: updatedAt,
+        updatedBy,
+        fiscalYear,
+        periodMode,
+        totalAllocated,
+        summary: `Ex. ${fiscalYear} (${periodMode}) — Plafond: ${totalAllocated.toLocaleString('fr-FR')} MAD (Seuil alerte: ${burnWarningPercent}%)`,
+      };
+      budgetChangeLog = [auditEntry, ...budgetChangeLog].slice(0, 5);
+    }
+
     const next: FiscalBudgetConfig = {
-      fiscalYear: Number(clean.fiscalYear) || new Date().getFullYear(),
-      allocatedPreventive: Math.max(0, Number(clean.allocatedPreventive) || 0),
-      allocatedCorrective: Math.max(0, Number(clean.allocatedCorrective) || 0),
-      allocatedExternal: Math.max(0, Number(clean.allocatedExternal) || 0),
-      allocatedSparesStock: Math.max(0, Number(clean.allocatedSparesStock) || 0),
+      fiscalYear,
+      allocatedPreventive,
+      allocatedCorrective,
+      allocatedExternal,
+      allocatedSparesStock,
       technicianHourlyRate: Math.max(0, Number(clean.technicianHourlyRate ?? EMPTY_FISCAL_BUDGET.technicianHourlyRate)),
       productionDowntimeCostPerHour: Math.max(
         0,
@@ -438,8 +505,13 @@ export const DataGateway = {
       ),
       berThresholdPercent: Math.max(10, Math.min(200, Number(clean.berThresholdPercent) || 70)),
       defaultVatRate: Math.max(0, Math.min(100, Number(clean.defaultVatRate ?? 20))),
-      updatedAt: clean.updatedAt || new Date().toISOString(),
-      updatedBy: actorName || clean.updatedBy || 'ADMIN',
+      periodMode,
+      burnWarningPercent,
+      ...(monthlyAllocations ? { monthlyAllocations } : {}),
+      ...(quarterlyAllocations ? { quarterlyAllocations } : {}),
+      budgetChangeLog,
+      updatedAt,
+      updatedBy,
     };
     storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, next);
     if (typeof window !== 'undefined') {

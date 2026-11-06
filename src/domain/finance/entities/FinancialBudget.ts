@@ -6,6 +6,26 @@
  * يحترم دستور AGENTS.md (Zero Silent Seed Reinjection: الميزانية الافتراضية للمصنع الفارغ = 0).
  */
 
+export type BudgetPeriodMode = 'ANNUAL' | 'MONTHLY' | 'QUARTERLY';
+export type BudgetCategoryKey = 'preventive' | 'corrective' | 'external' | 'spares';
+
+export interface PeriodCategoryAllocations {
+  preventive: number[]; // 12 values for MONTHLY, 4 values for QUARTERLY
+  corrective: number[];
+  external: number[];
+  spares: number[];
+}
+
+export interface BudgetAuditEntry {
+  id: string;
+  timestamp: string;
+  updatedBy: string;
+  fiscalYear: number;
+  periodMode: BudgetPeriodMode;
+  totalAllocated: number;
+  summary: string;
+}
+
 export interface FiscalBudgetConfig {
   fiscalYear: number;
   allocatedPreventive: number;           // الميزانية المخصصة للصيانة الوقائية (MAD)
@@ -16,6 +36,11 @@ export interface FiscalBudgetConfig {
   productionDowntimeCostPerHour: number; // كلفة توقف خط الإنتاج المعتمدة لكل ساعة (درهم/ساعة)
   berThresholdPercent: number;           // عتبة الإهلاك الاقتصادي الموصى باستبدال الآلة عندها (افتراضياً 70%)
   defaultVatRate: number;                // نسبة الضريبة على القيمة المضافة TVA (المغرب: 20%)
+  periodMode?: BudgetPeriodMode;         // P2-1: نمط متابعة الميزانية (ANNUAL | MONTHLY | QUARTERLY)
+  burnWarningPercent?: number;           // P2-2: عتبة إنذار استهلاك الميزانية (افتراضياً 90%)
+  monthlyAllocations?: PeriodCategoryAllocations;   // P2-1: توزيع شهري مخصص اختياري (12 شهراً)
+  quarterlyAllocations?: PeriodCategoryAllocations; // P2-1: توزيع ربع سنوي مخصص اختياري (4 أرباع)
+  budgetChangeLog?: BudgetAuditEntry[];  // P2-5: سجل تدقيق خفيف لآخر 5 تعديلات على الميزانية
   updatedAt: string;
   updatedBy?: string;                    // اسم أو معرّف المسؤول الذي عدّل الميزانية (سجل تدقيق)
 }
@@ -60,6 +85,9 @@ export const EMPTY_FISCAL_BUDGET: FiscalBudgetConfig = {
   productionDowntimeCostPerHour: 2500,   // 2,500 DH / heure
   berThresholdPercent: 70,               // 70% Beyond Economical Repair
   defaultVatRate: 20,                    // 20% TVA au Maroc
+  periodMode: 'ANNUAL',
+  burnWarningPercent: 90,
+  budgetChangeLog: [],
   updatedAt: new Date().toISOString(),
 };
 
@@ -76,6 +104,9 @@ export const DEMO_FISCAL_BUDGET: FiscalBudgetConfig = {
   productionDowntimeCostPerHour: 2500,
   berThresholdPercent: 70,
   defaultVatRate: 20,
+  periodMode: 'MONTHLY',
+  burnWarningPercent: 90,
+  budgetChangeLog: [],
   updatedAt: new Date().toISOString(),
   updatedBy: 'DEMO_SEED',
 };

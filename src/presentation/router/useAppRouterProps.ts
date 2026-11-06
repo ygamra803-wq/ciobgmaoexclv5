@@ -242,6 +242,15 @@ export function useAppRouterProps({
       preventiveExecutions,
       sortiesExterne,
       onNavigateToTab: navigateTo,
+      onNavigateToMachine: (machineCode: string) => {
+        if (filters?.setMchFamilyFilter) filters.setMchFamilyFilter('ALL');
+        if (filters?.setMchTemplateFilter) filters.setMchTemplateFilter('ALL');
+        if (filters?.setMchZoneFilter) filters.setMchZoneFilter('ALL');
+        if (filters?.setMchSearch && typeof machineCode === 'string') {
+          filters.setMchSearch(machineCode.trim());
+        }
+        navigateTo('machines');
+      },
       showToast: showToast || navigation?.showToast,
     },
 

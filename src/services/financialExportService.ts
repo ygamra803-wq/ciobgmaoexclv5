@@ -12,15 +12,15 @@ export class FinancialExportService {
   static exportFinancialSynthesisToExcel(synthesis: FinancialSynthesis, currencySymbol: string = 'DH'): void {
     const wb = XLSX.utils.book_new();
 
-    // 1. Sheet: Synthèse Budgétaire
+    // 1. Sheet: Synthèse Budgétaire (Annuelle + Alertes)
     const budgetRows = [
       ['Pilotage des Coûts & Budgets Maintenance (Coûts Validés GMAO)', '', '', '', '', ''],
       [
         `Exercice Fiscal: ${synthesis.fiscalYear}`,
+        `Mode Période: ${synthesis.periodMode}`,
+        `Seuil Alerte Burn: ${synthesis.burnWarningPercent}%`,
         `Date d'export: ${new Date().toLocaleDateString('fr-FR')}`,
         synthesis.budget.updatedBy ? `Configuré par: ${synthesis.budget.updatedBy}` : '',
-        '',
-        '',
         '',
       ],
       ['', '', '', '', '', ''],
@@ -41,10 +41,10 @@ export class FinancialExportService {
         v.status === 'FAVORABLE'
           ? 'Favorable'
           : v.status === 'WARNING'
-          ? 'Sous surveillance'
+          ? `Sous surveillance (>=${synthesis.burnWarningPercent}%)`
           : v.status === 'UNCONFIGURED'
           ? 'Budget non défini (0)'
-          : 'Dépassement',
+          : 'Dépassement (Déficit)',
       ]),
       ['', '', '', '', '', ''],
       [
@@ -63,7 +63,41 @@ export class FinancialExportService {
     const wsBudget = XLSX.utils.aoa_to_sheet(budgetRows);
     XLSX.utils.book_append_sheet(wb, wsBudget, 'Synthèse Budgétaire');
 
-    // 2. Sheet: TCO & Coûts par Machine (Zero Synthetic Assumptions)
+    // 2. Sheet: Suivi Mensuel & Alertes (FIN-P2)
+    const monthlyHeader = [
+      'Période',
+      `Budget Total Alloué (${currencySymbol})`,
+      `Dépenses Totales Validées (${currencySymbol})`,
+      `Écart (${currencySymbol})`,
+      'Taux Burn (%)',
+      'Statut Période',
+      `Préventif Réel (${currencySymbol})`,
+      `Correctif Réel (${currencySymbol})`,
+      `Externe Réel (${currencySymbol})`,
+      `Achats PDR Réel (${currencySymbol})`,
+    ];
+    const monthlyRows = synthesis.monthlyBreakdown.map((m) => {
+      const prev = m.variances.find((v) => v.key === 'preventive')?.actual || 0;
+      const corr = m.variances.find((v) => v.key === 'corrective')?.actual || 0;
+      const ext = m.variances.find((v) => v.key === 'external')?.actual || 0;
+      const sp = m.variances.find((v) => v.key === 'spares')?.actual || 0;
+      return [
+        `${m.periodCode} - ${m.labelFr}`,
+        m.totalAllocated,
+        m.totalActual,
+        m.totalVariance,
+        m.totalAllocated > 0 ? `${m.totalBurnRate}%` : '0%',
+        m.status,
+        prev,
+        corr,
+        ext,
+        sp,
+      ];
+    });
+    const wsMonthly = XLSX.utils.aoa_to_sheet([monthlyHeader, ...monthlyRows]);
+    XLSX.utils.book_append_sheet(wb, wsMonthly, 'Suivi Mensuel (12 Mois)');
+
+    // 3. Sheet: TCO & Coûts par Machine (Zero Synthetic Assumptions)
     const tcoHeader = [
       'Code Machine',
       'Désignation',
@@ -111,7 +145,7 @@ export class FinancialExportService {
     const wsTco = XLSX.utils.aoa_to_sheet([tcoHeader, ...tcoRows]);
     XLSX.utils.book_append_sheet(wb, wsTco, 'TCO & Amortissement');
 
-    // 3. Sheet: Main d'Œuvre & Arrêts de Production
+    // 4. Sheet: Main d'Œuvre & Arrêts de Production
     const laborHeader = [
       'Technicien / Intervenant',
       'Heures Travaillées Validées (h)',

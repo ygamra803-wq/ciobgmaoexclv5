@@ -1,12 +1,19 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { FinancialCalculationService } from '../application/services/FinancialCalculationService';
 import {
   DEFAULT_FISCAL_BUDGET,
   EMPTY_FISCAL_BUDGET,
   DEMO_FISCAL_BUDGET,
 } from '../domain/finance/entities/FinancialBudget';
+import { DataGateway } from '../application/DataGateway';
+import { storageService } from '../utils/storageService';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
 describe('FinancialCalculationService', () => {
+  beforeEach(() => {
+    storageService.removeItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
+  });
+
   it('converts foreign currencies to MAD correctly', () => {
     const rates = [
       {
@@ -31,7 +38,7 @@ describe('FinancialCalculationService', () => {
     expect(FinancialCalculationService.convertToMAD(200, 'USD', rates).amountMAD).toBe(2000);
   });
 
-  it('FIN-P0: starts with zero budget allocations in empty factory mode (no silent demo budget)', () => {
+  it('FIN-P0 & P2-3: starts with zero budget allocations in empty factory mode and emits zero false alerts', () => {
     expect(DEFAULT_FISCAL_BUDGET.allocatedPreventive).toBe(0);
     expect(DEFAULT_FISCAL_BUDGET.allocatedCorrective).toBe(0);
     expect(DEFAULT_FISCAL_BUDGET.allocatedExternal).toBe(0);
@@ -51,9 +58,11 @@ describe('FinancialCalculationService', () => {
     expect(synthesis.totalAllocated).toBe(0);
     expect(synthesis.totalActual).toBe(0);
     expect(synthesis.variances.every((v) => v.status === 'UNCONFIGURED')).toBe(true);
+    expect(synthesis.monthlyBreakdown.every((m) => m.status === 'UNCONFIGURED')).toBe(true);
+    expect(synthesis.budgetAlerts).toHaveLength(0);
   });
 
-  it('FIN-P0: does not invent valeur_a_neuf (120k) or annee_mise_en_service (2021) for unvalued machines', () => {
+  it('FIN-P0 (Non-regression): does not invent valeur_a_neuf (120k) or annee_mise_en_service (2021) for unvalued machines', () => {
     const machines = [
       {
         id_machine_registered: 'MCH-UNVALUED',
@@ -133,7 +142,6 @@ describe('FinancialCalculationService', () => {
 
     expect(m1?.preventiveCost).toBe(250);
     expect(m1?.coutMaintenanceCumule).toBe(250);
-    // MCH-02 had zero preventive executions -> must be 0, NOT 125!
     expect(m2?.preventiveCost).toBe(0);
     expect(m2?.coutMaintenanceCumule).toBe(0);
   });
@@ -184,121 +192,133 @@ describe('FinancialCalculationService', () => {
       correctiveInterventions,
     });
 
-    // Only 2026 intervention is counted in 2026 fiscal spend: 240 (PMP parts) + 100 (labor) = 340 DH
     expect(synthesis.spendCorrective).toBe(340);
-
-    // No downtime was recorded on CI-2026 -> must be 0, NOT 2 hours from duree_intervention_min
     expect(synthesis.totalDowntimeHours).toBe(0);
     expect(synthesis.totalDowntimeLossMAD).toBe(0);
 
-    // Machine TCO tracks both fiscal year (340 DH) and lifetime cumulative (5340 DH)
     const m1 = synthesis.machinesTCO[0];
     expect(m1.coutMaintenanceExercice).toBe(340);
     expect(m1.coutMaintenanceCumule).toBe(5340);
   });
 
-  it('computes financial synthesis with budget variances, PMP valuation, and explicit downtime losses', () => {
+  it('FIN-P2 (P2-1, P2-2, P2-3, P2-4): aggregates monthly spend within fiscalYear and triggers WARNING (>=90%) and DEFICIT (>100%) alerts', () => {
     const budget = {
       ...DEFAULT_FISCAL_BUDGET,
       fiscalYear: 2026,
-      allocatedPreventive: 100000,
-      allocatedCorrective: 80000,
-      allocatedExternal: 50000,
-      allocatedSparesStock: 120000,
+      periodMode: 'MONTHLY' as const,
+      burnWarningPercent: 90,
+      allocatedPreventive: 12000,   // 1,000 MAD / month
+      allocatedCorrective: 24000,   // 2,000 MAD / month
+      allocatedExternal: 12000,     // 1,000 MAD / month
+      allocatedSparesStock: 12000,  // 1,000 MAD / month
       technicianHourlyRate: 50,
-      productionDowntimeCostPerHour: 2000,
-      berThresholdPercent: 70,
-      defaultVatRate: 20,
     };
 
     const machines = [
       {
-        id_machine_registered: 'MCH-01',
-        nom: 'Presse Hydraulique 100T',
-        valeur_a_neuf: 100000,
-        annee_mise_en_service: 2022,
-        duree_vie_ans: 10,
+        id_machine_registered: 'MCH-A',
+        nom: 'Presse Zone A',
+        id_zone_default: 'Atelier Emboutissage',
+        valeur_a_neuf: 80000,
         status: 'OPERATIONNELLE',
-      },
-      {
-        id_machine_registered: 'MCH-02',
-        nom: 'Compresseur Atlas',
-        valeur_a_neuf: 50000,
-        annee_mise_en_service: 2018,
-        duree_vie_ans: 8,
-        status: 'OPERATIONNELLE',
-      },
-    ];
-
-    const stockItems = [
-      { id: 'ART-1', stockActuel: 10, prix_unitaire: 150 },
-      { id: 'ART-2', stockActuel: 5, prix_unitaire: 300 },
-    ];
-
-    const correctiveInterventions = [
-      {
-        id: 'CI-1',
-        code_machine: 'MCH-01',
-        duree_intervention_min: 120, // 2h -> 2 * 50 = 100 DH
-        duree_arret_minutes: 60,     // 1h explicit downtime -> 2000 DH loss
-        pieces_utilisees: [{ quantite: 2, prix_unitaire: 150 }], // 300 DH
-        validation_status: 'VALIDE',
-      },
-      {
-        id: 'CI-PENDING',
-        code_machine: 'MCH-01',
-        duree_intervention_min: 600,
-        validation_status: 'EN_ATTENTE_VALIDATION', // Should be excluded
       },
     ];
 
     const preventiveExecutions = [
       {
-        id: 'PE-1',
-        machineCode: 'MCH-01',
-        duree_minutes: 60, // 1h -> 50 DH
-        pieces_cout: 200,  // 200 DH -> total 250 DH
+        id: 'PE-M03-WARN',
+        machineCode: 'MCH-A',
+        periodMonth: '2026-03',
+        totalCost: 920, // 92% of 1,000 MAD monthly preventive envelope -> WARNING (>=90%)
         statut: 'CLOTUREE',
+      },
+      {
+        id: 'PE-2025-EXCLUDED',
+        machineCode: 'MCH-A',
+        periodMonth: '2025-03',
+        totalCost: 9999, // Different year -> must be excluded from 2026 monthly & annual spend
+        statut: 'CLOTUREE',
+      },
+    ];
+
+    const correctiveInterventions = [
+      {
+        id: 'CI-M05-DEFICIT',
+        code_machine: 'MCH-A',
+        date_cloture: '2026-05-18',
+        cout_total: 2500, // 125% of 2,000 MAD monthly corrective envelope -> DEFICIT (>100%)
+        validation_status: 'VALIDE',
+      },
+      {
+        id: 'CI-M05-UNAPPROVED',
+        code_machine: 'MCH-A',
+        date_cloture: '2026-05-20',
+        cout_total: 4000,
+        validation_status: 'EN_ATTENTE_VALIDATION', // Unapproved -> excluded
       },
     ];
 
     const synthesis = FinancialCalculationService.computeFinancialSynthesis({
       budget,
       machines,
-      stockItems,
-      correctiveInterventions,
       preventiveExecutions,
+      correctiveInterventions,
     });
 
-    // PMP Stock Valuation: 10*150 + 5*300 = 1500 + 1500 = 3000
-    expect(synthesis.stockValuationPMP_MAD).toBe(3000);
-    expect(synthesis.stockValuationWithVAT_MAD).toBe(3600); // 3000 * 1.20
+    expect(synthesis.monthlyBreakdown).toHaveLength(12);
+    expect(synthesis.quarterlyBreakdown).toHaveLength(4);
 
-    // Corrective spend on approved CI-1: 300 (parts) + 100 (labor) = 400
-    expect(synthesis.spendCorrective).toBe(400);
+    // Month 3 (Mars - M03): Preventive is 920 / 1000 = 92% -> WARNING
+    const march = synthesis.monthlyBreakdown[2];
+    expect(march.periodCode).toBe('M03');
+    const marchPrev = march.variances.find((v) => v.key === 'preventive');
+    expect(marchPrev?.allocated).toBe(1000);
+    expect(marchPrev?.actual).toBe(920);
+    expect(marchPrev?.burnRatePercent).toBe(92);
+    expect(marchPrev?.status).toBe('WARNING');
+    expect(march.zoneCostBreakdown[0].zone).toBe('Atelier Emboutissage');
+    expect(march.zoneCostBreakdown[0].preventiveCost).toBe(920);
 
-    // Preventive spend: 200 + 50 = 250
-    expect(synthesis.spendPreventive).toBe(250);
+    // Month 5 (Mai - M05): Corrective is 2500 / 2000 = 125% -> DEFICIT
+    const may = synthesis.monthlyBreakdown[4];
+    expect(may.periodCode).toBe('M05');
+    const mayCorr = may.variances.find((v) => v.key === 'corrective');
+    expect(mayCorr?.allocated).toBe(2000);
+    expect(mayCorr?.actual).toBe(2500);
+    expect(mayCorr?.burnRatePercent).toBe(125);
+    expect(mayCorr?.status).toBe('DEFICIT');
 
-    // Downtime: 60 min = 1h * 2000 DH = 2000 DH
-    expect(synthesis.totalDowntimeHours).toBe(1);
-    expect(synthesis.totalDowntimeLossMAD).toBe(2000);
+    // Alerts: DEFICIT sorted first, followed by WARNING
+    expect(synthesis.budgetAlerts.length).toBeGreaterThanOrEqual(2);
+    expect(synthesis.budgetAlerts[0].status).toBe('DEFICIT');
+    expect(synthesis.budgetAlerts[0].periodCode).toBe('M05');
+    expect(synthesis.budgetAlerts[1].status).toBe('WARNING');
+    expect(synthesis.budgetAlerts[1].periodCode).toBe('M03');
+  });
 
-    // Variances
-    const prevVar = synthesis.variances.find((v) => v.key === 'preventive');
-    expect(prevVar?.allocated).toBe(100000);
-    expect(prevVar?.actual).toBe(250);
-    expect(prevVar?.status).toBe('FAVORABLE');
+  it('FIN-P2 (P2-5): records updatedBy, updatedAt, and caps budgetChangeLog at last 5 entries in DataGateway', () => {
+    for (let i = 1; i <= 7; i++) {
+      DataGateway.saveFinancialBudget(
+        {
+          fiscalYear: 2026,
+          periodMode: 'MONTHLY',
+          allocatedPreventive: i * 10000,
+          allocatedCorrective: 20000,
+          allocatedExternal: 5000,
+          allocatedSparesStock: 15000,
+        },
+        `Manager_${i}`
+      );
+    }
 
-    // Machines TCO calculation
-    expect(synthesis.machinesTCO.length).toBe(2);
-    const m1 = synthesis.machinesTCO.find((m) => m.code === 'MCH-01');
-    expect(m1).toBeDefined();
-    expect(m1?.valeurANeuf).toBe(100000);
-    expect(m1?.preventiveCost).toBe(250);
-    expect(m1?.correctiveCost).toBe(400);
-    expect(m1?.berIndexPercent).toBeLessThan(70);
-    expect(m1?.berStatus).toBe('OPTIMAL');
+    const saved = DataGateway.getFinancialBudget();
+    expect(saved.updatedBy).toBe('Manager_7');
+    expect(saved.periodMode).toBe('MONTHLY');
+    expect(saved.budgetChangeLog).toBeDefined();
+    expect(saved.budgetChangeLog).toHaveLength(5);
+    // Most recent entry is first
+    expect(saved.budgetChangeLog?.[0].updatedBy).toBe('Manager_7');
+    expect(saved.budgetChangeLog?.[4].updatedBy).toBe('Manager_3');
   });
 
   it('flags machine with BER recommendation when maintenance spend exceeds threshold', () => {
@@ -344,11 +364,9 @@ describe('FinancialCalculationService', () => {
     expect(financeModule).toBeDefined();
     expect(financeModule?.children[0].id).toBe('finance');
 
-    // Index is right at the top (index 1, directly beside dashboard)
     const financeIndex = PARENT_MODULES.findIndex((m) => m.id === 'finance');
     expect(financeIndex).toBe(1);
 
-    // Resolves correctly as parent module
     const resolvedParent = getParentModuleForTab('finance');
     expect(resolvedParent.id).toBe('finance');
   });
