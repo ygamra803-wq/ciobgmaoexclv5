@@ -2,16 +2,15 @@
  * @file FinanceView.tsx
  * @module presentation/pages/finance/FinanceView
  * @description
- * واجهة الإدارة والتقارير المالية متعددة العملات (Financial & Multi-Currency Hub) لـ GMAO.
- * تربط العمليات التشغيلية للصيانة بالتحليلات المحاسبية (Budgeting, TCO, Amortissement, PMP, Pertes de Production).
+ * لوحة التحكم في تكاليف الصيانة والميزانية والأصول (Pilotage des Coûts & Budgets Maintenance) لـ GMAO.
+ * تلتزم بمبدأ: Field Claim ≠ Coût Validé ≠ Écriture Comptable ERP.
+ * تقرأ حصرياً من التدخلات والحركات المعتمدة دون أي قيم أصول افتراضية أو ميزانيات ديمو صامتة (FIN-P0).
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Coins,
   Landmark,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle2,
   FileSpreadsheet,
@@ -21,27 +20,22 @@ import {
   Clock,
   ArrowRightLeft,
   Receipt,
-  Percent,
   Sliders,
-  DollarSign,
   Search,
-  Filter,
-  Info,
-  Check,
-  ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { useCurrency } from '../../../utils/currencyService';
 import { storageService } from '../../../utils/storageService';
-import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
+import { DataGateway } from '../../../application/DataGateway';
 import {
   FiscalBudgetConfig,
   HistoricalExchangeRate,
-  DEFAULT_FISCAL_BUDGET,
   INITIAL_EXCHANGE_RATES,
 } from '../../../domain/finance/entities/FinancialBudget';
 import {
   FinancialCalculationService,
   FinancialSynthesis,
+  MachineBerStatus,
 } from '../../../application/services/FinancialCalculationService';
 import { FinancialExportService } from '../../../services/financialExportService';
 import { useAuth } from '../../../context/AuthContext';
@@ -70,12 +64,27 @@ export default function FinanceView({
 }: FinanceViewProps) {
   const { user } = useAuth();
   const { formatCurrency, currencyCode, symbol, setCurrency } = useCurrency();
-  const canManage = Boolean(user && AuthorizationService.hasPermission(user, 'finance.manage'));
+  const canManage =
+    Boolean(user) &&
+    !AuthorizationService.isReadOnly(user) &&
+    AuthorizationService.hasPermission(user, 'finance.manage');
 
-  // 1. Budget State
+  // 1. Budget State via DataGateway (FIN-P0: 0 allocations in empty factory mode)
   const [budget, setBudget] = useState<FiscalBudgetConfig>(() => {
-    return storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS) || DEFAULT_FISCAL_BUDGET;
+    return DataGateway.getFinancialBudget();
   });
+
+  useEffect(() => {
+    const handleBudgetUpdated = (e: any) => {
+      if (e?.detail) {
+        setBudget(e.detail);
+      } else {
+        setBudget(DataGateway.getFinancialBudget());
+      }
+    };
+    window.addEventListener('gmao_financial_budget_updated', handleBudgetUpdated);
+    return () => window.removeEventListener('gmao_financial_budget_updated', handleBudgetUpdated);
+  }, []);
 
   // 2. Exchange Rates State
   const [exchangeRates, setExchangeRates] = useState<HistoricalExchangeRate[]>(() => {
@@ -83,17 +92,13 @@ export default function FinanceView({
     return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_EXCHANGE_RATES;
   });
 
-  // Save budget changes
+  // Save budget changes via DataGateway with actor audit stamp
   const saveBudget = (updated: FiscalBudgetConfig) => {
-    setBudget(updated);
-    storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, updated);
-    if (showToast) showToast('Paramètres financiers enregistrés avec succès.', 'success');
-  };
-
-  // Save exchange rates changes
-  const saveExchangeRates = (rates: HistoricalExchangeRate[]) => {
-    setExchangeRates(rates);
-    storageService.setItem('gmao_historical_exchange_rates_v1', rates);
+    if (!canManage) return;
+    const actor = user?.name || user?.nom || user?.username || user?.role || 'ADMIN';
+    const saved = DataGateway.saveFinancialBudget(updated, actor);
+    setBudget(saved);
+    if (showToast) showToast('Allocations budgétaires enregistrées avec succès.', 'success');
   };
 
   // Active sub-tab
@@ -103,7 +108,7 @@ export default function FinanceView({
 
   // Search and filter states
   const [tcoSearch, setTcoSearch] = useState('');
-  const [tcoStatusFilter, setTcoStatusFilter] = useState<'ALL' | 'OPTIMAL' | 'ATTENTION' | 'REPLACE_RECOMMENDED'>('ALL');
+  const [tcoStatusFilter, setTcoStatusFilter] = useState<'ALL' | MachineBerStatus>('ALL');
   const [stockSearch, setStockSearch] = useState('');
 
   // Multi-Currency Simulator State
@@ -158,9 +163,9 @@ export default function FinanceView({
       const pmp = Math.max(0, Number(item.prix_unitaire ?? item.pmp ?? item.prix ?? 0));
       const totalHT = qte * pmp;
       return {
-        ref: item.ref_article || item.reference || item.code || item.id,
-        name: item.designation || item.nom || 'Article sans nom',
-        type: item.type || item.categorie || 'PDR',
+        ref: String(item.ref || item.ref_article || item.reference || item.code || item.id || ''),
+        name: String(item.designation || item.nom || 'Article sans nom'),
+        type: String(item.type || item.categorie || 'PDR'),
         stockActuel: qte,
         unit: item.unite || 'U',
         pmp,
@@ -177,7 +182,7 @@ export default function FinanceView({
   const handleExportExcel = () => {
     try {
       FinancialExportService.exportFinancialSynthesisToExcel(synthesis, symbol);
-      if (showToast) showToast('Rapport financier exporté au format Excel (.xlsx)', 'success');
+      if (showToast) showToast('Rapport de pilotage des coûts exporté au format Excel (.xlsx)', 'success');
     } catch (e: any) {
       if (showToast) showToast(`Erreur d'exportation: ${e.message}`, 'error');
     }
@@ -193,9 +198,9 @@ export default function FinanceView({
               <Landmark className="h-6 w-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-black tracking-tight text-slate-900">
-                  Direction Financière & Multi-Devises
+                  Pilotage des Coûts & Budgets Maintenance
                 </h1>
                 <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
                   ISO 4217 / {currencyCode}
@@ -204,13 +209,33 @@ export default function FinanceView({
                   Exercice {synthesis.fiscalYear}
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                Gestion budgétaire, valorisation PMP, TCO amortissement machines, et calcul des pertes industrielles.
+              <p className="text-xs text-slate-500 mt-0.5">
+                Contrôle budgétaire, coûts opérationnels validés (Maker-Checker), valorisation PMP et TCO réel par machine.
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* Fiscal Year Selector */}
+            <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs">
+              <span className="font-bold text-slate-600 mr-1.5">Exercice:</span>
+              <select
+                value={budget.fiscalYear}
+                onChange={(e) => {
+                  const nextYr = Number(e.target.value) || new Date().getFullYear();
+                  setBudget((prev) => ({ ...prev, fiscalYear: nextYr }));
+                }}
+                aria-label="Exercice fiscal"
+                className="bg-transparent font-mono font-black text-slate-900 focus:outline-hidden cursor-pointer"
+              >
+                {[2024, 2025, 2026, 2027].map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Quick Currency Selector */}
             <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
               <span className="px-2 font-bold text-slate-600 flex items-center gap-1">
@@ -263,16 +288,24 @@ export default function FinanceView({
           {/* Card 1: Budget Global */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span className="font-bold">Matière Budgétaire</span>
-              <span className={`text-[11px] font-black ${synthesis.totalVariance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                {synthesis.totalBurnRate}%
+              <span className="font-bold">Dépenses Validées ({synthesis.fiscalYear})</span>
+              <span
+                className={`text-[11px] font-black ${
+                  synthesis.totalAllocated === 0
+                    ? 'text-slate-500'
+                    : synthesis.totalVariance >= 0
+                    ? 'text-emerald-700'
+                    : 'text-rose-600'
+                }`}
+              >
+                {synthesis.totalAllocated > 0 ? `${synthesis.totalBurnRate}%` : 'Non alloué'}
               </span>
             </div>
             <div className="mt-1 text-lg font-black text-slate-900 font-mono">
               {formatCurrency(synthesis.totalActual)}
             </div>
             <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
-              <span>Alloué: {formatCurrency(synthesis.totalAllocated)}</span>
+              <span>Budget alloué: {formatCurrency(synthesis.totalAllocated)}</span>
             </div>
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
               <div
@@ -293,7 +326,7 @@ export default function FinanceView({
             <div className="flex items-center justify-between text-xs text-rose-800">
               <span className="font-bold flex items-center gap-1">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                Pertes Industrielles
+                Pertes d'Arrêt Confirmées
               </span>
               <span className="text-[11px] font-black font-mono">{synthesis.totalDowntimeHours}h arrêt</span>
             </div>
@@ -343,10 +376,10 @@ export default function FinanceView({
               <span className="text-[11px] font-black">{synthesis.machinesBerCount} machine(s)</span>
             </div>
             <div className="mt-1 text-lg font-black text-amber-900 font-mono">
-              {synthesis.machinesBerCount > 0 ? 'Remplacement conseillé' : 'Parc Économique'}
+              {synthesis.machinesBerCount > 0 ? 'Remplacement conseillé' : '0 dépassement BER'}
             </div>
             <div className="mt-1.5 text-[11px] text-amber-700">
-              Coûts maintenance excessifs
+              {synthesis.machinesValuedCount} évaluée(s) · {synthesis.machinesUnvaluedCount} non évaluée(s)
             </div>
           </div>
         </div>
@@ -377,7 +410,7 @@ export default function FinanceView({
           }`}
         >
           <Layers className="w-4 h-4" />
-          <span>TCO & Amortissement Machines</span>
+          <span>TCO & Coûts par Machine</span>
         </button>
 
         <button
@@ -390,7 +423,7 @@ export default function FinanceView({
           }`}
         >
           <ArrowRightLeft className="w-4 h-4" />
-          <span>Mouvements PDR & Multi-Devises</span>
+          <span>Valorisation PDR & Multi-Devises</span>
         </button>
 
         <button
@@ -416,7 +449,7 @@ export default function FinanceView({
           }`}
         >
           <Calculator className="w-4 h-4" />
-          <span>Pertes d'Arrêt & ROI Réparation</span>
+          <span>Pertes d'Arrêt & Coûts par Zone</span>
         </button>
 
         <button
@@ -436,29 +469,61 @@ export default function FinanceView({
       {/* 4. Tab 1: Maintenance Budgeting & Forecasting */}
       {activeTab === 'budgets' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-black text-slate-900">
-                Suivi Budgétaire & Analyse des Écarts (Variance Analysis)
+                Suivi Budgétaire & Analyse des Écarts (Exercice {synthesis.fiscalYear})
               </h2>
               <p className="text-xs text-slate-500">
-                Comparaison entre le budget alloué et les dépenses réelles enregistrées sur les ordres de travail et le magasin.
+                Comparaison entre les plafonds budgétaires alloués et les coûts réels validés (Maker-Checker) sur l'exercice {synthesis.fiscalYear}.
               </p>
             </div>
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditBudgetDraft(budget);
-                  setIsEditingBudget(true);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
-              >
-                <Sliders className="w-3.5 h-3.5 text-slate-500" />
-                <span>Modifier Allocations</span>
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {budget.updatedBy && budget.updatedBy !== 'FACTORY_RESET' && (
+                <span className="text-[11px] text-slate-500 font-mono">
+                  Mis à jour par: <strong className="text-slate-700">{budget.updatedBy}</strong>
+                </span>
+              )}
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditBudgetDraft(budget);
+                    setIsEditingBudget(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 shadow-xs hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Configurer Plafonds Budgétaires</span>
+                </button>
+              )}
+            </div>
           </div>
+
+          {synthesis.totalAllocated === 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="text-xs font-black text-amber-900">
+                  Aucun plafond budgétaire alloué (Mode Usine Réelle — 0 {symbol})
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Conformément à la règle Zero Silent Seed, aucun budget fictif n'est injecté par défaut. Définissez vos allocations annuelles pour suivre les taux de consommation.
+                </p>
+              </div>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditBudgetDraft(budget);
+                    setIsEditingBudget(true);
+                  }}
+                  className="shrink-0 rounded-xl bg-amber-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-amber-800 transition cursor-pointer"
+                >
+                  Définir le Budget {synthesis.fiscalYear}
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
             {synthesis.variances.map((item) => (
@@ -474,22 +539,24 @@ export default function FinanceView({
                         ? 'bg-emerald-100 text-emerald-800'
                         : item.status === 'WARNING'
                         ? 'bg-amber-100 text-amber-800'
+                        : item.status === 'UNCONFIGURED'
+                        ? 'bg-slate-100 text-slate-600'
                         : 'bg-rose-100 text-rose-800'
                     }`}
                   >
-                    {item.burnRatePercent}%
+                    {item.allocated > 0 ? `${item.burnRatePercent}%` : 'Non alloué'}
                   </span>
                 </div>
 
                 <div className="mt-4 space-y-1">
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs text-slate-500">Dépensé :</span>
+                    <span className="text-xs text-slate-500">Coût validé :</span>
                     <span className="text-base font-black text-slate-900 font-mono">
                       {formatCurrency(item.actual)}
                     </span>
                   </div>
                   <div className="flex items-baseline justify-between text-xs text-slate-500">
-                    <span>Alloué :</span>
+                    <span>Budget alloué :</span>
                     <span className="font-mono">{formatCurrency(item.allocated)}</span>
                   </div>
                   <div className="flex items-baseline justify-between text-xs">
@@ -525,7 +592,7 @@ export default function FinanceView({
           <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
             <div className="border-b border-slate-200 bg-slate-50 px-5 py-3 flex items-center justify-between">
               <span className="text-xs font-black uppercase tracking-wider text-slate-700">
-                Tableau Récapitulatif Budgétaire & Statut de Clôture
+                Tableau Récapitulatif Budgétaire & Statut de Clôture ({synthesis.fiscalYear})
               </span>
               <span className="text-xs text-slate-500">Monnaie : {symbol} ({currencyCode})</span>
             </div>
@@ -535,10 +602,10 @@ export default function FinanceView({
                   <tr>
                     <th className="px-5 py-3">Poste Budgétaire</th>
                     <th className="px-5 py-3 text-right">Budget Alloué</th>
-                    <th className="px-5 py-3 text-right">Dépenses Réalisées</th>
+                    <th className="px-5 py-3 text-right">Coûts Validés</th>
                     <th className="px-5 py-3 text-right">Écart Budgétaire</th>
                     <th className="px-5 py-3 text-right">Taux (%)</th>
-                    <th className="px-5 py-3 text-center">Diagnostic Comptable</th>
+                    <th className="px-5 py-3 text-center">Diagnostic Budgétaire</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -563,7 +630,7 @@ export default function FinanceView({
                         {formatCurrency(v.variance)}
                       </td>
                       <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-800">
-                        {v.burnRatePercent}%
+                        {v.allocated > 0 ? `${v.burnRatePercent}%` : '—'}
                       </td>
                       <td className="px-5 py-3.5 text-center">
                         <span
@@ -572,6 +639,8 @@ export default function FinanceView({
                               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                               : v.status === 'WARNING'
                               ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : v.status === 'UNCONFIGURED'
+                              ? 'bg-slate-100 text-slate-600 border border-slate-200'
                               : 'bg-rose-50 text-rose-800 border border-rose-200'
                           }`}
                         >
@@ -581,7 +650,9 @@ export default function FinanceView({
                           {v.status === 'FAVORABLE'
                             ? 'Favorable'
                             : v.status === 'WARNING'
-                            ? 'Sous Contrôle'
+                            ? 'Sous Contrôle (>85%)'
+                            : v.status === 'UNCONFIGURED'
+                            ? 'Plafond non défini'
                             : 'Déficit / Dépassement'}
                         </span>
                       </td>
@@ -599,10 +670,16 @@ export default function FinanceView({
                       {synthesis.totalVariance >= 0 ? '+' : ''}
                       {formatCurrency(synthesis.totalVariance)}
                     </td>
-                    <td className="px-5 py-4 text-right font-mono">{synthesis.totalBurnRate}%</td>
+                    <td className="px-5 py-4 text-right font-mono">
+                      {synthesis.totalAllocated > 0 ? `${synthesis.totalBurnRate}%` : '—'}
+                    </td>
                     <td className="px-5 py-4 text-center">
                       <span className="text-[11px] font-bold text-slate-700">
-                        {synthesis.totalVariance >= 0 ? 'Solde Positif' : 'Dépassement Global'}
+                        {synthesis.totalAllocated === 0 && synthesis.totalActual === 0
+                          ? 'Plafond 0 DH'
+                          : synthesis.totalVariance >= 0
+                          ? 'Solde Positif'
+                          : 'Dépassement Global'}
                       </span>
                     </td>
                   </tr>
@@ -613,16 +690,16 @@ export default function FinanceView({
         </div>
       )}
 
-      {/* 5. Tab 2: Asset TCO & Depreciation */}
+      {/* 5. Tab 2: Asset TCO & Depreciation (Zero Synthetic Valuation + Per-Machine Preventive Cost) */}
       {activeTab === 'tco_assets' && (
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-black text-slate-900">
-                TCO & Amortissement Linéaire des Équipements
+                TCO & Coûts Réels par Machine (Sans Hypothèses Synthétiques)
               </h2>
               <p className="text-xs text-slate-500">
-                Calcul du Total Cost of Ownership, Valeur Nette Comptable (VNC) et indice Beyond Economical Repair (BER).
+                Le coût préventif et correctif suit strictement chaque machine (`machineCode`). Les machines sans `valeur_a_neuf` sont affichées « Non évalué ».
               </p>
             </div>
 
@@ -644,9 +721,10 @@ export default function FinanceView({
                 className="rounded-xl border border-slate-200 bg-white py-1.5 px-3 text-xs focus:border-emerald-500 focus:outline-hidden"
               >
                 <option value="ALL">Tous les statuts BER</option>
-                <option value="OPTIMAL">Économique (&lt;50%)</option>
+                <option value="OPTIMAL">Rentable (&lt;50%)</option>
                 <option value="ATTENTION">Sous surveillance (50-70%)</option>
                 <option value="REPLACE_RECOMMENDED">Remplacement Conseillé (≥70%)</option>
+                <option value="NON_EVALUE">Valeur à neuf non renseignée</option>
               </select>
             </div>
           </div>
@@ -658,20 +736,20 @@ export default function FinanceView({
                   <tr>
                     <th className="px-4 py-3">Machine & Zone</th>
                     <th className="px-4 py-3 text-right">Valeur à Neuf</th>
-                    <th className="px-4 py-3 text-center">Année / Âge</th>
-                    <th className="px-4 py-3 text-right">Amort. Annuel</th>
+                    <th className="px-4 py-3 text-center">Mise en Service</th>
                     <th className="px-4 py-3 text-right">VNC Actuelle</th>
+                    <th className="px-4 py-3 text-right">Coût Préventif</th>
+                    <th className="px-4 py-3 text-right">Coût Correctif & Ext.</th>
                     <th className="px-4 py-3 text-right">Coût Maint. Cumulé</th>
-                    <th className="px-4 py-3 text-right">TCO Global</th>
                     <th className="px-4 py-3 text-right">Indice BER</th>
-                    <th className="px-4 py-3 text-center">Avis Économique</th>
+                    <th className="px-4 py-3 text-center">Décision / Fiche</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredTcoMachines.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
-                        Aucun équipement ne correspond aux filtres appliqués.
+                        Aucun équipement actif ne correspond aux filtres appliqués.
                       </td>
                     </tr>
                   ) : (
@@ -683,53 +761,87 @@ export default function FinanceView({
                           <div className="text-[10px] text-slate-400">{m.zone}</div>
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-medium text-slate-800">
-                          {formatCurrency(m.valeurANeuf)}
+                          {m.valeurANeuf !== null ? (
+                            formatCurrency(m.valeurANeuf)
+                          ) : (
+                            <span className="text-[11px] italic text-slate-400">Non évalué</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center font-mono">
-                          <div>{m.anneeMiseEnService}</div>
-                          <div className="text-[10px] text-slate-500">{m.ageYears} an(s)</div>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-slate-600">
-                          {formatCurrency(m.tauxAmortissementAnnuel)}
+                          {m.anneeMiseEnService !== null ? (
+                            <>
+                              <div>{m.anneeMiseEnService}</div>
+                              <div className="text-[10px] text-slate-500">{m.ageYears} an(s)</div>
+                            </>
+                          ) : (
+                            <span className="text-[11px] italic text-slate-400">Non renseigné</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-bold text-slate-900">
-                          {formatCurrency(m.valeurNetteComptable)}
+                          {m.valeurNetteComptable !== null ? (
+                            formatCurrency(m.valeurNetteComptable)
+                          ) : (
+                            <span className="text-[11px] italic text-slate-400">—</span>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-amber-900">
-                          {formatCurrency(m.coutMaintenanceCumule)}
+                        <td className="px-4 py-3 text-right font-mono text-indigo-700 font-bold">
+                          {formatCurrency(m.preventiveCost)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-amber-800 font-bold">
+                          {formatCurrency(m.correctiveCost + m.externalCost)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-black text-slate-900">
-                          {formatCurrency(m.tco)}
+                          {formatCurrency(m.coutMaintenanceCumule)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono font-black">
-                          <span
-                            className={
-                              m.berIndexPercent >= synthesis.budget.berThresholdPercent
-                                ? 'text-rose-600'
-                                : m.berIndexPercent >= synthesis.budget.berThresholdPercent * 0.7
-                                ? 'text-amber-600'
-                                : 'text-emerald-600'
-                            }
-                          >
-                            {m.berIndexPercent}%
-                          </span>
+                          {m.berIndexPercent !== null ? (
+                            <span
+                              className={
+                                m.berIndexPercent >= synthesis.budget.berThresholdPercent
+                                  ? 'text-rose-600'
+                                  : m.berIndexPercent >= synthesis.budget.berThresholdPercent * 0.7
+                                  ? 'text-amber-600'
+                                  : 'text-emerald-600'
+                              }
+                            >
+                              {m.berIndexPercent}%
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-normal italic text-slate-400">Non évalué</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                              m.berStatus === 'REPLACE_RECOMMENDED'
-                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                          <div className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                m.berStatus === 'REPLACE_RECOMMENDED'
+                                  ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                  : m.berStatus === 'ATTENTION'
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                  : m.berStatus === 'NON_EVALUE'
+                                  ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              }`}
+                            >
+                              {m.berStatus === 'REPLACE_RECOMMENDED'
+                                ? 'Remplacement Conseillé (BER)'
                                 : m.berStatus === 'ATTENTION'
-                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            }`}
-                          >
-                            {m.berStatus === 'REPLACE_RECOMMENDED'
-                              ? 'Remplacement Conseillé (BER)'
-                              : m.berStatus === 'ATTENTION'
-                              ? 'Sous Surveillance'
-                              : 'Rentable'}
-                          </span>
+                                ? 'Sous Surveillance'
+                                : m.berStatus === 'NON_EVALUE'
+                                ? 'À évaluer'
+                                : 'Rentable'}
+                            </span>
+                            {onNavigateToTab && (
+                              <button
+                                type="button"
+                                onClick={() => onNavigateToTab('machines')}
+                                title={`Ouvrir la fiche machine ${m.code}`}
+                                className="p-1 rounded-lg text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -753,7 +865,7 @@ export default function FinanceView({
                   Simulateur de Commande Fournisseur Multi-Devises (EUR / USD → {currencyCode})
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Conversion immédiate selon le cours officiel historique ou appliqué, avec calcul de TVA ({budget.defaultVatRate}%).
+                  Conversion selon le cours historique ou appliqué, avec calcul de TVA ({budget.defaultVatRate}%).
                 </p>
               </div>
             </div>
@@ -899,7 +1011,7 @@ export default function FinanceView({
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-black text-slate-900">
-                  Répartition Main d'Œuvre Interne
+                  Répartition Main d'Œuvre Interne ({synthesis.fiscalYear})
                 </h3>
                 <p className="text-xs text-slate-500">
                   Heures réelles validées × Taux horaire ({formatCurrency(budget.technicianHourlyRate)}/h).
@@ -924,7 +1036,7 @@ export default function FinanceView({
                   {synthesis.technicianLaborBreakdown.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-3 py-6 text-center text-slate-400">
-                        Aucune heure d'intervention enregistrée.
+                        Aucune heure d'intervention enregistrée sur l'exercice {synthesis.fiscalYear}.
                       </td>
                     </tr>
                   ) : (
@@ -956,7 +1068,7 @@ export default function FinanceView({
                   Sous-traitance & Bobinage Moteurs
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Suivi des travaux extérieurs et prestataires spécialisés.
+                  Suivi des travaux extérieurs et prestataires spécialisés (`sortiesExterne`).
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-mono font-bold text-slate-700">
@@ -983,19 +1095,25 @@ export default function FinanceView({
                     </tr>
                   ) : (
                     sortiesExterne.slice(0, 10).map((se: any, idx: number) => {
-                      const cost = Number(se.cout_reel || se.cout_estime || se.cout || 0);
+                      const cost = Number(
+                        se.cout_reel ?? se.cout_bobinage ?? se.prix_reparation ?? se.cout_estime ?? se.cout ?? 0
+                      );
+                      const organeLabel =
+                        se.designation_moteur || se.designation || se.nom || se.code_moteur_reel || 'Moteur';
+                      const machineLabel = se.id_machine || se.machine_cible || se.code_machine || 'Machine';
+                      const supplierLabel =
+                        se.fournisseur_externe || se.fournisseur || se.prestataire || se.atelier || 'Atelier Externe';
+                      const statusLabel = se.etat || se.statut || 'En cours';
                       return (
                         <tr key={se.id || idx} className="hover:bg-slate-50">
                           <td className="px-3 py-2.5">
-                            <div className="font-bold text-slate-900">{se.designation || se.nom || 'Moteur'}</div>
-                            <div className="text-[10px] text-slate-500 font-mono">{se.machine_cible || 'Machine'}</div>
+                            <div className="font-bold text-slate-900">{organeLabel}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{machineLabel}</div>
                           </td>
-                          <td className="px-3 py-2.5 text-slate-700 font-medium">
-                            {se.fournisseur || se.prestataire || se.atelier || 'Atelier Externe'}
-                          </td>
+                          <td className="px-3 py-2.5 text-slate-700 font-medium">{supplierLabel}</td>
                           <td className="px-3 py-2.5 text-center">
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
-                              {se.statut || 'En cours'}
+                              {statusLabel}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900">
@@ -1012,54 +1130,103 @@ export default function FinanceView({
         </div>
       )}
 
-      {/* 8. Tab 5: Downtime Financial Impact & ROI */}
+      {/* 8. Tab 5: Downtime Financial Impact & Zone Cost Breakdown */}
       {activeTab === 'downtime_roi' && (
         <div className="space-y-6">
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="max-w-3xl">
               <h2 className="text-base font-black text-slate-900">
-                Pertes d'Arrêt Industriel & Analyse ROI (Réparation vs Remplacement)
+                Pertes d'Arrêt Confirmées & Coûts par Zone ({synthesis.fiscalYear})
               </h2>
               <p className="text-xs text-slate-500 mt-1">
-                L'arrêt non planifié d'une ligne de production coûte{' '}
+                Seuls les Bons de Travail (BT) comportant une durée d'arrêt déclarée et validée sont comptabilisés au taux de{' '}
                 <span className="font-bold text-slate-900 font-mono">
                   {formatCurrency(budget.productionDowntimeCostPerHour)}
                 </span>{' '}
-                par heure. Cette analyse permet de prioriser les investissements sur les machines les plus coûteuses.
+                par heure.
               </p>
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <span className="text-xs font-bold text-slate-600">Heures d'Arrêt Cumulées</span>
+                <span className="text-xs font-bold text-slate-600">Heures d'Arrêt Validées</span>
                 <div className="text-2xl font-black text-slate-900 font-mono mt-1">
                   {synthesis.totalDowntimeHours} h
                 </div>
-                <span className="text-[11px] text-slate-500">Sur les pannes enregistrées</span>
+                <span className="text-[11px] text-slate-500">Sur les BT avec arrêt confirmé ({synthesis.fiscalYear})</span>
               </div>
 
               <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
-                <span className="text-xs font-bold text-rose-800">Manque à Gagner Total</span>
+                <span className="text-xs font-bold text-rose-800">Impact Financier des Arrêts</span>
                 <div className="text-2xl font-black text-rose-700 font-mono mt-1">
                   {formatCurrency(synthesis.totalDowntimeLossMAD)}
                 </div>
-                <span className="text-[11px] text-rose-600">Pertes directes de productivité</span>
+                <span className="text-[11px] text-rose-600">Pertes directes de disponibilité</span>
               </div>
 
               <div className="rounded-xl border border-emerald-100 bg-emerald-50/40 p-4">
-                <span className="text-xs font-bold text-emerald-800">Gain Potentiel Préventif</span>
+                <span className="text-xs font-bold text-emerald-800">Coût Maintenance Direct ({synthesis.fiscalYear})</span>
                 <div className="text-2xl font-black text-emerald-700 font-mono mt-1">
-                  {formatCurrency(Math.round(synthesis.totalDowntimeLossMAD * 0.45))}
+                  {formatCurrency(synthesis.spendPreventive + synthesis.spendCorrective + synthesis.spendExternal)}
                 </div>
-                <span className="text-[11px] text-emerald-600">Économie estimée par l'anticipation (45%)</span>
+                <span className="text-[11px] text-emerald-600">Préventif + Correctif + Sous-traitance</span>
               </div>
             </div>
           </div>
 
-          {/* Pareto of Downtime Loss by Machine */}
+          {/* Zone Cost Breakdown Table */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
             <h3 className="text-sm font-black text-slate-900">
-              Classement des Machines les Plus Coûteuses en Arrêt de Production
+              Répartition des Coûts de Maintenance par Zone / Atelier ({synthesis.fiscalYear})
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-slate-200 bg-slate-100/60 font-bold text-slate-700">
+                  <tr>
+                    <th className="px-4 py-2.5">Zone / Atelier</th>
+                    <th className="px-4 py-2.5 text-center">Machines Actives</th>
+                    <th className="px-4 py-2.5 text-right">Coût Préventif</th>
+                    <th className="px-4 py-2.5 text-right">Coût Correctif</th>
+                    <th className="px-4 py-2.5 text-right">Sous-traitance</th>
+                    <th className="px-4 py-2.5 text-right">Total Zone ({symbol})</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {synthesis.zoneCostBreakdown.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                        Aucune zone active enregistrée.
+                      </td>
+                    </tr>
+                  ) : (
+                    synthesis.zoneCostBreakdown.map((z) => (
+                      <tr key={z.zone} className="hover:bg-slate-50 transition">
+                        <td className="px-4 py-2.5 font-bold text-slate-900">{z.zone}</td>
+                        <td className="px-4 py-2.5 text-center font-mono text-slate-600">{z.machinesCount}</td>
+                        <td className="px-4 py-2.5 text-right font-mono text-indigo-700">
+                          {formatCurrency(z.preventiveCost)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-amber-800">
+                          {formatCurrency(z.correctiveCost)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono text-slate-700">
+                          {formatCurrency(z.externalCost)}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono font-black text-slate-900">
+                          {formatCurrency(z.totalCost)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Pareto of Most Expensive Machines */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
+            <h3 className="text-sm font-black text-slate-900">
+              Classement des Machines par Coût de Maintenance Cumulé
             </h3>
 
             <div className="overflow-x-auto">
@@ -1068,7 +1235,7 @@ export default function FinanceView({
                   <tr>
                     <th className="px-4 py-2.5">Code Machine</th>
                     <th className="px-4 py-2.5">Désignation</th>
-                    <th className="px-4 py-2.5 text-right">Dépenses Maint. Directes</th>
+                    <th className="px-4 py-2.5 text-right">Coût Maint. Cumulé</th>
                     <th className="px-4 py-2.5 text-right">Valeur à Neuf</th>
                     <th className="px-4 py-2.5 text-right">Indice BER</th>
                     <th className="px-4 py-2.5 text-center">Recommandation Stratégique</th>
@@ -1083,10 +1250,10 @@ export default function FinanceView({
                         {formatCurrency(m.coutMaintenanceCumule)}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-slate-600">
-                        {formatCurrency(m.valeurANeuf)}
+                        {m.valeurANeuf !== null ? formatCurrency(m.valeurANeuf) : 'Non évalué'}
                       </td>
                       <td className="px-4 py-3 text-right font-mono font-black text-slate-900">
-                        {m.berIndexPercent}%
+                        {m.berIndexPercent !== null ? `${m.berIndexPercent}%` : 'Non évalué'}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
@@ -1095,6 +1262,8 @@ export default function FinanceView({
                               ? 'bg-rose-100 text-rose-800'
                               : m.berStatus === 'ATTENTION'
                               ? 'bg-amber-100 text-amber-800'
+                              : m.berStatus === 'NON_EVALUE'
+                              ? 'bg-slate-100 text-slate-600'
                               : 'bg-emerald-100 text-emerald-800'
                           }`}
                         >
@@ -1102,6 +1271,8 @@ export default function FinanceView({
                             ? 'Investissement Remplacement Requis'
                             : m.berStatus === 'ATTENTION'
                             ? 'Renforcer Maintenance Préventive'
+                            : m.berStatus === 'NON_EVALUE'
+                            ? 'Renseigner Valeur à Neuf sur Fiche Machine'
                             : 'Maintien Opérationnel Rentable'}
                         </span>
                       </td>
@@ -1120,10 +1291,10 @@ export default function FinanceView({
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs space-y-4">
             <div>
               <h2 className="text-base font-black text-slate-900">
-                Matrice des Taux de Change & Paramètres Comptables
+                Matrice des Taux de Change & Paramètres de Valorisation
               </h2>
               <p className="text-xs text-slate-500">
-                Configuration des cours de devises (Bank Al-Maghrib) et des taux de valorisation horaire de l'usine.
+                Configuration des cours de devises (Bank Al-Maghrib) et des taux horaires de valorisation industrielle.
               </p>
             </div>
 
@@ -1187,13 +1358,13 @@ export default function FinanceView({
         </div>
       )}
 
-      {/* 10. Edit Budget Allocations Modal */}
-      {isEditingBudget && (
+      {/* 10. Edit Budget Allocations Modal (Strictly guarded by canManage) */}
+      {isEditingBudget && canManage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
           <div className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-xl space-y-5 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-base font-black text-slate-900">
-                Modifier les Allocations Budgétaires ({editBudgetDraft.fiscalYear})
+                Configurer les Plafonds Budgétaires ({editBudgetDraft.fiscalYear})
               </h3>
               <button
                 type="button"

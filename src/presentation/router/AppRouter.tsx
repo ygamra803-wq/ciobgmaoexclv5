@@ -113,7 +113,7 @@ export default function AppRouter({
                       )}
 
                       {currentTab === 'finance' && (
-                        <ErrorBoundary sectionName="Direction Financière & Multi-Devises">
+                        <ErrorBoundary sectionName="Pilotage des Coûts & Budgets Maintenance">
                           <FinanceView {...props.finance} />
                         </ErrorBoundary>
                       )}

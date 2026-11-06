@@ -29,13 +29,13 @@ export const PARENT_MODULES = [
   },
   {
     id: 'finance',
-    label: 'Finance & Devises',
+    label: 'Coûts & Budgets',
     icon: Landmark,
     color: 'text-emerald-500',
     colorDark: 'text-emerald-400',
     bgLight: 'bg-emerald-50',
     children: [
-      { id: 'finance', label: 'Finance & Multi-Devises' }
+      { id: 'finance', label: 'Pilotage Coûts & Budgets' }
     ]
   },
   {

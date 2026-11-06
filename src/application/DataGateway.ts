@@ -6,6 +6,11 @@ import { sanitizeObject } from '../utils/sanitize';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 import { movementRepository } from './MovementRepository';
+import {
+  EMPTY_FISCAL_BUDGET,
+  DEMO_FISCAL_BUDGET,
+  type FiscalBudgetConfig,
+} from '../domain/finance/entities/FinancialBudget';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
@@ -402,6 +407,48 @@ export const DataGateway = {
   },
 
   // ==========================================
+  // 7b. FINANCIAL BUDGETS & COSTING CONFIG
+  // ==========================================
+  getFinancialBudget(): FiscalBudgetConfig {
+    const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+    const saved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
+    if (saved && typeof saved === 'object' && typeof saved.fiscalYear === 'number') {
+      // FIN-P0: If factory is in empty mode and budget came from a stale demo seed, return zeroed budget
+      if (startMode === 'empty' && saved.updatedBy === 'DEMO_SEED') {
+        return { ...EMPTY_FISCAL_BUDGET };
+      }
+      return saved as FiscalBudgetConfig;
+    }
+    const isDemo = storageService.getItem(STORAGE_KEYS.DEMO_MODE) === true;
+    return isDemo && startMode !== 'empty' ? { ...DEMO_FISCAL_BUDGET } : { ...EMPTY_FISCAL_BUDGET };
+  },
+
+  saveFinancialBudget(budget: Partial<FiscalBudgetConfig>, actorName?: string): FiscalBudgetConfig {
+    const clean = this.sanitizePayload(budget || {}) as Partial<FiscalBudgetConfig>;
+    const next: FiscalBudgetConfig = {
+      fiscalYear: Number(clean.fiscalYear) || new Date().getFullYear(),
+      allocatedPreventive: Math.max(0, Number(clean.allocatedPreventive) || 0),
+      allocatedCorrective: Math.max(0, Number(clean.allocatedCorrective) || 0),
+      allocatedExternal: Math.max(0, Number(clean.allocatedExternal) || 0),
+      allocatedSparesStock: Math.max(0, Number(clean.allocatedSparesStock) || 0),
+      technicianHourlyRate: Math.max(0, Number(clean.technicianHourlyRate ?? EMPTY_FISCAL_BUDGET.technicianHourlyRate)),
+      productionDowntimeCostPerHour: Math.max(
+        0,
+        Number(clean.productionDowntimeCostPerHour ?? EMPTY_FISCAL_BUDGET.productionDowntimeCostPerHour)
+      ),
+      berThresholdPercent: Math.max(10, Math.min(200, Number(clean.berThresholdPercent) || 70)),
+      defaultVatRate: Math.max(0, Math.min(100, Number(clean.defaultVatRate ?? 20))),
+      updatedAt: clean.updatedAt || new Date().toISOString(),
+      updatedBy: actorName || clean.updatedBy || 'ADMIN',
+    };
+    storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, next);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gmao_financial_budget_updated', { detail: next }));
+    }
+    return next;
+  },
+
+  // ==========================================
   // 8. EXPLICIT DEMO DATA LOADER & FACTORY CLEAR
   // ==========================================
   /**
@@ -488,6 +535,7 @@ export const DataGateway = {
     this.savePartDesignations(seedPartDesignations);
 
     this.saveSortiesExterne(seedSortiesExternes);
+    this.saveFinancialBudget(DEMO_FISCAL_BUDGET, 'DEMO_SEED');
 
     // 3. Update React state setters if provided
     if (setters.setMachines) setters.setMachines(seedMachines);
@@ -637,6 +685,7 @@ export const DataGateway = {
     this.savePartDesignations([]);
 
     this.saveSortiesExterne([]);
+    this.saveFinancialBudget({ ...EMPTY_FISCAL_BUDGET, updatedAt: new Date().toISOString() }, 'FACTORY_RESET');
 
     if (setters.setMachines) setters.setMachines([]);
     if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes([]);
@@ -719,6 +768,7 @@ export const DataGateway = {
       [STORAGE_KEYS.PART_TYPES]: [],
       [STORAGE_KEYS.PART_DESIGNATIONS]: [],
       [STORAGE_KEYS.SORTIE_EXTERNE]: [],
+      [STORAGE_KEYS.FINANCIAL_BUDGETS]: { ...EMPTY_FISCAL_BUDGET },
     };
 
     return Promise.all([

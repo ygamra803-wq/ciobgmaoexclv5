@@ -388,7 +388,7 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Direction Financière & Multi-Devises (Page Dédiée) */}
+            {/* Pilotage des Coûts & Budgets Maintenance (Page Dédiée) */}
             {canAccess('finance') && (
               <button
                 onClick={() => navTo('finance')}
@@ -398,7 +398,7 @@ export default function MobileSidebarDrawer({
                   <Landmark
                     className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                   />
-                  <span>{t('nav.finance', 'Direction Financière & Devises')}</span>
+                  <span>{t('nav.finance', 'Pilotage Coûts & Budgets')}</span>
                 </span>
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono bg-emerald-100 text-emerald-800 font-bold">
                   ISO 4217
