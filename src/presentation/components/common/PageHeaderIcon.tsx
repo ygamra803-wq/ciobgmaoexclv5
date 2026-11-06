@@ -17,7 +17,7 @@ export default function PageHeaderIcon({
 }: PageHeaderIconProps) {
   return (
     <Icon
-      className={`w-7 h-7 ${colorClass} shrink-0 group-hover/header:scale-110 transition-transform duration-300 ${className}`.trim()}
+      className={`page-header-icon w-7 h-7 ${colorClass} shrink-0 group-hover/header:scale-110 transition-transform duration-300 ${className}`.trim()}
     />
   );
 }

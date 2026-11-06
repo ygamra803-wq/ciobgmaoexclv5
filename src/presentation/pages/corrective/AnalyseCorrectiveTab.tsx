@@ -545,8 +545,8 @@ export default function AnalyseCorrectiveTab({
       {/* 2. Filter & Export Bar */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-200/80 flex items-center justify-center text-purple-700 shadow-2xs shrink-0">
-            <SlidersHorizontal className="w-4 h-4 text-purple-700" />
+          <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
+            <SlidersHorizontal className="w-4 h-4 text-amber-700" />
           </div>
           <div>
             <span className="text-xs font-black uppercase tracking-wider text-slate-900">

@@ -266,53 +266,106 @@
 /* 1. Dashboard & Executive Analytics (Blue) */
 svg.lucide-layout-dashboard:not(.text-white),
 svg.lucide-file-bar-chart-2:not(.text-white),
-svg.gmao-icon-part-info:not(.text-white) {
+svg.gmao-icon-part-info:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon) {
   color: #2563eb !important;
 }
 
 /* 2. Stock PDR & Types PDR (Cyan) */
 svg.lucide-package:not(.text-white),
-svg.lucide-tag:not(.text-white),
-svg.gmao-icon-hub:not(.text-white) {
+svg.lucide-tag:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
+svg.gmao-icon-hub:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon) {
   color: #0891b2 !important;
 }
 
 /* 3. Machines Registered, Types Parts & Nexus Matrix (Emerald) */
-svg.lucide-factory:not(.text-white),
+svg.lucide-factory:not(.text-white):not(.sidebar-group-icon),
 svg.lucide-git-branch:not(.text-white),
 svg.lucide-layers:not(.text-white),
-svg.gmao-icon-layers:not(.text-white) {
+svg.gmao-icon-layers:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon) {
   color: #059669 !important;
 }
 
 /* 4. Preventive Planning, Entrepôt, Blueprints, Groupes, Désignations & Utilisateurs (Indigo) */
-svg.lucide-calendar:not(.text-white),
+svg.lucide-calendar:not(.text-white):not(.sidebar-group-icon),
 svg.lucide-calendar-days:not(.text-white),
-svg.lucide-warehouse:not(.text-white),
-svg.lucide-boxes:not(.text-white),
-svg.lucide-fingerprint-pattern:not(.text-white),
+svg.lucide-warehouse:not(.text-white):not(.sidebar-group-icon),
+svg.lucide-boxes:not(.text-white):not(.sidebar-l2-icon),
+svg.lucide-fingerprint-pattern:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-blueprint-plus:not(.text-white),
-svg.lucide-badge-check:not(.text-white),
-svg.lucide-users:not(.text-white),
+svg.lucide-badge-check:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
+svg.lucide-users:not(.text-white):not(.sidebar-l2-icon),
 svg.lucide-user-check:not(.text-white),
 svg.gmao-icon-supervisor:not(.text-white) {
   color: #4f46e5 !important;
 }
 
 /* 5. Corrective Maintenance, Catalogue, Machine/Comp Templates & Guide (Amber) */
-svg.lucide-wrench:not(.text-white),
-svg.lucide-database:not(.text-white),
-svg.lucide-book-open:not(.text-white),
-svg.gmao-icon-category:not(.text-white),
+svg.lucide-wrench:not(.text-white):not(.sidebar-group-icon),
+svg.lucide-database:not(.text-white):not(.sidebar-group-icon):not(.sidebar-l2-icon):not(.page-header-icon),
+svg.lucide-book-open:not(.text-white):not(.page-header-icon),
+svg.gmao-icon-category:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-category-plus:not(.text-white),
-svg.gmao-icon-spoke:not(.text-white) {
+svg.gmao-icon-spoke:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon) {
   color: #d97706 !important;
 }
 
+/* 5b. Sidebar Visual Hierarchy Preservation (Discipline & Subtle Metadata) */
+aside svg.sidebar-group-icon,
+aside svg.lucide.sidebar-group-icon,
+aside svg[class*="gmao-icon-"].sidebar-group-icon,
+aside .sidebar-group-icon {
+  color: #94a3b8 !important; /* text-slate-400 */
+}
+
+aside svg.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+aside svg.lucide.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+aside svg[class*="gmao-icon-"].sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+aside .sidebar-l2-icon:not(.text-white):not(.text-slate-900) {
+  color: #64748b !important; /* text-slate-500 (light mode) */
+}
+
+aside.bg-slate-900 svg.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+aside.bg-slate-900 svg.lucide.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+aside.bg-slate-900 svg[class*="gmao-icon-"].sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+.dark aside svg.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+.dark aside svg.lucide.sidebar-l2-icon:not(.text-white):not(.text-slate-900),
+.dark aside svg[class*="gmao-icon-"].sidebar-l2-icon:not(.text-white):not(.text-slate-900) {
+  color: #94a3b8 !important; /* text-slate-400 (dark mode) */
+}
+
+/* 5c. Page Header Card Icon Color Synchronization (Level 2 Sub-Page Alignment) */
+svg.page-header-icon.text-indigo-700,
+svg.page-header-icon.text-indigo-600,
+svg[class*="gmao-icon-"].page-header-icon.text-indigo-700,
+svg[class*="gmao-icon-"].page-header-icon.text-indigo-600 {
+  color: #4338ca !important; /* text-indigo-700 (Preventive & Entrepot) */
+}
+
+svg.page-header-icon.text-cyan-700,
+svg.page-header-icon.text-cyan-600,
+svg[class*="gmao-icon-"].page-header-icon.text-cyan-700,
+svg[class*="gmao-icon-"].page-header-icon.text-cyan-600 {
+  color: #0e7490 !important; /* text-cyan-700 (Stock Articles) */
+}
+
+svg.page-header-icon.text-emerald-700,
+svg.page-header-icon.text-emerald-600,
+svg[class*="gmao-icon-"].page-header-icon.text-emerald-700,
+svg[class*="gmao-icon-"].page-header-icon.text-emerald-600 {
+  color: #047857 !important; /* text-emerald-700 (Parc Machines) */
+}
+
+svg.page-header-icon.text-amber-700,
+svg.page-header-icon.text-amber-600,
+svg[class*="gmao-icon-"].page-header-icon.text-amber-700,
+svg[class*="gmao-icon-"].page-header-icon.text-amber-600 {
+  color: #b45309 !important; /* text-amber-700 (Corrective Maintenance) */
+}
+
 /* 6. Zones & Ateliers, Preventive Engineering & Component Templates (Purple) */
-svg.lucide-map-pin:not(.text-white),
-svg.lucide-settings-2:not(.text-white),
-svg.gmao-icon-cube:not(.text-white),
+svg.lucide-map-pin:not(.text-white):not(.sidebar-group-icon),
+svg.lucide-settings-2:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
+svg.gmao-icon-cube:not(.text-white):not(.sidebar-l2-icon):not(.page-header-icon),
 svg.gmao-icon-cube-plus:not(.text-white) {
   color: #9333ea !important;
 }

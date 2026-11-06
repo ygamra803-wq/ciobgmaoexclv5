@@ -627,7 +627,7 @@ export default function TypeView({
               <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-600" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
                     {t('article_types.sort_by_title', 'Trier par')}
                   </span>
                 </div>
@@ -636,16 +636,16 @@ export default function TypeView({
                     onClick={() => handleTableSort('id_type')}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'id_type'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('article_types.sort_code', 'Code / ID Type (A)')}</span>
                     {sortField === 'id_type' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -653,16 +653,16 @@ export default function TypeView({
                     onClick={() => handleTableSort('libelle')}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'libelle'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('article_types.sort_label', 'Libellé / Nom du Type (B)')}</span>
                     {sortField === 'libelle' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -670,16 +670,16 @@ export default function TypeView({
                     onClick={() => handleTableSort('desig_count')}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'desig_count'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('article_types.sort_desig_count', 'Nb Désignations Liées (C)')}</span>
                     {sortField === 'desig_count' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -687,16 +687,16 @@ export default function TypeView({
                     onClick={() => handleTableSort('article_count')}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'article_count'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('article_types.sort_article_count', 'Nb Articles en Stock (D)')}</span>
                     {sortField === 'article_count' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
                 </div>
@@ -709,12 +709,12 @@ export default function TypeView({
         {localSearch && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('article_types.active_filter', 'Filtre actif :')}</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-cyan-50 border border-cyan-200 text-cyan-800 text-xs font-semibold">
-              <Search className="w-3 h-3 text-cyan-600" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <Search className="w-3 h-3 text-amber-600" />
               {t('article_types.active_search_prefix', 'Recherche: ')}&quot;{localSearch}&quot;
               <button
                 onClick={() => setLocalSearch('')}
-                className="hover:bg-cyan-200/60 p-0.5 rounded-full transition cursor-pointer"
+                className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
               >
                 <X className="w-3 h-3" />
               </button>

@@ -136,17 +136,17 @@ export default function PreventiveSecondaryView({
         {/* 3D TACTILE SECONDARY HEADER CARD */}
         <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 relative overflow-hidden group/secHeader">
           {/* Ambient Subtle Glow */}
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/5 rounded-full blur-2xl pointer-events-none group-hover/secHeader:bg-purple-500/10 transition-colors duration-500" />
+          <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/secHeader:bg-indigo-500/10 transition-colors duration-500" />
 
           {/* Left Side: Title & Description */}
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-            <PageHeaderIcon icon={Settings2} colorClass="text-purple-700" />
+            <PageHeaderIcon icon={Settings2} colorClass="text-indigo-700" />
             <div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">
                   {t('preventive.referentiel.title', 'Ingénierie & Référentiel Préventif (Page Secondaire)')}
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200 shadow-2xs">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 shadow-2xs">
                   {t('preventive.referentiel.subtitle_badge', 'MODULES DE CONFIGURATION')}
                 </span>
               </div>

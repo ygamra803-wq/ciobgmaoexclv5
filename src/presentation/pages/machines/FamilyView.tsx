@@ -247,10 +247,10 @@ export default function FamilyView({
       {/* Top Banner (BDR Light GMAO Header Card with 3D Tactile Elevation) */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/header">
         {/* Subtle Ambient Gradient Background Highlight */}
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-teal-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-teal-500/10 transition-colors duration-500" />
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-emerald-500/10 transition-colors duration-500" />
 
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          <PageHeaderIcon icon={HubIcon} colorClass="text-teal-700" />
+          <PageHeaderIcon icon={HubIcon} colorClass="text-emerald-700" />
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">
               {t('machines.family.title')}
@@ -283,7 +283,7 @@ export default function FamilyView({
         {/* Header Toolbar: Icon + Title + Count Badge + Excel Export + Circular Reset */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-200/80 flex items-center justify-center text-teal-700 shadow-2xs shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
               <SlidersHorizontal className="w-4 h-4" />
             </div>
             <div>
@@ -291,7 +291,7 @@ export default function FamilyView({
                 <span className="text-xs font-black uppercase tracking-wider text-slate-800">
                   {t('common.filters.title')}
                 </span>
-                <span className="bg-teal-50 text-teal-800 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border border-teal-200/70 shadow-2xs font-mono">
+                <span className="bg-amber-50 text-amber-800 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border border-amber-200/70 shadow-2xs font-mono">
                   {filtered.length} / {safeFamilies.length}
                 </span>
               </div>
@@ -342,7 +342,7 @@ export default function FamilyView({
               </span>
             </div>
             <div className="relative flex items-center">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs pointer-events-none z-10">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs pointer-events-none z-10">
                 <Search className="w-3 h-3" />
               </span>
               <input
@@ -350,7 +350,7 @@ export default function FamilyView({
                 placeholder={t('machines.family.search_placeholder')}
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
-                className="w-full h-10 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+                className="w-full h-10 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
               />
               {localSearch && (
                 <button
@@ -380,12 +380,12 @@ export default function FamilyView({
               onClick={() => setShowSortMenu(!showSortMenu)}
               className={`w-full h-10 px-3 rounded-xl border text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
                 showSortMenu || sortField !== 'id_family' || sortOrder !== 'asc'
-                  ? 'bg-teal-50 text-teal-800 border-teal-300 ring-1 ring-teal-200 shadow-2xs'
+                  ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200 shadow-2xs'
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
               <div className="flex items-center gap-2">
-                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs shrink-0">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
                   <ArrowUpDown className="w-3 h-3" />
                 </span>
                 <span>
@@ -402,7 +402,7 @@ export default function FamilyView({
               <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-600" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
                     {t('common.filters.sort_by')}
                   </span>
                 </div>
@@ -418,16 +418,16 @@ export default function FamilyView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'id_family'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('machines.family.col_id')}</span>
                     {sortField === 'id_family' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -442,16 +442,16 @@ export default function FamilyView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'libelle'
-                        ? 'bg-cyan-50 text-cyan-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('machines.family.col_libelle')}</span>
                     {sortField === 'libelle' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-cyan-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
                 </div>

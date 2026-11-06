@@ -449,10 +449,10 @@ export default function CompFamilyView({
     <AnimatedPage className="space-y-4">
       {/* Top Banner */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/header">
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-amber-500/10 transition-colors duration-500" />
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          <PageHeaderIcon icon={SpokeIcon} colorClass="text-amber-700" />
+          <PageHeaderIcon icon={SpokeIcon} colorClass="text-indigo-700" />
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">
               {t('components.family.title', "Types de Composants d'Entrepôt")}
@@ -622,7 +622,7 @@ export default function CompFamilyView({
               value={activeGroupFilter || 'ALL'}
               onChange={(val) => setActiveGroupFilter(val === 'ALL' ? '' : val)}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs shrink-0">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
                   <Boxes className="w-3 h-3" />
                 </span>
               }
@@ -639,7 +639,7 @@ export default function CompFamilyView({
                     value: g.code || g.id || `grp-${gIdx}`,
                     label: `${g.code || g.id} - ${g.name || g.libelle}`,
                     badge: `${count}`,
-                    badgeColor: 'bg-indigo-50 text-indigo-800 font-bold',
+                    badgeColor: 'bg-amber-50 text-amber-800 font-bold',
                   };
                 }),
               ]}
@@ -681,7 +681,7 @@ export default function CompFamilyView({
               <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-teal-600" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
                     {t('common.filters.sort_by', 'Trier par')}
                   </span>
                 </div>
@@ -697,16 +697,16 @@ export default function CompFamilyView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'id_family'
-                        ? 'bg-teal-50 text-teal-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.family.col_id', 'ID Type')} (A)</span>
                     {sortField === 'id_family' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -721,16 +721,16 @@ export default function CompFamilyView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'libelle'
-                        ? 'bg-teal-50 text-teal-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.family.col_libelle', 'Libellé Type')} (B)</span>
                     {sortField === 'libelle' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -745,16 +745,16 @@ export default function CompFamilyView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'componentCode'
-                        ? 'bg-teal-50 text-teal-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.family.col_prefix', 'Code Composant')} (C)</span>
                     {sortField === 'componentCode' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
                 </div>
@@ -767,12 +767,12 @@ export default function CompFamilyView({
         {search && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('common.active_filter', 'Filtre actif :')}</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold">
-              <Search className="w-3 h-3 text-teal-600" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+              <Search className="w-3 h-3 text-amber-600" />
               {t('common.search_term', 'Recherche:')} &quot;{search}&quot;
               <button
                 onClick={() => setSearch('')}
-                className="hover:bg-teal-200/60 p-0.5 rounded-full transition cursor-pointer"
+                className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
               >
                 <X className="w-3 h-3" />
               </button>

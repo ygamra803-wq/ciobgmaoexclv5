@@ -1213,7 +1213,7 @@ export default function UtilisateursView({
                 <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                     <span className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-amber-700" />
                       {t('utilisateurs.filters.sort_by')}
                     </span>
                   </div>
@@ -1229,16 +1229,16 @@ export default function UtilisateursView({
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                         sortField === 'id'
-                          ? 'bg-indigo-50 text-indigo-800 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border border-amber-300 font-bold'
                           : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <span>{t('utilisateurs.filters.id_col')}</span>
                       {sortField === 'id' &&
                         (sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowUp className="w-3 h-3 text-amber-700 shrink-0" />
                         ) : (
-                          <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
                         ))}
                     </button>
 
@@ -1253,16 +1253,16 @@ export default function UtilisateursView({
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                         sortField === 'nom'
-                          ? 'bg-indigo-50 text-indigo-800 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border border-amber-300 font-bold'
                           : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <span>{t('utilisateurs.filters.name_col')}</span>
                       {sortField === 'nom' &&
                         (sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowUp className="w-3 h-3 text-amber-700 shrink-0" />
                         ) : (
-                          <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
                         ))}
                     </button>
 
@@ -1277,16 +1277,16 @@ export default function UtilisateursView({
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                         sortField === 'type'
-                          ? 'bg-indigo-50 text-indigo-800 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border border-amber-300 font-bold'
                           : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <span>{t('utilisateurs.filters.profile_col')}</span>
                       {sortField === 'type' &&
                         (sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowUp className="w-3 h-3 text-amber-700 shrink-0" />
                         ) : (
-                          <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
                         ))}
                     </button>
 
@@ -1301,16 +1301,16 @@ export default function UtilisateursView({
                       }}
                       className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                         sortField === 'id_zone'
-                          ? 'bg-indigo-50 text-indigo-800 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border border-amber-300 font-bold'
                           : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       <span>{t('utilisateurs.filters.zone_col')}</span>
                       {sortField === 'id_zone' &&
                         (sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowUp className="w-3 h-3 text-amber-700 shrink-0" />
                         ) : (
-                          <ArrowDown className="w-3 h-3 text-indigo-600 shrink-0" />
+                          <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
                         ))}
                     </button>
                   </div>

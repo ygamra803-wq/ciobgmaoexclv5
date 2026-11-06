@@ -415,7 +415,7 @@ export default function MobileSidebarDrawer({
             canAccess('designations')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-slate-400" />
+                <Database className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.stock_articles', 'Stock & Articles')}</span>
               </div>
               <div className="space-y-1">
@@ -458,7 +458,15 @@ export default function MobileSidebarDrawer({
                   <button onClick={() => navTo('types')} className={getTabClass('types', true)}>
                     <span className="flex items-center gap-2">
                       <Tag
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('types')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.types', 'Types')}</span>
                     </span>
@@ -474,7 +482,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <BadgeCheck
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('designations')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.designations', 'Désignations')}</span>
                     </span>
@@ -494,7 +510,7 @@ export default function MobileSidebarDrawer({
             canAccess('blueprints')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Factory className="w-3.5 h-3.5 text-slate-400" />
+                <Factory className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.parc_machines', 'Parc Machines')}</span>
               </div>
               <div className="space-y-1">
@@ -516,7 +532,15 @@ export default function MobileSidebarDrawer({
                   <button onClick={() => navTo('families')} className={getTabClass('families', true)}>
                     <span className="flex items-center gap-2">
                       <HubIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('families')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.families', 'Familles Machines')}</span>
                     </span>
@@ -532,7 +556,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <CategoryIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('templates')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.templates', 'Templates Machines')}</span>
                     </span>
@@ -548,7 +580,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <FingerprintPattern
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('blueprints')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.blueprints', 'Blueprint Machine')}</span>
                     </span>
@@ -563,7 +603,7 @@ export default function MobileSidebarDrawer({
           {(canAccess('preventive') || canAccess('preventive_referentiel')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.maintenance_preventive', 'Maintenance & Préventif')}</span>
               </div>
               <div className="space-y-1">
@@ -597,7 +637,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <Settings2
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('preventive_referentiel')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.preventive_referentiel', 'Ingénierie & Référentiel')}</span>
                     </span>
@@ -614,7 +662,7 @@ export default function MobileSidebarDrawer({
           {(canAccess('corrective') || canAccess('corrective_referentiel')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Wrench className="w-3.5 h-3.5 text-slate-400" />
+                <Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.maintenance_corrective', 'Maintenance Corrective')}</span>
               </div>
               <div className="space-y-1">
@@ -649,7 +697,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <Database
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('corrective_referentiel')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span className="truncate">{t('nav.subtabs.corrective_referentiel', 'Catalogue')}</span>
                     </span>
@@ -664,7 +720,7 @@ export default function MobileSidebarDrawer({
           {canAccess('entrepot') && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Warehouse className="w-3.5 h-3.5 text-slate-400" />
+                <Warehouse className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.groupe_entrepot', 'Groupe Entrepôt')}</span>
               </div>
               <div className="space-y-1">
@@ -689,7 +745,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <Boxes
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('comp_groups')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.comp_groups', 'Groupes (Composants)')}</span>
                     </span>
@@ -704,7 +768,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <SpokeIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('comp_families')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.comp_families', 'Familles (Composants)')}</span>
                     </span>
@@ -721,7 +793,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <CubeIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-purple-400' : 'text-purple-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('comp_templates')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.comp_templates', 'Templates (Composants)')}</span>
                     </span>
@@ -739,7 +819,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <LayersIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('part_types')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.part_types', 'Types (Parts)')}</span>
                     </span>
@@ -754,7 +842,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <PartInfoIcon
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('part_designations')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.part_designations', 'Désignations (Parts)')}</span>
                     </span>
@@ -771,7 +867,7 @@ export default function MobileSidebarDrawer({
           {(canAccess('zones') || canAccess('utilisateurs')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
                 <span>{t('nav.groups.zones_equipes', 'Zones & Équipes')}</span>
               </div>
               <div className="space-y-1">
@@ -796,7 +892,15 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <Users
-                        className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('utilisateurs')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
                       />
                       <span>{t('nav.subtabs.utilisateurs', 'Utilisateurs (Membres)')}</span>
                     </span>

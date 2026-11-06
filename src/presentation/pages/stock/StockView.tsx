@@ -894,7 +894,7 @@ export default function StockView({
       <IndustrialFilterCard
         title={t('common.filters.title')}
         subtitle={t('stock.filters_subtitle', 'Catalogue Pièces de Rechange • Liaisons Excel Colonnes B → K')}
-        color="cyan"
+        color="amber"
         filteredCount={effectiveFiltered.length}
         totalCount={stockItems.length}
         hasActiveFilters={hasActiveFilters}
@@ -919,16 +919,16 @@ export default function StockView({
             placeholder={t('stock.search_placeholder', 'Ref, désignation, emplacement...')}
             colBadge="Col. B+C"
             colBadgeColor="slate"
-            focusRingColor="focus:ring-cyan-500"
+            focusRingColor="focus:ring-amber-500"
             className="w-full sm:col-span-2 lg:col-span-1"
           />
 
           {/* 2. Type de Pièce (Col. D) */}
-          <FilterField label={t('stock.piece_type', 'Type de Pièce')} colBadge="Col. D" colBadgeColor="cyan">
+          <FilterField label={t('stock.piece_type', 'Type de Pièce')} colBadge="Col. D" colBadgeColor="amber">
             <CustomSelect
               value={stockTypeFilter}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Boxes className="w-3 h-3" />
                 </span>
               }
@@ -1011,12 +1011,12 @@ export default function StockView({
               onClick={() => setShowSortMenu(!showSortMenu)}
               className={`w-full h-9 px-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
                 showSortMenu || sortField !== 'type' || sortOrder !== 'asc'
-                  ? 'bg-indigo-50/80 text-indigo-950 border-indigo-300 ring-1 ring-indigo-200'
+                  ? 'bg-amber-50/80 text-amber-950 border-amber-300 ring-1 ring-amber-200'
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shrink-0 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
                   <ArrowUpDown className="w-3 h-3" />
                 </span>
                 <span className="truncate">
@@ -1058,16 +1058,16 @@ export default function StockView({
                       }}
                       className={`px-2.5 py-1.5 rounded-lg border text-left font-medium text-[11px] flex items-center justify-between transition cursor-pointer ${
                         sortField === col.key
-                          ? 'bg-indigo-50 text-indigo-950 border-indigo-300 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border-amber-300 font-bold'
                           : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
                       }`}
                     >
                       <span>{col.label}</span>
                       {sortField === col.key && (
                         sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowUp className="w-3.5 h-3.5 text-amber-700" />
                         ) : (
-                          <ArrowDown className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowDown className="w-3.5 h-3.5 text-amber-700" />
                         )
                       )}
                     </button>

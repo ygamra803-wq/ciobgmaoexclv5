@@ -485,10 +485,10 @@ export default function CompTemplateView({
     <AnimatedPage className="space-y-4">
       {/* Top Banner */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/header">
-        <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-purple-500/10 transition-colors duration-500" />
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
-          <PageHeaderIcon icon={CubeIcon} colorClass="text-purple-700" />
+          <PageHeaderIcon icon={CubeIcon} colorClass="text-indigo-700" />
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight">
               {t('components.template.title', "Désignations de Composants d'Entrepôt")}
@@ -675,7 +675,7 @@ export default function CompTemplateView({
                 }
               }}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs shrink-0">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
                   <Boxes className="w-3 h-3" />
                 </span>
               }
@@ -693,7 +693,7 @@ export default function CompTemplateView({
                     value: grpCode,
                     label: `${grpCode} - ${g.name || g.libelle}`,
                     badge: `${famCount} fam`,
-                    badgeColor: 'bg-indigo-50 text-indigo-800 font-bold',
+                    badgeColor: 'bg-amber-50 text-amber-800 font-bold',
                   };
                 }),
               ]}
@@ -775,7 +775,7 @@ export default function CompTemplateView({
               <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-3 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span className="flex items-center gap-1.5 text-slate-700 font-semibold">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-purple-600" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
                     {t('common.filters.sort_by', 'Trier par')}
                   </span>
                 </div>
@@ -791,16 +791,16 @@ export default function CompTemplateView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'id_templates'
-                        ? 'bg-purple-50 text-purple-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.template.sort_id', 'ID Désignation (A)')}</span>
                     {sortField === 'id_templates' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -815,16 +815,16 @@ export default function CompTemplateView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'libelle'
-                        ? 'bg-purple-50 text-purple-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.template.sort_libelle', 'Libellé / Modèle (B)')}</span>
                     {sortField === 'libelle' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
 
@@ -839,16 +839,16 @@ export default function CompTemplateView({
                     }}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'id_family'
-                        ? 'bg-purple-50 text-purple-800 font-bold'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     <span>{t('components.template.sort_family', 'Type de Composant (C)')}</span>
                     {sortField === 'id_family' &&
                       (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                       ))}
                   </button>
                 </div>
@@ -862,24 +862,24 @@ export default function CompTemplateView({
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('common.filters.active_filters', 'Filtres actifs :')}</span>
             {activeGroupFilter && activeGroupFilter !== 'ALL' && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold">
-                <Boxes className="w-3 h-3 text-indigo-600" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                <Boxes className="w-3 h-3 text-amber-600" />
                 {t('common.group', 'Groupe')} : {activeGroupFilter}
                 <button
                   onClick={() => setActiveGroupFilter('')}
-                  className="hover:bg-indigo-200/60 p-0.5 rounded-full transition cursor-pointer"
+                  className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
               </span>
             )}
             {compTemplateFamilyFilter && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-200 text-purple-800 text-xs font-semibold">
-                <Tag className="w-3 h-3 text-purple-600" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                <Tag className="w-3 h-3 text-amber-600" />
                 {t('common.family', 'Famille')} : {compTemplateFamilyFilter}
                 <button
                   onClick={() => setCompTemplateFamilyFilter && setCompTemplateFamilyFilter('')}
-                  className="hover:bg-purple-200/60 p-0.5 rounded-full transition cursor-pointer"
+                  className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>

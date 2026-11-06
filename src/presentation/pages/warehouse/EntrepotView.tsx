@@ -1341,7 +1341,7 @@ export default function EntrepotView({
       <IndustrialFilterCard
         title={t('common.filters.title')}
         subtitle={t('entrepot.filters.subtitle')}
-        color="teal"
+        color="amber"
         filteredCount={filteredItems.length}
         totalCount={warehouseItems.length}
         hasActiveFilters={hasActiveFilters}
@@ -1366,7 +1366,7 @@ export default function EntrepotView({
             placeholder={t('entrepot.filters.search_placeholder')}
             colBadge="Omni"
             colBadgeColor="slate"
-            focusRingColor="focus:ring-teal-500"
+            focusRingColor="focus:ring-amber-500"
             className="w-full sm:col-span-2 lg:col-span-1"
           />
 
@@ -1469,12 +1469,12 @@ export default function EntrepotView({
               onClick={() => setShowSortMenu(!showSortMenu)}
               className={`w-full h-9 px-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
                 showSortMenu || sortField !== 'id_warehouse_item' || sortOrder !== 'asc'
-                  ? 'bg-indigo-50/80 text-indigo-950 border-indigo-300 ring-1 ring-indigo-200'
+                  ? 'bg-amber-50/80 text-amber-950 border-amber-300 ring-1 ring-amber-200'
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shrink-0 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
                   <ArrowUpDown className="w-3 h-3" />
                 </span>
                 <span className="truncate">
@@ -1514,16 +1514,16 @@ export default function EntrepotView({
                       }}
                       className={`px-2.5 py-1.5 rounded-lg border text-left font-medium text-[11px] flex items-center justify-between transition cursor-pointer ${
                         sortField === col.key
-                          ? 'bg-indigo-50 text-indigo-950 border-indigo-300 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border-amber-300 font-bold'
                           : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
                       }`}
                     >
                       <span>{col.label}</span>
                       {sortField === col.key && (
                         sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowUp className="w-3.5 h-3.5 text-amber-700" />
                         ) : (
-                          <ArrowDown className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowDown className="w-3.5 h-3.5 text-amber-700" />
                         )
                       )}
                     </button>
