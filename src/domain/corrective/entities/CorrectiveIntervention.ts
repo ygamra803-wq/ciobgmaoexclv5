@@ -5,6 +5,14 @@ export type CorrectiveValidationStatus =
   | 'REJECTED'
   | 'NEEDS_CLARIFICATION';
 
+export type CorrectiveInterventionNature =
+  | 'REPLACE'
+  | 'REPAIR'
+  | 'CLEAN'
+  | 'ADJUST'
+  | 'INSPECT'
+  | 'OTHER';
+
 export interface ProposedPdrItem {
   ref: string;
   designation?: string;
@@ -54,6 +62,10 @@ export class CorrectiveIntervention {
   action_realisee_claimed?: string;
   validated_with_edits?: boolean;
   stock_effect?: 'NONE' | 'RESERVED' | 'APPLIED';
+  intervention_nature?: CorrectiveInterventionNature;
+  previous_validation_note?: string;
+  previous_validation_status?: CorrectiveValidationStatus;
+  resubmitted_count?: number;
   num_bon_saisi_par_tech?: string;
   date_fin_proposee?: string;
   heure_fin_proposee?: string;

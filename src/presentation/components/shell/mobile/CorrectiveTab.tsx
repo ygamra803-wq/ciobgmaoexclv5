@@ -12,10 +12,16 @@ import {
   FileText,
   Clock,
 } from 'lucide-react';
-import { getTechnicianDisplayName } from '../../../../core/security/technicianScope';
+import {
+  getTechnicianDisplayName,
+  isTechnicianRole,
+} from '../../../../core/security/technicianScope';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
+import ValidationStatusBadge, {
+  INTERVENTION_NATURE_OPTIONS,
+} from '../../common/ValidationStatusBadge';
 
-export type MobileCorrFilter = 'ACTIVE' | 'CLARIFY' | 'PENDING' | 'ALL';
+export type MobileCorrFilter = 'ACTIVE' | 'CLARIFY' | 'REJECTED' | 'PENDING' | 'ALL';
 
 interface ProposedBtPart {
   ref: string;
@@ -76,6 +82,7 @@ export default function CorrectiveTab({
   // BT Report Submission Sheet State (Maker-Checker)
   const [selectedBtForSubmit, setSelectedBtForSubmit] = useState<any | null>(null);
   const [btActionRealisee, setBtActionRealisee] = useState('');
+  const [btNature, setBtNature] = useState('');
   const [btNumBon, setBtNumBon] = useState('');
   const [btArretMachine, setBtArretMachine] = useState(false);
   const [btTempsArret, setBtTempsArret] = useState('');
@@ -101,17 +108,37 @@ export default function CorrectiveTab({
 
   const myInterventions = techScope?.myCorrectiveInterventions || [];
   const openCorrective = techScope?.openCorrective || [];
-  const clarifyCorrective = techScope?.needsClarificationCorrective || [];
+  const clarifyAll = techScope?.needsClarificationCorrective || [];
+  const clarifyOnlyCorrective = useMemo(
+    () =>
+      myInterventions.filter(
+        (i: any) =>
+          String(i.statut || '').toUpperCase() !== 'CLOTURE' &&
+          String(i.validation_status || '').toUpperCase() === 'NEEDS_CLARIFICATION'
+      ),
+    [myInterventions]
+  );
+  const rejectedCorrective = useMemo(
+    () =>
+      myInterventions.filter(
+        (i: any) =>
+          String(i.statut || '').toUpperCase() !== 'CLOTURE' &&
+          String(i.validation_status || '').toUpperCase() === 'REJECTED'
+      ),
+    [myInterventions]
+  );
   const pendingValCorrective = techScope?.pendingValidationCorrective || [];
 
   const filteredItems = useMemo(() => {
     let base: any[] = [];
     if (corrFilter === 'CLARIFY') {
-      base = clarifyCorrective;
+      base = clarifyOnlyCorrective;
+    } else if (corrFilter === 'REJECTED') {
+      base = rejectedCorrective;
     } else if (corrFilter === 'PENDING') {
       base = pendingValCorrective;
     } else if (corrFilter === 'ACTIVE') {
-      const combined = [...clarifyCorrective, ...openCorrective];
+      const combined = [...clarifyAll, ...openCorrective];
       base = combined.filter(
         (item, idx, arr) => arr.findIndex((x) => String(x.id) === String(item.id)) === idx
       );
@@ -127,7 +154,16 @@ export default function CorrectiveTab({
       const anom = String(item.anomalie || item.travail_a_faire || '').toLowerCase();
       return machine.includes(q) || bt.includes(q) || anom.includes(q);
     });
-  }, [corrFilter, searchQuery, myInterventions, openCorrective, clarifyCorrective, pendingValCorrective]);
+  }, [
+    corrFilter,
+    searchQuery,
+    myInterventions,
+    openCorrective,
+    clarifyAll,
+    clarifyOnlyCorrective,
+    rejectedCorrective,
+    pendingValCorrective,
+  ]);
 
   const handleCreateMobileDi = (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +226,7 @@ export default function CorrectiveTab({
   const handleOpenBtSubmitSheet = (bt: any) => {
     setSelectedBtForSubmit(bt);
     setBtActionRealisee(bt.action_realisee || bt.travail_a_faire || '');
+    setBtNature(bt.intervention_nature || '');
     setBtNumBon(bt.num_bon_saisi_par_tech || '');
     setBtArretMachine(Boolean(bt.arret_machine));
     setBtTempsArret(bt.temps_arret || '');
@@ -294,6 +331,15 @@ export default function CorrectiveTab({
       }
     }
 
+    const selectedNature = String(btNature || '').trim().toUpperCase();
+    if (selectedNature === 'REPLACE' && finalParts.length === 0) {
+      showToast?.(
+        'Nature « Remplacement PDR » sélectionnée sans pièce déclarée : ajoutez une pièce ou choisissez une autre nature.',
+        'warning'
+      );
+      return;
+    }
+
     const techName =
       getTechnicianDisplayName(currentUser, technicians) ||
       currentUser?.personnelName ||
@@ -307,10 +353,18 @@ export default function CorrectiveTab({
         currentUser?.id ||
         'tech'
     );
+    const sessionRole = String(
+      currentUser?.role || (isTechnicianRole(currentUser) ? 'TECHNICIEN' : 'ADMIN')
+    )
+      .trim()
+      .toUpperCase();
 
     // Maker-Checker Submission: sets validation_status = 'PENDING_VALIDATION', action_fermee = 'NON'
     // Zero direct stock movement until Admin reviews and approves
     onSubmitInterventionForValidation(selectedBtForSubmit.id, {
+      actorRole: sessionRole,
+      isTechnician: isTechnicianRole(currentUser),
+      ...(selectedNature ? { intervention_nature: selectedNature } : {}),
       action_realisee: btActionRealisee.trim(),
       travail_a_faire: selectedBtForSubmit.travail_a_faire || btActionRealisee.trim(),
       intervenant: techName,
@@ -372,18 +426,23 @@ export default function CorrectiveTab({
             },
             {
               id: 'CLARIFY',
-              label: `À clarifier (${clarifyCorrective.length})`,
+              label: `À clarifier (${clarifyOnlyCorrective.length})`,
+              activeClass: 'bg-orange-600 text-white',
+            },
+            {
+              id: 'REJECTED',
+              label: `Rejetés (${rejectedCorrective.length})`,
               activeClass: 'bg-rose-600 text-white',
             },
             {
               id: 'PENDING',
               label: `En attente val. (${pendingValCorrective.length})`,
-              activeClass: 'bg-purple-600 text-white',
+              activeClass: 'bg-amber-600 text-white',
             },
             {
               id: 'ALL',
               label: `Tous (${myInterventions.length})`,
-              activeClass: 'bg-amber-600 text-white',
+              activeClass: 'bg-indigo-600 text-white',
             },
           ].map((f) => (
             <button
@@ -454,24 +513,12 @@ export default function CorrectiveTab({
                         {item.num_bt || item.id}
                       </span>
 
-                      {isClarify && (
-                        <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-mono text-[10px] font-black">
-                          À CLARIFIER
-                        </span>
+                      {(isClarify || isPending || isClosed || item.intervention_nature) && (
+                        <ValidationStatusBadge record={item} compact showNote={false} />
                       )}
-                      {isPending && (
-                        <span className="px-2 py-0.5 rounded bg-purple-100 text-purple-800 font-mono text-[10px] font-bold">
-                          EN ATTENTE VALIDATION
-                        </span>
-                      )}
-                      {isLive && !isPending && !isClosed && (
+                      {isLive && !isPending && !isClosed && !isClarify && (
                         <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[10px] font-black">
                           EN_COURS (LIVE)
-                        </span>
-                      )}
-                      {isClosed && (
-                        <span className="px-2 py-0.5 rounded bg-slate-200 text-slate-800 font-mono text-[10px] font-bold">
-                          CLÔTURÉ
                         </span>
                       )}
                     </div>
@@ -502,12 +549,26 @@ export default function CorrectiveTab({
                   </span>
                 </div>
 
-                {/* Supervisor Clarification Banner */}
+                {/* Supervisor Clarification / Rejection Banner */}
                 {item.validation_note && (
-                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-xs text-rose-900">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div
+                    className={`p-2.5 rounded-xl border flex items-start gap-2 text-xs ${
+                      vStatus === 'REJECTED'
+                        ? 'bg-rose-50 border-rose-200 text-rose-900'
+                        : 'bg-orange-50 border-orange-200 text-orange-900'
+                    }`}
+                  >
+                    <AlertTriangle
+                      className={`w-4 h-4 shrink-0 mt-0.5 ${
+                        vStatus === 'REJECTED' ? 'text-rose-600' : 'text-orange-600'
+                      }`}
+                    />
                     <div>
-                      <span className="font-black">Note Admin (À clarifier) : </span>
+                      <span className="font-black">
+                        {vStatus === 'REJECTED'
+                          ? 'Motif du rejet (Aucun déstockage) : '
+                          : 'Note Admin (À clarifier) : '}
+                      </span>
                       <span>{item.validation_note}</span>
                     </div>
                   </div>
@@ -552,17 +613,21 @@ export default function CorrectiveTab({
                       onClick={() => handleOpenBtSubmitSheet(item)}
                       data-testid={`mobile-corr-submit-open-btn-${item.id}`}
                       className={`px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                        isClarify
+                        vStatus === 'REJECTED'
                           ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                          : isClarify
+                          ? 'bg-orange-600 hover:bg-orange-500 text-white'
                           : isPending
-                          ? 'bg-purple-700 hover:bg-purple-600 text-white'
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
                           : 'bg-slate-900 hover:bg-slate-800 text-white'
                       }`}
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>
-                        {isClarify
-                          ? 'Corriger Rapport'
+                        {vStatus === 'REJECTED'
+                          ? 'Nouvelle déclaration'
+                          : isClarify
+                          ? 'Corriger & Renvoyer'
                           : isPending
                           ? 'Modifier Rapport'
                           : 'Soumettre pour validation'}
@@ -747,6 +812,24 @@ export default function CorrectiveTab({
             )}
 
             <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  Nature de l'intervention (optionnel)
+                </label>
+                <select
+                  value={btNature}
+                  onChange={(e) => setBtNature(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold bg-white"
+                >
+                  <option value="">— Non spécifiée (Autre) —</option>
+                  {INTERVENTION_NATURE_OPTIONS.map((opt) => (
+                    <option key={opt.code} value={opt.code}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
                   Action réalisée sur le terrain *

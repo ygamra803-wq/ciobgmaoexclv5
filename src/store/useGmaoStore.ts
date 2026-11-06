@@ -54,6 +54,37 @@ import { getEntityRecordId } from '../services/lanStateMergeService';
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
 const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
 
+function resolveActiveSessionRole(): string {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem('gmao_session_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const role = parsed?.payload?.role || parsed?.role || '';
+        return String(role).trim().toUpperCase();
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+function normalizeInterventionNature(raw: unknown): string | undefined {
+  const clean = String(raw || '').trim().toUpperCase();
+  if (
+    clean === 'REPLACE' ||
+    clean === 'REPAIR' ||
+    clean === 'CLEAN' ||
+    clean === 'ADJUST' ||
+    clean === 'INSPECT' ||
+    clean === 'OTHER'
+  ) {
+    return clean;
+  }
+  return undefined;
+}
+
 function recordLocalDeletedIds(entity: string, removedIds: unknown[]): void {
   const cleanEntity = String(entity || '').trim();
   if (!cleanEntity || !Array.isArray(removedIds) || removedIds.length === 0) return;
@@ -2482,6 +2513,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedPartId)
             : null;
 
+          const prevValStatus = String(item.validation_status || '').trim().toUpperCase();
+          const isResubmission =
+            prevValStatus === 'NEEDS_CLARIFICATION' || prevValStatus === 'REJECTED';
+          const resolvedNature = normalizeInterventionNature(
+            submissionData.intervention_nature ?? item.intervention_nature
+          );
+
           updated = new CorrectiveIntervention({
             ...item,
             travail_a_faire: submissionData.travail_a_faire ?? item.travail_a_faire ?? '',
@@ -2490,6 +2528,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             temps_arret: submissionData.temps_arret ?? item.temps_arret ?? '',
             marque: submissionData.marque ?? item.marque ?? '',
             etat_piece: submissionData.etat_piece ?? item.etat_piece ?? 'Neuve',
+            ...(resolvedNature ? { intervention_nature: resolvedNature as any } : {}),
+            ...(isResubmission
+              ? {
+                  previous_validation_note: String(
+                    item.validation_note || item.previous_validation_note || ''
+                  ).trim(),
+                  previous_validation_status: prevValStatus as any,
+                  resubmitted_count: Number(item.resubmitted_count || 0) + 1,
+                }
+              : {}),
             id_composant: resolvedCompId,
             nom_composant:
               submissionData.nom_composant ||
@@ -2536,6 +2584,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               submissionData.temps_intervention_mins ??
               timeCalc.minutes,
             validation_status: 'PENDING_VALIDATION',
+            validation_note: '',
+            validated_by_id: '',
+            validated_by_name: '',
+            validated_at: '',
             stock_deducted: false,
             stock_effect: normalizedProposed.length > 0 ? 'RESERVED' : 'NONE',
             submitted_by_id:
@@ -2603,16 +2655,26 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ? String(decisionData.action_realisee).trim()
             : claimedAction;
 
+        const claimedNature = normalizeInterventionNature(existing.intervention_nature);
+        const finalNature = normalizeInterventionNature(
+          decisionData.intervention_nature ?? existing.intervention_nature
+        );
+
         const hasPartsDiff = serializePiecesSig(claimedPieces) !== serializePiecesSig(approvedPieces);
         const hasActionDiff = Boolean(claimedAction && finalAction && claimedAction !== finalAction);
+        const hasNatureDiff = Boolean(claimedNature && finalNature && claimedNature !== finalNature);
         const validatedWithEdits =
-          Boolean(decisionData.validated_with_edits) || hasPartsDiff || hasActionDiff;
+          Boolean(decisionData.validated_with_edits) ||
+          hasPartsDiff ||
+          hasActionDiff ||
+          hasNatureDiff;
 
         return get().handleClotureIntervention(
           id,
           {
             ...decisionData,
             _fromValidationReview: true,
+            ...(finalNature ? { intervention_nature: finalNature } : {}),
             pieces_claimed: claimedPieces,
             action_realisee_claimed: claimedAction,
             validated_with_edits: validatedWithEdits,
@@ -2640,6 +2702,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         }
 
         const nowIso = new Date().toISOString();
+        const finalNature = normalizeInterventionNature(
+          decisionData.intervention_nature ?? existing.intervention_nature
+        );
         let updated: any = null;
         const next = get().correctiveInterventions.map((item) => {
           if (item.id === id) {
@@ -2654,6 +2719,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               ...(Array.isArray(decisionData.pieces_proposees)
                 ? { pieces_proposees: decisionData.pieces_proposees }
                 : {}),
+              ...(finalNature ? { intervention_nature: finalNature as any } : {}),
               pieces_claimed: Array.isArray(item.pieces_claimed)
                 ? item.pieces_claimed
                 : Array.isArray(item.pieces_proposees)
@@ -2688,13 +2754,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const existing = get().correctiveInterventions.find((item) => item.id === id);
       if (!existing) return null;
 
-      // VAL-2 Single Gate Guard: Technician or Operator field submissions must ALWAYS go through PENDING_VALIDATION
-      const actorRoleUpper = String(clotureData?.actorRole || clotureData?.role || '').trim().toUpperCase();
+      // G0 + VAL-2 Single Gate Guard: Technician or Operator field submissions must ALWAYS go through PENDING_VALIDATION
+      // Uses explicit actorRole/isTechnician from payload AND active signed session role as defense-in-depth fallback
+      const explicitRole = String(clotureData?.actorRole || clotureData?.role || '').trim().toUpperCase();
+      const effectiveRole = explicitRole || resolveActiveSessionRole();
       if (
         clotureData?._fromValidationReview !== true &&
         (clotureData?.isTechnician === true ||
-          actorRoleUpper === 'TECHNICIEN' ||
-          actorRoleUpper === 'OPERATEUR')
+          effectiveRole === 'TECHNICIEN' ||
+          effectiveRole === 'OPERATEUR')
       ) {
         return get().handleSubmitInterventionForValidation(id, clotureData);
       }
@@ -2841,10 +2909,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
           const cleanClotureData = { ...clotureData };
           delete cleanClotureData._fromValidationReview;
+          delete cleanClotureData.actorRole;
+          delete cleanClotureData.isTechnician;
+          const resolvedClotureNature = normalizeInterventionNature(
+            clotureData.intervention_nature ?? item.intervention_nature
+          );
 
           updated = new CorrectiveIntervention({
             ...item,
             ...cleanClotureData,
+            ...(resolvedClotureNature ? { intervention_nature: resolvedClotureNature as any } : {}),
             id_composant: resolvedCompId,
             nom_composant:
               clotureData.nom_composant ||

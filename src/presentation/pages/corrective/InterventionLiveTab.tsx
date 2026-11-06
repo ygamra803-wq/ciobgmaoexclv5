@@ -28,6 +28,7 @@ import {
   matchesTechnicianRecord,
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
+import { INTERVENTION_NATURE_OPTIONS } from '../../components/common/ValidationStatusBadge';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -168,6 +169,7 @@ export default function InterventionLiveTab({
   const [formState, setFormState] = useState<any>({
     travail_a_faire: '',
     action_realisee: '',
+    intervention_nature: '',
     pdr_ref: '',
     pdr_designation: '',
     pdr_quantite: 1,
@@ -202,6 +204,7 @@ export default function InterventionLiveTab({
       setFormState({
         travail_a_faire: activeIntervention.travail_a_faire || '',
         action_realisee: activeIntervention.action_realisee || '',
+        intervention_nature: activeIntervention.intervention_nature || '',
         pdr_ref: activeIntervention.pdr_ref || activeIntervention.pdr || '',
         pdr_designation: activeIntervention.pdr_designation || '',
         pdr_quantite: activeIntervention.pdr_quantite || 1,
@@ -425,9 +428,21 @@ export default function InterventionLiveTab({
     }
 
     const effectivePieces = buildEffectivePiecesList(formState);
+    const selectedNature = String(formState.intervention_nature || '').trim().toUpperCase();
+
+    // VAL-4 Guard: If nature is REPLACE ('Remplacement PDR') but 0 parts are declared, warn before submitting
+    if (selectedNature === 'REPLACE' && effectivePieces.length === 0) {
+      showToast?.(
+        'Nature « Remplacement PDR » sélectionnée sans pièce déclarée : veuillez ajouter la pièce remplacée ou choisir une nature sans PDR (Réparation, Nettoyage, Réglage...).',
+        'warning'
+      );
+      return false;
+    }
+
     const primaryPiece = effectivePieces.length === 1 ? effectivePieces[0] : null;
     const normalizedFormState = {
       ...formState,
+      ...(selectedNature ? { intervention_nature: selectedNature } : {}),
       pieces_utilisees: effectivePieces,
       pdr_ref: primaryPiece ? primaryPiece.ref : formState.pdr_ref,
       pdr_designation: primaryPiece ? primaryPiece.designation : formState.pdr_designation,
@@ -447,6 +462,9 @@ export default function InterventionLiveTab({
       'Atelier';
     const machineDesignation =
       targetMachine?.designation || activeIntervention.code_machine;
+    const sessionActorRole = String(user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN'))
+      .trim()
+      .toUpperCase();
 
     // 1. TECHNICIAN PATH: Submit field claim for validation WITHOUT closing or deducting stock
     if (isTechUser) {
@@ -454,6 +472,8 @@ export default function InterventionLiveTab({
       if (typeof submitFn === 'function') {
         const submittedResult = submitFn(activeIntervention.id, {
           ...normalizedFormState,
+          actorRole: sessionActorRole,
+          isTechnician: true,
           pieces_proposees: effectivePieces,
           num_bon_saisi_par_tech: normalizedFormState.num_bon_saisi_par_tech,
           zone: machineZone,
@@ -477,7 +497,10 @@ export default function InterventionLiveTab({
       } else if (typeof onUpdateIntervention === 'function') {
         onUpdateIntervention(activeIntervention.id, {
           ...normalizedFormState,
+          actorRole: sessionActorRole,
+          isTechnician: true,
           pieces_proposees: effectivePieces,
+          pieces_claimed: effectivePieces,
           pieces_utilisees: [],
           pdr_ref: '',
           pdr_quantite: 0,
@@ -487,6 +510,8 @@ export default function InterventionLiveTab({
           temps_intervention_propose: liveWorkingTime.formatted,
           temps_intervention_mins_propose: liveWorkingTime.minutes,
           validation_status: 'PENDING_VALIDATION',
+          validation_note: '',
+          stock_deducted: false,
           submitted_by_id: user?.personnelId || user?.code || user?.id || '',
           submitted_by_name: getTechnicianBadgeLabel(user, _technicians),
           submitted_at: now.toISOString(),
@@ -510,6 +535,8 @@ export default function InterventionLiveTab({
     // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
     const closedResult = onClotureIntervention(activeIntervention.id, {
       ...normalizedFormState,
+      actorRole: sessionActorRole,
+      isTechnician: isTechUser,
       zone: machineZone,
       machine_designation: machineDesignation,
       date_fin: activeIntervention.date_fin_proposee || dateFin,
@@ -580,6 +607,71 @@ export default function InterventionLiveTab({
   // ============================================================================
   const step1DiagnosticSection = (
     <div className="space-y-4">
+      {/* VAL-3 Banner: Show Supervisor Clarification / Rejection Note when editing & resubmitting */}
+      {(activeIntervention.validation_status === 'NEEDS_CLARIFICATION' ||
+        activeIntervention.validation_status === 'REJECTED') &&
+        activeIntervention.validation_note && (
+          <div
+            className={`p-3.5 rounded-2xl border flex items-start gap-2.5 text-xs ${
+              activeIntervention.validation_status === 'REJECTED'
+                ? 'bg-rose-50 border-rose-300 text-rose-900'
+                : 'bg-orange-50 border-orange-300 text-orange-950'
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-black uppercase tracking-wider">
+                {activeIntervention.validation_status === 'REJECTED'
+                  ? 'Déclaration précédente rejetée (Sans effet stock) — Nouvelle déclaration :'
+                  : 'Clarification demandée par le responsable — Corrigez et renvoyez :'}
+              </div>
+              <p className="font-semibold mt-0.5">{activeIntervention.validation_note}</p>
+            </div>
+          </div>
+        )}
+
+      {/* VAL-4: Nature de l'intervention (Optionnel · Compatible ascendant) */}
+      <div className="space-y-1.5">
+        <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+          Nature de l'Intervention (Optionnel · Contrôle cohérence PDR)
+        </label>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {INTERVENTION_NATURE_OPTIONS.map((opt) => {
+            const isSelected =
+              String(formState.intervention_nature || '').toUpperCase() === opt.code;
+            return (
+              <button
+                key={opt.code}
+                type="button"
+                data-testid={`live-nature-${opt.code}`}
+                onClick={() =>
+                  setFormState((p: any) => ({
+                    ...p,
+                    intervention_nature: isSelected ? '' : opt.code,
+                  }))
+                }
+                className={`px-3 py-2 rounded-xl border text-left text-xs font-bold transition cursor-pointer flex items-center justify-between gap-1.5 ${
+                  isSelected
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                }`}
+              >
+                <span className="truncate">{opt.shortLabel}</span>
+                {opt.requiresPartsWarning && (
+                  <span
+                    className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
+                      isSelected ? 'bg-amber-400 text-slate-950' : 'bg-cyan-100 text-cyan-800'
+                    }`}
+                  >
+                    +PDR
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Travail à faire & Suggestions d'Atelier */}
       <div className="space-y-2">
         <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">

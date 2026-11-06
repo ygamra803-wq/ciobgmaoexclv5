@@ -40,7 +40,9 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
 import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
-import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
+import ValidationStatusBadge, {
+  INTERVENTION_NATURE_OPTIONS,
+} from '../../components/common/ValidationStatusBadge';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -76,6 +78,7 @@ export default function BonsTravailTab({
   // Maker-Checker Review Modal State (Admin / Supervisor)
   const [reviewModalBt, setReviewModalBt] = useState<any | null>(null);
   const [reviewActionRealisee, setReviewActionRealisee] = useState('');
+  const [reviewNature, setReviewNature] = useState('');
   const [reviewPieces, setReviewPieces] = useState<any[]>([]);
   const [reviewSkipStockDeduction, setReviewSkipStockDeduction] = useState(false);
   const [reviewNote, setReviewNote] = useState('');
@@ -120,6 +123,7 @@ export default function BonsTravailTab({
     });
     setReviewModalBt(bt);
     setReviewActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
+    setReviewNature(bt?.intervention_nature || '');
     setReviewPieces(initialPieces);
     setReviewSkipStockDeduction(Boolean(rec?.exactMovementMatch));
     setReviewNote(bt?.validation_note || '');
@@ -138,6 +142,18 @@ export default function BonsTravailTab({
       return;
     }
 
+    if (
+      decision === 'APPROVED' &&
+      String(reviewNature || '').trim().toUpperCase() === 'REPLACE' &&
+      reviewPieces.length === 0
+    ) {
+      showToast?.(
+        'Un remplacement (REPLACE) nécessite au moins une pièce de rechange ou changez la nature (ex: Réparation / Nettoyage).',
+        'warning'
+      );
+      return;
+    }
+
     const reviewFn = onReviewValidation || storeReviewValidation;
     if (typeof reviewFn === 'function') {
       const result = reviewFn(
@@ -146,6 +162,7 @@ export default function BonsTravailTab({
           decision,
           action_realisee: reviewActionRealisee,
           travail_a_faire: reviewActionRealisee,
+          intervention_nature: reviewNature || reviewModalBt.intervention_nature || '',
           pieces_utilisees: reviewPieces,
           pieces_proposees: reviewPieces,
           skipStockDeduction: reviewSkipStockDeduction,
@@ -723,8 +740,9 @@ export default function BonsTravailTab({
           const isClosed = bt.statut === 'CLOTURE';
           const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
           const isPendingVal = bt.validation_status === 'PENDING_VALIDATION';
+          const isRejectedVal = bt.validation_status === 'REJECTED';
           const isClarif =
-            bt.validation_status === 'NEEDS_CLARIFICATION' || bt.validation_status === 'REJECTED';
+            bt.validation_status === 'NEEDS_CLARIFICATION' || isRejectedVal;
 
           return !isClosed ? (
             <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -752,11 +770,19 @@ export default function BonsTravailTab({
                       ? 'bg-purple-100 hover:bg-purple-200 text-purple-900 border border-purple-300'
                       : 'bg-amber-600 hover:bg-amber-700 text-white'
                   }`}
-                  title="Lancer ou reprendre le Chrono Live"
+                  title={
+                    isRejectedVal
+                      ? 'Soumettre une nouvelle déclaration après rejet'
+                      : isClarif
+                      ? 'Corriger et renvoyer après demande de clarification'
+                      : 'Lancer ou reprendre le Chrono Live'
+                  }
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
                   <span>
-                    {isClarif
+                    {isRejectedVal
+                      ? 'Nouvelle déclaration'
+                      : isClarif
                       ? 'Corriger'
                       : isPendingVal && isTechUser
                       ? 'Modifier'
@@ -905,7 +931,7 @@ export default function BonsTravailTab({
         </div>
       )}
 
-      {isTechUser && kpiStats.needsClarification > 0 && (
+      {isTechUser && (kpiStats.needsClarification > 0 || kpiStats.rejected > 0) && (
         <div
           data-testid="bt-tech-clarification-banner"
           className="bg-rose-50/90 border border-rose-300 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
@@ -916,23 +942,39 @@ export default function BonsTravailTab({
             </div>
             <div>
               <div className="font-black uppercase tracking-wider text-rose-900">
-                Clarification Demandée par le Responsable ({kpiStats.needsClarification} BT)
+                Suivi de vos Déclarations Terrain ({kpiStats.needsClarification} à clarifier · {kpiStats.rejected} rejeté(s))
               </div>
               <p className="text-rose-800 font-medium mt-0.5">
-                Cliquez sur « Corriger » dans la liste pour consulter la note du responsable, ajuster votre saisie et resoumettre.
+                Consultez la note du responsable et cliquez sur « Corriger » ou « Nouvelle déclaration » pour ajuster votre saisie et resoumettre (aucun déstockage tant que non approuvé).
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setFilterStatus('NEEDS_CLARIFICATION');
-              setCurrentPage(1);
-            }}
-            className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-xs active:scale-95"
-          >
-            Voir À Clarifier ({kpiStats.needsClarification})
-          </button>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {kpiStats.needsClarification > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterStatus('NEEDS_CLARIFICATION');
+                  setCurrentPage(1);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+              >
+                Voir À Clarifier ({kpiStats.needsClarification})
+              </button>
+            )}
+            {kpiStats.rejected > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterStatus('REJECTED');
+                  setCurrentPage(1);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition cursor-pointer shrink-0 shadow-xs active:scale-95"
+              >
+                Voir Rejetés ({kpiStats.rejected})
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1635,17 +1677,37 @@ export default function BonsTravailTab({
                 </div>
               )}
 
-              {/* Editable Travail Réalisé */}
-              <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                  Travail Réalisé / Rapport Technique (Col K)
-                </label>
-                <input
-                  type="text"
-                  value={reviewActionRealisee}
-                  onChange={(e) => setReviewActionRealisee(e.target.value)}
-                  className="w-full py-2.5 px-3.5 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-purple-400 focus:outline-hidden"
-                />
+              {/* Editable Nature d'intervention & Travail Réalisé */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Nature de l'intervention (VAL-4)
+                  </label>
+                  <select
+                    data-testid="bt-review-nature-select"
+                    value={reviewNature}
+                    onChange={(e) => setReviewNature(e.target.value)}
+                    className="w-full py-2.5 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-purple-400 focus:outline-hidden"
+                  >
+                    <option value="">-- Non spécifiée (Autre) --</option>
+                    {INTERVENTION_NATURE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label} ({opt.shortLabel})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Travail Réalisé / Rapport Technique (Col K)
+                  </label>
+                  <input
+                    type="text"
+                    value={reviewActionRealisee}
+                    onChange={(e) => setReviewActionRealisee(e.target.value)}
+                    className="w-full py-2.5 px-3.5 text-xs font-semibold rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white focus:border-purple-400 focus:outline-hidden"
+                  />
+                </div>
               </div>
 
               {/* Proposed PDR List & Stock Verification */}

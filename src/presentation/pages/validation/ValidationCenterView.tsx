@@ -31,6 +31,10 @@ import {
 } from '../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
+import {
+  getInterventionNatureMeta,
+  INTERVENTION_NATURE_OPTIONS,
+} from '../../components/common/ValidationStatusBadge';
 
 interface ValidationCenterViewProps {
   stockItems?: any[];
@@ -155,6 +159,7 @@ export default function ValidationCenterView({
   // 1. Corrective Review Modal State
   const [reviewBt, setReviewBt] = useState<any | null>(null);
   const [btActionRealisee, setBtActionRealisee] = useState('');
+  const [btNature, setBtNature] = useState('');
   const [btPieces, setBtPieces] = useState<any[]>([]);
   const [btSkipStockDeduction, setBtSkipStockDeduction] = useState(false);
   const [btNote, setBtNote] = useState('');
@@ -334,6 +339,7 @@ export default function ValidationCenterView({
     });
     setReviewBt(bt);
     setBtActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
+    setBtNature(bt?.intervention_nature || '');
     setBtPieces(initialPieces);
     setBtSkipStockDeduction(Boolean(rec?.exactMovementMatch));
     setBtNote(bt?.validation_note || '');
@@ -352,6 +358,18 @@ export default function ValidationCenterView({
       return;
     }
 
+    if (
+      decision === 'APPROVED' &&
+      String(btNature || '').trim().toUpperCase() === 'REPLACE' &&
+      btPieces.length === 0
+    ) {
+      showToast?.(
+        'Un remplacement (REPLACE) nécessite au moins une pièce de rechange ou changez la nature (ex: Réparation / Nettoyage).',
+        'warning'
+      );
+      return;
+    }
+
     const reviewFn = onReviewCorrectiveValidation || storeReviewCorrective;
     const result = reviewFn(
       reviewBt.id,
@@ -359,6 +377,7 @@ export default function ValidationCenterView({
         decision,
         action_realisee: btActionRealisee,
         travail_a_faire: btActionRealisee,
+        intervention_nature: btNature || reviewBt.intervention_nature || '',
         pieces_utilisees: btPieces,
         pieces_proposees: btPieces,
         skipStockDeduction: btSkipStockDeduction,
@@ -1147,6 +1166,19 @@ export default function ValidationCenterView({
                             À VALIDER
                           </span>
                         )}
+                        {(() => {
+                          const natureMeta = getInterventionNatureMeta(bt.intervention_nature);
+                          if (!natureMeta) return null;
+                          return (
+                            <span
+                              data-testid={`vc-bt-nature-badge-${bt.id}`}
+                              className={`px-2 py-0.5 rounded border font-mono text-[10px] font-black ${natureMeta.bgClass} ${natureMeta.textClass} ${natureMeta.borderClass}`}
+                              title={`Nature d'intervention déclarée : ${natureMeta.label}`}
+                            >
+                              {natureMeta.shortLabel}
+                            </span>
+                          );
+                        })()}
                         {(bt.source === 'AUTO_DI_PREVENTIF' || bt.source_preventive_execution_id) && (
                           <span
                             data-testid={`vc-bt-auto-di-badge-${bt.id}`}
@@ -1676,6 +1708,25 @@ export default function ValidationCenterView({
             )}
 
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nature de l'intervention (modifiable avant validation)
+                </label>
+                <select
+                  data-testid="vc-bt-nature-select"
+                  value={btNature}
+                  onChange={(e) => setBtNature(e.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold bg-white"
+                >
+                  <option value="">-- Non spécifiée (Autre) --</option>
+                  {INTERVENTION_NATURE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label} ({opt.shortLabel})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Action réalisée (modifiable avant clôture)

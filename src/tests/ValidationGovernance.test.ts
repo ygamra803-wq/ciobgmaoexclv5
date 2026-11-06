@@ -1,9 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { useGmaoStore } from '../store/useGmaoStore';
-import { getValidationStatusMeta } from '../presentation/components/common/ValidationStatusBadge';
+import {
+  getValidationStatusMeta,
+  getInterventionNatureMeta,
+} from '../presentation/components/common/ValidationStatusBadge';
 
-describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constitution', () => {
+describe('VAL-1, VAL-2, VAL-3, VAL-4 & G0 — Maker-Checker Validation Governance', () => {
   beforeEach(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem('gmao_session_v2');
+    }
     const store = useGmaoStore.getState();
     store.setRawStock([
       {
@@ -12,6 +18,14 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
         stockInitial: 10,
         stockActuel: 10,
         prix: 120,
+        unite: 'Pièce',
+      },
+      {
+        ref: 'PDR-JNT-10',
+        designation: 'Joint Torique NBR 10',
+        stockInitial: 20,
+        stockActuel: 20,
+        prix: 15,
         unite: 'Pièce',
       },
     ]);
@@ -34,11 +48,18 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
     });
   });
 
+  afterEach(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem('gmao_session_v2');
+    }
+  });
+
   it('VAL-2: routes technician direct closure call through PENDING_VALIDATION without deducting stock', () => {
     const store = useGmaoStore.getState();
     const result = store.handleClotureIntervention('BT-TEST-001', {
       actorRole: 'TECHNICIEN',
       isTechnician: true,
+      intervention_nature: 'REPLACE',
       action_realisee: 'Remplacement roulement',
       date_fin: '2026-04-01',
       heure_fin: '10:00',
@@ -47,6 +68,7 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
 
     expect(result).toBeTruthy();
     expect(result.validation_status).toBe('PENDING_VALIDATION');
+    expect(result.intervention_nature).toBe('REPLACE');
     expect(result.action_fermee).toBe('NON');
     expect(result.statut).toBe('EN_COURS');
     expect(result.stock_deducted).toBe(false);
@@ -58,9 +80,35 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
     expect(useGmaoStore.getState().mouvements).toHaveLength(0);
   });
 
+  it('G0: intercepts handleClotureIntervention via active sessionStorage role even when actorRole is omitted', () => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(
+        'gmao_session_v2',
+        JSON.stringify({ id: 'TECH-01', name: 'Karim Tech', role: 'TECHNICIEN' })
+      );
+    }
+
+    const store = useGmaoStore.getState();
+    const result = store.handleClotureIntervention('BT-TEST-001', {
+      action_realisee: 'Tentative de clôture directe sans actorRole explicite',
+      date_fin: '2026-04-01',
+      heure_fin: '11:00',
+      pieces_utilisees: [{ ref: 'PDR-RLM-6205', quantite: 1 }],
+    });
+
+    expect(result).toBeTruthy();
+    expect(result.validation_status).toBe('PENDING_VALIDATION');
+    expect(result.statut).toBe('EN_COURS');
+    expect(result.action_fermee).toBe('NON');
+    expect(result.stock_deducted).toBe(false);
+    expect(result.pieces_utilisees).toEqual([]);
+    expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+  });
+
   it('VAL-2: preserves pieces_claimed and flags validated_with_edits when Admin modifies parts before approval', () => {
     const store = useGmaoStore.getState();
     store.handleSubmitInterventionForValidation('BT-TEST-001', {
+      intervention_nature: 'REPLACE',
       action_realisee: 'Changement roulements',
       date_fin_proposee: '2026-04-01',
       heure_fin_proposee: '10:30',
@@ -70,6 +118,7 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
 
     const approved = useGmaoStore.getState().handleReviewInterventionValidation('BT-TEST-001', {
       decision: 'APPROVED',
+      intervention_nature: 'REPLACE',
       action_realisee: 'Changement roulement (1 seul remplacé après contrôle)',
       pieces_utilisees: [{ ref: 'PDR-RLM-6205', quantite: 1 }],
       validated_by_name: 'Responsable Maintenance',
@@ -92,11 +141,13 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
     expect(meta.status).toBe('APPROVED');
     expect(meta.validatedWithEdits).toBe(true);
     expect(meta.label).toContain('AJUSTÉ PAR ADMIN');
+    expect(meta.natureMeta?.nature).toBe('REPLACE');
   });
 
   it('VAL-1 & VAL-2: REJECTED decision keeps official stock untouched and exposes clear rejection metadata', () => {
     const store = useGmaoStore.getState();
     store.handleSubmitInterventionForValidation('BT-TEST-001', {
+      intervention_nature: 'CLEAN',
       action_realisee: 'Nettoyage capteur sans remplacement',
       pieces_proposees: [{ ref: 'PDR-RLM-6205', quantite: 1 }],
       submitted_by_name: 'Karim Tech',
@@ -120,5 +171,82 @@ describe('VAL-1 & VAL-2 — Maker-Checker Validation Governance & Status Constit
     expect(meta.status).toBe('REJECTED');
     expect(meta.label).toContain('REJETÉ');
     expect(meta.validationNote).toBe('Simple nettoyage, aucune pièce sortie du magasin');
+  });
+
+  it('VAL-3: resubmission after NEEDS_CLARIFICATION or REJECTED returns to PENDING_VALIDATION, archives old note, and updates pieces_claimed', () => {
+    const store = useGmaoStore.getState();
+    store.handleSubmitInterventionForValidation('BT-TEST-001', {
+      intervention_nature: 'REPLACE',
+      action_realisee: 'Remplacement roulement',
+      pieces_proposees: [{ ref: 'PDR-RLM-6205', quantite: 2 }],
+      submitted_by_name: 'Karim Tech',
+    });
+
+    // Step 1: Admin requests clarification
+    const clarified = useGmaoStore.getState().handleReviewInterventionValidation('BT-TEST-001', {
+      decision: 'NEEDS_CLARIFICATION',
+      validation_note: 'Merci de vérifier la référence exacte avec le magasinier',
+      validated_by_name: 'Responsable Maintenance',
+    });
+
+    expect(clarified.validation_status).toBe('NEEDS_CLARIFICATION');
+    expect(clarified.validation_note).toBe(
+      'Merci de vérifier la référence exacte avec le magasinier'
+    );
+    expect(clarified.stock_deducted).toBe(false);
+
+    // Step 2: Technician corrects and resubmits
+    const resubmitted = useGmaoStore.getState().handleSubmitInterventionForValidation(
+      'BT-TEST-001',
+      {
+        intervention_nature: 'REPLACE',
+        action_realisee: 'Remplacement joint torique et 1 roulement',
+        pieces_proposees: [
+          { ref: 'PDR-RLM-6205', quantite: 1 },
+          { ref: 'PDR-JNT-10', quantite: 2 },
+        ],
+        submitted_by_name: 'Karim Tech',
+      }
+    );
+
+    expect(resubmitted.validation_status).toBe('PENDING_VALIDATION');
+    expect(resubmitted.validation_note).toBe('');
+    expect(resubmitted.previous_validation_note).toBe(
+      'Merci de vérifier la référence exacte avec le magasinier'
+    );
+    expect(resubmitted.previous_validation_status).toBe('NEEDS_CLARIFICATION');
+    expect(resubmitted.resubmitted_count).toBe(1);
+    expect(resubmitted.stock_deducted).toBe(false);
+    expect(resubmitted.pieces_claimed).toHaveLength(2);
+    expect(resubmitted.pieces_proposees).toHaveLength(2);
+    expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+  });
+
+  it('VAL-4: preserves intervention_nature and handles legacy records without nature gracefully', () => {
+    const store = useGmaoStore.getState();
+
+    // Legacy record without intervention_nature
+    const legacyMeta = getValidationStatusMeta({
+      id: 'BT-LEGACY',
+      statut: 'CLOTURE',
+      action_fermee: 'OUI',
+    });
+    expect(legacyMeta.natureMeta).toBeNull();
+    expect(getInterventionNatureMeta(undefined)).toBeNull();
+
+    // Explicit nature
+    const submitted = store.handleSubmitInterventionForValidation('BT-TEST-001', {
+      intervention_nature: 'CLEAN',
+      action_realisee: 'Nettoyage complet armoire électrique',
+      pieces_proposees: [],
+      submitted_by_name: 'Karim Tech',
+    });
+
+    expect(submitted.intervention_nature).toBe('CLEAN');
+    expect(submitted.stock_effect).toBe('NONE');
+
+    const natureMeta = getInterventionNatureMeta(submitted.intervention_nature);
+    expect(natureMeta?.nature).toBe('CLEAN');
+    expect(natureMeta?.requiresParts).toBe(false);
   });
 });

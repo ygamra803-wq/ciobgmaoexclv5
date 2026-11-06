@@ -1,5 +1,6 @@
 import React from 'react';
-import { Clock, AlertTriangle, XCircle, CheckCircle2, ShieldCheck, Edit3 } from 'lucide-react';
+import { Clock, AlertTriangle, XCircle, CheckCircle2, ShieldCheck, Edit3, Wrench } from 'lucide-react';
+import type { CorrectiveInterventionNature } from '../../../domain/corrective/entities/CorrectiveIntervention';
 
 export type UnifiedValidationStatus =
   | 'NONE'
@@ -7,6 +8,110 @@ export type UnifiedValidationStatus =
   | 'NEEDS_CLARIFICATION'
   | 'REJECTED'
   | 'APPROVED';
+
+export interface InterventionNatureMeta {
+  code: CorrectiveInterventionNature;
+  value: CorrectiveInterventionNature;
+  nature: CorrectiveInterventionNature;
+  label: string;
+  shortLabel: string;
+  requiresParts: boolean;
+  requiresPartsWarning: boolean;
+  badgeClass: string;
+  bgClass: string;
+  textClass: string;
+  borderClass: string;
+}
+
+export const INTERVENTION_NATURE_OPTIONS: InterventionNatureMeta[] = [
+  {
+    code: 'REPLACE',
+    value: 'REPLACE',
+    nature: 'REPLACE',
+    label: 'Remplacement PDR (Avec pièce)',
+    shortLabel: 'Remplacement PDR',
+    requiresParts: true,
+    requiresPartsWarning: true,
+    badgeClass: 'bg-cyan-50 text-cyan-900 border-cyan-200',
+    bgClass: 'bg-cyan-50',
+    textClass: 'text-cyan-900',
+    borderClass: 'border-cyan-200',
+  },
+  {
+    code: 'REPAIR',
+    value: 'REPAIR',
+    nature: 'REPAIR',
+    label: 'Réparation sur place (Sans remplacement)',
+    shortLabel: 'Réparation',
+    requiresParts: false,
+    requiresPartsWarning: false,
+    badgeClass: 'bg-indigo-50 text-indigo-900 border-indigo-200',
+    bgClass: 'bg-indigo-50',
+    textClass: 'text-indigo-900',
+    borderClass: 'border-indigo-200',
+  },
+  {
+    code: 'CLEAN',
+    value: 'CLEAN',
+    nature: 'CLEAN',
+    label: 'Nettoyage / Soufflage / Dégraissage',
+    shortLabel: 'Nettoyage',
+    requiresParts: false,
+    requiresPartsWarning: false,
+    badgeClass: 'bg-teal-50 text-teal-900 border-teal-200',
+    bgClass: 'bg-teal-50',
+    textClass: 'text-teal-900',
+    borderClass: 'border-teal-200',
+  },
+  {
+    code: 'ADJUST',
+    value: 'ADJUST',
+    nature: 'ADJUST',
+    label: 'Réglage / Calibrage / Serrage',
+    shortLabel: 'Réglage',
+    requiresParts: false,
+    requiresPartsWarning: false,
+    badgeClass: 'bg-amber-50 text-amber-900 border-amber-200',
+    bgClass: 'bg-amber-50',
+    textClass: 'text-amber-900',
+    borderClass: 'border-amber-200',
+  },
+  {
+    code: 'INSPECT',
+    value: 'INSPECT',
+    nature: 'INSPECT',
+    label: 'Inspection / Diagnostic / Essai',
+    shortLabel: 'Diagnostic',
+    requiresParts: false,
+    requiresPartsWarning: false,
+    badgeClass: 'bg-slate-100 text-slate-800 border-slate-300',
+    bgClass: 'bg-slate-100',
+    textClass: 'text-slate-800',
+    borderClass: 'border-slate-300',
+  },
+  {
+    code: 'OTHER',
+    value: 'OTHER',
+    nature: 'OTHER',
+    label: 'Autre intervention',
+    shortLabel: 'Autre',
+    requiresParts: false,
+    requiresPartsWarning: false,
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+    bgClass: 'bg-slate-100',
+    textClass: 'text-slate-700',
+    borderClass: 'border-slate-200',
+  },
+];
+
+export function getInterventionNatureMeta(rawNature: unknown): InterventionNatureMeta | null {
+  const clean = String(rawNature || '').trim().toUpperCase();
+  if (!clean) return null;
+  return (
+    INTERVENTION_NATURE_OPTIONS.find((opt) => opt.code === clean) ||
+    INTERVENTION_NATURE_OPTIONS[INTERVENTION_NATURE_OPTIONS.length - 1]
+  );
+}
 
 export interface ValidationStatusMeta {
   status: UnifiedValidationStatus;
@@ -19,6 +124,7 @@ export interface ValidationStatusMeta {
   validatedWithEdits: boolean;
   validationNote: string;
   validatedByName: string;
+  natureMeta: InterventionNatureMeta | null;
 }
 
 export function getValidationStatusMeta(record: any): ValidationStatusMeta {
@@ -42,6 +148,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
   const validationNote = String(record?.validation_note || '').trim();
   const validatedByName = String(record?.validated_by_name || '').trim();
   const stockDeducted = Boolean(record?.stock_deducted);
+  const natureMeta = getInterventionNatureMeta(record?.intervention_nature);
 
   if (status === 'PENDING_VALIDATION') {
     return {
@@ -55,6 +162,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
       validatedWithEdits: false,
       validationNote,
       validatedByName,
+      natureMeta,
     };
   }
 
@@ -70,6 +178,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
       validatedWithEdits: false,
       validationNote,
       validatedByName,
+      natureMeta,
     };
   }
 
@@ -85,6 +194,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
       validatedWithEdits: false,
       validationNote,
       validatedByName,
+      natureMeta,
     };
   }
 
@@ -101,6 +211,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
         validatedWithEdits: true,
         validationNote,
         validatedByName,
+        natureMeta,
       };
     }
 
@@ -115,6 +226,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
       validatedWithEdits: false,
       validationNote,
       validatedByName,
+      natureMeta,
     };
   }
 
@@ -129,6 +241,7 @@ export function getValidationStatusMeta(record: any): ValidationStatusMeta {
     validatedWithEdits: false,
     validationNote,
     validatedByName,
+    natureMeta,
   };
 }
 
@@ -137,6 +250,7 @@ interface ValidationStatusBadgeProps {
   compact?: boolean;
   showNote?: boolean;
   showStockEffect?: boolean;
+  showNature?: boolean;
 }
 
 export const ValidationStatusBadge: React.FC<ValidationStatusBadgeProps> = ({
@@ -144,10 +258,11 @@ export const ValidationStatusBadge: React.FC<ValidationStatusBadgeProps> = ({
   compact = false,
   showNote = true,
   showStockEffect = false,
+  showNature = true,
 }) => {
   const meta = getValidationStatusMeta(record);
 
-  if (meta.status === 'NONE') {
+  if (meta.status === 'NONE' && !meta.natureMeta) {
     return null;
   }
 
@@ -172,15 +287,27 @@ export const ValidationStatusBadge: React.FC<ValidationStatusBadgeProps> = ({
 
   return (
     <div className="inline-flex flex-col items-center gap-0.5 max-w-[230px]">
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border shadow-2xs ${meta.badgeClass}`}
-        title={meta.validationNote ? `${meta.label} — Motif: ${meta.validationNote}` : meta.label}
-      >
-        {renderIcon()}
-        <span>{compact ? meta.shortLabel : meta.label}</span>
-      </span>
+      {meta.status !== 'NONE' && (
+        <span
+          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase border shadow-2xs ${meta.badgeClass}`}
+          title={meta.validationNote ? `${meta.label} — Motif: ${meta.validationNote}` : meta.label}
+        >
+          {renderIcon()}
+          <span>{compact ? meta.shortLabel : meta.label}</span>
+        </span>
+      )}
 
-      {showStockEffect && (
+      {showNature && meta.natureMeta && meta.natureMeta.code !== 'OTHER' && (
+        <span
+          className={`inline-flex items-center gap-1 px-2 py-0.2 rounded text-[9px] font-mono font-bold border ${meta.natureMeta.badgeClass}`}
+          title={`Nature d'intervention : ${meta.natureMeta.label}`}
+        >
+          <Wrench className="w-2.5 h-2.5 shrink-0" />
+          <span>{meta.natureMeta.shortLabel}</span>
+        </span>
+      )}
+
+      {showStockEffect && meta.status !== 'NONE' && (
         <span className="text-[9px] font-bold text-slate-500 leading-tight">
           {meta.stockEffectLabel}
         </span>
