@@ -31,7 +31,7 @@ import {
 } from '../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
-import {
+import ValidationStatusBadge, {
   getInterventionNatureMeta,
   INTERVENTION_NATURE_OPTIONS,
 } from '../../components/common/ValidationStatusBadge';
@@ -150,9 +150,10 @@ export default function ValidationCenterView({
     };
   };
 
-  // UI Filters
+  // UI Filters (VAL-5: Default shows Pending first + Clarification second in each section)
   const [sectionFilter, setSectionFilter] = useState<'ALL' | 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE'>('ALL');
-  const [includeClarifications, setIncludeClarifications] = useState(false);
+  const [statusFocus, setStatusFocus] = useState<'ACTIVE_QUEUES' | 'PENDING_ONLY' | 'CLARIFY_ONLY' | 'REJECTED_ONLY'>('ACTIVE_QUEUES');
+  const [includeClarifications, setIncludeClarifications] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showReservedDetails, setShowReservedDetails] = useState(false);
 
@@ -191,9 +192,14 @@ export default function ValidationCenterView({
   );
 
   const visibleCorrective = useMemo(() => {
-    const base = includeClarifications
-      ? [...queues.pendingCorrective, ...queues.clarificationCorrective]
-      : queues.pendingCorrective;
+    const base =
+      statusFocus === 'CLARIFY_ONLY'
+        ? queues.clarificationCorrective
+        : statusFocus === 'REJECTED_ONLY'
+        ? queues.rejectedCorrective
+        : statusFocus === 'PENDING_ONLY' || !includeClarifications
+        ? queues.pendingCorrective
+        : [...queues.pendingCorrective, ...queues.clarificationCorrective];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((bt: any) => {
@@ -205,12 +211,17 @@ export default function ValidationCenterView({
       const bon = String(bt.num_bon_saisi_par_tech || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || anom.includes(q) || bon.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
+  }, [queues, statusFocus, includeClarifications, searchQuery, machineMetaMap]);
 
   const visiblePreventive = useMemo(() => {
-    const base = includeClarifications
-      ? [...queues.pendingPreventive, ...queues.clarificationPreventive]
-      : queues.pendingPreventive;
+    const base =
+      statusFocus === 'CLARIFY_ONLY'
+        ? queues.clarificationPreventive
+        : statusFocus === 'REJECTED_ONLY'
+        ? queues.rejectedPreventive
+        : statusFocus === 'PENDING_ONLY' || !includeClarifications
+        ? queues.pendingPreventive
+        : [...queues.pendingPreventive, ...queues.clarificationPreventive];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((ex: any) => {
@@ -222,12 +233,17 @@ export default function ValidationCenterView({
       const bon = String(ex.num_bon_saisi_par_tech || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || organe.includes(q) || bon.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
+  }, [queues, statusFocus, includeClarifications, searchQuery, machineMetaMap]);
 
   const visibleSortieDemands = useMemo(() => {
-    const base = includeClarifications
-      ? [...queues.pendingSortieDemands, ...queues.clarificationSortieDemands]
-      : queues.pendingSortieDemands;
+    const base =
+      statusFocus === 'CLARIFY_ONLY'
+        ? queues.clarificationSortieDemands
+        : statusFocus === 'REJECTED_ONLY'
+        ? queues.rejectedSortieDemands
+        : statusFocus === 'PENDING_ONLY' || !includeClarifications
+        ? queues.pendingSortieDemands
+        : [...queues.pendingSortieDemands, ...queues.clarificationSortieDemands];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
     return base.filter((dem: any) => {
@@ -238,7 +254,7 @@ export default function ValidationCenterView({
       const comm = String(dem.commentaire || dem.motif || '').toLowerCase();
       return code.includes(q) || machine.includes(q) || tech.includes(q) || comm.includes(q);
     });
-  }, [queues, includeClarifications, searchQuery, machineMetaMap]);
+  }, [queues, statusFocus, includeClarifications, searchQuery, machineMetaMap]);
 
   // Active Modal Reconciliations
   const activeBtReconciliation = useMemo(() => {
@@ -776,7 +792,10 @@ export default function ValidationCenterView({
 
             <button
               type="button"
-              onClick={() => setIncludeClarifications((prev) => !prev)}
+              onClick={() => {
+                setIncludeClarifications((prev) => !prev);
+                setStatusFocus('ACTIVE_QUEUES');
+              }}
               className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 ${
                 includeClarifications
                   ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-2xs'
@@ -784,7 +803,18 @@ export default function ValidationCenterView({
               }`}
             >
               <AlertTriangle className="w-3.5 h-3.5" />
-              <span>À clarifier ({queues.totalClarification})</span>
+              <span>Inclure À clarifier ({queues.totalClarification})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowReservedDetails((prev) => !prev)}
+              className="px-3 py-2 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-600" />
+              <span>
+                Réservé: {queues.reservedRefsCount} réf. ({queues.totalReservedUnits} u.)
+              </span>
             </button>
 
             {canExportQueue && (
@@ -801,161 +831,256 @@ export default function ValidationCenterView({
           </div>
         </div>
 
-        {/* SUMMARY KPI CARDS (5 Cards) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {/* Card 1: Total Pending */}
+        {/* V5-1: RBAC Partial Permission Banner (e.g., Responsable Magasin) */}
+        {(!canValidateCorrective || !canValidatePreventive || !canValidateSortie) && (
+          <div
+            data-testid="vc-rbac-scope-banner"
+            className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap text-xs text-slate-700"
+          >
+            <div className="flex items-center gap-2 font-semibold">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                Périmètre de décision actif pour votre profil :{' '}
+                <strong className="font-black text-slate-900">
+                  {[
+                    canValidateCorrective ? 'Bons de travail (BT)' : null,
+                    canValidatePreventive ? 'Exécutions préventives' : null,
+                    canValidateSortie ? 'Demandes de sortie terrain' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ') || 'Consultation uniquement'}
+                </strong>
+                . Les autres files sont affichées en lecture seule.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* V5-1: 4 LIVE COCKPIT KPI CARDS (À valider, À clarifier, Rejetés, Validés aujourd'hui) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* KPI 1: À valider (PENDING_VALIDATION) */}
           <button
             type="button"
-            onClick={() => setSectionFilter('ALL')}
+            onClick={() => {
+              setStatusFocus((prev) => (prev === 'PENDING_ONLY' ? 'ACTIVE_QUEUES' : 'PENDING_ONLY'));
+            }}
             className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              sectionFilter === 'ALL'
+              statusFocus === 'PENDING_ONLY'
                 ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-900 border-slate-200'
+                : 'bg-rose-50/70 hover:bg-rose-50 text-slate-900 border-rose-200'
             }`}
           >
             <div className="flex items-center justify-between">
               <span
                 className={`text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  sectionFilter === 'ALL' ? 'text-rose-300' : 'text-slate-500'
+                  statusFocus === 'PENDING_ONLY' ? 'text-rose-300' : 'text-rose-900'
                 }`}
               >
-                Total À valider
+                À valider (En attente)
               </span>
               <ShieldCheck
-                className={`w-4 h-4 ${sectionFilter === 'ALL' ? 'text-rose-400' : 'text-rose-600'}`}
+                className={`w-4 h-4 ${
+                  statusFocus === 'PENDING_ONLY' ? 'text-rose-400' : 'text-rose-600'
+                }`}
               />
             </div>
             <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-pending">
               {queues.totalPending}
             </div>
             <div
-              className={`text-[11px] mt-0.5 ${
-                sectionFilter === 'ALL' ? 'text-slate-300' : 'text-slate-500'
+              className={`text-[11px] font-mono font-bold mt-1 flex items-center gap-1.5 flex-wrap ${
+                statusFocus === 'PENDING_ONLY' ? 'text-slate-300' : 'text-rose-900/90'
               }`}
             >
-              +{queues.totalClarification} en attente de clarification
+              <span>
+                BT: <strong data-testid="vc-corrective-count">{queues.pendingCorrective.length}</strong>
+              </span>
+              <span>|</span>
+              <span>
+                Préventif: <strong data-testid="vc-preventive-count">{queues.pendingPreventive.length}</strong>
+              </span>
+              <span>|</span>
+              <span>
+                Sorties: <strong data-testid="vc-sortie-count">{queues.pendingSortieDemands.length}</strong>
+              </span>
             </div>
           </button>
 
-          {/* Card 2: Corrective BTs */}
+          {/* KPI 2: À clarifier (NEEDS_CLARIFICATION) */}
           <button
             type="button"
-            onClick={() =>
-              setSectionFilter((prev) => (prev === 'CORRECTIVE' ? 'ALL' : 'CORRECTIVE'))
-            }
+            onClick={() => {
+              setIncludeClarifications(true);
+              setStatusFocus((prev) => (prev === 'CLARIFY_ONLY' ? 'ACTIVE_QUEUES' : 'CLARIFY_ONLY'));
+            }}
             className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              sectionFilter === 'CORRECTIVE'
+              statusFocus === 'CLARIFY_ONLY'
                 ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md'
-                : 'bg-amber-50/60 hover:bg-amber-50 text-slate-900 border-amber-200'
+                : 'bg-amber-50/70 hover:bg-amber-50 text-slate-900 border-amber-200'
             }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-amber-900">
-                1. Correctif (BT)
+                À clarifier (Terrain)
               </span>
-              <Wrench className="w-4 h-4 text-amber-700" />
+              <AlertTriangle className="w-4 h-4 text-amber-700" />
             </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-corrective-count">
-              {queues.pendingCorrective.length}
+            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-clarification">
+              {queues.totalClarification}
             </div>
-            <div className="text-[11px] text-amber-900/80 mt-0.5">
-              {queues.clarificationCorrective.length} à clarifier
+            <div className="text-[11px] font-mono font-bold text-amber-900/90 mt-1 flex items-center gap-1.5 flex-wrap">
+              <span>BT: {queues.clarificationCorrective.length}</span>
+              <span>|</span>
+              <span>Préventif: {queues.clarificationPreventive.length}</span>
+              <span>|</span>
+              <span>Sorties: {queues.clarificationSortieDemands.length}</span>
             </div>
           </button>
 
-          {/* Card 3: Preventive Executions */}
+          {/* KPI 3: Rejetés (Non clôturés) */}
           <button
             type="button"
-            onClick={() =>
-              setSectionFilter((prev) => (prev === 'PREVENTIVE' ? 'ALL' : 'PREVENTIVE'))
-            }
+            onClick={() => {
+              setStatusFocus((prev) => (prev === 'REJECTED_ONLY' ? 'ACTIVE_QUEUES' : 'REJECTED_ONLY'));
+            }}
             className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              sectionFilter === 'PREVENTIVE'
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                : 'bg-indigo-50/60 hover:bg-indigo-50 text-slate-900 border-indigo-200'
+              statusFocus === 'REJECTED_ONLY'
+                ? 'bg-rose-700 text-white border-rose-700 shadow-md'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-900 border-slate-200'
             }`}
           >
             <div className="flex items-center justify-between">
               <span
                 className={`text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  sectionFilter === 'PREVENTIVE' ? 'text-indigo-100' : 'text-indigo-900'
+                  statusFocus === 'REJECTED_ONLY' ? 'text-rose-100' : 'text-slate-600'
                 }`}
               >
-                2. Préventif (Exéc.)
+                Rejetés (Actifs)
               </span>
-              <Calendar
+              <ShieldAlert
                 className={`w-4 h-4 ${
-                  sectionFilter === 'PREVENTIVE' ? 'text-indigo-200' : 'text-indigo-600'
+                  statusFocus === 'REJECTED_ONLY' ? 'text-rose-200' : 'text-rose-600'
                 }`}
               />
             </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-preventive-count">
-              {queues.pendingPreventive.length}
+            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-rejected">
+              {queues.totalRejected}
             </div>
             <div
-              className={`text-[11px] mt-0.5 ${
-                sectionFilter === 'PREVENTIVE' ? 'text-indigo-100' : 'text-indigo-900/80'
+              className={`text-[11px] font-mono font-bold mt-1 flex items-center gap-1.5 flex-wrap ${
+                statusFocus === 'REJECTED_ONLY' ? 'text-rose-100' : 'text-slate-600'
               }`}
             >
-              {queues.clarificationPreventive.length} à clarifier
+              <span>BT: {queues.rejectedCorrective.length}</span>
+              <span>|</span>
+              <span>Préventif: {queues.rejectedPreventive.length}</span>
+              <span>|</span>
+              <span>Sorties: {queues.rejectedSortieDemands.length}</span>
             </div>
           </button>
 
-          {/* Card 4: Sortie Demands */}
-          <button
-            type="button"
-            onClick={() => setSectionFilter((prev) => (prev === 'SORTIE' ? 'ALL' : 'SORTIE'))}
-            className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              sectionFilter === 'SORTIE'
-                ? 'bg-teal-600 text-white border-teal-600 shadow-md'
-                : 'bg-teal-50/60 hover:bg-teal-50 text-slate-900 border-teal-200'
-            }`}
-          >
+          {/* KPI 4: Validés aujourd'hui */}
+          <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 text-left">
             <div className="flex items-center justify-between">
-              <span
-                className={`text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  sectionFilter === 'SORTIE' ? 'text-teal-100' : 'text-teal-900'
-                }`}
-              >
-                3. Sorties Terrain
+              <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-emerald-900">
+                Validés aujourd'hui
               </span>
-              <Package
-                className={`w-4 h-4 ${
-                  sectionFilter === 'SORTIE' ? 'text-teal-200' : 'text-teal-600'
-                }`}
-              />
-            </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-sortie-count">
-              {queues.pendingSortieDemands.length}
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
             </div>
             <div
-              className={`text-[11px] mt-0.5 ${
-                sectionFilter === 'SORTIE' ? 'text-teal-100' : 'text-teal-900/80'
+              className="text-2xl font-black font-mono text-emerald-950 mt-1"
+              data-testid="vc-approved-today"
+            >
+              {queues.hasAnyApprovedTimestamp || queues.totalApprovedToday > 0
+                ? queues.totalApprovedToday
+                : '—'}
+            </div>
+            <div className="text-[11px] font-mono font-bold text-emerald-900/90 mt-1 flex items-center gap-1.5 flex-wrap">
+              <span>BT: {queues.approvedTodayCorrective}</span>
+              <span>|</span>
+              <span>Préventif: {queues.approvedTodayPreventive}</span>
+              <span>|</span>
+              <span>Sorties: {queues.approvedTodaySortieDemands}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* V5-2: QUEUE SECTION SELECTOR TABS (3 Queues + All) */}
+        <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                setSectionFilter('ALL');
+                setStatusFocus('ACTIVE_QUEUES');
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
+                sectionFilter === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
-              {queues.clarificationSortieDemands.length} à clarifier
-            </div>
-          </button>
-
-          {/* Card 5: Derived Virtual Stock Reservation (Read-Only from computeReservedStockMap) */}
-          <button
-            type="button"
-            onClick={() => setShowReservedDetails((prev) => !prev)}
-            className="p-4 rounded-2xl border border-purple-200 bg-purple-50/60 hover:bg-purple-50 text-left transition cursor-pointer"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-purple-900">
-                Réservation PDR
+              Toutes les files ({queues.totalPending + queues.totalClarification})
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSectionFilter((prev) => (prev === 'CORRECTIVE' ? 'ALL' : 'CORRECTIVE'))
+              }
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
+                sectionFilter === 'CORRECTIVE'
+                  ? 'bg-amber-500 text-slate-950 shadow-2xs'
+                  : 'bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-200'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>
+                1. Bons de travail / Correctif ({queues.pendingCorrective.length} +{' '}
+                {queues.clarificationCorrective.length})
               </span>
-              <Layers className="w-4 h-4 text-purple-600" />
-            </div>
-            <div className="text-2xl font-black font-mono text-purple-950 mt-1">
-              {queues.reservedRefsCount} <span className="text-xs font-bold">réf.</span>
-            </div>
-            <div className="text-[11px] text-purple-800 mt-0.5 font-mono">
-              {queues.totalReservedUnits} unité(s) réservée(s)
-            </div>
-          </button>
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSectionFilter((prev) => (prev === 'PREVENTIVE' ? 'ALL' : 'PREVENTIVE'))
+              }
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
+                sectionFilter === 'PREVENTIVE'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-200'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>
+                2. Exécutions préventives ({queues.pendingPreventive.length} +{' '}
+                {queues.clarificationPreventive.length})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSectionFilter((prev) => (prev === 'SORTIE' ? 'ALL' : 'SORTIE'))}
+              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
+                sectionFilter === 'SORTIE'
+                  ? 'bg-teal-600 text-white shadow-2xs'
+                  : 'bg-teal-50 hover:bg-teal-100 text-teal-950 border border-teal-200'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>
+                3. Demandes de sortie terrain ({queues.pendingSortieDemands.length} +{' '}
+                {queues.clarificationSortieDemands.length})
+              </span>
+            </button>
+          </div>
+          {statusFocus !== 'ACTIVE_QUEUES' && (
+            <button
+              type="button"
+              onClick={() => setStatusFocus('ACTIVE_QUEUES')}
+              className="text-xs font-bold text-rose-700 hover:underline cursor-pointer"
+            >
+              Réinitialiser le filtre de statut
+            </button>
+          )}
         </div>
 
         {/* Optional Expandable Virtual Stock Reservation Breakdown */}
@@ -993,7 +1118,7 @@ export default function ValidationCenterView({
         )}
       </div>
 
-      {/* GLOBAL EMPTY STATE */}
+      {/* V5-3: GLOBAL EMPTY STATE */}
       {totalDisplayed === 0 && (
         <div
           data-testid="validation-center-empty"
@@ -1003,10 +1128,10 @@ export default function ValidationCenterView({
             <CheckCircle2 className="w-8 h-8" />
           </div>
           <h2 className="text-lg font-black text-slate-900">
-            Rien à valider — tout est à jour
+            Aucune déclaration en attente
           </h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Aucune demande d'approbation en attente dans ce filtre. Les soumissions terrain des techniciens apparaissent automatiquement ici.
+            Rien à valider — tout est à jour. Les déclarations terrain des techniciens (BT correctifs, exécutions préventives et demandes de sortie) apparaissent automatiquement ici.
           </p>
           <div className="flex items-center justify-center gap-2 pt-2 flex-wrap">
             <button
@@ -1052,7 +1177,7 @@ export default function ValidationCenterView({
               </div>
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
-                  <span>1. Interventions correctives à valider</span>
+                  <span>1. Bons de travail / Correctif</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-amber-100 text-amber-900">
                     {visibleCorrective.length}
                   </span>
@@ -1064,7 +1189,7 @@ export default function ValidationCenterView({
                   )}
                 </h2>
                 <p className="text-[11px] text-slate-500">
-                  Rapports Bons de Travail (BT) soumis par les techniciens • Approbation = Clôture + Sortie PDR officielle
+                  En attente d'abord ({queues.pendingCorrective.length}), puis À clarifier ({queues.clarificationCorrective.length}) • Approbation = Clôture + Sortie PDR officielle
                 </p>
               </div>
             </div>
@@ -1081,7 +1206,7 @@ export default function ValidationCenterView({
 
           {visibleCorrective.length === 0 ? (
             <div className="p-6 rounded-2xl bg-slate-50 text-center text-xs text-slate-500">
-              Aucune intervention corrective en attente de validation.
+              Aucune déclaration en attente (Bons de travail / Correctif).
             </div>
           ) : (
             <div className="space-y-3">
@@ -1157,15 +1282,7 @@ export default function ValidationCenterView({
                             Bon Tech: {bt.num_bon_saisi_par_tech}
                           </span>
                         )}
-                        {isClarify ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-950 font-mono text-[10px] font-black">
-                            À CLARIFIER PAR TECH
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono text-[10px] font-black">
-                            À VALIDER
-                          </span>
-                        )}
+                        <ValidationStatusBadge record={bt} showStockEffect />
                         {(() => {
                           const natureMeta = getInterventionNatureMeta(bt.intervention_nature);
                           if (!natureMeta) return null;
@@ -1244,7 +1361,7 @@ export default function ValidationCenterView({
                           className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                          <span>Ouvrir revue</span>
+                          <span>Ouvrir</span>
                         </button>
                       ) : (
                         <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">
@@ -1276,7 +1393,7 @@ export default function ValidationCenterView({
               </div>
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
-                  <span>2. Exécutions préventives à valider</span>
+                  <span>2. Exécutions préventives</span>
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-100 text-indigo-900">
                     {visiblePreventive.length}
                   </span>
@@ -1288,7 +1405,7 @@ export default function ValidationCenterView({
                   )}
                 </h2>
                 <p className="text-[11px] text-slate-500">
-                  Inspections et rondes préventives exécutées sur le terrain • Approbation = Fait + Sortie PDR officielle
+                  En attente d'abord ({queues.pendingPreventive.length}), puis À clarifier ({queues.clarificationPreventive.length}) • Approbation = Fait + Sortie PDR officielle
                 </p>
               </div>
             </div>
@@ -1305,7 +1422,7 @@ export default function ValidationCenterView({
 
           {visiblePreventive.length === 0 ? (
             <div className="p-6 rounded-2xl bg-slate-50 text-center text-xs text-slate-500">
-              Aucune exécution préventive en attente de validation.
+              Aucune déclaration en attente (Exécutions préventives).
             </div>
           ) : (
             <div className="space-y-3">
@@ -1381,15 +1498,7 @@ export default function ValidationCenterView({
                             Bon Tech: {ex.num_bon_saisi_par_tech}
                           </span>
                         )}
-                        {isClarify ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-950 font-mono text-[10px] font-black">
-                            À CLARIFIER PAR TECH
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono text-[10px] font-black">
-                            À VALIDER
-                          </span>
-                        )}
+                        <ValidationStatusBadge record={ex} showStockEffect />
                         {hasPreventiveExecutionAnomaly(ex) && (
                           <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 font-mono text-[10px] font-black inline-flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3 text-amber-600" />
@@ -1454,7 +1563,7 @@ export default function ValidationCenterView({
                           className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <ShieldCheck className="w-4 h-4" />
-                          <span>Ouvrir revue</span>
+                          <span>Ouvrir</span>
                         </button>
                       ) : (
                         <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">
@@ -1490,9 +1599,15 @@ export default function ValidationCenterView({
                   <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-teal-100 text-teal-900">
                     {visibleSortieDemands.length}
                   </span>
+                  {!canValidateSortie && (
+                    <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      <span>Lecture seule — Magasin / Responsable / Admin</span>
+                    </span>
+                  )}
                 </h2>
                 <p className="text-[11px] text-slate-500">
-                  Bons de sortie PDR saisis par les techniciens • Rapprochement BS-Tech × BS-Magasin sans double déstockage
+                  En attente d'abord ({queues.pendingSortieDemands.length}), puis À clarifier ({queues.clarificationSortieDemands.length}) • Rapprochement BS-Tech × BS-Magasin sans double déstockage
                 </p>
               </div>
             </div>
@@ -1509,7 +1624,7 @@ export default function ValidationCenterView({
 
           {visibleSortieDemands.length === 0 ? (
             <div className="p-6 rounded-2xl bg-slate-50 text-center text-xs text-slate-500">
-              Aucune demande de sortie terrain en attente de validation.
+              Aucune déclaration en attente (Demandes de sortie terrain).
             </div>
           ) : (
             <div className="space-y-3">
@@ -1574,15 +1689,7 @@ export default function ValidationCenterView({
                             {dem.date} {dem.heure || ''}
                           </span>
                         )}
-                        {isClarify ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-200 text-amber-950 font-mono text-[10px] font-black">
-                            À CLARIFIER PAR TECH
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded bg-rose-100 text-rose-800 font-mono text-[10px] font-black">
-                            À VALIDER
-                          </span>
-                        )}
+                        <ValidationStatusBadge record={dem} showStockEffect />
                       </div>
 
                       {dem.commentaire && (
@@ -1636,7 +1743,7 @@ export default function ValidationCenterView({
                           className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-xs font-black inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
                         >
                           <ShieldCheck className="w-4 h-4" />
-                          <span>Ouvrir revue</span>
+                          <span>Ouvrir</span>
                         </button>
                       ) : (
                         <span className="px-3 py-2 rounded-xl bg-slate-100 text-slate-500 border border-slate-200 text-xs font-bold inline-flex items-center gap-1.5">

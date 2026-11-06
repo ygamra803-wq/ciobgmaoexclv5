@@ -595,30 +595,46 @@ export function computeReservedStockMap({
 export interface ValidationCenterQueuesResult {
   pendingCorrective: any[];
   clarificationCorrective: any[];
+  rejectedCorrective: any[];
   pendingPreventive: any[];
   clarificationPreventive: any[];
+  rejectedPreventive: any[];
   pendingSortieDemands: any[];
   clarificationSortieDemands: any[];
+  rejectedSortieDemands: any[];
   totalPending: number;
   totalClarification: number;
+  totalRejected: number;
+  approvedTodayCorrective: number;
+  approvedTodayPreventive: number;
+  approvedTodaySortieDemands: number;
+  totalApprovedToday: number;
+  hasAnyApprovedTimestamp: boolean;
   reservedRefsCount: number;
   totalReservedUnits: number;
   reservedStockMap: Map<string, ReservedStockEntry>;
 }
 
 /**
- * Pure selector aggregating all pending & clarification Maker-Checker queues
- * for the unified desktop Validation Center (`Centre de validation / À valider`).
+ * Pure selector aggregating all pending, clarification, rejected & approved-today
+ * Maker-Checker queues for the unified desktop Validation Center (`Centre de validation / À valider`).
  */
 export function selectValidationCenterQueues({
   correctiveInterventions = [],
   preventiveExecutions = [],
   sortieDemands = [],
+  todayIsoDate,
 }: {
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
   sortieDemands?: any[];
+  todayIsoDate?: string;
 }): ValidationCenterQueuesResult {
+  const todayPrefix =
+    typeof todayIsoDate === 'string' && todayIsoDate.trim().length >= 10
+      ? todayIsoDate.trim().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
+
   const pendingCorrective = (correctiveInterventions || []).filter(
     (bt) =>
       bt?.validation_status === 'PENDING_VALIDATION' ||
@@ -627,12 +643,18 @@ export function selectValidationCenterQueues({
   const clarificationCorrective = (correctiveInterventions || []).filter(
     (bt) => bt?.validation_status === 'NEEDS_CLARIFICATION'
   );
+  const rejectedCorrective = (correctiveInterventions || []).filter(
+    (bt) => bt?.validation_status === 'REJECTED' && bt?.statut !== 'CLOTURE'
+  );
 
   const pendingPreventive = (preventiveExecutions || []).filter(
     (ex) => ex?.validation_status === 'PENDING_VALIDATION'
   );
   const clarificationPreventive = (preventiveExecutions || []).filter(
     (ex) => ex?.validation_status === 'NEEDS_CLARIFICATION'
+  );
+  const rejectedPreventive = (preventiveExecutions || []).filter(
+    (ex) => ex?.validation_status === 'REJECTED'
   );
 
   const pendingSortieDemands = (sortieDemands || []).filter(
@@ -641,6 +663,22 @@ export function selectValidationCenterQueues({
   const clarificationSortieDemands = (sortieDemands || []).filter(
     (dem) => dem?.validation_status === 'NEEDS_CLARIFICATION'
   );
+  const rejectedSortieDemands = (sortieDemands || []).filter(
+    (dem) => dem?.validation_status === 'REJECTED'
+  );
+
+  let hasAnyApprovedTimestamp = false;
+  const isApprovedToday = (record: any): boolean => {
+    if (String(record?.validation_status || '').toUpperCase() !== 'APPROVED') return false;
+    const rawStamp = String(record?.validated_at || '').trim();
+    if (!rawStamp) return false;
+    hasAnyApprovedTimestamp = true;
+    return rawStamp.slice(0, 10) === todayPrefix;
+  };
+
+  const approvedTodayCorrective = (correctiveInterventions || []).filter(isApprovedToday).length;
+  const approvedTodayPreventive = (preventiveExecutions || []).filter(isApprovedToday).length;
+  const approvedTodaySortieDemands = (sortieDemands || []).filter(isApprovedToday).length;
 
   const reservedStockMap = computeReservedStockMap({
     correctiveInterventions,
@@ -656,16 +694,27 @@ export function selectValidationCenterQueues({
   return {
     pendingCorrective,
     clarificationCorrective,
+    rejectedCorrective,
     pendingPreventive,
     clarificationPreventive,
+    rejectedPreventive,
     pendingSortieDemands,
     clarificationSortieDemands,
+    rejectedSortieDemands,
     totalPending:
       pendingCorrective.length + pendingPreventive.length + pendingSortieDemands.length,
     totalClarification:
       clarificationCorrective.length +
       clarificationPreventive.length +
       clarificationSortieDemands.length,
+    totalRejected:
+      rejectedCorrective.length + rejectedPreventive.length + rejectedSortieDemands.length,
+    approvedTodayCorrective,
+    approvedTodayPreventive,
+    approvedTodaySortieDemands,
+    totalApprovedToday:
+      approvedTodayCorrective + approvedTodayPreventive + approvedTodaySortieDemands,
+    hasAnyApprovedTimestamp,
     reservedRefsCount: reservedStockMap.size,
     totalReservedUnits,
     reservedStockMap,

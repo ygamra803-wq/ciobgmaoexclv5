@@ -249,4 +249,65 @@ describe('VAL-1, VAL-2, VAL-3, VAL-4 & G0 — Maker-Checker Validation Governanc
     expect(natureMeta?.nature).toBe('CLEAN');
     expect(natureMeta?.requiresParts).toBe(false);
   });
+
+  it('VAL-5: selectValidationCenterQueues computes live pending, clarification, rejected, and approvedToday KPIs accurately', async () => {
+    const { selectValidationCenterQueues } = await import(
+      '../core/security/validationReconciliation'
+    );
+
+    const queues = selectValidationCenterQueues({
+      todayIsoDate: '2026-11-06',
+      correctiveInterventions: [
+        { id: 'BT-1', validation_status: 'PENDING_VALIDATION', statut: 'EN_COURS' },
+        { id: 'BT-2', validation_status: 'NEEDS_CLARIFICATION', statut: 'EN_COURS' },
+        { id: 'BT-3', validation_status: 'REJECTED', statut: 'EN_COURS' },
+        {
+          id: 'BT-4',
+          validation_status: 'APPROVED',
+          statut: 'CLOTURE',
+          validated_at: '2026-11-06T09:15:00.000Z',
+        },
+        {
+          id: 'BT-5',
+          validation_status: 'APPROVED',
+          statut: 'CLOTURE',
+          validated_at: '2026-11-01T14:00:00.000Z',
+        },
+      ],
+      preventiveExecutions: [
+        { id: 'PM-1', validation_status: 'PENDING_VALIDATION' },
+        { id: 'PM-2', validation_status: 'PENDING_VALIDATION' },
+        {
+          id: 'PM-3',
+          validation_status: 'APPROVED',
+          validated_at: '2026-11-06T10:30:00.000Z',
+        },
+      ],
+      sortieDemands: [
+        { id: 'SD-1', validation_status: 'NEEDS_CLARIFICATION' },
+        { id: 'SD-2', validation_status: 'REJECTED' },
+      ],
+    });
+
+    expect(queues.pendingCorrective).toHaveLength(1);
+    expect(queues.pendingPreventive).toHaveLength(2);
+    expect(queues.pendingSortieDemands).toHaveLength(0);
+    expect(queues.totalPending).toBe(3);
+
+    expect(queues.clarificationCorrective).toHaveLength(1);
+    expect(queues.clarificationPreventive).toHaveLength(0);
+    expect(queues.clarificationSortieDemands).toHaveLength(1);
+    expect(queues.totalClarification).toBe(2);
+
+    expect(queues.rejectedCorrective).toHaveLength(1);
+    expect(queues.rejectedPreventive).toHaveLength(0);
+    expect(queues.rejectedSortieDemands).toHaveLength(1);
+    expect(queues.totalRejected).toBe(2);
+
+    expect(queues.approvedTodayCorrective).toBe(1);
+    expect(queues.approvedTodayPreventive).toBe(1);
+    expect(queues.approvedTodaySortieDemands).toBe(0);
+    expect(queues.totalApprovedToday).toBe(2);
+    expect(queues.hasAnyApprovedTimestamp).toBe(true);
+  });
 });
