@@ -1234,22 +1234,22 @@ export default function BonsTravailTab({
             </div>
             {isTechUser ? (
               <div
-                className="w-full h-9 px-2.5 rounded-xl bg-blue-50/70 border border-blue-200/90 flex items-center justify-between gap-2 text-xs font-bold text-blue-900 select-none"
+                className="w-full h-9 px-2.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs font-bold text-amber-900 select-none"
                 title="Périmètre BT verrouillé sur votre session technicien"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shrink-0">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0">
                     <User className="w-3 h-3" />
                   </span>
                   <span className="truncate">{techBadgeLabel}</span>
                 </div>
-                <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               </div>
             ) : (
               <CustomSelect
                 value={filterTech}
                 prefixIcon={
-                  <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                     <User className="w-3 h-3" />
                   </span>
                 }
@@ -1310,7 +1310,7 @@ export default function BonsTravailTab({
             <CustomSelect
               value={filterTypePanne}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Layers className="w-3 h-3" />
                 </span>
               }

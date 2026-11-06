@@ -1371,11 +1371,11 @@ export default function EntrepotView({
           />
 
           {/* 2. Nature Twin Filter (Col. B) */}
-          <FilterField label={t('entrepot.modal.nature')} colBadge="Col. B" colBadgeColor="teal">
+          <FilterField label={t('entrepot.modal.nature')} colBadge="Col. B" colBadgeColor="amber">
             <CustomSelect
               value={currentNatureFilter}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Layers className="w-3 h-3" />
                 </span>
               }
@@ -1395,13 +1395,13 @@ export default function EntrepotView({
           <FilterField
             label={isPartNature(currentNatureFilter) ? t('entrepot.modal.type') : t('entrepot.filters.family_label')}
             colBadge={isPartNature(currentNatureFilter) ? 'Col. B' : 'Col. D'}
-            colBadgeColor="cyan"
+            colBadgeColor="amber"
           >
             {isPartNature(currentNatureFilter) ? (
               <CustomSelect
                 value={currentTypeFilter}
                 prefixIcon={
-                  <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                     <Tag className="w-3 h-3" />
                   </span>
                 }
@@ -1418,7 +1418,7 @@ export default function EntrepotView({
               <CustomSelect
                 value={currentFamilyFilter}
                 prefixIcon={
-                  <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                     <Factory className="w-3 h-3" />
                   </span>
                 }
@@ -1438,11 +1438,11 @@ export default function EntrepotView({
           </FilterField>
 
           {/* 4. Rattachement & Emplacement (Col. E) */}
-          <FilterField label={t('entrepot.filters.rattachement_label')} colBadge="Col. E" colBadgeColor="purple">
+          <FilterField label={t('entrepot.filters.rattachement_label')} colBadge="Col. E" colBadgeColor="amber">
             <CustomSelect
               value={currentRattachementFilter}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <MapPin className="w-3 h-3" />
                 </span>
               }

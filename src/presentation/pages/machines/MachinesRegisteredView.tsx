@@ -836,7 +836,7 @@ export default function MachinesRegisteredView({
             <CustomSelect
               value={mchFamilyFilter}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Factory className="w-3 h-3" />
                 </span>
               }
@@ -897,7 +897,7 @@ export default function MachinesRegisteredView({
                      mchZoneFilter)
               }
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <MapPin className="w-3 h-3" />
                 </span>
               }

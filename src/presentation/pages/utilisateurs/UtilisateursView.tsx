@@ -921,7 +921,7 @@ export default function UtilisateursView({
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-indigo-500/10 transition-colors duration-500" />
 
           <div className="flex items-center gap-3 min-w-0 relative">
-            <PageHeaderIcon icon={Users} colorClass="text-indigo-700" />
+            <PageHeaderIcon icon={Users} colorClass="text-purple-700" />
             <div>
               <h2 className="text-lg font-bold text-slate-900 tracking-tight">
                 {t('utilisateurs.title')}

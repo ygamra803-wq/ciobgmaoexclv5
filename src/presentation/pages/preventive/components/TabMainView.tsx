@@ -1338,7 +1338,7 @@ export default function TabMainView({
             <CustomSelect
               value={selectedZone}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-emerald-100 border border-emerald-300/80 flex items-center justify-center text-emerald-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <MapPin className="w-3 h-3" />
                 </span>
               }
@@ -1361,7 +1361,7 @@ export default function TabMainView({
             <CustomSelect
               value={selectedMachine}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-blue-100 border border-blue-300/80 flex items-center justify-center text-blue-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Factory className="w-3 h-3" />
                 </span>
               }
@@ -1384,7 +1384,7 @@ export default function TabMainView({
             <CustomSelect
               value={selectedBlueprint}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <FingerprintPattern className="w-3 h-3" />
                 </span>
               }
@@ -1407,7 +1407,7 @@ export default function TabMainView({
             <CustomSelect
               value={selectedAction}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Wrench className="w-3 h-3" />
                 </span>
               }
@@ -1453,7 +1453,7 @@ export default function TabMainView({
             <CustomSelect
               value={selectedWeek}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <CalendarDays className="w-3 h-3" />
                 </span>
               }
@@ -1475,22 +1475,22 @@ export default function TabMainView({
             </div>
             {isTechUser ? (
               <div
-                className="w-full h-9 px-2.5 rounded-xl bg-purple-50/70 border border-purple-200/90 flex items-center justify-between gap-2 text-xs font-bold text-purple-900 select-none"
+                className="w-full h-9 px-2.5 rounded-xl bg-amber-50/70 border border-amber-200/90 flex items-center justify-between gap-2 text-xs font-bold text-amber-900 select-none"
                 title="Périmètre verrouillé sur votre session technicien"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shrink-0">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0">
                     <User className="w-3 h-3" />
                   </span>
                   <span className="truncate">{techBadgeLabel}</span>
                 </div>
-                <Lock className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               </div>
             ) : (
               <CustomSelect
                 value={selectedTech}
                 prefixIcon={
-                  <span className="w-5 h-5 rounded-md bg-purple-100 border border-purple-300/80 flex items-center justify-center text-purple-700 shadow-2xs">
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                     <User className="w-3 h-3" />
                   </span>
                 }

@@ -1111,7 +1111,7 @@ export default function DemandesInterventionTab({
               </span>
             </div>
             <div className="relative">
-              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-2xs pointer-events-none">
+              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs pointer-events-none">
                 <Search className="w-3 h-3" />
               </div>
               <input
@@ -1185,7 +1185,7 @@ export default function DemandesInterventionTab({
             <CustomSelect
               value={filterTypePanne}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-cyan-100 border border-cyan-300/80 flex items-center justify-center text-cyan-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Layers className="w-3 h-3" />
                 </span>
               }
@@ -1214,7 +1214,7 @@ export default function DemandesInterventionTab({
             <CustomSelect
               value={filterUrgence}
               prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-rose-100 border border-rose-300/80 flex items-center justify-center text-rose-700 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
                   <Flame className="w-3 h-3" />
                 </span>
               }
@@ -1244,12 +1244,12 @@ export default function DemandesInterventionTab({
               onClick={() => setShowSortMenu(!showSortMenu)}
               className={`w-full h-9 px-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
                 showSortMenu || sortField !== 'date_demande' || sortOrder !== 'desc'
-                  ? 'bg-indigo-50/80 text-indigo-950 border-indigo-300 ring-1 ring-indigo-200'
+                  ? 'bg-amber-50/80 text-amber-950 border-amber-300 ring-1 ring-amber-200'
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shrink-0 shadow-2xs">
+                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
                   <ArrowUpDown className="w-3 h-3" />
                 </span>
                 <span className="truncate">
@@ -1290,16 +1290,16 @@ export default function DemandesInterventionTab({
                       }}
                       className={`px-2.5 py-1.5 rounded-lg border text-left font-medium text-[11px] flex items-center justify-between transition cursor-pointer ${
                         sortField === col.key
-                          ? 'bg-indigo-50 text-indigo-950 border-indigo-300 font-bold'
+                          ? 'bg-amber-50 text-amber-950 border-amber-300 font-bold'
                           : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
                       }`}
                     >
                       <span>{col.label}</span>
                       {sortField === col.key && (
                         sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowUp className="w-3.5 h-3.5 text-amber-700" />
                         ) : (
-                          <ArrowDown className="w-3.5 h-3.5 text-indigo-700" />
+                          <ArrowDown className="w-3.5 h-3.5 text-amber-700" />
                         )
                       )}
                     </button>

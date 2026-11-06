@@ -508,7 +508,7 @@ export default function ReferentielPannesTravauxTab({
               </span>
             </div>
             <div className="relative">
-              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600 shadow-2xs pointer-events-none">
+              <div className="absolute left-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs pointer-events-none">
                 <Search className="w-3.5 h-3.5" />
               </div>
               <input
@@ -565,7 +565,7 @@ export default function ReferentielPannesTravauxTab({
         {subTab === 'pannes' && (
           <div className="pt-3 border-t border-slate-100/90 flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 flex items-center gap-1 font-mono">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
+              <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
               {t('corrective.catalogue.fast_filter', 'Filtre Rapide :')}
             </span>
 
