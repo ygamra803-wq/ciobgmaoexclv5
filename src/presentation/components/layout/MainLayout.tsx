@@ -5,10 +5,6 @@ import Header from './Header';
 import ContextMenu from '../common/ContextMenu';
 import AutoSaveIndicator from '../common/AutoSaveIndicator';
 import KeyboardShortcutsModal from '../common/KeyboardShortcutsModal';
-import { BottomNavigation } from '../../../mobile/components/layout/BottomNavigation';
-import { MobileHeader } from '../../../mobile/components/layout/MobileHeader';
-import MobileContainer from '../../../mobile/views/MobileContainer';
-import { useMobileDetect } from '../../../mobile/hooks/useMobileDetect';
 import { keyboardShortcuts } from '../../../services/KeyboardShortcutsService';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
@@ -44,7 +40,6 @@ export default function MainLayout({
   operationProgress,
 }) {
   const { user, logout } = useAuth();
-  const { isMobile: autoIsMobile } = useMobileDetect(1024);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const dragCounter = useRef(0);
@@ -84,31 +79,8 @@ export default function MainLayout({
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
   }, []);
 
-  // MainLayout is rendered exclusively when ShellPolicy resolved === 'desktop'.
-  // Never wrap the desktop router in legacy fake-mobile chrome (BottomNavigation / MobileContainer).
-  const isMobile = false;
-
-  // Mobile View Mode: 'compact' (focused industrial field companion) vs 'full' (desktop back-office on mobile)
-  const [mobileViewMode, setMobileViewMode] = useState(() => {
-    try {
-      return localStorage.getItem('gmao_mobile_view_mode') || 'compact';
-    } catch {
-      return 'compact';
-    }
-  });
-
-
-  const handleSetMobileViewMode = (valOrFn) => {
-    setMobileViewMode((prev) => {
-      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
-      try {
-        localStorage.setItem('gmao_mobile_view_mode', next);
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  };
+  // MainLayout is rendered exclusively for desktop (ShellPolicy.resolved === 'desktop').
+  // The dedicated mobile field companion shell is handled separately by MobileShell.
 
   // RBAC Capability Guards for Global Drag-and-Drop & Shortcuts (NH-1 & NH-2)
   const canImportData =
@@ -338,7 +310,6 @@ export default function MainLayout({
   }, [navigateIfAllowed, canDirectSave, onDirectSave, setMobileMenuOpen]);
 
   const mainContentSpacingClass = useMemo(() => {
-    if (isMobile) return 'p-2.5 sm:p-4 pb-24';
     if (sidebarStyle === 'standard') {
       return 'lg:ml-[270px] p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
     }
@@ -350,7 +321,7 @@ export default function MainLayout({
       return 'p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
     }
     return 'p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
-  }, [isMobile, sidebarStyle, sidebarBehavior]);
+  }, [sidebarStyle, sidebarBehavior]);
 
 
   return (
@@ -431,40 +402,28 @@ export default function MainLayout({
         </div>
       )}
 
-      {/* Sticky Top Header: Dedicated Compact Mobile Header on Mobile, Standard Header on Desktop */}
-      {isMobile ? (
-        <MobileHeader
-          currentTab={currentTab}
-          setMobileMenuOpen={setMobileMenuOpen}
-          linkedFileName={linkedFileName}
-          onDirectSave={onDirectSave}
-          mobileViewMode={mobileViewMode}
-          setMobileViewMode={handleSetMobileViewMode}
-          currentUser={user}
-        />
-      ) : (
-        <Header
-          currentTab={currentTab}
-          setCurrentTab={setCurrentTab}
-          filters={filters}
-          navigation={navigation}
-          counts={counts}
-          setMobileMenuOpen={setMobileMenuOpen}
-          fileInputRef={fileInputRef}
-          handleImportFile={handleImportFile}
-          handleExportExcel={handleExportExcel}
-          exportMasterTopologyWorkbook={exportMasterTopologyWorkbook}
-          exportInventoryMaterialsWorkbook={exportInventoryMaterialsWorkbook}
-          exportMovementsUnifiedWorkbook={exportMovementsUnifiedWorkbook}
-          linkedFileName={linkedFileName}
-          onDirectLink={onDirectLink}
-          onDirectSave={onDirectSave}
-          currentUser={user}
-          onOpenShortcuts={() => setShortcutsModalOpen(true)}
-          onLogout={handleLogout}
-          showToast={showToast}
-        />
-      )}
+      {/* Sticky Top Header: Desktop Back-Office Header */}
+      <Header
+        currentTab={currentTab}
+        setCurrentTab={setCurrentTab}
+        filters={filters}
+        navigation={navigation}
+        counts={counts}
+        setMobileMenuOpen={setMobileMenuOpen}
+        fileInputRef={fileInputRef}
+        handleImportFile={handleImportFile}
+        handleExportExcel={handleExportExcel}
+        exportMasterTopologyWorkbook={exportMasterTopologyWorkbook}
+        exportInventoryMaterialsWorkbook={exportInventoryMaterialsWorkbook}
+        exportMovementsUnifiedWorkbook={exportMovementsUnifiedWorkbook}
+        linkedFileName={linkedFileName}
+        onDirectLink={onDirectLink}
+        onDirectSave={onDirectSave}
+        currentUser={user}
+        onOpenShortcuts={() => setShortcutsModalOpen(true)}
+        onLogout={handleLogout}
+        showToast={showToast}
+      />
 
       {/* Content Layout */}
       <div className="flex-1 flex w-full relative min-w-0">
@@ -489,40 +448,9 @@ export default function MainLayout({
           aria-label="Contenu principal"
           className={`flex-1 w-full min-w-0 focus:outline-hidden overflow-x-hidden ${mainContentSpacingClass}`}
         >
-          {isMobile && mobileViewMode === 'compact' ? (
-            <MobileContainer
-              currentTab={currentTab}
-              setCurrentTab={setCurrentTab}
-              stockItems={stockItems}
-              machines={machines}
-              zones={zones}
-              technicians={technicians}
-              preventiveTasks={preventiveTasks}
-              onMarkTaskDone={onMarkTaskDone}
-              onAddMouvement={onAddMouvement}
-              showToast={showToast}
-              linkedFileName={linkedFileName}
-              onDirectSave={onDirectSave}
-            >
-              {children}
-            </MobileContainer>
-          ) : (
-            children
-          )}
+          {children}
         </main>
       </div>
-
-      {/* Industrial Mobile Bottom Navigation (Visible automatically on mobile & touch devices) */}
-      <BottomNavigation
-        activeTab={currentTab}
-        isMobile={isMobile}
-        onTabChange={(tab) => {
-          setCurrentTab(tab);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        onOpenMenu={() => setMobileMenuOpen(true)}
-        counts={counts}
-      />
 
       {/* Context Menu Global Portal */}
       <ContextMenu />
