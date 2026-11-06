@@ -50,6 +50,10 @@ export class CorrectiveIntervention {
   pdr_unite?: string;
   pieces_utilisees?: Array<{ ref: string; quantite: number; [key: string]: any }>;
   pieces_proposees?: ProposedPdrItem[];
+  pieces_claimed?: ProposedPdrItem[];
+  action_realisee_claimed?: string;
+  validated_with_edits?: boolean;
+  stock_effect?: 'NONE' | 'RESERVED' | 'APPLIED';
   num_bon_saisi_par_tech?: string;
   date_fin_proposee?: string;
   heure_fin_proposee?: string;

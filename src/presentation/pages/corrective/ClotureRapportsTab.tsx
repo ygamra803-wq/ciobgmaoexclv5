@@ -23,6 +23,7 @@ import {
   Radio,
   Calendar,
   Lock,
+  ShieldCheck,
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import * as XLSX from 'xlsx';
@@ -36,6 +37,7 @@ import {
   matchesTechnicianRecord,
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
+import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
 
 export default function ClotureRapportsTab({
   interventions = [],
@@ -173,6 +175,18 @@ export default function ClotureRapportsTab({
   const kpiStats = useMemo(() => {
     const total = scopedInterventions.length;
     const closed = scopedInterventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
+    const pendingValidation = scopedInterventions.filter(
+      (i) => i.statut !== 'CLOTURE' && i.validation_status === 'PENDING_VALIDATION'
+    ).length;
+    const needsClarification = scopedInterventions.filter(
+      (i) => i.statut !== 'CLOTURE' && i.validation_status === 'NEEDS_CLARIFICATION'
+    ).length;
+    const rejected = scopedInterventions.filter(
+      (i) => i.statut !== 'CLOTURE' && i.validation_status === 'REJECTED'
+    ).length;
+    const validatedEdited = scopedInterventions.filter(
+      (i) => i.statut === 'CLOTURE' && Boolean(i.validated_with_edits)
+    ).length;
     const arret = scopedInterventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
     const withPdr = scopedInterventions.filter(
       (i) => Boolean(i.pdr || i.pdr_ref || (Array.isArray(i.pieces_utilisees) && i.pieces_utilisees.length > 0))
@@ -199,13 +213,44 @@ export default function ClotureRapportsTab({
         : 0;
     const mttrFormatted = CorrectiveCalculationService.minutesToTimeString(avgMinutes);
 
-    return { total, closed, arret, withPdr, avgMinutes, mttrFormatted };
+    return {
+      total,
+      closed,
+      pendingValidation,
+      needsClarification,
+      rejected,
+      validatedEdited,
+      arret,
+      withPdr,
+      avgMinutes,
+      mttrFormatted,
+    };
   }, [scopedInterventions]);
 
   // Filtered interventions
   const filteredInterventions = useMemo(() => {
     return scopedInterventions.filter((item) => {
       if (selectedStatus === 'CLOTURE' && item.statut !== 'CLOTURE') return false;
+      if (
+        selectedStatus === 'PENDING_VALIDATION' &&
+        (item.statut === 'CLOTURE' || item.validation_status !== 'PENDING_VALIDATION')
+      )
+        return false;
+      if (
+        selectedStatus === 'NEEDS_CLARIFICATION' &&
+        (item.statut === 'CLOTURE' || item.validation_status !== 'NEEDS_CLARIFICATION')
+      )
+        return false;
+      if (
+        selectedStatus === 'REJECTED' &&
+        (item.statut === 'CLOTURE' || item.validation_status !== 'REJECTED')
+      )
+        return false;
+      if (
+        selectedStatus === 'VALIDATED_EDITED' &&
+        (item.statut !== 'CLOTURE' || !item.validated_with_edits)
+      )
+        return false;
       if (selectedStatus === 'ARRET' && !item.arret_machine) return false;
       if (
         selectedStatus === 'PDR' &&
@@ -521,18 +566,73 @@ export default function ClotureRapportsTab({
         icon: Package,
         render: (item) => {
           const pdrObj = resolvePdrDisplay(item);
-          return pdrObj ? (
-            <span
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
-              title={pdrObj.designation}
-            >
-              <Package className="w-3 h-3 text-cyan-600 shrink-0" />
-              <span className="truncate">
-                {pdrObj.ref} {item.marque ? `(${item.marque})` : ''}
+          if (pdrObj) {
+            return (
+              <div className="flex flex-col items-start gap-0.5">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
+                  title={pdrObj.designation}
+                >
+                  <Package className="w-3 h-3 text-cyan-600 shrink-0" />
+                  <span className="truncate">
+                    {pdrObj.ref} {item.marque ? `(${item.marque})` : ''}
+                  </span>
+                </span>
+                {item.validated_with_edits && Array.isArray(item.pieces_claimed) && item.pieces_claimed.length > 0 && (
+                  <span
+                    className="text-[9px] font-mono text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200"
+                    title={`Déclaré par tech: ${item.pieces_claimed
+                      .map((p) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`)
+                      .join(', ')}`}
+                  >
+                    Déclaré initialement: {item.pieces_claimed.map((p) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`).join(', ')}
+                  </span>
+                )}
+              </div>
+            );
+          }
+
+          if (Array.isArray(item.pieces_proposees) && item.pieces_proposees.length > 0) {
+            const propLabel = item.pieces_proposees
+              .map((p) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`)
+              .join(', ');
+            return (
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[10.5px] font-mono font-bold"
+                title={`PDR déclarée par le technicien (Non déduite du stock officiel) : ${propLabel}`}
+              >
+                <Package className="w-3 h-3 text-amber-600 shrink-0" />
+                <span className="truncate">{propLabel} (Non déstocké)</span>
               </span>
+            );
+          }
+
+          return <span className="text-slate-300 font-mono text-[11px]">—</span>;
+        },
+      },
+      {
+        key: 'validation_status',
+        label: 'Statut & Décision',
+        icon: ShieldCheck,
+        align: 'center',
+        sortable: true,
+        render: (item) => {
+          const isClosed =
+            item.statut === 'CLOTURE' || String(item.action_fermee || '').toUpperCase() === 'OUI';
+          const valStatus = String(item.validation_status || '').toUpperCase();
+          if (
+            isClosed ||
+            valStatus === 'PENDING_VALIDATION' ||
+            valStatus === 'NEEDS_CLARIFICATION' ||
+            valStatus === 'REJECTED' ||
+            valStatus === 'APPROVED'
+          ) {
+            return <ValidationStatusBadge record={item} showStockEffect />;
+          }
+          return (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 font-mono">
+              EN COURS TERRAIN
             </span>
-          ) : (
-            <span className="text-slate-300 font-mono text-[11px]">—</span>
           );
         },
       },
@@ -683,6 +783,34 @@ export default function ClotureRapportsTab({
               count: kpiStats.closed,
               activeBg: 'bg-emerald-600 text-white shadow-xs',
               colorDot: 'bg-emerald-500',
+            },
+            {
+              key: 'VALIDATED_EDITED',
+              label: 'Validés (Ajustés Admin)',
+              count: kpiStats.validatedEdited,
+              activeBg: 'bg-blue-600 text-white shadow-xs',
+              colorDot: 'bg-blue-500',
+            },
+            {
+              key: 'PENDING_VALIDATION',
+              label: 'À Valider (Centre)',
+              count: kpiStats.pendingValidation,
+              activeBg: 'bg-amber-600 text-white shadow-xs',
+              colorDot: 'bg-amber-500',
+            },
+            {
+              key: 'NEEDS_CLARIFICATION',
+              label: 'À Clarifier',
+              count: kpiStats.needsClarification,
+              activeBg: 'bg-orange-600 text-white shadow-xs',
+              colorDot: 'bg-orange-500',
+            },
+            {
+              key: 'REJECTED',
+              label: 'Rejetés (Sans stock)',
+              count: kpiStats.rejected,
+              activeBg: 'bg-rose-600 text-white shadow-xs',
+              colorDot: 'bg-rose-500',
             },
             {
               key: 'ARRET',

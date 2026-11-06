@@ -39,6 +39,7 @@ import {
   isTechnicianRole,
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
+import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
 
 export default function DemandesInterventionTab({
   interventions = [],
@@ -797,6 +798,15 @@ export default function DemandesInterventionTab({
             di.statut === 'DEMANDE' ||
             di.statut === 'DEMANDE_CREEE' ||
             di.statut === 'EN_ATTENTE_VALIDATION';
+          const valStatus = String(di.validation_status || '').toUpperCase();
+          if (
+            di.statut === 'CLOTURE' ||
+            valStatus === 'PENDING_VALIDATION' ||
+            valStatus === 'NEEDS_CLARIFICATION' ||
+            valStatus === 'REJECTED'
+          ) {
+            return <ValidationStatusBadge record={di} compact showNote />;
+          }
           if (isPending) {
             return (
               <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-amber-100 text-amber-900 border border-amber-300 font-mono animate-pulse shadow-2xs">

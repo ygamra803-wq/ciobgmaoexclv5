@@ -40,6 +40,7 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
 import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
+import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -313,11 +314,15 @@ export default function BonsTravailTab({
       (b) => b.statut !== 'CLOTURE' && b.validation_status === 'PENDING_VALIDATION'
     ).length;
     const needsClarification = bts.filter(
-      (b) =>
-        b.statut !== 'CLOTURE' &&
-        (b.validation_status === 'NEEDS_CLARIFICATION' || b.validation_status === 'REJECTED')
+      (b) => b.statut !== 'CLOTURE' && b.validation_status === 'NEEDS_CLARIFICATION'
+    ).length;
+    const rejected = bts.filter(
+      (b) => b.statut !== 'CLOTURE' && b.validation_status === 'REJECTED'
     ).length;
     const closed = bts.filter((b) => b.statut === 'CLOTURE').length;
+    const validatedEdited = bts.filter(
+      (b) => b.statut === 'CLOTURE' && Boolean(b.validated_with_edits)
+    ).length;
     const withPdr = bts.filter((b) =>
       Boolean(
         b.pdr ||
@@ -326,7 +331,17 @@ export default function BonsTravailTab({
       )
     ).length;
 
-    return { total, inProgress, waitingPdr, pendingValidation, needsClarification, closed, withPdr };
+    return {
+      total,
+      inProgress,
+      waitingPdr,
+      pendingValidation,
+      needsClarification,
+      rejected,
+      closed,
+      validatedEdited,
+      withPdr,
+    };
   }, [bts]);
 
   // Filtered BTs
@@ -348,11 +363,20 @@ export default function BonsTravailTab({
         return false;
       if (
         filterStatus === 'NEEDS_CLARIFICATION' &&
-        (bt.statut === 'CLOTURE' ||
-          (bt.validation_status !== 'NEEDS_CLARIFICATION' && bt.validation_status !== 'REJECTED'))
+        (bt.statut === 'CLOTURE' || bt.validation_status !== 'NEEDS_CLARIFICATION')
+      )
+        return false;
+      if (
+        filterStatus === 'REJECTED' &&
+        (bt.statut === 'CLOTURE' || bt.validation_status !== 'REJECTED')
       )
         return false;
       if (filterStatus === 'CLOTURE' && bt.statut !== 'CLOTURE') return false;
+      if (
+        filterStatus === 'VALIDATED_EDITED' &&
+        (bt.statut !== 'CLOTURE' || !bt.validated_with_edits)
+      )
+        return false;
       if (
         filterStatus === 'WITH_PDR' &&
         !bt.pdr &&
@@ -658,46 +682,18 @@ export default function BonsTravailTab({
           const isWaitingPdr = bt.statut === 'EN_ATTENTE_PDR';
           const valStatus = bt.validation_status;
 
-          if (isClosed) {
+          if (
+            isClosed ||
+            valStatus === 'PENDING_VALIDATION' ||
+            valStatus === 'NEEDS_CLARIFICATION' ||
+            valStatus === 'REJECTED'
+          ) {
             return (
               <div className="flex flex-col items-center gap-0.5">
-                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
-                  CLÔTURÉ
-                </span>
-                {bt.validated_by_name && (
-                  <span className="text-[9.5px] font-mono text-emerald-700">
-                    Validé ({bt.validated_by_name})
-                  </span>
-                )}
-              </div>
-            );
-          }
-          if (valStatus === 'PENDING_VALIDATION') {
-            return (
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-purple-100 text-purple-900 border border-purple-300 font-mono shadow-2xs animate-pulse">
-                  À VALIDER
-                </span>
-                {bt.submitted_by_name && (
-                  <span className="text-[9.5px] font-mono text-purple-700 truncate max-w-[120px]">
+                <ValidationStatusBadge record={bt} showStockEffect />
+                {valStatus === 'PENDING_VALIDATION' && bt.submitted_by_name && (
+                  <span className="text-[9.5px] font-mono text-amber-800 truncate max-w-[130px]">
                     Par {bt.submitted_by_name}
-                  </span>
-                )}
-              </div>
-            );
-          }
-          if (valStatus === 'NEEDS_CLARIFICATION' || valStatus === 'REJECTED') {
-            return (
-              <div
-                className="flex flex-col items-center gap-0.5"
-                title={bt.validation_note || 'Clarification demandée'}
-              >
-                <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-rose-100 text-rose-900 border border-rose-300 font-mono shadow-2xs">
-                  {valStatus === 'REJECTED' ? 'REJETÉ' : 'À CLARIFIER'}
-                </span>
-                {bt.validation_note && (
-                  <span className="text-[9.5px] text-rose-700 font-semibold truncate max-w-[140px]">
-                    {bt.validation_note}
                   </span>
                 )}
               </div>
@@ -1022,15 +1018,22 @@ export default function BonsTravailTab({
             },
             {
               key: 'PENDING_VALIDATION',
-              label: 'À Valider',
+              label: 'À Valider (Centre)',
               count: kpiStats.pendingValidation,
-              activeBg: 'bg-purple-600 text-white shadow-xs',
-              colorDot: 'bg-purple-500',
+              activeBg: 'bg-amber-600 text-white shadow-xs',
+              colorDot: 'bg-amber-500',
             },
             {
               key: 'NEEDS_CLARIFICATION',
               label: 'À Clarifier',
               count: kpiStats.needsClarification,
+              activeBg: 'bg-orange-600 text-white shadow-xs',
+              colorDot: 'bg-orange-500',
+            },
+            {
+              key: 'REJECTED',
+              label: 'Rejetés (Sans stock)',
+              count: kpiStats.rejected,
               activeBg: 'bg-rose-600 text-white shadow-xs',
               colorDot: 'bg-rose-500',
             },
@@ -1038,15 +1041,22 @@ export default function BonsTravailTab({
               key: 'EN_ATTENTE_PDR',
               label: 'Attente PDR',
               count: kpiStats.waitingPdr,
-              activeBg: 'bg-orange-600 text-white shadow-xs',
-              colorDot: 'bg-orange-500',
+              activeBg: 'bg-purple-600 text-white shadow-xs',
+              colorDot: 'bg-purple-500',
             },
             {
               key: 'CLOTURE',
-              label: 'Clôturés',
+              label: 'Clôturés & Validés',
               count: kpiStats.closed,
               activeBg: 'bg-emerald-600 text-white shadow-xs',
               colorDot: 'bg-emerald-500',
+            },
+            {
+              key: 'VALIDATED_EDITED',
+              label: 'Validés (Ajustés Admin)',
+              count: kpiStats.validatedEdited,
+              activeBg: 'bg-blue-600 text-white shadow-xs',
+              colorDot: 'bg-blue-500',
             },
             {
               key: 'WITH_PDR',

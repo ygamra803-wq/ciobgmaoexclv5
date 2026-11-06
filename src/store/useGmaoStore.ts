@@ -2513,8 +2513,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             pdr_designation: '',
             pdr_quantite: 0,
             pieces_utilisees: [],
-            // Store Technician Field Claim in proposal layer
+            // Store Technician Field Claim in proposal layer + immutable claim snapshot
             pieces_proposees: normalizedProposed,
+            pieces_claimed: normalizedProposed,
+            action_realisee_claimed: String(
+              submissionData.action_realisee ?? item.action_realisee ?? ''
+            ).trim(),
+            validated_with_edits: false,
             num_bon_saisi_par_tech: String(
               submissionData.num_bon_saisi_par_tech ?? item.num_bon_saisi_par_tech ?? ''
             ).trim(),
@@ -2532,6 +2537,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               timeCalc.minutes,
             validation_status: 'PENDING_VALIDATION',
             stock_deducted: false,
+            stock_effect: normalizedProposed.length > 0 ? 'RESERVED' : 'NONE',
             submitted_by_id:
               submissionData.submitted_by_id || item.submitted_by_id || item.technicien_matricule || '',
             submitted_by_name:
@@ -2563,6 +2569,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const decision = String(decisionData.decision || 'APPROVED').trim().toUpperCase();
 
       if (decision === 'APPROVED') {
+        const claimedPieces = Array.isArray(existing.pieces_claimed)
+          ? existing.pieces_claimed
+          : Array.isArray(existing.pieces_proposees)
+          ? existing.pieces_proposees
+          : [];
+
         const approvedPieces =
           decisionData.pieces_utilisees !== undefined
             ? decisionData.pieces_utilisees
@@ -2572,10 +2584,38 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ? existing.pieces_proposees
             : existing.pieces_utilisees || [];
 
+        const serializePiecesSig = (list: any[]) =>
+          (Array.isArray(list) ? list : [])
+            .map((p: any) => ({
+              ref: String(p?.ref || p?.code_article || '').trim().toUpperCase(),
+              qty: Number(p?.quantite ?? p?.qty ?? p?.qte ?? 0),
+            }))
+            .filter((p) => Boolean(p.ref && p.qty > 0))
+            .sort((a, b) => a.ref.localeCompare(b.ref))
+            .map((p) => `${p.ref}:${p.qty}`)
+            .join('|');
+
+        const claimedAction = String(
+          existing.action_realisee_claimed ?? existing.action_realisee ?? ''
+        ).trim();
+        const finalAction =
+          decisionData.action_realisee !== undefined
+            ? String(decisionData.action_realisee).trim()
+            : claimedAction;
+
+        const hasPartsDiff = serializePiecesSig(claimedPieces) !== serializePiecesSig(approvedPieces);
+        const hasActionDiff = Boolean(claimedAction && finalAction && claimedAction !== finalAction);
+        const validatedWithEdits =
+          Boolean(decisionData.validated_with_edits) || hasPartsDiff || hasActionDiff;
+
         return get().handleClotureIntervention(
           id,
           {
             ...decisionData,
+            _fromValidationReview: true,
+            pieces_claimed: claimedPieces,
+            action_realisee_claimed: claimedAction,
+            validated_with_edits: validatedWithEdits,
             pieces_utilisees: approvedPieces,
             pieces_proposees: approvedPieces,
             date_fin: decisionData.date_fin || existing.date_fin_proposee,
@@ -2614,6 +2654,15 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               ...(Array.isArray(decisionData.pieces_proposees)
                 ? { pieces_proposees: decisionData.pieces_proposees }
                 : {}),
+              pieces_claimed: Array.isArray(item.pieces_claimed)
+                ? item.pieces_claimed
+                : Array.isArray(item.pieces_proposees)
+                ? item.pieces_proposees
+                : [],
+              pieces_utilisees: [],
+              stock_deducted: false,
+              stock_effect: 'NONE',
+              validated_with_edits: false,
               validation_status: decision as any,
               validation_note: String(decisionData.validation_note || '').trim(),
               validated_by_id: decisionData.validated_by_id || 'admin',
@@ -2638,6 +2687,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     handleClotureIntervention: (id, clotureData = {}, onAddMouvement = null) => {
       const existing = get().correctiveInterventions.find((item) => item.id === id);
       if (!existing) return null;
+
+      // VAL-2 Single Gate Guard: Technician or Operator field submissions must ALWAYS go through PENDING_VALIDATION
+      const actorRoleUpper = String(clotureData?.actorRole || clotureData?.role || '').trim().toUpperCase();
+      if (
+        clotureData?._fromValidationReview !== true &&
+        (clotureData?.isTechnician === true ||
+          actorRoleUpper === 'TECHNICIEN' ||
+          actorRoleUpper === 'OPERATEUR')
+      ) {
+        return get().handleSubmitInterventionForValidation(id, clotureData);
+      }
 
       // Re-closure & FSM guard: never re-close an already closed BT or emit duplicate stock movements
       if (String(existing.action_fermee || '').trim().toUpperCase() === 'OUI') {
@@ -2779,9 +2839,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ? warehouseList.find((w: any) => String(w.id_warehouse_item || w.id || w.id_item || '').trim() === resolvedPartId)
             : null;
 
+          const cleanClotureData = { ...clotureData };
+          delete cleanClotureData._fromValidationReview;
+
           updated = new CorrectiveIntervention({
             ...item,
-            ...clotureData,
+            ...cleanClotureData,
             id_composant: resolvedCompId,
             nom_composant:
               clotureData.nom_composant ||
@@ -2808,6 +2871,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : 0,
             pdr_unite: primaryPiece ? primaryPiece.unite : 'Pièce',
             pieces_utilisees: normalizedPieces,
+            pieces_claimed: Array.isArray(clotureData.pieces_claimed)
+              ? clotureData.pieces_claimed
+              : Array.isArray(item.pieces_claimed)
+              ? item.pieces_claimed
+              : Array.isArray(item.pieces_proposees)
+              ? item.pieces_proposees
+              : normalizedPieces,
+            validated_with_edits: Boolean(
+              clotureData.validated_with_edits ?? item.validated_with_edits ?? false
+            ),
             cout_pdr: totalPdrCost,
             pdr_cost: totalPdrCost,
             date_debut: dDebut,
@@ -2819,7 +2892,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             temps_intervention_mins: timeCalc.minutes,
             temps_minutes: timeCalc.minutes,
             validation_status: 'APPROVED',
-            stock_deducted: normalizedPieces.length > 0,
+            stock_deducted: normalizedPieces.length > 0 && clotureData.skipStockDeduction !== true,
+            stock_effect:
+              normalizedPieces.length > 0 && clotureData.skipStockDeduction !== true
+                ? 'APPLIED'
+                : 'NONE',
             validated_by_id: clotureData.validated_by_id || item.validated_by_id || 'admin',
             validated_by_name:
               clotureData.validated_by_name || item.validated_by_name || 'Administrateur',
