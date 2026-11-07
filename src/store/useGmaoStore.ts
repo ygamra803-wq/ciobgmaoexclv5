@@ -12,6 +12,7 @@ import { DataGateway } from '../application/DataGateway';
 import { storageService } from '../utils/storageService';
 import { MeterService } from '../application/services/meter/MeterService';
 import type { IMeterReading, MeterUnit } from '../types/meter';
+import type { IReplenishmentOrder, ReplenishmentOrderStatus } from '../types/replenishment';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 import { reactiveCalculationEngine } from '../services/reactiveCalculationEngine';
 import { loadBaselineCorrectiveData } from '../utils/baselineCorrective';
@@ -366,7 +367,11 @@ function getInitialMovements() {
     allowDemoFallback: false,
     demoSeed: [],
   });
-  return { mouvements, sortieDemands };
+  const replenishmentOrders = loadCollection<IReplenishmentOrder>(STORAGE_KEYS.REPLENISHMENT_ORDERS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
+  return { mouvements, sortieDemands, replenishmentOrders };
 }
 
 function getInitialPreventive() {
@@ -760,6 +765,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // ==========================================
     mouvements: movementsInit.mouvements,
     sortieDemands: movementsInit.sortieDemands,
+    replenishmentOrders: movementsInit.replenishmentOrders,
 
     setMouvements: (updater) => {
       const prev = get().mouvements;
@@ -1058,6 +1064,140 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       }
 
       return null;
+    },
+
+    // ==========================================
+    // 5b. Replenishment & Purchase Orders Slice (المحور 4)
+    // ==========================================
+    setReplenishmentOrders: (updater) => {
+      const prev = get().replenishmentOrders || [];
+      const next = resolveUpdate(updater, prev);
+      DataGateway.saveReplenishmentOrders(next);
+      set({ replenishmentOrders: next });
+    },
+
+    handleCreateReplenishmentOrder: async (orderData: Partial<IReplenishmentOrder>) => {
+      const current = get().replenishmentOrders || [];
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const seq = String(current.length + 1).padStart(4, '0');
+      const numCmd = `BC-${dateStr.replace(/-/g, '')}-${seq}`;
+
+      const newOrder: IReplenishmentOrder = {
+        id: `PO-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        numero_commande: numCmd,
+        date_creation: dateStr,
+        fournisseur: orderData.fournisseur || 'Fournisseur Général',
+        statut: 'BROUILLON',
+        cree_par: orderData.cree_par || 'Magasinier',
+        items: orderData.items || [],
+        montant_total_estime: orderData.montant_total_estime || 0,
+        notes: orderData.notes || '',
+        ...orderData,
+      };
+
+      const next = [newOrder, ...current];
+      DataGateway.saveReplenishmentOrders(next);
+      set({ replenishmentOrders: next });
+      return newOrder;
+    },
+
+    handleUpdateReplenishmentOrderStatus: async (orderId: string, status: ReplenishmentOrderStatus, metadata?: any) => {
+      const current = get().replenishmentOrders || [];
+      const next = current.map((order) => {
+        if (order.id !== orderId) return order;
+        // Guard: completed or cancelled orders are terminal states
+        if (order.statut === 'RECU_CONFORME' || order.statut === 'ANNULE') {
+          return order;
+        }
+        return {
+          ...order,
+          statut: status,
+          date_commande: status === 'COMMANDE' ? new Date().toISOString().split('T')[0] : order.date_commande,
+          ...metadata,
+        };
+      });
+      DataGateway.saveReplenishmentOrders(next);
+      set({ replenishmentOrders: next });
+    },
+
+    handleReceiveReplenishmentOrder: async (
+      orderId: string,
+      receivedItems: { ref: string; quantite_recue: number }[],
+      numBonReception?: string,
+      recepteur?: string
+    ) => {
+      const currentOrders = get().replenishmentOrders || [];
+      const order = currentOrders.find((o) => o.id === orderId);
+      // Guard: prevent double-receipt on terminal orders (RECU_CONFORME or ANNULE)
+      if (!order || order.statut === 'RECU_CONFORME' || order.statut === 'ANNULE') return;
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const newMovements: any[] = [];
+
+      let allFullyReceived = true;
+      const updatedItems = order.items.map((it) => {
+        const match = receivedItems.find((r) => r.ref === it.ref);
+        const remainingNeeded = Math.max(0, it.quantite_demandee - (it.quantite_recue || 0));
+        const rawAddedQty = match ? Math.max(0, Number(match.quantite_recue) || 0) : 0;
+        const addedQty = Math.min(rawAddedQty, remainingNeeded);
+        const totalRecue = (it.quantite_recue || 0) + addedQty;
+        if (totalRecue < it.quantite_demandee) {
+          allFullyReceived = false;
+        }
+
+        if (addedQty > 0) {
+          newMovements.push({
+            id: `MVT-REC-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            date: dateStr,
+            type: 'Entrée',
+            action_id: 'reapprovisionnement',
+            ref: it.ref,
+            quantite: addedQty,
+            prix_unitaire: it.prix_unitaire_estime,
+            source: 'REAPPRO_COMMANDE',
+            code_bon: numBonReception || order.numero_commande,
+            observation: `Réception Commande ${order.numero_commande} (${order.fournisseur || 'Fournisseur'})`,
+            technicien: recepteur || 'Magasinier',
+          });
+        }
+
+        return {
+          ...it,
+          quantite_recue: totalRecue,
+        };
+      });
+
+      const nextStatus: ReplenishmentOrderStatus = allFullyReceived ? 'RECU_CONFORME' : 'RECEPTION_PARTIELLE';
+
+      const nextOrders = currentOrders.map((o) => {
+        if (o.id !== orderId) return o;
+        return {
+          ...o,
+          statut: nextStatus,
+          date_reception: dateStr,
+          numero_bon_reception: numBonReception || o.numero_bon_reception,
+          items: updatedItems,
+        };
+      });
+
+      DataGateway.saveReplenishmentOrders(nextOrders);
+
+      if (newMovements.length > 0) {
+        const currentMouvements = get().mouvements || [];
+        const nextMouvements = [...newMovements, ...currentMouvements];
+        DataGateway.saveMouvements(nextMouvements);
+        movementRepository.bulkReplace(
+          nextMouvements as any[],
+          buildInitialStockMapFromList(get().rawStock)
+        );
+        set({
+          mouvements: nextMouvements,
+          replenishmentOrders: nextOrders,
+        });
+      } else {
+        set({ replenishmentOrders: nextOrders });
+      }
     },
 
     // ==========================================
@@ -3321,11 +3461,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTechnicians: get().setTechnicians,
         setOperations: get().setOperations,
         setMouvements: get().setMouvements,
+        setSortieDemands: get().setSortieDemands,
+        setReplenishmentOrders: get().setReplenishmentOrders,
         setPreventiveTasks: get().setPreventiveTasks,
         setPreventiveActions: get().setPreventiveActions,
         setPreventiveGuides: get().setPreventiveGuides,
         setPreventivePlans: get().setPreventivePlans,
         setPreventiveExecutions: get().setPreventiveExecutions,
+        setMeterReadings: get().setMeterReadings,
         setSortiesExterne: get().setSortiesExterne,
         setCorrectiveInterventions: get().setCorrectiveInterventions,
         setCorrectiveActionsByPanne: get().setCorrectiveActionsByPanne,
@@ -3357,11 +3500,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTechnicians: get().setTechnicians,
         setOperations: get().setOperations,
         setMouvements: get().setMouvements,
+        setSortieDemands: get().setSortieDemands,
+        setReplenishmentOrders: get().setReplenishmentOrders,
         setPreventiveTasks: get().setPreventiveTasks,
         setPreventiveActions: get().setPreventiveActions,
         setPreventiveGuides: get().setPreventiveGuides,
         setPreventivePlans: get().setPreventivePlans,
         setPreventiveExecutions: get().setPreventiveExecutions,
+        setMeterReadings: get().setMeterReadings,
         setSortiesExterne: get().setSortiesExterne,
         setCorrectiveInterventions: get().setCorrectiveInterventions,
         setCorrectiveActionsByPanne: get().setCorrectiveActionsByPanne,
@@ -3393,11 +3539,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTechnicians: get().setTechnicians,
         setOperations: get().setOperations,
         setMouvements: get().setMouvements,
+        setSortieDemands: get().setSortieDemands,
+        setReplenishmentOrders: get().setReplenishmentOrders,
         setPreventiveTasks: get().setPreventiveTasks,
         setPreventiveActions: get().setPreventiveActions,
         setPreventiveGuides: get().setPreventiveGuides,
         setPreventivePlans: get().setPreventivePlans,
         setPreventiveExecutions: get().setPreventiveExecutions,
+        setMeterReadings: get().setMeterReadings,
         setSortiesExterne: get().setSortiesExterne,
         setCorrectiveInterventions: get().setCorrectiveInterventions,
         setCorrectiveActionsByPanne: get().setCorrectiveActionsByPanne,
@@ -3429,11 +3578,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setTechnicians: get().setTechnicians,
         setOperations: get().setOperations,
         setMouvements: get().setMouvements,
+        setSortieDemands: get().setSortieDemands,
+        setReplenishmentOrders: get().setReplenishmentOrders,
         setPreventiveTasks: get().setPreventiveTasks,
         setPreventiveActions: get().setPreventiveActions,
         setPreventiveGuides: get().setPreventiveGuides,
         setPreventivePlans: get().setPreventivePlans,
         setPreventiveExecutions: get().setPreventiveExecutions,
+        setMeterReadings: get().setMeterReadings,
         setSortiesExterne: get().setSortiesExterne,
         setCorrectiveInterventions: get().setCorrectiveInterventions,
         setCorrectiveActionsByPanne: get().setCorrectiveActionsByPanne,
@@ -3478,9 +3630,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.technicians)) updates.technicians = remoteState.technicians;
       if (Array.isArray(remoteState.operations)) updates.operations = remoteState.operations;
 
-      // Movements
+      // Movements & Replenishment
       if (Array.isArray(remoteState.mouvements)) updates.mouvements = remoteState.mouvements;
       if (Array.isArray(remoteState.sortieDemands)) updates.sortieDemands = remoteState.sortieDemands;
+      if (Array.isArray(remoteState.replenishmentOrders)) updates.replenishmentOrders = remoteState.replenishmentOrders;
 
       // Preventive
       if (Array.isArray(remoteState.preventiveTasks)) updates.preventiveTasks = remoteState.preventiveTasks;
@@ -3488,6 +3641,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.preventiveGuides)) updates.preventiveGuides = remoteState.preventiveGuides;
       if (Array.isArray(remoteState.preventivePlans)) updates.preventivePlans = remoteState.preventivePlans;
       if (Array.isArray(remoteState.preventiveExecutions)) updates.preventiveExecutions = remoteState.preventiveExecutions;
+      if (Array.isArray(remoteState.meterReadings)) updates.meterReadings = remoteState.meterReadings;
 
       // Sortie Externe
       if (Array.isArray(remoteState.sortiesExterne)) updates.sortiesExterne = remoteState.sortiesExterne;
@@ -3602,6 +3756,11 @@ export const useMovementSlice = () =>
     setMouvements: state.setMouvements,
     sortieDemands: state.sortieDemands,
     setSortieDemands: state.setSortieDemands,
+    replenishmentOrders: state.replenishmentOrders,
+    setReplenishmentOrders: state.setReplenishmentOrders,
+    handleCreateReplenishmentOrder: state.handleCreateReplenishmentOrder,
+    handleUpdateReplenishmentOrderStatus: state.handleUpdateReplenishmentOrderStatus,
+    handleReceiveReplenishmentOrder: state.handleReceiveReplenishmentOrder,
     handleSubmitSortieDemand: state.handleSubmitSortieDemand,
     handleReviewSortieDemandValidation: state.handleReviewSortieDemandValidation,
   }));

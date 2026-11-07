@@ -68,6 +68,8 @@ export const ALLOWED_ENTITIES = [
   'partDesignations',
   'sortiesExterne',
   'sortieDemands',
+  'meterReadings',
+  'replenishmentOrders',
 ] as const;
 
 const ALLOWED_ENTITY_SET = new Set<string>(ALLOWED_ENTITIES);

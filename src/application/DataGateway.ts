@@ -205,6 +205,12 @@ export const DataGateway = {
     return clean;
   },
 
+  saveReplenishmentOrders(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.REPLENISHMENT_ORDERS, clean);
+    return clean;
+  },
+
   // ==========================================
   // 3. PREVENTIVE MAINTENANCE
   // ==========================================
@@ -581,6 +587,8 @@ export const DataGateway = {
     this.saveStockTypes(seedStockTypes);
     this.saveDesignations(derivedDesignations);
     this.saveMouvements(seedMouvements);
+    this.saveSortieDemands([]);
+    this.saveReplenishmentOrders([]);
     movementRepository.bulkReplace(seedMouvements as any[], buildInitialStockMap(seedStockItems));
 
     this.savePreventiveTasks(seedPreventiveTasks, { machines: seedMachines });
@@ -588,6 +596,7 @@ export const DataGateway = {
     this.savePreventiveGuides(seedPreventiveGuides);
     this.savePreventivePlans([]);
     this.savePreventiveExecutions([]);
+    this.saveMeterReadings([]);
 
     this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: seedMachines });
     this.saveCorrectiveActionsByPanne(seedActionsByPanne);
@@ -628,12 +637,15 @@ export const DataGateway = {
     if (setters.setTypes) setters.setTypes(seedStockTypes);
     if (setters.setDesignations) setters.setDesignations(derivedDesignations);
     if (setters.setMouvements) setters.setMouvements(seedMouvements);
+    if (setters.setSortieDemands) setters.setSortieDemands([]);
+    if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
     if (setters.setPreventiveTasks) setters.setPreventiveTasks(seedPreventiveTasks);
     if (setters.setPreventiveActions) setters.setPreventiveActions(seedPreventiveActions);
     if (setters.setPreventiveGuides) setters.setPreventiveGuides(seedPreventiveGuides);
     if (setters.setPreventivePlans) setters.setPreventivePlans([]);
     if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
+    if (setters.setMeterReadings) setters.setMeterReadings([]);
 
     if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(seedCorrectiveInterventions);
     if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(seedActionsByPanne);
@@ -733,6 +745,7 @@ export const DataGateway = {
     this.saveDesignations([]);
     this.saveMouvements([]);
     this.saveSortieDemands([]);
+    this.saveReplenishmentOrders([]);
     movementRepository.bulkReplace([], new Map());
 
     this.savePreventiveTasks([]);
@@ -779,12 +792,14 @@ export const DataGateway = {
     if (setters.setDesignations) setters.setDesignations([]);
     if (setters.setMouvements) setters.setMouvements([]);
     if (setters.setSortieDemands) setters.setSortieDemands([]);
+    if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
     if (setters.setPreventiveTasks) setters.setPreventiveTasks([]);
     if (setters.setPreventiveActions) setters.setPreventiveActions([]);
     if (setters.setPreventiveGuides) setters.setPreventiveGuides([]);
     if (setters.setPreventivePlans) setters.setPreventivePlans([]);
     if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
+    if (setters.setMeterReadings) setters.setMeterReadings([]);
 
     if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions([]);
     if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne({});
@@ -826,11 +841,14 @@ export const DataGateway = {
       [STORAGE_KEYS.STOCK_TYPES]: [],
       [STORAGE_KEYS.DESIGNATIONS]: [],
       [STORAGE_KEYS.MOUVEMENTS]: [],
+      [STORAGE_KEYS.SORTIE_DEMANDS]: [],
+      [STORAGE_KEYS.REPLENISHMENT_ORDERS]: [],
       [STORAGE_KEYS.PREVENTIVE_TASKS]: [],
       [STORAGE_KEYS.PREVENTIVE_ACTIONS]: [],
       [STORAGE_KEYS.PREVENTIVE_GUIDES]: [],
       [STORAGE_KEYS.PREVENTIVE_PLANS]: [],
       [STORAGE_KEYS.PREVENTIVE_EXECUTIONS]: [],
+      [STORAGE_KEYS.METER_READINGS]: [],
       [STORAGE_KEYS.CORRECTIVE_INTERVENTIONS]: [],
       [STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE]: {},
       [STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES]: {},
@@ -924,6 +942,10 @@ export const DataGateway = {
     const partDesignations = Array.isArray(serverData.partDesignations) ? serverData.partDesignations : [];
     const sortiesExterne = Array.isArray(serverData.sortiesExterne) ? serverData.sortiesExterne : [];
     const sortieDemands = Array.isArray(serverData.sortieDemands) ? serverData.sortieDemands : [];
+    const replenishmentOrders = Array.isArray(serverData.replenishmentOrders)
+      ? serverData.replenishmentOrders
+      : [];
+    const meterReadings = Array.isArray(serverData.meterReadings) ? serverData.meterReadings : [];
 
     const hasData =
       rawStock.length > 0 ||
@@ -931,7 +953,9 @@ export const DataGateway = {
       preventiveTasks.length > 0 ||
       correctiveInterventions.length > 0 ||
       mouvements.length > 0 ||
-      sortieDemands.length > 0;
+      sortieDemands.length > 0 ||
+      replenishmentOrders.length > 0 ||
+      meterReadings.length > 0;
 
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, hasData ? 'custom' : 'empty');
@@ -948,12 +972,14 @@ export const DataGateway = {
     this.saveMachineBom(machineElementsLedger);
     this.saveMouvements(mouvements);
     this.saveSortieDemands(sortieDemands);
+    this.saveReplenishmentOrders(replenishmentOrders);
     movementRepository.bulkReplace(mouvements as any[], buildInitialStockMap(rawStock));
     this.savePreventiveTasks(preventiveTasks);
     this.savePreventiveActions(preventiveActions);
     this.savePreventiveGuides(preventiveGuides);
     this.savePreventivePlans(preventivePlans);
     this.savePreventiveExecutions(preventiveExecutions);
+    this.saveMeterReadings(meterReadings);
     this.saveCorrectiveInterventions(correctiveInterventions);
     this.saveCorrectiveActionsByPanne(correctiveActionsByPanne);
     this.saveCorrectivePanneCategories(correctivePanneCategories);
@@ -993,11 +1019,13 @@ export const DataGateway = {
         machineElementsLedger,
         mouvements,
         sortieDemands,
+        replenishmentOrders,
         preventiveTasks,
         preventiveActions,
         preventiveGuides,
         preventivePlans,
         preventiveExecutions,
+        meterReadings,
         correctiveInterventions,
         correctiveActionsByPanne,
         correctivePanneCategories,
@@ -1028,11 +1056,13 @@ export const DataGateway = {
       if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(machineElementsLedger);
       if (setters.setMouvements) setters.setMouvements(mouvements);
       if (setters.setSortieDemands) setters.setSortieDemands(sortieDemands);
+      if (setters.setReplenishmentOrders) setters.setReplenishmentOrders(replenishmentOrders);
       if (setters.setPreventiveTasks) setters.setPreventiveTasks(preventiveTasks);
       if (setters.setPreventiveActions) setters.setPreventiveActions(preventiveActions);
       if (setters.setPreventiveGuides) setters.setPreventiveGuides(preventiveGuides);
       if (setters.setPreventivePlans) setters.setPreventivePlans(preventivePlans);
       if (setters.setPreventiveExecutions) setters.setPreventiveExecutions(preventiveExecutions);
+      if (setters.setMeterReadings) setters.setMeterReadings(meterReadings);
       if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(correctiveInterventions);
       if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(correctiveActionsByPanne);
       if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(correctivePanneCategories);
@@ -1269,12 +1299,16 @@ export const DataGateway = {
       case 'mouvements':
       case 'movements':
         this.saveMouvements([]);
+        this.saveSortieDemands([]);
+        this.saveReplenishmentOrders([]);
         this.saveSortiesExterne([]);
         movementRepository.bulkReplace(
           [],
           buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
         );
         if (setters.setMouvements) setters.setMouvements([]);
+        if (setters.setSortieDemands) setters.setSortieDemands([]);
+        if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
         if (setters.setSortiesExterne) setters.setSortiesExterne([]);
         break;
 
@@ -1307,6 +1341,7 @@ export const DataGateway = {
             [STORAGE_KEYS.PREVENTIVE_GUIDES]: [],
             [STORAGE_KEYS.PREVENTIVE_PLANS]: [],
             [STORAGE_KEYS.PREVENTIVE_EXECUTIONS]: [],
+            [STORAGE_KEYS.METER_READINGS]: [],
           })
           .catch(() => false);
         indexedDBService.clear('preventive').catch(() => false);

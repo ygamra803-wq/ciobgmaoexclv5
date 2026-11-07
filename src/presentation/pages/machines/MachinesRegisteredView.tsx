@@ -52,6 +52,7 @@ import {
 import PreventiveService from '../../../application/services/PreventiveService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
 import MachineQrFieldModal from './components/MachineQrFieldModal';
+import MachinePassport360Modal from './components/MachinePassport360Modal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
 import { usePermission } from '../../components/common/PermissionGate';
@@ -219,6 +220,7 @@ export default function MachinesRegisteredView({
   const [toDelete, setToDelete] = useState(null);
   const [preventiveMachine, setPreventiveMachine] = useState(null);
   const [qrMachine, setQrMachine] = useState<{ machine: any; mode: 'ETIQUETTE' | 'FICHE_TERRAIN' } | null>(null);
+  const [passport360Machine, setPassport360Machine] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | 'En Service' | 'En Maintenance' | 'Arrêt'
   const [assetClassFilter, setAssetClassFilter] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [sysTypeFilter, setSysTypeFilter] = useState('ALL');
@@ -1557,7 +1559,20 @@ export default function MachinesRegisteredView({
                       <td className="py-3 px-3.5 text-center whitespace-nowrap">
                         <div className="relative inline-flex items-center justify-center action-menu-container">
                           <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                            {/* Primary Quick Action Button: Sortie Rapide / Intervention (1-clic) */}
+                            {/* Primary Quick Action Button: Dossier Technique 360° */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPassport360Machine(m);
+                                setActiveActionMenuId(null);
+                              }}
+                              className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 transition flex items-center justify-center cursor-pointer border-r border-slate-200 group"
+                              title={`Dossier Technique 360° (Passeport Santé, TCO & Historique) pour ${m.id_machine_registered} (${m.designation})`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                            </button>
+
+                            {/* Secondary Quick Action Button: Sortie Rapide / Intervention (1-clic) */}
                             <button
                               type="button"
                               onClick={() => {
@@ -1611,6 +1626,22 @@ export default function MachinesRegisteredView({
                                   {m.id_machine_registered} • {m.designation}
                                 </span>
                               </div>
+
+                              {/* Option 0: Dossier Technique 360° */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  setPassport360Machine(m);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-semibold text-indigo-900 bg-indigo-50/80 hover:bg-indigo-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer border border-indigo-200/70 shadow-2xs"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                <div className="flex flex-col items-start leading-tight">
+                                  <span>Dossier Technique 360°</span>
+                                  <span className="text-[10px] text-indigo-600 font-normal">Passeport Santé, TCO & Historique</span>
+                                </div>
+                              </button>
 
                               {/* Option 1: Sortie Rapide (1-clic) */}
                               <button
@@ -2839,6 +2870,19 @@ export default function MachinesRegisteredView({
           onNavigateToPreventive={onNavigateToPreventive}
           onNavigateToQuickSortie={onNavigateToQuickSortie}
           showToast={showToast}
+        />
+      )}
+
+      {passport360Machine && (
+        <MachinePassport360Modal
+          machine={passport360Machine}
+          onClose={() => setPassport360Machine(null)}
+          onNavigateToPreventive={onNavigateToPreventive}
+          onNavigateToQuickSortie={onNavigateToQuickSortie}
+          onOpenQrSticker={(m) => {
+            setPassport360Machine(null);
+            setQrMachine({ machine: m, mode: 'ETIQUETTE' });
+          }}
         />
       )}
     </AnimatedPage>

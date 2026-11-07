@@ -37,7 +37,9 @@ import {
   Inbox,
   Calculator,
   Lock,
+  ShoppingCart,
 } from 'lucide-react';
+import StockReplenishmentModal from './components/StockReplenishmentModal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   computeReservedStockMap,
@@ -141,6 +143,7 @@ export default function StockView({
   );
 
   const [showReorderPanel, setShowReorderPanel] = useState(false);
+  const [showReplenishmentModal, setShowReplenishmentModal] = useState(false);
 
   const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
 
@@ -696,6 +699,16 @@ export default function StockView({
             title={t('stock.formulas_button', 'Formules Excel (Col. B → K)')}
           />
 
+          {/* 3D Replenishment & Purchase Orders Button */}
+          <Action3DButton
+            variant="circle"
+            color="warning"
+            icon={ShoppingCart}
+            badgeCount={reorderAlerts.totalAlertCount > 0 ? reorderAlerts.totalAlertCount : undefined}
+            onClick={() => setShowReplenishmentModal(true)}
+            title="Réapprovisionnement PDR & Commandes Fournisseurs"
+          />
+
           {/* 3D Primary Add Article Button */}
           {canCreateStock && (
             <Action3DButton
@@ -812,6 +825,14 @@ export default function StockView({
                 }`}
               >
                 {stockAlertOnly ? 'Tout afficher' : 'Filtrer dans la grille'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReplenishmentModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span>Générer Commande</span>
               </button>
               <button
                 type="button"
@@ -1538,6 +1559,13 @@ export default function StockView({
             </div>
           </div>
         </div>
+      )}
+
+      {showReplenishmentModal && (
+        <StockReplenishmentModal
+          onClose={() => setShowReplenishmentModal(false)}
+          reorderAlerts={reorderAlerts}
+        />
       )}
     </AnimatedPage>
   );

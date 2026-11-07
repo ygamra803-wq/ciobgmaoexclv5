@@ -13,6 +13,7 @@ import type {
   ITechnician,
 } from './domain';
 import type { IMeterReading } from './meter';
+import type { IReplenishmentOrder, ReplenishmentOrderStatus } from './replenishment';
 
 export interface MachineElement {
   id: string;
@@ -163,6 +164,20 @@ export interface GmaoStoreState {
     },
     onAddMouvement?: ((mvt: any) => void) | null
   ) => any;
+
+  // ==========================================
+  // 5b. Replenishment & Purchase Orders Slice (المحور 4)
+  // ==========================================
+  replenishmentOrders: IReplenishmentOrder[];
+  setReplenishmentOrders: (orders: IReplenishmentOrder[] | ((prev: IReplenishmentOrder[]) => IReplenishmentOrder[])) => void;
+  handleCreateReplenishmentOrder: (orderData: Partial<IReplenishmentOrder>) => Promise<IReplenishmentOrder>;
+  handleUpdateReplenishmentOrderStatus: (orderId: string, status: ReplenishmentOrderStatus, metadata?: any) => Promise<void>;
+  handleReceiveReplenishmentOrder: (
+    orderId: string,
+    receivedItems: { ref: string; quantite_recue: number }[],
+    numBonReception?: string,
+    recepteur?: string
+  ) => Promise<void>;
 
   // ==========================================
   // 6. Preventive Maintenance Slice

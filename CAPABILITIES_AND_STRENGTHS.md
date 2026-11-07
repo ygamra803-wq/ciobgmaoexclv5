@@ -335,7 +335,44 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 
 ---
 
-## 13. سجل التحقق الآلي (`Automated Verification Matrix`)
+## 13. السجل الفني الشامل للآلة 360° (`Dossier Technique Machine 360° / Passeport Digital`)
+
+- **القدرة الهندسية:** توفير رؤية مركزية موحدة لكل أصل صناعي مسجل في النظام عبر بطاقة جواز السفر الفني الشاملة (`MachinePassport360Modal.tsx` و `MachinesRegisteredView.tsx`):
+  1. **المواصفات الفنية وبطاقة الهوية:** الكود، المنطقة، خط الإنتاج، النمرة التسلسلية، الموديل، الصانع، وتاريخ التشغيل.
+  2. **مؤشرات الصحة والاعتمادية (12 شهراً):** تقييم الصحة العام (`Health Score / 100`)، وتكلفة الملكية الشاملة للآلة ($\text{TCO} = \text{Correctif PDR} + \text{Préventif} + \text{Bobinage Externe}$)، وساعات التوقف التراكمية ($\text{Downtime Hours}$).
+  3. **كشف الأعطال المتكررة للمكونات (`Recurrent Organ Failure BER Alerts`):** تنبيه آلي عند تكرار تعطل عضو محدد 3 مرات أو أكثر خلال 60 أو 365 يوماً مع توصية الصيانة الوقائية أو الاستبدال.
+  4. **سجل العدادات وساعات التشغيل المباشر:** عرض العداد الحالي وتاريخ القراءات والفوارق التراكمية.
+  5. **السجل التاريخي المزدوج الموحد:** استعراض متزامن لجميع أوامر العمل التصحيحية السابقة (`BT/DI`) والزيارات الوقائية المنفذة للمعدة وتكلفتها وفنييها.
+- **المراجع البرمجية:**
+  - واجهة العرض الشاملة: `src/presentation/pages/machines/components/MachinePassport360Modal.tsx`.
+  - محرك الحسابات المجرد: `src/application/services/MachineHealthPassportService.ts`.
+  - زر الإجراء المباشر في الجداول: `MachinesRegisteredView.tsx`.
+
+---
+
+## 14. محرك إعادة التموين التلقائي وأوامر الشراء (`Automated Replenishment & Purchase Orders Engine`)
+
+- **القدرة الهندسية:** سد الفجوة بين نفاد المخزون وإصدار طلبيات التوريد عبر محرك مشتريات مؤتمت بالكامل متكامل مع محرك المخزون الأساسي (`IncrementalStockIndex`):
+  1. **رصد العجز ونقاط إعادة الطلب الآلية:** فحص حتمي لجميع الأصناف التي بلغت أو تجاوزت هبوطاً حد الأمان أو الحد الأدنى (`stockActuel <= seuilMin`).
+  2. **حساب كمية الطلب الاقتصادية المقترحة:** توليد فوري للكمية المقترحة $\text{Quantité Suggérée} = \max(1, \text{seuilMin} \times 2 - \text{stockActuel})$ مع تقدير التكلفة الإجمالية بالدرهم.
+  3. **دورة حياة منضبطة لأوامر الشراء (`ReplenishmentOrder FSM`):**
+     $$\text{BROUILLON (مسودة)} \longrightarrow \text{COMMANDE (مُرسل للمورد)} \longrightarrow \text{RECEPTION\_PARTIELLE} \longrightarrow \text{REÇU\_CONFORME} \quad (\text{أو } \text{ANNULE})$$
+  4. **الاستلام المباشر والتحويل الآلي للمخزن (حفظ معادلة المخزون دون ازدواجية):**
+     عند تسجيل استلام الشحنة وإدخال رقم إشعار الاستلام (`Bon de Réception - BR`):
+     - يُولد النظام تلقائياً حركة دخول مخزن: `type: 'Entrée'`, `action_id: 'reapprovisionnement'`.
+     - يستجيب محرك `IncrementalStockIndex` فورياً لتحديث الرصيد الفعلي دون أي خرق لمعادلة `stockActuel = stockInitial + entrées - sorties`.
+     - تحديث دوري وحتمي لحالة بنود الطلبية دون الحاجة لإدخال يدوي منفصل في شاشة الحركات.
+- **المراجع البرمجية:**
+  - نماذج البيانات: `src/types/replenishment.ts`.
+  - مفتاح التخزين الكانونيكال: `STORAGE_KEYS.REPLENISHMENT_ORDERS = 'gmao_replenishment_orders_v1'`.
+  - بوابة التخزين والتفريغ: `DataGateway.saveReplenishmentOrders` و `DataGateway.clearAllForRealFactory`.
+  - واجهة مركز التموين: `src/presentation/pages/stock/components/StockReplenishmentModal.tsx` و `StockView.tsx`.
+- **الاختبارات المُثبتة:**
+  - `src/tests/unit/MachinePassportAndReplenishment.test.ts` (3 اختبارات حاسمة وناجحة 100%).
+
+---
+
+## 15. سجل التحقق الآلي (`Automated Verification Matrix`)
 
 | المجال الهندسي | القدرة الموثّقة | ملف الاختبار الآلي (`Vitest`) |
 |---|---|---|
@@ -350,11 +387,12 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | **دستور ترابط الأصول و BOM (`P0–P5`)** | عزل مخزون `PDR` الاستهلاكي (`P0`)، انتشار `id_composant / id_part` إلى سجلات التنفيذ الوقائي (`P1`)، ترتيب `BOM` الذكي (`P2`)، توطين `Part` في التصحيحي (`P3`)، ووراثة `parent_component_key` و `pdr_requises` من القالب (`P4/P5`) | `src/tests/unit/Phase7AssetBomNexus.test.ts` |
 | **مركز الاعتماد وفصل السلطات** | حماية الصرف المخزني للفنيين، حفظ `pieces_claimed`، دورة التوضيح والرفض، ومسارات Maker-Checker | `src/tests/ValidationGovernance.test.ts` |
 | **الصيانة بالعدادات وساعات التشغيل** | رتابة قراءات العدادات، حساب الفوارق التراكمية، إنذارات الاقتراب من السقف، وتقييم المهام الهجينة | `src/tests/unit/MeterMaintenance.test.ts` |
+| **السجل الفني 360° ومحرك التموين** | حساب TCO ومؤشرات صحة الآلة، حراسة دورة أوامر الشراء، والتوليد التلقائي لحركات Entrée المخزنية | `src/tests/unit/MachinePassportAndReplenishment.test.ts` |
 | **المعمارية وأداء العرض** | التصفح الافتراضي 60fps لـ 1,000 سجل دون إجهاد المتصفح (`GmaoIndustrialDataGrid`) | `src/tests/unit/VirtualScrolling.test.tsx` |
 
 ---
 
-## 14. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
+## 16. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
 
 التزاماً بالشفافية الهندسية أمام المستثمرين والمطورين:
 1. **منصة ويب تشغيلية أولاً (`Web-First Operational Platform`):** يعمل النظام بكامل قدراته عبر المتصفح مع تخزين هجين (`Memory Cache + localStorage + IndexedDB`) وخادم Node/Express محلي (`server.ts`).

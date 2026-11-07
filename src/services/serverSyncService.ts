@@ -336,6 +336,12 @@ export const serverSyncService = {
     const sortieDemands = Array.isArray(store.sortieDemands)
       ? store.sortieDemands
       : storageService.getItem(STORAGE_KEYS.SORTIE_DEMANDS) || [];
+    const replenishmentOrders = Array.isArray(store.replenishmentOrders)
+      ? store.replenishmentOrders
+      : storageService.getItem(STORAGE_KEYS.REPLENISHMENT_ORDERS) || [];
+    const meterReadings = Array.isArray(store.meterReadings)
+      ? store.meterReadings
+      : storageService.getItem(STORAGE_KEYS.METER_READINGS) || [];
 
     const pendingDeletedIds =
       customState?.deletedIdsByEntity && typeof customState.deletedIdsByEntity === 'object'
@@ -357,11 +363,13 @@ export const serverSyncService = {
       machineElementsLedger,
       mouvements,
       sortieDemands,
+      replenishmentOrders,
       preventiveTasks,
       preventiveActions,
       preventiveGuides,
       preventivePlans,
       preventiveExecutions,
+      meterReadings,
       correctiveInterventions,
       correctiveActionsByPanne,
       correctivePanneCategories,

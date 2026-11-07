@@ -14,7 +14,12 @@
 
 export const ADMIN_ONLY_ENTITIES = new Set<string>(['users', 'technicians', 'operations', 'zones']);
 
-export const STOCK_LEDGER_ENTITIES = new Set<string>(['rawStock', 'stock', 'mouvements']);
+export const STOCK_LEDGER_ENTITIES = new Set<string>([
+  'rawStock',
+  'stock',
+  'mouvements',
+  'replenishmentOrders',
+]);
 
 export const CATALOG_PROTECTED_ENTITIES = new Set<string>([
   'warehouseItems',
@@ -36,6 +41,7 @@ export const FIELD_WRITABLE_ENTITIES = new Set<string>([
   'correctiveInterventions',
   'preventiveTasks',
   'preventiveExecutions',
+  'meterReadings',
   'sortieDemands',
   'machines',
   'machineElementsLedger',
@@ -46,6 +52,7 @@ export const MAGASIN_WRITABLE_ENTITIES = new Set<string>([
   'stock',
   'mouvements',
   'sortieDemands',
+  'replenishmentOrders',
   'warehouseItems',
   'entrepotComponents',
   'sortiesExterne',

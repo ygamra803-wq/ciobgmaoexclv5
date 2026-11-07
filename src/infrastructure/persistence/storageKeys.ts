@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   DESIGNATIONS: 'gmao_designations_v3',
   MOUVEMENTS: 'gmao_mouvements_v2',
   SORTIE_DEMANDS: 'gmao_sortie_demands_v1',
+  REPLENISHMENT_ORDERS: 'gmao_replenishment_orders_v1',
 
   // 3. Preventive Maintenance
   PREVENTIVE_TASKS: 'gmao_preventive_tasks_v9',
