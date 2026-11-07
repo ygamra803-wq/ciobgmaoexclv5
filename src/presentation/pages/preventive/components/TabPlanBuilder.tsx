@@ -223,8 +223,12 @@ export default function TabPlanBuilder({
 
     const mach = machines.find((m) => m.id_machine_registered === selectedMachineId || m.code_machine === selectedMachineId || m.id === selectedMachineId);
     
-    // 1. Auto-discover Zone from machine or active zones table
-    const autoZone = mach?.id_zone || mach?.zone || (activeZones[0]?.id_zone || activeZones[0]?.nom || 'AFM');
+    // 1. Auto-discover Zone from machine (canonical id_zone_default first) or active zones table
+    const autoZone =
+      mach?.id_zone_default ||
+      mach?.id_zone ||
+      mach?.zone ||
+      (activeZones[0]?.id_zone || activeZones[0]?.code_zone || activeZones[0]?.nom || 'AFM');
     setTargetZone(autoZone);
 
     // 2. Auto-discover Technician assigned to this machine or active technicians table (SSOT Utilisateurs)
@@ -235,11 +239,26 @@ export default function TabPlanBuilder({
       (activeTechnicians[0]?.nom || activeTechnicians[0]?.name || 'Technicien');
     setTargetTechnician(autoTech);
 
+    // 2b. Sync machine current horomètre and default meter unit for COMPTEUR / HYBRIDE plans
+    const currentMachineCounter = Number(
+      mach?.compteur_heures ?? mach?.dernier_releve_compteur ?? 0
+    );
+    setCompteurIndexActuel(Number.isFinite(currentMachineCounter) ? currentMachineCounter : 0);
+    if (mach?.compteur_unite_defaut) {
+      setCompteurUnite(mach.compteur_unite_defaut);
+    }
+
     // 3. Auto-generate Reference with current year
     const currentYear = new Date().getFullYear();
-    const cleanId = (mach?.code_machine || selectedMachineId).replace(/[^a-zA-Z0-9]/g, '');
+    const cleanId = (
+      mach?.id_machine_registered ||
+      mach?.code_machine ||
+      selectedMachineId
+    ).replace(/[^a-zA-Z0-9]/g, '');
     setPlanReference(`Plan-${currentYear}-${autoZone}-${cleanId}-${startWeek}`);
-    setPlanDescription(`Plan de maintenance préventive structuré pour ${mach?.nom || selectedMachineId}`);
+    setPlanDescription(
+      `Plan de maintenance préventive structuré pour ${mach?.designation || mach?.nom || selectedMachineId}`
+    );
 
     // 4. Initial default task suggestions strictly from registered machine components (SSOT)
     const initialTasks = [];
@@ -375,9 +394,14 @@ export default function TabPlanBuilder({
       return false;
     }
 
-    const machObj = machines.find((m) => m.id_machine_registered === selectedMachineId || m.code_machine === selectedMachineId || m.id === selectedMachineId);
-    const machCode = machObj?.code_machine || selectedMachineId;
-    const machName = machObj?.nom || `Machine ${machCode}`;
+    const machObj = machines.find(
+      (m) =>
+        m.id_machine_registered === selectedMachineId ||
+        m.code_machine === selectedMachineId ||
+        m.id === selectedMachineId
+    );
+    const machCode = machObj?.id_machine_registered || machObj?.code_machine || selectedMachineId;
+    const machName = machObj?.designation || machObj?.nom || `Machine ${machCode}`;
 
     const finalTasks = taskList.map((t) => ({
       ...t,

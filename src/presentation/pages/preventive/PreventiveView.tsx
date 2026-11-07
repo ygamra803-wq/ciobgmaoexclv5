@@ -101,8 +101,21 @@ export default function PreventiveView({
       t.type_declencheur === 'HYBRIDE' ||
       Number(t.compteur_seuil_intervalle) > 0;
     if (!isCounter || t.etat === 'Fait' || t.etat === 'En attente validation') return false;
-    const target = Number(t.compteur_prochain_declenchement || 0);
-    const curr = Number(t.compteur_actuel || t.dernier_releve || 0);
+    const tMach = String(t.id_machine || '').trim().toUpperCase();
+    const machObj = (machines || []).find(
+      (m) => String(m?.id_machine_registered || m?.id || m?.code || '').trim().toUpperCase() === tMach
+    );
+    const curr = Number(
+      machObj?.compteur_heures ??
+        machObj?.dernier_releve_compteur ??
+        t.compteur_actuel ??
+        t.dernier_releve ??
+        0
+    );
+    const target = Number(
+      t.compteur_prochain_declenchement ||
+        Number(t.compteur_dernier_declenchement || 0) + Number(t.compteur_seuil_intervalle || 0)
+    );
     return target > 0 && curr >= target;
   }).length;
 

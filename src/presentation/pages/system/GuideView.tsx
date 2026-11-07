@@ -1,491 +1,1043 @@
-import AnimatedPage from '../../components/common/AnimatedPage';
+import React, { useMemo, useState } from 'react';
 import {
   BookOpen,
-  Zap,
-  Database,
-  Layers,
-  ShieldCheck,
-  MapPin,
-  Users,
-  Factory,
-  Package,
   Boxes,
-  FileSpreadsheet,
+  Search,
+  ExternalLink,
+  Code2,
+  UserCheck,
+  Layers,
+  ChevronRight,
   CheckCircle2,
+  Clock,
+  FileText,
   Sparkles,
+  ArrowUpRight,
+  Cpu,
   Wrench,
-  KeyRound,
-  Lock,
+  CalendarClock,
+  Factory,
+  BarChart3,
 } from 'lucide-react';
 
-export default function GuideView() {
+interface GuideViewProps {
+  onNavigateToTab?: (tabId: string) => void;
+}
+
+interface ParsedMarkdownDoc {
+  id: string;
+  groupId: string;
+  groupTitle: string;
+  docType: 'architecture' | 'page';
+  audience: 'developer' | 'user';
+  tabId?: string;
+  title: string;
+  subtitle?: string;
+  summary: string;
+  relatedTabs: string[];
+  body: string;
+  filePath: string;
+}
+
+interface RoadmapGroupMeta {
+  groupId: string;
+  number: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tabs: { tabId: string; label: string }[];
+}
+
+const MODULE_ROADMAP: RoadmapGroupMeta[] = [
+  {
+    groupId: '01-stock-pdr',
+    number: '01',
+    title: 'Stock PDR, Mouvements & Commandes (PO)',
+    description:
+      'Catalogue articles PDR, moteur O(1) IncrementalStockIndex, réservations Maker-Checker, 5 flux magasin, demandes terrain et cycle de réapprovisionnement fournisseurs (PO).',
+    icon: Boxes,
+    tabs: [
+      { tabId: 'stock', label: 'Stock Articles & PO' },
+      { tabId: 'sortie', label: 'Sortie & Entrée Rapide' },
+      { tabId: 'types', label: 'Types PDR' },
+      { tabId: 'designations', label: 'Désignations PDR' },
+    ],
+  },
+  {
+    groupId: '02-parc-machines',
+    number: '02',
+    title: 'Parc Machines, Blueprints & Architecture 3-Tiers',
+    description:
+      'Machines enregistrées, hiérarchie opérationnelle (MACHINE / LINE), Familles, Modèles constructeurs, Blueprints cognitifs et Passeport Santé.',
+    icon: Factory,
+    tabs: [
+      { tabId: 'machines', label: 'Machines Enregistrées' },
+      { tabId: 'families', label: 'Familles de Machines' },
+      { tabId: 'templates', label: 'Modèles (Templates)' },
+      { tabId: 'blueprints', label: 'Blueprints Machines' },
+      { tabId: 'nexus', label: 'Arborescence Nexus' },
+    ],
+  },
+  {
+    groupId: '03-preventive-meters',
+    number: '03',
+    title: 'Maintenance Préventive & Compteurs (Meter PM)',
+    description:
+      'Matrice annuelle 12 mois, exécutions horodatées (PreventiveExecution), suivi par compteurs (heures/cycles) et référentiel d’ingénierie préventive.',
+    icon: CalendarClock,
+    tabs: [
+      { tabId: 'preventive', label: 'Planning & Compteurs Préventifs' },
+      { tabId: 'preventive_referentiel', label: 'Ingénierie & Référentiel Préventif' },
+    ],
+  },
+  {
+    groupId: '04-corrective-di-bt',
+    number: '04',
+    title: 'Maintenance Corrective (DI / BT & Clôture)',
+    description:
+      'Cycle complet Demande d’Intervention (DI) ➔ Bon de Travail (BT) ➔ Clôture, machine à états finis, symptômes/causes/remèdes et historique pannes.',
+    icon: Wrench,
+    tabs: [
+      { tabId: 'corrective_di', label: 'Demandes d’Intervention (DI)' },
+      { tabId: 'corrective_bt', label: 'Bons de Travail (BT)' },
+      { tabId: 'corrective_cloture', label: 'Clôture & Retour d’Expérience' },
+      { tabId: 'corrective_referentiel', label: 'Catalogue Symptômes / Causes' },
+    ],
+  },
+  {
+    groupId: '05-entrepot-organes',
+    number: '05',
+    title: 'Entrepôt Organes & Pièces Détachées',
+    description:
+      'Gestion physique et référentielle des organes complets (moteurs, réducteurs, pompes) et pièces détachées montables sur le parc machines.',
+    icon: Cpu,
+    tabs: [
+      { tabId: 'entrepot', label: 'Entrepôt Organes & Pièces' },
+      { tabId: 'comp_groups', label: 'Groupes d’Organes' },
+      { tabId: 'comp_families', label: 'Familles d’Organes' },
+      { tabId: 'comp_templates', label: 'Modèles d’Organes' },
+      { tabId: 'part_types', label: 'Types de Pièces' },
+      { tabId: 'part_designations', label: 'Désignations de Pièces' },
+    ],
+  },
+  {
+    groupId: '06-pilotage-gouvernance',
+    number: '06',
+    title: 'Pilotage, Finance, Validation Maker-Checker & Système',
+    description:
+      'Tableau de bord exécutif, budgets & TCO, centre de validation Maker-Checker, rapports hebdo/mensuels, utilisateurs RBAC, audit immuable et sauvegardes.',
+    icon: BarChart3,
+    tabs: [
+      { tabId: 'dashboard', label: 'Tableau de Bord' },
+      { tabId: 'validation_center', label: 'Centre de Validation' },
+      { tabId: 'finance', label: 'Coûts & Budgets' },
+      { tabId: 'utilisateurs', label: 'Utilisateurs & Rôles' },
+      { tabId: 'zones', label: 'Zones & Ateliers' },
+      { tabId: 'settings', label: 'Paramètres, Audit & Sauvegardes' },
+    ],
+  },
+];
+
+const TAB_LABELS: Record<string, string> = {
+  stock: 'Stock Articles & PO',
+  sortie: 'Sortie & Entrée Rapide',
+  types: 'Types PDR',
+  designations: 'Désignations PDR',
+  machines: 'Machines Enregistrées',
+  families: 'Familles Machines',
+  templates: 'Modèles Machines',
+  blueprints: 'Blueprints Machines',
+  nexus: 'Arborescence Nexus',
+  preventive: 'Planning Préventif',
+  preventive_referentiel: 'Référentiel Préventif',
+  corrective: 'Maintenance Corrective',
+  corrective_di: 'Demandes (DI)',
+  corrective_bt: 'Bons de Travail (BT)',
+  corrective_cloture: 'Clôture BT',
+  corrective_referentiel: 'Catalogue Données Correctives',
+  entrepot: 'Entrepôt Organes & Pièces',
+  validation_center: 'Centre de Validation (Maker-Checker)',
+  finance: 'Coûts & Budgets',
+  dashboard: 'Tableau de Bord',
+  zones: 'Zones & Ateliers',
+  utilisateurs: 'Utilisateurs & Rôles',
+  settings: 'Paramètres & Sauvegardes',
+};
+
+const rawMarkdownFiles = import.meta.glob('/docs/modules/**/*.md', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+function parseFrontmatter(raw: string, filePath: string): ParsedMarkdownDoc {
+  const normalized = raw.replace(/\r\n/g, '\n');
+  let body = normalized;
+  const meta: Record<string, string | string[]> = {};
+
+  if (normalized.startsWith('---\n')) {
+    const endIdx = normalized.indexOf('\n---\n', 4);
+    if (endIdx !== -1) {
+      const fmBlock = normalized.slice(4, endIdx);
+      body = normalized.slice(endIdx + 5).trim();
+      let currentArrayKey: string | null = null;
+
+      for (const line of fmBlock.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith('- ') && currentArrayKey) {
+          const arr = (meta[currentArrayKey] as string[]) || [];
+          arr.push(trimmed.slice(2).trim());
+          meta[currentArrayKey] = arr;
+          continue;
+        }
+        const colonIdx = line.indexOf(':');
+        if (colonIdx !== -1) {
+          const key = line.slice(0, colonIdx).trim();
+          const val = line.slice(colonIdx + 1).trim();
+          if (!val) {
+            currentArrayKey = key;
+            meta[key] = [];
+          } else {
+            currentArrayKey = null;
+            meta[key] = val;
+          }
+        }
+      }
+    }
+  }
+
+  // Strip top H1 from body if it duplicates title
+  const bodyWithoutDuplicateH1 = body.replace(/^#\s+[^\n]+\n+/, '');
+
+  return {
+    id: (meta.id as string) || filePath,
+    groupId: (meta.groupId as string) || '01-stock-pdr',
+    groupTitle: (meta.groupTitle as string) || 'Documentation GMAO',
+    docType: ((meta.docType as string) === 'architecture' ? 'architecture' : 'page'),
+    audience: ((meta.audience as string) === 'developer' ? 'developer' : 'user'),
+    tabId: meta.tabId as string | undefined,
+    title: (meta.title as string) || filePath,
+    subtitle: meta.subtitle as string | undefined,
+    summary: (meta.summary as string) || '',
+    relatedTabs: Array.isArray(meta.relatedTabs) ? meta.relatedTabs : [],
+    body: bodyWithoutDuplicateH1,
+    filePath,
+  };
+}
+
+function renderInlineFormatting(text: string): React.ReactNode[] {
+  // Handle inline math $\text{...}$, bold **...**, inline code `...`, and italics *...*
+  const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\$[^$]+\$)/g);
+  return tokens.map((tok, idx) => {
+    if (tok.startsWith('**') && tok.endsWith('**')) {
+      return (
+        <strong key={idx} className="font-bold text-slate-900">
+          {tok.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (tok.startsWith('`') && tok.endsWith('`')) {
+      return (
+        <code
+          key={idx}
+          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-[11.5px] text-emerald-800 font-semibold"
+        >
+          {tok.slice(1, -1)}
+        </code>
+      );
+    }
+    if (tok.startsWith('$') && tok.endsWith('$')) {
+      const cleanFormula = tok
+        .slice(1, -1)
+        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\times/g, '×')
+        .replace(/\\le/g, '≤')
+        .replace(/\\ge/g, '≥')
+        .replace(/\\rightarrow/g, '➔')
+        .replace(/\\sum/g, '∑')
+        .replace(/\\max/g, 'max')
+        .replace(/\\min/g, 'min')
+        .replace(/\\left\(/g, '(')
+        .replace(/\\right\)/g, ')')
+        .replace(/\\_/g, '_')
+        .replace(/\\/g, ' ');
+      return (
+        <span
+          key={idx}
+          className="px-2 py-0.5 mx-0.5 rounded bg-amber-50 border border-amber-200 font-mono text-xs font-bold text-amber-900"
+        >
+          {cleanFormula}
+        </span>
+      );
+    }
+    return <React.Fragment key={idx}>{tok}</React.Fragment>;
+  });
+}
+
+function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
+  const blocks = useMemo(() => {
+    const lines = markdown.split('\n');
+    const result: Array<
+      | { type: 'h2'; text: string }
+      | { type: 'h3'; text: string }
+      | { type: 'hr' }
+      | { type: 'code'; code: string }
+      | { type: 'formula'; formula: string }
+      | { type: 'table'; headers: string[]; rows: string[][] }
+      | { type: 'ul'; items: string[] }
+      | { type: 'ol'; items: string[] }
+      | { type: 'p'; text: string }
+    > = [];
+
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      if (!trimmed) {
+        i++;
+        continue;
+      }
+
+      if (trimmed === '---') {
+        result.push({ type: 'hr' });
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('## ')) {
+        result.push({ type: 'h2', text: trimmed.slice(3).trim() });
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('### ')) {
+        result.push({ type: 'h3', text: trimmed.slice(4).trim() });
+        i++;
+        continue;
+      }
+
+      // Block math $$...$$
+      if (trimmed.startsWith('$$')) {
+        const formulaLines: string[] = [];
+        if (trimmed.endsWith('$$') && trimmed.length > 4) {
+          formulaLines.push(trimmed.slice(2, -2));
+          i++;
+        } else {
+          i++;
+          while (i < lines.length && !lines[i].trim().endsWith('$$')) {
+            formulaLines.push(lines[i]);
+            i++;
+          }
+          if (i < lines.length) i++;
+        }
+        const cleanFormula = formulaLines
+          .join(' ')
+          .replace(/\\text\{([^}]+)\}/g, '$1')
+          .replace(/\\times/g, '×')
+          .replace(/\\le/g, '≤')
+          .replace(/\\ge/g, '≥')
+          .replace(/\\sum/g, '∑')
+          .replace(/\\max/g, 'max')
+          .replace(/\\min/g, 'min')
+          .replace(/\\left\(/g, '(')
+          .replace(/\\right\)/g, ')')
+          .replace(/\\_/g, '_')
+          .replace(/\\/g, ' ');
+        result.push({ type: 'formula', formula: cleanFormula.trim() });
+        continue;
+      }
+
+      // Code block ```
+      if (trimmed.startsWith('```')) {
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        result.push({ type: 'code', code: codeLines.join('\n') });
+        continue;
+      }
+
+      // Table | ... |
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        const tableLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('|')) {
+          tableLines.push(lines[i].trim());
+          i++;
+        }
+        if (tableLines.length >= 2) {
+          const parseRow = (r: string) =>
+            r
+              .slice(1, -1)
+              .split('|')
+              .map((c) => c.trim());
+          const headers = parseRow(tableLines[0]);
+          const rows = tableLines
+            .slice(2)
+            .filter((r) => !/^\|[\s:-]+\|$/.test(r))
+            .map(parseRow);
+          result.push({ type: 'table', headers, rows });
+        }
+        continue;
+      }
+
+      // Unordered list
+      if (trimmed.startsWith('- ')) {
+        const items: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('- ')) {
+          items.push(lines[i].trim().slice(2).trim());
+          i++;
+        }
+        result.push({ type: 'ul', items });
+        continue;
+      }
+
+      // Ordered list
+      if (/^\d+\.\s+/.test(trimmed)) {
+        const items: string[] = [];
+        while (i < lines.length && (/^\d+\.\s+/.test(lines[i].trim()) || lines[i].startsWith('   - '))) {
+          const currentTrimmed = lines[i].trim();
+          if (/^\d+\.\s+/.test(currentTrimmed)) {
+            items.push(currentTrimmed.replace(/^\d+\.\s+/, ''));
+          } else if (items.length > 0) {
+            items[items.length - 1] += ` — ${currentTrimmed.replace(/^-\s+/, '')}`;
+          }
+          i++;
+        }
+        result.push({ type: 'ol', items });
+        continue;
+      }
+
+      // Paragraph
+      const pLines: string[] = [];
+      while (
+        i < lines.length &&
+        lines[i].trim() !== '' &&
+        !lines[i].trim().startsWith('#') &&
+        !lines[i].trim().startsWith('- ') &&
+        !/^\d+\.\s+/.test(lines[i].trim()) &&
+        !lines[i].trim().startsWith('|') &&
+        !lines[i].trim().startsWith('```') &&
+        !lines[i].trim().startsWith('$$') &&
+        lines[i].trim() !== '---'
+      ) {
+        pLines.push(lines[i].trim());
+        i++;
+      }
+      result.push({ type: 'p', text: pLines.join(' ') });
+    }
+
+    return result;
+  }, [markdown]);
+
   return (
-    <AnimatedPage className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out">
-        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
-          <BookOpen className="w-5 h-5 text-amber-600 shrink-0" />
-          <span>Manuel d'Utilisation, Règles d'Intégrité & Formules Excel</span>
-        </h2>
-        <p className="text-xs text-slate-500 mt-1 max-w-3xl">
-          Retrouvez la méthodologie industrielle de remplissage des données GMAO PDR, les principes des
-          tables miroirs (Excel Twins), la gouvernance des liens intelligents et la syntaxe exacte des formules.
-        </p>
-      </div>
-
-      {/* Industrial Deployment Sequence / Roadmap (Workflow PDR Réel) */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-              <Sparkles className="w-4 h-4" />
+    <div className="space-y-4">
+      {blocks.map((block, index) => {
+        if (block.type === 'hr') {
+          return <hr key={index} className="border-slate-200 my-5" />;
+        }
+        if (block.type === 'h2') {
+          return (
+            <div key={index} className="pt-3 pb-1 border-b border-slate-200/80 flex items-center gap-2.5">
+              <span className="w-2 h-5 rounded-full bg-emerald-600 shrink-0" />
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                {block.text}
+              </h2>
             </div>
-            <div>
-              <h3 className="font-bold text-sm text-slate-900">
-                Méthodologie Industrielle : L'Ordre Chronologique de Saisie (Workflow PDR)
-              </h3>
-              <p className="text-[11px] text-slate-500">
-                Comment configurer une usine de A à Z sans conflits de clés et avec intégrité relationnelle totale.
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 self-start sm:self-auto">
-            <CheckCircle2 className="w-3.5 h-3.5" /> 6 Étapes Standards
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Step 1: Zones */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-cyan-100 text-cyan-800">
-                Étape 1 • Socle Spatial
-              </span>
-              <MapPin className="w-4 h-4 text-cyan-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Les Zones Industrielles (`Zones`)</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Dans le monde réel, vous délimitez d'abord le bâtiment et les ateliers physiques (ex:{' '}
-              <span className="font-mono font-medium text-slate-800">Tissage</span>,{' '}
-              <span className="font-mono font-medium text-slate-800">Teinture</span>,{' '}
-              <span className="font-mono font-medium text-slate-800">Magasin PDR</span>,{' '}
-              <span className="font-mono font-medium text-slate-800">Chaudière</span>).
-              Sans Zone, aucun équipement ni collaborateur ne peut être géographiquement rattaché.
-            </p>
-            <div className="text-[10px] font-mono text-cyan-700 bg-cyan-50/80 p-1.5 rounded-lg border border-cyan-100">
-              Format type : ZONE-01, ZONE-TIS, ZONE-MAG
-            </div>
-          </div>
-
-          {/* Step 2: Users */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
-                Étape 2 • Équipe & Rôles
-              </span>
-              <Users className="w-4 h-4 text-indigo-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Utilisateurs & Intervenants</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              L'encadrement et la main-d'œuvre qui animent les zones. Saisis dans l'ordre hiérarchique :
-              <br />
-              1. <b>Responsables</b> (<span className="font-mono text-[10px]">RESP-PDR</span> Magasinier, <span className="font-mono text-[10px]">RESP-MT</span> Maintenance).
-              <br />
-              2. <b>Techniciens</b> (<span className="font-mono text-[10px]">TECH-01...</span>) assignés à leurs zones.
-              <br />
-              3. <b>Opérateurs</b> (<span className="font-mono text-[10px]">OP-01...</span>) demandeurs des consommables.
-            </p>
-            <div className="text-[10px] font-mono text-indigo-700 bg-indigo-50/80 p-1.5 rounded-lg border border-indigo-100">
-              Auto-ID : TECH-01, OP-01, CHEF-01
-            </div>
-          </div>
-
-          {/* Step 3: Machines */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
-                Étape 3 • Parc Machines
-              </span>
-              <Factory className="w-4 h-4 text-blue-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Arborescence des Machines</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Installation des équipements de production en cascade à 3 niveaux :
-              <br />
-              • <b>Familles</b> : Familles technologiques (Tissage, Finition...).
-              <br />
-              • <b>Templates</b> : Modèles standards réutilisables.
-              <br />
-              • <b>Machines Enregistrées</b> : Les unités physiques en service, rattachées directement à leur{' '}
-              <b>Zone</b> et <b>Technicien référent</b>.
-            </p>
-            <div className="text-[10px] font-mono text-blue-700 bg-blue-50/80 p-1.5 rounded-lg border border-blue-100">
-              Code machine : MCH-001, CNC-01, DTA-08
-            </div>
-          </div>
-
-          {/* Step 4: Stock PDR */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
-                Étape 4 • Cœur du Réacteur
-              </span>
-              <Package className="w-4 h-4 text-amber-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Catalogue & Stock Actuel PDR</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Pour maintenir les machines en rotation continue, le magasin PDR référence les organes d'usure :
-              <br />
-              • <b>Types</b> : Roulements, Visserie, Courroies, Pneumatique...
-              <br />
-              • <b>Désignations & Diagnostics</b> associés.
-              <br />
-              • <b>Articles de Stock</b> : Réf unique, Emplacement physique (ex: Rayon B-04), Stock Initial et Seuil d'Alerte.
-            </p>
-            <div className="text-[10px] font-mono text-amber-700 bg-amber-50/80 p-1.5 rounded-lg border border-amber-100">
-              Formule : Actuel = Initial + Entrées - Sorties
-            </div>
-          </div>
-
-          {/* Step 5: Warehouse Components & Parts */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">
-                Étape 5 • Nomenclatures
-              </span>
-              <Boxes className="w-4 h-4 text-purple-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Entrepôt (Composants & Parts)</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              Au fur et à mesure de l'exploitation, l'entrepôt s'étoffe en arborescence fine :
-              <br />
-              • <b>COMPONENTS</b> : Ensembles et sous-systèmes lourds (Moteurs électriques, Pompes hydrauliques, Réducteurs avec code suivi).
-              <br />
-              • <b>PARTS</b> : Pièces spécifiques rattachées à une machine, une zone ou conservées en magasin général.
-            </p>
-            <div className="text-[10px] font-mono text-purple-700 bg-purple-50/80 p-1.5 rounded-lg border border-purple-100">
-              Codes : MOT-01-01, CYL-02, FIX-01
-            </div>
-          </div>
-
-          {/* Step 6: Mouvements & Bons */}
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition-all space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
-                Étape 6 • Flux Quotidiens
-              </span>
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            </div>
-            <h4 className="font-bold text-xs text-slate-900 flex items-center gap-1.5">
-              <span>Mouvements & Bons de Sortie</span>
-            </h4>
-            <p className="text-[11px] text-slate-600 leading-relaxed">
-              La vie quotidienne du magasin PDR :
-              <br />
-              • <b>Sortie</b> : Enregistrement avec N° de Bon (ex: Bon-012), Réf article, Quantité, Demandeur (Technicien ou Opérateur) et Machine réceptrice.
-              <br />
-              • <b>Entrée</b> : Réapprovisionnements fournisseurs avec mise à jour immédiate des niveaux et recalcul du statut (OK, ALERTE, RUPTURE).
-            </p>
-            <div className="text-[10px] font-mono text-emerald-700 bg-emerald-50/80 p-1.5 rounded-lg border border-emerald-100">
-              Traçabilité 100% Hors-ligne & Export Excel
-            </div>
-          </div>
-        </div>
-
-        {/* Industrial Focus Notice */}
-        <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
-          <Wrench className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <b className="font-semibold">Règle d'or du système GMAO Light PDR :</b> Nous focalisons 100% de l'application sur la{' '}
-            <span className="font-semibold underline">Gestion Rigoureuse des Pièces de Rechange (PDR)</span> et la cohérence des stocks jumeaux (Excel Twin). 
-            Les lourds workflows de billetterie ou de préventif complexe sont volontairement exclus pour garantir une rapidité d'exécution, une clarté totale pour le magasinier et une synchronisation parfaite avec les fichiers Excel d'usine.
-          </div>
-        </div>
-      </div>
-
-      {/* Guide Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {/* Rule 1: Twin Tables */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
-              <Database className="w-4 h-4" />
-            </div>
-            <h3 className="font-bold text-sm text-slate-900">Les Deux Tables Miroirs (Twins)</h3>
-          </div>
-          <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-            <p>
-              • <b className="text-slate-900">Stock (Articles)</b> : Tableau central des pièces de
-              rechange. Colonnes : Ref (B), Désignation (C), Type (D), Initial (E), Entrées (F),
-              Sorties (G), Actuel (H), Seuil (I), Alerte (J), Emplacement (K).
-            </p>
-            <p>
-              • <b className="text-slate-900">Machines Registered</b> : Tableau central des
-              équipements. Colonnes : Code Machine (B), Désignation (C), Family (D), Template (E),
-              Zone (F), Technician (G), Status (H).
-            </p>
-            <p className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-700">
-              Ces deux tables agissent comme les deux hubs de données majeurs du système.
-            </p>
-          </div>
-        </div>
-
-        {/* Rule 2: Smart Links Navigation */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center font-bold text-xs">
-              <Layers className="w-4 h-4" />
-            </div>
-            <h3 className="font-bold text-sm text-slate-900">
-              Navigation par Liens Intelligents (Smart Links)
+          );
+        }
+        if (block.type === 'h3') {
+          return (
+            <h3 key={index} className="text-sm font-extrabold text-emerald-950 pt-2 flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{block.text}</span>
             </h3>
-          </div>
-          <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-            <p>
-              • <b className="text-cyan-700">Family → Templates</b> : Clic sur <i>Nb Templates</i>{' '}
-              ouvre la liste des modèles filtrée sur la famille.
-            </p>
-            <p>
-              • <b className="text-emerald-700">Family → Machines</b> : Clic sur <i>Nb Machines</i>{' '}
-              filtre Machines Registered avec{' '}
-              <span className="font-mono text-[11px] bg-slate-100 px-1 py-0.5 rounded">
-                Family = Sélectionnée, Template = Tous
-              </span>
-              .
-            </p>
-            <p>
-              • <b className="text-amber-700">Template → Machines</b> : Clic sur <i>Nb Machines</i>{' '}
-              applique un filtre ciblé :{' '}
-              <span className="font-mono text-[11px] bg-slate-100 px-1 py-0.5 rounded">
-                Family = Famille parente + Template = Ce modèle
-              </span>
-              .
-            </p>
-          </div>
-        </div>
-
-        {/* Rule 3: Auto-Generated IDs */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-xs">
-              <ShieldCheck className="w-4 h-4" />
+          );
+        }
+        if (block.type === 'formula') {
+          return (
+            <div
+              key={index}
+              className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50/90 to-emerald-50/60 border border-amber-200/80 font-mono text-xs sm:text-sm font-bold text-slate-900 text-center shadow-2xs"
+            >
+              {block.formula}
             </div>
-            <h3 className="font-bold text-sm text-slate-900">
-              Génération Automatique d'Identifiants (Auto-ID)
-            </h3>
-          </div>
-          <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-            <p>
-              • <b className="text-blue-700">Technicians</b> : Auto-généré sous le format{' '}
-              <span className="font-mono font-bold">TECH-01, TECH-02...</span>
-            </p>
-            <p>
-              • <b className="text-indigo-700">Opérateurs</b> : Auto-généré sous le format{' '}
-              <span className="font-mono font-bold">OP-01, OP-02...</span>
-            </p>
-            <p>
-              • <b className="text-amber-700">Chefs d'Équipe</b> : Auto-généré sous le format{' '}
-              <span className="font-mono font-bold">CHEF-01, CHEF-02...</span>
-            </p>
-            <p className="p-2.5 rounded-xl bg-purple-50/60 border border-purple-200 text-purple-900 font-medium">
-              Distinction rigoureuse des rôles pour la gouvernance des sorties et interventions.
-            </p>
-          </div>
-        </div>
-
-        {/* Rule 4: Dropdowns & Quick '+' Creation */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs">
-              <Zap className="w-4 h-4" />
+          );
+        }
+        if (block.type === 'code') {
+          return (
+            <pre
+              key={index}
+              className="p-4 rounded-2xl bg-slate-900 text-emerald-300 font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"
+            >
+              <code>{block.code}</code>
+            </pre>
+          );
+        }
+        if (block.type === 'table') {
+          return (
+            <div key={index} className="overflow-x-auto rounded-2xl border border-slate-200 shadow-2xs">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-slate-100/90 border-b border-slate-200 text-slate-700 font-black uppercase tracking-wider text-[10.5px]">
+                    {block.headers.map((h, hi) => (
+                      <th key={hi} className="py-2.5 px-3.5">
+                        {renderInlineFormatting(h)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200/70 bg-white">
+                  {block.rows.map((row, ri) => (
+                    <tr key={ri} className="hover:bg-emerald-50/30 transition-colors">
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="py-2.5 px-3.5 text-slate-700 leading-relaxed">
+                          {renderInlineFormatting(cell)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <h3 className="font-bold text-sm text-slate-900">
-              Listes Déroulantes & Création Instantanée '+'
-            </h3>
-          </div>
-          <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-            <p>
-              Lors de la création d'un article ou d'une machine, vous pouvez sélectionner une entité
-              existante ou cliquer sur le bouton <b>'+'</b> pour créer la catégorie immédiatement.
-            </p>
-            <p>
-              La nouvelle entité est automatiquement enregistrée et pré-sélectionnée dans le
-              formulaire en cours.
-            </p>
-          </div>
-        </div>
-
-        {/* Rule 5: Zero-Knowledge Vault & 2FA Security */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-3 md:col-span-2">
-          <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                <Lock className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-                  <span>Règle 5 • Architecture Zero-Knowledge & Coffre Chiffré (Vault Sécurisé)</span>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-indigo-100 text-indigo-800 uppercase tracking-wide">
-                    AES-256-GCM + PBKDF2 100k + BCrypt
+          );
+        }
+        if (block.type === 'ul') {
+          return (
+            <ul key={index} className="space-y-2 pl-1">
+              {block.items.map((item, ii) => (
+                <li key={ii} className="flex items-start gap-2.5 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-2 shrink-0" />
+                  <div className="flex-1">{renderInlineFormatting(item)}</div>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        if (block.type === 'ol') {
+          return (
+            <ol key={index} className="space-y-2.5 pl-1">
+              {block.items.map((item, ii) => (
+                <li key={ii} className="flex items-start gap-2.5 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
+                  <span className="w-5 h-5 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-900 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                    {ii + 1}
                   </span>
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Gouvernance de sécurité industrielle : aucun mot de passe ni clé statique n'est codé en dur dans le code source.
-                </p>
-              </div>
+                  <div className="flex-1">{renderInlineFormatting(item)}</div>
+                </li>
+              ))}
+            </ol>
+          );
+        }
+        return (
+          <p key={index} className="text-xs sm:text-[13px] text-slate-700 leading-relaxed">
+            {renderInlineFormatting(block.text)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function GuideView({ onNavigateToTab }: GuideViewProps) {
+  const allDocs = useMemo<ParsedMarkdownDoc[]>(() => {
+    const parsed = Object.entries(rawMarkdownFiles).map(([path, content]) =>
+      parseFrontmatter(content, path)
+    );
+    return parsed.sort((a, b) => {
+      if (a.groupId !== b.groupId) return a.groupId.localeCompare(b.groupId);
+      // Put operational page guides first in user mode, architecture first in dev mode
+      if (a.docType !== b.docType) return a.docType === 'page' ? -1 : 1;
+      return a.filePath.localeCompare(b.filePath);
+    });
+  }, []);
+
+  const [selectedGroupId, setSelectedGroupId] = useState<string>('01-stock-pdr');
+  const [audienceFilter, setAudienceFilter] = useState<'all' | 'user' | 'developer'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedDocId, setSelectedDocId] = useState<string>(() => {
+    const firstPage = allDocs.find((d) => d.docType === 'page');
+    return firstPage?.id || allDocs[0]?.id || '';
+  });
+
+  const filteredDocs = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return allDocs.filter((doc) => {
+      if (selectedGroupId !== 'all' && doc.groupId !== selectedGroupId) return false;
+      if (audienceFilter === 'user' && doc.audience !== 'user') return false;
+      if (audienceFilter === 'developer' && doc.audience !== 'developer') return false;
+      if (!q) return true;
+      return (
+        doc.title.toLowerCase().includes(q) ||
+        doc.summary.toLowerCase().includes(q) ||
+        doc.body.toLowerCase().includes(q) ||
+        (doc.tabId && doc.tabId.toLowerCase().includes(q))
+      );
+    });
+  }, [allDocs, selectedGroupId, audienceFilter, searchQuery]);
+
+  const activeDoc = useMemo(() => {
+    return (
+      filteredDocs.find((d) => d.id === selectedDocId) ||
+      filteredDocs[0] ||
+      allDocs.find((d) => d.id === selectedDocId) ||
+      allDocs[0]
+    );
+  }, [filteredDocs, allDocs, selectedDocId]);
+
+  const docsCountByGroup = useMemo(() => {
+    const counts: Record<string, { total: number; pages: number; arch: number }> = {};
+    for (const d of allDocs) {
+      if (!counts[d.groupId]) counts[d.groupId] = { total: 0, pages: 0, arch: 0 };
+      counts[d.groupId].total += 1;
+      if (d.docType === 'page') counts[d.groupId].pages += 1;
+      else counts[d.groupId].arch += 1;
+    }
+    return counts;
+  }, [allDocs]);
+
+  const handleSelectDocByTab = (tabId: string) => {
+    const targetDoc = allDocs.find((d) => d.tabId === tabId);
+    if (targetDoc) {
+      setSelectedGroupId(targetDoc.groupId);
+      setAudienceFilter('all');
+      setSelectedDocId(targetDoc.id);
+    } else if (onNavigateToTab) {
+      onNavigateToTab(tabId);
+    }
+  };
+
+  return (
+    <div className="space-y-5 pb-10">
+      {/* En-tête Exécutif du Centre de Documentation Vivant */}
+      <div className="rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white p-5 sm:p-7 shadow-lg border border-emerald-800/60 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+          <div className="space-y-2 max-w-3xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/70 border border-emerald-600/40 text-emerald-200 text-[11px] font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Centre de Connaissances Vivant — Double Couche (Opérateur & Architecte)</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-              <KeyRound className="w-3.5 h-3.5" />
-              <span>Master PIN = Clé Cryptographique Unique</span>
-            </div>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-3">
+              <BookOpen className="w-7 h-7 text-amber-300 shrink-0" />
+              <span>Guide d’Utilisation & Architecture Métier CIOB GMAO v4</span>
+            </h1>
+            <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
+              Documentation officielle synchronisée avec le code source (`docs/modules/*`). Chaque groupe combine un{' '}
+              <strong className="text-white">Guide Opérationnel par Écran</strong> (destiné aux magasiniers, techniciens et responsables) et une{' '}
+              <strong className="text-amber-300">Spécification d’Architecture & Invariants</strong> (destinée aux développeurs, auditeurs et agents d’ingénierie).
+            </p>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-600">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-              <div className="text-[10px] font-bold uppercase text-indigo-700 flex items-center gap-1">
-                <span>1. Chiffrement AES-256-GCM</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-600">
-                L'ensemble des comptes, rôles et identifiants sensibles est encapsulé dans un coffre chiffré au repos. Sans le Master PIN, les données stockées ne sont qu'un bloc de bruit aléatoire impossible à déchiffrer.
-              </p>
-            </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-              <div className="text-[10px] font-bold uppercase text-indigo-700 flex items-center gap-1">
-                <span>2. Dérivation de Clé PBKDF2</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-600">
-                La clé de déchiffrement n'est jamais stockée. Elle est dérivée dynamiquement en mémoire vive à partir du Master PIN et d'un sel aléatoire de 16 octets via 100 000 itérations SHA-256.
-              </p>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
-              <div className="text-[10px] font-bold uppercase text-indigo-700 flex items-center gap-1">
-                <span>3. Authentification 2FA Forte</span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-slate-600">
-                La connexion exige la triple validation : Code Utilisateur + Mot de passe (haché individuellement avec BCrypt) + Master PIN pour déverrouiller la partition du coffre-fort.
-              </p>
+          {/* Sélecteur de profil de lecture */}
+          <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 bg-emerald-950/60 p-2.5 rounded-2xl border border-emerald-800/80">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 px-1">
+              Mode de Lecture :
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setAudienceFilter('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  audienceFilter === 'all'
+                    ? 'bg-amber-400 text-slate-950 shadow-xs'
+                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Tout ({allDocs.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAudienceFilter('user');
+                  const firstUserDoc = allDocs.find(
+                    (d) => (selectedGroupId === 'all' || d.groupId === selectedGroupId) && d.audience === 'user'
+                  );
+                  if (firstUserDoc) setSelectedDocId(firstUserDoc.id);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  audienceFilter === 'user'
+                    ? 'bg-emerald-400 text-slate-950 shadow-xs'
+                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Guides Utilisateur</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAudienceFilter('developer');
+                  const firstDevDoc = allDocs.find(
+                    (d) => (selectedGroupId === 'all' || d.groupId === selectedGroupId) && d.audience === 'developer'
+                  );
+                  if (firstDevDoc) setSelectedDocId(firstDevDoc.id);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  audienceFilter === 'developer'
+                    ? 'bg-cyan-400 text-slate-950 shadow-xs'
+                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Architecture & Dev</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Excel Formulas Reference */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
-          <Database className="w-4 h-4 text-emerald-600" />
-          <span>Formules Excel Standardisées (Calculs Stock & Relations)</span>
-        </h3>
+      {/* Cartes des 6 Groupes Fonctionnels de l'Application */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+        {MODULE_ROADMAP.map((group) => {
+          const stats = docsCountByGroup[group.groupId] || { total: 0, pages: 0, arch: 0 };
+          const isDocumented = stats.total > 0;
+          const isSelected = selectedGroupId === group.groupId;
+          const IconComponent = group.icon;
 
-        {/* Stock Formulas */}
-        <div>
-          <div className="text-xs font-semibold text-slate-700 mb-2">
-            1. Formules du Stock Actuel (Feuille Stock_Actuel)
+          return (
+            <div
+              key={group.groupId}
+              onClick={() => {
+                if (isDocumented) {
+                  setSelectedGroupId(group.groupId);
+                  const firstGroupDoc = allDocs.find((d) => d.groupId === group.groupId);
+                  if (firstGroupDoc) setSelectedDocId(firstGroupDoc.id);
+                }
+              }}
+              className={`rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 ${
+                isDocumented ? 'cursor-pointer' : 'opacity-80'
+              } ${
+                isSelected
+                  ? 'bg-emerald-50/90 border-emerald-600 ring-2 ring-emerald-500/20 shadow-sm'
+                  : isDocumented
+                  ? 'bg-white border-slate-200 hover:border-emerald-400 shadow-2xs'
+                  : 'bg-slate-50/80 border-slate-200/80'
+              }`}
+            >
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
+                        isDocumented
+                          ? 'bg-emerald-700 text-white shadow-2xs'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      <IconComponent className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                        Groupe {group.number}
+                      </span>
+                      <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-snug">
+                        {group.title}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {isDocumented ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-black shrink-0">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                      <span>{stats.total} Docs Vérifiés</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 text-[10px] font-bold shrink-0">
+                      <Clock className="w-3 h-3" />
+                      <span>Prochaine étape</span>
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11.5px] text-slate-600 leading-relaxed">{group.description}</p>
+              </div>
+
+              {/* Liens rapides vers les écrans du groupe */}
+              <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center gap-1.5">
+                {group.tabs.map((t) => {
+                  const hasPageDoc = allDocs.some((d) => d.tabId === t.tabId);
+                  return (
+                    <button
+                      key={t.tabId}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasPageDoc) {
+                          handleSelectDocByTab(t.tabId);
+                        } else if (onNavigateToTab) {
+                          onNavigateToTab(t.tabId);
+                        }
+                      }}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
+                        hasPageDoc
+                          ? 'bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-600 hover:text-white'
+                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900'
+                      }`}
+                      title={
+                        hasPageDoc
+                          ? `Lire le guide de l'écran ${t.label}`
+                          : `Ouvrir directement l'écran ${t.label}`
+                      }
+                    >
+                      <span>{t.label}</span>
+                      <ArrowUpRight className="w-3 h-3 opacity-70" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Corps Principal : Sommaire Latéral + Lecteur de Document */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Colonne Gauche : Recherche & Arborescence des Fichiers du Groupe */}
+        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-xs p-4 space-y-4 lg:sticky lg:top-4">
+          {/* Barre de recherche */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher (PO, stock, retour, TYP...)"
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+            />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Formule F (Entrées)
-              </div>
-              <div className="font-mono font-semibold text-blue-700 mt-1 text-[11px] break-all">
-                =SUMIFS(Mouvement[Quantite], Mouvement[Ref], [@Ref], Mouvement[Type], "Entrée")
-              </div>
+
+          {/* Liste structurée des documents */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-500">
+                Sommaire du Groupe Actif ({filteredDocs.length})
+              </span>
+              {selectedGroupId !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedGroupId('all')}
+                  className="text-[10.5px] font-bold text-emerald-700 hover:underline cursor-pointer"
+                >
+                  Voir tout
+                </button>
+              )}
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Formule G (Sorties)
-              </div>
-              <div className="font-mono font-semibold text-rose-700 mt-1 text-[11px] break-all">
-                =SUMIFS(Mouvement[Quantite], Mouvement[Ref], [@Ref], Mouvement[Type], "Sortie")
-              </div>
-            </div>
+            <div className="space-y-1.5">
+              {filteredDocs.map((doc) => {
+                const isSelected = activeDoc?.id === doc.id;
+                const isArch = doc.docType === 'architecture';
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Formule H (Stock Actuel)
-              </div>
-              <div className="font-mono font-bold text-emerald-700 mt-1 text-[11px]">
-                =[@[Stock Initial]] + [@Entrees] - [@Sorties]
-              </div>
-            </div>
+                return (
+                  <button
+                    key={doc.id}
+                    type="button"
+                    onClick={() => setSelectedDocId(doc.id)}
+                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-2.5 cursor-pointer ${
+                      isSelected
+                        ? isArch
+                          ? 'bg-slate-900 border-slate-800 text-white shadow-sm'
+                          : 'bg-emerald-700 border-emerald-700 text-white shadow-sm'
+                        : 'bg-slate-50/70 border-slate-200/80 hover:bg-white hover:border-emerald-300 text-slate-800'
+                    }`}
+                  >
+                    <div
+                      className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                        isSelected
+                          ? 'bg-white/15 text-white'
+                          : isArch
+                          ? 'bg-cyan-100 text-cyan-900'
+                          : 'bg-emerald-100 text-emerald-900'
+                      }`}
+                    >
+                      {isArch ? <Code2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded ${
+                            isSelected
+                              ? 'bg-white/20 text-white'
+                              : isArch
+                              ? 'bg-cyan-100 text-cyan-900'
+                              : 'bg-emerald-100 text-emerald-900'
+                          }`}
+                        >
+                          {isArch ? 'Architecture & Dev' : 'Guide Écran'}
+                        </span>
+                        {doc.tabId && (
+                          <span
+                            className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded ${
+                              isSelected ? 'bg-black/25 text-emerald-200' : 'bg-slate-200 text-slate-700'
+                            }`}
+                          >
+                            #{doc.tabId}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-extrabold mt-1 leading-snug truncate">{doc.title}</p>
+                      {doc.subtitle && (
+                        <p
+                          className={`text-[10.5px] mt-0.5 line-clamp-1 ${
+                            isSelected ? 'text-emerald-100' : 'text-slate-500'
+                          }`}
+                        >
+                          {doc.subtitle}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Formule J (Alerte / Rupture)
-              </div>
-              <div className="font-mono font-semibold text-amber-700 mt-1 text-[11px] break-all">
-                =IF([@[Stock Actuel]]&lt;=0, "RUPTURE", IF([@[Stock Actuel]]&lt;=[@Seuil], "ALERTE",
-                "OK"))
-              </div>
+              {filteredDocs.length === 0 && (
+                <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                  Aucun document ne correspond à votre filtre « {searchQuery} ».
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Cross-Sheet Aggregations */}
-        <div className="pt-3 border-t border-slate-100">
-          <div className="text-xs font-semibold text-slate-700 mb-2">
-            2. Formules d'Agrégation & Liens Relationnels (COUNTIF / COUNTIFS)
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Templates par Famille
-              </div>
-              <div className="font-mono text-cyan-800 font-semibold mt-1 text-[11px]">
-                =COUNTIF(Templates!C:C, [@id_family])
-              </div>
-            </div>
+        {/* Colonne Droite : Contenu Détaillé du Document Sélectionné */}
+        <div className="lg:col-span-8 xl:col-span-9">
+          {activeDoc ? (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              {/* Bannière du Document */}
+              <div
+                className={`p-5 sm:p-6 border-b ${
+                  activeDoc.docType === 'architecture'
+                    ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white border-slate-800'
+                    : 'bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-white text-slate-900 border-slate-200'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider ${
+                          activeDoc.docType === 'architecture'
+                            ? 'bg-cyan-400 text-slate-950'
+                            : 'bg-emerald-700 text-white'
+                        }`}
+                      >
+                        {activeDoc.docType === 'architecture'
+                          ? 'Spécification Architecture & Logique Métier'
+                          : 'Guide Opérationnel Utilisateur'}
+                      </span>
+                      <span
+                        className={`text-xs font-bold ${
+                          activeDoc.docType === 'architecture' ? 'text-emerald-300' : 'text-emerald-800'
+                        }`}
+                      >
+                        • {activeDoc.groupTitle}
+                      </span>
+                      <span
+                        className={`text-[11px] font-mono px-2 py-0.5 rounded ${
+                          activeDoc.docType === 'architecture'
+                            ? 'bg-white/10 text-slate-300'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {activeDoc.filePath}
+                      </span>
+                    </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Machines par Template
-              </div>
-              <div className="font-mono text-amber-800 font-semibold mt-1 text-[11px]">
-                =COUNTIF(Machines!D:D, [@id_templates])
-              </div>
-            </div>
+                    <h2 className="text-lg sm:text-xl font-black tracking-tight">{activeDoc.title}</h2>
+                    {activeDoc.subtitle && (
+                      <p
+                        className={`text-xs sm:text-sm font-medium ${
+                          activeDoc.docType === 'architecture' ? 'text-slate-300' : 'text-slate-600'
+                        }`}
+                      >
+                        {activeDoc.subtitle}
+                      </p>
+                    )}
+                  </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Machines par Zone
-              </div>
-              <div className="font-mono text-purple-800 font-semibold mt-1 text-[11px]">
-                =COUNTIF(Machines!E:E, [@id_zone])
-              </div>
-            </div>
+                  {/* Bouton d'action directe pour ouvrir la page correspondante */}
+                  {activeDoc.tabId && onNavigateToTab && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToTab(activeDoc.tabId!)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black shadow-sm transition shrink-0 cursor-pointer"
+                    >
+                      <span>Ouvrir l’écran dans l’application</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Auto-ID Chef d'Équipe
+                {/* Résumé exécutif */}
+                {activeDoc.summary && (
+                  <div
+                    className={`mt-4 p-3.5 rounded-2xl text-xs leading-relaxed border ${
+                      activeDoc.docType === 'architecture'
+                        ? 'bg-white/5 border-white/10 text-emerald-100'
+                        : 'bg-white border-emerald-200/80 text-slate-700 shadow-2xs'
+                    }`}
+                  >
+                    <strong className="font-black uppercase tracking-wider text-[10.5px] mr-1.5">
+                      Résumé :
+                    </strong>
+                    {activeDoc.summary}
+                  </div>
+                )}
               </div>
-              <div className="font-mono text-amber-800 font-semibold mt-1 text-[11px]">
-                ="CHEF-" & TEXT(COUNTIF(Op[Type],"CHEF")+1, "00")
-              </div>
-            </div>
 
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="text-[10px] font-bold text-slate-500 uppercase">
-                Classification Profil Chef
+              {/* Corps du Document Markdown */}
+              <div className="p-5 sm:p-7">
+                <MarkdownBodyRenderer markdown={activeDoc.body} />
               </div>
-              <div className="font-mono text-indigo-800 font-semibold mt-1 text-[11px]">
-                =IF(ISNUMBER(SEARCH("CHEF",[@id_operation])),"CHEF","OPERATEUR")
-              </div>
+
+              {/* Pied de document : Navigation croisée & raccourcis d'écrans */}
+              {activeDoc.relatedTabs.length > 0 && (
+                <div className="px-5 sm:px-7 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <span className="text-xs font-extrabold text-slate-700">
+                    Écrans & Guides Associés dans ce Groupe :
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {activeDoc.relatedTabs.map((relTab) => {
+                      const linkedDoc = allDocs.find((d) => d.tabId === relTab);
+                      const label = TAB_LABELS[relTab] || relTab;
+                      return (
+                        <div key={relTab} className="inline-flex items-center rounded-xl overflow-hidden border border-slate-300 bg-white shadow-2xs">
+                          {linkedDoc && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDocId(linkedDoc.id)}
+                              className="px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 transition flex items-center gap-1.5 cursor-pointer"
+                              title={`Lire le guide : ${linkedDoc.title}`}
+                            >
+                              <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
+                              <span>{label}</span>
+                            </button>
+                          )}
+                          {onNavigateToTab && (
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToTab(relTab)}
+                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-700 hover:text-white text-slate-700 text-[11px] font-bold border-l border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                              title={`Aller directement à l'écran ${label}`}
+                            >
+                              <span>Ouvrir</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
-    </AnimatedPage>
+    </div>
   );
 }

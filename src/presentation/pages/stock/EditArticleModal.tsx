@@ -15,6 +15,7 @@ export default function EditArticleModal({
     id_type: article?.id_type || types[0]?.id_type || '',
     stockInitial: article?.stockInitial ?? 0,
     seuil: article?.seuil ?? 5,
+    prix_unitaire: article?.prix_unitaire ?? article?.prixUnitaire ?? article?.prix ?? 0,
     emplacement: article?.emplacement || 'R1-B01',
   });
 
@@ -26,6 +27,7 @@ export default function EditArticleModal({
         id_type: article.id_type || types[0]?.id_type || '',
         stockInitial: article.stockInitial ?? 0,
         seuil: article.seuil ?? 5,
+        prix_unitaire: article.prix_unitaire ?? article.prixUnitaire ?? article.prix ?? 0,
         emplacement: article.emplacement || 'R1-B01',
       });
     }
@@ -47,6 +49,7 @@ export default function EditArticleModal({
     if (!form.designation) return;
 
     const targetId = article.id || article.ref;
+    const cleanPrice = Math.max(0, Number(form.prix_unitaire) || 0);
     onUpdateArticle(targetId, {
       ...article,
       id: targetId,
@@ -55,6 +58,8 @@ export default function EditArticleModal({
       type: form.id_type,
       stockInitial: Number(form.stockInitial) || 0,
       seuil: Number(form.seuil) || 0,
+      prix_unitaire: cleanPrice,
+      prixUnitaire: cleanPrice,
       emplacement: form.emplacement.trim() || 'ATELIER',
     });
 
@@ -149,7 +154,7 @@ export default function EditArticleModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-3 gap-3.5">
             <div>
               <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
                 Stock Initial (E)
@@ -175,6 +180,20 @@ export default function EditArticleModal({
                 onChange={(e) => setForm({ ...form, seuil: parseInt(e.target.value, 10) || 0 })}
                 className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+                Prix Unitaire (MAD)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.prix_unitaire}
+                onChange={(e) => setForm({ ...form, prix_unitaire: parseFloat(e.target.value) || 0 })}
+                className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold text-emerald-700 focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
               />
             </div>
           </div>

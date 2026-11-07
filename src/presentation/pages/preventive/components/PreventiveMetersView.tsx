@@ -116,7 +116,12 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
 
       // Get last recorded reading event from ledger
       const lastReadingEvent = meterReadings
-        .filter((r) => String(r.machineId || '').trim().toUpperCase() === mCode)
+        .filter(
+          (r) =>
+            String(r.machineId || (r as any).id_machine || '')
+              .trim()
+              .toUpperCase() === mCode
+        )
         .sort((a, b) => new Date(b.createdAt || b.date_releve).getTime() - new Date(a.createdAt || a.date_releve).getTime())[0];
 
       return {
@@ -833,13 +838,23 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
 
             {/* Readings list */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {meterReadings.filter((r) => String(r.machineId || '').trim().toUpperCase() === historyModalMachine.code).length === 0 ? (
+              {meterReadings.filter(
+                (r) =>
+                  String(r.machineId || (r as any).id_machine || '')
+                    .trim()
+                    .toUpperCase() === historyModalMachine.code
+              ).length === 0 ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   Aucun historique de relevé pour cette machine.
                 </div>
               ) : (
                 meterReadings
-                  .filter((r) => String(r.machineId || '').trim().toUpperCase() === historyModalMachine.code)
+                  .filter(
+                    (r) =>
+                      String(r.machineId || (r as any).id_machine || '')
+                        .trim()
+                        .toUpperCase() === historyModalMachine.code
+                  )
                   .sort((a, b) => new Date(b.createdAt || b.date_releve).getTime() - new Date(a.createdAt || a.date_releve).getTime())
                   .map((r) => (
                     <div

@@ -491,6 +491,8 @@ export default function SortieRapideView({
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
+  const activeMachinesList = useMemo(() => filterActiveMachines(machines), [machines]);
+
   // Form State
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -511,7 +513,7 @@ export default function SortieRapideView({
     usage_type: 'technician',
     demande_mode: 'ACHAT', // 'ACHAT' (Demande d'Achat) | 'SORTIE_EXT' (Demande de Sortie pour réparation)
     id_zone: zones[0]?.id_zone || '',
-    id_machine_registered: machines[0]?.id_machine_registered || '',
+    id_machine_registered: activeMachinesList[0]?.id_machine_registered || '',
     technicien: technicians[0]?.nom || '',
     id_technician: technicians[0]?.id_technician || '',
     operation: '',
@@ -3211,7 +3213,7 @@ export default function SortieRapideView({
                                 const targetZone = allowed.some((z) => z.id_zone === form.id_zone)
                                   ? form.id_zone
                                   : (allowed[0]?.id_zone || '');
-                                const machs = machines.filter((m) => m.id_zone_default === targetZone);
+                                const machs = activeMachinesList.filter((m) => m.id_zone_default === targetZone);
                                 updatedForm.operation = defaultResp ? defaultResp.nom : '';
                                 updatedForm.id_operation = defaultResp ? defaultResp.id_operation : '';
                                 updatedForm.technicien = defaultResp ? defaultResp.nom : '';
@@ -3276,7 +3278,7 @@ export default function SortieRapideView({
                           const nextZone = allowed.some((z) => z.id_zone === form.id_zone)
                             ? form.id_zone
                             : (allowed[0]?.id_zone || '');
-                          const machs = machines.filter((m) => m.id_zone_default === nextZone);
+                          const machs = activeMachinesList.filter((m) => m.id_zone_default === nextZone);
                           setForm((prev) => ({
                             ...prev,
                             usage_type: 'responsable',
@@ -3346,7 +3348,7 @@ export default function SortieRapideView({
                           const opZone = op?.id_zone || zones[0]?.id_zone || '';
                           const respsForZone = getResponsablesForZone(opZone);
                           const bestResp = respsForZone[0] || null;
-                          const machs = machines.filter((m) => m.id_zone_default === opZone);
+                          const machs = activeMachinesList.filter((m) => m.id_zone_default === opZone);
                           setForm((prev) => ({
                             ...prev,
                             usage_type: 'operation',
@@ -3398,7 +3400,7 @@ export default function SortieRapideView({
                                 const allowed = getResponsableAllowedZones(resp);
                                 const isZoneValid = allowed.some((z) => z.id_zone === form.id_zone);
                                 const nextZone = isZoneValid ? form.id_zone : (allowed[0]?.id_zone || '');
-                                const machs = machines.filter((m) => m.id_zone_default === nextZone);
+                                const machs = activeMachinesList.filter((m) => m.id_zone_default === nextZone);
                                 setForm((prev) => ({
                                   ...prev,
                                   operation: val,
@@ -3432,7 +3434,7 @@ export default function SortieRapideView({
                             <CustomSelect
                               value={form.id_zone}
                               onChange={(val) => {
-                                const machs = machines.filter((m) => m.id_zone_default === val);
+                                const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                                 setForm((prev) => ({
                                   ...prev,
                                   id_zone: val,
@@ -3555,7 +3557,7 @@ export default function SortieRapideView({
                                 const opZone = op?.id_zone || zones[0]?.id_zone || '';
                                 const respsForZone = getResponsablesForZone(opZone);
                                 const bestResp = respsForZone[0] || null;
-                                const machs = machines.filter((m) => m.id_zone_default === opZone);
+                                const machs = activeMachinesList.filter((m) => m.id_zone_default === opZone);
                                 setForm((prev) => ({
                                   ...prev,
                                   operation: val,
@@ -3687,7 +3689,7 @@ export default function SortieRapideView({
                           <CustomSelect
                             value={form.id_zone}
                             onChange={(val) => {
-                              const machs = machines.filter((m) => m.id_zone_default === val);
+                              const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                               const sup = findSupervisorForZone(val);
                               setForm((prev) => ({
                                 ...prev,
@@ -3833,7 +3835,7 @@ export default function SortieRapideView({
                           <CustomSelect
                             value={form.id_zone}
                             onChange={(val) => {
-                              const machs = machines.filter((m) => m.id_zone_default === val);
+                              const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                               const sup = findSupervisorForZone(val);
                               setForm((prev) => ({
                                 ...prev,
@@ -3977,7 +3979,7 @@ export default function SortieRapideView({
                           <CustomSelect
                             value={form.id_zone}
                             onChange={(val) => {
-                              const machs = machines.filter((m) => m.id_zone_default === val);
+                              const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                               const sup = findSupervisorForZone(val);
                               setForm((prev) => ({
                                 ...prev,
@@ -4314,7 +4316,7 @@ export default function SortieRapideView({
                             }}
                             options={[
                               { value: '', label: '-- Non Spécifiée / Chantier Général --' },
-                              ...machines.map((m) => ({
+                              ...activeMachinesList.map((m) => ({
                                 value: m.id_machine_registered,
                                 label: `[${m.id_machine_registered}] ${m.designation}`,
                               })),
@@ -4505,7 +4507,7 @@ export default function SortieRapideView({
                             }}
                             options={[
                               { value: '', label: '-- Sélectionner la Machine Déposée --' },
-                              ...machines.map((m) => ({
+                              ...activeMachinesList.map((m) => ({
                                 value: m.id_machine_registered,
                                 label: `[${m.id_machine_registered}] ${m.designation}`,
                               })),
@@ -4931,7 +4933,7 @@ export default function SortieRapideView({
                       }}
                       options={[
                         { value: '', label: '-- Stock Équipement / Non affecté --' },
-                        ...machines.map((m) => ({
+                        ...activeMachinesList.map((m) => ({
                           value: m.id_machine_registered,
                           label: `[${m.id_machine_registered}] ${m.designation}`,
                         })),

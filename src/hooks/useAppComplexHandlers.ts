@@ -596,7 +596,7 @@ export function useAppComplexHandlers({
   };
   const handleDeleteFamily = (id) => {
     const linkedTemplates = (templates || []).filter((t) => t.id_family === id).length;
-    const linkedMachines = activeMachines.filter((m) => m.id_family === id).length;
+    const linkedMachines = (machines || []).filter((m) => m.id_family === id).length;
     const linkedBlueprints = (blueprints || []).filter((b) => b.id_family === id).length;
     if (linkedTemplates > 0 || linkedMachines > 0 || linkedBlueprints > 0) {
       showToast?.(
@@ -790,7 +790,7 @@ export function useAppComplexHandlers({
     }
   };
   const handleDeleteTemplate = (id) => {
-    const linkedMachines = activeMachines.filter(
+    const linkedMachines = (machines || []).filter(
       (m) => m.id_templates === id || m.id_template === id
     ).length;
     const linkedBp = (blueprints || []).filter(

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
+import { resolveMachineHierarchyContext } from '../../../../utils/assetHierarchy';
+import { buildUnifiedMachineNexusElements } from '../../../../core/domain';
 import { computeMachineHealthPassport } from '../../../../application/services/MachineHealthPassportService';
 import { IMeterReading } from '../../../../types/meter';
 
@@ -32,12 +34,18 @@ export default function MachinePassport360Modal({
 }: MachinePassport360ModalProps) {
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'COMPTEURS' | 'BOM' | 'CORRECTIF' | 'PREVENTIF'>('OVERVIEW');
 
+  const machines = useGmaoStore((s) => s.machines) || [];
+  const zones = useGmaoStore((s) => s.zones) || [];
+  const families = useGmaoStore((s) => s.families) || [];
+  const templates = useGmaoStore((s) => s.templates) || [];
+  const technicians = useGmaoStore((s) => s.technicians) || [];
   const preventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
   const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
   const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne) || [];
   const rawStock = useGmaoStore((s) => s.rawStock) || [];
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
+  const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
   const blueprints = useGmaoStore((s) => s.blueprints) || [];
   const generalSystemTypes = useGmaoStore((s) => s.generalSystemTypes) || [];
   const meterReadings: IMeterReading[] = useGmaoStore((s) => s.meterReadings) || [];
@@ -137,16 +145,15 @@ export default function MachinePassport360Modal({
       );
   }, [preventiveExecutions, machineCodeUpper]);
 
-  // Machine Components & Elements Ledger
+  // Unified Machine Components & Elements Ledger (explicit BOM + mounted Entrepôt items)
   const machineElements = useMemo(() => {
-    if (!machineCodeUpper) return [];
-    return (machineElementsLedger || []).filter(
-      (el: any) =>
-        String(el.id_machine_registered || el.id_machine || '')
-          .trim()
-          .toUpperCase() === machineCodeUpper
+    if (!machineCode) return [];
+    return buildUnifiedMachineNexusElements(
+      machineCode,
+      machineElementsLedger,
+      warehouseItems
     );
-  }, [machineElementsLedger, machineCodeUpper]);
+  }, [machineCode, machineElementsLedger, warehouseItems]);
 
   // Associated Blueprint
   const blueprint = useMemo(() => {
@@ -158,11 +165,33 @@ export default function MachinePassport360Modal({
     );
   }, [blueprints, machine]);
 
+  const hierarchyContext = useMemo(
+    () => (machine ? resolveMachineHierarchyContext(machine, machines) : null),
+    [machine, machines]
+  );
+
   if (!machine) return null;
 
   const assetClass = getMachineAssetClass(machine);
   const sysTypeObj = generalSystemTypes.find(
     (t: any) => t.id === machine.id_general_system_type
+  );
+  const zoneRef = machine.id_zone_default || machine.id_zone || machine.zone || '';
+  const zoneObj = (zones || []).find(
+    (z: any) =>
+      z.id_zone === zoneRef ||
+      z.code_zone === zoneRef ||
+      z.libelle === zoneRef
+  );
+  const familyObj = (families || []).find(
+    (f: any) => f.id_family === machine.id_family
+  );
+  const templateObj = (templates || []).find(
+    (t: any) => t.id_templates === machine.id_templates
+  );
+  const techObj = (technicians || []).find(
+    (t: any) =>
+      t.id_technician === machine.technician || t.nom === machine.technician
   );
 
   // Current counter value & unit
@@ -374,35 +403,63 @@ export default function MachinePassport360Modal({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">Zone / Emplacement</span>
-                    <span className="font-semibold text-slate-800">{machine.zone || machine.nom_zone || 'Atelier Principal'}</span>
+                    <span className="font-semibold text-slate-800">
+                      {zoneObj
+                        ? `${zoneObj.code_zone ? zoneObj.code_zone + ' • ' : ''}${zoneObj.libelle}`
+                        : zoneRef || 'Atelier Principal'}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Atelier / Ligne</span>
-                    <span className="font-semibold text-slate-800">{machine.atelier || machine.ligne || '—'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block">Rôle / Ligne Mère</span>
+                    <span className="font-semibold text-slate-800">
+                      {hierarchyContext?.parentMachine
+                        ? `Sous ${hierarchyContext.parentMachine.id_machine_registered} (${hierarchyContext.parentMachine.designation})`
+                        : hierarchyContext?.level === 'LINE'
+                        ? `Ligne Mère (${hierarchyContext.childrenCount} machine(s))`
+                        : 'Machine Indépendante'}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Famille</span>
-                    <span className="font-semibold text-slate-800">{machine.famille || machine.nom_famille || '—'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block">Famille (Tier 1)</span>
+                    <span className="font-semibold text-slate-800">
+                      {familyObj
+                        ? `${familyObj.libelle} (${familyObj.id_family})`
+                        : machine.id_family || machine.famille || '—'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">N° Série Fabricant</span>
-                    <span className="font-mono font-semibold text-slate-800">{machine.numero_serie || machine.serial_number || '—'}</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {machine.serial_number || machine.numero_serie || `SN-${machineCode}`}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Modèle / Marque</span>
-                    <span className="font-semibold text-slate-800">{machine.modele || machine.constructeur || '—'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block">Template Modèle (Tier 1)</span>
+                    <span className="font-semibold text-slate-800">
+                      {templateObj
+                        ? `${templateObj.libelle} (${templateObj.id_templates})`
+                        : machine.id_templates || machine.modele || '—'}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">Date Mise en Service</span>
-                    <span className="font-mono font-semibold text-slate-800">{machine.date_mise_en_service || machine.annee || '—'}</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {machine.date_mise_en_service || machine.date_installation || machine.annee || '—'}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Classe d'Actif</span>
-                    <span className="font-semibold text-slate-800">{assetClass === 'SYSTEM_GENERAL' ? 'Système Général (Usine)' : 'Machine Process'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block">Classe d&apos;Actif</span>
+                    <span className="font-semibold text-slate-800">
+                      {assetClass === 'SYSTEM_GENERAL'
+                        ? `Système Général (${sysTypeObj?.name || sysTypeObj?.code || 'Utilités'})`
+                        : 'Machine de Production'}
+                    </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 font-bold block">Type Système</span>
-                    <span className="font-semibold text-slate-800">{sysTypeObj?.nom || 'Standard'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold block">Technicien Assigné</span>
+                    <span className="font-semibold text-slate-800">
+                      {techObj ? `${techObj.nom} (${techObj.id_technician})` : machine.technician || '—'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -529,31 +586,48 @@ export default function MachinePassport360Modal({
                 </h4>
                 {blueprint && (
                   <span className="text-[11px] font-mono text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200">
-                    Blueprint : {blueprint.nom_blueprint || blueprint.code_blueprint}
+                    Blueprint : {blueprint.id_blueprint} • {blueprint.libelle || blueprint.ref_plan || ''}
                   </span>
                 )}
               </div>
 
               {machineElements.length === 0 ? (
                 <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400">
-                  Aucun organe spécifique rattaché à cette machine dans le registre BOM.
+                  Aucun organe spécifique rattaché à cette machine dans le registre BOM / Entrepôt.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {machineElements.map((el: any) => (
-                    <div key={el.id || el.id_element} className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-900 text-xs">{el.nom_element || el.designation}</span>
-                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                          {el.nature || 'COMPOSANT'}
+                    <div key={el.id_element || el.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-slate-900 text-xs truncate">
+                          {el.designation || el.nom_element || el.ref_element}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">
+                          {el.element_type || el.nature || 'PDR'}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Réf / Code : <span className="font-mono font-semibold text-slate-800">{el.ref || el.code_element || '—'}</span>
+                      <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2">
+                        <span>
+                          Réf / Code :{' '}
+                          <span className="font-mono font-semibold text-slate-800">
+                            {el.ref_element || el.ref || el.code_element || '—'}
+                          </span>
+                        </span>
+                        {el.qte_montee && (
+                          <span className="font-mono font-bold text-emerald-700">
+                            Qté: {el.qte_montee} {el.unite || 'U'}
+                          </span>
+                        )}
                       </div>
-                      {el.observations && (
+                      {el.emplacement_machine && (
+                        <div className="text-[10.5px] text-slate-500">
+                          Position : <span className="font-medium text-slate-700">{el.emplacement_machine}</span>
+                        </div>
+                      )}
+                      {(el.remarques || el.observations) && (
                         <div className="text-[10.5px] text-slate-600 bg-slate-50 p-2 rounded-xl">
-                          {el.observations}
+                          {el.remarques || el.observations}
                         </div>
                       )}
                     </div>

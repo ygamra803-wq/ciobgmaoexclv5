@@ -261,7 +261,7 @@ export default function AppRouter({
 
                       {currentTab === 'guide' && (
                         <ErrorBoundary sectionName="Manuel & Guide Utilisateur">
-                          <GuideView {...props.guide} />
+                          <GuideView {...props.guide} onNavigateToTab={_setCurrentTab} />
                         </ErrorBoundary>
                       )}
 

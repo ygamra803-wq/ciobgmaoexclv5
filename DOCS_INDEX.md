@@ -46,3 +46,30 @@
 | **[`docs/ZONES_VIEW.md`](./docs/ZONES_VIEW.md)** | الورش والمناطق الجغرافية (`ZonesView.tsx`). |
 | **[`docs/UTILISATEURS_VIEW.md`](./docs/UTILISATEURS_VIEW.md)** | إدارة الكادر البشري، الفنيين، المشرفين، والأدوار (`UtilisateursView.tsx`). |
 | **[`docs/SETTINGS_BACKUP.md`](./docs/SETTINGS_BACKUP.md)** | الإعدادات، المزامنة عبر الشبكة المحلية `LAN`, النسخ الاحتياطي، وسجل التدقيق المؤسسي (`SettingsView.tsx`). |
+
+---
+
+## 📖 4. التوثيق الحي ثنائي الطبقة حسب المجموعات (`docs/modules/*` ➔ `GuideView.tsx`)
+
+هذه الملفات تُقرأ مباشرة داخل شاشة **`Guide d'utilisation`** (`src/presentation/pages/system/GuideView.tsx`) وتجمع بين **مرجع الهندسة والمعمارية للمطورين/الوكلاء (`GROUP_ARCHITECTURE.md`)** و**الأدلة التشغيلية للمستخدمين (`page-*.md`)**:
+
+### المجموعة 01: `Stock PDR, Mouvements & Commandes (PO)` (`docs/modules/01-stock-pdr/`)
+- **[`docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md`](./docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (`IncrementalStockIndex` $O(1)$، الحجز المؤقت `Maker-Checker`، دورة أوامر الشراء `PO`، الصلاحيات `RBAC`، وسجل التدقيق `AUDIT_EVENTS`).
+- **[`docs/modules/01-stock-pdr/page-stock-articles.md`](./docs/modules/01-stock-pdr/page-stock-articles.md)** — دليل المستخدم التشغيلي لشاشة `Stock Articles` ومركز التموين وأوامر الشراء `PO`.
+- **[`docs/modules/01-stock-pdr/page-sortie-entree-rapide.md`](./docs/modules/01-stock-pdr/page-sortie-entree-rapide.md)** — دليل المستخدم التشغيلي لشاشة `Sortie & Entrée Rapide` (التدفقات الخمسة، طلبيات الصرف الميدانية، وأذونات الخروج الخارجية).
+- **[`docs/modules/01-stock-pdr/page-types-pdr.md`](./docs/modules/01-stock-pdr/page-types-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Types PDR` (`TYP-XX`).
+- **[`docs/modules/01-stock-pdr/page-designations-pdr.md`](./docs/modules/01-stock-pdr/page-designations-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Désignations PDR`.
+
+### المجموعة 02: `Parc Machines, Blueprints & Architecture 3-Tiers` (`docs/modules/02-parc-machines/`)
+- **[`docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md`](./docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (فلسفة الطبقات الثلاث `Tier 1..3`، التجميع التشغيلي `MACHINE | LINE` ومنع الحلقات `wouldCreateHierarchyCycle`، جواز صحة الآلة 360° ومؤشر `BER`، دمج الـ `BOM As-Built` في `Nexus`، وسياسة `Safe Archive`).
+- **[`docs/modules/02-parc-machines/page-machines-registered.md`](./docs/modules/02-parc-machines/page-machines-registered.md)** — دليل المستخدم التشغيلي لشاشة `Machines Enregistrées` وجواز الآلة 360° والملصق الميداني `QR`.
+- **[`docs/modules/02-parc-machines/page-families-machines.md`](./docs/modules/02-parc-machines/page-families-machines.md)** — دليل المستخدم التشغيلي لشاشة `Familles de Machines` (`FAM-XX`).
+- **[`docs/modules/02-parc-machines/page-templates-machines.md`](./docs/modules/02-parc-machines/page-templates-machines.md)** — دليل المستخدم التشغيلي لشاشة `Modèles / Templates de Machines` (`TPL-XXX`).
+- **[`docs/modules/02-parc-machines/page-blueprints-machines.md`](./docs/modules/02-parc-machines/page-blueprints-machines.md)** — دليل المستخدم التشغيلي لشاشة `Blueprints Machines` (التوأم المعرفي ونشر الخطط الوقائية بضغطة واحدة).
+- **[`docs/modules/02-parc-machines/page-arborescence-nexus.md`](./docs/modules/02-parc-machines/page-arborescence-nexus.md)** — دليل المستخدم التشغيلي لشاشة `Arborescence & Nomenclature Réelle (Nexus BOM)`.
+
+### المجموعة 03: `Maintenance Préventive & Compteurs (Meter PM)` (`docs/modules/03-preventive-meters/`)
+- **[`docs/modules/03-preventive-meters/GROUP_ARCHITECTURE.md`](./docs/modules/03-preventive-meters/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (المحرك الهجين `CALENDRIER | COMPTEUR | HYBRIDE`، الذاكرة الزمنية غير القابلة للتعديل `PREVENTIVE_EXECUTIONS`، خوارزميات `MeterService` للعتبات والإنذار المبكر، وحوكمة `Maker-Checker`).
+- **[`docs/modules/03-preventive-meters/page-preventive-planning-meters.md`](./docs/modules/03-preventive-meters/page-preventive-planning-meters.md)** — دليل المستخدم التشغيلي لشاشة `Planning & Compteurs Préventifs` (أوضاع العرض الـ 6، تسجيل الزيارات، جولات العدادات المجمعة `Tournée d'Atelier`، وجولات النظام العام).
+- **[`docs/modules/03-preventive-meters/page-preventive-referentiel.md`](./docs/modules/03-preventive-meters/page-preventive-referentiel.md)** — دليل المستخدم التشغيلي لشاشة `Ingénierie & Référentiel Préventif` (مصمم الخطط `Plan Builder`، بطاقات الإرشاد للأعضاء `Guides & PDR`، وكتالوج أفعال `AFNOR`).
+
