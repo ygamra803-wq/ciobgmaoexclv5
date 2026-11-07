@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { useAuth } from '../../../../context/AuthContext';
+import { usePermission } from '../../../components/common/PermissionGate';
 import { IReplenishmentOrder } from '../../../../types/replenishment';
 
 interface StockReplenishmentModalProps {
@@ -25,6 +26,7 @@ export default function StockReplenishmentModal({
   showToast,
 }: StockReplenishmentModalProps) {
   const { user } = useAuth();
+  const canManageReplenishment = usePermission('stock.edit');
   const replenishmentOrders: IReplenishmentOrder[] = useGmaoStore((s) => s.replenishmentOrders) || [];
   const handleCreateReplenishmentOrder = useGmaoStore((s) => s.handleCreateReplenishmentOrder);
   const handleUpdateReplenishmentOrderStatus = useGmaoStore((s) => s.handleUpdateReplenishmentOrderStatus);
@@ -113,6 +115,10 @@ export default function StockReplenishmentModal({
   }, [alertItems, basketSelections]);
 
   const handleGenerateOrder = async () => {
+    if (!canManageReplenishment) {
+      showToast?.('Accès refusé : Réservé au Responsable Magasin ou Administrateur.', 'error');
+      return;
+    }
     if (selectedCount === 0) {
       showToast?.('Veuillez sélectionner au moins un article à réapprovisionner.', 'error');
       return;
@@ -150,6 +156,7 @@ export default function StockReplenishmentModal({
   };
 
   const handleOpenReception = (order: IReplenishmentOrder) => {
+    if (!canManageReplenishment) return;
     setReceptionOrder(order);
     const initItems: Record<string, number> = {};
     for (const it of order.items) {
@@ -161,7 +168,7 @@ export default function StockReplenishmentModal({
   };
 
   const handleConfirmReception = async () => {
-    if (!receptionOrder) return;
+    if (!canManageReplenishment || !receptionOrder) return;
 
     const payload = Object.entries(receptionItems).map(([ref, qty]) => ({
       ref,

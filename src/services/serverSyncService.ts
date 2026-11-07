@@ -342,6 +342,9 @@ export const serverSyncService = {
     const meterReadings = Array.isArray(store.meterReadings)
       ? store.meterReadings
       : storageService.getItem(STORAGE_KEYS.METER_READINGS) || [];
+    const auditEvents = Array.isArray(store.auditEvents)
+      ? store.auditEvents
+      : storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS) || [];
 
     const pendingDeletedIds =
       customState?.deletedIdsByEntity && typeof customState.deletedIdsByEntity === 'object'
@@ -370,6 +373,7 @@ export const serverSyncService = {
       preventivePlans,
       preventiveExecutions,
       meterReadings,
+      auditEvents,
       correctiveInterventions,
       correctiveActionsByPanne,
       correctivePanneCategories,

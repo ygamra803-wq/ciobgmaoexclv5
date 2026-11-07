@@ -22,6 +22,12 @@ import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import { WizardShell, useWizardFeature, type WizardProfile } from '../../components/common/wizard';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { filterActiveMachines } from '../../../utils/activeMachines';
+import {
+  ASSET_HIERARCHY_LEVEL_LABELS,
+  wouldCreateHierarchyCycle,
+  type AssetHierarchyLevel,
+} from '../../../utils/assetHierarchy';
 
 function generateMachineCode(selectedTemplateId, existingMachines = []) {
   if (!selectedTemplateId) return 'MCH-01';
@@ -133,6 +139,8 @@ export default function AddMachineModal({
 
   const [form, setForm] = useState({
     asset_class: 'PRODUCTION' as 'PRODUCTION' | 'SYSTEM_GENERAL',
+    asset_level: 'MACHINE' as AssetHierarchyLevel,
+    parent_id: '',
     id_general_system_type: '',
     id_machine_registered: '',
     designation: '',
@@ -163,6 +171,8 @@ export default function AddMachineModal({
 
       setForm({
         asset_class: 'PRODUCTION',
+        asset_level: 'MACHINE',
+        parent_id: '',
         id_general_system_type: activeSystemTypes[0]?.id || '',
         id_machine_registered: autoCode,
         designation: '',
@@ -447,6 +457,11 @@ export default function AddMachineModal({
     setFormError('');
 
     try {
+      const cleanParent = form.parent_id ? String(form.parent_id).trim().toUpperCase() : null;
+      if (cleanParent && wouldCreateHierarchyCycle(machines, codeNorm, cleanParent)) {
+        setFormError('Rattachement hiérarchique invalide : boucle circulaire détectée.');
+        return false;
+      }
       setIsSubmittingMachine(true);
       onAddMachine({
         id_machine_registered: codeNorm,
@@ -456,6 +471,9 @@ export default function AddMachineModal({
           `SN-${new Date().getFullYear()}-${codeNorm.replace(/[^A-Z0-9]/g, '')}`,
         date_mise_en_service: form.date_mise_en_service || new Date().toISOString().slice(0, 10),
         asset_class: form.asset_class,
+        asset_level: form.asset_level || 'MACHINE',
+        parent_id: cleanParent,
+        id_parent: cleanParent,
         id_general_system_type: isSystemGeneral ? form.id_general_system_type : null,
         id_family: isSystemGeneral ? form.id_family || '' : form.id_family,
         id_templates: isSystemGeneral
@@ -808,6 +826,48 @@ export default function AddMachineModal({
             <span>Plan lié : {blueprintOptions.find((o) => o.value === form.id_blueprint)?.label}</span>
           </p>
         )}
+      </div>
+
+      {/* Hiérarchie Industrielle (Niveau & Ligne / Équipement Parent — Optionnel) */}
+      <div className="grid grid-cols-2 gap-3.5 pt-1 border-t border-slate-100">
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+            Niveau Hiérarchique
+          </label>
+          <CustomSelect
+            value={form.asset_level || 'MACHINE'}
+            onChange={(val) => setForm({ ...form, asset_level: (val || 'MACHINE') as AssetHierarchyLevel })}
+            options={(Object.keys(ASSET_HIERARCHY_LEVEL_LABELS) as AssetHierarchyLevel[]).map((lvl) => ({
+              value: lvl,
+              label: `${ASSET_HIERARCHY_LEVEL_LABELS[lvl]} (${lvl})`,
+            }))}
+          />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
+            Ligne / Équipement Parent <span className="text-[10px] font-normal text-slate-400 italic">(optionnel)</span>
+          </label>
+          <CustomSelect
+            value={form.parent_id || ''}
+            onChange={(val) => setForm({ ...form, parent_id: val || '' })}
+            options={[
+              { value: '', label: '— Aucun Parent (Racine / Indépendant) —' },
+              ...filterActiveMachines(machines)
+                .filter(
+                  (m) =>
+                    !wouldCreateHierarchyCycle(
+                      machines,
+                      form.id_machine_registered,
+                      m.id_machine_registered
+                    )
+                )
+                .map((m) => ({
+                  value: m.id_machine_registered,
+                  label: `${m.id_machine_registered} • ${m.designation}`,
+                })),
+            ]}
+          />
+        </div>
       </div>
     </div>
   );

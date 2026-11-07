@@ -73,6 +73,7 @@ export const STORAGE_KEYS = {
   WIZARD_FEATURE_FLAGS: 'gmao_wizard_feature_flags_v1',
   CURRENCY_CONFIG: 'gmao_currency_config_v1',
   FINANCIAL_BUDGETS: 'gmao_financial_budgets_v1',
+  AUDIT_EVENTS: 'gmao_audit_events_v1',
 };
 
 /**

@@ -262,7 +262,13 @@ export class MeterService {
         ...t,
         compteur_actuel: newNumericVal,
         dernier_releve: newNumericVal,
-        ...(isCounterBased ? { etat: nextEtat } : {}),
+        ...(isCounterBased
+          ? {
+              etat: nextEtat,
+              compteur_statut_declenchement: evalResult.status,
+              compteur_restant: evalResult.remainingValue,
+            }
+          : {}),
         updated_at: nowIso,
       };
     });

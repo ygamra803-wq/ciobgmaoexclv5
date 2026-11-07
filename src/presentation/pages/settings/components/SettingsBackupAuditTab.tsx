@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import {
   Shield,
   Laptop,
@@ -20,11 +21,14 @@ import {
   AlertTriangle,
   Link2,
   Wifi,
+  Lock,
+  Filter,
 } from 'lucide-react';
 import TelemetryAuditPanel from '../../../components/settings/TelemetryAuditPanel';
 import SyncButtons from '../../../components/common/SyncButtons';
 import { performanceService } from '../../../../services/performanceService';
 import { syncQueueService } from '../../../../services/syncQueueService';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
 
 /**
  * Access Logs, Data Audits, Restore Points, Data Integrity, Orphan Cleanup & Telemetry Hub.
@@ -70,6 +74,35 @@ export default function SettingsBackupAuditTab({
   handleClearAnalytics,
   showToast,
 }: any) {
+  const storeAuditEvents = useGmaoStore((s) => s.auditEvents);
+  const [entityTypeFilter, setEntityTypeFilter] = useState<string>('ALL');
+
+  const combinedAuditEvents = useMemo(() => {
+    const fromStore = Array.isArray(storeAuditEvents) ? storeAuditEvents : [];
+    const fromLegacy = Array.isArray(auditLogs)
+      ? auditLogs
+          .filter((l: any) => l && !fromStore.some((s) => s.id === l.id))
+          .map((l: any) => ({
+            id: l.id || `LEG-${Math.random()}`,
+            ts: l.ts || l.timestamp || new Date().toISOString(),
+            actorId: l.actorId || l.userId || 'SYSTEM',
+            actorName: l.actorName || l.userId || 'Système',
+            actorRole: l.actorRole || 'ADMIN',
+            actionType: l.actionType || l.action || 'MUTATION',
+            entityType: l.entityType || l.entity || 'ENTITY',
+            entityId: l.entityId || 'N/A',
+            before: l.before ?? null,
+            after: l.after ?? null,
+            meta: l.meta || {},
+          }))
+      : [];
+    const merged = [...fromStore, ...fromLegacy].sort(
+      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
+    );
+    if (entityTypeFilter === 'ALL') return merged;
+    return merged.filter((ev) => String(ev.entityType).toUpperCase() === entityTypeFilter);
+  }, [storeAuditEvents, auditLogs, entityTypeFilter]);
+
   return (
     <div className="space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -105,7 +138,7 @@ export default function SettingsBackupAuditTab({
             }`}
           >
             <Activity className="w-3.5 h-3.5 text-blue-600" />
-            <span>Actions & Données ({auditLogs.length})</span>
+            <span>Actions & Données ({(storeAuditEvents?.length || 0) + (auditLogs?.length || 0)})</span>
           </button>
           <button
             onClick={() => setAuditSubTab('backups')}
@@ -280,74 +313,101 @@ export default function SettingsBackupAuditTab({
         </div>
       )}
 
-      {/* SUBTAB 2: DATA & AUDIT EVENTS */}
+      {/* SUBTAB 2: APPEND-ONLY ENTERPRISE DATA & AUDIT EVENTS (AUDIT-LEDGER-P0) */}
       {auditSubTab === 'events' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Journal des Modifications de Données
-            </h4>
-            <button
-              onClick={loadAuditLogs}
-              className="text-xs text-fuchsia-600 hover:text-fuchsia-700 flex items-center gap-1 font-bold cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingAudit ? 'animate-spin' : ''}`} /> Actualiser
-            </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">
+                  Journal d'Audit Append-Only (Opérations Critiques Avant / Après)
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Registre immuable (STOCK_ITEM, MACHINE, REPLENISHMENT_ORDER, VALIDATIONS, FINANCIAL_BUDGET) — Lecture seule.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  aria-label="Filtrer par type d'entité"
+                  value={entityTypeFilter}
+                  onChange={(e) => setEntityTypeFilter(e.target.value)}
+                  className="text-xs font-bold text-slate-700 bg-transparent focus:outline-none cursor-pointer"
+                >
+                  <option value="ALL">Toutes les entités ({combinedAuditEvents.length})</option>
+                  <option value="STOCK_ITEM">Articles Stock (STOCK_ITEM)</option>
+                  <option value="MACHINE">Machines & Archivage (MACHINE)</option>
+                  <option value="REPLENISHMENT_ORDER">Commandes d'Achat (REPLENISHMENT_ORDER)</option>
+                  <option value="CORRECTIVE_BT">Validation BT Correctif (CORRECTIVE_BT)</option>
+                  <option value="PREVENTIVE_EXECUTION">Validation Préventif (PREVENTIVE_EXECUTION)</option>
+                  <option value="SORTIE_DEMAND">Demandes Sortie PDR (SORTIE_DEMAND)</option>
+                  <option value="FINANCIAL_BUDGET">Budgets Financiers (FINANCIAL_BUDGET)</option>
+                </select>
+              </div>
+              <button
+                onClick={loadAuditLogs}
+                className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-fuchsia-700 text-xs font-bold rounded-xl border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingAudit ? 'animate-spin' : ''}`} />
+                <span>Actualiser</span>
+              </button>
+            </div>
           </div>
 
-          <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
-            <div className="max-h-[450px] overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+            <div className="max-h-[480px] overflow-y-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10">
+                <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold uppercase sticky top-0 z-10 text-[11px]">
                   <tr>
-                    <th className="px-4 py-2">Horodatage</th>
-                    <th className="px-4 py-2">Action</th>
-                    <th className="px-4 py-2">Cible</th>
-                    <th className="px-4 py-2">Acteur</th>
+                    <th className="px-4 py-2.5">Horodatage</th>
+                    <th className="px-4 py-2.5">Action</th>
+                    <th className="px-4 py-2.5">Entité & ID</th>
+                    <th className="px-4 py-2.5">Acteur (Rôle)</th>
+                    <th className="px-4 py-2.5">Avant ➔ Après</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {auditLogs.length === 0 ? (
+                  {combinedAuditEvents.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
-                        Aucun événement enregistré
+                      <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                        Aucun événement d'audit enregistré pour ce filtre
                       </td>
                     </tr>
                   ) : (
-                    [...auditLogs]
-                      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                      .slice(0, 100)
-                      .map((log: any) => (
-                        <tr key={log.id} className="hover:bg-white transition-colors">
-                          <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
-                            {new Date(log.timestamp).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                log.action === 'CREATE'
-                                  ? 'bg-emerald-100 text-emerald-700'
-                                  : log.action === 'UPDATE'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : log.action === 'DELETE'
-                                      ? 'bg-rose-100 text-rose-700'
-                                      : 'bg-slate-200 text-slate-700'
-                              }`}
-                            >
-                              {log.action}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 font-bold text-slate-700 truncate max-w-[100px]" title={log.entityId}>
-                            {log.entity}{' '}
-                            <span className="font-normal text-slate-400 font-mono text-[10px]">
-                              ({log.entityId})
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-600 truncate max-w-[80px]">
-                            {log.userId}
-                          </td>
-                        </tr>
-                      ))
+                    combinedAuditEvents.slice(0, 100).map((log: any) => (
+                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
+                          {new Date(log.ts).toLocaleString('fr-FR')}
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold font-mono">
+                            {log.actionType}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <div className="font-bold text-slate-800">{log.entityType}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{log.entityId}</div>
+                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          <div className="font-bold text-slate-700">{log.actorName}</div>
+                          <div className="font-mono text-[10px] text-slate-400">{log.actorRole}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-[11px] text-slate-600 max-w-md">
+                          {log.meta?.summary ? (
+                            <div className="font-medium text-slate-800 mb-0.5">{log.meta.summary}</div>
+                          ) : null}
+                          <div className="font-mono text-[10px] text-slate-500 truncate" title={`${JSON.stringify(log.before)} -> ${JSON.stringify(log.after)}`}>
+                            {log.before ? JSON.stringify(log.before) : '∅'} ➔ {log.after ? JSON.stringify(log.after) : '∅'}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>

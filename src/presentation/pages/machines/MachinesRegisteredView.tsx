@@ -50,7 +50,19 @@ import {
   Gauge,
 } from 'lucide-react';
 import PreventiveService from '../../../application/services/PreventiveService';
-import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
+import {
+  filterActiveMachines,
+  getMachineAssetClass,
+  isArchivedMachine,
+} from '../../../utils/activeMachines';
+import {
+  ASSET_HIERARCHY_LEVEL_LABELS,
+  computeParentCorrectiveRollup,
+  evaluateParentArchivePolicy,
+  resolveMachineHierarchyContext,
+  wouldCreateHierarchyCycle,
+  type AssetHierarchyLevel,
+} from '../../../utils/assetHierarchy';
 import MachineQrFieldModal from './components/MachineQrFieldModal';
 import MachinePassport360Modal from './components/MachinePassport360Modal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -1343,17 +1355,66 @@ export default function MachinesRegisteredView({
                         </div>
                       </td>
 
-                      {/* Désignation (C) */}
-                      <td className="py-3 px-3.5 whitespace-nowrap min-w-[200px]">
-                        <div className="font-bold text-slate-900 text-xs">{m.designation}</div>
-                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 mt-0.5">
-                          <span>Réf: {m.id_machine_registered}</span>
-                          {isSysGeneral && sysType && (
-                            <span className="text-amber-700 font-semibold">
-                              • {sysType.code || sysType.id} ({sysType.name})
-                            </span>
-                          )}
-                        </div>
+                      {/* Désignation (C) & Hiérarchie / Rollup Parent */}
+                      <td className="py-3 px-3.5 whitespace-nowrap min-w-[220px]">
+                        {(() => {
+                          const hierarchyCtx = resolveMachineHierarchyContext(m, machines);
+                          const parentRollup = computeParentCorrectiveRollup(
+                            m.id_machine_registered,
+                            machines,
+                            correctiveInterventions
+                          );
+                          const showRollup =
+                            parentRollup.descendantCount > 0 || hierarchyCtx.level === 'LINE';
+                          return (
+                            <div className="flex flex-col items-start gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-900 text-xs">{m.designation}</span>
+                                {hierarchyCtx.level !== 'MACHINE' && (
+                                  <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 text-[9.5px] font-mono font-bold uppercase">
+                                    {hierarchyCtx.level}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
+                                <span>Réf: {m.id_machine_registered}</span>
+                                {isSysGeneral && sysType && (
+                                  <span className="text-amber-700 font-semibold">
+                                    • {sysType.code || sysType.id} ({sysType.name})
+                                  </span>
+                                )}
+                              </div>
+                              {hierarchyCtx.parentId && (
+                                <div
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-semibold"
+                                  title={`Chemin hiérarchique : ${hierarchyCtx.breadcrumbLabels.join(' ➔ ')}`}
+                                >
+                                  <span>Parent :</span>
+                                  <strong className="text-indigo-700">{hierarchyCtx.parentId}</strong>
+                                  {hierarchyCtx.parentDesignation && (
+                                    <span className="text-slate-500 max-w-[130px] truncate">
+                                      ({hierarchyCtx.parentDesignation})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {showRollup && (
+                                <div
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50/90 text-emerald-900 border border-emerald-200 text-[10px] font-mono font-semibold"
+                                  title="Agrégation corrective validée (parent + équipements enfants rattachés)"
+                                >
+                                  <Activity className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                                  <span>Enfants: {parentRollup.descendantCount}</span>
+                                  <span>• BT validés: {parentRollup.approvedFailuresCount}</span>
+                                  <span>• MTTR: {parentRollup.mttrHours}h</span>
+                                  {parentRollup.mtbfHours !== null && (
+                                    <span>• MTBF: {parentRollup.mtbfHours}h</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Mise en Service & N° de Série */}
@@ -2119,6 +2180,73 @@ export default function MachinesRegisteredView({
                 />
               </div>
 
+              {/* Niveau Hiérarchique & Équipement Parent */}
+              <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-indigo-50/40 border border-indigo-100">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Niveau Hiérarchique
+                  </label>
+                  <CustomSelect
+                    value={toEdit.asset_level || 'MACHINE'}
+                    onChange={(val) =>
+                      setToEdit({
+                        ...toEdit,
+                        asset_level: (val || 'MACHINE') as AssetHierarchyLevel,
+                      })
+                    }
+                    options={(Object.keys(ASSET_HIERARCHY_LEVEL_LABELS) as AssetHierarchyLevel[]).map(
+                      (lvl) => ({
+                        value: lvl,
+                        label: `${ASSET_HIERARCHY_LEVEL_LABELS[lvl]} (${lvl})`,
+                      })
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Ligne / Équipement Parent
+                  </label>
+                  <CustomSelect
+                    value={toEdit.parent_id ?? toEdit.id_parent ?? ''}
+                    onChange={(val) => {
+                      const nextParent = val ? String(val).trim().toUpperCase() : null;
+                      if (
+                        nextParent &&
+                        wouldCreateHierarchyCycle(
+                          machines,
+                          toEdit.id_machine_registered,
+                          nextParent
+                        )
+                      ) {
+                        return;
+                      }
+                      setToEdit({
+                        ...toEdit,
+                        parent_id: nextParent,
+                        id_parent: nextParent,
+                      });
+                    }}
+                    options={[
+                      { value: '', label: '— Aucun Parent (Racine / Indépendant) —' },
+                      ...filterActiveMachines(machines)
+                        .filter(
+                          (cand) =>
+                            cand.id_machine_registered !== toEdit.id_machine_registered &&
+                            !wouldCreateHierarchyCycle(
+                              machines,
+                              toEdit.id_machine_registered,
+                              cand.id_machine_registered
+                            )
+                        )
+                        .map((cand) => ({
+                          value: cand.id_machine_registered,
+                          label: `${cand.id_machine_registered} • ${cand.designation}`,
+                        })),
+                    ]}
+                  />
+                </div>
+              </div>
+
               {/* N° de Série & Date de Mise en Service */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -2413,7 +2541,8 @@ export default function MachinesRegisteredView({
           sortieDemands,
           warehouseItems,
         });
-        const willSoftArchive = !deps.canHardDelete;
+        const parentPolicy = evaluateParentArchivePolicy(toDelete.id_machine_registered, machines);
+        const willSoftArchive = !deps.canHardDelete || parentPolicy.hasActiveChildren;
 
         return (
           <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2433,6 +2562,18 @@ export default function MachinesRegisteredView({
                   Équipement ciblé :{' '}
                   <b className="font-mono text-slate-900">{toDelete.id_machine_registered}</b> ({toDelete.designation})
                 </p>
+
+                {parentPolicy.hasActiveChildren && (
+                  <div className="mt-3 w-full text-left text-[11px] text-indigo-950 bg-indigo-50 border border-indigo-200 rounded-2xl p-3 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-indigo-900">
+                      <AlertTriangle className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>Politique Hiérarchique Parent ({parentPolicy.activeChildrenIds.length} enfant(s) actif(s))</span>
+                    </div>
+                    <p className="text-[10.5px] text-indigo-800">
+                      {parentPolicy.warningMessage}
+                    </p>
+                  </div>
+                )}
 
                 {willSoftArchive ? (
                   <div className="mt-3 w-full text-left text-[11px] text-amber-950 bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">

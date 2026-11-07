@@ -45,6 +45,7 @@ export const FIELD_WRITABLE_ENTITIES = new Set<string>([
   'sortieDemands',
   'machines',
   'machineElementsLedger',
+  'auditEvents',
 ]);
 
 export const MAGASIN_WRITABLE_ENTITIES = new Set<string>([
@@ -65,6 +66,7 @@ export const MAGASIN_WRITABLE_ENTITIES = new Set<string>([
   'compTemplates',
   'machines',
   'machineElementsLedger',
+  'auditEvents',
 ]);
 
 const ROLE_PRIVILEGE_RANK: Record<string, number> = {
@@ -232,6 +234,13 @@ export function canRoleMutateEntity(
 
   if (!targetEntity || targetEntity === 'state' || targetEntity === 'audit') {
     return { allowed: true };
+  }
+
+  if (targetEntity === 'auditEvents' && (httpMethod === 'DELETE' || httpMethod === 'PUT')) {
+    return {
+      allowed: false,
+      reason: `Entity 'auditEvents' is strictly append-only; ${httpMethod} is prohibited.`,
+    };
   }
 
   if (ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {

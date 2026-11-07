@@ -47,6 +47,7 @@ export const OPERATIONS_HISTORY_KEYS = [
   STORAGE_KEYS.PREVENTIVE_EXECUTIONS,
   STORAGE_KEYS.METER_READINGS,
   STORAGE_KEYS.SORTIE_EXTERNE,
+  STORAGE_KEYS.AUDIT_EVENTS,
   'gmao_access_logs',
 ];
 
@@ -92,6 +93,7 @@ const CANONICAL_PROP_TO_STORAGE_KEY: Record<string, string> = {
   preventiveExecutions: STORAGE_KEYS.PREVENTIVE_EXECUTIONS,
   meterReadings: STORAGE_KEYS.METER_READINGS,
   sortiesExterne: STORAGE_KEYS.SORTIE_EXTERNE,
+  auditEvents: STORAGE_KEYS.AUDIT_EVENTS,
 };
 
 const STORAGE_KEY_TO_CANONICAL_PROP: Record<string, string> = Object.entries(

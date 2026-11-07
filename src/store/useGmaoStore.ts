@@ -17,6 +17,7 @@ import { dataIntegrityService } from '../services/dataIntegrityService';
 import { reactiveCalculationEngine } from '../services/reactiveCalculationEngine';
 import { loadBaselineCorrectiveData } from '../utils/baselineCorrective';
 import { confirmAction } from '../utils/confirmAction';
+import { sanitizeMachinesHierarchy } from '../utils/assetHierarchy';
 
 import initialStockSeed from '../data/stock/seedStockItems.json';
 import initialStockTypes from '../data/stock/seedStockTypes.json';
@@ -54,8 +55,48 @@ import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderSt
 import { movementRepository } from '../application/MovementRepository';
 import { getEntityRecordId } from '../services/lanStateMergeService';
 
+import type { IAuditEvent } from '../types/audit';
+
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
 const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
+
+function resolveActiveActorContext(): { actorId: string; actorName: string; actorRole: string } {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const raw = sessionStorage.getItem('gmao_session_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const payload = parsed?.payload || parsed || {};
+        return {
+          actorId: String(payload.userId || payload.id || payload.username || 'ADMIN').trim(),
+          actorName: String(payload.nom || payload.name || payload.username || 'Administrateur').trim(),
+          actorRole: String(payload.role || 'ADMIN').trim().toUpperCase(),
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return {
+    actorId: 'ADMIN',
+    actorName: 'Administrateur GMAO',
+    actorRole: 'ADMIN',
+  };
+}
+
+function isMachineArchivedState(m: any): boolean {
+  if (!m || typeof m !== 'object') return false;
+  const statusUpper = String(m.status || m.statut || '').trim().toUpperCase();
+  const lifecycleUpper = String(m.lifecycle_status || '').trim().toUpperCase();
+  return (
+    statusUpper === 'ARCHIVEE' ||
+    statusUpper === 'ARCHIVED' ||
+    lifecycleUpper === 'ARCHIVED' ||
+    m.is_active === false ||
+    m.actif === false ||
+    m.archived === true
+  );
+}
 
 function resolveActiveSessionRole(): string {
   try {
@@ -253,7 +294,7 @@ function getInitialStock() {
 
 function normalizeMachinesList(list: any[] = []) {
   if (!Array.isArray(list)) return [];
-  return list.map((m) => {
+  const baseNormalized = list.map((m) => {
     if (!m || typeof m !== 'object') return m;
     const assetClass =
       String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
@@ -266,6 +307,7 @@ function normalizeMachinesList(list: any[] = []) {
         assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
     };
   });
+  return sanitizeMachinesHierarchy(baseNormalized);
 }
 
 function getInitialMachines() {
@@ -475,11 +517,58 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setRawStock: (updater) => {
-      const prev = get().rawStock;
+      const prev = get().rawStock || [];
       const next = resolveUpdate(updater, prev);
       trackRemovedEntityIds('rawStock', prev, next);
       set({ rawStock: next });
       DataGateway.saveStock(next);
+
+      // Record before/after audit events for stockInitial or unit price changes on existing items
+      if (Array.isArray(prev) && prev.length > 0 && Array.isArray(next) && next.length > 0) {
+        const prevMap = new Map<string, any>();
+        for (const item of prev) {
+          const key = String(item?.ref || item?.id || '').trim().toUpperCase();
+          if (key) prevMap.set(key, item);
+        }
+        for (const nextItem of next) {
+          const key = String(nextItem?.ref || nextItem?.id || '').trim().toUpperCase();
+          if (!key) continue;
+          const prevItem = prevMap.get(key);
+          if (!prevItem) continue;
+          const prevInit = Number(prevItem.stockInitial ?? 0);
+          const nextInit = Number(nextItem.stockInitial ?? 0);
+          const prevPrice = Number(prevItem.prix ?? prevItem.prix_unitaire ?? (prevItem as any).prixUnitaire ?? 0);
+          const nextPrice = Number(nextItem.prix ?? nextItem.prix_unitaire ?? (nextItem as any).prixUnitaire ?? 0);
+          if (prevInit !== nextInit || prevPrice !== nextPrice) {
+            const actionType =
+              prevInit !== nextInit && prevPrice !== nextPrice
+                ? 'STOCK_INITIAL_AND_PRICE_CHANGED'
+                : prevInit !== nextInit
+                ? 'STOCK_INITIAL_CHANGED'
+                : 'STOCK_PRICE_CHANGED';
+            get().appendAuditEvent({
+              actionType,
+              entityType: 'STOCK_ITEM',
+              entityId: String(nextItem.ref || nextItem.id || key),
+              before: {
+                ref: prevItem.ref,
+                designation: prevItem.designation,
+                stockInitial: prevInit,
+                prix_unitaire: prevPrice,
+              },
+              after: {
+                ref: nextItem.ref,
+                designation: nextItem.designation,
+                stockInitial: nextInit,
+                prix_unitaire: nextPrice,
+              },
+              meta: {
+                summary: `Modification article ${nextItem.ref || key}: stockInitial (${prevInit} ➔ ${nextInit}), prix (${prevPrice} ➔ ${nextPrice})`,
+              },
+            });
+          }
+        }
+      }
     },
 
     setDesignations: (updater) => {
@@ -518,11 +607,53 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
 
     setMachines: (updater) => {
-      const prev = get().machines;
+      const prev = get().machines || [];
       const next = normalizeMachinesList(resolveUpdate(updater, prev));
       trackRemovedEntityIds('machines', prev, next);
       set({ machines: next });
       DataGateway.saveMachines(next);
+
+      // Record before/after audit events for machine archive/restore lifecycle transitions
+      if (Array.isArray(prev) && prev.length > 0 && Array.isArray(next) && next.length > 0) {
+        const prevMap = new Map<string, any>();
+        for (const m of prev) {
+          const key = String(m?.id_machine_registered || m?.id_machine || m?.id || '').trim().toUpperCase();
+          if (key) prevMap.set(key, m);
+        }
+        for (const nextM of next) {
+          const key = String(nextM?.id_machine_registered || nextM?.id_machine || nextM?.id || '').trim().toUpperCase();
+          if (!key) continue;
+          const prevM = prevMap.get(key);
+          if (!prevM) continue;
+          const wasArchived = isMachineArchivedState(prevM);
+          const isNowArchived = isMachineArchivedState(nextM);
+          if (wasArchived !== isNowArchived) {
+            get().appendAuditEvent({
+              actionType: isNowArchived ? 'MACHINE_ARCHIVED' : 'MACHINE_RESTORED',
+              entityType: 'MACHINE',
+              entityId: String(nextM.id_machine_registered || nextM.id_machine || key),
+              before: {
+                id_machine_registered: prevM.id_machine_registered,
+                status: prevM.status || (wasArchived ? 'ARCHIVEE' : 'EN_SERVICE'),
+                lifecycle_status: prevM.lifecycle_status || (wasArchived ? 'ARCHIVED' : 'ACTIVE'),
+                is_active: !wasArchived,
+              },
+              after: {
+                id_machine_registered: nextM.id_machine_registered,
+                status: nextM.status || (isNowArchived ? 'ARCHIVEE' : 'EN_SERVICE'),
+                lifecycle_status: nextM.lifecycle_status || (isNowArchived ? 'ARCHIVED' : 'ACTIVE'),
+                is_active: !isNowArchived,
+                archive_reason: (nextM as any).archive_reason || undefined,
+              },
+              meta: {
+                summary: isNowArchived
+                  ? `Archivage machine ${nextM.id_machine_registered || key}`
+                  : `Restauration machine ${nextM.id_machine_registered || key}`,
+              },
+            });
+          }
+        }
+      }
     },
 
     setGeneralSystemTypes: (updater) => {
@@ -1033,6 +1164,20 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
         set({ sortieDemands: nextDemands });
         DataGateway.saveSortieDemands(nextDemands);
+        get().appendAuditEvent({
+          actorId: decisionData.validated_by_id,
+          actorName: decisionData.validated_by_name,
+          actionType: 'VALIDATION_APPROVED',
+          entityType: 'SORTIE_DEMAND',
+          entityId: String(demandId),
+          before: { validation_status: existing.validation_status, stock_deducted: existing.stock_deducted },
+          after: {
+            validation_status: 'APPROVED',
+            stock_deducted: true,
+            code_bon_magasin: finalCodeBonMagasin,
+          },
+          meta: { summary: `Validation demande sortie PDR ${demandId} (${finalCodeBonMagasin})` },
+        });
         return updatedDemand;
       }
 
@@ -1060,6 +1205,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
         set({ sortieDemands: nextDemands });
         DataGateway.saveSortieDemands(nextDemands);
+        get().appendAuditEvent({
+          actorId: decisionData.validated_by_id,
+          actorName: decisionData.validated_by_name,
+          actionType: decision === 'REJECTED' ? 'VALIDATION_REJECTED' : 'VALIDATION_NEEDS_CLARIFICATION',
+          entityType: 'SORTIE_DEMAND',
+          entityId: String(demandId),
+          before: { validation_status: existing.validation_status },
+          after: { validation_status: decision, validation_note: decisionData.validation_note || '' },
+          meta: { summary: `Décision ${decision} sur demande sortie PDR ${demandId}` },
+        });
         return updatedDemand;
       }
 
@@ -1099,17 +1254,32 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const next = [newOrder, ...current];
       DataGateway.saveReplenishmentOrders(next);
       set({ replenishmentOrders: next });
+      get().appendAuditEvent({
+        actorName: newOrder.cree_par,
+        actionType: 'PO_CREATED',
+        entityType: 'REPLENISHMENT_ORDER',
+        entityId: newOrder.id,
+        before: null,
+        after: {
+          numero_commande: newOrder.numero_commande,
+          fournisseur: newOrder.fournisseur,
+          statut: newOrder.statut,
+          itemsCount: newOrder.items.length,
+          montant_total_estime: newOrder.montant_total_estime,
+        },
+        meta: { summary: `Création commande ${newOrder.numero_commande} (${newOrder.fournisseur})` },
+      });
       return newOrder;
     },
 
     handleUpdateReplenishmentOrderStatus: async (orderId: string, status: ReplenishmentOrderStatus, metadata?: any) => {
       const current = get().replenishmentOrders || [];
+      const prevOrder = current.find((o) => o.id === orderId);
+      if (!prevOrder || prevOrder.statut === 'RECU_CONFORME' || prevOrder.statut === 'ANNULE') {
+        return;
+      }
       const next = current.map((order) => {
         if (order.id !== orderId) return order;
-        // Guard: completed or cancelled orders are terminal states
-        if (order.statut === 'RECU_CONFORME' || order.statut === 'ANNULE') {
-          return order;
-        }
         return {
           ...order,
           statut: status,
@@ -1119,6 +1289,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       });
       DataGateway.saveReplenishmentOrders(next);
       set({ replenishmentOrders: next });
+      get().appendAuditEvent({
+        actionType: status === 'ANNULE' ? 'PO_CANCELLED' : 'PO_STATUS_CHANGED',
+        entityType: 'REPLENISHMENT_ORDER',
+        entityId: orderId,
+        before: { statut: prevOrder.statut },
+        after: { statut: status },
+        meta: { summary: `Commande ${prevOrder.numero_commande}: ${prevOrder.statut} ➔ ${status}` },
+      });
     },
 
     handleReceiveReplenishmentOrder: async (
@@ -1134,6 +1312,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       const dateStr = new Date().toISOString().split('T')[0];
       const newMovements: any[] = [];
+      const beforeItemsSnapshot = order.items.map((it) => ({
+        ref: it.ref,
+        quantite_demandee: it.quantite_demandee,
+        quantite_recue: it.quantite_recue || 0,
+      }));
 
       let allFullyReceived = true;
       const updatedItems = order.items.map((it) => {
@@ -1198,6 +1381,26 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       } else {
         set({ replenishmentOrders: nextOrders });
       }
+
+      get().appendAuditEvent({
+        actorName: recepteur || 'Magasinier',
+        actionType: 'PO_RECEIVED',
+        entityType: 'REPLENISHMENT_ORDER',
+        entityId: orderId,
+        before: { statut: order.statut, items: beforeItemsSnapshot },
+        after: {
+          statut: nextStatus,
+          numero_bon_reception: numBonReception || order.numero_bon_reception,
+          items: updatedItems.map((it) => ({
+            ref: it.ref,
+            quantite_demandee: it.quantite_demandee,
+            quantite_recue: it.quantite_recue,
+          })),
+        },
+        meta: {
+          summary: `Réception commande ${order.numero_commande} ➔ ${nextStatus} (${newMovements.length} entrée(s))`,
+        },
+      });
     },
 
     // ==========================================
@@ -1823,6 +2026,22 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           }
         }
 
+        get().appendAuditEvent({
+          actorId: decisionData.validated_by_id,
+          actorName: decisionData.validated_by_name,
+          actionType: 'VALIDATION_APPROVED',
+          entityType: 'PREVENTIVE_EXECUTION',
+          entityId: String(executionId),
+          before: { validation_status: existingExec.validation_status, status: existingExec.status },
+          after: {
+            validation_status: 'APPROVED',
+            status: 'DONE',
+            totalCost,
+            sparesCount: approvedSpares.length,
+          },
+          meta: { summary: `Validation exécution préventive ${executionId}` },
+        });
+
         return updatedExec;
       }
 
@@ -1869,6 +2088,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         PreventiveService.saveTasks(nextTasks);
         DataGateway.savePreventiveExecutions(nextExecs);
         DataGateway.savePreventiveTasks(nextTasks);
+        get().appendAuditEvent({
+          actorId: decisionData.validated_by_id,
+          actorName: decisionData.validated_by_name,
+          actionType: decision === 'REJECTED' ? 'VALIDATION_REJECTED' : 'VALIDATION_NEEDS_CLARIFICATION',
+          entityType: 'PREVENTIVE_EXECUTION',
+          entityId: String(executionId),
+          before: { validation_status: existingExec.validation_status },
+          after: { validation_status: decision, validation_note: decisionData.validation_note || '' },
+          meta: { summary: `Décision ${decision} sur exécution préventive ${executionId}` },
+        });
         return updatedExec;
       }
 
@@ -2861,7 +3090,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           hasActionDiff ||
           hasNatureDiff;
 
-        return get().handleClotureIntervention(
+        const closedBt = get().handleClotureIntervention(
           id,
           {
             ...decisionData,
@@ -2885,6 +3114,24 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           },
           onAddMouvement
         );
+        if (closedBt) {
+          get().appendAuditEvent({
+            actorId: decisionData.validated_by_id,
+            actorName: decisionData.validated_by_name,
+            actionType: 'VALIDATION_APPROVED',
+            entityType: 'CORRECTIVE_BT',
+            entityId: String(existing.num_bt || id),
+            before: { statut: existing.statut, validation_status: existing.validation_status },
+            after: {
+              statut: closedBt.statut,
+              validation_status: 'APPROVED',
+              validated_with_edits: validatedWithEdits,
+              cout_pdr: closedBt.cout_pdr,
+            },
+            meta: { summary: `Validation et clôture BT ${existing.num_bt || id}` },
+          });
+        }
+        return closedBt;
       }
 
       if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
@@ -2936,6 +3183,16 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
         set({ correctiveInterventions: next });
         DataGateway.saveCorrectiveInterventions(next);
+        get().appendAuditEvent({
+          actorId: decisionData.validated_by_id,
+          actorName: decisionData.validated_by_name,
+          actionType: decision === 'REJECTED' ? 'VALIDATION_REJECTED' : 'VALIDATION_NEEDS_CLARIFICATION',
+          entityType: 'CORRECTIVE_BT',
+          entityId: String(existing.num_bt || id),
+          before: { statut: existing.statut, validation_status: existing.validation_status },
+          after: { statut: updated?.statut, validation_status: decision, validation_note: decisionData.validation_note || '' },
+          meta: { summary: `Décision ${decision} sur BT ${existing.num_bt || id}` },
+        });
         return updated;
       }
 
@@ -3475,6 +3732,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
     handleClearAllForRealFactory: () =>
@@ -3514,6 +3772,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
     handleLoadDemoSection: (sectionId: string) =>
@@ -3594,6 +3853,23 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
       }),
 
+    // ==========================================
+    // 12. Append-Only Enterprise Audit Ledger (AUDIT-LEDGER-P0)
+    // ==========================================
+    auditEvents: DataGateway.getAuditEvents(),
+
+    appendAuditEvent: (payload) => {
+      const actor = resolveActiveActorContext();
+      const { event, list } = DataGateway.appendAuditEvent({
+        ...payload,
+        actorId: payload.actorId || actor.actorId,
+        actorName: payload.actorName || actor.actorName,
+        actorRole: payload.actorRole || actor.actorRole,
+      });
+      set({ auditEvents: list });
+      return event;
+    },
+
     applyRemoteStateUpdate: (remoteState: Record<string, any>) => {
       if (!remoteState || typeof remoteState !== 'object') return;
       const updates: Record<string, any> = {};
@@ -3646,6 +3922,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       // Sortie Externe
       if (Array.isArray(remoteState.sortiesExterne)) updates.sortiesExterne = remoteState.sortiesExterne;
 
+      // Audit Events
+      if (Array.isArray(remoteState.auditEvents)) updates.auditEvents = remoteState.auditEvents;
+
       // Corrective
       if (Array.isArray(remoteState.correctiveInterventions)) updates.correctiveInterventions = remoteState.correctiveInterventions;
       if (remoteState.correctiveActionsByPanne && typeof remoteState.correctiveActionsByPanne === 'object') {
@@ -3684,6 +3963,19 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     },
   };
 });
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('gmao_audit_event_appended', ((e: CustomEvent) => {
+    if (Array.isArray(e?.detail?.list)) {
+      useGmaoStore.setState({ auditEvents: e.detail.list });
+    }
+  }) as EventListener);
+  window.addEventListener('gmao_audit_events_synced', ((e: CustomEvent) => {
+    if (Array.isArray(e?.detail?.list)) {
+      useGmaoStore.setState({ auditEvents: e.detail.list });
+    }
+  }) as EventListener);
+}
 
 // Fine-grained slice hooks for optimal re-rendering
 export const useStockSlice = () =>

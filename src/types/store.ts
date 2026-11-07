@@ -14,6 +14,7 @@ import type {
 } from './domain';
 import type { IMeterReading } from './meter';
 import type { IReplenishmentOrder, ReplenishmentOrderStatus } from './replenishment';
+import type { IAuditEvent } from './audit';
 
 export interface MachineElement {
   id: string;
@@ -308,4 +309,13 @@ export interface GmaoStoreState {
   // 11. Multi-Tab State Synchronization
   // ==========================================
   applyRemoteStateUpdate: (remoteState: Record<string, any>) => void;
+
+  // ==========================================
+  // 12. Append-Only Enterprise Audit Ledger (AUDIT-LEDGER-P0)
+  // ==========================================
+  auditEvents: ReadonlyArray<IAuditEvent>;
+  appendAuditEvent: (
+    payload: Omit<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'> &
+      Partial<Pick<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'>>
+  ) => IAuditEvent;
 }

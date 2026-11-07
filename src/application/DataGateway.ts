@@ -6,6 +6,7 @@ import { sanitizeObject } from '../utils/sanitize';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 import { movementRepository } from './MovementRepository';
+import { sanitizeMachinesHierarchy } from '../utils/assetHierarchy';
 import {
   EMPTY_FISCAL_BUDGET,
   DEMO_FISCAL_BUDGET,
@@ -96,19 +97,21 @@ export const DataGateway = {
   // ==========================================
   saveMachines(list = [], { validate = false } = {}) {
     let clean = Array.isArray(list)
-      ? list.map((m) => {
-          if (!m || typeof m !== 'object') return m;
-          const assetClass =
-            String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
-              ? 'SYSTEM_GENERAL'
-              : 'PRODUCTION';
-          return {
-            ...m,
-            asset_class: assetClass,
-            id_general_system_type:
-              assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
-          };
-        })
+      ? sanitizeMachinesHierarchy(
+          list.map((m) => {
+            if (!m || typeof m !== 'object') return m;
+            const assetClass =
+              String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
+                ? 'SYSTEM_GENERAL'
+                : 'PRODUCTION';
+            return {
+              ...m,
+              asset_class: assetClass,
+              id_general_system_type:
+                assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
+            };
+          })
+        )
       : [];
     if (validate) {
       clean = clean.filter((m) => ValidationService.validateMachine(m).valid);
@@ -526,10 +529,105 @@ export const DataGateway = {
       updatedBy,
     };
     storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, next);
+    if (updatedBy !== 'FACTORY_RESET' && updatedBy !== 'DEMO_SEED') {
+      this.appendAuditEvent({
+        actorId: updatedBy,
+        actorName: updatedBy,
+        actorRole: 'ADMIN',
+        actionType: 'BUDGET_UPDATED',
+        entityType: 'FINANCIAL_BUDGET',
+        entityId: String(fiscalYear),
+        before: prevSaved
+          ? {
+              fiscalYear: prevSaved.fiscalYear,
+              periodMode: prevSaved.periodMode,
+              allocatedPreventive: prevSaved.allocatedPreventive,
+              allocatedCorrective: prevSaved.allocatedCorrective,
+              allocatedExternal: prevSaved.allocatedExternal,
+              allocatedSparesStock: prevSaved.allocatedSparesStock,
+            }
+          : null,
+        after: {
+          fiscalYear,
+          periodMode,
+          totalAllocated,
+          allocatedPreventive,
+          allocatedCorrective,
+          allocatedExternal,
+          allocatedSparesStock,
+        },
+        meta: {
+          summary: `Budget Ex. ${fiscalYear} (${periodMode}) mis à jour: ${totalAllocated} MAD`,
+        },
+      });
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('gmao_financial_budget_updated', { detail: next }));
     }
     return next;
+  },
+
+  // ==========================================
+  // 7c. APPEND-ONLY ENTERPRISE AUDIT LEDGER (AUDIT-LEDGER-P0)
+  // ==========================================
+  getAuditEvents(): any[] {
+    const raw = storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS);
+    return Array.isArray(raw) ? raw : [];
+  },
+
+  saveAuditEvents(list: any[] = []): any[] {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.AUDIT_EVENTS, clean);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gmao_audit_events_synced', { detail: { list: clean } }));
+    }
+    return clean;
+  },
+
+  appendAuditEvent(payload: {
+    id?: string;
+    ts?: string;
+    actorId?: string;
+    actorName?: string;
+    actorRole?: string;
+    actionType: string;
+    entityType: string;
+    entityId: string;
+    before: any;
+    after: any;
+    meta?: Record<string, any>;
+  }) {
+    const current = this.getAuditEvents();
+    const safeBefore =
+      payload.before && typeof payload.before === 'object'
+        ? Object.freeze({ ...payload.before })
+        : payload.before ?? null;
+    const safeAfter =
+      payload.after && typeof payload.after === 'object'
+        ? Object.freeze({ ...payload.after })
+        : payload.after ?? null;
+    const event = Object.freeze({
+      id: payload.id || `AUD-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      ts: payload.ts || new Date().toISOString(),
+      actorId: String(payload.actorId || payload.actorName || 'SYSTEM').trim(),
+      actorName: String(payload.actorName || payload.actorId || 'Système GMAO').trim(),
+      actorRole: String(payload.actorRole || 'ADMIN').trim().toUpperCase(),
+      actionType: String(payload.actionType || 'MUTATION').trim(),
+      entityType: String(payload.entityType || 'ENTITY').trim(),
+      entityId: String(payload.entityId || 'UNKNOWN').trim(),
+      before: safeBefore,
+      after: safeAfter,
+      meta: Object.freeze({
+        ...(typeof navigator !== 'undefined' && navigator.userAgent ? { userAgent: navigator.userAgent } : {}),
+        ...(payload.meta || {}),
+      }),
+    });
+    const next = [event, ...current];
+    this.saveAuditEvents(next);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('gmao_audit_event_appended', { detail: { event, list: next } }));
+    }
+    return { event, list: next };
   },
 
   // ==========================================
@@ -623,6 +721,7 @@ export const DataGateway = {
 
     this.saveSortiesExterne(seedSortiesExternes);
     this.saveFinancialBudget(DEMO_FISCAL_BUDGET, 'DEMO_SEED');
+    this.saveAuditEvents([]);
 
     // 3. Update React state setters if provided
     if (setters.setMachines) setters.setMachines(seedMachines);
@@ -666,6 +765,8 @@ export const DataGateway = {
     if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations);
 
     if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
+    this.saveAuditEvents([]);
+    if (setters.setAuditEvents) setters.setAuditEvents([]);
 
     return {
       machinesCount: seedMachines.length,
@@ -778,6 +879,7 @@ export const DataGateway = {
 
     this.saveSortiesExterne([]);
     this.saveFinancialBudget({ ...EMPTY_FISCAL_BUDGET, updatedAt: new Date().toISOString() }, 'FACTORY_RESET');
+    this.saveAuditEvents([]);
 
     if (setters.setMachines) setters.setMachines([]);
     if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes([]);
@@ -820,6 +922,8 @@ export const DataGateway = {
     if (setters.setPartDesignations) setters.setPartDesignations([]);
 
     if (setters.setSortiesExterne) setters.setSortiesExterne([]);
+    this.saveAuditEvents([]);
+    if (setters.setAuditEvents) setters.setAuditEvents([]);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('preventive_tasks_updated', { detail: [] }));
@@ -866,6 +970,7 @@ export const DataGateway = {
       [STORAGE_KEYS.PART_DESIGNATIONS]: [],
       [STORAGE_KEYS.SORTIE_EXTERNE]: [],
       [STORAGE_KEYS.FINANCIAL_BUDGETS]: { ...EMPTY_FISCAL_BUDGET },
+      [STORAGE_KEYS.AUDIT_EVENTS]: [],
     };
 
     return Promise.all([
@@ -946,6 +1051,7 @@ export const DataGateway = {
       ? serverData.replenishmentOrders
       : [];
     const meterReadings = Array.isArray(serverData.meterReadings) ? serverData.meterReadings : [];
+    const auditEvents = Array.isArray(serverData.auditEvents) ? serverData.auditEvents : [];
 
     const hasData =
       rawStock.length > 0 ||
@@ -955,7 +1061,8 @@ export const DataGateway = {
       mouvements.length > 0 ||
       sortieDemands.length > 0 ||
       replenishmentOrders.length > 0 ||
-      meterReadings.length > 0;
+      meterReadings.length > 0 ||
+      auditEvents.length > 0;
 
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, hasData ? 'custom' : 'empty');
@@ -980,6 +1087,7 @@ export const DataGateway = {
     this.savePreventivePlans(preventivePlans);
     this.savePreventiveExecutions(preventiveExecutions);
     this.saveMeterReadings(meterReadings);
+    this.saveAuditEvents(auditEvents);
     this.saveCorrectiveInterventions(correctiveInterventions);
     this.saveCorrectiveActionsByPanne(correctiveActionsByPanne);
     this.saveCorrectivePanneCategories(correctivePanneCategories);
@@ -1026,6 +1134,7 @@ export const DataGateway = {
         preventivePlans,
         preventiveExecutions,
         meterReadings,
+        auditEvents,
         correctiveInterventions,
         correctiveActionsByPanne,
         correctivePanneCategories,
@@ -1063,6 +1172,7 @@ export const DataGateway = {
       if (setters.setPreventivePlans) setters.setPreventivePlans(preventivePlans);
       if (setters.setPreventiveExecutions) setters.setPreventiveExecutions(preventiveExecutions);
       if (setters.setMeterReadings) setters.setMeterReadings(meterReadings);
+      if (setters.setAuditEvents) setters.setAuditEvents(auditEvents);
       if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(correctiveInterventions);
       if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(correctiveActionsByPanne);
       if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(correctivePanneCategories);

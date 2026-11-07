@@ -13,6 +13,7 @@ import {
   isArchivedMachine,
   transitionMachineLifecycle,
 } from '../utils/activeMachines';
+import { evaluateParentArchivePolicy } from '../utils/assetHierarchy';
 
 export function useAppComplexHandlers({
   zones, setZones,
@@ -382,7 +383,9 @@ export function useAppComplexHandlers({
       warehouseItems,
     });
 
-    if (!deps.canHardDelete) {
+    const parentPolicy = evaluateParentArchivePolicy(id, activeMachines || []);
+
+    if (!deps.canHardDelete || parentPolicy.hasActiveChildren) {
       const targetCodeNorm = String(id || '').trim().toUpperCase();
       const archiveTimestamp = new Date().toISOString();
 
@@ -395,6 +398,9 @@ export function useAppComplexHandlers({
       if (deps.warehouseCount) parts.push(`${deps.warehouseCount} organe(s) d'entrepôt`);
       if (deps.externalSortiesCount) parts.push(`${deps.externalSortiesCount} bobinage(s) externe(s)`);
       if (deps.sortieDemandsCount) parts.push(`${deps.sortieDemandsCount} demande(s) PDR`);
+      if (parentPolicy.hasActiveChildren) {
+        parts.push(`${parentPolicy.activeChildrenIds.length} équipement(s) enfant(s) actif(s)`);
+      }
 
       const archiveReason = `Archivage automatique (historique protégé : ${parts.join(', ')})`;
 
