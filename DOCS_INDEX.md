@@ -28,9 +28,8 @@
 
 ## 🗄️ 3. خارطة الطريق والأرشيف التاريخي (لا تُفتح تلقائياً للوكيل)
 
-* 🗺️ **خارطة الطريق المعمارية وخطة المراحل (`P0` → `P6`):** [`ROADMAP_AND_PHASES_PLAN.md`](./ROADMAP_AND_PHASES_PLAN.md)
-* 🛡️ **ملخص الضمانات الهندسية والقائمة المفتوحة المختصرة:** [`ISSUES_AND_FIXES_PLAN.md`](./ISSUES_AND_FIXES_PLAN.md)
-* 🕰️ **الأرشيف التاريخي لجولات التدقيق المغلقة (`Rounds 1–7`):** [`docs/history/ARCHIVED_ISSUES_ROUNDS_1_TO_7.md`](./docs/history/ARCHIVED_ISSUES_ROUNDS_1_TO_7.md)
+* 🗺️ **خارطة الطريق المعمارية وخطة المراحل (`P0` → `P7`):** [`ROADMAP_AND_PHASES_PLAN.md`](./ROADMAP_AND_PHASES_PLAN.md)
+* 🕰️ **الأرشيف التاريخي لخطط المشاكل والجولات السابقة:** [`docs/history/ARCHIVED_ISSUES_AND_FIXES_LEGACY.md`](./docs/history/ARCHIVED_ISSUES_AND_FIXES_LEGACY.md) | [`docs/history/ARCHIVED_ISSUES_ROUNDS_1_TO_7.md`](./docs/history/ARCHIVED_ISSUES_ROUNDS_1_TO_7.md)
 
 ---
 *نحن لا نجرّ خلفنا مشاكل محلولة، ولا نصرف سياق العمل على روايات قديمة تجاوزها الكود.*

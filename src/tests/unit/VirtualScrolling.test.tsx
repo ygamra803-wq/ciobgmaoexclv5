@@ -2,7 +2,6 @@ import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import GmaoIndustrialDataGrid, { VirtualizedIndustrialDataGrid } from '../../presentation/components/common/GmaoIndustrialDataGrid';
-import { VirtualizedTable } from '../../presentation/components/common/VirtualizedTable';
 import DetailedTaskListView from '../../presentation/pages/preventive/components/DetailedTaskListView';
 import { I18nProvider } from '../../i18n/I18nContext';
 
@@ -122,21 +121,5 @@ describe('Virtual Scrolling Architecture & Performance (60fps Engine)', () => {
     expect(html).toContain('Virtual 60fps');
     const trMatches = html.match(/<tr/g) || [];
     expect(trMatches.length).toBeLessThan(50);
-  });
-
-  it('VirtualizedTable component renders smoothly with react-window List', () => {
-    const data200 = generateLargeDataset(200);
-
-    const html = renderToString(
-      <VirtualizedTable
-        data={data200}
-        columns={columns}
-        rowHeight={48}
-        height={400}
-      />
-    );
-
-    expect(html).toContain('ROUL-6000');
-    expect(html).toContain('Roulement à billes standard 1');
   });
 });

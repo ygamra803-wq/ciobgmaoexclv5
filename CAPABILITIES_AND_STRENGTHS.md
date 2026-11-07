@@ -275,7 +275,67 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 
 ---
 
-## 10. سجل التحقق الآلي (`Automated Verification Matrix`)
+---
+
+## 10. حوكمة مركز الاعتماد وفصل السلطات (`Maker-Checker Cockpit — VAL-1..VAL-5`)
+
+- **القدرة التصميمية:** إقامة محطة فصل صارمة بين إدخال الفني الميداني («تصريح أولي / Field Claim») واعتماد الإدارة («حقيقة مخزنية ومالية رسمية»). لا يصبح أي إدخال حرّ للقطع أو التكاليف حقيقة رسمية حتى يمر بمركز الاعتماد (`ValidationCenterView.tsx`).
+- **المراجع البرمجية:**
+  - لوحة تحكم الاعتماد: `src/presentation/pages/validation/ValidationCenterView.tsx`.
+  - منطق الحوكمة في المتجر: `src/store/useGmaoStore.ts` (`handleSubmitInterventionForValidation`, `handleReviewInterventionValidation`, `handleReviewPreventiveExecutionValidation`, `handleReviewSortieDemandValidation`).
+  - شارات الحالة المعتمدة: `src/presentation/components/common/ValidationStatusBadge.tsx`.
+- **الضمانات المنجزة والمُثبتة:**
+  1. **صون التصريح الأصلي (`Preservation of pieces_claimed`):** عند تعديل القطع من قبل المسؤول أثناء الاعتماد، تُحفظ القطع المصرح بها أصلاً من قِبل التقني في حقل `pieces_claimed` دون ضياع، بينما تُعتمد القطع المعدلة فعلياً في `pieces_utilisees` مع ختم الشارة `VALIDATED_WITH_EDITS`.
+  2. **فصل طبيعة التدخل (`Intervention Nature`):** التمييز الصريح بين الاستبدال والتصليح والتنظيف (`REPLACE`, `REPAIR`, `CLEAN`, `ADJUST`, `INSPECT`). تصليح القطعة أو تنظيفها لا يخصم قطعاً جديدة من المخزن، منعاً للخصم المخزني الكاذب.
+  3. **دورة التوضيح والرفض الرسمي (`NEEDS_CLARIFICATION & REJECTED`):** إرجاع التكليف للفني مع تعليق توضيحي محدد دون أن يختفي السجل أو يُخصم مخزنياً، أو رفضه رسمياً مع سبب مكتوب.
+  4. **مؤشرات القيادة المباشرة (`Cockpit KPI Cards`):** 4 بطاقات تفاعلية أعلى الصفحة توضح المعلق (`PENDING_VALIDATION`) مفصلاً (BT / وقائي / طلبيات صرف)، بانتظار التوضيح (`NEEDS_CLARIFICATION`)، والمرفوض اليوم.
+- **الاختبارات المُثبتة:**
+  - `src/tests/ValidationGovernance.test.ts` (7 اختبارات حوكمة ناجحة بنسبة 100%).
+
+---
+
+## 11. الرقابة المالية والميزانيات التشغيلية الموزعة (`Financial Budgeting & Operational Cost Control — FIN-P0..FIN-P2`)
+
+- **القدرة التصميمية:** تحويل الرقابة المالية من مجرد ملخص سنوي جامد إلى ميزانية تشغيلية حية موزعة عبر السنة المالية (`P2-1 Temporal Budget Model`)، مع رصد معدلات الحرق المالي والتجاوزات لكل ماكينة وربطها المباشر بسجل التدقيق.
+- **المراجع البرمجية:**
+  - نموذج الميزانية: `src/types/FinancialBudget.ts`.
+  - محرك الحسابات المالية: `src/application/services/finance/FinancialCalculationService.ts`.
+  - بوابة الحفظ والاسترجاع: `src/application/DataGateway.ts` (`saveFinancialBudgets`).
+  - لوحة التحكم المالية: `src/presentation/pages/finance/FinanceView.tsx`.
+- **الضمانات المنجزة والمُثبتة:**
+  1. **توزيع الميزانية على 4 بنود مستقلة:** الوقائي (`Preventive`)، التصحيحي (`Corrective`)، الخدمات الخارجية والبوبيناج (`External`)، وقطع الغيار (`Spares Stock`)، موزعة على 12 شهراً و4 أرباع سنوية.
+  2. **إنذارات الحرق المالي التراكمي (`Burn-Rate Alerts`):** حساب نسبة الاستهلاك مقابل الوقت المنقضي من السنة ومقارنتها التلقائية؛ إظهار شارات الأمان (`CONFORME`)، التحذير (`ATTENTION` عند اقتراب الاستهلاك من 90%)، والتجاوز (`DEPASSEMENT` باللون الأحمر).
+  3. **تجميع التكلفة لكل آلة مع الرابط المباشر:** جدول توزيع التكاليف الفعلي لكل ماكينة مع زر انتقال فوري لبطاقة الآلة في سجل الأصول (`Parc Machines`).
+  4. **سجل تدقيق خفيف لتعديلات الميزانية (`budget_audit_log`):** توثيق كل عملية تعديل للميزانية بالتاريخ والقيم السابقة والجديدة والمسؤول، مع استمرار صمود حالة الصفر/الفراغ (`Zero Silent Seed Invariant`).
+
+---
+
+## 12. الصيانة الوقائية بالعدادات وساعات التشغيل (`Meter & Counter-based Maintenance — Horomètres / Cycles / Km`)
+
+- **القدرة التصميمية:** تفعيل الصيانة الوقائية الشرطية المرتبطة بجهد التشغيل الحقيقي للآلات الصناعية (`Horomètres`, `Cycles de production`, `Kilométrage`)، تماشياً مع المعيار الدولي ISO 14224، دون الاقتصار على التقويم الزمني.
+- **المراجع البرمجية:**
+  - نموذج العدادات: `src/types/meter.ts`.
+  - محرك حساب العتبات والتقييم: `src/application/services/meter/MeterService.ts`.
+  - محطة متابعة العدادات: `src/presentation/pages/preventive/components/PreventiveMetersView.tsx`.
+  - مفتاح التخزين القياسي: `STORAGE_KEYS.METER_READINGS` = `'gmao_meter_readings_v1'`.
+- **الضمانات المنجزة والمُثبتة:**
+  1. **نمط الإطلاق الثلاثي (`Triple Trigger Engine`):**
+     - `CALENDRIER`: تقويمي اعتيادي.
+     - `COMPTEUR`: شرطي مرتبط ببلوغ عتبة العداد المحددة (`compteur_prochain_declenchement`).
+     - `HYBRIDE`: المعيار المزدوج («الأجل الأسبق» / *Whichever comes first* مثل: 6 أشهر أو 500 ساعة).
+  2. **تقييم الحالة الحركي (`Dynamic Threshold Status`):**
+     - `OK`: القراءة الحالية أقل من عتبة الإنذار.
+     - `WARNING`: القراءة تدخل في هامش الـ 10% الاستباقي قبل موعد الصيانة (`Alerte Seuil Imminent`).
+     - `OVERDUE`: القراءة تتجاوز عتبة الإطلاق (`Seuil dépassé`).
+  3. **جولة القراءة السريعة للأتيليه (`Tournée de Relevé Rapide`):** نافذة جماعية تتيح للفني إدخال قراءات عدادات خطوط الإنتاج كاملة في مسار واحد مع حساب تلقائي للفوارق ($\Delta$).
+  4. **الترحيل التلقائي للعتبة القادمة:** تقديم العتبة القادمة آلياً عند إنجاز وتأكيد المهمة بمقدار الفاصل التشغيلي (`compteur_seuil_intervalle`).
+  5. **الدمج مع سجل الأصول (`Parc Machines`):** إظهار وتعديل العداد ووحدته الافتراضية داخل بطاقة الآلة في `MachinesRegisteredView.tsx`.
+- **الاختبارات المُثبتة:**
+  - `src/tests/unit/MeterMaintenance.test.ts` (8 اختبارات ناجحة 100%).
+
+---
+
+## 13. سجل التحقق الآلي (`Automated Verification Matrix`)
 
 | المجال الهندسي | القدرة الموثّقة | ملف الاختبار الآلي (`Vitest`) |
 |---|---|---|
@@ -288,10 +348,13 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | **آلة الحالة والاعتمادية** | حراسة انتقالات `WorkOrderStateMachine`، حساب `MTTR / MTBF / OEE`، والمقارنة الشهرية (`MoM`) | `src/tests/unit/Round6FsmAndMonthlyReport.test.ts` |
 | **معمارية LAN وتفكيك الإعدادات** | أوضاع `HOST / LAN_CLIENT`، مصفوفة QR الحتمية `21x21`، مسارات `/api/network/info` و `/api/gmao/events`، وتفكيك `SettingsView.tsx` | `src/tests/unit/Round7LanArchitectureAndRefactoring.test.ts` |
 | **دستور ترابط الأصول و BOM (`P0–P5`)** | عزل مخزون `PDR` الاستهلاكي (`P0`)، انتشار `id_composant / id_part` إلى سجلات التنفيذ الوقائي (`P1`)، ترتيب `BOM` الذكي (`P2`)، توطين `Part` في التصحيحي (`P3`)، ووراثة `parent_component_key` و `pdr_requises` من القالب (`P4/P5`) | `src/tests/unit/Phase7AssetBomNexus.test.ts` |
+| **مركز الاعتماد وفصل السلطات** | حماية الصرف المخزني للفنيين، حفظ `pieces_claimed`، دورة التوضيح والرفض، ومسارات Maker-Checker | `src/tests/ValidationGovernance.test.ts` |
+| **الصيانة بالعدادات وساعات التشغيل** | رتابة قراءات العدادات، حساب الفوارق التراكمية، إنذارات الاقتراب من السقف، وتقييم المهام الهجينة | `src/tests/unit/MeterMaintenance.test.ts` |
+| **المعمارية وأداء العرض** | التصفح الافتراضي 60fps لـ 1,000 سجل دون إجهاد المتصفح (`GmaoIndustrialDataGrid`) | `src/tests/unit/VirtualScrolling.test.tsx` |
 
 ---
 
-## 11. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
+## 14. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
 
 التزاماً بالشفافية الهندسية أمام المستثمرين والمطورين:
 1. **منصة ويب تشغيلية أولاً (`Web-First Operational Platform`):** يعمل النظام بكامل قدراته عبر المتصفح مع تخزين هجين (`Memory Cache + localStorage + IndexedDB`) وخادم Node/Express محلي (`server.ts`).
