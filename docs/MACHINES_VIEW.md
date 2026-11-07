@@ -1,66 +1,50 @@
-# 🏭 توثيق صفحة سجل الآلات والصفحات التابعة (Machines & Hierarchy Views)
-## نظام CIOB GMAO Light UI Excel
+# 🏭 توثيق منظومة الأصول، سجل الآلات، والـ `Blueprint` المعرفي (`MACHINES_VIEW.md`)
 
-هذا الملف يوثق بالتفصيل المعماري والتقني صفحة **Machines Registered** والصفحات الثانوية التابعة لها (**Families**, **Templates**, **Blueprints**)، المتطابقة مع ورقة العمل المرجعية `Machines_Registered` في نموذج إكسيل التوأم (**Excel Twin**) والمعمارية النظيفة الموحدة (**Dedicated Clean Seed Architecture**).
-
----
-
-## 🏛️ 1. الفلسفة والهدف الوظيفي (Functional Philosophy)
-- **شجرة الأصول الصناعية (Asset Tree & Equipment Hierarchy):** بطاقة تعريفية لكل آلة أو خط إنتاج في المنشأة (Families ➔ Templates ➔ Blueprints ➔ Registered Machines).
-- **التوليد التلقائي لرموز الآلات (Auto-ID Engine):** توليد رمز الآلة تلقائياً استناداً إلى قالب أو عائلة الآلة (مثال: `ENC-01`, `DET-01`, `PRH-01`).
-- **المخططات الهندسية والمواصفات (Blueprints & Specs):** ربط كل نموذج آلة بمخطط تفصيلي يحدد القدرة بالكيلوواط، السرعة، الأبعاد، والمكونات الميكانيكية والكهربائية المطلوبة.
-- **الربط الجغرافي والمسؤولية الميدانية:** ربط كل آلة بمنطقة افتراضية (`id_zone_default`) وفني صيانة مرجعي مسؤول عنها (`technician`).
+يوثق هذا الملف المعمارية والفلسفة الصناعية لصفحة **سجل الآلات (`MachinesRegisteredView.tsx`)** والصفحات التابعة لها (**العائلات `FamilyView.tsx`**, **القوالب `TemplatesView.tsx`**, **المخططات المعرفية `BlueprintMachineView.tsx`**, و**جواز السفر الفني الشامل `MachinePassport360Modal.tsx`**).
 
 ---
 
-## 💾 2. معمارية البيانات المرجعية المخصصة (Dedicated Clean Seed Standard)
+## 🏛️ 1. الفلسفة الصناعية الثلاثية للأصول (`3-Tier Asset & Cognitive Blueprint Philosophy`)
 
-تتبع منظومة الآلات المعيار الذهبي المستلهم من نظام الصيانة التصحيحية (`Standard Corrective Pattern`):
+يفصل النظام بشكل صارم بين ثلاثة مستويات لمنع الخلط بين التصنيف القياسي، المعدة المادية في الورشة، والذاكرة المعرفية المتراكمة:
 
-```
-/src/data/machines/seedFamilies.json   (13 عائلة آلات)
-/src/data/machines/seedTemplates.json  (50 قالباً ونموذجاً)
-/src/data/machines/seedBlueprints.json (47 مخططاً تفصيلياً مع المواصفات)
-/src/data/machines/seedMachines.json   (412 آلة مسجلة بروابطها)
-/src/data/machines/seedZones.json      (14 منطقة إنتاجية)
-                      │
-           /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
-   (إدارة الحالة والتخزين الموحد SSOT + دوال التحقق)
-                      │
-           /src/presentation/router/useAppRouterProps.js
-                      │
-     ┌────────────────┬────────────────┬────────────────┐
-     │                │                │                │
-MachinesRegistered  Blueprints      Families        Templates
-   (سجل الآلات)    (المخططات)     (العائلات)       (النماذج)
-```
+1. **المستوى الأول — العائلة والقالب (`Family & Template`):**
+   - **العائلة (`Family` — `gmao_families_v2`):** التصنيف الهندسي العام للمعدات (مثال: `Détourage`, `Presse Hydraulique`, `Compresseur`).
+   - **القالب (`Template` — `gmao_templates_v2`):** الطراز القياسي للصانع والمواصفات الفنية العامة (القدرة بالكيلوواط، السرعة، الأبعاد).
+2. **المستوى الثاني — الآلة المسجلة (`Machine Registered` — الأصل الفيزيائي في الورشة):**
+   - هي الماكينة الحقيقية العاملة على أرض المصنع (`gmao_machines_v2`) أو النظام العام (`System General`).
+   - **المالك الحصري للواقع الفيزيائي:** تمتلك وحدها منطقتها الجغرافية الفعلية (`id_zone_default`)، الفني المسؤول عنها (`technician`)، عداد ساعات تشغيلها الحي (`compteur_actuel` / `meterReadings`)، والمكونات والأجزاء المركبة عليها فعلياً في `Nexus / machineElementsLedger`.
+   - **التجميع التشغيلي الاختياري للخطوط (`Rôle Opérationnel: MACHINE | LINE`):** يمكن تحديد الدور التشغيلي للآلة كـ `MACHINE` أو `LINE` وربطها اختيارياً بخط إنتاج أو آلة أم (`parent_id`) عبر `src/utils/assetHierarchy.ts` لتجميع مؤشرات التوقف والتكلفة وباريتو للخط، مع احتفاظ كل آلة بمنطقتها وقالبها ومخططها المستقل تماماً.
+3. **المستوى الثالث — المخطط المعرفي (`Blueprint` — البصمة الهندسية الافتراضية):**
+   - كيان معرفي افتراضي (`gmao_blueprints_v2`) يرتبط بالقالب والآلة.
+   - يتعلم ويتطور تراكمياً مع كل عملية إصلاح تصحيحي أو صيانة وقائية أو ربط في `Nexus`، فيحفظ شجرة الـ `BOM` النظرية (`components_theoriques`, `parts_theoriques`, `pdr_theoriques`)، خطط الوقائي المعيارية، والأعطال الشائعة.
+   - **قاعدة ذهبية:** الـ `Blueprint` افتراضي بحت؛ لا يمتلك أبداً منطقة جغرافية (`Zone`) ولا فنياً مسؤولاً (`Technician`).
 
 ---
 
-## 📊 3. التطابق مع أعمدة إكسيل (Excel Twin Mapping)
+## 📊 2. بنية سجل الآلة المسجلة (`Machine Registered Schema`)
 
-| العمود في إكسيل | اسم الحقل البرمجي | النوع | الوصف والربط |
-| :---: | :--- | :--- | :--- |
-| **(A)** | `id_machine_registered` | `String` | الرمز الفريد للآلة (المفتاح الأساسي، مثال: `DET-01`, `PRH-01`). |
-| **(B)** | `designation` | `String` | التسمية التفصيلية للآلة أو الخط الإنتاجي. |
-| **(C)** | `id_family` | `String` | المعرف المرجعي لعائلة الآلات (مرتبط بجدول `seedFamilies.json`). |
-| **(D)** | `id_templates` | `String` | المعرف المرجعي لنموذج أو قالب الآلة (مرتبط بجدول `seedTemplates.json`). |
-| **(E)** | `id_blueprint` | `String` | المخطط الهندسي التابع للنموذج (مرتبط بجدول `seedBlueprints.json`). |
-| **(F)** | `id_zone_default` | `String` | المنطقة الصناعية الافتراضية التي تتواجد بها الآلة (مرتبط بجدول `seedZones.json`). |
-| **(G)** | `technician` | `String` | الفني الرئيسي المشرف على الصيانة (مرتبط بجدول `Technicians`). |
-| **(H)** | `status` | `String` | الحالة التشغيلية للآلة (`En Service`, `En Maintenance`, `Arrêt`). |
+| الحقل البرمجي | النوع | الوصف والربط المرجعي |
+| :--- | :---: | :--- |
+| `id_machine_registered` | `String` | الرمز الفريد للآلة في المصنع (`DET-01`, `PRH-01`). |
+| `designation` | `String` | التسمية التفصيلية للآلة أو الخط الإنتاجي. |
+| `id_family` | `String` | المعرف المرجعي لعائلة الآلة (`families.id_family`). |
+| `id_templates` | `String` | المعرف المرجعي لقالب/طراز الآلة (`templates.id_templates`). |
+| `id_blueprint` | `String` | المعرف المرجعي للبصمة المعرفية (`blueprints.id_blueprint`). |
+| `id_zone_default` | `String` | المنطقة الصناعية الفعلية للآلة (`zones.id_zone`). |
+| `technician` | `String` | الفني الرئيسي المسؤول عن الآلة (`users` / `technicians`). |
+| `status` | `String` | الحالة التشغيلية (`En Service`, `En Maintenance`, `Arrêt`, `ARCHIVEE`). |
+| `asset_level` | `'MACHINE' \| 'LINE'` | الدور التشغيلي (آلة إنتاج/نظام عام أو خط إنتاج تجميعي). |
+| `parent_id` | `String \| null` | معرف الخط الأب أو الآلة الأم (اختياري للتجميع التشغيلي فقط، مع منع الحلقات الدائرية). |
+| `compteur_actuel` | `Number` | القراءة الحالية لعداد الآلة (ساعات، دورات، كيلومتر). |
+| `unite_compteur` | `String` | وحدة قياس العداد (`HEURES`, `CYCLES`, `KM`). |
 
 ---
 
-## 🔗 4. الصفحات الثانوية والربط المتعدد (Secondary Views & Navigation)
+## 🛡️ 3. جواز السفر الفني الشامل 360° (`MachinePassport360Modal.tsx`)
 
-1. **صفحة العائلات (`FamilyView.jsx`):**
-   - استعراض العائلات الـ 13 مع عداد النماذج والآلات التابعة لكل عائلة.
-   - الانتقال السريع والمصفى نحو نماذج أو آلات العائلة.
-2. **صفحة النماذج والقوالب (`TemplatesView.jsx`):**
-   - استعراض النماذج الـ 50، وتصفيتها حسب العائلة.
-   - الربط المباشر مع المخططات الهندسية (`Blueprints`) وسجل الآلات.
-3. **صفحة المخططات الهندسية (`BlueprintMachineView.jsx`):**
-   - استعراض ومطابقة 47 مخططاً هندسياً يشتمل على المواصفات الفنية والمكونات الميكانيكية والكهربائية.
-4. **شاشات الصرف السريع والتدخلات (`Sortie / Intervention`):**
-   - عند اختيار آلة أثناء تسجيل عطل أو سحب قطعة غيار، يتم تحميل بيانات الآلة وموقعها تلقائياً.
+من داخل جدول `MachinesRegisteredView.tsx`، يفتح زر **Passeport 360°** بطاقة الفحص الشاملة للآلة المحسوبة عبر `MachineHealthPassportService.ts`:
+1. **مؤشر الصحة الشامل (`Health Score / 100`)** وتكلفة الملكية الشاملة (`TCO = Correctif PDR + Préventif + Bobinage Externe`).
+2. **تنبيهات تكرار أعطال الأعضاء (`Recurrent Organ Failure / BER Alerts`)** عند تعطل نفس العضو 3 مرات أو أكثر.
+3. **سجل قراءات العدادات (`meterReadings`)** والفوارق التراكمية ($\Delta$).
+4. **السجل التاريخي الموحد** لأوامر العمل التصحيحية (`BT`) والتنفيذات الوقائية المؤرخة (`PreventiveExecution`).

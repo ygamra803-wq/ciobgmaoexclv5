@@ -369,10 +369,42 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
   - واجهة مركز التموين: `src/presentation/pages/stock/components/StockReplenishmentModal.tsx` و `StockView.tsx`.
 - **الاختبارات المُثبتة:**
   - `src/tests/unit/MachinePassportAndReplenishment.test.ts` (3 اختبارات حاسمة وناجحة 100%).
+  - `src/tests/unit/GapClosureConstitution.test.ts` (اختبارات حراسة سقف الاستلام `remainingNeeded` ومنع الاستلام المزدوج).
 
 ---
 
-## 15. سجل التحقق الآلي (`Automated Verification Matrix`)
+## 15. سجل التدقيق المؤسسي غير القابل للطمس (`Institutional Append-Only Audit Ledger — AUDIT-LEDGER-P0`)
+
+- **القدرة الهندسية:** توثيق مركزي غير قابل للتعديل أو الحذف (`Append-Only`) لكافة العمليات الحرجة في المصنع، يسجل الحالة قبل وبعد (`before / after`) مع هوية الفاعل ودوره الوظيفي والطابع الزمني الدقيق.
+- **المراجع البرمجية:**
+  - عقد البيانات: `src/types/audit.ts` (`AuditEvent`, `AuditActionType`, `AuditEntityType`).
+  - خدمة التدقيق: `src/application/services/audit/AuditService.ts`.
+  - مفتاح التخزين القياسي: `STORAGE_KEYS.AUDIT_EVENTS = 'gmao_audit_events_v1'`.
+  - واجهة الاستعراض والفلترة والتصدير: `src/presentation/pages/settings/components/SettingsAuditTrailSection.tsx`.
+- **النقاط الإلزامية الموثقة تلقائياً (`Before / After Snapshots`):**
+  1. تعديل الرصيد الافتتاحي (`stockInitial`) أو السعر الوحدوي (`prix_unitaire`) أو الحد الأدنى (`seuil`) لمقال مخزني (`STOCK_INITIAL_CHANGED`, `STOCK_PRICE_CHANGED`).
+  2. أرشفة أو استعادة آلة مسجلة (`MACHINE_ARCHIVED`, `MACHINE_RESTORED`).
+  3. قرارات مركز الاعتماد `Maker-Checker` (`VALIDATION_APPROVED`, `VALIDATION_REJECTED`, `VALIDATION_CLARIFICATION`).
+  4. دورة حياة أوامر الشراء والتموين (`PO_CREATED`, `PO_RECEIVED`, `PO_CANCELLED`).
+  5. تعديلات الميزانيات المالية السنوية والشهرية (`BUDGET_UPDATED`).
+- **الاختبارات المُثبتة:**
+  - `src/tests/unit/GapClosureConstitution.test.ts`.
+
+---
+
+## 16. الفلسفة الثلاثية للأصول والـ `Blueprint` والتجميع التشغيلي للخطوط (`3-Tier Asset, Blueprint & Line Rollup`)
+
+- **القدرة الهندسية:** فصل معماري صارم بين المستويات الثلاثة للأصول الصناعية مع دعم التجميع التشغيلي الاختياري لخطوط الإنتاج دون تحويل النظام إلى شجرة معقدة تخلط الجغرافيا بالمكونات:
+  1. **المستوى الأول (`Family & Template`):** التصنيف القياسي والمواصفات العامة للطراز.
+  2. **المستوى الثاني (`Machine Registered`):** الآلة الفيزيائية المسجلة في الورشة، وهي **المالك الحصري** للمنطقة الجغرافية (`Zone`)، الفني المسؤول (`Technician`)، العداد الحي (`compteur_actuel`)، والمكونات والأجزاء المركبة فعلياً (`machineElementsLedger`).
+  3. **المستوى الثالث (`Blueprint`):** البصمة المعرفية الافتراضية التي تتراكم فيها الخبرة الهندسية (`BOM` النظري، خطط الوقائي، الأعطال الشائعة) مع كل تدخل، ولا تمتلك أبداً منطقة أو فنياً.
+  4. **التجميع التشغيلي للخطوط (`Rôle Opérationnel: MACHINE | LINE`):** إمكانية ربط آلة بخط إنتاج أو آلة أم (`parent_id`) عبر `src/utils/assetHierarchy.ts` مع منع الحلقات الدائرية (`Cycle Detection`)، وفصل الأبناء تلقائياً عند أرشفة الخط الأب (`detachChildrenOnParentArchive`)، وتجميع مؤشرات التوقف والتكلفة للخط (`computeBranchRollupMetrics`) مع احتفاظ كل آلة بمنطقتها وقالبها ومخططها المستقل.
+- **الاختبارات المُثبتة:**
+  - `src/tests/unit/Phase7AssetBomNexus.test.ts` و `src/tests/unit/GapClosureConstitution.test.ts`.
+
+---
+
+## 17. سجل التحقق الآلي (`Automated Verification Matrix`)
 
 | المجال الهندسي | القدرة الموثّقة | ملف الاختبار الآلي (`Vitest`) |
 |---|---|---|
@@ -388,13 +420,15 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | **مركز الاعتماد وفصل السلطات** | حماية الصرف المخزني للفنيين، حفظ `pieces_claimed`، دورة التوضيح والرفض، ومسارات Maker-Checker | `src/tests/ValidationGovernance.test.ts` |
 | **الصيانة بالعدادات وساعات التشغيل** | رتابة قراءات العدادات، حساب الفوارق التراكمية، إنذارات الاقتراب من السقف، وتقييم المهام الهجينة | `src/tests/unit/MeterMaintenance.test.ts` |
 | **السجل الفني 360° ومحرك التموين** | حساب TCO ومؤشرات صحة الآلة، حراسة دورة أوامر الشراء، والتوليد التلقائي لحركات Entrée المخزنية | `src/tests/unit/MachinePassportAndReplenishment.test.ts` |
+| **دستور إغلاق الفجوات (`Batch A–E`)** | سجل التدقيق المؤسسي `AUDIT_EVENTS`، التجميع التشغيلي للخطوط `MACHINE \| LINE` ومنع الحلقات واستقلالية المنطقة/الـ `Blueprint`، حراسة العدادات وأوامر الشراء وRBAC | `src/tests/unit/GapClosureConstitution.test.ts` |
 | **المعمارية وأداء العرض** | التصفح الافتراضي 60fps لـ 1,000 سجل دون إجهاد المتصفح (`GmaoIndustrialDataGrid`) | `src/tests/unit/VirtualScrolling.test.tsx` |
 
 ---
 
-## 16. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
+## 18. الحدود الهندسية الصريحة (`Explicit System Boundaries`)
 
 التزاماً بالشفافية الهندسية أمام المستثمرين والمطورين:
 1. **منصة ويب تشغيلية أولاً (`Web-First Operational Platform`):** يعمل النظام بكامل قدراته عبر المتصفح مع تخزين هجين (`Memory Cache + localStorage + IndexedDB`) وخادم Node/Express محلي (`server.ts`).
 2. **نطاق التشغيل الشبكي المحلي (`LAN Host Scope`):** يوفر الخادم الحالي كتابة ذرية متسلسلة (`writeQueue` إلى `gmao_state.json`) ورقم إصدار (`version`) وكشف تعارض (`HTTP 409`) وبث إشعارات تحديث (`SSE`). هذا التصميم مناسب لمزامنة عدة أجهزة داخل ورشة أو مصنع محلي، لكنه ليس قاعدة بيانات علائقية موزعة (`PostgreSQL / Cloud SQL`) لآلاف المستخدمين المتزامنين في نفس اللحظة.
-3. **التقييم المالي التشغيلي وليس المحاسبة القانونية (`Operational Valuation vs. Financial ERP`):** يحسب النظام تكلفة قطع الغيار المستهلكة، قيمة المخزون الحالي، وتكلفة ساعات الصيانة لأغراض الضبط الصناعي وإدارة المصنع، ولا يدّعي استبدال برامج المحاسبة القانونية والفوترة الضريبية (`SAP FI/CO` أو `ERP` المالي).
+3. **التقييم المالي التشغيلي وليس المحاسبة القانونية (`Operational Valuation vs. Financial ERP`):** يحسب النظام تكلفة قطع الغيار المستهلكة، قيمة المخزون الحالي، الميزانيات التشغيلية، وتكلفة ساعات الصيانة لأغراض الضبط الصناعي وإدارة المصنع، ولا يدّعي استبدال برامج المحاسبة القانونية والفوترة الضريبية (`SAP FI/CO` أو `ERP` المالي).
+

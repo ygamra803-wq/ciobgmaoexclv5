@@ -8,13 +8,13 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 ## 1. Principes Non-Négociables (Constitution GMAO)
 
 1. **Une entité = Une clé de stockage canonique (`STORAGE_KEYS`) = Un chemin d'écriture unique (`DataGateway.ts` + `useGmaoStore.ts`).**
-2. **Parc Machines (`machines`)** est le référentiel maître (Master) pour tous les identifiants `id_machine_registered` / `id_machine` / `code_machine`.
+2. **Parc Machines (`machines`)** est le référentiel maître (Master) pour tous les équipements physiques enregistrés (`id_machine_registered` / `id_machine` / `code_machine`).
 3. **Zéro injection automatique de seed au démarrage** : Le stockage local ne reçoit jamais de données seed de manière implicite au chargement si la collection est vide. Le chargement des données de démonstration se fait exclusivement via une action utilisateur explicite (`DataGateway.loadDemoData` / `DataGateway.loadDemoSection`).
 4. **Interdiction des seuils de longueur arbitraires** : Une collection contenant `0`, `2` ou `5` enregistrements est une donnée utilisateur valide et ne doit jamais être écrasée par un seed.
 5. **Vérité des chiffres** : Les compteurs, badges de barre latérale et indicateurs KPI reflètent strictement le nombre réel d'enregistrements stockés (`list.length`), sans valeurs codées en dur.
 6. **Hiérarchie de Stockage et Résolution de Conflits** :
    - **Ordre de priorité** : Mémoire Zustand (`useGmaoStore`) → `localStorage` / `IndexedDB` (`DataGateway`) → Serveur Hôte LAN (`server.ts`).
-   - **Synchronisation Serveur (`server.ts`)** : Protégée par `X-GMAO-API-TOKEN`, liste blanche `ALLOWED_ENTITIES`, contrôle de rôle `x-gmao-role`, file d'écriture atomique (`writeQueue`), et détection de conflit `version` (`409 Conflict`).
+   - **Synchronisation Serveur (`server.ts`)** : Protégée par `X-GMAO-API-TOKEN`, liste blanche `ALLOWED_ENTITIES`, contrôle de rôle Fail-Closed (`serverRbacPolicy.ts` / `x-gmao-role`), file d'écriture atomique (`writeQueue`), et détection de conflit `version` (`409 Conflict`).
 
 ---
 
@@ -22,7 +22,8 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 
 | Entity | Primary Key | Foreign Keys (FK →) | Storage Key (Canonical) | Seed File (Explicit Demo Only) | Writer (Gateway / Store) |
 |--------|-------------|---------------------|-------------------------|--------------------------------|--------------------------|
-| **machines** | `id_machine_registered` | → `zones.id_zone`, `families.id_family`, `templates.id_templates` | `gmao_machines_v2` | `src/data/machines/seedMachines.json` | `DataGateway.saveMachines` / `useGmaoStore` |
+| **machines** | `id_machine_registered` | → `zones.id_zone`, `families.id_family`, `templates.id_templates`, `machines.id_machine_registered` (`parent_id` optionnel) | `gmao_machines_v2` | `src/data/machines/seedMachines.json` | `DataGateway.saveMachines` / `useGmaoStore` |
+| **generalSystemTypes** | `id` (`code`) | — | `gmao_general_system_types_v1` | `[]` | `DataGateway.saveGeneralSystemTypes` / `useGmaoStore` |
 | **families** | `id_family` | — | `gmao_families_v2` | `src/data/machines/seedFamilies.json` | `DataGateway.saveFamilies` / `useGmaoStore` |
 | **templates** | `id_templates` | → `families.id_family` | `gmao_templates_v2` | `src/data/machines/seedTemplates.json` | `DataGateway.saveTemplates` / `useGmaoStore` |
 | **blueprints** | `id_blueprint` | → `templates.id_templates` | `gmao_blueprints_v2` | `src/data/machines/seedBlueprints.json` | `DataGateway.saveBlueprints` / `useGmaoStore` |
@@ -32,8 +33,11 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **stockTypes** | `id_type` | — | `gmao_types_v5` | `src/data/stock/seedStockTypes.json` | `DataGateway.saveStockTypes` / `useGmaoStore` |
 | **designations** | `ref` (`id`) | → `stockTypes.id_type` | `gmao_designations_v3` | Dérivé de `seedStockItems.json` | `DataGateway.saveDesignations` / `useGmaoStore` |
 | **mouvements** | `id` (`code_bon`) | → `rawStock.ref`, `machines.id_machine_registered`, `zones.id_zone` | `gmao_mouvements_v2` | `src/data/movements/seedMouvements.json` | `DataGateway.saveMouvements` / `useGmaoStore` |
+| **sortieDemands** | `id` (`code_demande`) | → `rawStock.ref`, `machines.id_machine_registered` | `gmao_sortie_demands_v1` | `[]` | `DataGateway.saveSortieDemands` / `useGmaoStore` |
+| **replenishmentOrders** | `id` (`code_commande`) | → `rawStock.ref` (`items[].ref`) | `gmao_replenishment_orders_v1` | `[]` | `DataGateway.saveReplenishmentOrders` / `useGmaoStore` |
 | **preventiveTasks** | `id` (`code`) | → `machines.id_machine_registered`, `zones.id_zone`, `warehouseItems.id` (`id_composant` / `id_part`) | `gmao_preventive_tasks_v9` | `src/data/preventive/seedPreventiveTasks.json` | `DataGateway.savePreventiveTasks` / `useGmaoStore` |
 | **preventiveExecutions** | `id` | → `preventiveTasks.id`, `machines.id_machine_registered`, `warehouseItems.id` (`id_composant` / `id_part`) | `gmao_preventive_executions_v1` | `[]` | `ExecutionService.recordExecution` / `DataGateway.savePreventiveExecutions` |
+| **meterReadings** | `id` | → `machines.id_machine_registered` (`machineId`) | `gmao_meter_readings_v1` | `[]` | `MeterService` / `DataGateway.saveMeterReadings` |
 | **preventiveActions** | `id` (`code`) | — | `gmao_preventive_actions_v3` | `src/data/preventive/seedPreventiveActions.json` | `DataGateway.savePreventiveActions` / `useGmaoStore` |
 | **preventiveGuides** | `id` (`code`) | → `preventiveActions.code` | `gmao_preventive_guides_v3` | `src/data/preventive/seedPreventiveGuides.json` | `DataGateway.savePreventiveGuides` / `useGmaoStore` |
 | **preventivePlans** | `id` (`code`) | → `machines.id_machine_registered` | `gmao_preventive_plans_v3` | `[]` | `DataGateway.savePreventivePlans` / `useGmaoStore` |
@@ -54,6 +58,8 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **partTypes** | `id_type` | — | `gmao_part_types_v2` | `src/data/warehouse/seedPartTypes.json` | `DataGateway.savePartTypes` / `useGmaoStore` |
 | **partDesignations** | `id` (`ref`) | → `partTypes.id_type` | `gmao_part_designations_v2` | `src/data/warehouse/seedPartDesignations.json` | `DataGateway.savePartDesignations` / `useGmaoStore` |
 | **sortiesExterne** | `id` (`code`) | → `machines.id_machine_registered`, `warehouseItems.id` (`id_composant`) | `gmao_sortie_externe_bobinage_v1` | `src/data/movements/seedSortiesExternes.json` | `DataGateway.saveSortiesExterne` / `useGmaoStore` |
+| **financialBudgets** | `fiscalYear` | — | `gmao_financial_budgets_v1` | `[]` | `DataGateway.saveFinancialBudgets` / `useGmaoStore` |
+| **auditEvents** | `id` (`AUD-*`) | — (Append-Only Ledger) | `gmao_audit_events_v1` | `[]` | `AuditService.recordEvent` / `DataGateway.saveAuditEvents` |
 
 ---
 
@@ -70,22 +76,18 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 
 ## 4. Politique d'Intégrité Référentielle
 
-- **Suppression d'une machine (`machines`) ou d'un technicien (`users`)** : Vérification obligatoire des dépendances historiques. Si l'entité possède un historique (Préventif, Correctif, Mouvements, BOM), elle est archivée (`status: 'ARCHIVEE'` ou `is_active: false`) au lieu d'une suppression physique.
+- **Suppression d'une machine (`machines`) ou d'un technicien (`users`)** : Vérification obligatoire des dépendances historiques. Si l'entité possède un historique (Préventif, Correctif, Mouvements, BOM), elle est archivée (`status: 'ARCHIVEE'` ou `is_active: false`) au lieu d'une suppression physique. L'archivage d'une ligne mère détache proprement ses machines filles (`detachChildrenOnParentArchive`).
 - **Création d'interventions / tâches** : Les listes déroulantes de sélection d'équipements utilisent exclusivement `filterActiveMachines(machines)` (`src/utils/activeMachines.ts`), excluant les machines archivées et sans jamais injecter de machines fictives codées en dur.
 - **Détection et purge des orphelins** : Gérées via `src/services/dataIntegrityService.ts` dans `Paramètres > Intégrité` et persistées via `DataGateway` sur les clés canoniques.
 
 ---
 
-## 5. Hiérarchie Industrielle des Équipements & Nomenclature (BOM Nexus)
+## 5. Philosophie Industrielle à 3 Niveaux (`Family/Template ➔ Machine Registered ➔ Blueprint`) & `BOM Nexus`
 
-L'architecture métier distingue strictement quatre niveaux dans la chaîne `Blueprint ➔ Machine ➔ Component / Part ➔ PDR` :
-
-1. **`Blueprint` (`gmao_blueprints_v2`)** : Modèle d'ingénierie rattaché au `Template` de machine. Il définit la nomenclature théorique hiérarchisée :
-   - `components_theoriques` (Sous-ensembles réparables/rotatifs),
-   - `parts_theoriques` (Sous-parties mécaniques / emplacements fonctionnels),
-   - `pdr_theoriques` (Pièces de rechange consommables, pouvant référencer un `Component` ou `Part` parent),
-   - `preventivePlanItems` & `commonFailures` (liés aux `Component/Part` cibles et aux `pdr_ref` recommandées).
-2. **`Components` (`warehouseItems` avec `nature === 'COMPONENT'`)** : Sous-ensembles rotatifs suivis individuellement (`mot 01`, pompes, réducteurs, variateurs) gérés par **cycle de vie d'état** (`Actif / En service`, `En réserve`, `En bobinage`, `HS`), liés aux `Sorties Externes (Bobinage)` et aux interventions (`id_composant`).
-3. **`Parts` (`warehouseItems` avec `nature === 'PART'`)** : Éléments mécaniques ou fonctionnels localisés sur la machine (`Table croisée`, `Mandrin`, `Arbre`), liés aux tâches préventives et aux interventions correctives (`id_part`, `nom_part`) pour l'analyse de fiabilité par organe (`Pareto Organes`).
-4. **`PDR` (`rawStock` — `gmao_raw_stock_v8`)** : Pièces de rechange consommables (roulements, joints, courroies, contacteurs) gérées exclusivement par **quantité mathématique** (`stockActuel = stockInitial + entrées − sorties` via `IncrementalStockIndex`). Seuls les articles de `rawStock` génèrent des mouvements de déduction (`Sortie Interne`) lors de l'exécution préventive ou de la clôture corrective.
-
+1. **Niveau 1 — `Family` & `Template` (`gmao_families_v2`, `gmao_templates_v2`)** : Classification industrielle et fiche de spécifications standard constructeur (puissance, vitesse, modèle).
+2. **Niveau 2 — `Machine Registered` (`gmao_machines_v2`)** : L'équipement physique réel installé dans l'atelier (ou `System General`). **Elle seule possède** sa zone géographique (`id_zone_default`), son technicien référent (`technician`), son compteur d'exploitation (`compteur_actuel` / `meterReadings`), et ses organes montés (`machineElementsLedger`). Elle peut optionnellement déclarer un `asset_level: 'MACHINE' | 'LINE'` et un `parent_id` pour l'agrégation opérationnelle de ligne (`src/utils/assetHierarchy.ts`), sans jamais hériter de la `Zone`, de la `Family` ou du `Blueprint` de la ligne mère.
+3. **Niveau 3 — `Blueprint` (`gmao_blueprints_v2`)** : Empreinte cognitive virtuelle rattachée au `Template` et à la `Machine`. Elle capitalise la connaissance technique au fil des interventions (`components_theoriques`, `parts_theoriques`, `pdr_theoriques`, `preventivePlanItems`, `commonFailures`). **Un `Blueprint` est virtuel : il ne possède jamais de `Zone` ni de `Technicien`.**
+4. **Nomenclature `BOM Nexus` (`Component` vs `Part` vs `PDR`)** :
+   - **`Components` (`warehouseItems`, `nature === 'COMPONENT'`)** : Sous-ensembles rotatifs suivis par cycle de vie d'état (`Actif`, `En réserve`, `En bobinage`, `HS`).
+   - **`Parts` (`warehouseItems`, `nature === 'PART'`)** : Éléments mécaniques ou fonctionnels localisés sur la machine (`id_part`, `Pareto Organes`).
+   - **`PDR` (`rawStock` — `gmao_raw_stock_v8`)** : Pièces de rechange consommables gérées exclusivement par quantité mathématique (`stockActuel = stockInitial + entrées − sorties` via `IncrementalStockIndex`).

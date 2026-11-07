@@ -1,64 +1,32 @@
-# 🗓️ توثيق صفحة الصيانة الوقائية (Preventive Maintenance Views)
-## نظام CIOB GMAO Light UI Excel
+# 🗓️ توثيق منظومة الصيانة الوقائية بالزمن والعدادات (`PREVENTIVE_VIEW.md`)
 
-هذا الملف يوثق بالتفصيل المعماري والتقني صفحة **الصيانة الوقائية (Preventive Maintenance)** بشقيها: **المصفوفة السنوية الرئيسية (`PreventiveView.jsx`)** و**الصفحات المرجعية الثانوية (`PreventiveSecondaryView.jsx`)**، المتطابقة مع المعمارية النظيفة الموحدة (**Dedicated Clean Seed Architecture**).
-
----
-
-## 🏛️ 1. الفلسفة والهدف الوظيفي (Functional Philosophy)
-- **مصفوفة الأسابيع السنوية (52-Week Master Matrix - S1..S52):** جدولة ومراقبة 1,175 مهمة صيانة دورية عبر أسابيع السنة.
-- **رموز التدخلات المرجعية (Standard Action Codes):**
-  - `C`: Contrôle (مراقبة وفحص)
-  - `N`: Nettoyage (تنظيف وإزالة شوائب)
-  - `G`: Graissage (تشحيم)
-  - `V`: Vidange (تفريغ وتغيير زيوت)
-  - `R`: Remplacement (استبدال دوري)
-  - `S`: Serrage (شد وضبط ميكانيكي)
-  - `L`: Lubrification (تزييت)
-- **منشئ الخطط الوقائية (Plan Builder):** إنشاء خطط وقائية هندسية وتوليد مهامها آلياً لكل خط أو آلة.
-- **دليل التعليمات الفنية (Technical Guides):** بطاقات إرشادية لكل إجراء وقائي مع معايير السلامة وقطع الغيار المقترحة.
+يوثق هذا الملف المعمارية التقنية والوظيفية لوحدة **الصيانة الوقائية (`PreventiveView.tsx`, `PreventiveSecondaryView.tsx`, و `PreventiveMetersView.tsx`)** ومحركي التنفيذ المؤرخ (`ExecutionService.ts`) والعدادات (`MeterService.ts`).
 
 ---
 
-## 💾 2. معمارية البيانات المرجعية المخصصة (Dedicated Clean Seed Standard)
+## 🏛️ 1. الفلسفة والهدف الوظيفي
 
-```
-/src/data/preventive/seedPreventiveTasks.json   (1,175 مهمة وقائية مجدولة S1..S52)
-/src/data/preventive/seedPreventiveActions.json (7 رموز إجراءات قياسية)
-/src/data/preventive/seedPreventiveGuides.json  (10 كتيبات وإرشادات فنية)
-                      │
-           /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
-   (إدارة مهام الصيانة وسجلات التنفيذ المؤرخة والمصدر الوحيد SSOT)
-                      │
-           /src/presentation/router/useAppRouterProps.js
-                      │
-         ┌────────────┴────────────┐
-         │                         │
-  PreventiveView           PreventiveSecondaryView
-(المصفوفة والتحليلات)     (منشئ الخطط، الدليل، الإجراءات)
-```
+1. **مصفوفة الأسابيع السنوية (`52-Week Master Matrix — S1..S52`):** جدولة ومراقبة المهام الوقائية عبر أسابيع السنة برموز الإجراءات القياسية (`C` Contrôle, `N` Nettoyage, `G` Graissage, `V` Vidange, `R` Remplacement, `S` Serrage, `L` Lubrification).
+2. **الذاكرة الزمنية غير القابلة للطمس (`Immutable Preventive Executions`):**
+   - إتمام أي مهمة وقائية لا يكتفي بقلب راية حالة مؤقتة، بل ينشئ سجلاً تاريخياً مؤرخاً (`PreventiveExecution` في `STORAGE_KEYS.PREVENTIVE_EXECUTIONS`) يحمل `periodMonth (YYYY-MM)`، المنفذ، المكون/الجزء (`id_composant`, `id_part`)، والقطع المستهلكة.
+3. **الصيانة الوقائية بالعدادات وساعات التشغيل (`Meter-Based & Hybrid PM`):**
+   - عبر `MeterService.ts` وواجهة `PreventiveMetersView.tsx`، تدعم المهام الوقائية 3 أنماط إطلاق (`type_declenchement`):
+     - `CALENDRIER`: حسب الجدول الزمني الأسبوعي/الشهري.
+     - `COMPTEUR`: عند بلوغ قراءة عداد الآلة عتبة الاستحقاق (`compteur_prochain_declenchement`).
+     - `HYBRIDE`: المعيار المزدوج (الأجل الأسبق بين التقويم والعداد).
+   - **تقييم العتبات (`OK` / `WARNING` / `OVERDUE`):** تنبيه استباقي (`WARNING`) عند دخول القراءة في هامش الـ 10% الأخيرة قبل العتبة، وتنبيه تجاوز (`OVERDUE`) عند بلوغها، مع نافذة جولة قراءة سريعة للورشة (`Tournée de Relevé Rapide`).
+4. **حوكمة الاعتماد (`Maker-Checker`):**
+   - تنفيذ الفني الميداني لمهمة وقائية تتضمن قطع غيار يسجل المطالبة (`pieces_claimed`) بحالة `PENDING_VALIDATION`، ولا تُخصم القطع من `rawStock` إلا بعد اعتماد المشرف في `ValidationCenterView.tsx`.
 
 ---
 
-## 📊 3. بنية المهام الوقائية (Preventive Task Schema)
+## 💾 2. مفاتيح التخزين القياسية (`STORAGE_KEYS`)
 
-| الحقل البرمجي | النوع | الوصف |
-| :--- | :---: | :--- |
-| `id` | `String` | المعرف الفريد للمهمة (مثال: `ID-PREV-DET01-MOTEUR-MEN-0001-1`). |
-| `code` | `String` | رمز المهمة المرجعي. |
-| `id_machine` | `String` | رمز الآلة المرتبطة (مطابق لـ `seedMachines.json`). |
-| `nom_machine` | `String` | اسم وتسمية الآلة. |
-| `id_zone` | `String` | المنطقة الصناعية (مطابق لـ `seedZones.json`). |
-| `composant` | `String` | المكون أو الجزء المعني بالصيانة الوقائية. |
-| `action_code` | `String` | رمز الإجراء القياسي (`C`, `N`, `G`, `V`, `R`, `S`, `L`). |
-| `frequence` | `String` | الدورية (`Hebdomadaire`, `Mensuel`, `Trimestriel`, `Semestriel`, `Annuel`). |
-| `planning` | `Object` | خريطة الأسابيع السنوية المجدولة (مثال: `{"S1": "C", "S5": "C"}`). |
-| `etat` | `String` | الحالة التشغيلية للمهمة (`À faire`, `En cours`, `Terminé`). |
-| `responsable` | `String` | الفني أو المشرف المسؤول. |
-| `duree_estimee` | `String` | الزمن المقدر للإنجاز. |
-
----
-
-## 🔗 4. التكامل المزدوج مع المستودع وسجلات التدخلات
-- عند تأكيد إنجاز مهمة وقائية تتطلب استبدال قطعة غيار (`R` أو `V`)، يتيح النظام تسجيل حركة صرف فورية (`Sortie`) نحو حساب الآلة تلقائياً.
-- ربط مباشر بين رمز الآلة في المهمة الوقائية وسجلها الكامل في صفحة الآلات (`MachinesRegisteredView`).
+| الكيان | المفتاح القياسي | الخدمة المسؤولة |
+| :--- | :--- | :--- |
+| **المهام الوقائية (`preventiveTasks`)** | `gmao_preventive_tasks_v9` | `DataGateway.savePreventiveTasks` |
+| **سجل التنفيذات المؤرخة (`preventiveExecutions`)** | `gmao_preventive_executions_v1` | `ExecutionService.recordExecution` |
+| **قراءات العدادات (`meterReadings`)** | `gmao_meter_readings_v1` | `MeterService` / `DataGateway.saveMeterReadings` |
+| **رموز الإجراءات (`preventiveActions`)** | `gmao_preventive_actions_v3` | `DataGateway.savePreventiveActions` |
+| **الأدلة الفنية (`preventiveGuides`)** | `gmao_preventive_guides_v3` | `DataGateway.savePreventiveGuides` |
+| **الخطط الوقائية (`preventivePlans`)** | `gmao_preventive_plans_v3` | `DataGateway.savePreventivePlans` |

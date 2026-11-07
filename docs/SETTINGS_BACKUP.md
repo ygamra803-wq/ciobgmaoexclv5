@@ -1,61 +1,29 @@
-# ⚙️ توثيق الإعدادات ونظام النسخ الاحتياطي (Settings & Backup View)
-## نظام CIOB GMAO Light UI Excel
+# ⚙️ توثيق الإعدادات، المزامنة الشبكية `LAN`، وسجل التدقيق المؤسسي (`SETTINGS_BACKUP.md`)
 
-هذا الملف يوثق بالتفصيل المعماري والتقني صفحة **Paramètres & Excel Twin**، ونظام المزامنة والتخزين الاحتياطي لنظام **CIOB GMAO Light UI Excel**.
-
----
-
-## 🏛️ 1. الفلسفة والهدف الوظيفي (Functional Philosophy)
-- **الاستقلالية التامة دون إنترنت (100% Offline-First Data Sovereignty):** البيانات ملك للمستخدم بالكامل وتُحفظ محلياً في `localStorage` مع دعم التصدير والاستيراد لملفات `.xlsx` و `.json`.
-- **النسخ الاحتياطي التلقائي الذكي (Automated Local Backup Engine):** محرك نسخ احتياطي يعمل في الخلفية ويحفظ لقطات زمنية للبيانات لمنع أي فقدان للمعلومات القيمة.
-- **الربط المباشر مع ملفات النظام (File System Access API):** إمكانية ربط التطبيق بملف إكسيل محلي وتحديثه بضغطة زر.
+يوثق هذا الملف المعمارية التقنية لوحدة **الإعدادات (`SettingsView.tsx`)** ووحداتها الفرعية العشر (`src/presentation/pages/settings/components/`).
 
 ---
 
-## 📊 2. بنية البيانات في التصدير والاستيراد (Excel Twin Export/Import)
+## 🏛️ 1. الوحدات الفرعية لصفحة الإعدادات
 
-يتم تصدير واستيراد مصنف إكسيل موحد يحتوي على أوراق العمل التالية:
-1. `Stock_Actuel`: بيانات المخزون والمقالات والأرصدة المحسوبة.
-2. `Mouvement`: سجل كافة حركات الصرف والدخول مع كافة أعمدة التتبع الـ 12.
-3. `Machines_Registered`: سجل الآلات والخطوط وحالات التشغيل.
-4. `Families`: عائلات ومجموعات الآلات.
-5. `Templates`: قوالب ونماذج المعدات.
-6. `Zones`: المناطق والورشات الصناعية.
-7. `Diagnostics`: رموز ووصف الأعطال والتشخيص.
-8. `Types`: أنواع وتصنيفات المقالات.
-9. `Technicians`: قائمة الفنيين وتخصصاتهم ومناطقهم.
-10. `Operations`: قائمة المشغلين ورؤساء الفرق.
-
----
-
-## 🔒 3. بروتوكول حماية البيانات والخزنة المشفرة (Zero-Knowledge Vault Protocol)
-
-تم تعزيز نظام الحماية بالكامل ليعتمد على معمارية **Zero-Knowledge Vault** مبنية على معايير التشفير العسكري:
-1. **انعدام كلمات المرور المدمجة (Zero Hardcoded Passwords):**
-   - تم التخلص نهائياً من أي كلمات سر مدمجة أو ثابتة في الكود المصدري للتطبيق.
-   - رمز **Master PIN** هو المفتاح التشفيري الحصري الوحيد، وبدونه تكون البيانات المخزنة مجرد كتل عشوائية من البايتات المشفرة (`Ciphertext`).
-
-2. **التشفير المتماثل فائق الأمان (AES-256-GCM):**
-   - تشفير كامل لبيانات الحسابات والأدوار الحساسة باستخدام خوارزمية `AES-256-GCM` المعتمدة من NIST.
-   - توليد متجه تهيئة فريد ديناميكي (`IV - Initialization Vector` بطول 12 بايت) لكل عملية تشفير لمنع أي هجمات إعادة إرسال أو تحليل شفرات.
-
-3. **اشتقاق المفاتيح القياسي (PBKDF2 Key Derivation):**
-   - اشتقاق مفتاح التشفير من رمز Master PIN باستخدام دالة `PBKDF2` بـ **100,000 دورة** وخوارزمية `SHA-256`.
-   - توليد ملح تشفيري عشوائي ديناميكي (`Cryptographic Salt` بطول 16 بايت) عبر `crypto.getRandomValues`، وغير مدمج في الكود.
-
-4. **تأمين كلمات المرور الفردية (BCrypt Hashing):**
-   - داخل الخزنة المشفرة، تخزن كلمات مرور الحسابات بصيغة تجزئة `BCrypt (Salt Rounds = 10)`، مما يوفر حماية مزدوجة حتى في حالة فك تشفير الخزنة في الذاكرة الحية.
-
-5. **المصادقة الثنائية (2FA System Login):**
-   - تتطلب جلسة العمل تقديم ثلاثة عناصر متكاملة:
-     - المعرف أو الكود الوظيفي (`Code / Username`).
-     - كلمة المرور الشخصية للحساب (`Password`).
-     - رمز Master PIN لفك تشفير الخزنة والتحقق من الصلاحيات.
+تم تفكيك `SettingsView.tsx` إلى مكونات معيارية متخصصة:
+1. **`SettingsLanSyncSection.tsx`:** إدارة وضع الجهاز على الشبكة المحلية (`HOST` مقابل `LAN_CLIENT`)، عرض عنوان المضيف ورمز `QR Code`، ومراقبة اتصال البث الحي (`SSE`).
+2. **`SettingsServerSyncSection.tsx`:** المزامنة الصريحة (`Push / Pull`) مع ملف الحالة المركزي على الخادم (`data/gmao_state.json`) ومعالجة تعارض الإصدارات (`HTTP 409 Conflict` عبر `ServerSyncConflictModal.tsx`).
+3. **`SettingsExcelTwinSection.tsx`:** تصدير واستيراد مصنفات الإكسل (`.xlsx`) وتحميل القالب الفارغ (`excelEngineService.ts`) ومزامنة المرآة المحلية (`excelMirrorService.ts`).
+4. **`SettingsDataInjectionSection.tsx`:**
+   - تحميل بيانات الديمو صراحةً (`DataGateway.loadDemoData` / `loadDemoSection`).
+   - التصفير الشامل للمصنع الحقيقي (`DataGateway.clearAllForRealFactory`) الذي يضبط `START_MODE = 'empty'` ويصفر جميع الكيانات الـ 36+ بحيث تبقى `0` بعد تحديث الصفحة (`F5`).
+5. **`SettingsAuditTrailSection.tsx`:** استعراض وفلترة وتصدير **سجل التدقيق المؤسسي غير القابل للطمس (`Append-Only Audit Ledger — STORAGE_KEYS.AUDIT_EVENTS`)** ومزامنته مع سجل الخادم (`GET /api/gmao/audit`).
+6. **`SettingsIntegritySection.tsx`:** فحص نزاهة العلاقات المرجعية واكتشاف السجلات اليتيمة (`dataIntegrityService.ts`).
+7. **`SettingsAppearanceSection.tsx` & `SettingsRegionalCurrencySection.tsx`:** تخصيص المظهر، كثافة الجداول، وإعدادات العملة (`CURRENCY_CONFIG`).
 
 ---
 
-## 🎛️ 4. إدارة حسابات الإدارة والخزنة من صفحة الإعدادات
-- **التهيئة لأول مرة (Master PIN Setup):** عند تشغيل التطبيق لأول مرة في بيئة جديدة تطلب الواجهة إدخال رمز Master PIN لتوليد الخزنة المشفرة الأولية.
-- **تغيير Master PIN (Re-encryption Engine):** إمكانية تغيير رمز Master PIN في أي وقت، حيث يقوم النظام بفك تشفير الخزنة بالمفتاح القديم، وتوليد مفتاح جديد وإعادة تشفير كامل البيانات وحفظها فورياً.
-- **تحديث كلمات المرور للحسابات:** يمكن لمسؤول النظام تغيير كلمات مرور الحسابات الفردية داخل الخزنة مع اشتراط إدخال Master PIN لتأكيد العملية.
-- **إعادة الضبط الآمنة (Reset Vault):** إمكانية تصفير الخزنة المشفرة بعد تأكيد الهوية باستخدام Master PIN.
+## 🔐 2. الحماية، الصلاحيات (`RBAC`)، وسجل التدقيق (`Audit Ledger`)
+
+1. **سياسة الصلاحيات (`Fail-Closed RBAC`):**
+   - تُطبق على مستوى الواجهة (`AuthorizationService.tsx`) وعلى مستوى الخادم (`src/core/security/serverRbacPolicy.ts`).
+   - دور `VIEWER` ممنوع من أي كتابة (`HTTP 403`).
+   - الأدوار الميدانية (`TECHNICIEN / OPERATEUR`) مسموح لها بتسجيل العمليات الميدانية فقط (`correctiveInterventions`, `preventiveExecutions`, `meterReadings`, `sortieDemands`)، وممنوعة من تعديل المخزون مباشرة أو تزوير أوامر الشراء (`replenishmentOrders`) أو تعديل سجل التدقيق (`auditEvents`).
+2. **سجل التدقيق المؤسسي (`STORAGE_KEYS.AUDIT_EVENTS`):**
+   - يوثق تلقائياً كل عملية حرجة (`STOCK_INITIAL_CHANGED`, `STOCK_PRICE_CHANGED`, `MACHINE_ARCHIVED`, `MACHINE_RESTORED`, `VALIDATION_APPROVED`, `VALIDATION_REJECTED`, `PO_CREATED`, `PO_RECEIVED`, `PO_CANCELLED`, `BUDGET_UPDATED`) بالقيم قبل وبعد (`before / after`) وهوية الفاعل والطابع الزمني.

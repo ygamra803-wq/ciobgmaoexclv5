@@ -1,7 +1,7 @@
 # 🏛️ AGENTS.md — CIOB GMAO v4 Engineering Constitution & Agent Gateway
 
 > **STOP — READ THIS FIRST (Token & Context Discipline):**
-> Do **NOT** crawl `/docs` or read legacy manuals automatically. This file is the authoritative gateway. Open secondary files **only** when your specific task requires them.
+> Do **NOT** crawl `/docs` or read all markdown files automatically. This file is the authoritative gateway. Open secondary files **only** when your specific task requires them.
 
 ---
 
@@ -16,15 +16,23 @@
 3. **Stock Math Invariant:**
    - `stockActuel = stockInitial + entrées − sorties` computed exclusively via `src/application/IncrementalStockIndex.ts` and `src/application/services/StockCalculationService.ts`.
    - Do **not** modify `IncrementalStockIndex` or `StockCalculationService` unless a numeric bug is proven with a failing test case. Never combine direct stock mutation with a `Sortie` movement (prevents double deduction).
-4. **Temporal Memory & Explicit Lifecycles:**
-   - **Preventive Maintenance:** Completing a task records an immutable dated `PreventiveExecution` (`src/application/services/preventive/ExecutionService.ts` → `STORAGE_KEYS.PREVENTIVE_EXECUTIONS`) with `periodMonth (YYYY-MM)`, rather than merely flipping a status flag.
+4. **3-Tier Asset, Blueprint & BOM Nexus Philosophy (Strict Separation of Concerns):**
+   - **Tier 1 (`Family` & `Template`):** Standard industrial classification and technical catalog specifications (`puissance`, `vitesse`, manufacturer model).
+   - **Tier 2 (`Machine Registered` — Physical Shopfloor Asset):** The real machine on the shopfloor (`gmao_machines_v2`). It **exclusively owns** its physical location (`id_zone_default` / `Zone`), assigned `technician`, live operating counter (`compteur_actuel` / `meterReadings`), and physically mounted `Components`, `Parts`, and `PDR` (`machineElementsLedger` / `warehouseItems`).
+   - **Tier 3 (`Blueprint` — Virtual Cognitive Fingerprint):** A dynamic engineering knowledge twin (`gmao_blueprints_v2`) linked to `Template` / `Machine`. It accumulates learned maintenance knowledge (`components_theoriques`, `parts_theoriques`, `pdr_theoriques`, `preventivePlanItems`, `commonFailures`) across corrective and preventive interventions. **A `Blueprint` is virtual: it NEVER owns a physical `Zone` or `Technician`.**
+   - **Operational Line Grouping (`MACHINE | LINE` only):** Optional `parent_id` and `asset_level` (`'MACHINE' | 'LINE'`) on `machines` are strictly for operational line/parent-machine KPI rollup (`src/utils/assetHierarchy.ts`). Never conflate `Zone` (geography) or internal `Components/Parts` (`Entrepôt/Nexus`) with `parent_id`, and never inherit `Zone`, `Family`, or `Blueprint` from a parent line.
+5. **Temporal Memory, Explicit Lifecycles & Maker-Checker Governance:**
+   - **Preventive Maintenance (Calendar + Meter):** Completing a task records an immutable dated `PreventiveExecution` (`src/application/services/preventive/ExecutionService.ts` → `STORAGE_KEYS.PREVENTIVE_EXECUTIONS`) with `periodMonth (YYYY-MM)` and advances meter thresholds (`MeterService.ts`) when applicable.
    - **Corrective Maintenance:** Work orders enforce guarded transitions via `src/domain/maintenance/WorkOrderStateMachine.ts` (`DEMANDE ➔ EN_COURS / EN_ATTENTE_PDR ➔ CLOTURE`).
-5. **Referential Discipline & Safe Archive:**
+   - **Maker-Checker Validation (`VAL-1..VAL-5`):** Field technician executions (`BT`, preventive executions, `sortieDemands`) enter `PENDING_VALIDATION` without deducting `rawStock` until approved by a supervisor/manager (`validationReconciliation.ts`).
+6. **Institutional Append-Only Audit Ledger (`AUDIT_EVENTS`):**
+   - Critical state mutations (initial stock/price adjustments, machine archive/restore, maker-checker approvals/rejections, replenishment `PO` lifecycle, and financial budget updates) record immutable before/after events via `AuditService.recordEvent` (`STORAGE_KEYS.AUDIT_EVENTS`).
+7. **Referential Discipline & Safe Archive:**
    - Dropdowns for new PM tasks, WOs, and movements must use `filterActiveMachines(machines)` (`src/utils/activeMachines.ts`) from registered `machines` — never hardcoded fallback machine lists.
-   - Machines or personnel with historical movements/interventions must be soft-archived (`status: 'ARCHIVEE'` / `is_active: false`), never hard-deleted into orphans.
-6. **LAN Host & Security Boundaries (`server.ts`):**
-   - Respect `X-GMAO-API-TOKEN` authentication, `ALLOWED_ENTITIES` allowlist, RBAC role guards (`AuthorizationService.tsx` / `x-gmao-role`), serialized atomic disk writes (`writeQueue`: `.tmp` → `rename`), and `version` / `409 Conflict` checks.
-7. **Minimal Diffs:**
+   - Machines or personnel with historical movements/interventions must be soft-archived (`status: 'ARCHIVEE'` / `is_active: false`), never hard-deleted into orphans. Archiving a parent line detaches its children cleanly (`detachChildrenOnParentArchive`).
+8. **LAN Host & Security Boundaries (`server.ts`):**
+   - Respect `X-GMAO-API-TOKEN` authentication, `ALLOWED_ENTITIES` allowlist, fail-closed RBAC role guards (`AuthorizationService.tsx` / `serverRbacPolicy.ts` / `x-gmao-role`), serialized atomic disk writes (`writeQueue`: `.tmp` → `rename`), and `version` / `409 Conflict` checks.
+9. **Minimal Diffs:**
    - Change only what the task requires. No drive-by refactors, no unrequested UI redesigns, no hardcoded secrets.
 
 ---
@@ -33,8 +41,8 @@
 
 | Need | Authoritative File | Rule |
 | :--- | :--- | :--- |
-| **Implemented Capabilities & Code Pointers** | [`CAPABILITIES_AND_STRENGTHS.md`](./CAPABILITIES_AND_STRENGTHS.md) | Read when verifying existing features, services, or test coverage. |
-| **Architecture & ADR Decisions** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Read when reviewing system boundaries, ADRs (`ADR-01` to `ADR-08`), or executive overview. |
+| **Implemented Capabilities & Code Pointers** | [`CAPABILITIES_AND_STRENGTHS.md`](./CAPABILITIES_AND_STRENGTHS.md) | Read when verifying existing features, services, or automated test coverage. |
+| **Architecture & ADR Decisions** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Read when reviewing system boundaries, 3-Tier Asset/Blueprint architecture, or ADRs (`ADR-01` to `ADR-10`). |
 | **Canonical Storage Keys & FK Schema** | [`docs/DATA_SSOT.md`](./docs/DATA_SSOT.md) | Read when touching persistence, `STORAGE_KEYS`, migrations, or entity relationships. |
+| **Documentation Map** | [`DOCS_INDEX.md`](./DOCS_INDEX.md) | Read when looking up the exact documentation file for a specific module or screen. |
 | **Specific UI Screen Specs** | `docs/*_VIEW.md` | Open **only** the single `*_VIEW.md` matching the screen you are actively editing. |
-| **Historical Issues & Roadmap** | `docs/history/*`, `ROADMAP_AND_PHASES_PLAN.md` | **Do NOT open automatically.** Consult only if explicitly asked about project history or roadmap phases. |
