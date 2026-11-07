@@ -57,7 +57,7 @@ export interface IMachine {
   parent_id?: string | null;
   id_parent?: string | null;
   previous_parent_id?: string | null;
-  asset_level?: 'SITE' | 'ZONE_LINK' | 'LINE' | 'MACHINE' | 'SUB_SYSTEM';
+  asset_level?: 'MACHINE' | 'LINE';
   serial_number?: string;
   date_mise_en_service?: string;
   components_reels?: Array<{

@@ -1,42 +1,31 @@
 import { isArchivedMachine } from './activeMachines';
 
 /**
- * 🏛️ ASSET-HIERARCHY-P0 — Practical Industrial Asset Hierarchy (ISO-14224 pragmatic subset)
+ * 🏛️ ASSET-HIERARCHY-P0 — Operational Line / Parent Machine Grouping (CIOB 3-Tier Philosophy)
  *
- * Design Principles:
- * 1. Backward Compatibility: Legacy machines without `parent_id` or `asset_level` remain valid
- *    root-level or machine-level (`MACHINE`) assets.
- * 2. Cycle Immunity: Self-parenting (`A -> A`) and ancestor loops (`A -> B -> A`) are strictly
- *    detected and rejected/stripped before persistence.
- * 3. Safe Parent Archive Policy:
- *    - Policy: "WARN_AND_PRESERVE_CHILDREN" (with optional strict block `blockIfActiveChildren`).
- *    - When a parent asset (e.g. Production Line `LINE-01`) is archived, its active child machines
- *      are NEVER silently archived or corrupted. Instead, active children retain `previous_parent_id`
- *      for historical traceability while their active `parent_id` is safely detached (`null`),
- *      keeping `filterActiveMachines` 100% intact.
- * 4. Approved Corrective Rollup Only:
- *    - Parent-level failure counts, downtime, MTTR, and MTBF aggregate strictly approved/closed
- *      corrective interventions (`validation_status === 'APPROVED'` or closed BTs without pending/rejected status)
- *      across the parent and its descendants. Zero synthetic data is invented.
+ * Strict Architectural Boundaries (Non-Negotiable):
+ * - Tier 1 (Design Classification): `Family` ➔ `Template` defines the equipment category/model.
+ * - Tier 2 (Physical Reality): `Machine Registered` (`DET-01`, `DET-02`) is the real physical asset
+ *   on the shop floor. It exclusively owns its physical `Zone`, assigned `Technician`, live counter,
+ *   and mounted real components (`Nexus` / `Entrepôt`). It NEVER inherits `Zone` or `Technician`
+ *   from a parent or from a Blueprint.
+ * - Tier 3 (Cognitive Fingerprint): `Blueprint` (`id_blueprint`) is the accumulated virtual knowledge
+ *   twin (empirical BOM, proven PM plan, failure modes learned over interventions). Two machines of
+ *   the same template (`DET-01`, `DET-02`) can link to different Blueprints as their real history evolves.
+ *
+ * Role of `parent_id` & `asset_level` ('MACHINE' | 'LINE'):
+ * - Purely optional operational grouping (`Machine ➔ Production Line / Mother Machine`) for
+ *   analytical rollup (bottleneck detection, aggregated approved corrective downtime/MTTR/MTBF).
+ * - Never replaces `Zone` (geography) and never represents internal components/sub-assemblies
+ *   (which belong strictly to `Blueprint` / `Nexus` / `Entrepôt`).
  */
 
-export type AssetHierarchyLevel = 'SITE' | 'ZONE_LINK' | 'LINE' | 'MACHINE' | 'SUB_SYSTEM';
+export type AssetHierarchyLevel = 'MACHINE' | 'LINE';
 
 export const ASSET_HIERARCHY_LEVEL_LABELS: Record<AssetHierarchyLevel, string> = {
-  SITE: 'Site / Usine',
-  ZONE_LINK: 'Atelier / Zone',
-  LINE: 'Ligne de Production (Parent)',
-  MACHINE: 'Machine / Équipement',
-  SUB_SYSTEM: 'Sous-ensemble / Unité',
+  MACHINE: 'Machine / Équipement individuel',
+  LINE: 'Ligne de Production / Machine Mère (Regroupement)',
 };
-
-const VALID_LEVELS = new Set<AssetHierarchyLevel>([
-  'SITE',
-  'ZONE_LINK',
-  'LINE',
-  'MACHINE',
-  'SUB_SYSTEM',
-]);
 
 export function getMachineCanonicalId(machine: any): string {
   if (!machine || typeof machine !== 'object') return '';
@@ -55,13 +44,15 @@ export function getMachineParentId(machine: any): string | null {
   return clean.length > 0 ? clean : null;
 }
 
+/**
+ * Enforces strict 2-mode operational role ('MACHINE' | 'LINE').
+ * Any legacy or non-machine/line value ('SITE', 'ZONE_LINK', 'SUB_SYSTEM') normalizes to 'MACHINE'
+ * so geographical Zones and internal BOM Components are never conflated with registered machines.
+ */
 export function getMachineAssetLevel(machine: any): AssetHierarchyLevel {
   if (!machine || typeof machine !== 'object') return 'MACHINE';
-  const raw = String(machine.asset_level || '').trim().toUpperCase() as AssetHierarchyLevel;
-  if (VALID_LEVELS.has(raw)) {
-    return raw;
-  }
-  return 'MACHINE';
+  const raw = String(machine.asset_level || '').trim().toUpperCase();
+  return raw === 'LINE' ? 'LINE' : 'MACHINE';
 }
 
 /**
@@ -147,8 +138,9 @@ export function getDescendantMachineIds(parentId: string, machines: any[]): stri
 }
 
 /**
- * Resolves the full hierarchy context for a machine, including ancestor breadcrumb path
- * and inherited zone/family fallback if unset on the child machine.
+ * Resolves the operational parent/line context for a registered machine.
+ * Note: Physical `Zone`, `Technician`, `Family`, `Template`, and `Blueprint` belong strictly
+ * to the individual `Machine Registered` and are NEVER overwritten or inherited from the parent line.
  */
 export interface IMachineHierarchyContext {
   id: string;
@@ -158,8 +150,9 @@ export interface IMachineHierarchyContext {
   parentDesignation: string | null;
   breadcrumbIds: string[];
   breadcrumbLabels: string[];
-  effectiveZone: string;
-  effectiveFamily: string;
+  ownZone: string;
+  ownFamily: string;
+  ownBlueprint: string;
   isRoot: boolean;
 }
 
@@ -169,7 +162,7 @@ export function resolveMachineHierarchyContext(
 ): IMachineHierarchyContext {
   const selfId = getMachineCanonicalId(machine);
   const level = getMachineAssetLevel(machine);
-  const levelLabel = ASSET_HIERARCHY_LEVEL_LABELS[level] || ASSET_HIERARCHY_LEVEL_LABELS.MACHINE;
+  const levelLabel = ASSET_HIERARCHY_LEVEL_LABELS[level];
 
   const byId = new Map<string, any>();
   if (Array.isArray(machines)) {
@@ -191,8 +184,10 @@ export function resolveMachineHierarchyContext(
     String(machine?.designation || machine?.nom || selfId || '').trim(),
   ];
 
-  let effectiveZone = String(machine?.id_zone_default || machine?.zone || '').trim();
-  let effectiveFamily = String(machine?.id_family || '').trim();
+  // Physical and cognitive attributes belong strictly to the individual Machine Registered
+  const ownZone = String(machine?.id_zone_default || machine?.zone || '').trim();
+  const ownFamily = String(machine?.id_family || '').trim();
+  const ownBlueprint = String(machine?.id_blueprint || '').trim();
 
   const visited = new Set<string>(selfId ? [selfId] : []);
   let cursorId = validParentId;
@@ -205,12 +200,6 @@ export function resolveMachineHierarchyContext(
     breadcrumbLabels.unshift(
       ancestor ? String(ancestor.designation || ancestor.nom || cursorId).trim() : cursorId
     );
-    if (!effectiveZone && ancestor?.id_zone_default) {
-      effectiveZone = String(ancestor.id_zone_default).trim();
-    }
-    if (!effectiveFamily && ancestor?.id_family) {
-      effectiveFamily = String(ancestor.id_family).trim();
-    }
     cursorId = ancestor ? getMachineParentId(ancestor) : null;
     guard += 1;
   }
@@ -225,8 +214,9 @@ export function resolveMachineHierarchyContext(
       : null,
     breadcrumbIds,
     breadcrumbLabels,
-    effectiveZone,
-    effectiveFamily,
+    ownZone,
+    ownFamily,
+    ownBlueprint,
     isRoot: !validParentId,
   };
 }
@@ -279,7 +269,7 @@ export function evaluateParentArchivePolicy(
   const strictBlock = Boolean(options?.strictBlock);
 
   const warningMessage = hasActiveChildren
-    ? `Cet équipement parent possède ${activeChildrenIds.length} machine(s) fille(s) active(s) (${activeChildrenIds.join(', ')}). Conformément à la politique d'archivage hiérarchique, les équipements enfants restent actifs en service et leur rattachement actif sera détaché proprement (avec conservation de previous_parent_id=${cleanParentId}).`
+    ? `Cette ligne / machine mère possède ${activeChildrenIds.length} machine(s) rattachée(s) active(s) (${activeChildrenIds.join(', ')}). Conformément à la politique d'archivage, les machines rattachées restent actives dans leur Zone respective et leur lien parent_id sera détaché proprement (avec conservation de previous_parent_id=${cleanParentId}).`
     : null;
 
   return {
@@ -294,7 +284,7 @@ export function evaluateParentArchivePolicy(
 
 /**
  * Sanitizes a list of machines to guarantee:
- * 1. Canonical `parent_id` (or `null`) and `asset_level` (`'MACHINE'` default).
+ * 1. Canonical `parent_id` (or `null`) and `asset_level` (`'MACHINE' | 'LINE'`).
  * 2. Zero hierarchy cycles (`A -> A` or `A -> B -> A` stripped to `parent_id: null`).
  * 3. Safe Parent Archive Policy: if a parent machine is archived (`isArchivedMachine(parent)`),
  *    any active child machine pointing to that archived parent has its active `parent_id`
@@ -357,8 +347,8 @@ export function sanitizeMachinesHierarchy(machines: any[] = []): any[] {
 }
 
 /**
- * Computes simple, factual rollup metrics on a parent asset (e.g. `LINE`) across itself
- * and its descendant machines using ONLY approved/closed corrective interventions.
+ * Computes simple, factual rollup metrics on a parent line/machine across itself
+ * and its attached child machines using ONLY approved/closed corrective interventions.
  * Zero invented or extrapolated data.
  */
 export interface IParentCorrectiveRollup {

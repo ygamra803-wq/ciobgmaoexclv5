@@ -192,7 +192,7 @@ describe('Gap Closure Constitution (Batches A, B, C, D, E)', () => {
       expect(hasCycleAfterSanitize).toBe(false);
     });
 
-    it('resolves child hierarchy context and preserves backward compatibility for legacy machines without parent_id', () => {
+    it('resolves operational parent line context without inheriting Zone/Blueprint and preserves legacy machines', () => {
       const machines = [
         {
           id_machine_registered: 'LINE-EXT',
@@ -200,15 +200,27 @@ describe('Gap Closure Constitution (Batches A, B, C, D, E)', () => {
           asset_level: 'LINE',
           id_zone_default: 'ZONE-EXT',
           id_family: 'FAM-EXT',
+          id_blueprint: 'BP-LINE-DEFAULT',
           status: 'En Service',
         },
         {
-          id_machine_registered: 'MCH-EXTRUDEUSE-01',
-          designation: 'Extrudeuse Principale',
+          id_machine_registered: 'DET-01',
+          designation: 'Extrudeuse DET-01',
+          asset_level: 'SUB_SYSTEM', // legacy/invalid level must normalize to MACHINE
+          parent_id: 'LINE-EXT',
+          id_zone_default: 'ZONE-ATELIER-A',
+          id_family: 'FAM-DET',
+          id_blueprint: 'BP-DET-V1',
+          status: 'En Service',
+        },
+        {
+          id_machine_registered: 'DET-02',
+          designation: 'Extrudeuse DET-02',
           asset_level: 'MACHINE',
           parent_id: 'LINE-EXT',
           id_zone_default: '',
-          id_family: '',
+          id_family: 'FAM-DET',
+          id_blueprint: 'BP-DET-V2',
           status: 'En Service',
         },
         {
@@ -220,21 +232,28 @@ describe('Gap Closure Constitution (Batches A, B, C, D, E)', () => {
         },
       ];
 
-      const childCtx = resolveMachineHierarchyContext(machines[1], machines);
-      expect(childCtx.parentId).toBe('LINE-EXT');
-      expect(childCtx.parentDesignation).toBe('Ligne Extrusion');
-      expect(childCtx.breadcrumbIds).toEqual(['LINE-EXT', 'MCH-EXTRUDEUSE-01']);
-      expect(childCtx.effectiveZone).toBe('ZONE-EXT');
-      expect(childCtx.effectiveFamily).toBe('FAM-EXT');
+      const det1Ctx = resolveMachineHierarchyContext(machines[1], machines);
+      expect(det1Ctx.level).toBe('MACHINE'); // SUB_SYSTEM normalized to MACHINE
+      expect(det1Ctx.parentId).toBe('LINE-EXT');
+      expect(det1Ctx.parentDesignation).toBe('Ligne Extrusion');
+      expect(det1Ctx.breadcrumbIds).toEqual(['LINE-EXT', 'DET-01']);
+      expect(det1Ctx.ownZone).toBe('ZONE-ATELIER-A');
+      expect(det1Ctx.ownBlueprint).toBe('BP-DET-V1');
 
-      const legacyCtx = resolveMachineHierarchyContext(machines[2], machines);
+      // DET-02 has its own Blueprint (BP-DET-V2) and empty Zone -> must NOT inherit ZONE-EXT from LINE-EXT
+      const det2Ctx = resolveMachineHierarchyContext(machines[2], machines);
+      expect(det2Ctx.parentId).toBe('LINE-EXT');
+      expect(det2Ctx.ownZone).toBe('');
+      expect(det2Ctx.ownBlueprint).toBe('BP-DET-V2');
+
+      const legacyCtx = resolveMachineHierarchyContext(machines[3], machines);
       expect(legacyCtx.isRoot).toBe(true);
       expect(legacyCtx.parentId).toBeNull();
       expect(legacyCtx.level).toBe('MACHINE');
       expect(legacyCtx.breadcrumbIds).toEqual(['LEGACY-MCH-99']);
 
-      // filterActiveMachines must return all 3 active machines unbroken
-      expect(filterActiveMachines(machines)).toHaveLength(3);
+      // filterActiveMachines must return all 4 active machines unbroken
+      expect(filterActiveMachines(machines)).toHaveLength(4);
     });
 
     it('enforces safe parent archive policy (warns and detaches active children while preserving previous_parent_id)', () => {

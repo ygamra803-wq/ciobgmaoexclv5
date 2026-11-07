@@ -828,30 +828,30 @@ export default function AddMachineModal({
         )}
       </div>
 
-      {/* Hiérarchie Industrielle (Niveau & Ligne / Équipement Parent — Optionnel) */}
-      <div className="grid grid-cols-2 gap-3.5 pt-1 border-t border-slate-100">
+      {/* Regroupement Opérationnel (Ligne / Machine Mère — Optionnel pour Rollup analytique) */}
+      <div className="grid grid-cols-2 gap-3.5 pt-2 border-t border-slate-100">
         <div>
           <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
-            Niveau Hiérarchique
+            Rôle Opérationnel
           </label>
           <CustomSelect
             value={form.asset_level || 'MACHINE'}
             onChange={(val) => setForm({ ...form, asset_level: (val || 'MACHINE') as AssetHierarchyLevel })}
             options={(Object.keys(ASSET_HIERARCHY_LEVEL_LABELS) as AssetHierarchyLevel[]).map((lvl) => ({
               value: lvl,
-              label: `${ASSET_HIERARCHY_LEVEL_LABELS[lvl]} (${lvl})`,
+              label: ASSET_HIERARCHY_LEVEL_LABELS[lvl],
             }))}
           />
         </div>
         <div>
           <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5">
-            Ligne / Équipement Parent <span className="text-[10px] font-normal text-slate-400 italic">(optionnel)</span>
+            Rattachement Ligne / Machine Mère <span className="text-[10px] font-normal text-slate-400 italic">(optionnel)</span>
           </label>
           <CustomSelect
             value={form.parent_id || ''}
             onChange={(val) => setForm({ ...form, parent_id: val || '' })}
             options={[
-              { value: '', label: '— Aucun Parent (Racine / Indépendant) —' },
+              { value: '', label: '— Machine indépendante (Aucune ligne mère) —' },
               ...filterActiveMachines(machines)
                 .filter(
                   (m) =>

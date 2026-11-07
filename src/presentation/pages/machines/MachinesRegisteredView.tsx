@@ -1370,9 +1370,9 @@ export default function MachinesRegisteredView({
                             <div className="flex flex-col items-start gap-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="font-bold text-slate-900 text-xs">{m.designation}</span>
-                                {hierarchyCtx.level !== 'MACHINE' && (
+                                {hierarchyCtx.level === 'LINE' && (
                                   <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 text-[9.5px] font-mono font-bold uppercase">
-                                    {hierarchyCtx.level}
+                                    LIGNE MÈRE
                                   </span>
                                 )}
                               </div>
@@ -1387,9 +1387,9 @@ export default function MachinesRegisteredView({
                               {hierarchyCtx.parentId && (
                                 <div
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-semibold"
-                                  title={`Chemin hiérarchique : ${hierarchyCtx.breadcrumbLabels.join(' ➔ ')}`}
+                                  title={`Rattachement opérationnel ligne : ${hierarchyCtx.breadcrumbLabels.join(' ➔ ')}`}
                                 >
-                                  <span>Parent :</span>
+                                  <span>Ligne / Mère :</span>
                                   <strong className="text-indigo-700">{hierarchyCtx.parentId}</strong>
                                   {hierarchyCtx.parentDesignation && (
                                     <span className="text-slate-500 max-w-[130px] truncate">
@@ -2180,31 +2180,31 @@ export default function MachinesRegisteredView({
                 />
               </div>
 
-              {/* Niveau Hiérarchique & Équipement Parent */}
+              {/* Regroupement Opérationnel (Rôle & Rattachement Ligne / Machine Mère) */}
               <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-indigo-50/40 border border-indigo-100">
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                    Niveau Hiérarchique
+                    Rôle Opérationnel
                   </label>
                   <CustomSelect
-                    value={toEdit.asset_level || 'MACHINE'}
+                    value={toEdit.asset_level === 'LINE' ? 'LINE' : 'MACHINE'}
                     onChange={(val) =>
                       setToEdit({
                         ...toEdit,
-                        asset_level: (val || 'MACHINE') as AssetHierarchyLevel,
+                        asset_level: (val === 'LINE' ? 'LINE' : 'MACHINE') as AssetHierarchyLevel,
                       })
                     }
                     options={(Object.keys(ASSET_HIERARCHY_LEVEL_LABELS) as AssetHierarchyLevel[]).map(
                       (lvl) => ({
                         value: lvl,
-                        label: `${ASSET_HIERARCHY_LEVEL_LABELS[lvl]} (${lvl})`,
+                        label: ASSET_HIERARCHY_LEVEL_LABELS[lvl],
                       })
                     )}
                   />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                    Ligne / Équipement Parent
+                    Rattachement Ligne / Machine Mère
                   </label>
                   <CustomSelect
                     value={toEdit.parent_id ?? toEdit.id_parent ?? ''}
@@ -2227,7 +2227,7 @@ export default function MachinesRegisteredView({
                       });
                     }}
                     options={[
-                      { value: '', label: '— Aucun Parent (Racine / Indépendant) —' },
+                      { value: '', label: '— Machine indépendante (Aucune ligne mère) —' },
                       ...filterActiveMachines(machines)
                         .filter(
                           (cand) =>
