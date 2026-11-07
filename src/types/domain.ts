@@ -61,6 +61,12 @@ export interface IMachine {
     designation: string;
     ref_pdr?: string;
   }>;
+  compteur_heures?: number;
+  compteur_cycles?: number;
+  compteur_km?: number;
+  dernier_releve_compteur?: number;
+  date_releve_compteur?: string;
+  compteur_unite_defaut?: 'Heures' | 'Cycles' | 'Km';
 }
 
 export interface IMouvement {

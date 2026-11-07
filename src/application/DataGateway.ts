@@ -263,6 +263,12 @@ export const DataGateway = {
     return clean;
   },
 
+  saveMeterReadings(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.METER_READINGS, clean);
+    return clean;
+  },
+
   // ==========================================
   // 4. CORRECTIVE MAINTENANCE
   // ==========================================
@@ -734,6 +740,7 @@ export const DataGateway = {
     this.savePreventiveGuides([]);
     this.savePreventivePlans([]);
     this.savePreventiveExecutions([]);
+    this.saveMeterReadings([]);
 
     this.saveCorrectiveInterventions([]);
     this.saveCorrectiveActionsByPanne({});
@@ -1282,11 +1289,13 @@ export const DataGateway = {
         this.savePreventiveGuides([]);
         this.savePreventivePlans([]);
         this.savePreventiveExecutions([]);
+        this.saveMeterReadings([]);
         if (setters.setPreventiveTasks) setters.setPreventiveTasks([]);
         if (setters.setPreventiveActions) setters.setPreventiveActions([]);
         if (setters.setPreventiveGuides) setters.setPreventiveGuides([]);
         if (setters.setPreventivePlans) setters.setPreventivePlans([]);
         if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
+        if (setters.setMeterReadings) setters.setMeterReadings([]);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('preventive_tasks_updated', { detail: [] }));
           window.dispatchEvent(new CustomEvent('preventive_executions_updated', { detail: [] }));

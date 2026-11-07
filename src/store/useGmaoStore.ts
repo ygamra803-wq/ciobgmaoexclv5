@@ -10,6 +10,8 @@ import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import { loadCollection, migrateStorageOnce } from '../infrastructure/persistence/migrateStorage';
 import { DataGateway } from '../application/DataGateway';
 import { storageService } from '../utils/storageService';
+import { MeterService } from '../application/services/meter/MeterService';
+import type { IMeterReading, MeterUnit } from '../types/meter';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 import { reactiveCalculationEngine } from '../services/reactiveCalculationEngine';
 import { loadBaselineCorrectiveData } from '../utils/baselineCorrective';
@@ -388,7 +390,11 @@ function getInitialPreventive() {
     allowDemoFallback: false,
     demoSeed: [],
   });
-  return { actions, guides, plans, tasks, executions };
+  const meterReadings = loadCollection<IMeterReading>(STORAGE_KEYS.METER_READINGS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
+  return { actions, guides, plans, tasks, executions, meterReadings };
 }
 
 function getInitialSorties() {
@@ -1062,6 +1068,83 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     preventiveGuides: preventiveInit.guides,
     preventivePlans: preventiveInit.plans,
     preventiveExecutions: preventiveInit.executions,
+    meterReadings: preventiveInit.meterReadings,
+
+    setMeterReadings: (updater) => {
+      const next = resolveUpdate(updater, get().meterReadings);
+      set({ meterReadings: next });
+      DataGateway.saveMeterReadings(next);
+    },
+
+    handleRecordMeterReading: (payload: {
+      machineId: string;
+      valeur: number;
+      unite?: MeterUnit;
+      date_releve?: string;
+      releve_par?: string;
+      source?: IMeterReading['source'];
+      commentaire?: string;
+    }) => {
+      const result = MeterService.recordReading(
+        payload,
+        get().meterReadings,
+        get().machines,
+        get().preventiveTasks
+      );
+
+      set({
+        meterReadings: result.updatedReadings,
+        machines: result.updatedMachines,
+        preventiveTasks: result.updatedTasks,
+      });
+
+      DataGateway.saveMeterReadings(result.updatedReadings);
+      DataGateway.saveMachines(result.updatedMachines);
+      DataGateway.savePreventiveTasks(result.updatedTasks);
+
+      return result.newReading;
+    },
+
+    handleBatchRecordMeterReadings: (readingsPayload: Array<{
+      machineId: string;
+      valeur: number;
+      unite?: MeterUnit;
+      date_releve?: string;
+      releve_par?: string;
+      source?: IMeterReading['source'];
+      commentaire?: string;
+    }>) => {
+      let currentReadings = get().meterReadings;
+      let currentMachines = get().machines;
+      let currentTasks = get().preventiveTasks;
+      const recorded: IMeterReading[] = [];
+
+      for (const item of readingsPayload) {
+        if (!item || !item.machineId || isNaN(Number(item.valeur))) continue;
+        const res = MeterService.recordReading(
+          item,
+          currentReadings,
+          currentMachines,
+          currentTasks
+        );
+        currentReadings = res.updatedReadings;
+        currentMachines = res.updatedMachines;
+        currentTasks = res.updatedTasks;
+        recorded.push(res.newReading);
+      }
+
+      set({
+        meterReadings: currentReadings,
+        machines: currentMachines,
+        preventiveTasks: currentTasks,
+      });
+
+      DataGateway.saveMeterReadings(currentReadings);
+      DataGateway.saveMachines(currentMachines);
+      DataGateway.savePreventiveTasks(currentTasks);
+
+      return recorded;
+    },
 
     setPreventiveTasks: (updater) => {
       const prev = get().preventiveTasks;
@@ -1118,42 +1201,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const targetTask = get().preventiveTasks.find((t) => String(t.id) === String(id));
       const targetMachine = String(targetTask?.id_machine || '').trim().toUpperCase();
       const numericVal = Number(newCounterValue || 0);
-      const nowIso = new Date().toISOString();
+      if (!targetMachine || numericVal <= 0) return;
 
-      const next = get().preventiveTasks.map((t) => {
-        const isSameTask = String(t.id) === String(id);
-        const isSameMachine =
-          targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
-        if (isSameTask || isSameMachine) {
-          return {
-            ...t,
-            dernier_releve: numericVal,
-            compteur_actuel: numericVal,
-            updated_at: nowIso,
-          };
-        }
-        return t;
+      get().handleRecordMeterReading({
+        machineId: targetMachine,
+        valeur: numericVal,
+        source: 'MANUEL',
+        commentaire: `Saisie compteur via tâche ${targetTask?.code || id}`,
       });
-      set({ preventiveTasks: next });
-      DataGateway.savePreventiveTasks(next);
-
-      if (targetMachine && numericVal > 0) {
-        const today = nowIso.split('T')[0];
-        const nextMachines = (get().machines || []).map((m: any) => {
-          const mCode = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
-          if (mCode === targetMachine) {
-            return {
-              ...m,
-              compteur_heures: numericVal,
-              dernier_releve_compteur: numericVal,
-              date_releve_compteur: today,
-            };
-          }
-          return m;
-        });
-        set({ machines: nextMachines });
-        DataGateway.saveMachines(nextMachines);
-      }
     },
 
     handleMarkTaskDone: (id, validationData) => {
@@ -1354,20 +1409,17 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           validationData?.date_realisation ||
           validationData?.date_execution ||
           new Date().toISOString().split('T')[0];
-        const nextMachines = (get().machines || []).map((m: any) => {
-          const mCode = String(m.id_machine_registered || m.id || m.code || '').trim().toUpperCase();
-          if (mCode === targetMachine) {
-            return {
-              ...m,
-              compteur_heures: releveNum,
-              dernier_releve_compteur: releveNum,
-              date_releve_compteur: dateRealisation,
-            };
-          }
-          return m;
+        get().handleRecordMeterReading({
+          machineId: targetMachine,
+          valeur: releveNum,
+          date_releve: dateRealisation,
+          releve_par:
+            validationData?.technicien ||
+            validationData?.technicien_realisateur ||
+            'Technicien GMAO',
+          source: 'PREVENTIVE_EXECUTION',
+          commentaire: `Relevé enregistré lors de l'exécution préventive (${targetTask?.code || id})`,
         });
-        set({ machines: nextMachines });
-        DataGateway.saveMachines(nextMachines);
       }
     },
 
@@ -3566,6 +3618,10 @@ export const usePreventiveSlice = () =>
     setPreventivePlans: state.setPreventivePlans,
     preventiveExecutions: state.preventiveExecutions,
     setPreventiveExecutions: state.setPreventiveExecutions,
+    meterReadings: state.meterReadings,
+    setMeterReadings: state.setMeterReadings,
+    handleRecordMeterReading: state.handleRecordMeterReading,
+    handleBatchRecordMeterReadings: state.handleBatchRecordMeterReadings,
     handleUpdateTask: state.handleUpdateTask,
     handleDeleteTask: state.handleDeleteTask,
     handleUpdateTaskCounter: state.handleUpdateTaskCounter,

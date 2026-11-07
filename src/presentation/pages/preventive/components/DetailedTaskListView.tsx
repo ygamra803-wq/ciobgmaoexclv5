@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   SlidersHorizontal,
   Zap,
+  Gauge,
 } from 'lucide-react';
 import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
@@ -310,9 +311,21 @@ export default function DetailedTaskListView({
         </td>
 
         <td className="py-2.5 px-3 font-mono text-slate-700 font-semibold border-r border-slate-200/70 whitespace-nowrap">
-          <div className="flex items-center gap-1 text-[11px]">
-            <Calendar className="w-3 h-3 text-slate-400" />
-            <span>{tItem.prochaine_echeance || tItem.semaine_cible || 'S1'}</span>
+          <div className="flex flex-col gap-0.5 text-[11px]">
+            <div className="flex items-center gap-1">
+              <Calendar className="w-3 h-3 text-slate-400" />
+              <span>{tItem.prochaine_echeance || tItem.semaine_cible || 'S1'}</span>
+            </div>
+            {(tItem.type_declencheur === 'COMPTEUR' ||
+              tItem.type_declencheur === 'HYBRIDE' ||
+              Number(tItem.compteur_seuil_intervalle) > 0) && (
+              <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
+                <Gauge className="w-2.5 h-2.5 text-indigo-600" />
+                <span>
+                  {tItem.compteur_actuel || tItem.dernier_releve || 0} / {tItem.compteur_prochain_declenchement || (Number(tItem.compteur_actuel || 0) + Number(tItem.compteur_seuil_intervalle || 500))} {tItem.compteur_unite || 'h'}
+                </span>
+              </div>
+            )}
           </div>
         </td>
 

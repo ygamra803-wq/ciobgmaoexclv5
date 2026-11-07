@@ -70,10 +70,19 @@ export class TaskService {
       const isSameMachine =
         targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
       if (isSameTask || isSameMachine) {
+        const isCounter = t.type_declencheur === 'COMPTEUR' || t.type_declencheur === 'HYBRIDE';
+        const targetVal = Number(t.compteur_prochain_declenchement || 0);
+        const isOverdue = targetVal > 0 && numericVal >= targetVal;
+        let etat = t.etat;
+        if (isCounter && t.etat !== 'Fait' && t.etat !== 'En attente validation') {
+          if (isOverdue) etat = 'En retard';
+          else if (etat === 'En retard' && !isOverdue) etat = 'À faire';
+        }
         return {
           ...t,
           dernier_releve: numericVal,
           compteur_actuel: numericVal,
+          etat,
           updated_at: nowIso,
         };
       }
@@ -180,7 +189,13 @@ export class TaskService {
         ...(execution.id_part ? { id_part: execution.id_part } : {}),
         ...(execution.nom_part ? { nom_part: execution.nom_part } : {}),
         ...(releveNum > 0
-          ? { dernier_releve: releveNum, compteur_actuel: releveNum }
+          ? {
+              dernier_releve: releveNum,
+              compteur_actuel: releveNum,
+              compteur_dernier_declenchement: releveNum,
+              compteur_prochain_declenchement:
+                releveNum + Math.max(1, Number(t.compteur_seuil_intervalle || 500)),
+            }
           : {}),
         planning: nextPlanning,
         updated_at: nowIso,

@@ -47,6 +47,7 @@ import {
   Plus,
   Check,
   QrCode,
+  Gauge,
 } from 'lucide-react';
 import PreventiveService from '../../../application/services/PreventiveService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
@@ -2113,6 +2114,50 @@ export default function MachinesRegisteredView({
                     onChange={(e) => setToEdit({ ...toEdit, date_mise_en_service: e.target.value })}
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
+                </div>
+              </div>
+
+              {/* Horomètre / Compteur Principal */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1 flex items-center gap-1">
+                    <Gauge className="w-3 h-3 text-indigo-600" />
+                    <span>Compteur Principal (Horomètre)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={toEdit.compteur_heures ?? toEdit.dernier_releve_compteur ?? ''}
+                    onChange={(e) =>
+                      setToEdit({
+                        ...toEdit,
+                        compteur_heures: Number(e.target.value) || 0,
+                        dernier_releve_compteur: Number(e.target.value) || 0,
+                        date_releve_compteur: new Date().toISOString().split('T')[0],
+                      })
+                    }
+                    placeholder="Ex: 4500 (Heures)"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                    <span>Unité par Défaut</span>
+                  </label>
+                  <select
+                    value={toEdit.compteur_unite_defaut || 'Heures'}
+                    onChange={(e) =>
+                      setToEdit({
+                        ...toEdit,
+                        compteur_unite_defaut: e.target.value,
+                      })
+                    }
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  >
+                    <option value="Heures">Heures (Horomètre)</option>
+                    <option value="Cycles">Cycles (Production)</option>
+                    <option value="Km">Km (Engins mobiles)</option>
+                  </select>
                 </div>
               </div>
 

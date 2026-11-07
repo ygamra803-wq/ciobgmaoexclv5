@@ -12,6 +12,7 @@ import type {
   IOperation,
   ITechnician,
 } from './domain';
+import type { IMeterReading } from './meter';
 
 export interface MachineElement {
   id: string;
@@ -171,11 +172,23 @@ export interface GmaoStoreState {
   preventiveGuides: any[];
   preventivePlans: any[];
   preventiveExecutions: any[];
+  meterReadings: IMeterReading[];
   setPreventiveTasks: (tasks: PreventiveTaskItem[] | ((prev: PreventiveTaskItem[]) => PreventiveTaskItem[])) => void;
   setPreventiveActions: (actions: any[] | ((prev: any[]) => any[])) => void;
   setPreventiveGuides: (guides: any[] | ((prev: any[]) => any[])) => void;
   setPreventivePlans: (plans: any[] | ((prev: any[]) => any[])) => void;
   setPreventiveExecutions: (executions: any[] | ((prev: any[]) => any[])) => void;
+  setMeterReadings: (readings: IMeterReading[] | ((prev: IMeterReading[]) => IMeterReading[])) => void;
+  handleRecordMeterReading: (payload: {
+    machineId: string;
+    valeur: number;
+    unite?: string;
+    date_releve?: string;
+    releve_par?: string;
+    source?: any;
+    commentaire?: string;
+  }) => any;
+  handleBatchRecordMeterReadings: (readingsPayload: any[]) => any[];
   handleUpdateTask: (id: string | number, updates: any) => void;
   handleDeleteTask: (id: string | number) => void;
   handleUpdateTaskCounter: (id: string | number, newCounterValue: number | string) => void;

@@ -18,6 +18,7 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  Gauge,
 } from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
@@ -27,6 +28,7 @@ import ErrorBoundary from '../../components/common/ErrorBoundary';
 import PreventiveService from '../../../application/services/PreventiveService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import TabMainView from './components/TabMainView';
+import PreventiveMetersView from './components/PreventiveMetersView';
 import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
 import { confirmAction } from '../../../utils/confirmAction';
@@ -53,6 +55,9 @@ export default function PreventiveView({
   onDeleteExecution = null,
   onResetToBaseline = null,
   onClearPreventiveForRealFactory = null,
+  meterReadings = [],
+  onRecordReading = null,
+  onBatchRecordReadings = null,
   machines = [],
   blueprints = [],
   zones = [],
@@ -81,7 +86,7 @@ export default function PreventiveView({
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [viewMode, setViewMode] = useState('matrix'); // 'matrix' | 'grouped' | 'calendar' | 'list' | 'analytics'
+  const [viewMode, setViewMode] = useState('matrix'); // 'matrix' | 'grouped' | 'calendar' | 'list' | 'analytics' | 'meters'
 
   const pendingPreventiveValidationCount = (executions || []).filter(
     (ex) => ex.validation_status === 'PENDING_VALIDATION'
@@ -89,6 +94,17 @@ export default function PreventiveView({
   const needsClarificationPreventiveCount = (tasks || []).filter(
     (tk) => tk.validation_status === 'NEEDS_CLARIFICATION' || tk.etat === 'À clarifier'
   ).length;
+
+  const overdueCounterTasksCount = (tasks || []).filter((t) => {
+    const isCounter =
+      t.type_declencheur === 'COMPTEUR' ||
+      t.type_declencheur === 'HYBRIDE' ||
+      Number(t.compteur_seuil_intervalle) > 0;
+    if (!isCounter || t.etat === 'Fait' || t.etat === 'En attente validation') return false;
+    const target = Number(t.compteur_prochain_declenchement || 0);
+    const curr = Number(t.compteur_actuel || t.dernier_releve || 0);
+    return target > 0 && curr >= target;
+  }).length;
 
   const handleRestoreBaseline = async () => {
     if (!canManagePreventive) return;
@@ -303,6 +319,16 @@ export default function PreventiveView({
                     À clarifier : {needsClarificationPreventiveCount}
                   </span>
                 )}
+                {overdueCounterTasksCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode((prev) => (prev === 'meters' ? 'matrix' : 'meters'))}
+                    className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black bg-rose-100 text-rose-900 border border-rose-300 shadow-2xs animate-pulse cursor-pointer flex items-center gap-1"
+                  >
+                    <Gauge className="w-3 h-3 text-rose-700" />
+                    <span>Compteurs : {overdueCounterTasksCount} échue(s)</span>
+                  </button>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5 max-w-3xl leading-snug line-clamp-1">
                 {t('preventive.subtitle')}
@@ -312,6 +338,20 @@ export default function PreventiveView({
 
           {/* Right Column: 3D Circular Action Buttons */}
           <div className="flex items-center gap-2 shrink-0 relative">
+            {/* 3D Switch Button: Horomètres & Compteurs (Conditionnel) */}
+            <Action3DButton
+              variant="circle"
+              color={viewMode === 'meters' ? 'indigo' : overdueCounterTasksCount > 0 ? 'rose' : 'slate'}
+              icon={Gauge}
+              onClick={() => setViewMode((prev) => (prev === 'meters' ? 'matrix' : 'meters'))}
+              title={
+                viewMode === 'meters'
+                  ? 'Revenir à la Matrice S1-S52'
+                  : 'Gestion des Horomètres & Compteurs' + (overdueCounterTasksCount > 0 ? ` (${overdueCounterTasksCount} seuils dépassés)` : '')
+              }
+              className={viewMode === 'meters' ? 'ring-2 ring-indigo-400/80' : overdueCounterTasksCount > 0 ? 'ring-2 ring-rose-400 animate-pulse' : ''}
+            />
+
             {/* 3D Switch Button: Grouped by Machine */}
             <Action3DButton
               variant="circle"
@@ -544,30 +584,44 @@ export default function PreventiveView({
         {/* MAIN VIEW CONTENT                                                         */}
         {/* ========================================================================= */}
         <ErrorBoundary sectionName="Matrice & Planning Préventif">
-          <TabMainView
-            tasks={tasks}
-            executions={executions}
-            machines={machines}
-            blueprints={blueprints}
-            zones={zones}
-            technicians={technicians}
-            actions={actions}
-            guides={guides}
-            stockItems={stockItems}
-            warehouseItems={warehouseItems}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
-            onReviewPreventiveExecution={canManagePreventive ? onReviewPreventiveExecution : null}
-            showToast={showToast}
-            onDeleteExecution={canManagePreventive ? onDeleteExecution : null}
-            onDeleteTask={canManagePreventive ? handleDeleteTask : null}
-            onUpdateTaskCounter={canExecutePreventive ? handleUpdateTaskCounter : null}
-            onUpdateTaskStatus={canExecutePreventive ? handleUpdateTaskStatus : null}
-            onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
-            onCreateCorrective={canExecutePreventive ? onCreateCorrective : null}
-            onNavigateToMachine={onNavigateToMachine}
-          />
+          {viewMode === 'meters' ? (
+            <PreventiveMetersView
+              machines={machines}
+              tasks={tasks}
+              meterReadings={meterReadings}
+              onRecordReading={onRecordReading || handleUpdateTaskCounter}
+              onBatchRecordReadings={onBatchRecordReadings}
+              onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
+              onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
+              user={user}
+              showToast={showToast}
+            />
+          ) : (
+            <TabMainView
+              tasks={tasks}
+              executions={executions}
+              machines={machines}
+              blueprints={blueprints}
+              zones={zones}
+              technicians={technicians}
+              actions={actions}
+              guides={guides}
+              stockItems={stockItems}
+              warehouseItems={warehouseItems}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
+              onReviewPreventiveExecution={canManagePreventive ? onReviewPreventiveExecution : null}
+              showToast={showToast}
+              onDeleteExecution={canManagePreventive ? onDeleteExecution : null}
+              onDeleteTask={canManagePreventive ? handleDeleteTask : null}
+              onUpdateTaskCounter={canExecutePreventive ? handleUpdateTaskCounter : null}
+              onUpdateTaskStatus={canExecutePreventive ? handleUpdateTaskStatus : null}
+              onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
+              onCreateCorrective={canExecutePreventive ? onCreateCorrective : null}
+              onNavigateToMachine={onNavigateToMachine}
+            />
+          )}
         </ErrorBoundary>
 
         {/* ========================================================================= */}

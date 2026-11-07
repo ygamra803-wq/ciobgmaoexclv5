@@ -42,6 +42,13 @@ export interface IPreventiveTask {
   consignes_securite?: string[];
   outillage_requis?: string[];
   pdr_requises?: PreventiveRequiredPdrItem[];
+  type_declencheur?: 'CALENDRIER' | 'COMPTEUR' | 'HYBRIDE';
+  compteur_unite?: 'Heures' | 'Cycles' | 'Km';
+  compteur_seuil_intervalle?: number;
+  compteur_dernier_declenchement?: number;
+  compteur_prochain_declenchement?: number;
+  compteur_actuel?: number;
+  compteur_marge_alerte?: number;
 }
 
 export interface IPreventivePlan {
