@@ -71,10 +71,14 @@ export function AppearanceLayoutSelector({
     return storageService.getItem(STORAGE_KEYS.HEADER_CLOCK) !== 'false';
   });
 
-  // Mise à jour des attributs DOM (Densité et Couleur d'accentuation)
-  const applyDOMPreferences = useCallback((currentDensity, currentAccent, currentDeviceMode, currentSidebarStyle) => {
+  // Mise à jour des attributs DOM (Thème, Densité, Accentuation et Appareil)
+  const applyDOMPreferences = useCallback((currentDensity, currentAccent, currentDeviceMode, currentSidebarStyle, currentTheme) => {
     if (typeof document === 'undefined') return;
-    document.documentElement.classList.remove('dark');
+    if (currentTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
     document.documentElement.setAttribute('data-density', currentDensity);
     document.documentElement.setAttribute('data-accent', currentAccent);
     document.documentElement.setAttribute('data-device-mode', currentDeviceMode);
@@ -83,8 +87,8 @@ export function AppearanceLayoutSelector({
 
   // Ensure DOM is synced when mounting Settings view
   useEffect(() => {
-    applyDOMPreferences(density, accentColor, deviceMode, sidebarStyle);
-  }, [applyDOMPreferences, density, accentColor, deviceMode, sidebarStyle]);
+    applyDOMPreferences(density, accentColor, deviceMode, sidebarStyle, theme);
+  }, [applyDOMPreferences, density, accentColor, deviceMode, sidebarStyle, theme]);
 
   // Listen for external appearance changes (e.g. Sidebar Sun/Moon theme toggle)
   useEffect(() => {
@@ -127,7 +131,7 @@ export function AppearanceLayoutSelector({
     storageService.setItem(STORAGE_KEYS.ANIMATIONS, String(newAnims));
     storageService.setItem(STORAGE_KEYS.HEADER_CLOCK, String(newClock));
 
-    applyDOMPreferences(newDensity, newAccent, newDeviceMode, newStyle);
+    applyDOMPreferences(newDensity, newAccent, newDeviceMode, newStyle, newTheme);
 
     window.dispatchEvent(
       new CustomEvent('gmao_appearance_changed', {

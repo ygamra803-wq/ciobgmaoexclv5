@@ -16,6 +16,12 @@
   <script>
     (function() {
       try {
+        var theme = localStorage.getItem('gmao_theme') || 'light';
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
         var accent = localStorage.getItem('gmao_accent_color') || 'emerald';
         document.documentElement.setAttribute('data-accent', accent);
         var density = localStorage.getItem('gmao_density') || 'comfortable';
@@ -136,7 +142,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 antialiased min-h-screen">
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

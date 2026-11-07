@@ -115,15 +115,13 @@ export function useAppComplexHandlers({
         matchesZone(o.id_zone) ||
         (Array.isArray(o.zones) && o.zones.some((zId) => matchesZone(zId)))
     );
-    const hasWarehouse = (warehouseItems || []).some((w) => matchesZone(w.id_zone));
     if (hasMachines || hasTechs || hasOps || hasWarehouse) {
       showToast?.(
-        `Suppression refusée : la zone ${id} contient des machines, membres ou articles d'entrepôt actifs. Réaffectez-les d'abord.`,
+        `Suppression refusée : la zone ${id} contient des machines ou techniciens actifs (ou membres/articles d'entrepôt). Réaffectez-les d'abord.`,
         'warning'
       );
       return;
     }
-    setZones((prev) => prev.filter((z) => z.id_zone !== id));
     showToast?.(`Zone ${id} supprimée.`, 'info');
   };
 

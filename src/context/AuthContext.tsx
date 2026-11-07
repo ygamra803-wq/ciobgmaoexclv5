@@ -10,7 +10,7 @@ const AuthContext = createContext(null);
 const LoginSchema = z.object({
   username: z
     .string()
-    .min(2, "Nom d'utilisateur requis")
+    .min(3, "Nom d'utilisateur d'au moins 3 caractères")
     .max(50, "Nom d'utilisateur trop long (max 50)")
     .regex(/^[a-zA-Z0-9_.-]+$/, "Le nom d'utilisateur contient des caractères invalides"),
   password: z

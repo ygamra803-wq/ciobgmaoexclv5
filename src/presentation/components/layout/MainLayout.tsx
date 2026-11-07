@@ -59,6 +59,13 @@ export default function MainLayout({
 
   useEffect(() => {
     const handleAppearanceChanged = (e) => {
+      if (e?.detail?.theme !== undefined && typeof document !== 'undefined') {
+        if (e.detail.theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
       if (e?.detail?.deviceMode !== undefined) {
         setDeviceMode(e.detail.deviceMode);
       }

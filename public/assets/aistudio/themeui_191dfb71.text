@@ -1,0 +1,82 @@
+نظام المظهر (Light / Dark Mode System) المستخدم في هذا التطبيق مصمم وفق أحدث معايير Design Systems & Sensory Engineering ليمنح كل وضع شخصية وهوية بصرية مستقلة تماماً، وليس مجرد عكس للألوان، مع محرك انتقال ناعم يمنع الوميض ويجعل التجربة سينمائية راقية.
+إليك التشريح الكامل للألوان، الخلفيات، والتقنيات التي تجعل كل عنصر يملك "وجهين" متناسقين تلقائياً:
+1️⃣ فلسفة الهوية البصرية (Light vs. Dark Persona)
+الخاصيةالوضع الفاتح (Light Mode) ☀️الوضع الداكن (Dark Mode) 🌙
+الهوية العامةنقاء هندسي، أبيض ثلجي، وأزرق بحري مع بطاقات ملموسةفخامة تقنية، أسود فحمي عسلي، وذهبي لامع مع زجاج معتم
+الخلفية (--background)Snow White (أبيض ثلجي نقي hsl(220 13% 97%))Deep Charcoal / Honey Black (فحمي عميق hsl(0 0% 8%))
+اللون الأساسي (--primary)Sea Blue (أزرق بحري نابض بالحياة hsl(210 70% 55%))Lustrous Muted Gold (ذهبي عسلي مطفي لامع hsl(32 40% 58%))
+البطاقات والأسطح (--card)أبيض صلب ناصع 100% مع حواف رمادية دقيقة وظلال هادئةزجاج شفاف hsl(0 0% 12% / 0.5) مع backdrop-blur-lg
+الحدود والتحديد (--border)حواف كلاسيكية رمادية ناعمة hsl(210 15% 90%)حواف مضيئة بلمسة ذهبية/بيضاء hsl(var(--primary) / 0.2)
+طبقة الملمس (Noise Texture)ضجيج خفيف جداً بنسبة 3% لكسر صلابة البياضضجيج بنسبة 1.5% يمنع تشوه التدرجات (Color Banding)
+2️⃣ المؤثرات الزجاجية والخلفيات التفاعلية (Neural & Glassmorphism)
+في الوضع الداكن، لا تكون الخلفية سوداء مسطحة، بل تحتوي على نظام خلفية عصبية (Neural Background System) مكون من 6 طبقات تعمل بالـ GPU:
+الكرات الضوئية السابحة (Ambient Drift Orbs):
+3 كرات ضوئية عملاقة ممزوجة بـ radial-gradient من اللون العسلي الأساسي وتتحرك ببطء وتطفو في الخلفية مع فلتر تمويه عميق (blur(60px)).
+الشبكة الهندسية العصبية (Neural Grid 40px):
+خطوط دقيقة مصفوفة بمسافات 40px مع توهج نيون (drop-shadow) تتنفس بتزامن حيوي هادئ (grid-breathe).
+نبضات الإشارة (Neural Pulses & Sweeps):
+حزم ضوئية ونقاط تقاطع (Nodes) تتحرك على خطوط الشبكة وكأنها تدفقات بيانات في لوحة تحكم ذكية.
+تأثير الزجاج الثلجي (Frosted Glassmorphism):
+البطاقات تستخدم bg-card/50 backdrop-blur-lg border border-white/10 shadow-lg، مما يسمح للضوء والشبكة الخلفية بالظهور من خلال البطاقات بطريقة ضبابية مريحة للعين.
+3️⃣ كيف تعمل تقنية "الوجهين" لكل عنصر؟ (Dual-Face Architecture)
+بدلاً من كتابة كود مكرر يدوي لكل زر أو بطاقة مثل (bg-white text-black dark:bg-black dark:text-white) في آلاف الأماكن، يعتمد النظام على 3 ركائز معمارية رئيسية:
+أ. الرموز الدلالية (Semantic Design Tokens)
+يتم ربط كل عنصر بـ متغير CSS مجرد داخل globals.css:
+CSS
+:root {
+ --background: 220 13% 97%; /* فاتح */
+ --card: 0 0% 100%;
+ --primary: 210 70% 55%; /* أزرق بحري */
+}
+
+.dark {
+ --background: 0 0% 8%; /* فحمي داكن */
+ --card: 0 0% 12%;
+ --primary: 32 40% 58%; /* ذهبي عسلي */
+}
+بهذه الطريقة، عندما يكتب المطور في Tailwind:
+Tsx
+<div className="bg-card text-card-foreground border-border">
+ <button className="bg-primary text-primary-foreground">زر تفاعلي</button>
+</div>
+يتحول العنصر فوراً وبشكل تلقائي بين الوجهين:
+في Light: كارت أبيض ناصع + نص داكن + زر أزرق نقي.
+في Dark: كارت رمادي داكن زجاجي + نص أبيض ساطع + زر ذهبي عسلي فخم.
+ب. الشفافية الديناميكية (Alpha-Channel Composition)
+لأن الألوان معرّفة بنظام HSL أو RGB كأرقام خام بدون غلاف مسبق، يتيح لك Tailwind التحكم بدرجة الشفافية على الطاير:
+bg-primary/10: يعطي خلفية خفيفة زرقاء في اللايت، وخلفية عسلية مذهبة ناعمة في الدارك.
+border-white/10: يندمج طبيعياً في الوضع الداكن مع الزجاج دون أن يؤثر سلباً على الوضع الفاتح.
+4️⃣ محرك الانتقال فائق النعومة (Theme Transition Engine)
+عند النقر لتبديل الوضع، لا يحدث "وميض مزعج" (No White Flash) بفضل تقنيتين استثنائيتين:
+1. استيفاء درجة الحرارة اللونية (Color Temperature Interpolation عبر CSS Houdini):
+داخل theme-transitions.css، يتم تعريف قنوات الألوان كقيم رقمية قابلة للحركة التدريجية:
+CSS
+@property --theme-bg-r { syntax: "<number>"; initial-value: 244; inherits: true; }
+@property --theme-bg-g { syntax: "<number>"; initial-value: 244; inherits: true; }
+@property --theme-bg-b { syntax: "<number>"; initial-value: 246; inherits: true; }
+
+:root {
+ transition:
+ --theme-bg-r 800ms cubic-bezier(0.22, 1, 0.36, 1),
+ --theme-bg-g 800ms cubic-bezier(0.22, 1, 0.36, 1),
+ --theme-bg-b 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+المتصفح لا يقفز بين اللونين فجأة، بل يقوم بحساب التدفق اللوني بسلاسة على مدار 800ms.
+2. تناغم View Transitions API:
+CSS
+/* ترتيب الطبقات لمنع أي وميض أبيض أثناء التحول */
+::view-transition-old(root) { z-index: 2; }
+::view-transition-new(root) { z-index: 1; }
+html.dark::view-transition-old(root) { z-index: 1; }
+html.dark::view-transition-new(root) { z-index: 2; }
+3. وميض الشبكة العصبية (Pulse Glow on Switch):
+عند التحول، تُطلق الشبكة الخلفية نبضة ضوئية قصيرة (theme-pulse-glow) تعطي شعوراً حياً بأن النظام يقوم بإعادة التغذية الكهربائية للواجهة.
+💡 كيف تطبق هذا النظام في تطبيقك الآخر؟
+انسخ المتغيرات في globals.css: انقل قيم :root و .dark الخاصة بالألوان و --glass-bg.
+ضع الكلاس الأساسي للبطاقات المشتركة:
+Tsx
+className="bg-card/60 backdrop-blur-md border border-border shadow-sm hover:border-primary/50 transition-all"
+اعتمد على أسماء التوكنز فقط: تجنب أسماء الألوان الصريحة مثل bg-blue-500 أو text-white، واستخدم دائماً:
+للأسطح: bg-background, bg-card, bg-popover, bg-muted.
+للنصوص: text-foreground, text-muted-foreground, text-primary.
+للتفاعلات: bg-primary, hover:bg-primary/90, ring-primary.

@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-accent-50: var(--color-accent-50);
   --color-accent-100: var(--color-accent-100);
@@ -418,3 +420,50 @@ table.border-collapse tbody tr:not(:last-child) > td {
 .btn-primary-accent svg[class*="gmao-icon-"] {
   color: #ffffff !important;
 }
+
+/* =========================================================================
+   DARK MODE TABLE GRID & VIEW TRANSITION ENGINE
+   ========================================================================= */
+
+.dark table thead th svg.lucide:not(.lucide-arrow-up):not(.lucide-arrow-down):not(.lucide-arrow-up-down),
+.dark table thead th svg[class*="gmao-icon-"],
+.dark .gmao-thead-header svg.lucide:not(.lucide-arrow-up):not(.lucide-arrow-down):not(.lucide-arrow-up-down),
+.dark .gmao-thead-header svg[class*="gmao-icon-"] {
+  color: #94a3b8 !important; /* text-slate-400 */
+}
+
+.dark table.border-collapse thead tr > th:not(:last-child) {
+  border-right: 1px solid #334155 !important; /* slate-700 header column divider in dark mode */
+}
+
+.dark table.border-collapse tbody tr > td:not(:last-child) {
+  border-right: 1px solid #1e293b !important; /* slate-800 data cell column divider in dark mode */
+}
+
+.dark table.border-collapse tbody tr:not(:last-child) > td {
+  border-bottom: 1px solid #1e293b !important;
+}
+
+/* View Transitions API circular morph & color transition */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+.dark ::view-transition-old(root) {
+  z-index: 9999;
+}
+
+.dark ::view-transition-new(root) {
+  z-index: 1;
+}
+

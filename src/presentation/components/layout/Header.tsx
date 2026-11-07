@@ -19,6 +19,8 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import PWAInstallButton from '../common/PWAInstallButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
@@ -119,8 +121,15 @@ export default function Header({
     return storageService.getItem('gmao_header_clock') !== 'false';
   });
 
+  const [theme, setTheme] = useState(() => {
+    return storageService.getItem('gmao_theme') || 'light';
+  });
+
   useEffect(() => {
-    const handleAppearanceChanged = (e) => {
+    const handleAppearanceChanged = (e: any) => {
+      if (e?.detail?.theme !== undefined) {
+        setTheme(e.detail.theme);
+      }
       if (e?.detail?.headerClockEnabled !== undefined) {
         setHeaderClockEnabled(e.detail.headerClockEnabled);
       }
@@ -131,6 +140,33 @@ export default function Header({
     window.addEventListener('gmao_appearance_changed', handleAppearanceChanged);
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
   }, []);
+
+  const handleToggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    const updateDOM = () => {
+      setTheme(nextTheme);
+      storageService.setItem('gmao_theme', nextTheme);
+      storageService.setItem('gmao_sidebar_theme', nextTheme);
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      window.dispatchEvent(
+        new CustomEvent('gmao_appearance_changed', {
+          detail: { theme: nextTheme, sidebarTheme: nextTheme },
+        })
+      );
+    };
+
+    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+      (document as any).startViewTransition(() => {
+        updateDOM();
+      });
+    } else {
+      updateDOM();
+    }
+  };
 
 
 
@@ -919,6 +955,17 @@ export default function Header({
 
           {/* Offline Language Switcher (Fixed-width trigger + floating popover — NH-13) */}
           <LanguageSwitcher />
+
+          {/* Quick Sun/Moon Light/Dark Theme Switcher */}
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-zinc-200 dark:border-slate-700 flex items-center justify-center text-zinc-700 dark:text-amber-400 hover:text-black dark:hover:text-amber-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+            title={theme === 'dark' ? t('header.theme_light', 'Basculer en Mode Clair') : t('header.theme_dark', 'Basculer en Mode Sombre')}
+            aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+          >
+            {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-700" />}
+          </button>
 
           {/* Export Excel Dropdown Menu - Only in Floating Mode & RBAC Guarded (Fixed sidebar already has Export button) */}
           {!isStandardFixed && canExportData && (

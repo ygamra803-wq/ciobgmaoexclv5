@@ -73,3 +73,11 @@
 - **[`docs/modules/03-preventive-meters/page-preventive-planning-meters.md`](./docs/modules/03-preventive-meters/page-preventive-planning-meters.md)** — دليل المستخدم التشغيلي لشاشة `Planning & Compteurs Préventifs` (أوضاع العرض الـ 6، تسجيل الزيارات، جولات العدادات المجمعة `Tournée d'Atelier`، وجولات النظام العام).
 - **[`docs/modules/03-preventive-meters/page-preventive-referentiel.md`](./docs/modules/03-preventive-meters/page-preventive-referentiel.md)** — دليل المستخدم التشغيلي لشاشة `Ingénierie & Référentiel Préventif` (مصمم الخطط `Plan Builder`، بطاقات الإرشاد للأعضاء `Guides & PDR`، وكتالوج أفعال `AFNOR`).
 
+### المجموعة 04: `Maintenance Corrective (DI / BT / Clôture & Catalogue)` (`docs/modules/04-corrective-di-bt/`)
+- **[`docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md`](./docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (آلة الحالات المحدودة `WorkOrderStateMachine` والانتقالات المحمية، بروتوكول `Maker-Checker` للتوفيق بين قطع الغيار المستهلكة، حسابات الورديات الصناعية `Shifts 08:00–17:00` واستقطاع فترات الغداء تلقائياً، وخوارزميات `MTTR/MTBF/Pareto`).
+- **[`docs/modules/04-corrective-di-bt/page-demandes-intervention.md`](./docs/modules/04-corrective-di-bt/page-demandes-intervention.md)** — دليل المستخدم التشغيلي لشاشة `Demandes d'Intervention` (تسجيل البلاغات الطارئة، درجات الاستعجال P1-P4، التحقق من الآلات النشطة، والتحويل إلى أمر عمل BT).
+- **[`docs/modules/04-corrective-di-bt/page-bons-travail.md`](./docs/modules/04-corrective-di-bt/page-bons-travail.md)** — دليل المستخدم التشغيلي لشاشتي `Bons de Travail` و `Intervention Live` (التشغيل الزمني المباشر، الخصم التلقائي لاستراحة الغداء، تتبع القطع المصروفة، ومراجعة المشرف `Maker-Checker`).
+- **[`docs/modules/04-corrective-di-bt/page-cloture-analyse.md`](./docs/modules/04-corrective-di-bt/page-cloture-analyse.md)** — دليل المستخدم التشغيلي لشاشتي `Rapports Clôturés` و `Analyse Corrective & Pareto` (تحليلات باريتو 80/20، مؤشرات الاعتمادية MTTR/MTBF، التكلفة المركبة، وتصدير التقارير).
+- **[`docs/modules/04-corrective-di-bt/page-catalogue-correctif.md`](./docs/modules/04-corrective-di-bt/page-catalogue-correctif.md)** — دليل المستخدم التشغيلي لشاشة `Catalogue des Données / Référentiel Correctif` (قاعدة الأعراض، الأعمال المعيارية، مصفوفة العرض-الحل، والفنيين المؤهلين).
+
+
