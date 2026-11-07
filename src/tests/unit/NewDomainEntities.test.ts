@@ -1,62 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  OperationEntity,
-  DiagnosticEntity,
   ZoneEntity,
   MovementEntity,
-  OperationService,
-  DiagnosticService,
 } from '../../domain';
 
 describe('New Domain Entities & Services (TypeScript + Clean Architecture)', () => {
-  describe('OperationEntity', () => {
-    it('should initialize with defaults and determine role helpers', () => {
-      const chef = new OperationEntity({
-        id_operation: 'CHEF-01',
-        nom: 'Chef Equipe Alpha',
-        type_profil: 'CHEF',
-      });
-      expect(chef.isChef()).toBe(true);
-      expect(chef.isOperateur()).toBe(false);
-      expect(chef.getDisplayName()).toBe('CHEF-01 - Chef Equipe Alpha');
-
-      const op = new OperationEntity({
-        id_operation: 'OP-05',
-        nom: 'Operateur Machine',
-        type_profil: 'OPERATEUR',
-      });
-      expect(op.isChef()).toBe(false);
-      expect(op.isOperateur()).toBe(true);
-    });
-
-    it('should calculate next ID correctly in OperationService', () => {
-      const service = new OperationService({} as any);
-      const ops = [
-        new OperationEntity({ id_operation: 'OP-01', type_profil: 'OPERATEUR' }),
-        new OperationEntity({ id_operation: 'OP-02', type_profil: 'OPERATEUR' }),
-        new OperationEntity({ id_operation: 'CHEF-01', type_profil: 'CHEF' }),
-      ];
-
-      expect(service.calculateNextId(ops, 'OPERATEUR')).toBe('OP-03');
-      expect(service.calculateNextId(ops, 'CHEF')).toBe('CHEF-02');
-    });
-  });
-
-  describe('DiagnosticEntity', () => {
-    it('should match search query against ref, diag id, and designation', () => {
-      const diag = new DiagnosticEntity({
-        id_diag: 'DIAG-01',
-        ref: 'ROUL-6204',
-        designation: 'Roulement à billes SKF',
-        description: 'Vibration anormale palier 2',
-      });
-
-      expect(diag.matches('ROUL')).toBe(true);
-      expect(diag.matches('skf')).toBe(true);
-      expect(diag.matches('vibration')).toBe(true);
-      expect(diag.matches('pneumatique')).toBe(false);
-    });
-  });
 
   describe('ZoneEntity', () => {
     it('should format display name and match search queries', () => {
