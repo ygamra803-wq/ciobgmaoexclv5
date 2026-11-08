@@ -13,7 +13,7 @@ const STORAGE_KEY = STORAGE_KEYS.SORTIE_EXTERNE;
 // Seed Initial issu des archives de l'usine
 export const INITIAL_SORTIES_BOBINAGE = initialSorties;
 
-class SortieExterneService {
+export class SortieExterneService {
   /**
    * Charge la liste des sorties depuis storageService ou le seed démo si activé
    */
@@ -36,20 +36,96 @@ class SortieExterneService {
   }
 
   /**
-   * Génère le prochain code interne (SORT-EXT-001, SORT-EXT-002, ...)
+   * Génère le prochain code interne (SORT-EXT-001 ou BON-ATEL-001 selon categorieFlux)
    */
-  static getNextCode(existingSorties = []) {
-    const list = existingSorties.length > 0 ? existingSorties : this.getSorties();
+  static getNextCode(existingSorties?: any[], categorieFlux = 'SOUS_TRAITANCE_EXTERNE') {
+    const list = Array.isArray(existingSorties) ? existingSorties : this.getSorties();
+    const isAtelier = String(categorieFlux || '').trim().toUpperCase() === 'ATELIER_MECANIQUE';
+    const prefix = isAtelier ? 'BON-ATEL' : 'SORT-EXT';
+    const regex = isAtelier ? /BON-ATEL-(\d+)/i : /SORT-EXT-(\d+)/i;
+
     let maxSeq = 0;
     list.forEach((s) => {
-      const m = String(s.code || '').match(/SORT-EXT-(\d+)/i);
+      const m = String(s.code || '').match(regex);
       if (m && m[1]) {
         const val = parseInt(m[1], 10);
         if (val > maxSeq) maxSeq = val;
       }
     });
     const nextSeq = maxSeq + 1;
-    return `SORT-EXT-${String(nextSeq).padStart(3, '0')}`;
+    return `${prefix}-${String(nextSeq).padStart(3, '0')}`;
+  }
+
+  /**
+   * Vérifie si un bon d'atelier / sortie externe est encore ouvert (non réceptionné et non monté).
+   */
+  static isWorkshopOrderOpen(etat?: string | null): boolean {
+    const norm = String(etat || '')
+      .trim()
+      .toUpperCase();
+    if (!norm) return true;
+    if (
+      norm.includes('RETOURNE') ||
+      norm.includes('RETOURNÉ') ||
+      norm.includes('TERMINE') ||
+      norm.includes('TERMINÉ') ||
+      norm.includes('MONTE') ||
+      norm.includes('MONTÉ') ||
+      norm.includes('STOCK') ||
+      norm.includes('CLOTURE') ||
+      norm.includes('REFORME') ||
+      norm.includes('RÉFORMÉ')
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Vérifie si un bon d'atelier / sortie externe est terminé (réceptionné OK ou monté sur machine)
+   * et permet donc la clôture définitive du Bon de Travail (BT) parent.
+   */
+  static isWorkshopOrderReadyForClosure(etat?: string | null): boolean {
+    return !this.isWorkshopOrderOpen(etat);
+  }
+
+  /**
+   * Retourne tous les bons d'atelier / sorties externes rattachés à un Bon de Travail (BT).
+   */
+  static getLinkedOrdersForBt(btOrId: any, existingList?: any[]): any[] {
+    const list = Array.isArray(existingList) ? existingList : this.getSorties();
+    if (!btOrId || !Array.isArray(list) || list.length === 0) return [];
+
+    const keys = new Set<string>();
+    if (typeof btOrId === 'string') {
+      const k = btOrId.trim().toUpperCase();
+      if (k) keys.add(k);
+    } else if (typeof btOrId === 'object') {
+      [
+        btOrId.id,
+        btOrId.num_bt,
+        btOrId.code_bt,
+        btOrId.id_sortie_atelier,
+        btOrId.code_sortie_atelier,
+      ].forEach((val) => {
+        const clean = String(val || '').trim().toUpperCase();
+        if (clean) keys.add(clean);
+      });
+    }
+
+    if (keys.size === 0) return [];
+
+    return list.filter((s) => {
+      if (!s || typeof s !== 'object') return false;
+      const sId = String(s.id || '').trim().toUpperCase();
+      const sCode = String(s.code || '').trim().toUpperCase();
+      const sBt = String(s.id_corrective || '').trim().toUpperCase();
+      return (
+        (sId && keys.has(sId)) ||
+        (sCode && keys.has(sCode)) ||
+        (sBt && keys.has(sBt))
+      );
+    });
   }
 
   /**
@@ -66,43 +142,72 @@ class SortieExterneService {
   }
 
   /**
-   * Ajoute une nouvelle sortie externe bobinage
+   * Ajoute une nouvelle sortie externe bobinage ou bon d'atelier mécanique (rectification / usinage)
    */
   static addSortie(payload, existingList?: any[]) {
     const currentList = Array.isArray(existingList) ? [...existingList] : this.getSorties();
-    const code = payload.code || this.getNextCode(currentList);
-    const id = payload.id || this.generatePassportId({
-      code,
-      machine: payload.id_machine,
-      moteurReel: payload.code_moteur_reel,
-      refMoteur: payload.ref_moteur,
-      fournisseur: payload.fournisseur_externe,
-    });
+    const categorieFlux =
+      String(payload?.categorie_flux || '').trim().toUpperCase() === 'ATELIER_MECANIQUE'
+        ? 'ATELIER_MECANIQUE'
+        : 'SOUS_TRAITANCE_EXTERNE';
+    const isAtelier = categorieFlux === 'ATELIER_MECANIQUE';
+
+    const code = payload.code || this.getNextCode(currentList, categorieFlux);
+    const organeCode =
+      payload.code_moteur_reel ||
+      payload.id_composant ||
+      payload.id_part ||
+      (isAtelier ? 'ORG-MECA-01' : 'mot 01');
+    const prestataire =
+      payload.fournisseur_externe ||
+      (isAtelier ? 'Atelier Mécanique Interne' : 'Bobinage Casa');
+
+    const id =
+      payload.id ||
+      this.generatePassportId({
+        code,
+        machine: payload.id_machine,
+        moteurReel: organeCode,
+        refMoteur: payload.ref_moteur || payload.nature_travail,
+        fournisseur: prestataire,
+      });
 
     const now = new Date().toISOString();
+    const defaultEtat = isAtelier ? 'En cours atelier' : 'En réparation externe';
     const newEntry = {
       id,
       code,
-      ref: payload.ref || `BS-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`,
+      categorie_flux: categorieFlux,
+      nature_travail:
+        payload.nature_travail ||
+        (isAtelier ? 'Rectification / Usinage' : 'Bobinage & Révision'),
+      ref:
+        payload.ref ||
+        `${isAtelier ? 'BA' : 'BS'}-${new Date().getFullYear()}-${String(
+          Math.floor(Math.random() * 900) + 100
+        )}`,
       id_machine: payload.id_machine || 'DET-01',
-      code_moteur_reel: payload.code_moteur_reel || 'mot 01',
-      id_groupe: payload.id_groupe || 'GRP-MOTEUR-001',
-      id_family: payload.id_family || 'FAM-MOTEUR-ELEC-001',
-      id_template: payload.id_template || 'TPL-MOT-ASYNC-001',
+      code_moteur_reel: organeCode,
+      id_composant: payload.id_composant || '',
+      id_part: payload.id_part || '',
+      id_groupe: payload.id_groupe || (isAtelier ? 'GRP-MECA-001' : 'GRP-MOTEUR-001'),
+      id_family: payload.id_family || (isAtelier ? 'FAM-ORGANE-MECA-001' : 'FAM-MOTEUR-ELEC-001'),
+      id_template: payload.id_template || (isAtelier ? 'TPL-MECA-STD-001' : 'TPL-MOT-ASYNC-001'),
       ref_moteur: payload.ref_moteur || '',
       designation_moteur: payload.designation_moteur || '',
       date_demontage: payload.date_demontage || new Date().toISOString().split('T')[0],
       technicien_demontage: payload.technicien_demontage || '',
-      type_probleme: payload.type_probleme || 'grille',
+      type_probleme: payload.type_probleme || (isAtelier ? 'usinage / rectification' : 'grille'),
       observation_probleme: payload.observation_probleme || '',
       date_expedition: payload.date_expedition || new Date().toISOString().split('T')[0],
-      fournisseur_externe: payload.fournisseur_externe || 'Bobinage Casa',
+      fournisseur_externe: prestataire,
       date_arrivee_prevue: payload.date_arrivee_prevue || '',
       date_arrivee_reelle: payload.date_arrivee_reelle || null,
       technicien_montage: payload.technicien_montage || null,
       date_montage: payload.date_montage || null,
-      etat: payload.etat || 'En réparation externe',
-      cout_bobinage: Number(payload.cout_bobinage) || 0,
+      etat: payload.etat || defaultEtat,
+      cout_bobinage: Number(payload.cout_bobinage ?? payload.cout_atelier) || 0,
+      duree_usinage_heures: Number(payload.duree_usinage_heures) || 0,
       note: payload.note || '',
       id_corrective: payload.id_corrective || '',
       created_at: now,
@@ -136,7 +241,12 @@ class SortieExterneService {
   /**
    * Marque une sortie comme "Retourné OK" avec date de retour réelle et coût final
    */
-  static markAsReturned(id, { date_arrivee_reelle, cout_bobinage, note, technicien_reception }, existingList?: any[]) {
+  static markAsReturned(id, returnDataOrCost: any = {}, existingList?: any[]) {
+    const opts =
+      typeof returnDataOrCost === 'number'
+        ? { cout_bobinage: returnDataOrCost }
+        : returnDataOrCost || {};
+    const { date_arrivee_reelle, cout_bobinage, note, technicien_reception } = opts;
     return this.updateSortie(
       id,
       {
@@ -151,7 +261,7 @@ class SortieExterneService {
   }
 
   /**
-   * Marque le moteur comme remonté sur sa machine
+   * Marque le moteur / organe comme remonté sur sa machine
    */
   static markAsMounted(id, { technicien_montage, date_montage, id_machine_cible, note }, existingList?: any[]) {
     return this.updateSortie(
@@ -161,7 +271,7 @@ class SortieExterneService {
         technicien_montage: technicien_montage || 'Ismaayl',
         date_montage: date_montage || new Date().toISOString().split('T')[0],
         id_machine: id_machine_cible || undefined,
-        note: note || 'Moteur remonté et testé en charge OK',
+        note: note || 'Organe remonté et testé en charge OK',
       },
       existingList
     );
@@ -256,7 +366,13 @@ class SortieExterneService {
         };
       }
 
-      if (etatUpper.includes('RETOURNE') || etatUpper.includes('RETOURNÉ') || etatUpper.includes('STOCK')) {
+      if (
+        etatUpper.includes('RETOURNE') ||
+        etatUpper.includes('RETOURNÉ') ||
+        etatUpper.includes('TERMINE') ||
+        etatUpper.includes('TERMINÉ') ||
+        etatUpper.includes('STOCK')
+      ) {
         return {
           ...item,
           rattachement_type: 'STOCK',
@@ -287,9 +403,17 @@ class SortieExterneService {
   static getStats(sortiesList = []) {
     const list = sortiesList.length > 0 ? sortiesList : this.getSorties();
     const total = list.length;
-    const enCours = list.filter((s) => s.etat === 'En réparation externe').length;
-    const retournes = list.filter((s) => s.etat === 'Retourné OK').length;
+    const enCours = list.filter((s) => this.isWorkshopOrderOpen(s.etat)).length;
+    const retournes = list.filter(
+      (s) => s.etat === 'Retourné OK' || s.etat === 'Terminé Atelier OK'
+    ).length;
     const montes = list.filter((s) => s.etat === 'Monté' || s.etat === 'En stock').length;
+    const atelierCount = list.filter(
+      (s) =>
+        String(s.categorie_flux || '').toUpperCase() === 'ATELIER_MECANIQUE' ||
+        String(s.code || '').toUpperCase().startsWith('BON-ATEL')
+    ).length;
+    const externeCount = total - atelierCount;
     const totalCout = list.reduce((sum, s) => sum + (Number(s.cout_bobinage) || 0), 0);
 
     return {
@@ -297,6 +421,8 @@ class SortieExterneService {
       enCours,
       retournes,
       montes,
+      atelierCount,
+      externeCount,
       totalCout,
     };
   }

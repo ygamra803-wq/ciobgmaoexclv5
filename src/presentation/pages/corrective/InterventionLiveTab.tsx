@@ -29,6 +29,7 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
 import { INTERVENTION_NATURE_OPTIONS } from '../../components/common/ValidationStatusBadge';
+import { SortieExterneService } from '../../../application/services/SortieExterneService';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -57,6 +58,9 @@ export default function InterventionLiveTab({
   const blueprints = useGmaoStore((s) => s.blueprints);
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const storeSubmitForValidation = useGmaoStore((s) => s.handleSubmitInterventionForValidation);
+  const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
+  const handleAddSortieExterne = useGmaoStore((s) => s.handleAddSortieExterne);
+  const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
@@ -223,6 +227,93 @@ export default function InterventionLiveTab({
       setTravailSearch(activeIntervention.travail_a_faire || '');
     }
   }, [activeIntervention]);
+
+  // Linked Workshop / External Orders (Bon d'Atelier / Rectification & Sous-Traitance)
+  const linkedWorkshopOrders = useMemo(() => {
+    if (!activeIntervention) return [];
+    return SortieExterneService.getLinkedOrdersForBt(activeIntervention, sortiesExterne);
+  }, [activeIntervention, sortiesExterne]);
+
+  const openWorkshopOrders = useMemo(() => {
+    return linkedWorkshopOrders.filter((o) => SortieExterneService.isWorkshopOrderOpen(o.etat));
+  }, [linkedWorkshopOrders]);
+
+  const [showQuickWorkshopForm, setShowQuickWorkshopForm] = useState(false);
+  const [workshopQuickForm, setWorkshopQuickForm] = useState({
+    categorie_flux: 'ATELIER_MECANIQUE' as 'ATELIER_MECANIQUE' | 'SOUS_TRAITANCE_EXTERNE',
+    nature_travail: 'Usinage / Rectification',
+    designation_piece: '',
+    fournisseur_externe: 'Atelier Mécanique Interne',
+    cout_bobinage: 0,
+    suspendBtAfterCreate: true,
+  });
+
+  const handleQuickCreateWorkshopOrder = () => {
+    if (!activeIntervention) return;
+    const isAtelier = workshopQuickForm.categorie_flux === 'ATELIER_MECANIQUE';
+    const pieceName =
+      String(workshopQuickForm.designation_piece || '').trim() ||
+      formState.nom_composant ||
+      formState.nom_part ||
+      `Organe ${activeIntervention.code_machine}`;
+    const created = handleAddSortieExterne({
+      categorie_flux: workshopQuickForm.categorie_flux,
+      code_machine: activeIntervention.code_machine,
+      id_corrective: activeIntervention.num_bt || activeIntervention.id,
+      designation_moteur: pieceName,
+      nature_travail: workshopQuickForm.nature_travail,
+      type_probleme: workshopQuickForm.nature_travail,
+      fournisseur_externe:
+        String(workshopQuickForm.fournisseur_externe || '').trim() ||
+        (isAtelier ? 'Atelier Mécanique Interne' : 'Sous-traitant Externe'),
+      cout_bobinage: Number(workshopQuickForm.cout_bobinage || 0),
+      id_composant: formState.id_composant || '',
+      id_part: formState.id_part || '',
+      etat: isAtelier ? 'En cours atelier' : 'En réparation externe',
+      observations:
+        formState.action_realisee ||
+        formState.travail_a_faire ||
+        activeIntervention.anomalie ||
+        '',
+    });
+
+    setFormState((prev: any) => ({
+      ...prev,
+      intervention_nature: 'ATELIER',
+      action_realisee:
+        prev.action_realisee ||
+        `${workshopQuickForm.nature_travail} (${created.code}) — ${pieceName}`,
+      travail_a_faire:
+        prev.travail_a_faire ||
+        `${workshopQuickForm.nature_travail} (${created.code}) — ${pieceName}`,
+    }));
+
+    if (workshopQuickForm.suspendBtAfterCreate && typeof onUpdateIntervention === 'function') {
+      onUpdateIntervention(activeIntervention.id, {
+        ...formState,
+        intervention_nature: 'ATELIER',
+        id_sortie_atelier: created.id,
+        code_sortie_atelier: created.code,
+        cout_atelier: Number(workshopQuickForm.cout_bobinage || 0),
+        nature_travail_atelier: workshopQuickForm.nature_travail,
+        prestataire_atelier: created.fournisseur_externe,
+        statut: 'EN_ATTENTE_PDR',
+      });
+      setActiveLiveId?.(null);
+      showToast?.(
+        `Bon ${created.code} créé et BT ${activeIntervention.num_bt || activeIntervention.id} suspendu en attente de fin d'atelier (EN_ATTENTE_PDR).`,
+        'info'
+      );
+      onNavigateToTab?.('corrective_bt');
+      return;
+    }
+
+    setShowQuickWorkshopForm(false);
+    showToast?.(
+      `Bon ${created.code} lié au BT ${activeIntervention.num_bt || activeIntervention.id}.`,
+      'success'
+    );
+  };
 
   // Machine components from Entrepôt for optional component lifecycle tracking
   const machineComponents = useMemo(() => {
@@ -533,6 +624,15 @@ export default function InterventionLiveTab({
     }
 
     // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
+    if (openWorkshopOrders.length > 0) {
+      const openCodes = openWorkshopOrders.map((o) => o.code).join(', ');
+      showToast?.(
+        `Clôture bloquée : le Bon d'Atelier / Externe [${openCodes}] est encore en cours. Réceptionnez le bon (Retourné OK) ou suspendez le BT en attente (EN_ATTENTE_PDR).`,
+        'warning'
+      );
+      return false;
+    }
+
     const closedResult = onClotureIntervention(activeIntervention.id, {
       ...normalizedFormState,
       actorRole: sessionActorRole,
@@ -671,6 +771,246 @@ export default function InterventionLiveTab({
           })}
         </div>
       </div>
+
+      {/* CORRECTIVE-ATELIER-P0: Bon de Réalisation & Rectification (Atelier / Externe) lié au BT */}
+      {(String(formState.intervention_nature || '').toUpperCase() === 'ATELIER' ||
+        linkedWorkshopOrders.length > 0) && (
+        <div
+          data-testid="live-atelier-bridge-panel"
+          className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 space-y-3"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                <Wrench className="w-4 h-4 text-indigo-700" />
+                Bon d’Atelier / Rectification & Sous-Traitance lié au BT
+              </span>
+              <p className="text-[11px] text-indigo-800 mt-0.5">
+                Tant qu’un bon d’atelier ou externe est en cours, le BT ne peut pas être clôturé définitivement (reste ou passe en <b>EN_ATTENTE_PDR</b>).
+              </p>
+            </div>
+            <button
+              type="button"
+              data-testid="toggle-quick-workshop-btn"
+              onClick={() => setShowQuickWorkshopForm((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs transition cursor-pointer shrink-0 inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>{showQuickWorkshopForm ? 'Fermer' : '+ Créer Bon d’Atelier / Externe'}</span>
+            </button>
+          </div>
+
+          {/* Existing Linked Workshop Orders */}
+          {linkedWorkshopOrders.length > 0 && (
+            <div className="space-y-2">
+              {linkedWorkshopOrders.map((ord: any) => {
+                const isOpen = SortieExterneService.isWorkshopOrderOpen(ord.etat);
+                return (
+                  <div
+                    key={ord.id || ord.code}
+                    className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                      isOpen
+                        ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                        : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
+                        {ord.code}
+                      </span>
+                      <span className="font-bold">
+                        {ord.nature_travail || ord.type_probleme}
+                      </span>
+                      <span className="text-[11px] opacity-80">
+                        • {ord.fournisseur_externe}
+                      </span>
+                      <span className="font-mono font-bold text-[11px] bg-white/80 px-2 py-0.5 rounded">
+                        {Number(ord.cout_bobinage || 0).toLocaleString()} DH
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                          isOpen
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        }`}
+                      >
+                        {ord.etat}
+                      </span>
+                      {isOpen && !isTechUser && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleMarkSortieReturned(ord.id, ord.cout_bobinage);
+                            showToast?.(
+                              `Bon ${ord.code} réceptionné (Retourné OK). Vous pouvez maintenant clôturer le BT.`,
+                              'success'
+                            );
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                        >
+                          Réceptionner OK
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Quick Workshop Creation Form */}
+          {(showQuickWorkshopForm || linkedWorkshopOrders.length === 0) && (
+            <div className="p-3.5 rounded-xl bg-white border border-indigo-200 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Type de Flux
+                  </label>
+                  <select
+                    value={workshopQuickForm.categorie_flux}
+                    onChange={(e) => {
+                      const cat = e.target.value as 'ATELIER_MECANIQUE' | 'SOUS_TRAITANCE_EXTERNE';
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        categorie_flux: cat,
+                        nature_travail:
+                          cat === 'ATELIER_MECANIQUE'
+                            ? 'Usinage / Rectification'
+                            : 'Bobinage complet',
+                        fournisseur_externe:
+                          cat === 'ATELIER_MECANIQUE'
+                            ? 'Atelier Mécanique Interne'
+                            : 'Atelier Bobinage Externe',
+                      }));
+                    }}
+                    className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-200 bg-slate-50"
+                  >
+                    <option value="ATELIER_MECANIQUE">
+                      Atelier Mécanique / Usinage & Rectification (BON-ATEL)
+                    </option>
+                    <option value="SOUS_TRAITANCE_EXTERNE">
+                      Sous-Traitance Externe / Bobinage (SORT-EXT)
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Nature du Travail
+                  </label>
+                  <select
+                    value={workshopQuickForm.nature_travail}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({ ...p, nature_travail: e.target.value }))
+                    }
+                    className="w-full py-2 px-2.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50"
+                  >
+                    {workshopQuickForm.categorie_flux === 'ATELIER_MECANIQUE' ? (
+                      <>
+                        <option value="Usinage / Rectification">Usinage / Rectification</option>
+                        <option value="Tournage arbre / axe">Tournage arbre / axe</option>
+                        <option value="Soudure / Rechargement">Soudure / Rechargement</option>
+                        <option value="Confection pièce sur mesure">Confection pièce sur mesure</option>
+                        <option value="Révision mécanique / Alésage">Révision mécanique / Alésage</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Bobinage complet">Bobinage complet</option>
+                        <option value="Remplacement roulements + étanchéité">
+                          Remplacement roulements + étanchéité
+                        </option>
+                        <option value="Rectification collecteur / induit">
+                          Rectification collecteur / induit
+                        </option>
+                        <option value="Réparation électronique / variateur">
+                          Réparation électronique / variateur
+                        </option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Organe / Pièce à usiner ou réparer
+                  </label>
+                  <input
+                    type="text"
+                    value={workshopQuickForm.designation_piece}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({ ...p, designation_piece: e.target.value }))
+                    }
+                    placeholder={`Ex: Arbre principal / Moteur ${activeIntervention.code_machine}`}
+                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                      Atelier / Prestataire
+                    </label>
+                    <input
+                      type="text"
+                      value={workshopQuickForm.fournisseur_externe}
+                      onChange={(e) =>
+                        setWorkshopQuickForm((p) => ({
+                          ...p,
+                          fournisseur_externe: e.target.value,
+                        }))
+                      }
+                      className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                      Coût estimé (DH)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={workshopQuickForm.cout_bobinage}
+                      onChange={(e) =>
+                        setWorkshopQuickForm((p) => ({
+                          ...p,
+                          cout_bobinage: Math.max(0, Number(e.target.value) || 0),
+                        }))
+                      }
+                      className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-200 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-xs text-slate-700 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={workshopQuickForm.suspendBtAfterCreate}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        suspendBtAfterCreate: e.target.checked,
+                      }))
+                    }
+                    className="rounded border-indigo-300 text-indigo-600"
+                  />
+                  <span>
+                    Suspendre automatiquement le BT en <b>EN_ATTENTE_PDR</b> après création du bon
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  data-testid="confirm-quick-workshop-btn"
+                  onClick={handleQuickCreateWorkshopOrder}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer transition shadow-xs"
+                >
+                  Enregistrer le Bon & Lier au BT
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Travail à faire & Suggestions d'Atelier */}
       <div className="space-y-2">

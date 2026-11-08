@@ -7,6 +7,7 @@ export type CorrectiveValidationStatus =
 
 export type CorrectiveInterventionNature =
   | 'REPLACE'
+  | 'ATELIER'
   | 'REPAIR'
   | 'CLEAN'
   | 'ADJUST'
@@ -63,6 +64,11 @@ export class CorrectiveIntervention {
   validated_with_edits?: boolean;
   stock_effect?: 'NONE' | 'RESERVED' | 'APPLIED';
   intervention_nature?: CorrectiveInterventionNature;
+  id_sortie_atelier?: string;
+  code_sortie_atelier?: string;
+  cout_atelier?: number;
+  nature_travail_atelier?: string;
+  prestataire_atelier?: string;
   previous_validation_note?: string;
   previous_validation_status?: CorrectiveValidationStatus;
   resubmitted_count?: number;

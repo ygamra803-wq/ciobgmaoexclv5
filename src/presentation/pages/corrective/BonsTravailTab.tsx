@@ -43,6 +43,7 @@ import { reconcileFieldClaim } from '../../../core/security/validationReconcilia
 import ValidationStatusBadge, {
   INTERVENTION_NATURE_OPTIONS,
 } from '../../components/common/ValidationStatusBadge';
+import { SortieExterneService } from '../../../application/services/SortieExterneService';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -70,6 +71,8 @@ export default function BonsTravailTab({
   const storeReviewValidation = useGmaoStore((s) => s.handleReviewInterventionValidation);
   const storeMouvements = useGmaoStore((s) => s.mouvements);
   const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions);
+  const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
+  const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
@@ -152,6 +155,19 @@ export default function BonsTravailTab({
         'warning'
       );
       return;
+    }
+
+    if (decision === 'APPROVED') {
+      const linkedOrders = SortieExterneService.getLinkedOrdersForBt(reviewModalBt, sortiesExterne);
+      const openOrders = linkedOrders.filter((o) => SortieExterneService.isWorkshopOrderOpen(o.etat));
+      if (openOrders.length > 0) {
+        const codes = openOrders.map((o) => o.code).join(', ');
+        showToast?.(
+          `Approbation bloquée : le Bon d'Atelier / Externe [${codes}] est encore en cours. Cliquez sur « Réceptionner OK » ou laissez le BT en attente.`,
+          'warning'
+        );
+        return;
+      }
     }
 
     const reviewFn = onReviewValidation || storeReviewValidation;
@@ -639,27 +655,56 @@ export default function BonsTravailTab({
       },
       {
         key: 'pdr',
-        label: 'PDR Prévue / Proposée',
+        label: 'PDR & Atelier',
         colLetter: 'Col L',
         icon: Package,
         render: (bt) => {
           const pdrObj = resolvePdrDisplay(bt);
+          const linkedWorkshop = SortieExterneService.getLinkedOrdersForBt(bt, sortiesExterne);
+          const primaryWorkshop = linkedWorkshop[0] || null;
+          const workshopCode = primaryWorkshop?.code || bt.code_sortie_atelier || '';
+          const workshopOpen = primaryWorkshop
+            ? SortieExterneService.isWorkshopOrderOpen(primaryWorkshop.etat)
+            : false;
+
+          const workshopBadge = workshopCode ? (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10.5px] font-mono font-bold shadow-2xs ${
+                workshopOpen
+                  ? 'bg-amber-50 text-amber-900 border-amber-300'
+                  : 'bg-indigo-50 text-indigo-900 border-indigo-200'
+              }`}
+              title={`${primaryWorkshop?.nature_travail || bt.nature_travail_atelier || 'Bon Atelier'} (${primaryWorkshop?.etat || 'Lié'})`}
+            >
+              <Wrench className="w-3 h-3 shrink-0" />
+              <span className="truncate">{workshopCode}</span>
+              {Number(primaryWorkshop?.cout_bobinage ?? bt.cout_atelier ?? 0) > 0 && (
+                <span className="text-[9.5px] opacity-80">
+                  • {Number(primaryWorkshop?.cout_bobinage ?? bt.cout_atelier ?? 0)} DH
+                </span>
+              )}
+            </span>
+          ) : null;
+
           if (pdrObj) {
             return (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
-                title={pdrObj.designation}
-              >
-                <Package className="w-3 h-3 text-cyan-600 shrink-0" />
-                <span className="truncate">{pdrObj.ref}</span>
-              </span>
+              <div className="flex flex-col gap-1 items-start">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-xs font-mono font-bold shadow-2xs"
+                  title={pdrObj.designation}
+                >
+                  <Package className="w-3 h-3 text-cyan-600 shrink-0" />
+                  <span className="truncate">{pdrObj.ref}</span>
+                </span>
+                {workshopBadge}
+              </div>
             );
           }
           if (Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0) {
             const first = bt.pieces_proposees[0];
             const extra = bt.pieces_proposees.length > 1 ? ` +${bt.pieces_proposees.length - 1}` : '';
             return (
-              <div className="flex flex-col gap-0.5">
+              <div className="flex flex-col gap-0.5 items-start">
                 <span
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-900 border border-purple-200 text-[11px] font-mono font-bold shadow-2xs"
                   title={`Proposition terrain: ${first.ref} × ${first.quantite}`}
@@ -675,8 +720,12 @@ export default function BonsTravailTab({
                     Bon saisi: {bt.num_bon_saisi_par_tech}
                   </span>
                 )}
+                {workshopBadge}
               </div>
             );
+          }
+          if (workshopBadge) {
+            return workshopBadge;
           }
           if (bt.num_bon_saisi_par_tech) {
             return (
@@ -1813,6 +1862,88 @@ export default function BonsTravailTab({
                   </label>
                 )}
               </div>
+
+              {/* CORRECTIVE-ATELIER-P0: Linked Workshop / External Orders in Review Modal */}
+              {(() => {
+                const linkedOrders = SortieExterneService.getLinkedOrdersForBt(
+                  reviewModalBt,
+                  sortiesExterne
+                );
+                if (linkedOrders.length === 0) return null;
+                return (
+                  <div
+                    data-testid="review-workshop-orders-panel"
+                    className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                        <Wrench className="w-4 h-4 text-indigo-700" />
+                        Bon(s) d’Atelier / Externe associé(s) ({linkedOrders.length})
+                      </span>
+                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900">
+                        Coût Atelier inclus à la clôture
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {linkedOrders.map((ord: any) => {
+                        const isOpen = SortieExterneService.isWorkshopOrderOpen(ord.etat);
+                        return (
+                          <div
+                            key={ord.id || ord.code}
+                            className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                              isOpen
+                                ? 'bg-amber-50 border-amber-300 text-amber-950'
+                                : 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
+                                {ord.code}
+                              </span>
+                              <span className="font-bold">
+                                {ord.nature_travail || ord.type_probleme}
+                              </span>
+                              <span className="text-[11px] opacity-80">
+                                • {ord.fournisseur_externe}
+                              </span>
+                              <span className="font-mono font-bold text-[11px] bg-white/80 px-2 py-0.5 rounded">
+                                {Number(ord.cout_bobinage || 0).toLocaleString()} DH
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                                  isOpen
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                    : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                }`}
+                              >
+                                {ord.etat}
+                              </span>
+                              {isOpen && (
+                                <button
+                                  type="button"
+                                  data-testid={`review-receive-workshop-${ord.code}`}
+                                  onClick={() => {
+                                    handleMarkSortieReturned(ord.id, ord.cout_bobinage);
+                                    showToast?.(
+                                      `Bon ${ord.code} réceptionné (Retourné OK). Vous pouvez approuver la clôture du BT.`,
+                                      'success'
+                                    );
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                                >
+                                  Réceptionner OK
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Validation / Clarification Note */}
               <div className="space-y-1.5">

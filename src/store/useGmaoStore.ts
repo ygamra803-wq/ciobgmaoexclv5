@@ -118,6 +118,7 @@ function normalizeInterventionNature(raw: unknown): string | undefined {
   const clean = String(raw || '').trim().toUpperCase();
   if (
     clean === 'REPLACE' ||
+    clean === 'ATELIER' ||
     clean === 'REPAIR' ||
     clean === 'CLEAN' ||
     clean === 'ADJUST' ||
@@ -127,6 +128,64 @@ function normalizeInterventionNature(raw: unknown): string | undefined {
     return clean;
   }
   return undefined;
+}
+
+function syncCorrectiveInterventionsWithSortieRecord(
+  interventions: any[],
+  sortieRecord: any,
+  allSorties: any[]
+): { changed: boolean; nextInterventions: any[] } {
+  if (!Array.isArray(interventions) || !sortieRecord || typeof sortieRecord !== 'object') {
+    return { changed: false, nextInterventions: interventions };
+  }
+  const targetBtKey = String(sortieRecord.id_corrective || '').trim().toUpperCase();
+  const sortieId = String(sortieRecord.id || '').trim();
+  const sortieCode = String(sortieRecord.code || '').trim();
+  if (!targetBtKey && !sortieId && !sortieCode) {
+    return { changed: false, nextInterventions: interventions };
+  }
+
+  let changed = false;
+  const nextInterventions = interventions.map((bt) => {
+    if (!bt || typeof bt !== 'object') return bt;
+    const btId = String(bt.id || '').trim().toUpperCase();
+    const btNum = String(bt.num_bt || '').trim().toUpperCase();
+    const existingSortieId = String(bt.id_sortie_atelier || '').trim();
+    const existingSortieCode = String(bt.code_sortie_atelier || '').trim().toUpperCase();
+
+    const matches =
+      (targetBtKey && (btId === targetBtKey || btNum === targetBtKey)) ||
+      (sortieId && existingSortieId === sortieId) ||
+      (sortieCode && existingSortieCode === sortieCode.toUpperCase());
+
+    if (!matches) return bt;
+
+    changed = true;
+    const linkedList = SortieExterneService.getLinkedOrdersForBt(
+      { ...bt, id_sortie_atelier: sortieId || bt.id_sortie_atelier, code_sortie_atelier: sortieCode || bt.code_sortie_atelier },
+      allSorties
+    );
+    const totalAtelierCost = linkedList.reduce(
+      (sum, s) => sum + (Number(s?.cout_bobinage ?? s?.cout_atelier) || 0),
+      0
+    );
+    const totalPdrCost = Number(bt.cout_pdr ?? bt.pdr_cost ?? 0) || 0;
+
+    return {
+      ...bt,
+      id_sortie_atelier: sortieRecord.id || bt.id_sortie_atelier || '',
+      code_sortie_atelier: sortieRecord.code || bt.code_sortie_atelier || '',
+      cout_atelier: totalAtelierCost,
+      cout_total: Number((totalPdrCost + totalAtelierCost).toFixed(2)),
+      nature_travail_atelier:
+        sortieRecord.nature_travail || sortieRecord.type_probleme || bt.nature_travail_atelier || '',
+      prestataire_atelier:
+        sortieRecord.fournisseur_externe || bt.prestataire_atelier || '',
+      ...(bt.intervention_nature ? {} : { intervention_nature: 'ATELIER' }),
+    };
+  });
+
+  return { changed, nextInterventions };
 }
 
 function recordLocalDeletedIds(entity: string, removedIds: unknown[]): void {
@@ -2333,12 +2392,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         get().warehouseItems,
         created
       );
+      const btSync = syncCorrectiveInterventionsWithSortieRecord(
+        get().correctiveInterventions,
+        created,
+        nextSorties
+      );
       set({
         sortiesExterne: nextSorties,
         warehouseItems: nextWarehouse,
+        ...(btSync.changed ? { correctiveInterventions: btSync.nextInterventions } : {}),
       });
       DataGateway.saveSortiesExterne(nextSorties);
       DataGateway.saveWarehouseItems(nextWarehouse);
+      if (btSync.changed) {
+        DataGateway.saveCorrectiveInterventions(btSync.nextInterventions);
+      }
       return created;
     },
 
@@ -2351,12 +2419,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         get().warehouseItems,
         updated
       );
+      const btSync = syncCorrectiveInterventionsWithSortieRecord(
+        get().correctiveInterventions,
+        updated,
+        nextSorties
+      );
       set({
         sortiesExterne: nextSorties,
         warehouseItems: nextWarehouse,
+        ...(btSync.changed ? { correctiveInterventions: btSync.nextInterventions } : {}),
       });
       DataGateway.saveSortiesExterne(nextSorties);
       DataGateway.saveWarehouseItems(nextWarehouse);
+      if (btSync.changed) {
+        DataGateway.saveCorrectiveInterventions(btSync.nextInterventions);
+      }
       return updated;
     },
 
@@ -2377,12 +2454,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         get().warehouseItems,
         updated
       );
+      const btSync = syncCorrectiveInterventionsWithSortieRecord(
+        get().correctiveInterventions,
+        updated,
+        nextSorties
+      );
       set({
         sortiesExterne: nextSorties,
         warehouseItems: nextWarehouse,
+        ...(btSync.changed ? { correctiveInterventions: btSync.nextInterventions } : {}),
       });
       DataGateway.saveSortiesExterne(nextSorties);
       DataGateway.saveWarehouseItems(nextWarehouse);
+      if (btSync.changed) {
+        DataGateway.saveCorrectiveInterventions(btSync.nextInterventions);
+      }
       return updated;
     },
 
@@ -2395,12 +2481,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         get().warehouseItems,
         updated
       );
+      const btSync = syncCorrectiveInterventionsWithSortieRecord(
+        get().correctiveInterventions,
+        updated,
+        nextSorties
+      );
       set({
         sortiesExterne: nextSorties,
         warehouseItems: nextWarehouse,
+        ...(btSync.changed ? { correctiveInterventions: btSync.nextInterventions } : {}),
       });
       DataGateway.saveSortiesExterne(nextSorties);
       DataGateway.saveWarehouseItems(nextWarehouse);
+      if (btSync.changed) {
+        DataGateway.saveCorrectiveInterventions(btSync.nextInterventions);
+      }
       return updated;
     },
 
@@ -2950,6 +3045,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             marque: submissionData.marque ?? item.marque ?? '',
             etat_piece: submissionData.etat_piece ?? item.etat_piece ?? 'Neuve',
             ...(resolvedNature ? { intervention_nature: resolvedNature as any } : {}),
+            ...(submissionData.id_sortie_atelier !== undefined
+              ? { id_sortie_atelier: String(submissionData.id_sortie_atelier || '').trim() }
+              : {}),
+            ...(submissionData.code_sortie_atelier !== undefined
+              ? { code_sortie_atelier: String(submissionData.code_sortie_atelier || '').trim() }
+              : {}),
+            ...(submissionData.cout_atelier !== undefined
+              ? { cout_atelier: Number(submissionData.cout_atelier || 0) }
+              : {}),
+            ...(submissionData.nature_travail_atelier !== undefined
+              ? { nature_travail_atelier: String(submissionData.nature_travail_atelier || '').trim() }
+              : {}),
+            ...(submissionData.prestataire_atelier !== undefined
+              ? { prestataire_atelier: String(submissionData.prestataire_atelier || '').trim() }
+              : {}),
             ...(isResubmission
               ? {
                   previous_validation_note: String(
@@ -3222,7 +3332,22 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         return null;
       }
 
-      const validation = WorkOrderStateMachine.validateTransition(existing, 'CLOTURE', clotureData);
+      const linkedWorkshopOrders = SortieExterneService.getLinkedOrdersForBt(
+        {
+          ...existing,
+          id_sortie_atelier: clotureData.id_sortie_atelier ?? existing.id_sortie_atelier,
+          code_sortie_atelier: clotureData.code_sortie_atelier ?? existing.code_sortie_atelier,
+        },
+        get().sortiesExterne
+      );
+      const hasOpenWorkshopOrder =
+        clotureData.hasOpenWorkshopOrder === true ||
+        linkedWorkshopOrders.some((s) => SortieExterneService.isWorkshopOrderOpen(s?.etat));
+
+      const validation = WorkOrderStateMachine.validateTransition(existing, 'CLOTURE', {
+        ...clotureData,
+        hasOpenWorkshopOrder,
+      });
       if (!validation.valid) {
         console.warn('[useGmaoStore] handleClotureIntervention blocked:', validation.reason);
         return null;
@@ -3346,6 +3471,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             0
           );
           const primaryPiece = normalizedPieces[0] || null;
+          const primaryWorkshopOrder = linkedWorkshopOrders[0] || null;
+          const computedWorkshopCost =
+            linkedWorkshopOrders.length > 0
+              ? linkedWorkshopOrders.reduce(
+                  (sum, s) => sum + (Number(s?.cout_bobinage ?? s?.cout_atelier) || 0),
+                  0
+                )
+              : Number(clotureData.cout_atelier ?? item.cout_atelier ?? 0) || 0;
 
           const resolvedCompId = String(clotureData.id_composant ?? item.id_composant ?? '').trim();
           const resolvedPartId = String(clotureData.id_part ?? item.id_part ?? '').trim();
@@ -3360,6 +3493,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           delete cleanClotureData._fromValidationReview;
           delete cleanClotureData.actorRole;
           delete cleanClotureData.isTechnician;
+          delete cleanClotureData.hasOpenWorkshopOrder;
           const resolvedClotureNature = normalizeInterventionNature(
             clotureData.intervention_nature ?? item.intervention_nature
           );
@@ -3368,6 +3502,28 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ...item,
             ...cleanClotureData,
             ...(resolvedClotureNature ? { intervention_nature: resolvedClotureNature as any } : {}),
+            id_sortie_atelier:
+              clotureData.id_sortie_atelier ||
+              item.id_sortie_atelier ||
+              primaryWorkshopOrder?.id ||
+              '',
+            code_sortie_atelier:
+              clotureData.code_sortie_atelier ||
+              item.code_sortie_atelier ||
+              primaryWorkshopOrder?.code ||
+              '',
+            cout_atelier: computedWorkshopCost,
+            nature_travail_atelier:
+              clotureData.nature_travail_atelier ||
+              item.nature_travail_atelier ||
+              primaryWorkshopOrder?.nature_travail ||
+              primaryWorkshopOrder?.type_probleme ||
+              '',
+            prestataire_atelier:
+              clotureData.prestataire_atelier ||
+              item.prestataire_atelier ||
+              primaryWorkshopOrder?.fournisseur_externe ||
+              '',
             id_composant: resolvedCompId,
             nom_composant:
               clotureData.nom_composant ||
@@ -3406,6 +3562,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             ),
             cout_pdr: totalPdrCost,
             pdr_cost: totalPdrCost,
+            cout_total: Number((totalPdrCost + computedWorkshopCost).toFixed(2)),
             date_debut: dDebut,
             heure_debut: hDebut,
             date_fin: dFin,

@@ -31,6 +31,7 @@ const STATUS_ALIASES: Record<string, WorkOrderStatus> = {
   LIVE: 'EN_COURS',
 
   EN_ATTENTE_PDR: 'EN_ATTENTE_PDR',
+  EN_ATTENTE_ATELIER: 'EN_ATTENTE_PDR',
   ON_HOLD: 'EN_ATTENTE_PDR',
   SUSPENDU: 'EN_ATTENTE_PDR',
   EN_ATTENTE: 'EN_ATTENTE_PDR',
@@ -137,7 +138,7 @@ export class WorkOrderStateMachine {
       };
     }
 
-    // Domain invariant for CLOTURE: must have num_bt (or auto-assigned) and work description
+    // Domain invariant for CLOTURE: must have num_bt (or auto-assigned), work description, and no open workshop order
     if (toStatus === 'CLOTURE') {
       const hasAction = Boolean(
         String(
@@ -155,6 +156,16 @@ export class WorkOrderStateMachine {
           fromStatus,
           toStatus,
           reason: 'Veuillez renseigner le travail réalisé avant de clôturer le Bon de Travail.',
+        };
+      }
+
+      if (payload.hasOpenWorkshopOrder === true || intervention?.hasOpenWorkshopOrder === true) {
+        return {
+          valid: false,
+          fromStatus,
+          toStatus,
+          reason:
+            "Clôture refusée : un Bon d'Atelier / Réparation Externe lié à ce BT est encore en cours. Réceptionnez ou montez l'organe avant de clôturer le BT.",
         };
       }
     }
