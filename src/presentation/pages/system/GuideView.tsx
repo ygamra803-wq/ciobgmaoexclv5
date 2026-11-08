@@ -126,7 +126,7 @@ const MODULE_ROADMAP: RoadmapGroupMeta[] = [
     number: '06',
     title: 'Pilotage, Finance & Validation Maker-Checker',
     description:
-      'Tableau de bord exécutif, budgets & TCO, centre de validation Maker-Checker, utilisateurs RBAC et zones géographiques d’atelier.',
+      'Tableau de bord exécutif, budgets & TCO, centre de validation Maker-Checker, utilisateurs RBAC, zones géographiques et équipements du Système Général.',
     icon: BarChart3,
     tabs: [
       { tabId: 'dashboard', label: 'Tableau de Bord' },
@@ -134,6 +134,7 @@ const MODULE_ROADMAP: RoadmapGroupMeta[] = [
       { tabId: 'finance', label: 'Coûts & Budgets' },
       { tabId: 'utilisateurs', label: 'Utilisateurs & Rôles' },
       { tabId: 'zones', label: 'Zones & Ateliers' },
+      { tabId: 'equipment', label: 'Équipements & Système Général' },
       { tabId: 'nexus', label: 'Nexus (Nomenclature As-Built & Jumeaux)' },
     ],
   },
@@ -182,6 +183,7 @@ const TAB_LABELS: Record<string, string> = {
   dashboard: 'Tableau de Bord',
   zones: 'Zones & Ateliers',
   utilisateurs: 'Utilisateurs & Rôles',
+  equipment: 'Équipements & Système Général',
   settings: 'Supervision & Stockage',
   settings_mvt_logic: 'Logique des Mouvements',
   settings_injection: 'Injection Données Excel',

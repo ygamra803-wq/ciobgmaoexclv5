@@ -45,11 +45,12 @@ Dans **CIOB GMAO v4**, un équipement industriel n'est jamais réduit à une sim
 
 ---
 
-## 2. Classes d'Actifs (`PRODUCTION` vs `SYSTEM_GENERAL`)
+## 2. Classes d'Actifs (`PRODUCTION` vs `SYSTEM_GENERAL`) & Frontière de Gouvernance
 
-Le service `src/utils/activeMachines.ts` distingue deux classes d'équipements au sein de `STORAGE_KEYS.MACHINES` :
-- **`PRODUCTION`** : Machines de transformation et lignes de production industrielle. Elles sont obligatoirement rattachées à une **Famille (`id_family`)** et un **Template (`id_templates`)**, et apparaissent dans l'**Arborescence Nexus** (`filterProductionMachines(machines)`).
-- **`SYSTEM_GENERAL`** : Infrastructures, utilités et équipements de sécurité d'usine (compresseurs d'air `AIR`, groupes électrogènes `ELEC`, pompes incendie `SEC`, refroidisseurs `CHILL`). Ils sont typés via `STORAGE_KEYS.GENERAL_SYSTEM_TYPES` (`id_general_system_type`) avec génération automatique de code (`AIR-01`, `SEC-01`), sans imposer de Famille/Template de production.
+Le service `src/utils/activeMachines.ts` distingue deux classes d'équipements au sein du SSOT unique `STORAGE_KEYS.MACHINES` :
+- **`PRODUCTION` (Géré dans `MachinesRegisteredView.tsx` — `#machines`)** : Machines de transformation et lignes de production industrielle. Elles sont obligatoirement rattachées à une **Famille (`id_family`)** et un **Template (`id_templates`)**, disposent d'un **Blueprint (`id_blueprint`)**, et apparaissent dans l'**Arborescence Nexus** (`filterProductionMachines(machines)`). Leur création et leur édition s'effectuent dans `MachinesRegisteredView.tsx` / `AddMachineModal.tsx`.
+- **`SYSTEM_GENERAL` (Géré exclusivement dans `EquipmentView.tsx` — `#equipment`)** : Infrastructures, utilités et équipements de sécurité d'usine (compresseurs d'air `AIR`, groupes électrogènes `ELEC`, pompes incendie `SEC`, refroidisseurs `CHILL`). Ils sont typés via `STORAGE_KEYS.GENERAL_SYSTEM_TYPES` (`id_general_system_type`) avec génération automatique de code (`AIR-01`, `SEC-01`), sans imposer de Famille/Template de production.
+  - **Règle d'Isolation (`EQUIPMENT-PAGE-P0`)** : `MachinesRegisteredView.tsx` affiche les équipements `SYSTEM_GENERAL` en **consultation** (pour la visibilité globale du parc, le Passeport 360° et l'étiquette QR), mais ne permet **ni de les créer ni de les modifier sur place** : toute action de création ou d'édition d'un équipement `SYSTEM_GENERAL` redirige vers la page dédiée **Équipements / Système Général (`#equipment`)** du groupe Pilotage & Référentiels.
 
 ---
 

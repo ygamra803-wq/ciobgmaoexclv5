@@ -13,13 +13,14 @@ relatedTabs:
   - templates
   - blueprints
   - nexus
+  - equipment
 ---
 
 # Machines Enregistrées & Passeport Technique 360° (`Parc Machines`)
 
 ## 1. Rôle de cet Écran
 
-L'écran **Machines Enregistrées** est le registre officiel de tous les équipements physiques présents dans votre usine. Contrairement aux catalogues théoriques (**Familles**, **Templates** et **Blueprints**), chaque ligne représente ici **une machine réelle sur le terrain**, caractérisée par :
+L'écran **Machines Enregistrées** est le registre central de vos machines de production et offre également une vue consolidée sur l'ensemble du parc physique de l'usine. Contrairement aux catalogues théoriques (**Familles**, **Templates** et **Blueprints**), chaque ligne représente ici **un équipement réel sur le terrain**, caractérisé par :
 - Son **Code Machine unique** (ex. `RCF100-01`, `AIR-01`) et son **Numéro de Série**.
 - Sa **Zone géographique réelle** (atelier/secteur) et son **Technicien Responsable**.
 - Son **Horomètre / Compteur principal** (Heures, Cycles ou Km).
@@ -27,16 +28,17 @@ L'écran **Machines Enregistrées** est le registre officiel de tous les équipe
 
 ---
 
-## 2. Les Deux Classes d'Équipements : `Production` vs `Système Général`
+## 2. Séparation Claire : `Machines de Production` vs `Équipements Système Général`
 
-Lors de l'ajout d'un équipement (**« + Nouvelle Machine »**) ou dans la barre de filtres rapides, vous pouvez choisir entre deux grandes classes :
+Dans la barre de filtres rapides, vous pouvez filtrer le parc selon deux classes d'équipements, mais leur **gestion (création et modification)** est strictement séparée pour éviter toute confusion :
 
-1. **Machine de Production (`PRODUCTION`)** :
+1. **Machine de Production (`PRODUCTION` — Création & Édition sur cet écran)** :
    - Équipement participant directement à la fabrication (ex. *Rectifieuse*, *Tour CNC*, *Presse Hydraulique*, *Ligne d'assemblage*).
-   - Elle est rattachée à une **Famille (`FAM-XX`)** et à un **Modèle / Template (`TPL-XXX`)** qui génère automatiquement son code séquentiel.
-2. **Système Général — Utilités & Sécurité (`SYSTEM_GENERAL`)** :
+   - Le bouton **« + Nouvelle Machine »** de cet écran est exclusivement dédié aux machines de **Production**, rattachées à une **Famille (`FAM-XX`)** et à un **Modèle / Template (`TPL-XXX`)** qui génère automatiquement leur code séquentiel.
+2. **Système Général — Utilités & Sécurité (`SYSTEM_GENERAL` — Consultation ici, Gestion dans `#equipment`)** :
    - Équipements transverses d'infrastructure (ex. *Compresseur d'air*, *Groupe électrogène*, *Pompe incendie*, *Poste de transformation*).
-   - Vous pouvez gérer et créer vos propres **Types de Système Général** (bouton **« Types Système »**) sans être obligé de créer une Famille ou un Template de production.
+   - Ils sont visibles dans ce tableau (pour consulter leur **Passeport 360°**, leur **Carnet de Santé Préventif** ou imprimer leur **QR Code**), mais **ne se créent et ne se modifient pas ici**.
+   - Si vous souhaitez créer un équipement du Système Général, modifier l'un d'eux ou gérer les **Types de Système Général**, cliquez sur le bouton **« Gérer dans Système Général »** (dans la barre d'outils ou dans le menu d'actions `•••` de l'équipement) : vous serez redirigé instantanément vers la page dédiée **Équipements / Système Général (`#equipment`)**.
 
 ---
 

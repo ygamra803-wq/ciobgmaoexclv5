@@ -36,11 +36,12 @@
 | الملف | الشاشة المقابلة في الكود |
 | :--- | :--- |
 | **[`docs/DASHBOARD_VIEW.md`](./docs/DASHBOARD_VIEW.md)** | لوحة القيادة والمؤشرات التنفيذية (`DashboardView.tsx`). |
-| **[`docs/MACHINES_VIEW.md`](./docs/MACHINES_VIEW.md)** | سجل الآلات، العائلات، القوالب، الـ `Blueprint` المعرفي، وجواز الآلة 360° (`MachinesRegisteredView.tsx`). |
+| **[`docs/MACHINES_VIEW.md`](./docs/MACHINES_VIEW.md)** | سجل آلات الإنتاج، العائلات، القوالب، الـ `Blueprint` المعرفي، وجواز الآلة 360° (`MachinesRegisteredView.tsx`). |
+| **[`docs/EQUIPEMENTS_VIEW.md`](./docs/EQUIPEMENTS_VIEW.md)** | شاشة معدات النظام العام والمرافق وفئاتها (`EquipmentView.tsx` — `#equipment`). |
 | **[`docs/STOCK_VIEW.md`](./docs/STOCK_VIEW.md)** | مخزون قطع الغيار `PDR` ومركز التموين وأوامر الشراء `PO` (`StockView.tsx`). |
 | **[`docs/MOUVEMENTS_VIEW.md`](./docs/MOUVEMENTS_VIEW.md)** | دفتر الأستاذ الموحد لحركات المخزون (`MouvementsView.tsx`). |
 | **[`docs/SORTIE_RAPIDE_VIEW.md`](./docs/SORTIE_RAPIDE_VIEW.md)** | بوابة الصرف والإدخال السريع وطلبيات الصرف الميدانية (`SortieRapideView.tsx`). |
-| **[`docs/SORTIE_EXTERNE_VIEW.md`](./docs/SORTIE_EXTERNE_VIEW.md)** | الصيانة الخارجية وإعادة لف المحركات (`SortieExterneBobinageView.tsx`). |
+| **[`docs/SORTIE_EXTERNE_VIEW.md`](./docs/SORTIE_EXTERNE_VIEW.md)** | أوامر الإنجاز بالورشة الميكانيكية (`BON-ATEL`) والصيانة الخارجية/لف المحركات (`SORT-EXT`) (`SortieExterneBobinageTab.tsx`). |
 | **[`docs/ENTREPOT_VIEW.md`](./docs/ENTREPOT_VIEW.md)** | مستودع المكونات الدوارة والأجزاء المركبة (`EntrepotView.tsx`). |
 | **[`docs/COMPONENTS_VIEW.md`](./docs/COMPONENTS_VIEW.md)** | المرجعيات الهيكلية للمكونات والأجزاء (`CompGroupView`, `CompFamilyView`, `CompTemplateView`). |
 | **[`docs/PREVENTIVE_VIEW.md`](./docs/PREVENTIVE_VIEW.md)** | الصيانة الوقائية (مصفوفة 52 أسبوعاً + الصيانة بالعدادات `PreventiveMetersView.tsx`). |
@@ -62,8 +63,8 @@
 - **[`docs/modules/01-stock-pdr/page-designations-pdr.md`](./docs/modules/01-stock-pdr/page-designations-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Désignations PDR`.
 
 ### المجموعة 02: `Parc Machines, Blueprints & Architecture 3-Tiers` (`docs/modules/02-parc-machines/`)
-- **[`docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md`](./docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (فلسفة الطبقات الثلاث `Tier 1..3`، التجميع التشغيلي `MACHINE | LINE` ومنع الحلقات `wouldCreateHierarchyCycle`، جواز صحة الآلة 360° ومؤشر `BER`، دمج الـ `BOM As-Built` في `Nexus`، وسياسة `Safe Archive`).
-- **[`docs/modules/02-parc-machines/page-machines-registered.md`](./docs/modules/02-parc-machines/page-machines-registered.md)** — دليل المستخدم التشغيلي لشاشة `Machines Enregistrées` وجواز الآلة 360° والملصق الميداني `QR`.
+- **[`docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md`](./docs/modules/02-parc-machines/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (فلسفة الطبقات الثلاث `Tier 1..3`، فصل إدارة آلات الإنتاج `PRODUCTION` عن معدات النظام العام `SYSTEM_GENERAL` التي تُدار في `#equipment`، التجميع التشغيلي `MACHINE | LINE`، جواز صحة الآلة 360° ومؤشر `BER`، دمج الـ `BOM As-Built` في `Nexus`، وسياسة `Safe Archive`).
+- **[`docs/modules/02-parc-machines/page-machines-registered.md`](./docs/modules/02-parc-machines/page-machines-registered.md)** — دليل المستخدم التشغيلي لشاشة `Machines Enregistrées` (إنشاء وتعديل آلات الإنتاج، عرض معدات النظام العام مع التوجيه المباشر لصفحة `#equipment`، وجواز الآلة 360° والملصق الميداني `QR`).
 - **[`docs/modules/02-parc-machines/page-families-machines.md`](./docs/modules/02-parc-machines/page-families-machines.md)** — دليل المستخدم التشغيلي لشاشة `Familles de Machines` (`FAM-XX`).
 - **[`docs/modules/02-parc-machines/page-templates-machines.md`](./docs/modules/02-parc-machines/page-templates-machines.md)** — دليل المستخدم التشغيلي لشاشة `Modèles / Templates de Machines` (`TPL-XXX`).
 - **[`docs/modules/02-parc-machines/page-blueprints-machines.md`](./docs/modules/02-parc-machines/page-blueprints-machines.md)** — دليل المستخدم التشغيلي لشاشة `Blueprints Machines` (التوأم المعرفي ونشر الخطط الوقائية بضغطة واحدة).
@@ -75,10 +76,10 @@
 - **[`docs/modules/03-preventive-meters/page-preventive-referentiel.md`](./docs/modules/03-preventive-meters/page-preventive-referentiel.md)** — دليل المستخدم التشغيلي لشاشة `Ingénierie & Référentiel Préventif` (مصمم الخطط `Plan Builder`، بطاقات الإرشاد للأعضاء `Guides & PDR`، وكتالوج أفعال `AFNOR`).
 
 ### المجموعة 04: `Maintenance Corrective (DI / BT / Clôture & Catalogue)` (`docs/modules/04-corrective-di-bt/`)
-- **[`docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md`](./docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (آلة الحالات المحدودة `WorkOrderStateMachine` والانتقالات المحمية، بروتوكول `Maker-Checker` للتوفيق بين قطع الغيار المستهلكة، حسابات الورديات الصناعية `Shifts 08:00–17:00` واستقطاع فترات الغداء تلقائياً، وخوارزميات `MTTR/MTBF/Pareto`).
+- **[`docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md`](./docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (آلة الحالات المحدودة `WorkOrderStateMachine`، جسر أوامر الورشة الميكانيكية والمقاولة الخارجية `CORRECTIVE-ATELIER-P0` ومنع الإغلاق المبكر `hasOpenWorkshopOrder`، بروتوكول `Maker-Checker`، حسابات الورديات الصناعية `Shifts 08:00–17:00`، وخوارزميات `MTTR/MTBF/Pareto`).
 - **[`docs/modules/04-corrective-di-bt/page-demandes-intervention.md`](./docs/modules/04-corrective-di-bt/page-demandes-intervention.md)** — دليل المستخدم التشغيلي لشاشة `Demandes d'Intervention` (تسجيل البلاغات الطارئة، درجات الاستعجال P1-P4، التحقق من الآلات النشطة، والتحويل إلى أمر عمل BT).
-- **[`docs/modules/04-corrective-di-bt/page-bons-travail.md`](./docs/modules/04-corrective-di-bt/page-bons-travail.md)** — دليل المستخدم التشغيلي لشاشتي `Bons de Travail` و `Intervention Live` (التشغيل الزمني المباشر، الخصم التلقائي لاستراحة الغداء، تتبع القطع المصروفة، ومراجعة المشرف `Maker-Checker`).
-- **[`docs/modules/04-corrective-di-bt/page-cloture-analyse.md`](./docs/modules/04-corrective-di-bt/page-cloture-analyse.md)** — دليل المستخدم التشغيلي لشاشتي `Rapports Clôturés` و `Analyse Corrective & Pareto` (تحليلات باريتو 80/20، مؤشرات الاعتمادية MTTR/MTBF، التكلفة المركبة، وتصدير التقارير).
+- **[`docs/modules/04-corrective-di-bt/page-bons-travail.md`](./docs/modules/04-corrective-di-bt/page-bons-travail.md)** — دليل المستخدم التشغيلي لشاشتي `Bons de Travail` و `Intervention Live` (التشغيل الزمني المباشر، إنشاء بون ورشة/تجليخ مرتبط بالـ BT، تعليق الإغلاق حتى استلام القطعة من الورشة، ومراجعة المشرف `Maker-Checker`).
+- **[`docs/modules/04-corrective-di-bt/page-cloture-analyse.md`](./docs/modules/04-corrective-di-bt/page-cloture-analyse.md)** — دليل المستخدم التشغيلي لشاشتي `Rapports Clôturés` و `Analyse Corrective & Pareto` (تحليلات باريتو 80/20، مؤشرات الاعتمادية MTTR/MTBF، التكلفة المركبة شاملاً تكلفة الورشة والمقاولة الخارجية `cout_atelier`، وتصدير التقارير).
 - **[`docs/modules/04-corrective-di-bt/page-catalogue-correctif.md`](./docs/modules/04-corrective-di-bt/page-catalogue-correctif.md)** — دليل المستخدم التشغيلي لشاشة `Catalogue des Données / Référentiel Correctif` (قاعدة الأعراض، الأعمال المعيارية، مصفوفة العرض-الحل، والفنيين المؤهلين).
 
 ### المجموعة 05: `Entrepôt Organes & Pièces Détachées` (`docs/modules/05-entrepot-organes/`)
@@ -93,7 +94,7 @@
 ### المجموعة 06: `Pilotage, Finance & Gouvernance` (`docs/modules/06-pilotage-gouvernance/`)
 > **ملاحظة معمارية:** تم إعداد **توثيقين مستقلين لكل صفحة**: دليل هندسي معماري للمطورين والوكلاء (`page-dev-*.md`) + دليل تشغيلي ميداني للمستخدمين (`page-user-*.md`).
 
-- **[`docs/modules/06-pilotage-gouvernance/GROUP_ARCHITECTURE.md`](./docs/modules/06-pilotage-gouvernance/GROUP_ARCHITECTURE.md)** — المرجع المعماري الشامل لحوكمة المنظومة (الأركان الستة، سياسة الصلاحيات Fail-Closed، والتكامل المالي والتشغيلي).
+- **[`docs/modules/06-pilotage-gouvernance/GROUP_ARCHITECTURE.md`](./docs/modules/06-pilotage-gouvernance/GROUP_ARCHITECTURE.md)** — المرجع المعماري الشامل لحوكمة المنظومة (الأركان السبعة، سياسة الصلاحيات Fail-Closed، والتكامل المالي والتشغيلي).
 - **لوحة القيادة (`Dashboard`):**
   - **[`docs/modules/06-pilotage-gouvernance/page-dev-dashboard.md`](./docs/modules/06-pilotage-gouvernance/page-dev-dashboard.md)** — المرجع التقني (محرك التجميع، الكاش متعدد الطبقات L1/L2/L3، ومعادلات التوافر والاعتمادية دون حقن وهمي).
   - **[`docs/modules/06-pilotage-gouvernance/page-user-dashboard.md`](./docs/modules/06-pilotage-gouvernance/page-user-dashboard.md)** — دليل المستخدم التشغيلي (قراءة المؤشرات التنفيذية، تنبيهات الأعطال الحرجة، وقيمة المخزون).
@@ -102,13 +103,16 @@
   - **[`docs/modules/06-pilotage-gouvernance/page-user-validation-center.md`](./docs/modules/06-pilotage-gouvernance/page-user-validation-center.md)** — دليل المستخدم التشغيلي (مراجعة تقارير الفنيين، تعديل كميات القطع المصروفة، وقرارات الرفض والقبول).
 - **المالية والميزانيات (`Finance & Budgets`):**
   - **[`docs/modules/06-pilotage-gouvernance/page-dev-finance-budgets.md`](./docs/modules/06-pilotage-gouvernance/page-dev-finance-budgets.md)** — المرجع التقني (مبدأ Field Claim ≠ Coût Validé ≠ ERP، بنية `FiscalBudgetConfig`، وتكلفة الملكية الإجمالية TCO).
-  - **[`docs/modules/06-pilotage-gouvernance/page-user-finance-budgets.md`](./docs/modules/06-pilotage-gouvernance/page-user-finance-budgets.md)** — دليل المستخدم التشغيلي (تخصيص الميزانية السنوية، توزيع التكاليف الثلاثي، ومؤشر الجدوى الاقتصادية BER).
+  - **[`docs/modules/06-pilotage-gouvernance/page-user-finance-budgets.md`](./docs/modules/06-pilotage-gouvernance/page-user-finance-budgets.md)** — دليل المستخدم التشغيلي (تخصيص الميزانية السنوية، توزيع التكاليف، ومؤشر الجدوى الاقتصادية BER).
 - **المستخدمون والصلاحيات (`Utilisateurs & RBAC`):**
   - **[`docs/modules/06-pilotage-gouvernance/page-dev-utilisateurs.md`](./docs/modules/06-pilotage-gouvernance/page-dev-utilisateurs.md)** — المرجع التقني (مصفوفة `PERMISSIONS`، التشفير بـ AES-GCM 256-bit، وسياسة الحماية من الهجمات بالتخمين).
   - **[`docs/modules/06-pilotage-gouvernance/page-user-utilisateurs.md`](./docs/modules/06-pilotage-gouvernance/page-user-utilisateurs.md)** — دليل المستخدم التشغيلي (إدارة الحسابات، تعيين الأدوار الوظيفية، وسياسة الأرشفة الآمنة Soft Archive).
 - **المناطق والورشات (`Zones & Ateliers`):**
   - **[`docs/modules/06-pilotage-gouvernance/page-dev-zones.md`](./docs/modules/06-pilotage-gouvernance/page-dev-zones.md)** — المرجع التقني (الفصل الصارم بين الجغرافيا والتراتب الفني، وحماية الحذف `handleDeleteZone`).
   - **[`docs/modules/06-pilotage-gouvernance/page-user-zones.md`](./docs/modules/06-pilotage-gouvernance/page-user-zones.md)** — دليل المستخدم التشغيلي (المخطط المكاني للمصنع، ربط الآلات والفنيين بالورش، ومنع حذف المناطق المشغولة).
+- **المعدات والنظام العام (`Équipements & Système Général`):**
+  - **[`docs/modules/06-pilotage-gouvernance/page-dev-equipment.md`](./docs/modules/06-pilotage-gouvernance/page-dev-equipment.md)** — المرجع التقني (`EquipmentView.tsx`، مشاركة SSOT الوحيد `STORAGE_KEYS.MACHINES` + `STORAGE_KEYS.GENERAL_SYSTEM_TYPES`، العزل الوظيفي عن شاشة آلات الإنتاج، وصلاحيات `equipment.*`).
+  - **[`docs/modules/06-pilotage-gouvernance/page-user-equipment.md`](./docs/modules/06-pilotage-gouvernance/page-user-equipment.md)** — دليل المستخدم التشغيلي (إدارة معدات المرافق وفئات النظام العام `AIR/ELEC/SEC/CHILL` والترقيم التلقائي).
 - **شجرة نيكسوس والتسميات الحقيقية (`Nexus As-Built & Digital Twins`):**
   - **[`docs/modules/06-pilotage-gouvernance/page-dev-nexus.md`](./docs/modules/06-pilotage-gouvernance/page-dev-nexus.md)** — المرجع التقني (بناء التسمية الموحدة buildUnifiedMachineNexusElements، تحليل فروقات البلوبرنت، واستنساخ التسمية للخطوط التوأم).
   - **[`docs/modules/06-pilotage-gouvernance/page-user-nexus.md`](./docs/modules/06-pilotage-gouvernance/page-user-nexus.md)** — دليل المستخدم التشغيلي (استعراض التشريح الفيزيائي للآلة، مقارنة الواقع مع النظرية، والربط المباشر مع أذونات الصرف السريعة).

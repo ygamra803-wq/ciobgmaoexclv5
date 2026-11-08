@@ -5,33 +5,35 @@ groupTitle: Pilotage, Finance & Gouvernance
 docType: architecture
 audience: developer
 title: Architecture & Spécifications Techniques — Groupe 06 : Pilotage, Finance & Gouvernance
-summary: Spécification technique d'architecture pour le groupe 06. Couvre les 6 piliers de pilotage stratégique et de gouvernance opérationnelle (Tableau de bord exécutif, Centre de validation Maker-Checker, Contrôle budgétaire & TCO, Gestion des utilisateurs RBAC, Cadastre spatial des Zones et Nomenclature réelle Nexus As-Built & Jumeaux Numériques).
+summary: Spécification technique d'architecture pour le groupe 06. Couvre les 7 piliers de pilotage stratégique et de gouvernance opérationnelle (Tableau de bord exécutif, Centre de validation Maker-Checker, Contrôle budgétaire & TCO, Gestion des utilisateurs RBAC, Cadastre spatial des Zones, Équipements & Système Général, et Nomenclature réelle Nexus As-Built & Jumeaux Numériques).
 relatedTabs:
   - dashboard
   - validation_center
   - finance
   - utilisateurs
   - zones
+  - equipment
   - nexus
 ---
 
 # 🏛️ Group 06 : Pilotage, Finance & Gouvernance — Spécifications Architecturales
 
 > **Destination :** Développeurs, Architectes Logiciels, Auditeurs de Sécurité & Modèles IA.  
-> **Périmètre applicatif :** Les 6 piliers de pilotage stratégique et de gouvernance de l'usine :
+> **Périmètre applicatif :** Les 7 piliers de pilotage stratégique et de gouvernance de l'usine :
 > 1. **Tableau de Bord Exécutif (`DashboardView`) :** Agrégation réactive, KPIs MTTR/MTBF et alertes temps réel.
 > 2. **Centre de Validation Maker-Checker (`ValidationCenterView`) :** Protocole d'approbation hiérarchique `VAL-1..VAL-5`.
 > 3. **Pilotage des Coûts & Budgets (`FinanceView`) :** Règle `Field Claim ≠ Coût Validé ≠ Écriture ERP`, TCO et suivi budgétaire 12 mois.
 > 4. **Utilisateurs & Sécurité RBAC (`UtilisateursView`) :** Coffre-fort chiffré AES-GCM, verrouillage anti-bruteforce, et matrice des rôles fail-closed.
 > 5. **Zones & Ateliers (`ZonesView`) :** Cadastre géographique de l'usine et intégrité référentielle stricte.
-> 6. **Nexus BOM & Jumeaux Numériques (`NexusView`) :** Nomenclature réelle As-Built, analyse d'écarts avec le Blueprint et clonage vers machines jumelles.  
+> 6. **Équipements & Système Général (`EquipmentView`) :** Référentiel dédié aux utilités et infrastructures d'usine (`SYSTEM_GENERAL` et `GENERAL_SYSTEM_TYPES`), isolé de la création des lignes de production.
+> 7. **Nexus BOM & Jumeaux Numériques (`NexusView`) :** Nomenclature réelle As-Built, analyse d'écarts avec le Blueprint et clonage vers machines jumelles.  
 > *(Note : Les Paramètres Système, Sauvegardes et Registre d'Audit forment le Groupe dédié 07).*
 
 ---
 
 ## 1. Philosophie Générale de Gouvernance
 
-Le Groupe 06 constitue **l'épine dorsale de contrôle, de sécurité, d'arbitrage financier et de pilotage anatomique** de l'ensemble de la GMAO :
+Le Groupe 06 constitue **l'épine dorsale de contrôle, de sécurité, d'arbitrage financier, d'utilités d'infrastructure et de pilotage anatomique** de l'ensemble de la GMAO :
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -44,21 +46,21 @@ Le Groupe 06 constitue **l'épine dorsale de contrôle, de sécurité, d'arbitra
 ┌─────────────────────────┐ ┌────────────────────┐ ┌────────────────────┐
 │ CENTRE DE VALIDATION    │ │ FINANCES & BUDGETS │ │ NEXUS BOM AS-BUILT │
 │ Maker-Checker (VAL-1..5)│ │ Coûts MO, PDR, TCO │ │ Nomenclature réelle│
-│ Séparation Rédacteur/   │ │ Suivi Mensuel/     │ │ Analyse écarts     │
-│ Approbateur             │ │ Trimestriel        │ │ Jumeaux Numériques │
+│ Séparation Rédacteur/   │ │ Atelier & Externe  │ │ Analyse écarts     │
+│ Approbateur             │ │ Suivi Mensuel      │ │ Jumeaux Numériques │
 └──────────┬──────────────┘ └─────────┬──────────┘ └─────────┬──────────┘
            │                          │                      │
            └──────────────────────────┼──────────────────────┘
                                       ▼
 ┌────────────────────────────────────────────────────────────────────────┐
-│                  SÉCURITÉ & TERRITOIRE OPÉRATIONNEL                    │
-│           Utilisateurs & RBAC  •  Zones Géographiques d'Atelier        │
+│           SÉCURITÉ, TERRITOIRE & INFRASTRUCTURE SYSTÈME GÉNÉRAL        │
+│   Utilisateurs & RBAC • Zones Géographiques • Équipements & Utilités   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. Les 6 Piliers et leurs Invariants Non-Négociables
+## 2. Les 7 Piliers et leurs Invariants Non-Négociables
 
 ### Pilier 1 : Tableau de Bord (`#dashboard`)
 - **Invariant :** Zéro calcul destructif ; les KPIs sont des vues dérivées pures ($O(N)$ optimisées par cache multi-niveaux L1/L2/L3).
@@ -70,8 +72,8 @@ Le Groupe 06 constitue **l'épine dorsale de contrôle, de sécurité, d'arbitra
 
 ### Pilier 3 : Finances, Coûts & Budgets (`#finance`)
 - **Axiome :** `Déclaration Terrain (Claim)` $\neq$ `Coût Validé (GMAO)` $\neq$ `Écriture Comptable (ERP)`.
-- **Ventilation Tripartite :** Tout coût machine se décompose rigoureusement en :
-  $$\text{Coût Total} = \text{Coût Main-d'Œuvre} + \text{Coût PDR Consommée (PUMP)} + \text{Coût Sous-Traitance Externe}$$
+- **Ventilation Quadripartite :** Tout coût machine se décompose rigoureusement en :
+  $$\text{Coût Total} = \text{Coût Main-d'Œuvre} + \text{Coût PDR Consommée (PUMP)} + \text{Coût Atelier Mécanique (BON-ATEL)} + \text{Coût Sous-Traitance Externe (SORT-EXT)}$$
 - **Traçabilité Budgétaire :** Tout réajustement de dotation annuelle ou mensuelle consigne un enregistrement immuable dans `budgetChangeLog` et dans `AUDIT_EVENTS`.
 
 ### Pilier 4 : Sécurité des Utilisateurs & RBAC (`#utilisateurs`)
@@ -83,7 +85,11 @@ Le Groupe 06 constitue **l'épine dorsale de contrôle, de sécurité, d'arbitra
 - **Vérité Géographique :** Une Zone est une localisation physique d'atelier (ex. `Laminoir`, `Finition`, `Centrale Électrique`), jamais un parent fonctionnel de ligne ou un composant machine.
 - **Verrouillage de Suppression :** Suppression bloquée avec statut HTTP 400 / Toast Warning si des machines, techniciens, opérations ou articles d'entrepôt y sont encore rattachés (`handleDeleteZone`).
 
-### Pilier 6 : Nexus BOM & Jumeaux Numériques (`#nexus`)
+### Pilier 6 : Équipements & Système Général (`#equipment`)
+- **SSOT Unique & Frontière d'Édition (`EQUIPMENT-PAGE-P0`) :** Les utilités d'usine (`asset_class: 'SYSTEM_GENERAL'`) résident dans `STORAGE_KEYS.MACHINES` et sont typées par `STORAGE_KEYS.GENERAL_SYSTEM_TYPES`, mais leur création, modification et gestion de catégories sont **exclusivement** opérées dans `EquipmentView.tsx` (`#equipment`).
+- **Redirection Propre depuis le Parc Machines :** `MachinesRegisteredView.tsx` affiche les équipements `SYSTEM_GENERAL` en lecture seule pour la visibilité flotte et redirige toute demande d'édition vers `#equipment` avec focus automatique (`gmao_equipment_focus_id`).
+
+### Pilier 7 : Nexus BOM & Jumeaux Numériques (`#nexus`)
 - **Vérité As-Built Unifiée :** Fusion dynamique du registre d'atelier (`machineElementsLedger`) et des organes montés d'entrepôt (`warehouseItems`).
 - **Analyse d'Écarts :** Confrontation temps réel avec le `Blueprint` modèle pour détecter les substitutions de terrain et les pièces manquantes.
 - **Duplication aux Machines Jumelles :** Réplication instantanée de la nomenclature As-Built validée sur une machine vers l'ensemble de ses lignes sœurs du parc.

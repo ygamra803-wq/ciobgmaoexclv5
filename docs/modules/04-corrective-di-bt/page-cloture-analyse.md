@@ -46,8 +46,9 @@ L'onglet `#corrective_cloture` regroupe l'historique exhaustif des BT finalisés
      - Identité de la machine, date et heure d'arrêt, date et heure de redémarrage.
      - Symptôme d'origine et diagnostic constaté.
      - Actions techniques exécutées.
-     - Liste détaillée des pièces de rechange avec référence, quantité et coût unitaire PUMP.
-     - Coût global de l'intervention : $\text{Coût Total} = \text{Coût MO} + \text{Coût PDR}$.
+     - Liste détaillée des pièces de rechange avec référence, quantité et coût unitaire PUMP (`cout_pdr`).
+     - Détail du **Bon d'Atelier / Sous-Traitance Externe** associé (`code_sortie_atelier`, nature d'usinage/bobinage, prestataire et `cout_atelier`).
+     - Coût global consolidé de l'intervention : $\text{Coût Total} = \text{Coût PDR} + \text{Coût Atelier / Externe}$ (+ valorisation MO).
 3. **Export Excel et Impression :**
    - Bouton **« Exporter vers Excel »** : Génération immédiate d'un classeur structuré pour audit et reporting hiérarchique.
    - Bouton **« Imprimer / PDF »** : Fiche d'intervention au format A4 normalisé avec zones d'émargement technicien et production.

@@ -73,31 +73,34 @@ L'onglet Live permet un suivi dynamique des équipes sur le terrain :
 
 ---
 
-## 4. Déclaration des Pièces Consommées & Soumission Terrain
+## 4. Déclaration Terrain : Pièces Consommées & Bons d'Atelier / Rectification
 
-Lors de la fin des travaux :
-1. Cliquez sur **« Saisir Rapport & Pièces »** sur le BT.
-2. Décrivez le travail réalisé : diagnostic exact, cause première de la défaillance (usure normale, défaut de graissage, surchauffe, corps étranger...), et actions correctives menées.
+Lors de la saisie du rapport d'intervention (en mode **Formulaire Classique** ou **Assistant Wizard 3 Étapes**) :
+1. **Nature de l'Intervention (Contrôle de cohérence `VAL-4`) :**
+   - Choisissez la nature réelle du dépannage : *Remplacement PDR (`+PDR`)*, *Réparation*, *Réglage*, *Nettoyage*, *Diagnostic* ou **`Atelier / Rectif.`** (*Bon d’Atelier / Rectification / Externe*).
+2. **Cas d'un Usinage / Rectification Atelier ou Bobinage Externe (`Atelier / Rectif.`) :**
+   - Lorsque la pièce ou l'organe défaillant doit être rectifié à l'atelier mécanique interne (**`BON-ATEL-xxx`** : *Usinage, Tournage d'arbre, Soudure/Rechargement, Confection sur mesure*) ou envoyé en sous-traitance externe (**`SORT-EXT-xxx`** : *Bobinage moteur, Réparation variateur*), un panneau dédié **« Bon d’Atelier / Rectification & Sous-Traitance lié au BT »** s'ouvre directement dans l'écran Live.
+   - Vous pouvez créer et lier le bon en 1 clic sans quitter l'intervention, et cocher **« Suspendre automatiquement le BT en EN_ATTENTE_PDR après création du bon »**.
+   - **Règle d'Or Anti-Clôture Prématurée :** Tant que le Bon d'Atelier ou Externe lié n'est pas terminé et réceptionné (**`Retourné OK`** ou **`Monté`**), le système **empêche la clôture définitive du BT** afin que les délais d'atelier et les coûts d'usinage/bobinage ne soient jamais oubliés.
 3. **Ajout des Pièces de Rechange (PDR) :**
-   - Sélectionnez l'article dans le catalogue du magasin (référence, désignation).
-   - Indiquez la quantité physiquement montée sur la machine.
-   - Le système affiche le stock disponible en magasin pour vérification.
-4. Cliquez sur **« Soumettre pour Validation Superviseur »**.
-   - Le BT passe au statut `PENDING_VALIDATION`.
-   - **Règle de sécurité :** Le stock physique magasin **n'est pas encore débité**. Cela empêche toute erreur de saisie sur le terrain de fausser l'inventaire avant contrôle.
+   - Sélectionnez l'article dans le catalogue du magasin (avec mise en avant automatique `★ BOM` des pièces recommandées pour cette machine).
+   - Indiquez la quantité physiquement montée et ajoutez une ou plusieurs références.
+4. **Soumission ou Clôture :**
+   - **Technicien :** Cliquez sur **« Soumettre pour Validation Responsable »**. Le BT passe au statut `PENDING_VALIDATION` sans débiter le stock physique immédiatement.
+   - **Administrateur / Responsable :** Si aucun Bon d'Atelier n'est encore ouvert, l'intervention est validée et clôturée directement avec calcul automatique du coût global ($\text{Coût Total} = \text{Coût PDR} + \text{Coût Atelier}$).
 
 ---
 
-## 5. Validation Superviseur : Protocole Maker-Checker
+## 5. Validation Superviseur : Protocole Maker-Checker & Réception Atelier
 
-Pour les chefs d'équipe et responsables maintenance :
+Pour les chefs d'équipe et responsables maintenance dans l'onglet **Bons de Travail (`#corrective_bt`)** :
 
-1. Les BT nécessitant un visa apparaissent avec un badge d'avertissement **« À Valider »**.
-2. Cliquez sur **« Examiner la Déclaration »** pour ouvrir la modale de réconciliation (`MakerCheckerReviewModal`).
+1. La colonne **`PDR & Atelier (Col L)`** affiche à la fois les pièces PDR et le badge du **Bon d'Atelier / Externe** lié (ex. `BON-ATEL-001 • 450 DH`), en orange s'il est encore en cours ou en indigo s'il est réceptionné.
+2. Cliquez sur **« Contrôler & Valider »** sur un BT en attente pour ouvrir la modale de réconciliation (`MakerCheckerReviewModal`).
 3. Le superviseur examine :
-   - Les heures déclarées vs la durée constatée.
-   - Les références de pièces et quantités déclarées.
-   - Si nécessaire, il peut corriger une quantité erronée ou retirer une pièce non justifiée.
+   - Les alertes automatiques de concordance **V4** (stock disponible, doublon de bon magasin).
+   - Les pièces de rechange proposées et leurs quantités.
+   - Les **Bons d'Atelier / Externe associés** : si un bon d'atelier vient d'être terminé, le superviseur peut cliquer directement sur **« Réceptionner OK »** dans la modale pour valider son retour et débloquer l'approbation du BT.
 4. Choix de décision :
-   - **Approuver :** Les pièces sont définitivement déduites du stock magasin (`Sortie`), le coût global est ventilé, et un enregistrement immutable `VALIDATION_APPROVED` est consigné dans le journal d'audit.
-   - **Demander Correction :** Le BT est renvoyé au technicien avec un commentaire explicatif pour réajustement.
+   - **Approuver & Clôturer :** Les pièces sont définitivement déduites du stock magasin (`Sortie`), le coût d'atelier (`cout_atelier`) est consolidé avec le coût PDR (`cout_pdr`) dans `cout_total`, et un enregistrement immuable est consigné dans le journal d'audit.
+   - **Demander Clarification / Rejeter :** Le BT est renvoyé au technicien avec une note explicative sans aucun impact sur le stock.
