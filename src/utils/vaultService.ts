@@ -196,12 +196,58 @@ export async function decryptVault(pin) {
   }
 }
 
+export const PROHIBITED_TRIVIAL_PINS = new Set([
+  '000000',
+  '111111',
+  '222222',
+  '333333',
+  '444444',
+  '555555',
+  '666666',
+  '777777',
+  '888888',
+  '999999',
+  '123456',
+  '654321',
+  '12345678',
+  '1234',
+  '0000',
+  'admin',
+  'magasinier',
+  'viewer',
+  'tech',
+  'password',
+]);
+
+/**
+ * SEC-HARDENING-P1 (Batch D): Validates a newly set or rotated Master PIN.
+ * - Rejects trivial / repetitive PINs (000000, 123456, 111111, 1234, admin...)
+ * - Requires >= 6 digits for numeric PINs, or >= 8 chars for alphanumeric PINs.
+ * - Existing vaults remain verifiable without breaking backward compatibility.
+ */
+export function validateMasterPinPolicy(pin: unknown): string {
+  const cleanPin = String(pin || '').trim();
+  if (!cleanPin) {
+    throw new Error('Veuillez saisir un Master PIN.');
+  }
+  if (PROHIBITED_TRIVIAL_PINS.has(cleanPin.toLowerCase()) || /^(\d)\1+$/.test(cleanPin)) {
+    throw new Error(
+      'Ce code Master PIN est trop trivial ou interdit (ex: 000000, 123456, 111111, 1234, admin). Veuillez choisir un PIN robuste.'
+    );
+  }
+  const isDigitsOnly = /^\d+$/.test(cleanPin);
+  if (isDigitsOnly && cleanPin.length < 6) {
+    throw new Error('Le nouveau Master PIN numérique doit comporter au moins 6 chiffres.');
+  }
+  if (!isDigitsOnly && cleanPin.length < 8) {
+    throw new Error('Le nouveau Master PIN alphanumérique doit comporter au moins 8 caractères.');
+  }
+  return cleanPin;
+}
+
 // Rotation et changement sécurisé du Master PIN avec régénération complète des clés
 export async function changeMasterPin(currentPin, newPin) {
-  if (!newPin || typeof newPin !== 'string' || newPin.trim().length < 4) {
-    throw new Error('Le nouveau Master PIN doit comporter au moins 4 caractères.');
-  }
-  const cleanNewPin = newPin.trim();
+  const cleanNewPin = validateMasterPinPolicy(newPin);
   // 1. Déchiffrer avec l'ancien PIN pour valider l'accès
   let vaultData;
   if (isVaultExists()) {
@@ -366,6 +412,7 @@ export const vaultService = {
   setPinHash,
   verifyPinHash,
   changeMasterPin,
+  validateMasterPinPolicy,
   createEmptyVault,
   setMasterPin,
   getMasterPin,

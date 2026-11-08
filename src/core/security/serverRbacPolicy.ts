@@ -400,3 +400,101 @@ export function sanitizeBulkStateForRole(
     strippedKeys,
   };
 }
+
+/**
+ * SEC-HARDENING-P1 (Batch B): Prohibited weak or default API tokens for LAN host server
+ */
+export const WEAK_API_TOKENS = new Set<string>([
+  '',
+  'empty',
+  'change-me',
+  'changeme',
+  'secret',
+  'gmao',
+  '1234',
+  '123456',
+  'admin',
+  'password',
+  'default',
+  'token',
+]);
+
+/**
+ * Returns true if the configured GMAO_API_TOKEN is empty, shorter than 8 characters,
+ * or matches a known weak placeholder.
+ */
+export function isWeakOrEmptyApiToken(token: unknown): boolean {
+  if (typeof token !== 'string') return true;
+  const clean = token.trim();
+  if (clean.length < 8) return true;
+  return WEAK_API_TOKENS.has(clean.toLowerCase());
+}
+
+/**
+ * Evaluates the GMAO_API_TOKEN security guard for incoming API requests.
+ * - Production/Host mode: Rejects write requests (POST/PUT/DELETE) and strict API calls
+ *   whenever GMAO_API_TOKEN is missing or weak, or when client header does not match.
+ * - Development mode: Allows local work without a token (after startup warning),
+ *   while still rejecting explicit mismatched tokens.
+ */
+export function evaluateServerApiTokenGuard(params: {
+  method: string;
+  providedToken: unknown;
+  expectedToken: unknown;
+  clientOrigin?: unknown;
+  isProduction: boolean;
+  strictTokenEnv?: unknown;
+}): {
+  allowed: boolean;
+  statusCode?: number;
+  error?: string;
+  message?: string;
+} {
+  const method = String(params.method || 'GET').toUpperCase();
+  const isWriteMethod = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+  const rawExpected = typeof params.expectedToken === 'string' ? params.expectedToken.trim() : '';
+  const rawProvided =
+    typeof params.providedToken === 'string' ? params.providedToken.trim() : undefined;
+  const isExpectedWeak = isWeakOrEmptyApiToken(rawExpected);
+
+  // 1. In production, refuse write requests (and strict access) if server token is missing or weak
+  if (params.isProduction && isExpectedWeak) {
+    if (isWriteMethod) {
+      return {
+        allowed: false,
+        statusCode: 401,
+        error: 'Unauthorized',
+        message:
+          'Sécurité Production : GMAO_API_TOKEN est absent ou trop faible sur le serveur. Veuillez configurer un GMAO_API_TOKEN robuste dans l’environnement.',
+      };
+    }
+  }
+
+  // 2. If an expected token is configured and client explicitly sent a mismatched token header, reject immediately
+  if (rawExpected && rawProvided !== undefined && rawProvided !== rawExpected) {
+    return {
+      allowed: false,
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'API Token invalide ou manquant.',
+    };
+  }
+
+  const strictToken = params.isProduction || params.strictTokenEnv !== 'false';
+  const tokenValid =
+    (!params.isProduction && !rawExpected) ||
+    (Boolean(rawExpected) && rawProvided === rawExpected && (!params.isProduction || !isExpectedWeak)) ||
+    (!strictToken && params.clientOrigin === 'gmao-web-client');
+
+  if (!tokenValid) {
+    return {
+      allowed: false,
+      statusCode: 401,
+      error: 'Unauthorized',
+      message: 'API Token invalide ou manquant.',
+    };
+  }
+
+  return { allowed: true };
+}
+

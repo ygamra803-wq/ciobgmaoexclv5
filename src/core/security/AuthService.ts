@@ -15,6 +15,33 @@ export const PROHIBITED_BOOTSTRAP_PASSWORDS = new Set([
   '1234',
 ]);
 
+/**
+ * SEC-HARDENING-P1 (Batch A): Unified password strength policy
+ * - Rejects prohibited bootstrap passwords first
+ * - Minimum 8 characters
+ * - Must contain at least one letter ([a-zA-Z]) and one digit ([0-9])
+ */
+export function validatePasswordPolicy(rawPassword: string): string {
+  const cleanPass = String(rawPassword || '').trim();
+  if (!cleanPass) {
+    throw new Error('Veuillez saisir un mot de passe.');
+  }
+  if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPass.toLowerCase())) {
+    throw new Error(
+      'Ce mot de passe fait partie des mots de passe par défaut interdits. Veuillez choisir un mot de passe sécurisé et robuste.'
+    );
+  }
+  if (cleanPass.length < 8) {
+    throw new Error(
+      'Le nouveau mot de passe doit comporter au moins 8 caractères (avec au moins une lettre et un chiffre).'
+    );
+  }
+  if (!/[a-zA-Z]/.test(cleanPass) || !/[0-9]/.test(cleanPass)) {
+    throw new Error('Le mot de passe doit contenir au moins une lettre et un chiffre.');
+  }
+  return cleanPass;
+}
+
 function buildAvatar(nameOrCode = '') {
   const clean = String(nameOrCode || '').trim();
   if (!clean) return 'TC';
@@ -427,9 +454,7 @@ export class AuthService {
 
     const cleanPass = String(plainPassword || '').trim();
     if (cleanPass) {
-      if (cleanPass.length < 4) {
-        throw new Error('Le mot de passe doit comporter au moins 4 caractères.');
-      }
+      validatePasswordPolicy(cleanPass);
       passwordHash = await SecurityService.hashPassword(cleanPass);
     }
 
@@ -597,16 +622,7 @@ export class AuthService {
   }
 
   async updateUserPassword(usernameOrId, newPlainPassword) {
-    const cleanPass = (newPlainPassword || '').trim();
-    if (cleanPass.length < 4) {
-      throw new Error('Le nouveau mot de passe doit comporter au moins 4 caractères.');
-    }
-
-    if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPass.toLowerCase())) {
-      throw new Error(
-        "Ce mot de passe fait partie des mots de passe par défaut interdits. Veuillez choisir un mot de passe sécurisé et robuste."
-      );
-    }
+    const cleanPass = validatePasswordPolicy(newPlainPassword);
 
     const users = [...this.getStoredUsersList()];
     const target = String(usernameOrId || '').trim().toLowerCase();

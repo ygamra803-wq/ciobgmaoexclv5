@@ -3,6 +3,7 @@ import { storageService } from '../utils/storageService';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { dataIntegrityService } from '../services/dataIntegrityService';
 import { sanitizeObject } from '../utils/sanitize';
+import { safeId } from '../utils/safeId';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 import { movementRepository } from './MovementRepository';
@@ -607,7 +608,7 @@ export const DataGateway = {
         ? Object.freeze({ ...payload.after })
         : payload.after ?? null;
     const event = Object.freeze({
-      id: payload.id || `AUD-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
+      id: payload.id || safeId('AUD'),
       ts: payload.ts || new Date().toISOString(),
       actorId: String(payload.actorId || payload.actorName || 'SYSTEM').trim(),
       actorName: String(payload.actorName || payload.actorId || 'Système GMAO').trim(),

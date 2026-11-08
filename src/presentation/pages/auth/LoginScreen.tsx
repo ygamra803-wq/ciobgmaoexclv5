@@ -79,7 +79,20 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [pinCode, setPinCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const idleMsg = sessionStorage.getItem('gmao_session_idle_expired');
+        if (idleMsg) {
+          sessionStorage.removeItem('gmao_session_idle_expired');
+          return idleMsg;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   // Active accounts from unified AuthService / AuthContext SSOT

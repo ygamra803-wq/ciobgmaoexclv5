@@ -8,13 +8,14 @@ import {
   AlertTriangle,
   LogOut,
   ArrowRight,
-  User,
   Loader2,
   ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
-
-const PROHIBITED_PASSWORDS = ['admin', 'magasinier', 'viewer', 'tech', '1234'];
+import {
+  PROHIBITED_BOOTSTRAP_PASSWORDS,
+  validatePasswordPolicy,
+} from '../../../core/security/AuthService';
 
 export default function RequirePasswordChange() {
   const { currentUser, updateUserPassword, logout } = useAuth();
@@ -28,25 +29,21 @@ export default function RequirePasswordChange() {
   const cleanPass = newPassword.trim();
   const cleanConfirm = confirmPassword.trim();
 
-  // Rule checks
-  const isMinLength = cleanPass.length >= 4;
-  const isNotProhibited = !PROHIBITED_PASSWORDS.includes(cleanPass.toLowerCase());
+  // SEC-HARDENING-P1 (Batch A): Unified rule checks (8+ chars, letter + digit, not prohibited)
+  const isMinLength = cleanPass.length >= 8;
+  const hasLetterAndDigit = /[a-zA-Z]/.test(cleanPass) && /[0-9]/.test(cleanPass);
+  const isNotProhibited = !PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPass.toLowerCase());
   const isMatching = cleanPass.length > 0 && cleanPass === cleanConfirm;
-  const isFormValid = isMinLength && isNotProhibited && isMatching;
+  const isFormValid = isMinLength && hasLetterAndDigit && isNotProhibited && isMatching;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    if (!isMinLength) {
-      setErrorMsg('Le nouveau mot de passe doit comporter au moins 4 caractères.');
-      return;
-    }
-
-    if (!isNotProhibited) {
-      setErrorMsg(
-        'Ce mot de passe fait partie des mots de passe par défaut interdits. Veuillez choisir un mot de passe sécurisé et robuste.'
-      );
+    try {
+      validatePasswordPolicy(cleanPass);
+    } catch (policyErr: any) {
+      setErrorMsg(policyErr?.message || 'Mot de passe invalide.');
       return;
     }
 
@@ -151,7 +148,7 @@ export default function RequirePasswordChange() {
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Nouveau mot de passe sécurisé"
+                placeholder="8+ caractères (lettres + chiffres)"
                 className="w-full px-3.5 py-2.5 pr-10 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 text-sm transition-all"
                 disabled={isSubmitting}
                 required
@@ -197,7 +194,17 @@ export default function RequirePasswordChange() {
                 }`}
               />
               <span className={isMinLength ? 'text-emerald-300' : 'text-slate-400'}>
-                Au moins 4 caractères
+                Au moins 8 caractères
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2
+                className={`w-3.5 h-3.5 ${
+                  hasLetterAndDigit ? 'text-emerald-400' : 'text-slate-500'
+                }`}
+              />
+              <span className={hasLetterAndDigit ? 'text-emerald-300' : 'text-slate-400'}>
+                Contient au moins une lettre et un chiffre
               </span>
             </div>
             <div className="flex items-center gap-2">

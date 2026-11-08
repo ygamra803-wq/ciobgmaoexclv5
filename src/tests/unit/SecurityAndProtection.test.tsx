@@ -264,7 +264,7 @@ describe('4. Security & Hardening Tests', () => {
     it('should rotate Master PIN, re-encrypt vault with new salt and IV, and authenticate with new PIN', async () => {
       const { vaultService } = await import('../../utils/vaultService.js');
       const initialPin = '1234';
-      const newPin = '9876';
+      const newPin = '908172';
 
       // 1. Initial vault encryption
       const sampleVault = { secretToken: 'GMAO-SECURE-KEY-2026', accounts: [{ user: 'admin' }] };

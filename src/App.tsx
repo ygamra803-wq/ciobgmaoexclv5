@@ -27,6 +27,7 @@ import AppRouter from './presentation/router/AppRouter';
 import { useAppRouterProps } from './presentation/router/useAppRouterProps';
 
 import { useAppViewController } from './hooks/useAppViewController';
+import { useIdleLogout, IDLE_EXPIRED_STORAGE_FLAG } from './hooks/useIdleLogout';
 import { DataGateway } from './application/DataGateway';
 import MachineQrFieldModal from './presentation/pages/machines/components/MachineQrFieldModal';
 import { useAppShell } from './core/shell/shellPolicy';
@@ -48,6 +49,22 @@ export default function App() {
     mobileMenuOpen,
     setMobileMenuOpen,
   } = useAppViewController();
+
+  // SEC-HARDENING-P1 (Batch C): Auto-logout on inactivity (active only after login and after mustChangePassword is cleared)
+  useIdleLogout({
+    enabled: Boolean(currentUser && !currentUser.mustChangePassword),
+    onIdle: () => {
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem(IDLE_EXPIRED_STORAGE_FLAG, 'Session expirée pour inactivité');
+        }
+      } catch {
+        // ignore storage errors
+      }
+      showToast?.('Session expirée pour inactivité', 'warning');
+      logout();
+    },
+  });
 
   const fileInputRef = useRef(null);
 

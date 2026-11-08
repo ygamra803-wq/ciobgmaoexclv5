@@ -14,6 +14,8 @@ import {
   resolveEffectiveServerRole,
   canRoleMutateEntity,
   sanitizeBulkStateForRole,
+  isWeakOrEmptyApiToken,
+  evaluateServerApiTokenGuard,
 } from './src/core/security/serverRbacPolicy';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -86,6 +88,21 @@ async function startServer() {
   const PORT = cliPort || Number(process.env.GMAO_PORT) || 3000;
   const isProduction = process.env.NODE_ENV === 'production';
 
+  // SEC-HARDENING-P1 (Batch B): Startup verification of GMAO_API_TOKEN
+  // In production/host mode, an empty or weak token blocks all write operations and logs a critical alert.
+  // In DEV mode, logs a warning without breaking local development workflow.
+  if (isWeakOrEmptyApiToken(process.env.GMAO_API_TOKEN)) {
+    if (isProduction) {
+      console.error(
+        '[Server][SEC-HARDENING-P1] CRITIQUE : GMAO_API_TOKEN est absent ou faible (ex: empty, change-me, secret, gmao, 1234). Vous devez définir un GMAO_API_TOKEN fort (>= 8 caractères) dans les variables d’environnement. Les requêtes d’écriture API seront refusées.'
+      );
+    } else {
+      console.warn(
+        '[Server][SEC-HARDENING-P1] AVERTISSEMENT DEV : GMAO_API_TOKEN absent ou faible. Autorisé uniquement en développement local ; définissez un GMAO_API_TOKEN robuste en production.'
+      );
+    }
+  }
+
   app.use(cors());
   app.use(express.json({ limit: MAX_STATE_PAYLOAD_LIMIT, strict: false }));
 
@@ -128,25 +145,21 @@ async function startServer() {
     const token = req.headers['x-gmao-api-token'];
     const clientOrigin = req.headers['x-gmao-client-origin'];
     const expectedToken = process.env.GMAO_API_TOKEN;
-    // Strict token policy: in production or when GMAO_API_TOKEN is configured, gmao-web-client
-    // does NOT bypass token verification unless GMAO_STRICT_TOKEN is explicitly set to 'false' in non-prod.
-    const strictToken = isProduction || process.env.GMAO_STRICT_TOKEN !== 'false';
 
-    // Reject immediately on any method (GET/POST/PUT/DELETE) if an explicit token header does not match expectedToken
-    if (expectedToken && token !== undefined && token !== expectedToken) {
-      return res.status(401).json({
-        success: false,
-        error: 'Unauthorized',
-        message: 'API Token invalide ou manquant.',
-      });
-    }
+    const tokenGuard = evaluateServerApiTokenGuard({
+      method: req.method,
+      providedToken: token,
+      expectedToken,
+      clientOrigin,
+      isProduction,
+      strictTokenEnv: process.env.GMAO_STRICT_TOKEN,
+    });
 
-    const tokenValid = !expectedToken || token === expectedToken || (!strictToken && clientOrigin === 'gmao-web-client');
-    if (!tokenValid) {
-      return res.status(401).json({
+    if (!tokenGuard.allowed) {
+      return res.status(tokenGuard.statusCode || 401).json({
         success: false,
-        error: 'Unauthorized',
-        message: 'API Token invalide ou manquant.',
+        error: tokenGuard.error || 'Unauthorized',
+        message: tokenGuard.message || 'API Token invalide ou manquant.',
       });
     }
 
@@ -349,7 +362,7 @@ async function startServer() {
 
     const auditEntry = auditContext
       ? JSON.stringify({
-          id: `aud_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: `aud_${Date.now()}_${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 8)}`,
           timestamp: currentUpdatedAt,
           version: currentVersion,
           actor: auditContext.actor || 'system',

@@ -4,6 +4,7 @@ import { Container } from '../core/di/Container';
 import { accessLogService } from '../utils/AccessLogService';
 import { vaultService } from '../utils/vaultService';
 import { SecurityService } from '../core/security/SecurityService';
+import { validatePasswordPolicy } from '../core/security/AuthService';
 
 const AuthContext = createContext(null);
 
@@ -126,10 +127,7 @@ export const AuthProvider = ({ children }) => {
   // Initialisation du Master PIN pour la première fois - synchronise avec la source unique AuthService
   const setupMasterPin = useCallback(
     async (pin) => {
-      const cleanPin = (pin || '').trim();
-      if (!cleanPin || cleanPin.length < 4) {
-        throw new Error('Le Master PIN doit comporter au moins 4 chiffres.');
-      }
+      const cleanPin = vaultService.validateMasterPinPolicy(pin);
 
       const adminHash = await SecurityService.hashPassword(cleanPin);
       const storedUsers = authService?.getStoredUsersList
@@ -319,10 +317,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateUserPassword = useCallback(
     async (username, newPass, masterPin) => {
-      const cleanPass = (newPass || '').trim();
-      if (cleanPass.length < 4) {
-        throw new Error('Le mot de passe doit comporter au moins 4 caractères.');
-      }
+      const cleanPass = validatePasswordPolicy(newPass);
 
       if (vaultService.isVaultExists() && masterPin) {
         await vaultService.decryptVault(masterPin);

@@ -87,8 +87,11 @@ export default function SettingsAdminTab({
     try {
       if (vaultModal.mode === 'change_password') {
         const newPass = vaultModal.newPassword.trim();
-        if (newPass.length < 4) {
-          showToast?.('Le nouveau mot de passe doit contenir au moins 4 caractères.', 'error');
+        if (newPass.length < 8 || !/[a-zA-Z]/.test(newPass) || !/[0-9]/.test(newPass)) {
+          showToast?.(
+            'Le nouveau mot de passe doit contenir au moins 8 caractères (avec au moins une lettre et un chiffre).',
+            'error'
+          );
           setVaultModal((prev) => ({ ...prev, submitting: false }));
           return;
         }

@@ -3,6 +3,8 @@
  * Tracks user logins, logouts, session duration, device fingerprint, simulated/resolved client IP, OS, browser, screen resolution.
  */
 import { storageService } from './storageService';
+import { safeId } from './safeId';
+import { Logger } from '../core/logger/LoggerService';
 
 const LOGS_STORAGE_KEY = 'gmao_access_logs_v1';
 const CURRENT_SESSION_KEY = 'gmao_active_session_tracking';
@@ -35,17 +37,17 @@ export const accessLogService = {
     const screenRes = typeof window !== 'undefined' ? `${window.screen.width}x${window.screen.height}` : 'N/A';
     const lang = typeof navigator !== 'undefined' ? navigator.language || 'fr' : 'fr';
 
-    // Persistent Device Identifier (Fingerprint ID)
+    // Persistent Device Identifier (Fingerprint ID) — SEC-HARDENING-P1 (Batch E): crypto.randomUUID via safeId
     let deviceId = storageService.getItem('gmao_device_uuid');
     if (!deviceId) {
-      deviceId = 'DEV-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+      deviceId = safeId('DEV');
       storageService.setItem('gmao_device_uuid', deviceId);
     }
 
     // Client Hostname/Station Name
     let stationName = storageService.getItem('gmao_station_name');
     if (!stationName) {
-      stationName = `Station-${os.split(' ')[0]}-${deviceId.substring(4, 8)}`;
+      stationName = `Station-${os.split(' ')[0]}-${deviceId.substring(4, 8).toUpperCase()}`;
       storageService.setItem('gmao_station_name', stationName);
     }
 
@@ -65,7 +67,8 @@ export const accessLogService = {
    */
   async recordLogin(user) {
     const device = this.getDeviceDetails();
-    const sessionId = 'SESS-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+    // SEC-HARDENING-P1 (Batch E): Cryptographically strong session identifier
+    const sessionId = safeId('SESS');
     const loginTime = new Date().toISOString();
 
     // Best-effort client IP resolution (real LAN hostname, public IP, or deterministic local fallback)
@@ -92,8 +95,9 @@ export const accessLogService = {
           clientIp = data.ip;
         }
       }
-    } catch {
+    } catch (err) {
       // Offline fallback: keep real clientIp or '127.0.0.1 (Local)' without simulated random IP
+      Logger.warn('[AccessLogService] Public IP resolution fallback to local IP:', err, 'AccessLogService');
     }
 
     const logEntry = {
@@ -122,7 +126,13 @@ export const accessLogService = {
         userId: logEntry.userId,
         userName: logEntry.userName,
       }));
-    } catch {}
+    } catch (err) {
+      Logger.warn(
+        `[AccessLogService] Failed to persist active session key '${CURRENT_SESSION_KEY}':`,
+        err,
+        'AccessLogService'
+      );
+    }
 
     const logs = this.getLogs();
     logs.unshift(logEntry);
@@ -139,7 +149,13 @@ export const accessLogService = {
     try {
       const raw = sessionStorage.getItem(CURRENT_SESSION_KEY);
       if (raw) activeSession = JSON.parse(raw);
-    } catch {}
+    } catch (err) {
+      Logger.warn(
+        `[AccessLogService] Failed to parse active session key '${CURRENT_SESSION_KEY}':`,
+        err,
+        'AccessLogService'
+      );
+    }
 
     const logoutTime = new Date().toISOString();
     const logs = this.getLogs();
@@ -166,7 +182,13 @@ export const accessLogService = {
 
     try {
       sessionStorage.removeItem(CURRENT_SESSION_KEY);
-    } catch {}
+    } catch (err) {
+      Logger.warn(
+        `[AccessLogService] Failed to remove active session key '${CURRENT_SESSION_KEY}':`,
+        err,
+        'AccessLogService'
+      );
+    }
 
     this.saveLogs(logs);
   },

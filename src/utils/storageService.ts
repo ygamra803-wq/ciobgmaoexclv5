@@ -135,7 +135,9 @@ function purgeObsoleteStorageKeys() {
       localStorage.removeItem(k);
       freedCount++;
     });
-  } catch {}
+  } catch (err) {
+    Logger.warn('[StorageService] Failed to purge obsolete snapshot keys:', err, 'storageService');
+  }
 
   return freedCount;
 }
@@ -353,7 +355,13 @@ export const storageService = {
             migratedKeys.add(k);
             try {
               localStorage.setItem(k, JSON.stringify(decryptedObj));
-            } catch {}
+            } catch (writeErr) {
+              Logger.warn(
+                `[StorageService] Failed to persist migrated key '${k}' to localStorage:`,
+                writeErr,
+                'storageService'
+              );
+            }
           }
         } catch (e) {
           Logger.warn(`Error migrating key ${k}:`, e, 'storageService');
@@ -402,7 +410,8 @@ export const storageService = {
         memoryCache.set(key, cachedEntry);
         return item;
       }
-    } catch {
+    } catch (err) {
+      Logger.warn(`[StorageService] getItem read error for key '${key}':`, err, 'storageService');
       return fallback;
     }
   },
@@ -450,8 +459,13 @@ export const storageService = {
                 try {
                   localStorage.setItem(key, serialized);
                   return true;
-                } catch {
+                } catch (retryErr) {
                   // Fallback safely to memoryCache
+                  Logger.warn(
+                    `[StorageService] setItem retry after quota purge failed for '${key}':`,
+                    retryErr,
+                    'storageService'
+                  );
                 }
               }
             }
@@ -472,7 +486,9 @@ export const storageService = {
         } else {
           indexedDBService.setItem(key, value).catch(() => {});
         }
-      } catch {}
+      } catch (err) {
+        Logger.warn(`[StorageService] Background IndexedDB mirror error for '${key}':`, err, 'storageService');
+      }
     }
 
     return true;
@@ -491,7 +507,9 @@ export const storageService = {
         } else {
           await indexedDBService.setItem(key, value);
         }
-      } catch {}
+      } catch (err) {
+        Logger.warn(`[StorageService] setItemAsync IndexedDB error for '${key}':`, err, 'storageService');
+      }
     }
     return true;
   },
@@ -505,12 +523,16 @@ export const storageService = {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(key);
       }
-    } catch {}
+    } catch (err) {
+      Logger.warn(`[StorageService] removeItem localStorage error for '${key}':`, err, 'storageService');
+    }
 
     if (key.startsWith('gmao_')) {
       try {
         indexedDBService.removeItem(key).catch(() => {});
-      } catch {}
+      } catch (err) {
+        Logger.warn(`[StorageService] removeItem IndexedDB mirror error for '${key}':`, err, 'storageService');
+      }
     }
 
     return true;
@@ -524,7 +546,9 @@ export const storageService = {
     if (key.startsWith('gmao_')) {
       try {
         await indexedDBService.removeItem(key);
-      } catch {}
+      } catch (err) {
+        Logger.warn(`[StorageService] removeItemAsync IndexedDB error for '${key}':`, err, 'storageService');
+      }
     }
     return true;
   },
@@ -541,13 +565,17 @@ export const storageService = {
         if (typeof localStorage !== 'undefined') {
           localStorage.removeItem(k);
         }
-      } catch {}
+      } catch (err) {
+        Logger.warn(`[StorageService] removeItemsBatchAsync localStorage error for '${k}':`, err, 'storageService');
+      }
     }
     try {
       await Promise.all(
         keys.filter(Boolean).map((k) => indexedDBService.removeItem(k).catch(() => false))
       );
-    } catch {}
+    } catch (err) {
+      Logger.warn('[StorageService] removeItemsBatchAsync IndexedDB batch error:', err, 'storageService');
+    }
     return true;
   },
 
