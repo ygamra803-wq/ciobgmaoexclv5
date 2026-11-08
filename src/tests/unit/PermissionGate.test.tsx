@@ -23,12 +23,12 @@ describe('UI RBAC Guards & usePermission', () => {
     expect(usePermission('settings.edit')).toBe(false);
   });
 
-  it('should return true for technicien accessing allowed operations like movement.create', () => {
+  it('should return true for technicien accessing allowed operations like preventive.execute', () => {
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
       user: { id: 'usr-3', role: 'TECHNICIEN' }
     });
 
-    expect(usePermission('movement.create')).toBe(true);
+    expect(usePermission('preventive.execute')).toBe(true);
     expect(usePermission('stock.view')).toBe(true);
   });
 

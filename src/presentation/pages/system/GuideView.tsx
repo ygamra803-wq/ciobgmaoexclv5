@@ -18,6 +18,7 @@ import {
   CalendarClock,
   Factory,
   BarChart3,
+  Settings,
 } from 'lucide-react';
 
 interface GuideViewProps {
@@ -123,9 +124,9 @@ const MODULE_ROADMAP: RoadmapGroupMeta[] = [
   {
     groupId: '06-pilotage-gouvernance',
     number: '06',
-    title: 'Pilotage, Finance, Validation Maker-Checker & Système',
+    title: 'Pilotage, Finance & Validation Maker-Checker',
     description:
-      'Tableau de bord exécutif, budgets & TCO, centre de validation Maker-Checker, rapports hebdo/mensuels, utilisateurs RBAC, audit immuable et sauvegardes.',
+      'Tableau de bord exécutif, budgets & TCO, centre de validation Maker-Checker, utilisateurs RBAC et zones géographiques d’atelier.',
     icon: BarChart3,
     tabs: [
       { tabId: 'dashboard', label: 'Tableau de Bord' },
@@ -133,7 +134,27 @@ const MODULE_ROADMAP: RoadmapGroupMeta[] = [
       { tabId: 'finance', label: 'Coûts & Budgets' },
       { tabId: 'utilisateurs', label: 'Utilisateurs & Rôles' },
       { tabId: 'zones', label: 'Zones & Ateliers' },
-      { tabId: 'settings', label: 'Paramètres, Audit & Sauvegardes' },
+      { tabId: 'nexus', label: 'Nexus (Nomenclature As-Built & Jumeaux)' },
+    ],
+  },
+  {
+    groupId: '07-settings-systeme',
+    number: '07',
+    title: 'Paramètres Système, Sauvegardes & Registre d’Audit',
+    description:
+      'Supervision, logique des mouvements, injection Excel, synchronisation réseau local LAN, éditeur JSON, registre d’audit append-only, performance et devises.',
+    icon: Settings,
+    tabs: [
+      { tabId: 'settings', label: 'Supervision & Stockage' },
+      { tabId: 'settings_mvt_logic', label: 'Logique & Flux Mouvements' },
+      { tabId: 'settings_injection', label: 'Injection Données Excel' },
+      { tabId: 'settings_directory', label: 'Dossier Partagé & Sync LAN' },
+      { tabId: 'settings_matching', label: 'Appairage & Audit' },
+      { tabId: 'settings_json_editor', label: 'Base JSON' },
+      { tabId: 'settings_backup_audit', label: 'Sauvegardes & Audit Ledger' },
+      { tabId: 'settings_admin', label: 'Compte Admin & Coffre-Fort' },
+      { tabId: 'settings_performance', label: 'Performance & Cache' },
+      { tabId: 'settings_currency', label: 'Devises & Finance ISO' },
     ],
   },
 ];
@@ -161,7 +182,16 @@ const TAB_LABELS: Record<string, string> = {
   dashboard: 'Tableau de Bord',
   zones: 'Zones & Ateliers',
   utilisateurs: 'Utilisateurs & Rôles',
-  settings: 'Paramètres & Sauvegardes',
+  settings: 'Supervision & Stockage',
+  settings_mvt_logic: 'Logique des Mouvements',
+  settings_injection: 'Injection Données Excel',
+  settings_directory: 'Dossier Partagé & Sync LAN',
+  settings_matching: 'Appairage & Réconciliation',
+  settings_json_editor: 'Base JSON',
+  settings_backup_audit: 'Sauvegardes & Audit Ledger',
+  settings_admin: 'Compte Admin & Coffre-Fort',
+  settings_performance: 'Performance & Cache',
+  settings_currency: 'Devises & Finance ISO',
 };
 
 const rawMarkdownFiles = import.meta.glob('/docs/modules/**/*.md', {
