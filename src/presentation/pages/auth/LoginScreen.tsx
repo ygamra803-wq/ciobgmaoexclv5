@@ -69,13 +69,29 @@ export default function LoginScreen() {
     setupMasterPin,
   } = useAuth();
 
+  // Check if returning from a Quick Screen Lock to pre-select the locked operator's account
+  const lockedAccountInit = useMemo(() => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const raw = sessionStorage.getItem('gmao_screen_locked_account');
+        if (raw) {
+          sessionStorage.removeItem('gmao_screen_locked_account');
+          return JSON.parse(raw);
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }, []);
+
   // Authentication mode: 'CREDENTIALS' | 'PIN_ENCRYPTED' | 'SETUP_PIN'
   const [authMode, setAuthMode] = useState(() =>
     !isPinConfigured() ? 'SETUP_PIN' : 'CREDENTIALS'
   );
-  const [selectedRole, setSelectedRole] = useState('ADMIN');
-  const [selectedUserKey, setSelectedUserKey] = useState('admin');
-  const [username, setUsername] = useState('admin');
+  const [selectedRole, setSelectedRole] = useState(() => lockedAccountInit?.role || 'ADMIN');
+  const [selectedUserKey, setSelectedUserKey] = useState(() => lockedAccountInit?.username || 'admin');
+  const [username, setUsername] = useState(() => lockedAccountInit?.username || 'admin');
   const [password, setPassword] = useState('');
   const [pinCode, setPinCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);

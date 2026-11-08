@@ -64,7 +64,7 @@ export default function ShellModeSwitcher({
           aria-haspopup="menu"
           aria-label={`Mode d'affichage (actuellement ${activeLabel}, résolu: ${resolved})`}
           title={`Affichage : ${activeLabel} (résolu: ${resolved})`}
-          className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/90 text-xs font-bold text-slate-700 transition shadow-2xs hover:shadow-xs cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+          className="h-8 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 rounded-full bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/90 text-xs font-bold text-slate-700 transition shadow-2xs hover:shadow-xs cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
         >
           {mode === 'auto' && (
             <Sparkles size={14} className="text-emerald-600 group-hover:scale-110 transition-transform shrink-0" aria-hidden="true" />

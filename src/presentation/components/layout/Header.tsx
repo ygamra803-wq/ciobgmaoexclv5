@@ -19,8 +19,7 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
-  Sun,
-  Moon,
+  Lock,
 } from 'lucide-react';
 import PWAInstallButton from '../common/PWAInstallButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
@@ -121,15 +120,12 @@ export default function Header({
     return storageService.getItem('gmao_header_clock') !== 'false';
   });
 
-  const [theme, setTheme] = useState(() => {
-    return storageService.getItem('gmao_theme') || 'light';
-  });
-
   useEffect(() => {
+    // Ensure no stale .dark class remains on documentElement if light mode is default
+    if (typeof document !== 'undefined' && storageService.getItem('gmao_theme') !== 'dark') {
+      document.documentElement.classList.remove('dark');
+    }
     const handleAppearanceChanged = (e: any) => {
-      if (e?.detail?.theme !== undefined) {
-        setTheme(e.detail.theme);
-      }
       if (e?.detail?.headerClockEnabled !== undefined) {
         setHeaderClockEnabled(e.detail.headerClockEnabled);
       }
@@ -141,31 +137,31 @@ export default function Header({
     return () => window.removeEventListener('gmao_appearance_changed', handleAppearanceChanged);
   }, []);
 
-  const handleToggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    const updateDOM = () => {
-      setTheme(nextTheme);
-      storageService.setItem('gmao_theme', nextTheme);
-      storageService.setItem('gmao_sidebar_theme', nextTheme);
-      if (nextTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
+  // DEPTH-DEFENSE-LIGHT: 1-Click Application Screen Lock (preserves all data & current tab, requires password to resume)
+  const handleLockScreen = () => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        if (currentUser) {
+          sessionStorage.setItem(
+            'gmao_screen_locked_account',
+            JSON.stringify({
+              username: currentUser.username || currentUser.code || 'admin',
+              role: currentUser.role || 'ADMIN',
+              name: currentUser.name || 'Administrateur',
+            })
+          );
+        }
+        sessionStorage.setItem(
+          'gmao_session_idle_expired',
+          'Écran verrouillé — Veuillez saisir votre mot de passe pour reprendre votre session.'
+        );
       }
-      window.dispatchEvent(
-        new CustomEvent('gmao_appearance_changed', {
-          detail: { theme: nextTheme, sidebarTheme: nextTheme },
-        })
-      );
-    };
-
-    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
-      (document as any).startViewTransition(() => {
-        updateDOM();
-      });
-    } else {
-      updateDOM();
+    } catch {
+      // ignore storage errors
     }
+    setUserMenuOpen(false);
+    showToast?.('Écran verrouillé par sécurité', 'info');
+    onLogout?.({ preserveActiveTab: true });
   };
 
 
@@ -837,7 +833,7 @@ export default function Header({
                 <button
                   type="button"
                   onClick={() => setCurrentTab('validation_center')}
-                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-extrabold transition cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
+                  className={`h-8 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-full text-xs font-extrabold transition cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
                     isValidationCenterActive
                       ? 'bg-slate-900 text-white border border-slate-900 shadow-sm'
                       : totalPending > 0
@@ -885,7 +881,7 @@ export default function Header({
             linkedFileName ? (
               <div className="flex items-center gap-1 shrink-0">
                 <span
-                  className="hidden 2xl:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-bold text-accent-main bg-accent-subtle border border-accent-subtle shadow-2xs truncate max-w-[130px]"
+                  className="hidden 2xl:inline-flex h-8 items-center gap-1.5 px-2.5 rounded-full text-[11px] font-mono font-bold text-accent-main bg-accent-subtle border border-accent-subtle shadow-2xs truncate max-w-[130px]"
                   title={`${t('header.linked_file', 'Fichier lié')} : ${linkedFileName}`}
                   aria-label={`${t('header.linked_file', 'Fichier lié')} : ${linkedFileName}`}
                 >
@@ -921,7 +917,7 @@ export default function Header({
               <button
                 type="button"
                 onClick={() => setSyncMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-accent-subtle hover:bg-accent-100 border border-accent-subtle text-accent-main text-xs font-bold transition shadow-xs hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden group"
+                className="h-8 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 rounded-full bg-accent-subtle hover:bg-accent-100 border border-accent-subtle text-accent-main text-xs font-bold transition shadow-xs hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden group"
                 title={t('header.sync_server', 'Synchronisation Serveur (Sauvegarde / Restauration)')}
                 aria-label="Synchronisation Serveur gmao_state.json"
                 aria-expanded={syncMenuOpen}
@@ -956,15 +952,16 @@ export default function Header({
           {/* Offline Language Switcher (Fixed-width trigger + floating popover — NH-13) */}
           <LanguageSwitcher />
 
-          {/* Quick Sun/Moon Light/Dark Theme Switcher */}
+          {/* DEPTH-DEFENSE-LIGHT: Quick Session / Screen Lock Button (replaces Light/Dark toggle in Header) */}
           <button
             type="button"
-            onClick={handleToggleTheme}
-            className="w-8 h-8 rounded-full bg-white dark:bg-slate-800 border border-zinc-200 dark:border-slate-700 flex items-center justify-center text-zinc-700 dark:text-amber-400 hover:text-black dark:hover:text-amber-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
-            title={theme === 'dark' ? t('header.theme_light', 'Basculer en Mode Clair') : t('header.theme_dark', 'Basculer en Mode Sombre')}
-            aria-label={theme === 'dark' ? 'Activer le mode clair' : 'Activer le mode sombre'}
+            onClick={handleLockScreen}
+            data-testid="header-lock-screen-btn"
+            className="w-8 h-8 rounded-full bg-white hover:bg-amber-50 border border-zinc-200 hover:border-amber-300 flex items-center justify-center text-zinc-600 hover:text-amber-700 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:outline-hidden group"
+            title={t('header.lock_screen', "Verrouiller l'écran (Protéger le poste sans perdre vos données)")}
+            aria-label={t('header.lock_screen', "Verrouiller l'écran")}
           >
-            {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-slate-700" />}
+            <Lock size={14} className="text-zinc-600 group-hover:text-amber-700 transition-colors shrink-0" aria-hidden="true" />
           </button>
 
           {/* Export Excel Dropdown Menu - Only in Floating Mode & RBAC Guarded (Fixed sidebar already has Export button) */}
@@ -972,7 +969,7 @@ export default function Header({
             <div className="relative hidden sm:block shrink-0" ref={topologyMenuRef}>
               <button
                 onClick={() => setTopologyMenuOpen((prev) => !prev)}
-                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+                className="h-8 flex items-center gap-1 px-2 sm:px-2.5 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
                 title={t('header.export_excel', 'Exporter Excel & 3-Workbook Topology')}
                 aria-label="Menu d'exportation Excel et topologie industrielle"
                 aria-expanded={topologyMenuOpen}
@@ -1302,7 +1299,16 @@ export default function Header({
                   </div>
 
                   {onLogout && (
-                    <div className="pt-1 mt-1 border-t border-slate-100 px-1.5">
+                    <div className="pt-1 mt-1 border-t border-slate-100 px-1.5 space-y-0.5">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleLockScreen}
+                        className="w-full px-2.5 py-2 rounded-xl text-left hover:bg-amber-50 flex items-center gap-2.5 text-xs font-bold text-amber-700 hover:text-amber-800 transition cursor-pointer"
+                      >
+                        <Lock size={14} className="text-amber-600 shrink-0" />
+                        <span>{t('header.lock_screen', "Verrouiller l'écran")}</span>
+                      </button>
                       <button
                         type="button"
                         role="menuitem"

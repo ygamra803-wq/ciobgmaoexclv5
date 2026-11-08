@@ -115,15 +115,20 @@ export default function MainLayout({
     [user, setCurrentTab, showToast]
   );
 
-  const handleLogout = useCallback(() => {
-    try {
-      localStorage.setItem('gmao_active_tab', 'dashboard');
-    } catch {
-      /* ignore */
-    }
-    setCurrentTab('dashboard');
-    logout();
-  }, [setCurrentTab, logout]);
+  const handleLogout = useCallback(
+    (options?: { preserveActiveTab?: boolean }) => {
+      if (!options?.preserveActiveTab) {
+        try {
+          localStorage.setItem('gmao_active_tab', 'dashboard');
+        } catch {
+          /* ignore */
+        }
+        setCurrentTab('dashboard');
+      }
+      logout();
+    },
+    [setCurrentTab, logout]
+  );
 
   // Drag and Drop File Handlers (Window level — RBAC Guarded)
   const handleDragEnter = useCallback(

@@ -47,7 +47,7 @@ export default function LanguageSwitcher({ className = '' }) {
         aria-haspopup="menu"
         aria-label={`Changer la langue (actuellement ${activeLang?.label || language})`}
         title={`Langue : ${activeLang?.label || language}`}
-        className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-full bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/90 text-xs font-bold text-slate-700 transition shadow-2xs hover:shadow-xs cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
+        className="h-8 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 rounded-full bg-slate-100/90 hover:bg-slate-200/80 border border-slate-200/90 text-xs font-bold text-slate-700 transition shadow-2xs hover:shadow-xs cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
       >
         <Languages size={14} className="text-slate-500 group-hover:text-emerald-700 transition-colors shrink-0" aria-hidden="true" />
         <span className="px-1.5 py-0.2 rounded-md bg-white text-emerald-800 shadow-2xs ring-1 ring-emerald-500/20 text-[10.5px] font-bold font-mono leading-none">
