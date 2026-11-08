@@ -29,6 +29,7 @@ import {
   Download,
   Upload,
   Landmark,
+  ShieldAlert,
 } from 'lucide-react';
 import { HubIcon } from '../common/icons/HubIcon';
 import { CategoryIcon } from '../common/icons/CategoryIcon';
@@ -864,7 +865,7 @@ export default function MobileSidebarDrawer({
           )}
 
           {/* GROUPE 4: ZONES & ÉQUIPES */}
-          {(canAccess('zones') || canAccess('utilisateurs')) && (
+          {(canAccess('zones') || canAccess('utilisateurs') || canAccess('equipment')) && (
             <div>
               <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
                 <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
@@ -906,6 +907,32 @@ export default function MobileSidebarDrawer({
                     </span>
                     <span className={getBadgeClass('utilisateurs')}>
                       {(counts.technicians || 0) + (counts.operations || 0)}
+                    </span>
+                  </button>
+                )}
+
+                {/* Équipements (Système Général) */}
+                {canAccess('equipment') && (
+                  <button
+                    onClick={() => navTo('equipment')}
+                    className={getTabClass('equipment', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <ShieldAlert
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('equipment')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-amber-400'
+                              : 'text-amber-600'
+                        }`}
+                      />
+                      <span>{t('nav.subtabs.equipment', 'Équipements (Système Général)')}</span>
+                    </span>
+                    <span className={getBadgeClass('equipment')}>
+                      {counts.equipment || 0}
                     </span>
                   </button>
                 )}

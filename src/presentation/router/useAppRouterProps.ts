@@ -467,6 +467,36 @@ export function useAppRouterProps({
         }
         navigateTo('preventive');
       },
+      onNavigateToEquipment: () => navigateTo('equipment'),
+      showToast: showToast || navigation?.showToast,
+    },
+
+    equipment: {
+      machines,
+      generalSystemTypes: (setters as any)?.generalSystemTypes || [],
+      setGeneralSystemTypes: (setters as any)?.setGeneralSystemTypes,
+      handleAddGeneralSystemType: (setters as any)?.handleAddGeneralSystemType,
+      handleToggleGeneralSystemType: (setters as any)?.handleToggleGeneralSystemType,
+      zones,
+      technicians,
+      mouvements,
+      preventiveTasks,
+      correctiveInterventions,
+      handleAddMachine,
+      handleUpdateMachine,
+      handleDeleteMachine,
+      onNavigateToZone: navigation.handleNavigateToZoneById,
+      onNavigateToQuickSortie: navigation.handleNavigateToQuickSortieFromMachine,
+      onNavigateToPreventive: (machId) => {
+        if (typeof machId === 'string' && machId.trim()) {
+          try {
+            localStorage.setItem('gmao_preventive_target_machine', machId.trim());
+          } catch {
+            // ignore storage errors
+          }
+        }
+        navigateTo('preventive');
+      },
       showToast: showToast || navigation?.showToast,
     },
 

@@ -71,6 +71,21 @@ export const PERMISSIONS: Record<string, string[]> = {
   'machine.update': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
   'machine.delete': [ROLES.ADMIN],
 
+  // إدارة التجهيزات العامة والأنظمة المشتركة (Équipements / Système Général)
+  'equipment.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'equipment.create': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'equipment.edit': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
+  'equipment.update': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
+  'equipment.delete': [ROLES.ADMIN],
+
   // إدارة المناطق والورشات (Zones & Ateliers)
   'zone.view': [
     ROLES.ADMIN,
@@ -168,6 +183,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'part_types',
     'part_designations',
     'machines',
+    'equipment',
     'families',
     'templates',
     'blueprints',
@@ -179,6 +195,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'stock',
     'sortie',
     'machines',
+    'equipment',
     'preventive',
     'corrective',
     'corrective_di',
@@ -195,6 +212,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'stock',
     'sortie',
     'machines',
+    'equipment',
     'corrective',
     'corrective_di',
     'zones',
@@ -207,6 +225,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'executive_report',
     'stock',
     'machines',
+    'equipment',
     'preventive',
     'corrective',
     'corrective_di',

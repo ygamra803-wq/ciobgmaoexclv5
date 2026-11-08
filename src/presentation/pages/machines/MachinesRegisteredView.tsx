@@ -173,19 +173,18 @@ export default function MachinesRegisteredView({
   onNavigateToBlueprints = () => {},
   onNavigateToQuickSortie = () => {},
   onNavigateToPreventive = () => {},
+  onNavigateToEquipment = (_machineId?: string) => {},
   showToast,
 }) {
-  const canCreate = usePermission('CREATE');
-  const canEdit = usePermission('EDIT');
-  const canDelete = usePermission('DELETE');
+  const canCreate = usePermission('machine.create');
+  const canEdit = usePermission('machine.edit');
+  const canDelete = usePermission('machine.delete');
 
   const {
     machines: dbMachines,
     generalSystemTypes = [],
     updateMachine: dbUpdateMachine,
     deleteMachine: dbDeleteMachine,
-    addGeneralSystemType,
-    toggleGeneralSystemType,
   } = useMachines();
 
   const preventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
@@ -236,34 +235,17 @@ export default function MachinesRegisteredView({
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | 'En Service' | 'En Maintenance' | 'Arrêt'
   const [assetClassFilter, setAssetClassFilter] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [sysTypeFilter, setSysTypeFilter] = useState('ALL');
-  const [showSysTypesModal, setShowSysTypesModal] = useState(false);
-  const [newSysTypeName, setNewSysTypeName] = useState('');
-  const [newSysTypeCode, setNewSysTypeCode] = useState('');
-  const [showEditNewSysType, setShowEditNewSysType] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
-  const activeSystemTypes = useMemo(
-    () => (Array.isArray(generalSystemTypes) ? generalSystemTypes.filter((t) => t && t.is_active !== false) : []),
-    [generalSystemTypes]
-  );
-
-  const handleQuickCreateSystemType = (selectInEdit = false) => {
-    const cleanName = newSysTypeName.trim();
-    if (!cleanName || !addGeneralSystemType) return;
-    const created = addGeneralSystemType({
-      name: cleanName,
-      code: newSysTypeCode.trim().toUpperCase(),
-    });
-    if (created && selectInEdit && toEdit) {
-      setToEdit({
-        ...toEdit,
-        asset_class: 'SYSTEM_GENERAL',
-        id_general_system_type: created.id,
-      });
+  const navigateToEquipmentForMachine = (machineId?: string) => {
+    try {
+      if (machineId) {
+        localStorage.setItem('gmao_equipment_focus_id', String(machineId));
+      }
+    } catch {
+      // Ignore storage access errors
     }
-    setNewSysTypeName('');
-    setNewSysTypeCode('');
-    setShowEditNewSysType(false);
+    onNavigateToEquipment(machineId);
   };
 
   // Debounce state for high-performance machine searching
@@ -792,17 +774,15 @@ export default function MachinesRegisteredView({
               </div>
             )}
 
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setShowSysTypesModal(true)}
-                className="h-7 px-2.5 rounded-lg border border-amber-300/90 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="Gérer les types de Système Général (+ Nouveau type / Activer / Désactiver)"
-              >
-                <Settings2 className="w-3.5 h-3.5 text-amber-700" />
-                <span>Types Système ({activeSystemTypes.length})</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => navigateToEquipmentForMachine()}
+              className="h-7 px-2.5 rounded-lg border border-amber-300/90 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              title="Ouvrir la page dédiée Équipements (Système Général) pour créer ou gérer les types et utilités"
+            >
+              <Settings2 className="w-3.5 h-3.5 text-amber-700" />
+              <span>Gérer dans Équipements ➔</span>
+            </button>
           </div>
         </div>
 
@@ -1659,6 +1639,21 @@ export default function MachinesRegisteredView({
                               <QrCode className="w-3.5 h-3.5 text-cyan-700 group-hover:scale-110 transition-transform" />
                             </button>
 
+                            {isSysGeneral && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  navigateToEquipmentForMachine(m.id_machine_registered);
+                                }}
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 hover:text-amber-950 transition flex items-center gap-1 cursor-pointer border-r border-slate-200 text-[10px] font-bold"
+                                title={`Gérer ${m.id_machine_registered} dans la page Équipements (Système Général)`}
+                              >
+                                <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                                <span className="hidden xl:inline">Gérer dans Équipements</span>
+                              </button>
+                            )}
+
                             {/* 3-dots Toggle Button */}
                             <button
                               type="button"
@@ -1752,19 +1747,33 @@ export default function MachinesRegisteredView({
                                 </div>
                               </button>
 
-                              {/* Option 2: Modifier la machine */}
-                              {canEdit && (
+                              {/* Option 2: Modifier la machine (Production) ou Gérer dans Équipements (Système Général) */}
+                              {isSysGeneral ? (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setActiveActionMenuId(null);
-                                    setToEdit({ ...m });
+                                    navigateToEquipmentForMachine(m.id_machine_registered);
                                   }}
-                                  className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                  className="w-full px-3 py-2 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer border border-amber-200/80"
                                 >
-                                  <Edit2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                  <span>Modifier cette machine</span>
+                                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>Gérer dans Équipements ➔</span>
                                 </button>
+                              ) : (
+                                canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveActionMenuId(null);
+                                      setToEdit({ ...m });
+                                    }}
+                                    className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span>Modifier cette machine</span>
+                                  </button>
+                                )
                               )}
 
                               {/* Option 3: Consulter Blueprint si disponible */}
@@ -1971,109 +1980,24 @@ export default function MachinesRegisteredView({
               }}
               className="space-y-4"
             >
-              {/* Asset Class Switcher (Permet la conversion manuelle Production <-> Système Général) */}
-              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2.5">
-                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
-                  Classification Fonctionnelle de l'Équipement
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setToEdit({
-                        ...toEdit,
-                        asset_class: 'PRODUCTION',
-                        id_general_system_type: '',
-                      })
-                    }
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
-                      getMachineAssetClass(toEdit) === 'PRODUCTION'
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Factory className="w-3.5 h-3.5" />
-                    <span>Machine de Production</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setToEdit({
-                        ...toEdit,
-                        asset_class: 'SYSTEM_GENERAL',
-                        id_general_system_type:
-                          toEdit.id_general_system_type || activeSystemTypes[0]?.id || '',
-                      })
-                    }
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
-                      getMachineAssetClass(toEdit) === 'SYSTEM_GENERAL'
-                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Système Général</span>
-                  </button>
-                </div>
-
-                {getMachineAssetClass(toEdit) === 'SYSTEM_GENERAL' && (
-                  <div className="pt-2 border-t border-slate-200/70 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
-                        Type de Système Général <span className="text-rose-500">*</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowEditNewSysType((v) => !v)}
-                        className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 cursor-pointer"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Nouveau type</span>
-                      </button>
-                    </div>
-
-                    {showEditNewSysType && (
-                      <div className="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newSysTypeCode}
-                          onChange={(e) => setNewSysTypeCode(e.target.value.toUpperCase())}
-                          placeholder="Code (ex: AIR)"
-                          className="w-24 h-8 px-2 rounded-lg border border-amber-300 bg-white text-xs font-mono font-bold"
-                        />
-                        <input
-                          type="text"
-                          value={newSysTypeName}
-                          onChange={(e) => setNewSysTypeName(e.target.value)}
-                          placeholder="Nom du type (ex: Air comprimé)"
-                          className="flex-1 h-8 px-2.5 rounded-lg border border-amber-300 bg-white text-xs font-medium"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleQuickCreateSystemType(true)}
-                          className="h-8 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Créer</span>
-                        </button>
-                      </div>
-                    )}
-
-                    <CustomSelect
-                      value={toEdit.id_general_system_type || ''}
-                      onChange={(val) => setToEdit({ ...toEdit, id_general_system_type: val })}
-                      options={[
-                        { value: '', label: '— Choisir un Type de Système Général —' },
-                        ...generalSystemTypes
-                          .filter((t) => t.is_active !== false || t.id === toEdit.id_general_system_type)
-                          .map((t) => ({
-                            value: t.id,
-                            label: `${t.code ? t.code + ' • ' : ''}${t.name}`,
-                          })),
-                      ]}
-                    />
-                  </div>
-                )}
+              {/* Classification Fonctionnelle (Production ici — Redirection vers Équipements pour Système Général) */}
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 flex items-center justify-between gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold">
+                  <Factory className="w-3.5 h-3.5" />
+                  <span>Machine de Production</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetCode = toEdit.id_machine_registered;
+                    setToEdit(null);
+                    navigateToEquipmentForMachine(targetCode);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition cursor-pointer"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Gérer dans Équipements ➔</span>
+                </button>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2414,117 +2338,6 @@ export default function MachinesRegisteredView({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: GESTION RAPIDE DES TYPES DE SYSTÈME GÉNÉRAL */}
-      {showSysTypesModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 border border-slate-200 animate-in fade-in zoom-in-95 duration-150 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200">
-                  <Settings2 className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-slate-900">Types de Système Général</h3>
-                  <p className="text-[11px] text-slate-500">
-                    Utilités, sécurité incendie, pompes, éclairage & infrastructures
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSysTypesModal(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
-              <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider block">
-                + Ajouter un nouveau type
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={newSysTypeCode}
-                  onChange={(e) => setNewSysTypeCode(e.target.value.toUpperCase())}
-                  placeholder="Code (AIR)"
-                  className="w-24 h-9 px-2.5 rounded-xl border border-amber-300 bg-white text-xs font-mono font-bold"
-                />
-                <input
-                  type="text"
-                  value={newSysTypeName}
-                  onChange={(e) => setNewSysTypeName(e.target.value)}
-                  placeholder="Nom (ex: Air comprimé)"
-                  className="flex-1 h-9 px-3 rounded-xl border border-amber-300 bg-white text-xs font-medium"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleQuickCreateSystemType(false)}
-                  className="h-9 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer shrink-0"
-                >
-                  Ajouter
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
-              {generalSystemTypes.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  Aucun type de Système Général enregistré.
-                </div>
-              ) : (
-                generalSystemTypes.map((t) => {
-                  const count = machines.filter((m) => m.id_general_system_type === t.id).length;
-                  const isActive = t.is_active !== false;
-                  return (
-                    <div
-                      key={t.id}
-                      className="px-3.5 py-2.5 flex items-center justify-between gap-2 bg-white hover:bg-slate-50"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                            {t.code || t.id}
-                          </span>
-                          <span className={`text-xs font-bold truncate ${isActive ? 'text-slate-900' : 'text-slate-400 line-through'}`}>
-                            {t.name}
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {t.id} • {count} équipement(s) rattaché(s)
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleGeneralSystemType && toggleGeneralSystemType(t.id)}
-                        className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer shrink-0 ${
-                          isActive
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200'
-                            : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-emerald-50 hover:text-emerald-800'
-                        }`}
-                      >
-                        {isActive ? 'Actif' : 'Inactif'}
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div className="flex justify-end pt-1">
-              <button
-                type="button"
-                onClick={() => setShowSysTypesModal(false)}
-                className="px-4 h-9 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold cursor-pointer"
-              >
-                Fermer
-              </button>
-            </div>
           </div>
         </div>
       )}

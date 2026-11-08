@@ -5,6 +5,7 @@ import {
   Warehouse,
   MapPin,
   Users,
+  ShieldAlert,
   GitBranch,
   BookOpen,
   Calendar,
@@ -126,6 +127,17 @@ export const PARENT_MODULES = [
     bgLight: 'bg-violet-50',
     children: [
       { id: 'utilisateurs', label: 'Utilisateurs & Rôles' }
+    ]
+  },
+  {
+    id: 'equipment',
+    label: 'Équipements',
+    icon: ShieldAlert,
+    color: 'text-amber-500',
+    colorDark: 'text-amber-400',
+    bgLight: 'bg-amber-50',
+    children: [
+      { id: 'equipment', label: 'Équipements & Système Général' }
     ]
   },
   {

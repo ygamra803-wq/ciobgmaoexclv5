@@ -63,6 +63,10 @@ export default function AppModals({
           setAddUserModalType('TECHNICIEN');
           setShowAddUserModal(true);
         }}
+        onNavigateToEquipment={() => {
+          setShowAddMachineModal(false);
+          startTransition(() => setCurrentTab('equipment'));
+        }}
       />
 
       <AddUserModal

@@ -32,6 +32,7 @@ import { DataGateway } from './application/DataGateway';
 import MachineQrFieldModal from './presentation/pages/machines/components/MachineQrFieldModal';
 import { useAppShell } from './core/shell/shellPolicy';
 import MobileShell from './presentation/components/shell/MobileShell';
+import { getMachineAssetClass } from './utils/activeMachines';
 
 export default function App() {
   const { user: currentUser, logout } = useAuth();
@@ -592,6 +593,7 @@ export default function App() {
           zones: zones.length,
           technicians: technicians.length,
           operations: operations.length,
+          equipment: (machines || []).filter((m: any) => getMachineAssetClass(m) === 'SYSTEM_GENERAL').length,
         }}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}

@@ -15,6 +15,7 @@
     "corrective": "Maintenance Corrective",
     "zones": "Zones & Ateliers",
     "utilisateurs": "Opérations & Chefs",
+    "equipment": "Équipements & Système Général",
     "nexus": "Nexus Matrix",
     "guide": "Guide & Manuel",
     "settings": "Paramètres Système",
@@ -66,6 +67,7 @@
       "part_designations": "Désignations Parts",
       "zones": "Zones & Ateliers",
       "utilisateurs": "Utilisateurs & Rôles",
+      "equipment": "Équipements (Système Général)",
       "nexus": "Nexus Matrix",
       "guide": "Guide d'utilisation",
       "settings": "Paramètres"

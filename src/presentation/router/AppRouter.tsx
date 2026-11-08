@@ -25,6 +25,7 @@ const TemplatesView = lazy(() => import('../pages/machines/TemplatesView'));
 const BlueprintMachineView = lazy(() => import('../pages/machines/BlueprintMachineView'));
 const ZonesView = lazy(() => import('../pages/referentiel/ZonesView'));
 const UtilisateursView = lazy(() => import('../pages/utilisateurs/UtilisateursView'));
+const EquipmentView = lazy(() => import('../pages/equipment/EquipmentView'));
 const SortieRapideView = lazy(() => import('../pages/movements/SortieRapideView'));
 const SettingsView = lazy(() => import('../pages/settings/SettingsView'));
 const NexusView = lazy(() => import('../pages/system/NexusView'));
@@ -241,6 +242,12 @@ export default function AppRouter({
                       {currentTab === 'utilisateurs' && (
                         <ErrorBoundary sectionName="Gestion des Utilisateurs">
                           <UtilisateursView {...props.utilisateurs} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'equipment' && (
+                        <ErrorBoundary sectionName="Équipements & Système Général">
+                          <EquipmentView {...props.equipment} />
                         </ErrorBoundary>
                       )}
 

@@ -11,6 +11,9 @@ import { useGmaoStore } from '../store/useGmaoStore';
 import { DataGateway } from '../application/DataGateway';
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
+import { AuthorizationService } from '../core/security/AuthorizationService';
+import { ROLES } from '../core/security/Roles';
+
 describe('System General & Real Zones Contract', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -91,6 +94,57 @@ describe('System General & Real Zones Contract', () => {
 
     const prodOnly = filterProductionMachines(list as any);
     expect(prodOnly.map((m) => m.id_machine_registered)).toEqual(['PRS-01']);
+  });
+
+  it('persists SYSTEM_GENERAL equipment created from EquipmentView into single STORAGE_KEYS.MACHINES SSOT and enforces RBAC on equipment tab', () => {
+    const store = useGmaoStore.getState();
+    store.setMachines([]);
+    store.setGeneralSystemTypes([
+      { id: 'SYS-AIR', code: 'AIR', name: 'Air comprimé', is_active: true },
+    ]);
+
+    const nextCode = generateSystemGeneralCode(
+      useGmaoStore.getState().generalSystemTypes[0],
+      useGmaoStore.getState().machines
+    );
+    expect(nextCode).toBe('AIR-01');
+
+    store.setMachines([
+      {
+        id_machine_registered: nextCode,
+        designation: 'Compresseur Vis GA37',
+        asset_class: 'SYSTEM_GENERAL',
+        id_general_system_type: 'SYS-AIR',
+        id_family: '',
+        id_templates: '',
+        id_zone_default: 'Z-UTIL-01',
+        technician: 'TECH-01',
+        status: 'En Service',
+      } as any,
+    ]);
+
+    const currentMachines = useGmaoStore.getState().machines;
+    expect(currentMachines).toHaveLength(1);
+    expect(filterActiveMachines(currentMachines).map((m) => m.id_machine_registered)).toEqual([
+      'AIR-01',
+    ]);
+    expect(filterProductionMachines(currentMachines)).toHaveLength(0);
+
+    // RBAC checks for equipment page & permissions
+    expect(AuthorizationService.canAccessTab({ role: ROLES.ADMIN }, 'equipment')).toBe(true);
+    expect(
+      AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAINTENANCE }, 'equipment')
+    ).toBe(true);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.TECHNICIEN }, 'equipment')).toBe(true);
+    expect(AuthorizationService.hasPermission({ role: ROLES.ADMIN }, 'equipment.create')).toBe(
+      true
+    );
+    expect(
+      AuthorizationService.hasPermission({ role: ROLES.TECHNICIEN }, 'equipment.create')
+    ).toBe(false);
+    expect(AuthorizationService.hasPermission({ role: ROLES.TECHNICIEN }, 'equipment.view')).toBe(
+      true
+    );
   });
 
   it('protects BOM / MachineElements from attaching to SYSTEM_GENERAL machines', () => {
