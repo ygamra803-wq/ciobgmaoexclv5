@@ -634,7 +634,10 @@ export class AuthService {
       currentSession &&
       (currentSession.username === users[idx].username || currentSession.id === users[idx].id)
     ) {
-      this.saveSignedSession(currentSession);
+      this.saveSignedSession({
+        ...currentSession,
+        mustChangePassword: false,
+      });
     }
 
     return users[idx];

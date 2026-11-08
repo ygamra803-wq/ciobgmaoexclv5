@@ -329,6 +329,10 @@ export const AuthProvider = ({ children }) => {
       }
 
       const updated = await authService?.updateUserPassword(username, cleanPass);
+      const latestSession = authService?.getCurrentUser();
+      if (latestSession) {
+        setUser(latestSession);
+      }
       refreshAccountsState();
       return updated;
     },

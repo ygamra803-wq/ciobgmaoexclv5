@@ -10,7 +10,7 @@ import { useAppExcelOperations } from './hooks/useAppExcelOperations';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppEntityActions } from './hooks/useAppEntityActions';
 
-import { SplashScreen, LoginScreen } from './presentation/pages/auth';
+import { SplashScreen, LoginScreen, RequirePasswordChange } from './presentation/pages/auth';
 import OfflineIndicator from './presentation/components/common/OfflineIndicator';
 import ErrorBoundary from './presentation/components/common/ErrorBoundary';
 import RuntimeErrorModal from './presentation/components/common/RuntimeErrorModal';
@@ -434,6 +434,16 @@ export default function App() {
     return (
       <>
         <LoginScreen />
+        <ConfirmDialog />
+      </>
+    );
+  }
+
+  // SEC-P0.2: Mandatory password change gate. Operational modules are strictly blocked until resolved.
+  if (currentUser.mustChangePassword) {
+    return (
+      <>
+        <RequirePasswordChange />
         <ConfirmDialog />
       </>
     );

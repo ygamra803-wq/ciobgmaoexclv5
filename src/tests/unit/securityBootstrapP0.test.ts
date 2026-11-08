@@ -223,4 +223,67 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
       expect(latestLog.ip).toBe(mockPublicIp);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════
+  // S3: SEC-P0.2 Mandatory Password Change Gate & Session Lifecycle
+  // ══════════════════════════════════════════════════════════════
+  describe('S3 — SEC-P0.2: Mandatory Password Change Gate & Session Lifecycle', () => {
+    it('session retains mustChangePassword flag in signed HMAC session envelope upon initial login', async () => {
+      const auth = new AuthService();
+      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
+
+      const session = await auth.login('admin', 'admin');
+      expect(session.mustChangePassword).toBe(true);
+
+      // Verify that reading through getCurrentUser() validates the HMAC and preserves mustChangePassword = true
+      const activeSession = auth.getCurrentUser();
+      expect(activeSession).not.toBeNull();
+      expect(activeSession.username).toBe('admin');
+      expect(activeSession.mustChangePassword).toBe(true);
+    });
+
+    it('updateUserPassword clears mustChangePassword to false in the active signed session upon valid change', async () => {
+      const auth = new AuthService();
+      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
+
+      // 1. Initial login in DEV creates session with mustChangePassword = true
+      await auth.login('admin', 'admin');
+      expect(auth.getCurrentUser().mustChangePassword).toBe(true);
+
+      // 2. User updates password to a strong non-prohibited password
+      await auth.updateUserPassword('admin', 'V@lidNewPass2026!#');
+
+      // 3. Active signed session must now have mustChangePassword = false
+      const updatedSession = auth.getCurrentUser();
+      expect(updatedSession).not.toBeNull();
+      expect(updatedSession.username).toBe('admin');
+      expect(updatedSession.mustChangePassword).toBe(false);
+
+      // 4. Verify HMAC token signature in storage is valid and tamper-free
+      const rawStoredStr = sessionStorage.getItem('gmao_session_v2');
+      expect(rawStoredStr).not.toBeNull();
+      const envelope = JSON.parse(rawStoredStr!);
+      expect(envelope.token).toBeDefined();
+
+      const verified = CoreSecurityService.verifyToken(envelope.token);
+      expect(verified.username).toBe('admin');
+      expect(verified.mustChangePassword).toBe(false);
+    });
+
+    it('failed password update with prohibited password leaves mustChangePassword = true', async () => {
+      const auth = new AuthService();
+      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
+
+      // Initial login with mustChangePassword = true
+      await auth.login('admin', 'admin');
+      expect(auth.getCurrentUser().mustChangePassword).toBe(true);
+
+      // Attempt to change password to '1234'
+      await expect(auth.updateUserPassword('admin', '1234')).rejects.toThrow();
+
+      // Session must remain unchanged with mustChangePassword = true
+      expect(auth.getCurrentUser().mustChangePassword).toBe(true);
+    });
+  });
 });
+
