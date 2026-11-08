@@ -114,9 +114,67 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
       expect(session.mustChangePassword).toBe(true);
     });
 
+    it('SEC-BOOTSTRAP-P0.1: in PRODUCTION rejects login with default password even AFTER hash is upgraded to modern PBKDF2', async () => {
+      const auth = new AuthService();
+      
+      // Simulate that the user's password was upgraded to a real PBKDF2 hash of 'admin' (no init_seed suffix!)
+      const upgradedPbkdf2Hash = await CoreSecurityService.hashPassword('admin');
+      expect(upgradedPbkdf2Hash).not.toContain('init_seed');
+
+      // Inject the upgraded hash into stored users
+      const users = auth.getStoredUsersList();
+      const adminIdx = users.findIndex((u) => u.username === 'admin');
+      users[adminIdx].passwordHash = upgradedPbkdf2Hash;
+      auth.saveStoredUsersList(users, false);
+
+      // Enable PRODUCTION mode
+      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(true);
+
+      // Even though hash is modern PBKDF2 and isSeedHashMatch is false, login with prohibited password 'admin' MUST be rejected!
+      await expect(auth.login('admin', 'admin')).rejects.toThrow(
+        "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
+      );
+    });
+
+    it('SEC-BOOTSTRAP-P0.1: in DEV allows login with upgraded hash of prohibited password and maintains mustChangePassword = true', async () => {
+      const auth = new AuthService();
+      
+      // Upgrade hash to PBKDF2 of 'admin'
+      const upgradedPbkdf2Hash = await CoreSecurityService.hashPassword('admin');
+      const users = auth.getStoredUsersList();
+      const adminIdx = users.findIndex((u) => u.username === 'admin');
+      users[adminIdx].passwordHash = upgradedPbkdf2Hash;
+      auth.saveStoredUsersList(users, false);
+
+      // Enable DEV mode
+      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
+
+      const session = await auth.login('admin', 'admin');
+      expect(session).toBeDefined();
+      expect(session.username).toBe('admin');
+      // mustChangePassword must remain true because password is in the prohibited default list
+      expect(session.mustChangePassword).toBe(true);
+    });
+
+    it('SEC-BOOTSTRAP-P0.1: updateUserPassword rejects changing password to any prohibited default password', async () => {
+      const auth = new AuthService();
+
+      await expect(auth.updateUserPassword('admin', 'admin')).rejects.toThrow(
+        "Ce mot de passe fait partie des mots de passe par défaut interdits. Veuillez choisir un mot de passe sécurisé et robuste."
+      );
+
+      await expect(auth.updateUserPassword('admin', '1234')).rejects.toThrow(
+        "Ce mot de passe fait partie des mots de passe par défaut interdits"
+      );
+
+      await expect(auth.updateUserPassword('admin', 'tech')).rejects.toThrow(
+        "Ce mot de passe fait partie des mots de passe par défaut interdits"
+      );
+    });
+
     it('in PRODUCTION: allows login once user has set a strong custom password', async () => {
       const auth = new AuthService();
-      // First, update admin password to a strong custom password
+      // Update admin password to a strong custom password
       await auth.updateUserPassword('admin', 'StrongEnterpriseP@ssw0rd!2026');
 
       // Now simulate production mode

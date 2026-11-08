@@ -7,6 +7,14 @@ const USERS_KEY = 'gmao_auth_accounts_v2';
 const SESSION_KEY = 'gmao_session_v2';
 const TECH_DEFAULT_HASH = 'pbkdf2:v1:9b2c3d4e5f6a7b8c9d0e:100000:tech_init_seed';
 
+export const PROHIBITED_BOOTSTRAP_PASSWORDS = new Set([
+  'admin',
+  'magasinier',
+  'viewer',
+  'tech',
+  '1234',
+]);
+
 function buildAvatar(nameOrCode = '') {
   const clean = String(nameOrCode || '').trim();
   if (!clean) return 'TC';
@@ -594,6 +602,12 @@ export class AuthService {
       throw new Error('Le nouveau mot de passe doit comporter au moins 4 caractères.');
     }
 
+    if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPass.toLowerCase())) {
+      throw new Error(
+        "Ce mot de passe fait partie des mots de passe par défaut interdits. Veuillez choisir un mot de passe sécurisé et robuste."
+      );
+    }
+
     const users = [...this.getStoredUsersList()];
     const target = String(usernameOrId || '').trim().toLowerCase();
     const idx = users.findIndex(
@@ -803,8 +817,11 @@ export class AuthService {
         isPasswordHashMatch || isSeedHashMatch || (user.role === 'ADMIN' && isPinMatch);
 
       if (isPasswordValid) {
-        // SEC-BOOTSTRAP-P0 (S1): Reject bootstrap seed passwords in production
-        if (isSeedHashMatch) {
+        // SEC-BOOTSTRAP-P0.1: Check if the provided password is a prohibited default password
+        const isProhibitedDefault = PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPassword.toLowerCase());
+
+        // Reject default passwords in production (both on initial seed and on upgraded PBKDF2 hashes)
+        if (isProhibitedDefault || isSeedHashMatch) {
           if (AuthService.isProductionMode()) {
             throw new Error(
               "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
@@ -837,7 +854,7 @@ export class AuthService {
           id_zone: user.id_zone || null,
           specialite: user.specialite || null,
           authMethod: 'PASSWORD',
-          mustChangePassword: Boolean(isSeedHashMatch),
+          mustChangePassword: Boolean(isProhibitedDefault || isSeedHashMatch),
         };
         return this.saveSignedSession(sessionPayload);
       }
