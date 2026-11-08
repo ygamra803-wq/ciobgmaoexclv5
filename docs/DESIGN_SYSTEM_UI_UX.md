@@ -92,62 +92,66 @@
 
 ---
 
-## 3. هيكلية ورأس الصفحة القياسي (Page Header & Actions Bar)
+### 3. هيكلية ورأس الصفحة القياسي والظهور التدريجي (`AnimatedPage` & Floating Header Card)
 
-كل صفحة تشغيلية في المنظومة تبدأ بكتلة هيدر موحدة تجمع بين أيقونة المجال، العنوان الهرمي، وشريط الأزرار التفاعلية:
+تُغلَّف كل صفحة مرجعية أو تشغيلية بالمكون **`<AnimatedPage className="space-y-5">`** لضمان الظهور التدريجي المتناسق وإيقاع المسافات الرأسية (`space-y-5`).  
+وتبدأ ببطاقة هيدر عائمة (`Floating Header Card`) ذات ظل صناعي متدرج، وحركة رفع ناعمة عند التحويم (`hover:-translate-y-0.5 transition-all duration-300 ease-out`)، وتوهج محيطي خفيف في الزاوية (`group/header`):
 
 ```tsx
+import AnimatedPage from '@/presentation/components/common/AnimatedPage';
 import PageHeaderIcon from '@/presentation/components/common/PageHeaderIcon';
 import Action3DButton from '@/presentation/components/common/Action3DButton';
 import FormulasModalButton from '@/presentation/components/common/FormulasModalButton';
-import { Package, Plus, RefreshCw } from 'lucide-react';
+import { ShieldAlert, Tag } from 'lucide-react';
 
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
-  {/* الجزء الأيسر: الأيقونة المجردة + العنوان والوصف */}
-  <div className="flex items-center gap-3.5 group/header">
-    <PageHeaderIcon icon={Package} colorClass="text-cyan-700" />
-    <div>
-      <div className="flex items-center gap-2 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-          Stock Articles & PDR
-        </h1>
-        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-cyan-50 text-cyan-800 border border-cyan-200">
-          STK-CORE
-        </span>
+<AnimatedPage className="space-y-5">
+  <div className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-6 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 w-full relative overflow-hidden group/header">
+    {/* توهج زاوية خفيف يتفاعل مع التحويم */}
+    <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-amber-500/10 transition-colors duration-500" />
+
+    {/* الجزء الأيسر: الأيقونة المجردة + العنوان والوصف */}
+    <div className="flex items-center gap-3 min-w-0 relative">
+      <PageHeaderIcon icon={ShieldAlert} colorClass="text-amber-600" />
+      <div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+            Équipements & Système Général
+          </h2>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+            SYS-GEN
+          </span>
+        </div>
+        <p className="text-xs text-slate-500 mt-0.5">
+          Référentiel des utilités d'usine rattachées aux zones réelles.
+        </p>
       </div>
-      <p className="text-xs sm:text-[13px] text-slate-500 font-medium mt-0.5">
-        Gestion du catalogue des pièces de rechange et calcul du stock actif en temps réel.
-      </p>
+    </div>
+
+    {/* الجزء الأيمن: زر المعادلات + الأزرار الدائرية ثلاثية الأبعاد مع شارة الإضافة */}
+    <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+      <FormulasModalButton
+        onClick={() => setShowFormulasModal(true)}
+        title="Voir les formules Excel & règles d'architecture"
+      />
+
+      <Action3DButton
+        variant="circle"
+        color="amber"
+        icon={ShieldAlert}
+        showAddBadge={true}
+        onClick={handleCreateModalOpen}
+        title="Ajouter un Nouvel Équipement"
+      />
     </div>
   </div>
-
-  {/* الجزء الأيمن: شريط الإجراءات بالأزرار ثلاثية الأبعاد */}
-  <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
-    <FormulasModalButton domain="stock" />
-    
-    <Action3DButton
-      icon={RefreshCw}
-      variant="circle"
-      color="slate"
-      title="Actualiser les données"
-      onClick={handleRefresh}
-    />
-
-    <Action3DButton
-      icon={Plus}
-      variant="pill"
-      color="cyan"
-      label="Nouvel Article"
-      showAddBadge={true}
-      onClick={handleCreateModalOpen}
-    />
-  </div>
-</div>
+</AnimatedPage>
 ```
 
-### خصائص `PageHeaderIcon`:
-- يبتعد عن وضع الأيقونة داخل صندوق رمادي مغلق في الهيدر، بل يعتمد أيقونة مسطحة تفاعلية:  
+### خصائص `PageHeaderIcon` وأزرار الهيدر:
+- **`PageHeaderIcon`:** يبتعد عن وضع الأيقونة داخل صندوق رمادي مغلق في الهيدر، بل يعتمد أيقونة مسطحة تفاعلية:  
   `w-7 h-7 ${colorClass} shrink-0 group-hover/header:scale-110 transition-transform duration-300`
+- **`FormulasModalButton`:** زر قياسي يفتح نافذة منبثقة من 4 بطاقات تشرح معادلات الإكسيل التوأم (`=[@id_zone] → Zones!B:B`) ومنطق الترقيم التلقائي للصفحة.
+- **`Action3DButton` في الهيدر:** يُفضّل في صفحات المراجع (`UtilisateursView`, `EquipmentView`, `ZonesView`) استخدام النمط الدائري `variant="circle"` مع `showAddBadge={true}` لإعطاء كثافة بصرية نظيفة تشبه لوحات التحكم الصناعية.
 
 ---
 
@@ -165,7 +169,7 @@ import { Package, Plus, RefreshCw } from 'lucide-react';
   `active:translate-y-0.5 active:scale-95 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.12)]`
 
 ### 4.2 أشكال الأزرار المتاحة (`variant`)
-1. **`circle` (افتراضي):** دائرة متقنة (`w-10 sm:w-11 h-10 sm:h-11 rounded-full bg-white border`) للأفعال السريعة (تحديث، طباعة، مسح QR).
+1. **`circle` (الافتراضي المعتمد في الهيدر):** دائرة متقنة (`w-10 sm:w-11 h-10 sm:h-11 rounded-full bg-white border`) للأفعال السريعة وإضافة السجلات مع `showAddBadge={true}`.
 2. **`pill`:** كبسولة بيضاء بإطار ملون (`px-4 py-2 rounded-full bg-white border text-xs gap-2`) للأزرار المرفقة بنص واضح.
 3. **`square`:** مربع بزوايا مستديرة ناعمة (`px-4 py-2.5 rounded-xl border text-xs gap-2`).
 4. **`solid`:** زر ممتلئ بلون تدرجي غني (`bg-gradient-to-b text-white`) يُستخدم كزر نداء أساسي لاتخاذ قرار (`Primary CTA`).
@@ -173,8 +177,8 @@ import { Package, Plus, RefreshCw } from 'lucide-react';
 ### 4.3 لوحات الألوان المدعومة (`color`)
 - `cyan`: قسم قطع الغيار والمخزون.
 - `emerald`: قسم الآلات وتسجيل الأصول.
-- `indigo`: الصيانة الوقائية والمخططات والمستودع.
-- `amber`: الصيانة العلاجية وأوامر الشغل.
+- `indigo`: الصيانة الوقائية والمخططات والمستودع والمستخدمين.
+- `amber`: الصيانة العلاجية، أوامر الشغل، والأنظمة العامة (`EquipmentView`).
 - `purple`: الورشات والمناطق.
 - `slate`: الإجراءات المحايدة (إلغاء، تصدير، تحديث).
 - `rose`: الإجراءات الخطرة أو التحذيرية.
@@ -182,110 +186,147 @@ import { Package, Plus, RefreshCw } from 'lucide-react';
 
 ---
 
-## 5. بطاقات المؤشرات وشبكات الـ KPI القياسية (4-Tier GmaoKpiCard)
+## 5. بطاقات المؤشرات التفاعلية وشبكات الـ KPI القياسية (Interactive 4-Tier `GmaoKpiCard`)
 
-جميع بطاقات الـ KPI في جميع صفحات L1 تعتمد بنية موحدة من **4 طبقات صارمة** (`src/presentation/components/common/GmaoKpiCard.tsx`):
+جميع بطاقات الـ KPI في جميع صفحات L1 تعتمد بنية موحدة من **4 طبقات صارمة** (`src/presentation/components/common/GmaoKpiCard.tsx`)، والأهم هو **التوازن بين التصميم والمنطق**: فالبطاقات ليست أرقاماً صماء، بل تعمل **كفلاتر تفاعلية حية (`isActive` + `onClick`)** تعيد تصفية الجدول أو تبديل التبويب فور النقر عليها!
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ Tier 1: العنوان العلوي (Uppercase) ── الأيقونة الحرة (w-6 h-6)   │
-│ Tier 2: الرقم المونو الضخم (3xl Monospace) + الوحدة             │
-│ Tier 3: شارة إكسيل الحسابية السياقية (Badge / Formula Cue)        │
+│ Tier 2: الرقم المونو الضخم (3xl Monospace) + الوحدة (unit)       │
+│ Tier 3: شارة إكسيل الحسابية السياقية (badgeText)                 │
 ├─────────────────────────────────────────────────────────────────┤
-│ Tier 4: التذييل التحليلي (Border-t) ── التسمية | القيمة / الشريط │
+│ Tier 4: التذييل التحليلي (footerLabel : footerValue)            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.1 نموذج الكود القياسي
+### 5.1 نموذج الكود القياسي (توازن التصميم والمنطق التفاعلي)
 ```tsx
-import { GmaoKpiCard, GmaoKpiGrid } from '@/presentation/components/common/GmaoKpiCard';
-import { Package, AlertTriangle, CheckCircle, TrendingDown } from 'lucide-react';
+import GmaoKpiCard, { GmaoKpiGrid } from '@/presentation/components/common/GmaoKpiCard';
+import { ShieldAlert, CheckCircle2, AlertTriangle, Layers } from 'lucide-react';
 
 <GmaoKpiGrid columns={4}>
   <GmaoKpiCard
-    id="kpi-stock-total"
-    title="Articles Actifs"
-    value={142}
-    unit="réfs"
-    icon={Package}
-    color="cyan"
-    badgeText="100% Vérifié"
-    badgePrefix="Inventaire"
-    footerLabel="Taux de rotation"
-    footerValue="4.2x / an"
-    progressBarPercent={75}
+    title="Équipements Installés"
+    value={kpiStats.totalActive}
+    unit="équip."
+    icon={ShieldAlert}
+    color="slate"
+    valueColored={false}
+    isActive={activeSection === 'equipments' && statusFilter === 'ALL'}
+    onClick={() => {
+      setActiveSection('equipments');
+      setStatusFilter('ALL');
+    }}
+    badgeText="Registre Actif (SSOT)"
+    footerLabel="Feuille Machines :"
+    footerValue="Classe SYSTEM_GENERAL"
   />
 
   <GmaoKpiCard
-    id="kpi-stock-rupture"
-    title="Rupture Critique"
-    value={3}
-    unit="articles"
-    icon={AlertTriangle}
-    color="rose"
-    pulseIcon={true}
-    badgeText="Action Immédiate"
-    footerLabel="Commandes PO requises"
-    footerValue="3 en attente"
-    progressBarPercent={100}
+    title="En Service Opérationnel"
+    value={kpiStats.enService}
+    unit="actifs"
+    icon={CheckCircle2}
+    color="emerald"
+    isActive={activeSection === 'equipments' && statusFilter === 'En Service'}
+    onClick={() => {
+      setActiveSection('equipments');
+      setStatusFilter(statusFilter === 'En Service' ? 'ALL' : 'En Service');
+    }}
+    badgeText="95% Disponibilité"
+    footerLabel="Interventions :"
+    footerValue="Éligibles PM & BT"
   />
 </GmaoKpiGrid>
 ```
 
-### 5.2 تفاصيل التصميم الدقيقة في `GmaoKpiCard`
-- **التوهج المحيطي غير المباشر (Ambient Corner Glow):**  
-  `absolute -top-10 -right-10 w-28 h-28 rounded-full blur-xl pointer-events-none transition-colors`
-- **الشبكة المرنة (`GmaoKpiGrid`):** تدعم خاصية `columns={4}` أو `columns={5}` وتتكيف تلقائياً على الشاشات الصغيرة:
-  - 4 أعمدة: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4`.
-  - 5 أعمدة: `grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4`.
+### 5.2 القواعد الإلزامية في `GmaoKpiCard`
+1. **اكتمال الطبقات الأربع:** يجب دائماً تمرير `title`, `value`, `unit`, `icon`, `color`, `badgeText`, `footerLabel`, `footerValue`.
+2. **التفاعل المنطقي (`isActive` + `onClick`):** النقر على البطاقة يفعّل الفلتر المقابل في الجدول، والنقر عليها مرة ثانية يعيد الفلتر إلى `'ALL'`.
 
 ---
 
-## 6. جداول البيانات الصناعية الموحدة (GmaoIndustrialDataGrid)
+## 6. جداول البيانات الصناعية الموحدة (`GmaoIndustrialDataGrid`)
 
 المكون المركزي لعرض البيانات في كل التطبيق هو **`GmaoIndustrialDataGrid`** (`src/presentation/components/common/GmaoIndustrialDataGrid.tsx`).
 
-### 6.1 المزايا الهندسية المدمجة
-1. **شريط المعلومات العلوي الصناعي (Banner Header):** يوضح أيقونة الجدول، عنوانه، ومطابقة الأعمدة في ملف الإكسيل التوأم `(Col A → Z)`.
-2. **الترويسة الثابتة والفرز (Sticky thead & Sort):** يظل شريط العناوين ثابتاً أثناء التمرير الرأسي مع مؤشرات فرز سهمية واضحة (`ArrowUpDown`, `ArrowUp`, `ArrowDown`).
-3. **فواصل الأعمدة الدقيقة (Crisp Column Grid Borders):** حدود واضحة ورأسية تفصل الخلايا تماثل بيئة Excel الاحترافية (`border-r border-slate-300` في الترويسة و `border-r border-slate-200` في الجسم).
-4. **التمرير الافتراضي عالي الأداء (Virtual Scrolling 60fps):** تفعيل محرك `@tanstack/react-virtual` تلقائياً عندما يتجاوز عدد السجلات `virtualThreshold` (35 صفاً فما فوق)، للتعامل بسلاسة مع أكثر من 10,000 سجل دون أي هبوط في معدل الإطارات.
-5. **تضمين بطاقة الترقيم (`TablePaginationCard`):** مدمجة بسلاسة في التذييل السفلي، وتتيح للمستخدم تحديد حجم الصفحة (`25, 50, 100, 200, Tout`).
-6. **هياكل التحميل والشاشات الفارغة (Skeletons & Empty States):** شريط تحميل متلألئ عبر `TableSkeletonRows`، وشاشة فارغة معبرة لا تحقن بيانات وهمية.
+### 6.1 العقد البرمجي الإلزامي للجدول وبطاقة القاع (`TablePaginationCard`)
+لكي يظهر الجدول بكامل عناصره (شريط مطابقة الإكسيل العلوي، أيقونات الأعمدة، شارات الحروف `Col B..H`، الفرز التفاعلي، ترقيم الصفوف `#`، وبطاقة قاع الجدول `TablePaginationCard`)، يجب تمرير الخصائص التالية دون نقص:
 
-### 6.2 تعريف الأعمدة القياسي (Column Definition Spec)
+```tsx
+<GmaoIndustrialDataGrid
+  title="Registre des Équipements — Système Général"
+  icon={<ShieldAlert className="w-4 h-4 text-amber-600" />}
+  excelMapping="id_machine (B) | designation (C) | id_general_system_type (D) | id_zone_default (E) | status (H)"
+  bannerColor="amber"
+  columns={equipmentColumns}
+  data={paginatedData}
+  rowKey={(row) => row.id_machine_registered}
+  sortField={sortField}
+  sortOrder={sortOrder}
+  onSort={handleSort}
+  renderSortIcon={renderSortIcon}
+  startIndex={startIndex}
+  showRowNumber={true}
+  emptyIcon={<ShieldAlert className="w-8 h-8 text-slate-300" />}
+  emptyMessage="Aucun enregistrement trouvé."
+  pagination={{
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
+    totalItems,
+    pageSizeOptions: [20, 50, 100, 200, 0],
+    color: 'amber',
+    itemLabel: 'équipements',
+  }}
+/>
+```
+
+### 6.2 العقد الإلزامي لتعريف الأعمدة (`label` + `colLetter` + `icon` + `sortable`)
+> ⚠️ **تحذير صارم:** يُمنع استخدام خاصية `title` في تعريف أعمدة `GmaoIndustrialDataGrid` لأن المكون يقرأ حصرياً `col.label` و`col.colLetter` و`col.icon`!
+
+1. **عمود الكود/المعرّف (`Col B`):** يُعرض داخل شارة إكسيل فاتحة مؤطرة (`bg-slate-100 text-slate-900 border border-slate-200/90 shadow-2xs font-mono font-bold text-xs`) مع أيقونة ملونة صغيرة (`w-3 h-3`). يُمنع استخدام شارات سوداء داكنة (`bg-slate-900`) داخل الجدول الفاتح.
+2. **عمود الاسم/التعيين (`Col C`):** يبدأ بمربع أيقونة مؤطر (`w-7 h-7 rounded-lg flex items-center justify-center border shadow-2xs`) يليه الاسم بخط عريض (`font-bold text-xs sm:text-[12.5px] text-slate-900`) وتحته سطر فرعي بخط `font-mono text-[10px] text-slate-400`.
+3. **فصل الأعمدة المرجعية:** لا تدمج المنطقة (`Zone`) والفني (`Technicien`) في عمود واحد؛ افصل كل مرجع في عمود إكسيل مستقل (`Col E`, `Col F`) لسهولة الفرز والقراءة.
+4. **عمود الإجراءات (`actions` — العمود الأخير):**
+   - `headerClassName: 'w-32 text-center font-bold text-slate-400 tracking-widest select-none'`
+   - جميع أزرار الإجراءات داخل الصف يجب أن تكون **مربعات مؤطرة بحجم `28x28px`**:  
+     `w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 border border-slate-200 shadow-2xs transition cursor-pointer`  
+     مع تلوين دلالي عند التحويم (`hover:text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200`، `hover:text-indigo-600...`، `hover:text-rose-600...`).
+
 ```tsx
 const columns = [
   {
-    key: 'ref',
-    label: 'Référence PDR',
-    colLetter: 'A',
-    icon: Tag,
+    key: 'id',
+    label: 'Code',
+    colLetter: 'B',
+    icon: Hash,
     sortable: true,
-    width: '160px',
     render: (row) => (
-      <span className="font-mono font-bold text-cyan-900 bg-cyan-50/60 px-2 py-0.5 rounded border border-cyan-200/60">
-        {row.ref}
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono font-bold text-xs bg-slate-100 text-slate-900 border border-slate-200/90 shadow-2xs">
+        <Hash className="w-3 h-3 text-indigo-600 shrink-0" />
+        <span>{row.id}</span>
       </span>
     ),
   },
   {
-    key: 'designation',
-    label: 'Désignation Standard',
-    colLetter: 'B',
-    sortable: true,
-    render: (row) => <span className="font-semibold text-slate-800">{row.designation}</span>,
-  },
-  {
-    key: 'stock_actuel',
-    label: 'Stock Actuel',
-    colLetter: 'E',
-    sortable: true,
-    align: 'right',
+    key: 'actions',
+    label: 'Actions',
+    align: 'center',
+    headerClassName: 'w-28 text-center font-bold text-slate-400 tracking-widest select-none',
     render: (row) => (
-      <span className="font-mono font-black text-slate-900">
-        {row.stock_actuel} <span className="text-[10px] text-slate-400 font-normal">U</span>
-      </span>
+      <div className="flex items-center justify-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => handleEdit(row)}
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 transition cursor-pointer shadow-2xs"
+          title="Modifier"
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
     ),
   },
 ];
@@ -293,48 +334,22 @@ const columns = [
 
 ---
 
-## 7. منظومة الفلاتر والبحث والتحكم الزمني (IndustrialFilterCard & PeriodFilterBar)
+## 7. منظومة بطاقة الفلاتر والفرز المتقدمة (`Excel Filter & Sort Card`)
 
-### 7.1 بطاقة الفلاتر المركزية (`IndustrialFilterCard`)
-مكون يجمع كل حقول التصفية والبحث في بطاقة مرتفعة ذات ظل صناعي ناعم:
+في صفحات المراجع والأسطول (`UtilisateursView`, `EquipmentView`, `ZonesView`)، تتكون بطاقة الفلاتر المرتفعة (`rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12)...] hover:-translate-y-0.5`) من **4 أجزاء قياسية**:
 
-- **الرأس:** أيقونة الفلتر + العنوان + شارة العداد الحي (`filteredCount / totalCount`) + زر تصدير الإكسيل + زر إعادة التعيين الدائري (`RotateCcw`).
-- **شريط الحالات السريعة (Quick Status Presets):** أزرار كبسولية بألوان تنبيهية مخصصة وفلاتر فورية بنقرة واحدة.
-- **شبكة الإدخال (Filter Grid Inputs):** حقول الإدخال المغلفة بـ `FilterField` ومزودة بشارة العمود المطابق في إكسيل `(Omni, Col C, etc.)`.
-- **شريط الشارات النشطة (Active Chips):** يعرض الفلاتر المطبقة حالياً مع زر إزالة مفرد وزر "إلغاء الكل".
-
-```tsx
-<IndustrialFilterCard
-  title="Filtres & Recherche Avancée"
-  color="cyan"
-  filteredCount={filteredItems.length}
-  totalCount={allItems.length}
-  hasActiveFilters={Boolean(searchTerm || statusFilter)}
-  onReset={handleResetFilters}
-  onExportExcel={handleExportExcel}
-  presets={[
-    { key: 'ALL', label: 'Tous', count: 142, isActive: status === 'ALL', onClick: () => setStatus('ALL') },
-    { key: 'ALERT', label: 'En Rupture', count: 3, colorDot: 'bg-rose-500', isActive: status === 'ALERT', onClick: () => setStatus('ALERT') },
-  ]}
->
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-    <FilterSearchInput
-      value={searchTerm}
-      onChange={setSearchTerm}
-      onClear={() => setSearchTerm('')}
-      colBadge="Omni"
-    />
-    {/* حقول Select إضافية مغلفة بـ FilterField */}
-  </div>
-</IndustrialFilterCard>
-```
-
-### 7.2 شريط التصفية الزمني (`PeriodFilterBar`)
-مكون زمني قياسي لإدارة الفترات التاريخية بدون تعقيد:
-- يدعم خيارات جاهزة: `Tout`, `Ce mois`, `Mois dernier`, `Trimestre`.
-- قائمة منسدلة لاختيار شهر محدد: `Mois spécifique...`.
-- درج منبثق لاختيار فترة مخصصة باليوم: `Plage libre (Du ... Au ...)`.
-- يعرض عداد السجلات المصفاة على الجانب الأيمن.
+1. **شريط الترويسة العلوي (`Header Toolbar`):**
+   - صندوق أيقونة `SlidersHorizontal` كهرماني (`w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 text-amber-700`).
+   - عنوان البطاقة + **شارة العداد الحي** (`{filtered.length} / {total.length}` بتنسيق `bg-amber-50 text-amber-800 font-mono border-amber-200/70`).
+   - على اليمين: أزرار الحالات السريعة (اختياري) + زر **Export Excel** الزمردي (`h-8 px-3 rounded-xl border-emerald-200/80 bg-emerald-50 text-emerald-800`) + زر **Reset** الدائري الوردي (`w-8 h-8 rounded-full border-rose-200/80 bg-rose-50 text-rose-700`) الذي يظهر فقط عند تفعيل أي فلتر أو تغيير الفرز.
+2. **رأس كل حقل فلترة (`Label + Col. X Badge`):**
+   - فوق كل حقل بحث أو `CustomSelect` أو زر فرز، يوضع صف علوي (`flex items-center justify-between mb-1.5`) يضم اسم الحقل على اليسار وشارة عمود الإكسيل على اليمين (`Col. B+C`, `Col. D`, `Col. E` بتنسيق `px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-100 text-slate-700 border border-slate-200`).
+3. **الأيقونة المؤطرة داخل الحقل (`Amber Boxed prefixIcon`):**
+   - كل حقل إدخال أو `CustomSelect` يحتوي على أيقونة بادئة داخل مربع كهرماني صغير:  
+     `w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0`
+4. **قائمة الفرز المنسدلة (`Tri Dynamique`) وشريط الشارات النشطة (`Active Filter Chips`):**
+   - الحقل الرابع في الشبكة يُخصص لزر وقائمة الفرز (`Tri : CODE (B) / DÉSIGNATION (C)...`) مع أسهم التصاعدي والتنازلي (`ArrowUp` / `ArrowDown`).
+   - عند وجود أي فلتر نشط، يظهر في أسفل البطاقة شريط شارات قابلة للإزالة (`bg-indigo-50 border-indigo-200 text-indigo-800`).
 
 ---
 
@@ -346,8 +361,8 @@ const columns = [
 - التبويب النشط يكتسب خلفية وظلاً بلون التوكيد:  
   `${tab.activeBg} ${tab.activeBorder} ${tab.activeText} shadow-xs font-bold scale-[1.01]`
 
-### 8.2 شريط الخيارات المجزأة (Segmented Toggle Control)
-للتبديل الثنائي أو الثلاثي داخل الصفحة:
+### 8.2 شريط الخيارات المجزأة المدمج في الهيدر (Segmented Toggle Control)
+للتبديل الثنائي داخل الصفحة (مثل التبديل بين `Équipements` و`Types Système` داخل بطاقة الهيدر):
 - الحاوية الخارجية: `p-1 bg-slate-100 rounded-xl border border-slate-200/80 inline-flex items-center gap-1`.
 - الزر النشط: `bg-white text-slate-900 font-bold shadow-2xs rounded-lg px-3 py-1.5 text-xs`.
 - الزر الخامل: `text-slate-500 hover:text-slate-800 font-semibold px-3 py-1.5 text-xs transition`.
@@ -356,15 +371,10 @@ const columns = [
 
 ## 9. النوافذ المنبثقة، مربعات التأكيد، والتنبيهات (Modals, Dialogs & Toast)
 
-### 9.1 نوافذ الحوار والتأكيد (`ConfirmDialog`)
-تعتمد المنظومة بروتوكول تأكيد عالمي عبر وعد جافاسكريبت (`confirmAction(...)`):
-- **الخلفية المضببة:** `bg-slate-950/60 backdrop-blur-xs fixed inset-0 z-[120]`.
-- **البطاقة المركزية:** `bg-white dark:bg-slate-900 rounded-2xl shadow-2xl p-5 md:p-6 border`.
-- **المتغيرات:**
-  - `danger` (عمليات الحذف أو الأرشفة): أيقونة `AlertTriangle` بلون وردي وزر أحمر `bg-rose-600` مع التركيز التلقائي على زر الإلغاء كإجراء أمان.
-  - `warning` (تنبيه تنفيذي): أيقونة `AlertCircle` بلون برتقالي `amber`.
-  - `info` (تأكيد اعتيادي): أيقونة `Info` بلون أزرق أو زمردي.
-- **التفاعل بلوحة المفاتيح:** زر `Escape` يغلق الحوار ويعيد `false`.
+### 9.1 نوافذ الحوار والتأكيد (`ConfirmDialog` & Light Modals)
+- **الخلفية المضببة:** `bg-slate-900/60 backdrop-blur-xs fixed inset-0 z-50`.
+- **البطاقة المركزية:** `bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150`.
+- **ترويسة النافذة المنبثقة:** خلفية بيضاء نظيفة (`bg-white border-b border-slate-200 px-5 py-4`) مع أيقونة ملونة داخل مربع مؤطر (`w-8 h-8 rounded-xl bg-amber-50 border border-amber-200`) وزر إغلاق مربع (`w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200`).
 
 ### 9.2 التنبيهات العائمة (`Toast`)
 تظهر في الزاوية العلوية أو السفلية بإشعار لطيف ومؤقت، يدعم 4 حالات: `success`, `error`, `info`, `warning`.
@@ -378,136 +388,25 @@ const columns = [
 البيئة الأساسية للتطبيق هي واجهة فاتحة ذات تباين ناصع، صُممت خصيصاً لأجهزة الكمبيوتر والتابلت في الورشات والمصانع التي تعاني من انعكاسات الإضاءة العالية.
 
 ### 10.2 معمارية الوضع الداكن (`.dark`)
-يتم تفعيل الوضع الداكن عبر إضافة صنف `.dark` لعنصر `<html>` الجذري.
-في `src/index.css`:
-```css
-@custom-variant dark (&:where(.dark, .dark *));
-
-/* تحويلات الجداول في الوضع الداكن */
-.dark table thead th svg.lucide {
-  color: #94a3b8 !important; /* text-slate-400 */
-}
-.dark table.border-collapse thead tr > th:not(:last-child) {
-  border-right: 1px solid #334155 !important; /* slate-700 */
-}
-.dark table.border-collapse tbody tr > td:not(:last-child) {
-  border-right: 1px solid #1e293b !important; /* slate-800 */
-}
-.dark table.border-collapse tbody tr:not(:last-child) > td {
-  border-bottom: 1px solid #1e293b !important;
-}
-```
-
-### 10.3 محرك انتقالات الرؤية (View Transitions API)
-الانتقال بين الثيمات أو بين الصفحات يعتمد واجهة برمجة الانتقالات الحديثة:
-```css
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 350ms;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-}
-```
-
-### 10.4 ضوابط التباين والأمان البصري في الثيمات
-- **قاعدة الأيقونات البيضاء داخل الأزرار الداكنة:**  
-  إذا كان الزر مصمتاً بلون قوي (`.btn-primary-accent` أو `.bg-accent-main` أو `text-white`)، يجب أن تظل الأيقونة بداخله ناصعة البياض `#ffffff` وألا تتأثر بألوان الـ CSS التلقائية للأيقونات.
-- **حدود التقسيم في الجداول:** في الوضع الفاتح تكون `border-slate-200` و `border-slate-300`. وفي الوضع الداكن تكون `border-slate-800` و `border-slate-700`.
+يتم تفعيل الوضع الداكن عبر إضافة صنف `.dark` لعنصر `<html>` الجذري في `src/index.css`.
 
 ---
 
-## 11. دستور إنشاء صفحة جديدة: القالب المعياري وموانع الأخطاء
+## 11. دستور إنشاء أو مراجعة صفحة: قائمة الفحص وموانع الأخطاء (Checklist & Anti-Patterns)
 
-عند الحاجة لإضافة صفحة تشغيلية جديدة مستقبلاً، يجب على المهندس أو الوكيل اتباع الخطوات الإلزامية التالية:
+عند إنشاء صفحة جديدة أو مراجعة صفحة قائمة (على غرار `UtilisateursView.tsx` و`EquipmentView.tsx`)، يجب التحقق من البنود الـ 8 التالية:
 
-### 11.1 الهيكل العظمي للصفحة (Master Page Anatomy)
-
-```tsx
-import { useState, useMemo } from 'react';
-import PageHeaderIcon from '@/presentation/components/common/PageHeaderIcon';
-import Action3DButton from '@/presentation/components/common/Action3DButton';
-import { GmaoKpiCard, GmaoKpiGrid } from '@/presentation/components/common/GmaoKpiCard';
-import IndustrialFilterCard, { FilterSearchInput } from '@/presentation/components/common/IndustrialFilterCard';
-import GmaoIndustrialDataGrid from '@/presentation/components/common/GmaoIndustrialDataGrid';
-import { Sparkles, Plus, RefreshCw } from 'lucide-react';
-
-export default function NewModuleView() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
-
-  // 1. البيانات الحقيقية من المخزن الموحد (useGmaoStore)
-  // 2. عمليات الفرز والتصفية عبر useMemo
-  // 3. تعريف مصفوفة الأعمدة columns
-
-  return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-view-transition pb-12">
-      {/* 1. رأس الصفحة القياسي */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80">
-        <div className="flex items-center gap-3.5 group/header">
-          <PageHeaderIcon icon={Sparkles} colorClass="text-indigo-700" />
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Titre de la Nouvelle Page
-            </h1>
-            <p className="text-xs sm:text-[13px] text-slate-500 font-medium mt-0.5">
-              Description claire et concise de l'objectif opérationnel de la page.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Action3DButton icon={RefreshCw} variant="circle" color="slate" onClick={() => {}} />
-          <Action3DButton icon={Plus} variant="pill" color="indigo" label="Ajouter un élément" showAddBadge={true} onClick={() => {}} />
-        </div>
-      </div>
-
-      {/* 2. شبكة المؤشرات KPI */}
-      <GmaoKpiGrid columns={4}>
-        {/* بطاقات GmaoKpiCard القياسية */}
-      </GmaoKpiGrid>
-
-      {/* 3. بطاقة الفلاتر والبحث */}
-      <IndustrialFilterCard
-        title="Filtres & Recherche"
-        color="indigo"
-        filteredCount={filteredData.length}
-        totalCount={rawData.length}
-      >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <FilterSearchInput value={searchTerm} onChange={setSearchTerm} onClear={() => setSearchTerm('')} />
-        </div>
-      </IndustrialFilterCard>
-
-      {/* 4. جدول البيانات الرئيسي */}
-      <GmaoIndustrialDataGrid
-        title="Registre des Éléments"
-        icon={Sparkles}
-        bannerColor="indigo"
-        excelMapping="COLONNES A → H"
-        columns={columns}
-        data={paginatedData}
-        pagination={{
-          currentPage,
-          setCurrentPage,
-          pageSize,
-          setPageSize,
-          totalItems: filteredData.length,
-        }}
-      />
-    </div>
-  );
-}
-```
-
-### 11.2 قائمة موانع الأخطاء والانحراف التصميمي (Anti-Patterns Checklist)
-❌ **ممنوع:** إنشاء جدول عادي بـ `<table>` يدوي دون استخدام `GmaoIndustrialDataGrid`.  
-❌ **ممنوع:** استخدام أزرار عادية بألوان Hex عشوائية مثل `style={{ backgroundColor: '#23a1f2' }}`.  
-❌ **ممنوع:** وضع أرقام الـ KPI أو الأكواد بخط عادي، بل يجب دائماً إدراج `font-mono`.  
-❌ **ممنوع:** عرض "بطاقات بيضاء" بلا حدود؛ فالحدود الرمادية `border border-slate-200` إلزامية لضبط التباين الصناعي.  
-❌ **ممنوع:** حقن أي بيانات وهمية أو أرقام تجريبية تلقائية عند وجود فراغ؛ الحالة الفارغة الصريحة هي الأصل الحتمي.  
-❌ **ممنوع:** كسر قاعدة 60-30-10 بتلوين كامل خلفية الصفحة بألوان فاقعة.
+1. ✅ **تغليف الصفحة:** هل الصفحة مغلفة بـ `<AnimatedPage className="space-y-5">`؟
+2. ✅ **بطاقة الهيدر العائمة:** هل تحتوي على `<PageHeaderIcon />`، و`<FormulasModalButton />`، وأزرار `<Action3DButton variant="circle" showAddBadge={true} />` مع ظل صناعي متدرج وتفاعل `hover:-translate-y-0.5`؟
+3. ✅ **بطاقات الـ KPI التفاعلية:** هل تحتوي كل بطاقة `GmaoKpiCard` على الطبقات الأربع كاملة (`unit`, `badgeText`, `footerLabel`, `footerValue`) وهل تعمل كفلتر تفاعلي عبر `isActive` و`onClick`؟
+4. ✅ **بطاقة الفلاتر والفرز:** هل تتضمن شارة العداد (`filtered / total`)، زر `Export Excel`، زر `Reset` الدائري الوردي، شارات الأعمدة (`Col. B+C`, `Col. D`...) فوق الحقول، أيقونة `prefixIcon` الكهرمانية المؤطرة، وقائمة الفرز المنسدلة (`Tri`)؟
+5. ✅ **أعمدة الجدول (`GmaoIndustrialDataGrid`):** هل كل عمود معرّف بـ (`label` + `colLetter` + `icon` + `sortable: true`)؟ (**ممنوع** استخدام `title` بدلاً من `label`).
+6. ✅ **بطاقة قاع الجدول (`pagination`):** هل تم تمرير كائن `pagination` الكامل مع `startIndex` و`showRowNumber={true}` و`excelMapping` إلى `GmaoIndustrialDataGrid`؟
+7. ✅ **الشارات وأزرار الإجراءات داخل الجدول:** هل أكواد الصفوف تستخدم الشارة الفاتحة (`bg-slate-100 text-slate-900 border-slate-200/90`) وليس الشارة السوداء الداكنة؟ وهل أزرار الإجراءات في العمود الأخير مربعة مؤطرة (`w-7 h-7 rounded-lg border border-slate-200 shadow-2xs`)؟
+8. ✅ **صفر بيانات وهمية صامتة:** الحالة الفارغة الصريحة تعرض رسالة واضحة دون حقن أي بذور تلقائية.
 
 ---
 **تاريخ اعتماد الوثيقة:** نوفمبر 2026  
-**الإصدار:** v4.0.0 (Production Master)  
+**الإصدار:** v4.1.0 (Production Master — Calibrated on `UtilisateursView` & `EquipmentView`)  
 **المرجعية:** `CIOB GMAO v4 Constitution & Design System`
+
