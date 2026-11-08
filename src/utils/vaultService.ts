@@ -324,11 +324,15 @@ function resolveSymmetricKey(password) {
 }
 
 export function encrypt(text, password) {
+  const key = resolveSymmetricKey(password);
+  if (!key) {
+    throw new Error('[vaultService] Encryption aborted: symmetric key is null or empty');
+  }
   try {
-    const key = resolveSymmetricKey(password);
     return CryptoJS.AES.encrypt(String(text), key).toString();
-  } catch {
-    return text;
+  } catch (err) {
+    console.error('[vaultService] encrypt failed:', err);
+    throw err;
   }
 }
 

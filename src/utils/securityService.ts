@@ -1,7 +1,33 @@
 import CryptoJS from 'crypto-js';
 import { Logger } from '../core/logger/LoggerService';
+import { SecurityService as CoreSecurityService } from '../core/security/SecurityService';
 
-const DEFAULT_SECRET_KEY = 'GMAO_SECURE_KEY';
+export const DEFAULT_SECRET_KEY = 'GMAO_SECURE_KEY';
+
+function resolveSecretKey(providedKey?: string): string {
+  const isProd = Boolean(
+    import.meta.env.PROD ||
+    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+  );
+
+  // If a custom key (not the insecure static default) was explicitly passed, use it
+  if (providedKey && providedKey !== DEFAULT_SECRET_KEY) {
+    return providedKey;
+  }
+
+  // S0: In production, reject silent static default key and enforce canonical CoreSecurityService.SECRET_KEY
+  if (isProd) {
+    if (providedKey === DEFAULT_SECRET_KEY) {
+      Logger.warn(
+        '[SecurityService] Insecure static DEFAULT_SECRET_KEY rejected in production. Using canonical CoreSecurityService.SECRET_KEY.'
+      );
+    }
+    return CoreSecurityService.SECRET_KEY;
+  }
+
+  // In development/test, fallback to provided key or DEFAULT_SECRET_KEY
+  return providedKey || DEFAULT_SECRET_KEY;
+}
 
 /**
  * Security Service for Hashing, Encryption and Local Storage protection
@@ -13,12 +39,24 @@ export class SecurityService {
    * @param {string} [secretKey] - Optional encryption key
    * @returns {string} Encrypted string payload
    */
-  static encrypt(data, secretKey = DEFAULT_SECRET_KEY) {
+  static encrypt(data, secretKey) {
     try {
       if (data === undefined || data === null) return '';
-      return CryptoJS.AES.encrypt(JSON.stringify(data), secretKey).toString();
+      const key = resolveSecretKey(secretKey);
+      if (!key) {
+        throw new Error('[SecurityService] Encryption aborted: key is null or empty');
+      }
+      return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
     } catch (e) {
-      // Fallback to safe base64 encoding if AES fails
+      const isProd = Boolean(
+        import.meta.env.PROD ||
+        (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+      );
+      if (isProd) {
+        Logger.error('Encryption failed in production:', e, 'SecurityService');
+        throw e;
+      }
+      // Dev-only fallback to safe base64 encoding if AES fails
       try {
         return btoa(JSON.stringify(data));
       } catch {
@@ -34,55 +72,51 @@ export class SecurityService {
    * @param {string} [secretKey] - Optional encryption key
    * @returns {any} Decrypted data object or null if invalid
    */
-  static decrypt(encrypted, secretKey = DEFAULT_SECRET_KEY) {
+  static decrypt(encrypted, secretKey) {
     if (!encrypted) return null;
+    const key = resolveSecretKey(secretKey);
     try {
-      const bytes = CryptoJS.AES.decrypt(encrypted, secretKey);
-      const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
-      if (decryptedData) {
-        return JSON.parse(decryptedData);
+      if (key) {
+        const bytes = CryptoJS.AES.decrypt(encrypted, key);
+        const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
+        if (decryptedData) {
+          return JSON.parse(decryptedData);
+        }
       }
     } catch {
-      // Fallback base64 decode attempt
-      try {
-        return JSON.parse(atob(encrypted));
-      } catch (err) {
-        Logger.error('Failed to decrypt data:', err, 'SecurityService');
-        return null;
+      // Dev-only fallback base64 decode attempt
+      const isProd = Boolean(
+        import.meta.env.PROD ||
+        (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+      );
+      if (!isProd) {
+        try {
+          return JSON.parse(atob(encrypted));
+        } catch (err) {
+          Logger.error('Failed to decrypt data:', err, 'SecurityService');
+          return null;
+        }
       }
     }
     return null;
   }
 
   /**
-   * Save encrypted item safely to localStorage
+   * Save encrypted item safely to localStorage (delegates to canonical CoreSecurityService)
    * @param {string} key - Storage key name
    * @param {any} data - Value object/data to store securely
    */
   static saveSecure(key, data) {
-    try {
-      const encrypted = this.encrypt(data);
-      localStorage.setItem(key, encrypted);
-      Logger.debug(`✅ Data saved securely under key: ${key}`);
-    } catch (error) {
-      Logger.error(`❌ Failed to save secure item: ${key}`, error);
-    }
+    return CoreSecurityService.saveSecure(key, data);
   }
 
   /**
-   * Retrieve and decrypt item safely from localStorage
+   * Retrieve and decrypt item safely from localStorage (delegates to canonical CoreSecurityService)
    * @param {string} key - Storage key name
    * @returns {any} Decrypted payload or null
    */
   static getSecure(key) {
-    try {
-      const encrypted = localStorage.getItem(key);
-      if (!encrypted) return null;
-      return this.decrypt(encrypted);
-    } catch (error) {
-      Logger.error(`❌ Failed to get secure item for key: ${key}`, error);
-      return null;
-    }
+    return CoreSecurityService.getSecure(key);
   }
 
   /**

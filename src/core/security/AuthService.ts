@@ -19,6 +19,17 @@ function buildAvatar(nameOrCode = '') {
 
 export class AuthService {
   static instance = null;
+  static _warnedDevBootstrap = false;
+
+  /**
+   * Determine if running in a production environment
+   */
+  static isProductionMode(): boolean {
+    return Boolean(
+      import.meta.env.PROD ||
+      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+    );
+  }
 
   constructor() {
     if (AuthService.instance) return AuthService.instance;
@@ -792,6 +803,21 @@ export class AuthService {
         isPasswordHashMatch || isSeedHashMatch || (user.role === 'ADMIN' && isPinMatch);
 
       if (isPasswordValid) {
+        // SEC-BOOTSTRAP-P0 (S1): Reject bootstrap seed passwords in production
+        if (isSeedHashMatch) {
+          if (AuthService.isProductionMode()) {
+            throw new Error(
+              "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
+            );
+          }
+          if (!AuthService._warnedDevBootstrap) {
+            AuthService._warnedDevBootstrap = true;
+            console.warn(
+              `[AuthService] Connexion de développement avec mot de passe d'initialisation par défaut pour '${user.username}'. Veuillez le modifier avant la mise en production.`
+            );
+          }
+        }
+
         // Upgrade legacy or initial seed hash to full PBKDF2-SHA256
         if (
           (user.passwordHash && SecurityService.isLegacyHash(user.passwordHash)) ||
@@ -811,6 +837,7 @@ export class AuthService {
           id_zone: user.id_zone || null,
           specialite: user.specialite || null,
           authMethod: 'PASSWORD',
+          mustChangePassword: Boolean(isSeedHashMatch),
         };
         return this.saveSignedSession(sessionPayload);
       }

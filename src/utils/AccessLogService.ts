@@ -68,10 +68,20 @@ export const accessLogService = {
     const sessionId = 'SESS-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
     const loginTime = new Date().toISOString();
 
-    // Best-effort local/public IP fetch (with fallback)
-    let clientIp = '127.0.0.1 (Local / Intranet)';
+    // Best-effort client IP resolution (real LAN hostname, public IP, or deterministic local fallback)
+    let clientIp = '127.0.0.1 (Local)';
+    if (
+      typeof window !== 'undefined' &&
+      window.location?.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1' &&
+      window.location.hostname !== '::1'
+    ) {
+      clientIp = window.location.hostname;
+    }
+
     try {
-      // Fast timeout fetch for IP
+      // Fast timeout fetch for public IP if online
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 1200);
       const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal }).catch(() => null);
@@ -83,8 +93,7 @@ export const accessLogService = {
         }
       }
     } catch {
-      // offline fallback
-      clientIp = '192.168.1.' + Math.floor(Math.random() * 200 + 10) + ' (Réseau Interne)';
+      // Offline fallback: keep real clientIp or '127.0.0.1 (Local)' without simulated random IP
     }
 
     const logEntry = {
