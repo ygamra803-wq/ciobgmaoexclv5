@@ -71,7 +71,20 @@ Dans le tableau détaillé par équipement :
 
 Pour modifier la dotation budgétaire ou le taux horaire de main-d'œuvre :
 
-1. Cliquez sur le bouton **« Configurer le Budget »** en haut à droite.
+1. Cliquez sur le bouton circulaire 3D violet **« Configurer le Budget »** (`Sliders`) dans l'en-tête de la page.
 2. Modifiez le montant global ou ajustez la dotation mois par mois pour tenir compte des arrêts techniques programmés (ex. augmentation de la dotation en août pour le grand arrêt d'été).
 3. Renseignez obligatoirement le **motif de l'ajustement** (ex. *« Dotation exceptionnelle suite à l'installation de la nouvelle Ligne 3 »*).
 4. Cliquez sur **« Enregistrer »** : la modification est immédiatement consignée dans l'historique d'audit `budgetChangeLog`.
+
+---
+
+## 6. Outils d'En-Tête & Carte des Paramètres Financiers
+
+L'écran intègre des outils ergonomiques conformes à la charte v4.1.0 :
+- 📐 **Bouton des Formules Financières :** Situé dans l'en-tête, le bouton vert circulaire 3D avec l'icône $f(x)$ ouvre la modale des 5 formules de référence (TCO, Seuil BER, PUMP, Taux de combustion budgétaire et Règles de validation).
+- 📅 **Carte des Paramètres & Période :** Située directement sous les indicateurs KPI clés, cette carte dédiée permet de :
+  - Sélectionner l'exercice fiscal (`Année`).
+  - Basculer instantanément la devise d'affichage (`MAD`, `EUR`, `USD`) sans recharger la page.
+  - Surveiller en temps réel le badge du taux de consommation (*Burn Rate*) avec code couleur vert/orange/rouge.
+  - Réinitialiser les filtres financiers via le bouton circulaire rose.
+

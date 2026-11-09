@@ -20,6 +20,9 @@ import {
   ShieldAlert,
   FileSpreadsheet,
   Lock,
+  SlidersHorizontal,
+  RotateCcw,
+  Calculator,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -35,6 +38,11 @@ import ValidationStatusBadge, {
   getInterventionNatureMeta,
   INTERVENTION_NATURE_OPTIONS,
 } from '../../components/common/ValidationStatusBadge';
+import AnimatedPage from '../../components/common/AnimatedPage';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
+import FormulasModalButton from '../../components/common/FormulasModalButton';
+import Action3DButton from '../../components/common/Action3DButton';
+import GmaoKpiCard, { GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 
 interface ValidationCenterViewProps {
   stockItems?: any[];
@@ -156,6 +164,7 @@ export default function ValidationCenterView({
   const [includeClarifications, setIncludeClarifications] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showReservedDetails, setShowReservedDetails] = useState(false);
+  const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // 1. Corrective Review Modal State
   const [reviewBt, setReviewBt] = useState<any | null>(null);
@@ -750,55 +759,268 @@ export default function ValidationCenterView({
     (sectionFilter === 'ALL' || sectionFilter === 'PREVENTIVE' ? visiblePreventive.length : 0) +
     (sectionFilter === 'ALL' || sectionFilter === 'SORTIE' ? visibleSortieDemands.length : 0);
 
+  const totalAllQueues =
+    queues.totalPending + queues.totalClarification + queues.totalRejected;
+
+  const validationFormulas = [
+    {
+      title: '1. Contrat Maker-Checker (Zéro Déstockage Avant Validation)',
+      formula: 'Déclaration Terrain (Tech) ➔ PENDING_VALIDATION (Stock Réservé Virtuel) ➔ APPROVED (Clôture + Sortie Officielle)',
+      description:
+        'Aucune déclaration saisie par un technicien ne modifie le stock physique ni ne clôture définitivement un BT avant revue par un responsable habilité.',
+    },
+    {
+      title: '2. Rapprochement Intelligent BS-Tech × BS-Magasin',
+      formula: 'Reconciliation = Comparaison (N° Bon Tech, Machine, Références PDR, Quantités) vs Mouvements Magasin',
+      description:
+        'Détecte automatiquement si le magasinier a déjà saisi la sortie physique pour éviter tout double déstockage lors de la validation.',
+    },
+    {
+      title: '3. Réservation Virtuelle & Risque de Rupture',
+      formula: 'Disponible Net = Stock Actuel Physique − ∑ Quantités en PENDING_VALIDATION',
+      description:
+        'Signale immédiatement si l’approbation d’une demande entraînerait un passage sous le seuil de sécurité ou une rupture de stock.',
+    },
+    {
+      title: '4. Boucle Fermée Préventif ➔ Correctif (Auto-DI)',
+      formula: 'Anomalie Préventive Approuvée + Case Auto-DI ➔ Création Automatique DI Corrective Liée',
+      description:
+        'Transforme instantanément une anomalie constatée lors d’une ronde préventive en Demande d’Intervention corrective traçable.',
+    },
+  ];
+
   return (
-    <div data-testid="validation-center-view" className="space-y-6 pb-10">
-      {/* TOP HEADER BANNER */}
-      <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-xs space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0 shadow-2xs">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-200">
-                  Maker-Checker Centralisé
-                </span>
-                <span className="text-xs font-mono text-slate-500">
-                  Zéro déduction stock avant approbation
-                </span>
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
+    <AnimatedPage data-testid="validation-center-view" className="space-y-5 pb-10">
+      {/* 1. CLEAN SINGLE-ROW FLOATING HEADER CARD */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 md:p-6 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex items-center justify-between gap-3 sm:gap-4 w-full relative overflow-hidden group/header">
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-rose-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-rose-500/10 transition-colors duration-500" />
+
+        <div className="flex items-center gap-3.5 min-w-0 relative z-10">
+          <PageHeaderIcon icon={ShieldCheck} colorClass="text-rose-600" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
                 Centre de Validation — À valider
               </h1>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Point unique de revue et d'approbation des rapports correctifs (BT), exécutions préventives et demandes de sortie PDR.
+              <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-black uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-200">
+                Maker-Checker Centralisé
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                Zéro déduction stock avant approbation
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Point unique de revue et d&apos;approbation des rapports correctifs (BT), exécutions préventives et demandes de sortie PDR.
+            </p>
+          </div>
+        </div>
+
+        {/* Circular 3D Header Action Buttons */}
+        <div className="flex items-center gap-2 shrink-0 relative z-10">
+          <FormulasModalButton
+            onClick={() => setShowFormulasModal(true)}
+            title="Formules & Règles — Centre de Validation (Maker-Checker)"
+          />
+
+          <Action3DButton
+            variant="circle"
+            color="purple"
+            icon={Layers}
+            title={`Réservations virtuelles PDR (${queues.reservedRefsCount} réf. / ${queues.totalReservedUnits} u.)`}
+            ariaLabel="Réservé PDR"
+            onClick={() => setShowReservedDetails((prev) => !prev)}
+          />
+
+          {canExportQueue && (
+            <Action3DButton
+              variant="circle"
+              color="emerald"
+              icon={FileSpreadsheet}
+              title="Exporter la file de validation vers Excel (.xlsx)"
+              ariaLabel="Exporter File (.xlsx)"
+              data-testid="vc-export-excel-btn"
+              onClick={handleExportValidationQueueExcel}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* V5-1: RBAC Partial Permission Banner (e.g., Responsable Magasin) */}
+      {(!canValidateCorrective || !canValidatePreventive || !canValidateSortie) && (
+        <div
+          data-testid="vc-rbac-scope-banner"
+          className="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200/90 flex items-center justify-between gap-3 flex-wrap text-xs text-amber-950 shadow-2xs"
+        >
+          <div className="flex items-center gap-2 font-semibold">
+            <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              Périmètre de décision actif pour votre profil :{' '}
+              <strong className="font-black text-slate-900">
+                {[
+                  canValidateCorrective ? 'Bons de travail (BT)' : null,
+                  canValidatePreventive ? 'Exécutions préventives' : null,
+                  canValidateSortie ? 'Demandes de sortie terrain' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' • ') || 'Consultation uniquement'}
+              </strong>
+              . Les autres files sont affichées en lecture seule.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Expandable Virtual Stock Reservation Breakdown */}
+      {showReservedDetails && queues.reservedRefsCount > 0 && (
+        <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2 shadow-2xs animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black text-purple-950 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-purple-600" />
+              <span>Détail des réservations virtuelles (lecture seule — sans impact sur Stock Actuel avant validation)</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowReservedDetails(false)}
+              className="text-xs font-bold text-purple-700 hover:underline cursor-pointer"
+            >
+              Masquer
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {Array.from(queues.reservedStockMap.values()).map((entry) => (
+              <div
+                key={entry.ref}
+                className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-xs font-mono flex items-center gap-2 shadow-2xs"
+              >
+                <span className="font-black text-slate-900">{entry.ref}</span>
+                <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px]">
+                  Réservé: {entry.reservedQty}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  ({entry.sources.map((s) => s.code).join(', ')})
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2. V5-1: 4-TIER INTERACTIVE COCKPIT KPI CARDS (Preserving all vc-* data-testid attributes) */}
+      <GmaoKpiGrid columns={4}>
+        {/* KPI 1: À valider (PENDING_VALIDATION) */}
+        <GmaoKpiCard
+          title="1. À valider (En attente)"
+          value={<span data-testid="vc-total-pending">{queues.totalPending}</span>}
+          unit="déclarations"
+          icon={ShieldCheck}
+          color="rose"
+          isActive={statusFocus === 'PENDING_ONLY'}
+          onClick={() => {
+            setStatusFocus((prev) => (prev === 'PENDING_ONLY' ? 'ACTIVE_QUEUES' : 'PENDING_ONLY'));
+          }}
+          badges={
+            <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold text-[11px]">
+              <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-900 border border-rose-200">
+                BT: <strong data-testid="vc-corrective-count">{queues.pendingCorrective.length}</strong>
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-900 border border-indigo-200">
+                Préventif: <strong data-testid="vc-preventive-count">{queues.pendingPreventive.length}</strong>
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-900 border border-teal-200">
+                Sorties: <strong data-testid="vc-sortie-count">{queues.pendingSortieDemands.length}</strong>
+              </span>
+            </div>
+          }
+          footerLabel="Contrat :"
+          footerValue="Maker-Checker"
+        />
+
+        {/* KPI 2: À clarifier (NEEDS_CLARIFICATION) */}
+        <GmaoKpiCard
+          title="2. À clarifier (Terrain)"
+          value={<span data-testid="vc-total-clarification">{queues.totalClarification}</span>}
+          unit="en attente"
+          icon={AlertTriangle}
+          color="amber"
+          isActive={statusFocus === 'CLARIFY_ONLY'}
+          onClick={() => {
+            setIncludeClarifications(true);
+            setStatusFocus((prev) => (prev === 'CLARIFY_ONLY' ? 'ACTIVE_QUEUES' : 'CLARIFY_ONLY'));
+          }}
+          badgeText={`BT: ${queues.clarificationCorrective.length} · PM: ${queues.clarificationPreventive.length} · Sorties: ${queues.clarificationSortieDemands.length}`}
+          footerLabel="Action requise :"
+          footerValue="Retour technicien"
+        />
+
+        {/* KPI 3: Rejetés (Non clôturés) */}
+        <GmaoKpiCard
+          title="3. Rejetés (Actifs)"
+          value={<span data-testid="vc-total-rejected">{queues.totalRejected}</span>}
+          unit="rejet(s)"
+          icon={ShieldAlert}
+          color="slate"
+          valueColored={false}
+          isActive={statusFocus === 'REJECTED_ONLY'}
+          onClick={() => {
+            setStatusFocus((prev) => (prev === 'REJECTED_ONLY' ? 'ACTIVE_QUEUES' : 'REJECTED_ONLY'));
+          }}
+          badgeText={`BT: ${queues.rejectedCorrective.length} · PM: ${queues.rejectedPreventive.length} · Sorties: ${queues.rejectedSortieDemands.length}`}
+          footerLabel="Cycle de vie :"
+          footerValue="Sans déstockage"
+        />
+
+        {/* KPI 4: Validés aujourd'hui */}
+        <GmaoKpiCard
+          title="4. Validés Aujourd'hui"
+          value={
+            <span data-testid="vc-approved-today">
+              {queues.hasAnyApprovedTimestamp || queues.totalApprovedToday > 0
+                ? queues.totalApprovedToday
+                : '—'}
+            </span>
+          }
+          unit="décisions"
+          icon={CheckCircle2}
+          color="emerald"
+          badgeText={`BT: ${queues.approvedTodayCorrective} · PM: ${queues.approvedTodayPreventive} · Sorties: ${queues.approvedTodaySortieDemands}`}
+          footerLabel="Traçabilité :"
+          footerValue="Journal horodaté"
+        />
+      </GmaoKpiGrid>
+
+      {/* 3. ELEVATED FILTER & QUEUE SELECTOR CARD */}
+      <div className="relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
+        {/* Header Toolbar: Icon + Title + Count Badge + Clarification Toggle + Reset */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
+              <SlidersHorizontal className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                  Filtres & Files d’Approbation Maker-Checker
+                </span>
+                <span className="bg-rose-50 text-rose-800 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border border-rose-200/70 shadow-2xs font-mono">
+                  {totalDisplayed} / {totalAllQueues}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">
+                Recherche multi-critères par N° BT, code machine, zone, intervenant ou bon terrain
               </p>
             </div>
           </div>
 
-          {/* Search, Clarification Toggle & Excel Export */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="relative min-w-[220px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher N° BT, machine, zone, tech, bon..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
             <button
               type="button"
               onClick={() => {
                 setIncludeClarifications((prev) => !prev);
                 setStatusFocus('ACTIVE_QUEUES');
               }}
-              className={`px-3 py-2 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+              className={`h-8 px-3 rounded-xl text-xs font-extrabold border transition cursor-pointer flex items-center gap-1.5 shadow-2xs active:scale-95 ${
                 includeClarifications
-                  ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-2xs'
+                  ? 'bg-amber-500 text-slate-950 border-amber-500'
                   : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
               }`}
             >
@@ -806,323 +1028,138 @@ export default function ValidationCenterView({
               <span>Inclure À clarifier ({queues.totalClarification})</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowReservedDetails((prev) => !prev)}
-              className="px-3 py-2 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-900 text-xs font-bold transition cursor-pointer inline-flex items-center gap-1.5"
-            >
-              <Layers className="w-3.5 h-3.5 text-purple-600" />
-              <span>
-                Réservé: {queues.reservedRefsCount} réf. ({queues.totalReservedUnits} u.)
-              </span>
-            </button>
-
-            {canExportQueue && (
+            {(searchQuery || sectionFilter !== 'ALL' || statusFocus !== 'ACTIVE_QUEUES' || !includeClarifications) && (
               <button
                 type="button"
-                data-testid="vc-export-excel-btn"
-                onClick={handleExportValidationQueueExcel}
-                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSectionFilter('ALL');
+                  setStatusFocus('ACTIVE_QUEUES');
+                  setIncludeClarifications(true);
+                }}
+                className="w-8 h-8 rounded-full border border-rose-200/80 bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center cursor-pointer shadow-2xs active:scale-95 animate-in fade-in shrink-0"
+                title="Réinitialiser tous les filtres"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Exporter File (.xlsx)</span>
+                <RotateCcw className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
 
-        {/* V5-1: RBAC Partial Permission Banner (e.g., Responsable Magasin) */}
-        {(!canValidateCorrective || !canValidatePreventive || !canValidateSortie) && (
-          <div
-            data-testid="vc-rbac-scope-banner"
-            className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 flex-wrap text-xs text-slate-700"
-          >
-            <div className="flex items-center gap-2 font-semibold">
-              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
-                Périmètre de décision actif pour votre profil :{' '}
-                <strong className="font-black text-slate-900">
-                  {[
-                    canValidateCorrective ? 'Bons de travail (BT)' : null,
-                    canValidatePreventive ? 'Exécutions préventives' : null,
-                    canValidateSortie ? 'Demandes de sortie terrain' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' • ') || 'Consultation uniquement'}
-                </strong>
-                . Les autres files sont affichées en lecture seule.
+        {/* 2-Column Structured Filter Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
+          {/* 1. Multi-Criteria Search Input */}
+          <div className="lg:col-span-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                Recherche Multi-Critères
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs font-mono">
+                Col. A-D
               </span>
             </div>
-          </div>
-        )}
-
-        {/* V5-1: 4 LIVE COCKPIT KPI CARDS (À valider, À clarifier, Rejetés, Validés aujourd'hui) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* KPI 1: À valider (PENDING_VALIDATION) */}
-          <button
-            type="button"
-            onClick={() => {
-              setStatusFocus((prev) => (prev === 'PENDING_ONLY' ? 'ACTIVE_QUEUES' : 'PENDING_ONLY'));
-            }}
-            className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              statusFocus === 'PENDING_ONLY'
-                ? 'bg-slate-900 text-white border-slate-900 shadow-md'
-                : 'bg-rose-50/70 hover:bg-rose-50 text-slate-900 border-rose-200'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className={`text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  statusFocus === 'PENDING_ONLY' ? 'text-rose-300' : 'text-rose-900'
-                }`}
-              >
-                À valider (En attente)
+            <div className="relative flex items-center">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs pointer-events-none z-10">
+                <Search className="w-3 h-3" />
               </span>
-              <ShieldCheck
-                className={`w-4 h-4 ${
-                  statusFocus === 'PENDING_ONLY' ? 'text-rose-400' : 'text-rose-600'
-                }`}
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="N° BT, code machine, zone, tech, bon terrain..."
+                className="w-full h-10 pl-9 pr-8 text-xs font-medium text-slate-800 placeholder-slate-400 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-rose-500 focus:bg-white focus:ring-2 focus:ring-rose-500/20 transition"
               />
-            </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-pending">
-              {queues.totalPending}
-            </div>
-            <div
-              className={`text-[11px] font-mono font-bold mt-1 flex items-center gap-1.5 flex-wrap ${
-                statusFocus === 'PENDING_ONLY' ? 'text-slate-300' : 'text-rose-900/90'
-              }`}
-            >
-              <span>
-                BT: <strong data-testid="vc-corrective-count">{queues.pendingCorrective.length}</strong>
-              </span>
-              <span>|</span>
-              <span>
-                Préventif: <strong data-testid="vc-preventive-count">{queues.pendingPreventive.length}</strong>
-              </span>
-              <span>|</span>
-              <span>
-                Sorties: <strong data-testid="vc-sortie-count">{queues.pendingSortieDemands.length}</strong>
-              </span>
-            </div>
-          </button>
-
-          {/* KPI 2: À clarifier (NEEDS_CLARIFICATION) */}
-          <button
-            type="button"
-            onClick={() => {
-              setIncludeClarifications(true);
-              setStatusFocus((prev) => (prev === 'CLARIFY_ONLY' ? 'ACTIVE_QUEUES' : 'CLARIFY_ONLY'));
-            }}
-            className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              statusFocus === 'CLARIFY_ONLY'
-                ? 'bg-amber-500 text-slate-950 border-amber-500 shadow-md'
-                : 'bg-amber-50/70 hover:bg-amber-50 text-slate-900 border-amber-200'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-amber-900">
-                À clarifier (Terrain)
-              </span>
-              <AlertTriangle className="w-4 h-4 text-amber-700" />
-            </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-clarification">
-              {queues.totalClarification}
-            </div>
-            <div className="text-[11px] font-mono font-bold text-amber-900/90 mt-1 flex items-center gap-1.5 flex-wrap">
-              <span>BT: {queues.clarificationCorrective.length}</span>
-              <span>|</span>
-              <span>Préventif: {queues.clarificationPreventive.length}</span>
-              <span>|</span>
-              <span>Sorties: {queues.clarificationSortieDemands.length}</span>
-            </div>
-          </button>
-
-          {/* KPI 3: Rejetés (Non clôturés) */}
-          <button
-            type="button"
-            onClick={() => {
-              setStatusFocus((prev) => (prev === 'REJECTED_ONLY' ? 'ACTIVE_QUEUES' : 'REJECTED_ONLY'));
-            }}
-            className={`p-4 rounded-2xl border text-left transition cursor-pointer ${
-              statusFocus === 'REJECTED_ONLY'
-                ? 'bg-rose-700 text-white border-rose-700 shadow-md'
-                : 'bg-slate-50 hover:bg-slate-100 text-slate-900 border-slate-200'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span
-                className={`text-[10px] font-mono font-extrabold uppercase tracking-wider ${
-                  statusFocus === 'REJECTED_ONLY' ? 'text-rose-100' : 'text-slate-600'
-                }`}
-              >
-                Rejetés (Actifs)
-              </span>
-              <ShieldAlert
-                className={`w-4 h-4 ${
-                  statusFocus === 'REJECTED_ONLY' ? 'text-rose-200' : 'text-rose-600'
-                }`}
-              />
-            </div>
-            <div className="text-2xl font-black font-mono mt-1" data-testid="vc-total-rejected">
-              {queues.totalRejected}
-            </div>
-            <div
-              className={`text-[11px] font-mono font-bold mt-1 flex items-center gap-1.5 flex-wrap ${
-                statusFocus === 'REJECTED_ONLY' ? 'text-rose-100' : 'text-slate-600'
-              }`}
-            >
-              <span>BT: {queues.rejectedCorrective.length}</span>
-              <span>|</span>
-              <span>Préventif: {queues.rejectedPreventive.length}</span>
-              <span>|</span>
-              <span>Sorties: {queues.rejectedSortieDemands.length}</span>
-            </div>
-          </button>
-
-          {/* KPI 4: Validés aujourd'hui */}
-          <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/60 text-left">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono font-extrabold uppercase tracking-wider text-emerald-900">
-                Validés aujourd'hui
-              </span>
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div
-              className="text-2xl font-black font-mono text-emerald-950 mt-1"
-              data-testid="vc-approved-today"
-            >
-              {queues.hasAnyApprovedTimestamp || queues.totalApprovedToday > 0
-                ? queues.totalApprovedToday
-                : '—'}
-            </div>
-            <div className="text-[11px] font-mono font-bold text-emerald-900/90 mt-1 flex items-center gap-1.5 flex-wrap">
-              <span>BT: {queues.approvedTodayCorrective}</span>
-              <span>|</span>
-              <span>Préventif: {queues.approvedTodayPreventive}</span>
-              <span>|</span>
-              <span>Sorties: {queues.approvedTodaySortieDemands}</span>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer z-10"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
-        </div>
 
-        {/* V5-2: QUEUE SECTION SELECTOR TABS (3 Queues + All) */}
-        <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                setSectionFilter('ALL');
-                setStatusFocus('ACTIVE_QUEUES');
-              }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer ${
-                sectionFilter === 'ALL'
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-              }`}
-            >
-              Toutes les files ({queues.totalPending + queues.totalClarification})
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setSectionFilter((prev) => (prev === 'CORRECTIVE' ? 'ALL' : 'CORRECTIVE'))
-              }
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
-                sectionFilter === 'CORRECTIVE'
-                  ? 'bg-amber-500 text-slate-950 shadow-2xs'
-                  : 'bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-200'
-              }`}
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              <span>
-                1. Bons de travail / Correctif ({queues.pendingCorrective.length} +{' '}
-                {queues.clarificationCorrective.length})
+          {/* 2. Queue Section Selector Tabs */}
+          <div className="lg:col-span-7">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                File d’Approbation Spécifique
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs font-mono">
+                3 Files
               </span>
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setSectionFilter((prev) => (prev === 'PREVENTIVE' ? 'ALL' : 'PREVENTIVE'))
-              }
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
-                sectionFilter === 'PREVENTIVE'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-200'
-              }`}
+            </div>
+            <div
+              className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200/80 h-10 flex-wrap sm:flex-nowrap"
+              role="group"
+              aria-label="Sélecteur de File de Validation"
             >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>
-                2. Exécutions préventives ({queues.pendingPreventive.length} +{' '}
-                {queues.clarificationPreventive.length})
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSectionFilter((prev) => (prev === 'SORTIE' ? 'ALL' : 'SORTIE'))}
-              className={`px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 ${
-                sectionFilter === 'SORTIE'
-                  ? 'bg-teal-600 text-white shadow-2xs'
-                  : 'bg-teal-50 hover:bg-teal-100 text-teal-950 border border-teal-200'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>
-                3. Demandes de sortie terrain ({queues.pendingSortieDemands.length} +{' '}
-                {queues.clarificationSortieDemands.length})
-              </span>
-            </button>
-          </div>
-          {statusFocus !== 'ACTIVE_QUEUES' && (
-            <button
-              type="button"
-              onClick={() => setStatusFocus('ACTIVE_QUEUES')}
-              className="text-xs font-bold text-rose-700 hover:underline cursor-pointer"
-            >
-              Réinitialiser le filtre de statut
-            </button>
-          )}
-        </div>
-
-        {/* Optional Expandable Virtual Stock Reservation Breakdown */}
-        {showReservedDetails && queues.reservedRefsCount > 0 && (
-          <div className="p-4 rounded-2xl bg-purple-50/80 border border-purple-200 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-black text-purple-950">
-                Détail des réservations virtuelles (lecture seule — sans impact sur Stock Actuel avant validation)
-              </span>
               <button
                 type="button"
-                onClick={() => setShowReservedDetails(false)}
-                className="text-xs font-bold text-purple-700 hover:underline cursor-pointer"
+                onClick={() => {
+                  setSectionFilter('ALL');
+                  setStatusFocus('ACTIVE_QUEUES');
+                }}
+                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer whitespace-nowrap truncate ${
+                  sectionFilter === 'ALL'
+                    ? 'bg-white text-slate-900 shadow-2xs border border-slate-200/60'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Masquer
+                Toutes ({queues.totalPending + queues.totalClarification})
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSectionFilter((prev) => (prev === 'CORRECTIVE' ? 'ALL' : 'CORRECTIVE'))
+                }
+                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap truncate ${
+                  sectionFilter === 'CORRECTIVE'
+                    ? 'bg-amber-500 text-slate-950 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5 shrink-0" />
+                <span>BT ({queues.pendingCorrective.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setSectionFilter((prev) => (prev === 'PREVENTIVE' ? 'ALL' : 'PREVENTIVE'))
+                }
+                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap truncate ${
+                  sectionFilter === 'PREVENTIVE'
+                    ? 'bg-indigo-600 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 shrink-0" />
+                <span>PM ({queues.pendingPreventive.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSectionFilter((prev) => (prev === 'SORTIE' ? 'ALL' : 'SORTIE'))}
+                className={`flex-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer inline-flex items-center justify-center gap-1.5 whitespace-nowrap truncate ${
+                  sectionFilter === 'SORTIE'
+                    ? 'bg-teal-600 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Package className="w-3.5 h-3.5 shrink-0" />
+                <span>Sorties ({queues.pendingSortieDemands.length})</span>
               </button>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(queues.reservedStockMap.values()).map((entry) => (
-                <div
-                  key={entry.ref}
-                  className="px-3 py-1.5 rounded-xl bg-white border border-purple-200 text-xs font-mono flex items-center gap-2 shadow-2xs"
-                >
-                  <span className="font-black text-slate-900">{entry.ref}</span>
-                  <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-900 font-bold text-[10px]">
-                    Réservé: {entry.reservedQty}
-                  </span>
-                  <span className="text-[10px] text-slate-500">
-                    ({entry.sources.map((s) => s.code).join(', ')})
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* V5-3: GLOBAL EMPTY STATE */}
       {totalDisplayed === 0 && (
         <div
           data-testid="validation-center-empty"
-          className="bg-white rounded-3xl p-10 border border-slate-200/90 text-center space-y-3 shadow-2xs"
+          className="bg-white rounded-2xl p-10 border border-slate-200/90 text-center space-y-3 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.08)]"
         >
           <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
@@ -1168,8 +1205,10 @@ export default function ValidationCenterView({
       {(sectionFilter === 'ALL' || sectionFilter === 'CORRECTIVE') && (
         <section
           data-testid="vc-section-corrective"
-          className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
+          className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.08)]"
         >
+          <div className="h-1.5 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600" />
+          <div className="p-5 space-y-4">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center">
@@ -1178,7 +1217,7 @@ export default function ValidationCenterView({
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>1. Bons de travail / Correctif</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-amber-100 text-amber-900">
+                  <span className="px-2 py-0.5 rounded-md text-xs font-mono bg-amber-100 text-amber-900 border border-amber-200">
                     {visibleCorrective.length}
                   </span>
                   {!canValidateCorrective && (
@@ -1197,7 +1236,7 @@ export default function ValidationCenterView({
             <button
               type="button"
               onClick={() => onNavigateToTab?.('corrective')}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <span>Ouvrir Correctif BT</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -1375,6 +1414,7 @@ export default function ValidationCenterView({
               })}
             </div>
           )}
+          </div>
         </section>
       )}
 
@@ -1384,8 +1424,10 @@ export default function ValidationCenterView({
       {(sectionFilter === 'ALL' || sectionFilter === 'PREVENTIVE') && (
         <section
           data-testid="vc-section-preventive"
-          className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
+          className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.08)]"
         >
+          <div className="h-1.5 w-full bg-gradient-to-r from-indigo-500 via-blue-500 to-indigo-600" />
+          <div className="p-5 space-y-4">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center">
@@ -1394,7 +1436,7 @@ export default function ValidationCenterView({
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>2. Exécutions préventives</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-indigo-100 text-indigo-900">
+                  <span className="px-2 py-0.5 rounded-md text-xs font-mono bg-indigo-100 text-indigo-900 border border-indigo-200">
                     {visiblePreventive.length}
                   </span>
                   {!canValidatePreventive && (
@@ -1413,7 +1455,7 @@ export default function ValidationCenterView({
             <button
               type="button"
               onClick={() => onNavigateToTab?.('preventive')}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <span>Ouvrir Préventif</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -1577,6 +1619,7 @@ export default function ValidationCenterView({
               })}
             </div>
           )}
+          </div>
         </section>
       )}
 
@@ -1586,8 +1629,10 @@ export default function ValidationCenterView({
       {(sectionFilter === 'ALL' || sectionFilter === 'SORTIE') && (
         <section
           data-testid="vc-section-sortie"
-          className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs space-y-4"
+          className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-[0_10px_28px_-6px_rgba(0,0,0,0.08)]"
         >
+          <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 via-emerald-500 to-teal-600" />
+          <div className="p-5 space-y-4">
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3 flex-wrap">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 text-teal-600 flex items-center justify-center">
@@ -1596,7 +1641,7 @@ export default function ValidationCenterView({
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2 flex-wrap">
                   <span>3. Demandes de sortie terrain</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-teal-100 text-teal-900">
+                  <span className="px-2 py-0.5 rounded-md text-xs font-mono bg-teal-100 text-teal-900 border border-teal-200">
                     {visibleSortieDemands.length}
                   </span>
                   {!canValidateSortie && (
@@ -1615,7 +1660,7 @@ export default function ValidationCenterView({
             <button
               type="button"
               onClick={() => onNavigateToTab?.('sortie')}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <span>Ouvrir Sortie & Entrée</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -1757,6 +1802,7 @@ export default function ValidationCenterView({
               })}
             </div>
           )}
+          </div>
         </section>
       )}
 
@@ -2320,6 +2366,51 @@ export default function ValidationCenterView({
           </div>
         </div>
       )}
-    </div>
+
+      {/* Formulas Modal */}
+      {showFormulasModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-5 space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-700 shrink-0">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">
+                    Formules & Règles — Centre de Validation (Maker-Checker)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Gouvernance des clôtures, rapprochement des bons et réservations de stock PDR
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFormulasModal(false)}
+                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[65vh] overflow-y-auto pr-1">
+              {validationFormulas.map((f) => (
+                <div
+                  key={f.title}
+                  className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/90 space-y-1.5"
+                >
+                  <div className="text-xs font-black text-slate-800">{f.title}</div>
+                  <div className="font-mono text-xs text-rose-900 font-bold bg-white p-2 rounded-lg border border-rose-100">
+                    {f.formula}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">{f.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </AnimatedPage>
   );
 }

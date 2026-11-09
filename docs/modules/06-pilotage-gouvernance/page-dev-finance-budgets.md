@@ -86,3 +86,32 @@ $$\text{Ratio BER} = \frac{\sum_{\text{Année N}} \text{Coûts de Maintenance Ma
 1. **Agrégation par Mois (`YYYY-MM`) :** Les mouvements et bons de travail sont regroupés selon leur date d'exécution réelle, indépendamment de la date de création de la fiche.
 2. **Invariant Usine Vide :** Si aucun mouvement ou bon de travail n'est présent (`mouvements.length === 0`), `FinancialCalculationService.synthesize()` renvoie des totaux rigoureusement à zéro sans générer d'erreurs d'incohérence budgétaire (`0.00 DA dépensés / 0% consommé`).
 3. **Immuabilité des Périodes Antérieures :** Les données des mois clôturés ne peuvent pas être rétroactivement altérées par un changement de prix unitaire futur.
+
+---
+
+## 5. Architecture UI/UX Conforme au Design System v4.1.0
+
+Conformément à la constitution `DESIGN_SYSTEM_UI_UX.md` (§3.1, §4.2, §7.2) :
+
+### 5.1 Carte d'En-Tête Épurée (Single-Row Header Card)
+- **Conteneur :** Carte flottante épurée sur une seule ligne (`bg-white border border-slate-200/90 rounded-2xl p-5 md:p-6 shadow-[0_12px_32px_-6px...]`).
+- **Composants d'En-Tête :**
+  - `PageHeaderIcon` avec icône `Landmark` aux reflets dorés/ambre (`bg-gradient-to-br from-amber-500 to-amber-700 shadow-amber-500/25`).
+  - Titre hiérarchique avec badges compacts : code devise (`ISO 4217 / MAD/EUR/USD`) et mode d'exercice (`Exercice YYYY · Mode Annuel`).
+  - **Boutons d'action circulaires 3D (`variant="circle"`) :**
+    - `FormulasModalButton` (`variant="circle" color="emerald" icon={FxFormulaIcon}`) : déclenche la modale des formules financières.
+    - Bouton `Sliders` (`variant="circle" color="indigo"`) : ouvre le tiroir d'ajustement budgétaire annuel.
+    - Bouton `FileSpreadsheet` (`variant="circle" color="emerald"`) : exporte l'audit financier vers Excel.
+
+### 5.2 Carte Dédiée des Paramètres et Périodes (Dedicated Elevated Filter & Period Card)
+- Tous les sélecteurs de période (Exercice Fiscal `yearSelect`) et de devises rapides (`MAD`, `EUR`, `USD`) sont extraits de l'en-tête et logés dans une carte surélevée dédiée (`relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px...]`) située entre la grille KPI 5-cartes et les onglets de navigation.
+- Affiche le badge dynamique du rythme de consommation budgétaire (*Burn Rate*) et le bouton de réinitialisation circulaire 3D (`RotateCcw`).
+
+### 5.3 Modale des Formules Financières (`showFormulasModal`)
+- Référence mathématique intégrée en 5 cartes détaillées :
+  1. **TCO Machine** : Coût Total de Possession ($C_{\text{acquisition}} + \sum C_{\text{curatif}} + \sum C_{\text{préventif}}$).
+  2. **Ratio BER** : Seuil d'obsolescence et de rentabilité ($\frac{\text{Coûts Réparation}}{\text{Valeur Remplacement}} \times 100\%$).
+  3. **Valorisation PMP / PUMP** : Valorisation pondérée des stocks consommés.
+  4. **Budget Burn Rate** : Rythme de consommation et détection de surconsommation.
+  5. **Maker-Checker Governance** : Étanchéité entre déclarations terrain non validées et coûts budgétaires audités.
+
