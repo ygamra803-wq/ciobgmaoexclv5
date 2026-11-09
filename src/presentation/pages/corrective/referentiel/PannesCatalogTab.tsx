@@ -31,19 +31,19 @@ export default function PannesCatalogTab({
   onUpdatePanne,
   onDeletePanne,
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   // View mode state: 'excel' (Tableau) | 'grid' (Cartes)
   const [displayMode, setDisplayMode] = useState('excel');
 
   // Pagination state: Default 20 rows standard
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<any>(20);
   const [currentPage, setCurrentPage] = useState(1);
 
   // CRUD Modals State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingPanne, setEditingPanne] = useState(null);
-  const [panneToDelete, setPanneToDelete] = useState(null);
+  const [editingPanne, setEditingPanne] = useState<any>(null);
+  const [panneToDelete, setPanneToDelete] = useState<any>(null);
 
   // Form fields
   const [formCategory, setFormCategory] = useState('E');

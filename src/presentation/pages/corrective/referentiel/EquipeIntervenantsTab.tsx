@@ -29,19 +29,19 @@ export default function EquipeIntervenantsTab({
   onDeleteTechnician,
   zones = [],
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   // View mode state: 'excel' (Tableau) | 'grid' (Cartes)
   const [displayMode, setDisplayMode] = useState('excel');
 
   // Pagination state: Default 20 rows standard
-  const [pageSize, setPageSize] = useState(20); // 20, 50, 100, 200, 'ALL'
+  const [pageSize, setPageSize] = useState<any>(20); // 20, 50, 100, 200, 'ALL'
   const [currentPage, setCurrentPage] = useState(1);
 
   // CRUD Modals State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingTech, setEditingTech] = useState(null);
-  const [techToDelete, setTechToDelete] = useState(null);
+  const [editingTech, setEditingTech] = useState<any>(null);
+  const [techToDelete, setTechToDelete] = useState<any>(null);
 
   // Form State
   const [formId, setFormId] = useState('');

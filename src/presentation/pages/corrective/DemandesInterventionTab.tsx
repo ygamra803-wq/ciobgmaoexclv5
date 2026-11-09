@@ -62,7 +62,7 @@ export default function DemandesInterventionTab({
   onResetAutoOpen,
   presetData = null,
   onClearPreset,
-}) {
+}: any) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
@@ -74,7 +74,7 @@ export default function DemandesInterventionTab({
   );
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showConvertModal, setShowConvertModal] = useState(null); // holds selected DI
+  const [showConvertModal, setShowConvertModal] = useState<any>(null); // holds selected DI
   const [showTravauxSelector, setShowTravauxSelector] = useState(false);
   const [travauxSearchTerm, setTravauxSearchTerm] = useState('');
 
@@ -153,7 +153,8 @@ export default function DemandesInterventionTab({
   // Combined machine list from registered state (SSOT)
   const allMachineOptions = useMemo(() => {
     const active = filterActiveMachines(machines);
-    return active.map((m) => ({
+    return active.map((m: any) => ({
+      id: m.id || m.id_machine_registered || m.code,
       id_machine_registered: m.id_machine_registered || m.code || m.id,
       code: m.code || m.id_machine_registered || m.id,
       id_blueprint: m.id_blueprint || '',

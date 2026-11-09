@@ -897,7 +897,7 @@ export default function PartDesignationView({
                     type="number"
                     min="0"
                     value={form.seuil}
-                    onChange={(e) => setForm({ ...form, seuil: e.target.value })}
+                    onChange={(e) => setForm({ ...form, seuil: Number(e.target.value) || 0 })}
                     className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500"
                   />
                 </div>

@@ -267,7 +267,7 @@ export default function DesignationView({
     const refDisplay = item.ref || item.id_designation || item.id_diag || (stockMatch ? stockMatch.ref : 'N/A');
     const desigDisplay = item.designation || item.libelle || item.nom || (stockMatch ? stockMatch.designation : 'Sans désignation');
 
-    return { stockMatch, currentStock, alertStatus, location, typeName, refDisplay, desigDisplay };
+    return { stockMatch, currentStock, threshold, alertStatus, location, typeName, refDisplay, desigDisplay };
   };
 
   const handleTableSort = (field) => {

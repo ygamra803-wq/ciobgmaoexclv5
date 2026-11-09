@@ -27,19 +27,19 @@ export default function TravauxStandardTab({
   onUpdateTravail,
   onDeleteTravail,
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   // View mode state: 'excel' (Tableau) | 'grid' (Cartes)
   const [displayMode, setDisplayMode] = useState('excel');
 
   // Pagination state: Default 20 rows standard
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<any>(20);
   const [currentPage, setCurrentPage] = useState(1);
 
   // CRUD Modals State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingTravail, setEditingTravail] = useState(null);
-  const [travailToDelete, setTravailToDelete] = useState(null);
+  const [editingTravail, setEditingTravail] = useState<any>(null);
+  const [travailToDelete, setTravailToDelete] = useState<any>(null);
 
   // Form field
   const [travailInputText, setTravailInputText] = useState('');

@@ -61,7 +61,7 @@ export default function BonsTravailTab({
   actionsByPanne: _actionsByPanne = {},
   travauxAFaire: _travauxAFaire = [],
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
@@ -303,10 +303,10 @@ export default function BonsTravailTab({
 
   // All machines present in BTs + registered machines from SSOT (excluding archived for creation/selection)
   const availableMachines = useMemo(() => {
-    const set = new Set();
+    const set = new Set<string>();
     if (Array.isArray(machines)) {
       machines
-        .filter((m) => {
+        .filter((m: any) => {
           const statusNorm = String(m?.status || m?.statut || '').trim().toUpperCase();
           return (
             statusNorm !== 'ARCHIVEE' &&
@@ -316,22 +316,22 @@ export default function BonsTravailTab({
             m?.actif !== false
           );
         })
-        .forEach((m) => {
+        .forEach((m: any) => {
           const id = m.id_machine_registered || m.id || m.code;
-          if (id) set.add(id);
+          if (id) set.add(String(id));
         });
     }
-    bts.forEach((b) => {
-      if (b.code_machine) set.add(b.code_machine);
+    bts.forEach((b: any) => {
+      if (b.code_machine) set.add(String(b.code_machine));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [bts, machines]);
 
   // All types of panne present in BTs
   const availableTypesPanne = useMemo(() => {
-    const set = new Set();
-    bts.forEach((b) => {
-      if (b.type_panne) set.add(b.type_panne);
+    const set = new Set<string>();
+    bts.forEach((b: any) => {
+      if (b.type_panne) set.add(String(b.type_panne));
     });
     return Array.from(set).sort();
   }, [bts]);

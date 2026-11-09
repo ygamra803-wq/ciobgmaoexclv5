@@ -732,7 +732,7 @@ export default function ZonesView({
               </td>
               
               {/* Cells */}
-              {zoneColumns.map((col) => (
+              {zoneColumns.map((col: any) => (
                 <td
                   key={col.key}
                   className={`py-3 px-3.5 ${

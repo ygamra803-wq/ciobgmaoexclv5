@@ -46,7 +46,7 @@ export default function ClotureRapportsTab({
   technicians = [],
   onUpdateIntervention: _onUpdateIntervention,
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
@@ -142,31 +142,31 @@ export default function ClotureRapportsTab({
 
   // Machine options
   const machines = useMemo(() => {
-    const set = new Set();
-    (registeredMachines || []).forEach((m) => {
+    const set = new Set<string>();
+    (registeredMachines || []).forEach((m: any) => {
       const id = m.id_machine_registered || m.id || m.code;
-      if (id) set.add(id);
+      if (id) set.add(String(id));
     });
-    interventions.forEach((item) => {
-      if (item.code_machine) set.add(item.code_machine);
+    interventions.forEach((item: any) => {
+      if (item.code_machine) set.add(String(item.code_machine));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [interventions, registeredMachines]);
 
   // Tech options
   const techs = useMemo(() => {
-    const set = new Set();
-    interventions.forEach((item) => {
-      if (item.intervenant) set.add(item.intervenant);
+    const set = new Set<string>();
+    interventions.forEach((item: any) => {
+      if (item.intervenant) set.add(String(item.intervenant));
     });
     return Array.from(set).sort();
   }, [interventions]);
 
   // Types Panne
   const typesPanne = useMemo(() => {
-    const set = new Set();
-    interventions.forEach((item) => {
-      if (item.type_panne) set.add(item.type_panne);
+    const set = new Set<string>();
+    interventions.forEach((item: any) => {
+      if (item.type_panne) set.add(String(item.type_panne));
     });
     return Array.from(set).sort();
   }, [interventions]);

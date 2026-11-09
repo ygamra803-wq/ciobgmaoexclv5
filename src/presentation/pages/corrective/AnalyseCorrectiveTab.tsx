@@ -63,22 +63,22 @@ export default function AnalyseCorrectiveTab({
 
   // Zone list from machines and interventions
   const zoneOptions = useMemo(() => {
-    const set = new Set();
-    (registeredMachines || []).forEach((m) => {
+    const set = new Set<string>();
+    (registeredMachines || []).forEach((m: any) => {
       const z = m.id_zone_default || m.id_zone;
-      if (z) set.add(z);
+      if (z) set.add(String(z));
     });
-    (interventions || []).forEach((i) => {
-      if (i.zone) set.add(i.zone);
+    (interventions || []).forEach((i: any) => {
+      if (i.zone) set.add(String(i.zone));
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [registeredMachines, interventions]);
 
   // Type Panne list
   const typePanneOptions = useMemo(() => {
-    const set = new Set();
-    (interventions || []).forEach((i) => {
-      if (i.type_panne) set.add(i.type_panne);
+    const set = new Set<string>();
+    (interventions || []).forEach((i: any) => {
+      if (i.type_panne) set.add(String(i.type_panne));
     });
     return Array.from(set).sort();
   }, [interventions]);
@@ -86,7 +86,7 @@ export default function AnalyseCorrectiveTab({
   // Scoped active machines for accurate OEE / MTBF scheduled hours
   const scopedActiveMachines = useMemo(() => {
     const active = filterActiveMachines(registeredMachines || []);
-    return active.filter((m) => {
+    return active.filter((m: any) => {
       if (selectedAssetClass !== 'ALL' && getMachineAssetClass(m) !== selectedAssetClass) {
         return false;
       }
@@ -102,13 +102,13 @@ export default function AnalyseCorrectiveTab({
     if (selectedAssetClass === 'SYSTEM_GENERAL') {
       return scopedActiveMachines;
     }
-    const prodOnly = scopedActiveMachines.filter((m) => getMachineAssetClass(m) === 'PRODUCTION');
+    const prodOnly = scopedActiveMachines.filter((m: any) => getMachineAssetClass(m) === 'PRODUCTION');
     return prodOnly.length > 0 ? prodOnly : scopedActiveMachines;
   }, [scopedActiveMachines, selectedAssetClass]);
 
   // Filtered interventions for deep analytics
   const filteredInterventions = useMemo(() => {
-    return interventions.filter((item) => {
+    return interventions.filter((item: any) => {
       const m = machineMap.get(String(item.code_machine || item.id_machine || '').trim().toUpperCase());
       if (selectedAssetClass !== 'ALL') {
         const itemAssetClass = item.asset_class
@@ -131,8 +131,8 @@ export default function AnalyseCorrectiveTab({
   const dynamicParetoAnomalies = useMemo(() => {
     if (filteredInterventions.length === 0) return [];
 
-    const counts = {};
-    filteredInterventions.forEach((item) => {
+    const counts: Record<string, number> = {};
+    filteredInterventions.forEach((item: any) => {
       const anom = item.anomalie || 'Non spécifié';
       counts[anom] = (counts[anom] || 0) + 1;
     });
@@ -161,8 +161,8 @@ export default function AnalyseCorrectiveTab({
   const dynamicParetoMachines = useMemo(() => {
     if (filteredInterventions.length === 0) return [];
 
-    const counts = {};
-    filteredInterventions.forEach((item) => {
+    const counts: Record<string, number> = {};
+    filteredInterventions.forEach((item: any) => {
       const m = item.code_machine || 'Non spécifié';
       counts[m] = (counts[m] || 0) + 1;
     });
@@ -189,8 +189,8 @@ export default function AnalyseCorrectiveTab({
 
   // Breakdown by Type Panne (E, H, P, M, etc.)
   const typePanneBreakdown = useMemo(() => {
-    const counts = {};
-    filteredInterventions.forEach((item) => {
+    const counts: Record<string, number> = {};
+    filteredInterventions.forEach((item: any) => {
       const t = item.type_panne || 'M';
       counts[t] = (counts[t] || 0) + 1;
     });
@@ -207,8 +207,8 @@ export default function AnalyseCorrectiveTab({
 
   // Breakdown by Technician
   const techBreakdown = useMemo(() => {
-    const counts = {};
-    filteredInterventions.forEach((item) => {
+    const counts: Record<string, number> = {};
+    filteredInterventions.forEach((item: any) => {
       const t = item.intervenant || 'Non assigné';
       counts[t] = (counts[t] || 0) + 1;
     });

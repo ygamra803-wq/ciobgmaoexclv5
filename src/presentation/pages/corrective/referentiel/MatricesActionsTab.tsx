@@ -21,20 +21,20 @@ export default function MatricesActionsTab({
   totalActionsKeysCount = 0,
   copiedIndex = null,
   handleCopyText = () => {},
-  formatPanneName = (s) => s,
+  formatPanneName = (s: any) => s,
   onAddDemandeWithPreset = () => {},
   onAddActionForPanne,
   onUpdateActionForPanne,
   onDeleteActionForPanne,
   panneCategories = {},
   showToast,
-}) {
+}: any) {
   const { t } = useI18n();
   // View mode state: 'excel' (Tableau) | 'grid' (Cartes)
   const [displayMode, setDisplayMode] = useState('excel');
 
   // Pagination state: Default 20 rows standard
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<any>(20);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Modals state
@@ -42,18 +42,18 @@ export default function MatricesActionsTab({
   const [targetPanneForAdd, setTargetPanneForAdd] = useState('');
   const [newActionText, setNewActionText] = useState('');
 
-  const [editingActionItem, setEditingActionItem] = useState(null); // { panneKey, actionIndex, actionText }
-  const [actionToDelete, setActionToDelete] = useState(null); // { panneKey, actionIndex, actionText }
+  const [editingActionItem, setEditingActionItem] = useState<any>(null); // { panneKey, actionIndex, actionText }
+  const [actionToDelete, setActionToDelete] = useState<any>(null); // { panneKey, actionIndex, actionText }
 
   // Extract all available pannes from panneCategories for selection
   const allAvailablePannes = useMemo(() => {
-    const list = new Set();
-    Object.values(panneCategories || {}).forEach((pannes) => {
+    const list = new Set<string>();
+    Object.values(panneCategories || {}).forEach((pannes: any) => {
       if (Array.isArray(pannes)) {
-        pannes.forEach((p) => list.add(p));
+        pannes.forEach((p: any) => list.add(String(p)));
       }
     });
-    filteredActionsMatrix.forEach(([key]) => list.add(key));
+    filteredActionsMatrix.forEach(([key]: any) => list.add(String(key)));
     return Array.from(list).sort();
   }, [panneCategories, filteredActionsMatrix]);
 

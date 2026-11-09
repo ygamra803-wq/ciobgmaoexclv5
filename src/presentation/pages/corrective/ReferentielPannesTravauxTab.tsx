@@ -259,9 +259,9 @@ export default function ReferentielPannesTravauxTab({
       XLSX.utils.book_append_sheet(wb, wsTravaux, 'Travaux_A_Faire_114');
 
       // Sheet 3: Actions Matrix
-      const actionsData = [];
-      Object.entries(actionsByPanne || {}).forEach(([p, acts]) => {
-        (acts || []).forEach((a, i) => {
+      const actionsData: any[] = [];
+      Object.entries(actionsByPanne || {}).forEach(([p, acts]: [string, any]) => {
+        (Array.isArray(acts) ? acts : []).forEach((a: any, i: number) => {
           actionsData.push({
             Anomalie_Panne: p,
             N_Action: i + 1,
