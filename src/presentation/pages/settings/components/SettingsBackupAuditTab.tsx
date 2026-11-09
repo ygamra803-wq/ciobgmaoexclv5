@@ -82,8 +82,8 @@ export default function SettingsBackupAuditTab({
     const fromLegacy = Array.isArray(auditLogs)
       ? auditLogs
           .filter((l: any) => l && !fromStore.some((s) => s.id === l.id))
-          .map((l: any) => ({
-            id: l.id || `LEG-${Math.random()}`,
+          .map((l: any, idx: number) => ({
+            id: l.id || `LEG-${l.ts || l.timestamp || idx}-${idx}`,
             ts: l.ts || l.timestamp || new Date().toISOString(),
             actorId: l.actorId || l.userId || 'SYSTEM',
             actorName: l.actorName || l.userId || 'Système',
@@ -247,8 +247,8 @@ export default function SettingsBackupAuditTab({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {accessLogs.map((log: any) => (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                  {accessLogs.map((log: any, idx: number) => (
+                    <tr key={`${log.id || log.loginTime || 'access'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${
@@ -380,8 +380,8 @@ export default function SettingsBackupAuditTab({
                       </td>
                     </tr>
                   ) : (
-                    combinedAuditEvents.slice(0, 100).map((log: any) => (
-                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                    combinedAuditEvents.slice(0, 100).map((log: any, idx: number) => (
+                      <tr key={`${log.id || log.ts || 'audit'}-${idx}`} className="hover:bg-slate-50/80 transition-colors">
                         <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
                           {new Date(log.ts).toLocaleString('fr-FR')}
                         </td>
@@ -460,30 +460,36 @@ export default function SettingsBackupAuditTab({
                     </td>
                   </tr>
                 ) : (
-                  backupsList.map((b: any) => (
-                    <tr key={b.id} className="hover:bg-white transition-colors">
-                      <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[11px]">
-                        {new Date(b.timestamp).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5 truncate max-w-[100px]">{b.userId}</td>
-                      <td className="px-4 py-2.5 text-right flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleExportBackup(b.id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                          title="Exporter en JSON"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleRestoreBackup(b.id)}
-                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                          title="Restaurer cette version"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  backupsList.map((b: any, idx: number) => {
+                    const backupId = typeof b === 'string' ? b : b?.id || `backup-${idx}`;
+                    const rawTs = typeof b === 'object' ? b?.timestamp : null;
+                    const displayDate = rawTs ? new Date(rawTs).toLocaleString('fr-FR') : backupId;
+                    const displayUser = typeof b === 'object' ? b?.userId || b?.reason || 'Système' : 'Système';
+                    return (
+                      <tr key={`${backupId}-${idx}`} className="hover:bg-white transition-colors">
+                        <td className="px-4 py-2.5 whitespace-nowrap font-mono text-[11px]">
+                          {displayDate}
+                        </td>
+                        <td className="px-4 py-2.5 truncate max-w-[180px]">{displayUser}</td>
+                        <td className="px-4 py-2.5 text-right flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleExportBackup(backupId)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="Exporter en JSON"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleRestoreBackup(backupId)}
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                            title="Restaurer cette version"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

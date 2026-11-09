@@ -134,9 +134,51 @@ export class BackupService {
     return backups;
   }
 
-  // Alias for backwards compatibility
+  // Structured list for SettingsBackupAuditTab
   static getBackupsList() {
-    return this.getBackupList();
+    const structured: Array<{ id: string; timestamp: string | number; userId: string; reason?: string }> = [];
+    const seenIds = new Set<string>();
+
+    const snapshots = AutoBackupService.listSnapshots();
+    snapshots.forEach((snap: any) => {
+      if (snap && snap.id && !seenIds.has(snap.id)) {
+        seenIds.add(snap.id);
+        structured.push({
+          id: snap.id,
+          timestamp: snap.timestamp || new Date().toISOString(),
+          userId: snap.userId || snap.reason || 'Système AutoBackup',
+          reason: snap.reason,
+        });
+      }
+    });
+
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('backup_') && !seenIds.has(key)) {
+          seenIds.add(key);
+          let ts: string | number = new Date().toISOString();
+          try {
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed?.timestamp) ts = parsed.timestamp;
+            }
+          } catch {
+            // ignore parse error
+          }
+          structured.push({
+            id: key,
+            timestamp: ts,
+            userId: 'Sauvegarde Locale',
+          });
+        }
+      }
+    } catch {
+      // ignore storage access error
+    }
+
+    return structured;
   }
 
   static startAutoBackup(_getDataFn, _user) {
