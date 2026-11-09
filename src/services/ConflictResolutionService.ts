@@ -15,7 +15,7 @@ export class ConflictResolutionService {
   /**
    * Resolve conflict using Last Write Wins Strategy based on timestamp
    */
-  static resolveLastWriteWins(local = {}, remote = {}) {
+  static resolveLastWriteWins(local: any = {}, remote: any = {}) {
     const localTime = new Date(local.updated_at || local.timestamp || local.date || 0).getTime();
     const remoteTime = new Date(remote.updated_at || remote.timestamp || remote.date || 0).getTime();
 
@@ -31,7 +31,7 @@ export class ConflictResolutionService {
   /**
    * Resolve conflict using Local Version Wins
    */
-  static resolveLocalWins(local = {}) {
+  static resolveLocalWins(local: any = {}, _remote: any = {}) {
     Logger.debug('✅ Local version wins:', local?.id || local?.ref || '');
     return local;
   }
@@ -39,7 +39,7 @@ export class ConflictResolutionService {
   /**
    * Resolve conflict using Server / Remote Version Wins
    */
-  static resolveServerWins(_local = {}, remote = {}) {
+  static resolveServerWins(_local: any = {}, remote: any = {}) {
     Logger.debug('✅ Server/Remote version wins');
     return remote;
   }
@@ -47,14 +47,14 @@ export class ConflictResolutionService {
   /**
    * Resolve conflict using Property Field Merge Strategy
    */
-  static resolveMerge(local = {}, remote = {}) {
+  static resolveMerge(local: any = {}, remote: any = {}) {
     Logger.debug('🔄 Merging versions...');
 
-    const merged = {
+    const merged: any = {
       ...local,
       ...remote,
       merged_at: new Date().toISOString(),
-      conflicts: []
+      conflicts: [] as any[]
     };
 
     const keys = new Set([...Object.keys(local || {}), ...Object.keys(remote || {})]);
@@ -76,7 +76,7 @@ export class ConflictResolutionService {
   /**
    * Main conflict resolution dispatcher
    */
-  static resolveConflict(local, remote, strategy = 'LAST_WRITE_WINS') {
+  static resolveConflict(local: any, remote: any, strategy = 'LAST_WRITE_WINS') {
     if (!local) return remote;
     if (!remote) return local;
 
@@ -97,9 +97,9 @@ export class ConflictResolutionService {
   /**
    * Resolve multiple items array conflict by primary key (id, ref, code)
    */
-  static resolveMultipleConflicts(localData = [], remoteData = [], strategy = 'LAST_WRITE_WINS') {
-    const resolved = [];
-    const getKey = (item) => String(item.id || item.ref || item.code || item.code_bon || '').trim();
+  static resolveMultipleConflicts(localData: any[] = [], remoteData: any[] = [], strategy = 'LAST_WRITE_WINS') {
+    const resolved: any[] = [];
+    const getKey = (item: any) => String(item.id || item.ref || item.code || item.code_bon || '').trim();
 
     for (const local of localData) {
       const localKey = getKey(local);

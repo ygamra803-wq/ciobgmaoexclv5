@@ -30,6 +30,20 @@ export class TaskApplicationService {
     }
     return data;
   }
+
+  async updateTask(id: any, data: any): Promise<any> {
+    if (this.domainService?.updateTask) {
+      return this.domainService.updateTask(id, data);
+    }
+    return data;
+  }
+
+  async deleteTask(id: any): Promise<boolean> {
+    if (this.domainService?.deleteTask) {
+      return this.domainService.deleteTask(id);
+    }
+    return true;
+  }
 }
 
 export default TaskApplicationService;

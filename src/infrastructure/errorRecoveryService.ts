@@ -2,6 +2,10 @@
  * خدمة استرجاع الأخطاء الشاملة - GMAO Nexus Error Recovery Service
  */
 class ErrorRecoveryService {
+  recoveryStrategies: Map<string, (error: any, context: any) => Promise<boolean>>;
+  errorLog: any[];
+  maxErrors: number;
+
   constructor() {
     this.recoveryStrategies = new Map();
     this.errorLog = [];
@@ -14,7 +18,7 @@ class ErrorRecoveryService {
    */
   setupDefaultStrategies() {
     // استراتيجية IndexedDB
-    this.registerStrategy('IndexedDBError', async (error, context) => {
+    this.registerStrategy('IndexedDBError', async (error: any, context: any) => {
       console.warn('🔄 محاولة استرجاع IndexedDB...', error?.message);
       
       try {
@@ -37,7 +41,7 @@ class ErrorRecoveryService {
     });
 
     // استراتيجية Network
-    this.registerStrategy('NetworkError', async (error, context) => {
+    this.registerStrategy('NetworkError', async (error: any, context: any) => {
       console.warn('🔄 محاولة استرجاع الاتصال...', error?.message);
       
       // انتظر قبل المحاولة التالية
@@ -54,7 +58,7 @@ class ErrorRecoveryService {
     });
 
     // استراتيجية Memory
-    this.registerStrategy('MemoryError', async (error, context) => {
+    this.registerStrategy('MemoryError', async (error: any, context: any) => {
       console.warn('🔄 محاولة تحرير الذاكرة...', error?.message);
       
       // مسح الـ Cache
@@ -63,8 +67,8 @@ class ErrorRecoveryService {
       }
       
       // إجبار Garbage Collection (إن أمكن)
-      if (typeof window !== 'undefined' && window.gc) {
-        window.gc();
+      if (typeof window !== 'undefined' && (window as any).gc) {
+        (window as any).gc();
       }
       
       console.log('✅ تم تحرير الذاكرة');
@@ -72,7 +76,7 @@ class ErrorRecoveryService {
     });
 
     // استراتيجية Quota
-    this.registerStrategy('QuotaExceededError', async (error, context) => {
+    this.registerStrategy('QuotaExceededError', async (error: any, context: any) => {
       console.warn('🔄 محاولة تحرير المساحة...', error?.message);
       
       // حذف البيانات القديمة
@@ -88,14 +92,14 @@ class ErrorRecoveryService {
   /**
    * تسجيل استراتيجية مخصصة
    */
-  registerStrategy(errorType, strategy) {
+  registerStrategy(errorType: string, strategy: (error: any, context: any) => Promise<boolean>) {
     this.recoveryStrategies.set(errorType, strategy);
   }
 
   /**
    * محاولة الاسترجاع
    */
-  async recover(error, context = {}) {
+  async recover(error: any, context: any = {}) {
     // تسجيل الخطأ
     this.logError(error, context);
 
@@ -128,7 +132,7 @@ class ErrorRecoveryService {
   /**
    * تحديد نوع الخطأ
    */
-  getErrorType(error) {
+  getErrorType(error: any) {
     if (!error) return 'UnknownError';
 
     if (error.name === 'QuotaExceededError') {
@@ -154,7 +158,7 @@ class ErrorRecoveryService {
   /**
    * تسجيل الخطأ
    */
-  logError(error, context = {}) {
+  logError(error: any, context: any = {}) {
     const entry = {
       timestamp: new Date().toISOString(),
       type: this.getErrorType(error),
@@ -175,16 +179,16 @@ class ErrorRecoveryService {
   /**
    * الحصول على سجل الأخطاء
    */
-  getErrorLog(filters = {}) {
+  getErrorLog(filters: any = {}) {
     let results = this.errorLog;
 
     if (filters.type) {
-      results = results.filter(e => e.type === filters.type);
+      results = results.filter((e: any) => e.type === filters.type);
     }
 
     if (filters.startDate) {
       results = results.filter(
-        e => new Date(e.timestamp) >= new Date(filters.startDate)
+        (e: any) => new Date(e.timestamp) >= new Date(filters.startDate)
       );
     }
 
@@ -194,7 +198,7 @@ class ErrorRecoveryService {
   /**
    * انتظر
    */
-  sleep(ms) {
+  sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
@@ -217,9 +221,9 @@ class ErrorRecoveryService {
   /**
    * تحويل إلى CSV
    */
-  convertToCSV(logs) {
+  convertToCSV(logs: any[]) {
     const headers = ['التاريخ والوقت', 'النوع', 'الرسالة'];
-    const rows = logs.map(log => [
+    const rows = logs.map((log: any) => [
       log.timestamp,
       log.type,
       log.message

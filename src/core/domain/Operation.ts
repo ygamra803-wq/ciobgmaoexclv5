@@ -1,5 +1,11 @@
 export class Operation {
-  constructor(data) {
+  id_operation: string;
+  nom: string;
+  id_zone: string;
+  type_profil: string;
+  [key: string]: any;
+
+  constructor(data: any = {}) {
     this.id_operation = data.id_operation || data.id;
     this.nom = data.nom || '';
     this.id_zone = data.id_zone || '';
@@ -20,21 +26,21 @@ export class Operation {
     );
   }
 
-  getZone(zones = []) {
+  getZone(zones: any[] = []) {
     return zones.find(
-      (z) => z.id_zone === this.id_zone || z.code === this.id_zone
+      (z: any) => z.id_zone === this.id_zone || z.code === this.id_zone
     );
   }
 
-  getInterventions(mouvements = []) {
+  getInterventions(mouvements: any[] = []) {
     return mouvements.filter(
-      (m) => m.operation === this.nom || m.operation === this.id_operation
+      (m: any) => m.operation === this.nom || m.operation === this.id_operation
     );
   }
 
-  getTotalPiecesConsommees(mouvements = []) {
+  getTotalPiecesConsommees(mouvements: any[] = []) {
     return this.getInterventions(mouvements)
-      .filter((m) => String(m.type).toLowerCase().includes('sortie'))
-      .reduce((sum, m) => sum + (Number(m.quantite) || 0), 0);
+      .filter((m: any) => String(m.type).toLowerCase().includes('sortie'))
+      .reduce((sum: number, m: any) => sum + (Number(m.quantite) || 0), 0);
   }
 }

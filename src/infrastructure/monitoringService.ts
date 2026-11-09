@@ -2,6 +2,15 @@
  * خدمة المراقبة والتحليلات - GMAO Nexus Monitoring & Analytics Service
  */
 class MonitoringService {
+  metrics: Map<string, any[]>;
+  events: any[];
+  maxEvents: number;
+  thresholds: {
+    slowOperation: number;
+    verySlowOperation: number;
+    criticalOperation: number;
+  };
+
   constructor() {
     this.metrics = new Map();
     this.events = [];
@@ -16,7 +25,7 @@ class MonitoringService {
   /**
    * قياس العملية
    */
-  async measure(operationName, fn, metadata = {}) {
+  async measure(operationName: string, fn: () => any, metadata: any = {}) {
     const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const startMemory = this.getMemoryUsage();
 
@@ -38,7 +47,7 @@ class MonitoringService {
       this.checkThresholds(operationName, duration);
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       const endTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const duration = endTime - startTime;
 
@@ -57,7 +66,7 @@ class MonitoringService {
   /**
    * تسجيل الحدث
    */
-  recordEvent(eventName, data = {}) {
+  recordEvent(eventName: string, data: any = {}) {
     const event = {
       name: eventName,
       timestamp: new Date().toISOString(),
@@ -78,12 +87,12 @@ class MonitoringService {
   /**
    * تسجيل المقياس
    */
-  recordMetric(name, metric) {
+  recordMetric(name: string, metric: any) {
     if (!this.metrics.has(name)) {
       this.metrics.set(name, []);
     }
 
-    const metrics = this.metrics.get(name);
+    const metrics = this.metrics.get(name)!;
     metrics.push(metric);
 
     // الاحتفاظ بآخر 1000 قياس فقط
@@ -95,7 +104,7 @@ class MonitoringService {
   /**
    * التحقق من الحدود
    */
-  checkThresholds(operationName, duration) {
+  checkThresholds(operationName: string, duration: number) {
     let severity = 'normal';
     let message = '';
 
@@ -124,13 +133,13 @@ class MonitoringService {
   /**
    * الحصول على إحصائيات العملية
    */
-  getOperationStats(operationName) {
+  getOperationStats(operationName: string) {
     const metrics = this.metrics.get(operationName) || [];
     if (metrics.length === 0) return null;
 
     const durations = metrics
-      .filter(m => m.status === 'success')
-      .map(m => m.duration);
+      .filter((m: any) => m.status === 'success')
+      .map((m: any) => m.duration);
 
     if (durations.length === 0) return null;
 
@@ -148,7 +157,7 @@ class MonitoringService {
       max: Math.max(...durations).toFixed(2),
       p95: p95.toFixed(2),
       p99: p99.toFixed(2),
-      errors: metrics.filter(m => m.status === 'error').length
+      errors: metrics.filter((m: any) => m.status === 'error').length
     };
   }
 
@@ -156,8 +165,8 @@ class MonitoringService {
    * الحصول على استخدام الذاكرة
    */
   getMemoryUsage() {
-    if (typeof performance !== 'undefined' && performance.memory) {
-      return performance.memory.usedJSHeapSize / 1048576; // MB
+    if (typeof performance !== 'undefined' && (performance as any).memory) {
+      return (performance as any).memory.usedJSHeapSize / 1048576; // MB
     }
     return 0;
   }
@@ -166,7 +175,12 @@ class MonitoringService {
    * الحصول على تقرير الأداء
    */
   getPerformanceReport() {
-    const report = {
+    const report: {
+      timestamp: string;
+      operations: Record<string, any>;
+      memory: { current: number; unit: string };
+      events: any[];
+    } = {
       timestamp: new Date().toISOString(),
       operations: {},
       memory: {
@@ -230,9 +244,9 @@ class MonitoringService {
   /**
    * تحويل الأحداث إلى CSV
    */
-  convertEventsToCSV(events) {
+  convertEventsToCSV(events: any[]) {
     const headers = ['التاريخ والوقت', 'الحدث', 'البيانات'];
-    const rows = events.map(event => [
+    const rows = events.map((event: any) => [
       event.timestamp,
       event.name,
       JSON.stringify(event.data)

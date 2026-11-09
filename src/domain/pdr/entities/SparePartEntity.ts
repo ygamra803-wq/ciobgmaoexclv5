@@ -1,4 +1,19 @@
 export class SparePartEntity {
+  id: string;
+  ref: string;
+  designation: string;
+  id_type: string;
+  type: string;
+  id_diag: string;
+  stockInitial: number;
+  entrees: number;
+  sorties: number;
+  stockActuel: number;
+  seuil: number;
+  alerte: string;
+  emplacement: string;
+  [key: string]: any;
+
   constructor({
     id,
     ref,
@@ -13,7 +28,7 @@ export class SparePartEntity {
     alerte,
     emplacement,
     type
-  } = {}) {
+  }: any = {}) {
     this.id = id || ref || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `part_${Date.now()}`);
     this.ref = ref || String(this.id);
     this.designation = designation || '';

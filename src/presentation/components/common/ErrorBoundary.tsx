@@ -1,19 +1,33 @@
-import { Component } from 'react';
+import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw, Copy, Check, ShieldAlert } from 'lucide-react';
 import { Logger } from '../../../core/logger/LoggerService';
 import { errorTracker } from '../../../services/ErrorTrackingService';
 
-export default class ErrorBoundary extends Component {
-  constructor(props) {
+export interface ErrorBoundaryProps {
+  children?: ReactNode;
+  sectionName?: string;
+  compact?: boolean;
+  onReset?: () => void;
+  [key: string]: any;
+}
+
+export interface ErrorBoundaryState {
+  hasError: boolean;
+  error: any;
+  copied?: boolean;
+}
+
+export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null, copied: false };
   }
 
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: any) {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: any, errorInfo: ErrorInfo) {
     Logger.error('Captured runtime error:', { error, errorInfo }, 'ErrorBoundary');
     errorTracker.captureException(error, {
       componentStack: errorInfo?.componentStack,

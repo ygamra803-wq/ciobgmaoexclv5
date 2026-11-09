@@ -6,14 +6,14 @@ import { loadCollection } from '../../../infrastructure/persistence/migrateStora
 export const STORAGE_KEY_GUIDES = STORAGE_KEYS.PREVENTIVE_GUIDES;
 
 export class GuideService {
-  static getGuides() {
+  static getGuides(): any[] {
     return loadCollection(STORAGE_KEY_GUIDES, {
       allowDemoFallback: true,
       demoSeed: INITIAL_GUIDES,
     });
   }
 
-  static saveGuides(guides) {
+  static saveGuides(guides: any[]) {
     try {
       storageService.setItem(STORAGE_KEY_GUIDES, guides);
     } catch {
@@ -21,14 +21,15 @@ export class GuideService {
     }
   }
 
-  static addGuide(guideData) {
+  static addGuide(guideData: any): any[] {
     const current = [...this.getGuides()];
     const seq = String(current.length + 1).padStart(3, '0');
-    const compSlug = (guideData.composant_type || 'COMP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+    const compSlug = (guideData.composant_type || guideData.composant_nom || 'COMP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
     
     const newGuide = {
-      guide_id: `GDE-${compSlug}-${seq}`,
-      composant_type: guideData.composant_type || '',
+      ...guideData,
+      guide_id: guideData.guide_id || `GDE-${compSlug}-${seq}`,
+      composant_type: guideData.composant_type || guideData.composant_nom || '',
       actions_recommandees: guideData.actions_recommandees || [],
       periodicite_suggeree: guideData.periodicite_suggeree || '1M',
       points_de_controle: guideData.points_de_controle || [],
@@ -40,25 +41,24 @@ export class GuideService {
 
     current.push(newGuide);
     this.saveGuides(current);
-    return newGuide;
+    return current;
   }
 
-  static updateGuide(guide_id, updatedFields) {
+  static updateGuide(guide_id: string | number, updatedFields: any): any[] {
     const current = [...this.getGuides()];
-    const idx = current.findIndex(g => g.guide_id === guide_id);
+    const idx = current.findIndex((g: any) => (g.guide_id || g.id) === guide_id);
     if (idx !== -1) {
       current[idx] = { ...current[idx], ...updatedFields, updated_at: new Date().toISOString() };
       this.saveGuides(current);
-      return current[idx];
     }
-    return null;
+    return current;
   }
 
-  static deleteGuide(guide_id) {
+  static deleteGuide(guide_id: string | number): any[] {
     const current = this.getGuides();
-    const filtered = current.filter(g => g.guide_id !== guide_id);
+    const filtered = current.filter((g: any) => (g.guide_id || g.id) !== guide_id);
     this.saveGuides(filtered);
-    return true;
+    return filtered;
   }
 }
 

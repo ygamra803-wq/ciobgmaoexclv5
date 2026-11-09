@@ -5,6 +5,15 @@ import { Logger } from '../core/logger/LoggerService';
  * Tracks operation durations, percentile latency, memory deltas, and dispatches alerts for slow ops.
  */
 class ProductionPerformanceMonitor {
+  metrics: Map<string, any[]>;
+  thresholds: {
+    slow: number;
+    verySlow: number;
+    critical: number;
+  };
+  alerts: any[];
+  maxMetricsPerOp: number;
+
   constructor() {
     this.metrics = new Map(); // Map<operationName, MetricItem[]>
     this.thresholds = {
@@ -17,8 +26,8 @@ class ProductionPerformanceMonitor {
   }
 
   getMemoryUsageMb() {
-    if (typeof window !== 'undefined' && window.performance && window.performance.memory) {
-      return Number((window.performance.memory.usedJSHeapSize / 1048576).toFixed(2));
+    if (typeof window !== 'undefined' && window.performance && (window.performance as any).memory) {
+      return Number(((window.performance as any).memory.usedJSHeapSize / 1048576).toFixed(2));
     }
     return 0;
   }
@@ -26,7 +35,7 @@ class ProductionPerformanceMonitor {
   /**
    * Measures duration and memory usage of any sync or async task.
    */
-  async measure(operationName, fn, context = {}) {
+  async measure(operationName: string, fn: () => any, context: any = {}) {
     const startTime = performance.now();
     const startMemory = this.getMemoryUsageMb();
 
@@ -46,7 +55,7 @@ class ProductionPerformanceMonitor {
 
       this.evaluateThresholds(operationName, durationMs);
       return result;
-    } catch (error) {
+    } catch (error: any) {
       const durationMs = Number((performance.now() - startTime).toFixed(2));
       this.recordMetric(operationName, {
         durationMs,
@@ -61,19 +70,19 @@ class ProductionPerformanceMonitor {
     }
   }
 
-  recordMetric(name, metric) {
+  recordMetric(name: string, metric: any) {
     if (!this.metrics.has(name)) {
       this.metrics.set(name, []);
     }
-    const list = this.metrics.get(name);
+    const list = this.metrics.get(name)!;
     list.push(metric);
     if (list.length > this.maxMetricsPerOp) {
       list.shift();
     }
   }
 
-  evaluateThresholds(operationName, durationMs) {
-    let severity = null;
+  evaluateThresholds(operationName: string, durationMs: number) {
+    let severity: string | null = null;
     let message = '';
 
     if (durationMs > this.thresholds.critical) {
@@ -103,19 +112,19 @@ class ProductionPerformanceMonitor {
     }
   }
 
-  getStats(operationName) {
+  getStats(operationName: string) {
     const list = this.metrics.get(operationName) || [];
     if (list.length === 0) return null;
 
     const successfulDurations = list
-      .filter((m) => m.status === 'success')
-      .map((m) => m.durationMs)
+      .filter((m: any) => m.status === 'success')
+      .map((m: any) => m.durationMs)
       .sort((a, b) => a - b);
 
     if (successfulDurations.length === 0) {
       return {
         count: list.length,
-        errors: list.filter((m) => m.status === 'error').length,
+        errors: list.filter((m: any) => m.status === 'error').length,
         avg: '0.00',
         median: '0.00',
         min: '0.00',
@@ -135,7 +144,7 @@ class ProductionPerformanceMonitor {
 
     return {
       count: list.length,
-      errors: list.filter((m) => m.status === 'error').length,
+      errors: list.filter((m: any) => m.status === 'error').length,
       avg: avg.toFixed(2),
       median: median.toFixed(2),
       min: min.toFixed(2),
@@ -146,7 +155,7 @@ class ProductionPerformanceMonitor {
   }
 
   getAllMetricsSummary() {
-    const summary = {};
+    const summary: Record<string, any> = {};
     for (const opName of this.metrics.keys()) {
       summary[opName] = this.getStats(opName);
     }

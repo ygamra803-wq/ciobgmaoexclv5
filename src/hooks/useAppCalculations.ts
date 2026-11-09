@@ -57,19 +57,19 @@ export function syncMovementsToIndex(mouvements = []) {
 /**
  * Pure helper to calculate stock items from rawStock and mouvements.
  */
-export function calculateStockItems(rawStock = [], mouvements = []) {
+export function calculateStockItems(rawStock: any[] = [], mouvements: any[] = []) {
   if (!Array.isArray(rawStock) || rawStock.length === 0) return [];
   return reactiveCalculationEngine.recalculateStockReactive(rawStock, mouvements);
 }
 
-const EMPTY_ARRAY = Object.freeze([]);
-const _derivedDesignationsCache = new WeakMap();
+const EMPTY_ARRAY: any[] = Object.freeze([]) as unknown as any[];
+const _derivedDesignationsCache = new WeakMap<any, any[]>();
 
 /**
  * Pure helper to calculate effective designations (decoupled from dynamic movements).
  * Uses WeakMap caching on rawStock when designations is empty to guarantee strict reference equality.
  */
-export function calculateEffectiveDesignations(designations = EMPTY_ARRAY, rawStock = EMPTY_ARRAY) {
+export function calculateEffectiveDesignations(designations: any[] = EMPTY_ARRAY, rawStock: any[] = EMPTY_ARRAY) {
   if (
     Array.isArray(designations) &&
     designations.length > 0 &&

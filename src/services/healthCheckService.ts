@@ -6,6 +6,11 @@ import { Logger } from '../core/logger/LoggerService';
  * Continuously monitors storage systems, memory heap usage, and runtime environment.
  */
 class HealthCheckService {
+  registeredChecks: Map<string, () => Promise<any>>;
+  lastCheckResult: any;
+  checkIntervalMs: number;
+  timer: any;
+
   constructor() {
     this.registeredChecks = new Map();
     this.lastCheckResult = null;
@@ -16,7 +21,7 @@ class HealthCheckService {
     this.registerDefaultChecks();
   }
 
-  registerCheck(name, checkFn) {
+  registerCheck(name: string, checkFn: () => Promise<any>) {
     this.registeredChecks.set(name, checkFn);
   }
 
@@ -33,8 +38,8 @@ class HealthCheckService {
 
     // 2. Memory Heap Check
     this.registerCheck('memory', async () => {
-      if (typeof window !== 'undefined' && window.performance && window.performance.memory) {
-        const mem = window.performance.memory;
+      if (typeof window !== 'undefined' && window.performance && (window.performance as any).memory) {
+        const mem = (window.performance as any).memory;
         const usedMb = Math.round(mem.usedJSHeapSize / 1048576);
         const limitMb = Math.round(mem.jsHeapSizeLimit / 1048576);
         const percent = Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100);
@@ -65,7 +70,7 @@ class HealthCheckService {
   }
 
   async runAllChecks() {
-    const results = {};
+    const results: Record<string, any> = {};
     let overall = 'healthy';
 
     for (const [name, checkFn] of this.registeredChecks.entries()) {
@@ -78,7 +83,7 @@ class HealthCheckService {
         } else if (checkResult.status === 'degraded' && overall !== 'unhealthy') {
           overall = 'degraded';
         }
-      } catch (error) {
+      } catch (error: any) {
         results[name] = {
           status: 'unhealthy',
           error: error.message || 'Error running check',

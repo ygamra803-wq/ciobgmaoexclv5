@@ -5,6 +5,13 @@ import { Logger } from '../core/logger/LoggerService';
  * Permet d'empiler et de rejouer les opérations critiques lorsque le réseau ou le stockage distant est rétabli.
  */
 class SyncQueueService {
+  queue: any[];
+  inMemoryOperations: Map<any, Function>;
+  isOnline: boolean;
+  db: any;
+  maxRetries: number;
+  subscribers: Set<Function>;
+
   constructor() {
     this.queue = [];
     this.inMemoryOperations = new Map(); // id -> callable function
@@ -28,7 +35,7 @@ class SyncQueueService {
 
       const request = indexedDB.open('GMAO_SyncQueue', 1);
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = (event: any) => {
         const db = event.target.result;
         if (!db.objectStoreNames.contains('queue')) {
           const store = db.createObjectStore('queue', {
@@ -206,8 +213,8 @@ class SyncQueueService {
     Logger.debug('[SyncQueueService] 🔄 Traitement de la file de synchronisation...');
 
     // Ordonnancement par priorité
-    const priorityMap = { high: 1, normal: 2, low: 3 };
-    this.queue.sort((a, b) => {
+    const priorityMap: Record<string, number> = { high: 1, normal: 2, low: 3 };
+    this.queue.sort((a: any, b: any) => {
       const pA = priorityMap[a.priority] || 2;
       const pB = priorityMap[b.priority] || 2;
       return pA - pB;
@@ -312,9 +319,9 @@ class SyncQueueService {
   /**
    * Suppression d'un élément
    */
-  async removeItem(itemId) {
+  async removeItem(itemId: any) {
     if (this.db) {
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         try {
           const tx = this.db.transaction(['queue'], 'readwrite');
           const store = tx.objectStore('queue');
@@ -336,7 +343,7 @@ class SyncQueueService {
    */
   async clearQueue() {
     if (this.db) {
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         try {
           const tx = this.db.transaction(['queue'], 'readwrite');
           const store = tx.objectStore('queue');

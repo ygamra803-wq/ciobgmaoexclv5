@@ -12,9 +12,9 @@ import { tabSyncService } from '../services/TabSyncService';
  * - Deterministic Last-Write-Wins conflict resolution for movements and transactional entities
  * - Stable reference bindings preventing unnecessary unmount/remount cycles
  */
-export function useStateSync(setters = {}, validators = {}) {
-  const settersRef = useRef(setters);
-  const validatorsRef = useRef(validators);
+export function useStateSync(setters: Record<string, any> = {}, validators: Record<string, any> = {}) {
+  const settersRef = useRef<Record<string, any>>(setters);
+  const validatorsRef = useRef<Record<string, any>>(validators);
 
   // Keep references fresh without triggering useEffect re-execution
   useEffect(() => {
@@ -23,11 +23,11 @@ export function useStateSync(setters = {}, validators = {}) {
   });
 
   useEffect(() => {
-    const handleRemoteState = (fresh, isBroadcast) => {
+    const handleRemoteState = (fresh: any, isBroadcast?: boolean) => {
       if (!fresh || typeof fresh !== 'object') return;
 
-      const currentSetters = settersRef.current || {};
-      const currentValidators = validatorsRef.current || {};
+      const currentSetters: Record<string, any> = settersRef.current || {};
+      const currentValidators: Record<string, any> = validatorsRef.current || {};
 
       try {
         // If the store provides an atomic applyRemoteStateUpdate method, use it to update in-memory state cleanly
@@ -123,7 +123,7 @@ export function useStateSync(setters = {}, validators = {}) {
         // 5. Movements Slice with Conflict Resolution
         if (fresh.mouvements && typeof currentSetters.setMouvements === 'function') {
           if (isBroadcast) {
-            currentSetters.setMouvements((prevMouvementList) => {
+            currentSetters.setMouvements((prevMouvementList: any[]) => {
               if (!Array.isArray(prevMouvementList) || prevMouvementList.length === 0) {
                 return fresh.mouvements;
               }

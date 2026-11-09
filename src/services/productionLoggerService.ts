@@ -5,6 +5,12 @@ import { indexedDBService } from '../utils/indexedDBService';
  * Manages persistent logging, log rotation, CSV export, and alert monitoring.
  */
 class ProductionLoggerService {
+  namespace: string;
+  memoryLogs: any[];
+  maxMemoryLogs: number;
+  logLevel: string;
+  dbStoreKey: string;
+
   constructor(namespace = 'GMAO') {
     this.namespace = namespace;
     this.memoryLogs = [];
@@ -13,18 +19,18 @@ class ProductionLoggerService {
     this.dbStoreKey = 'production_logs_archive';
   }
 
-  setLevel(level) {
+  setLevel(level: string) {
     this.logLevel = level;
   }
 
-  shouldLog(level) {
-    const levels = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+  shouldLog(level: string) {
+    const levels: Record<string, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
     const currentWeight = levels[this.logLevel] ?? 0;
     const targetWeight = levels[level] ?? 1;
     return targetWeight >= currentWeight;
   }
 
-  async log(level, message, data = null, context = {}) {
+  async log(level: string, message: string, data: any = null, context: any = {}) {
     if (!this.shouldLog(level)) return;
 
     const entry = {
@@ -56,23 +62,23 @@ class ProductionLoggerService {
     }
   }
 
-  debug(message, data, context) {
+  debug(message: string, data?: any, context?: any) {
     this.log('DEBUG', message, data, context);
   }
 
-  info(message, data, context) {
+  info(message: string, data?: any, context?: any) {
     this.log('INFO', message, data, context);
   }
 
-  warn(message, data, context) {
+  warn(message: string, data?: any, context?: any) {
     this.log('WARN', message, data, context);
   }
 
-  error(message, data, context) {
+  error(message: string, data?: any, context?: any) {
     this.log('ERROR', message, data, context);
   }
 
-  async persistLogEntry(entry) {
+  async persistLogEntry(entry: any) {
     try {
       const existing = (await indexedDBService.getItem(this.dbStoreKey, [])) || [];
       existing.push(entry);
@@ -82,8 +88,8 @@ class ProductionLoggerService {
     } catch {}
   }
 
-  printToConsole(entry) {
-    const styles = {
+  printToConsole(entry: any) {
+    const styles: Record<string, string> = {
       ERROR: 'color: #ef4444; font-weight: bold;',
       WARN: 'color: #f59e0b; font-weight: bold;',
       INFO: 'color: #3b82f6;',
@@ -101,25 +107,25 @@ class ProductionLoggerService {
     }
   }
 
-  async getLogs(filters = {}) {
-    let logs = [...this.memoryLogs];
+  async getLogs(filters: any = {}) {
+    let logs: any[] = [...this.memoryLogs];
 
     try {
       const persisted = await indexedDBService.getItem(this.dbStoreKey, []);
       if (Array.isArray(persisted) && persisted.length > 0) {
         // Merge without duplicates by id
         const map = new Map();
-        [...persisted, ...logs].forEach((l) => map.set(l.id, l));
-        logs = Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        [...persisted, ...logs].forEach((l: any) => map.set(l.id, l));
+        logs = Array.from(map.values()).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       }
     } catch {}
 
     if (filters.level) {
-      logs = logs.filter((l) => l.level === filters.level);
+      logs = logs.filter((l: any) => l.level === filters.level);
     }
     if (filters.search) {
       const q = String(filters.search).toLowerCase();
-      logs = logs.filter((l) => l.message.toLowerCase().includes(q) || JSON.stringify(l.data).toLowerCase().includes(q));
+      logs = logs.filter((l: any) => l.message.toLowerCase().includes(q) || JSON.stringify(l.data).toLowerCase().includes(q));
     }
 
     return logs;
@@ -128,7 +134,7 @@ class ProductionLoggerService {
   async exportLogsAsCSV() {
     const logs = await this.getLogs();
     const headers = ['Timestamp', 'Level', 'Namespace', 'Message', 'Data'];
-    const rows = logs.map((l) => [
+    const rows = logs.map((l: any) => [
       l.timestamp,
       l.level,
       l.namespace,

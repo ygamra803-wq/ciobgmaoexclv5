@@ -4,12 +4,15 @@ import { SparePartEntity } from '../entities/SparePartEntity';
 
 
 export class SparePartService {
-  constructor(repository) {
+  repository: any;
+  cache: CacheService;
+
+  constructor(repository: any) {
     this.repository = repository;
     this.cache = new CacheService();
   }
 
-  async createSparePart(data) {
+  async createSparePart(data: any) {
     Logger.info('Creating spare part', { ref: data.ref });
     const sparePart = new SparePartEntity(data);
     const result = await this.repository.create(sparePart);
@@ -17,7 +20,7 @@ export class SparePartService {
     return result;
   }
 
-  async getSparePart(id) {
+  async getSparePart(id: string) {
     const cached = this.cache.get(`spare_part:${id}`);
     if (cached) return cached;
 
@@ -28,7 +31,7 @@ export class SparePartService {
     return sparePart;
   }
 
-  async listSpareParts(filters = {}) {
+  async listSpareParts(filters: any = {}) {
     const cacheKey = `spare_parts:${JSON.stringify(filters)}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
@@ -38,7 +41,7 @@ export class SparePartService {
     return spareParts;
   }
 
-  async updateSparePart(id, data) {
+  async updateSparePart(id: string, data: any) {
     Logger.info('Updating spare part', { id });
     const sparePart = new SparePartEntity({ id, ...data });
     const result = await this.repository.update(id, sparePart);
@@ -47,7 +50,7 @@ export class SparePartService {
     return result;
   }
 
-  async deleteSparePart(id) {
+  async deleteSparePart(id: string) {
     Logger.info('Deleting spare part', { id });
     await this.repository.delete(id);
     this.cache.delete(`spare_part:${id}`);

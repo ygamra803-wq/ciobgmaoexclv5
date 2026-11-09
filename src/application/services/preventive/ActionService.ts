@@ -6,14 +6,14 @@ import { loadCollection } from '../../../infrastructure/persistence/migrateStora
 export const STORAGE_KEY_ACTIONS = STORAGE_KEYS.PREVENTIVE_ACTIONS;
 
 export class ActionService {
-  static getActions() {
+  static getActions(): any[] {
     return loadCollection(STORAGE_KEY_ACTIONS, {
       allowDemoFallback: true,
       demoSeed: INITIAL_ACTIONS,
     });
   }
 
-  static saveActions(actions) {
+  static saveActions(actions: any[]) {
     try {
       storageService.setItem(STORAGE_KEY_ACTIONS, actions);
     } catch {
@@ -21,7 +21,7 @@ export class ActionService {
     }
   }
 
-  static addAction(actionData) {
+  static addAction(actionData: any): any[] {
     const current = [...this.getActions()];
     const code = (actionData.code || 'X').trim().toUpperCase();
     const libelle = (actionData.libelle || 'Action').trim();
@@ -44,25 +44,24 @@ export class ActionService {
 
     current.push(newAction);
     this.saveActions(current);
-    return newAction;
+    return current;
   }
 
-  static updateAction(action_id, updatedFields) {
+  static updateAction(action_id: string | number, updatedFields: any): any[] {
     const current = [...this.getActions()];
-    const idx = current.findIndex(a => a.action_id === action_id);
+    const idx = current.findIndex((a: any) => (a.action_id || a.id) === action_id);
     if (idx !== -1) {
       current[idx] = { ...current[idx], ...updatedFields, updated_at: new Date().toISOString() };
       this.saveActions(current);
-      return current[idx];
     }
-    return null;
+    return current;
   }
 
-  static deleteAction(action_id) {
+  static deleteAction(action_id: string | number): any[] {
     const current = this.getActions();
-    const filtered = current.filter(a => a.action_id !== action_id);
+    const filtered = current.filter((a: any) => (a.action_id || a.id) !== action_id);
     this.saveActions(filtered);
-    return true;
+    return filtered;
   }
 }
 

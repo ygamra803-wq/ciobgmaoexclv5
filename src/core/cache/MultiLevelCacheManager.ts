@@ -47,8 +47,12 @@ export class MultiLevelCacheManager {
   /**
    * Set item in Multi-Level Cache
    */
-  async set(key: string, value: any, options: any = {}) {
-    const { ttl = 5 * 60 * 1000, tags = [], persist = false, level = 'all' } = options;
+  async set(key: string, value: any, options: any = {}, extraTags: string[] = []) {
+    const isNumericTtl = typeof options === 'number';
+    const ttl = isNumericTtl ? options : (options?.ttl ?? 5 * 60 * 1000);
+    const tags = isNumericTtl ? extraTags : (options?.tags ?? extraTags);
+    const persist = isNumericTtl ? false : (options?.persist ?? false);
+    const level = isNumericTtl ? 'all' : (options?.level ?? 'all');
 
     // 1. L1 Memory Cache
     if (level === 'all' || level === 'l1') {
@@ -77,7 +81,7 @@ export class MultiLevelCacheManager {
   /**
    * Get item from Multi-Level Cache with fallback hierarchy
    */
-  async get(key, options = {}) {
+  async get(key: string, options: any = {}) {
     const startTime = performance.now();
 
     // Check L1
@@ -170,7 +174,7 @@ export class MultiLevelCacheManager {
    * Cache Warming Logic
    * Pre-loads frequent formulas, stocks, and movements index during idle time.
    */
-  async warmUpCache(articles = [], movements = [], _options = {}) {
+  async warmUpCache(articles: any[] = [], movements: any[] = [], _options: any = {}) {
     const startTime = performance.now();
     Logger.info('🔥 Cache Warming initiated...', null, 'CacheWarming');
 
@@ -179,7 +183,7 @@ export class MultiLevelCacheManager {
     // 1. Warm stock calculation cache for all articles
     if (Array.isArray(articles) && articles.length > 0) {
       // Pre-index movements by ref
-      const mvtIndex = {};
+      const mvtIndex: Record<string, any[]> = {};
       for (const m of movements || []) {
         if (!m || !m.ref) continue;
         const refKey = String(m.ref).trim().toUpperCase();

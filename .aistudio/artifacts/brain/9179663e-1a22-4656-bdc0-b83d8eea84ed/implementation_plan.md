@@ -1,136 +1,123 @@
-# Industrial Dual-Theme System (Light & Obsidian Dark Mode) - GMAO v4
+# خطة التحصين المعماري وتصفير أخطاء الأنواع (Safe TypeScript Remediation Plan — CIOB GMAO v4)
 
-Plan for integrating an industrial-grade dual-theme system (Light / Dark obsidian) into the GMAO CMMS v4 application, drawing architectural principles from the provided design system philosophy while preserving strict tabular legibility, Excel grid boundaries, and high-density industrial UX.
+تهدف هذه الخطة الهندسية إلى معالجة وإزالة ما يزيد عن **700 إلى 900 خطأ TypeScript** متبقٍ في طبقات النواة (Core & Domain Entities)، الخدمات التشغيلية (Services & Database)، وخطافات الحالة والعمليات (Synchronization & Excel Hooks)، عبر **تعديلات تصريحية آمنة بنسبة 100% وقت الترجمة (Compile-Time Only)** دون المساس بمنطق التشغيل أو كسر التوافق مع ملفات Excel والبذور.
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The following confirmed choices govern this dual-theme implementation:
+> تم بناء هذه الخطة بناءً على قراراتك الهندسية المعتمدة لضمان أعلى درجات الأمان وعدم المساس باستقرار التطبيق في بيئة الإنتاج.
 
-- **Confirmed Decision 1 (Visual Palette)**: Deep Charcoal / Obsidian (`#111215` / `#18191e`) base with subtle **Industrial Emerald** and **Honey Gold** accents for Dark Mode, ensuring operational safety badges (Critical Red, Warning Amber, Healthy Green) remain 100% WCAG AA compliant.
-- **Confirmed Decision 2 (Switch Location)**: Quick Theme Toggle button embedded in the top **Header bar** (sun/moon icon morph) + full customizable appearance controls inside `AppearanceLayoutSelector.tsx`.
-- **Confirmed Decision 3 (Transition Engine)**: Smooth **View Transitions API** morph with CSS color temperature interpolation and fallbacks for `prefers-reduced-motion`.
+- **القرار المعتمد 1 (نطاق الدفعة الشاملة الآمنة):** معالجة كلاسات النواة، الكيانات (Domain Entities)، الخدمات (Database, Sync, Alerts, Metrics)، والـ Hooks الرئيسية (State Sync & Excel Operations) في دفعة متكاملة ومنظمة.
+- **القرار المعتمد 2 (واجهات مرنة متوافقة رجعياً):** استخدام واجهات مرنة تدعم التسميات المزدوجة والحقول الاختيارية (`Optional Fields & Index Signatures`) بدلاً من فرض قيود صارمة مغلقة قد تكسر استيراد Excel أو البيانات التاريخية.
+- **القرار المعتمد 3 (توسيع توقيعات الدوال بدلاً من تعديل الاستدعاءات):** معالجة أخطاء اختلاف عدد المعاملات (`TS2554`) عبر جعل المعاملات الإضافية أو الافتراضية اختيارية في تعريف الدالة نفسها، مما يحمي كافة أماكن الاستدعاء الحالية من أي تغيير سلوكي.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Upgrades GMAO v4 with a unified Light & Obsidian Dark theme system. Users can switch between a crisp, high-contrast Light mode (engineered like a high-density Excel spreadsheet) and a low-glare Obsidian Dark mode designed for night-shift technicians and control rooms.
-- **Target Audience / Persona**: Plant maintenance managers, field technicians, and reliability engineers working across variable lighting environments (bright shopfloors to low-light control panels).
-- **Key Value**: Reduces visual fatigue during long monitoring sessions, retains high-density data readability, and ensures zero contrast breakage across work orders, asset trees, and inventory grids.
+- **What It Does (ماذا تقدم هذه الخطة):**
+  تحويل الكلاسات والخدمات والـ Hooks التي كُتبت سابقاً بأسلوب JavaScript ديناميكي (بدون تصريحات حقول الكلاس أو بمعاملات افتراضية فارغة `{}`) إلى وحدات TypeScript موثقة بالكامل، مما يقضي على فئة الأخطاء الكبرى `TS2339 (Property does not exist)` وفئة `TS2554 (Expected X arguments, but got Y)`.
+- **Target Audience / Persona:**
+  فريق الهندسة والتطوير، وأدوات التحقق الآلي (CI/CD & Typechecker)، مع ضمان بقاء تجربة مدير الصيانة والتقنيين وأمناء المخزن مستقرة بنسبة 100% دون أي انحدار.
+- **Key Value (القيمة الهندسية المضافة):**
+  خفض جذري لأخطاء `tsc` في الطبقات الحيوية للنظام، تفعيل الإكمال التلقائي الدقيق (IntelliSense)، وكشف الأخطاء المنطقية الحقيقية مستقبلاً دون تشويش من آلاف الأخطاء الشكلية.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Dual Visual Identity
-
-```
-┌─────────────────────────────────────────┬─────────────────────────────────────────┐
-│        LIGHT MODE (Excel Engineered)    │       DARK MODE (Obsidian Control)      │
-├─────────────────────────────────────────┼─────────────────────────────────────────┤
-│ Canvas: Soft Light Slate (#F8FAFC)      │ Canvas: Deep Obsidian (#111215)         │
-│ Surfaces: Pure White (#FFFFFF)          │ Surfaces: Muted Charcoal (#18191E)      │
-│ Text Primary: Dark Charcoal (#0F172A)   │ Text Primary: High-Legibility (#F1F5F9) │
-│ Accent: Industrial Emerald (#059669)   │ Accent: Glowing Emerald / Gold          │
-│ Borders: Hairline Slate (#E2E8F0)       │ Borders: Low-Luminance Charcoal (#2A2C34)│
-└─────────────────────────────────────────┴─────────────────────────────────────────┘
-```
-
-### Color Tokens & Semantic Surface System
-
-We will establish semantic CSS tokens in `src/index.css` via `:root` and `.dark` blocks, bound to Tailwind v4 via `@custom-variant dark (&:where(.dark, .dark *));`:
-
-- `--gmao-canvas`: App background field (`#F8FAFC` light / `#111215` dark).
-- `--gmao-surface`: Card & table background (`#FFFFFF` light / `#18191E` dark).
-- `--gmao-surface-header`: Table header row (`#F1F5F9` light / `#1F2128` dark).
-- `--gmao-border`: Table grid lines & hairline card borders (`#E2E8F0` light / `#2B2E37` dark).
-- `--gmao-text-main`: Primary headings & values (`#0F172A` light / `#F1F5F9` dark).
-- `--gmao-text-muted`: Neutral column labels & metadata (`#64748B` light / `#94A3B8` dark).
-
-### Motion & Transition Engine
-
-1. **View Transitions API**: Wraps theme updates in `document.startViewTransition()` when supported by Chrome/Edge/Safari.
-2. **Circular Morph Effect**: Animates a expanding radial clip-path originating from the header sun/moon toggle button.
-3. **Fallback**: Instant smooth 200ms opacity transition for browsers without View Transitions or when `prefers-reduced-motion` is active.
+- **Key User Flows (ثبات التدفقات التشغيلية):**
+  - استيراد وتصدير مصنفات Excel الصناعية سيستمر بنفس الكفاءة مع توثيق كامل لعقود الحالة الممررة.
+  - المزامنة الفورية عبر الشبكة المحلية (LAN Sync) وطابور المزامنة غير المتصلة (Offline Sync Queue) ستحتفظ بكافة آليات الدمج الذكي وحل التعارضات.
+  - عمليات حساب المخزون (`stockActuel = stockInitial + entrées - sorties`) والحوكمة المزدوجة (`Maker-Checker`) تبقى محمية بالكامل.
+- **Visual Identity & Theme (الحفاظ على الهوية البصرية الموحدة):**
+  - **ثبات الواجهات:** لا تتضمن هذه الدفعة أي تغيير عشوائي في تصميم البطاقات أو الجداول الصناعية الموحدة (`GmaoIndustrialDataGrid`) التي تم اعتمادها مؤخراً.
+  - **Zero Runtime Footprint:** جميع تعريفات الحقول والواجهات المضافة تُحذف تلقائياً بواسطة مترجم TypeScript عند إنتاج حزمة التشغيل النهائية، مما يعني **صفر تأثير** على سرعة التحميل أو استهلاك الذاكرة.
+- **Interactive Feedback & Motion:**
+  - الحفاظ على توقيعات دوال التنبيهات (`showToast`) وحالات التحميل ومعالجة الأخطاء في كافة الـ Hooks والخدمات.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Tailwind v4 Variant Configuration**
-  - *Chosen Approach*: Explicitly declare `@custom-variant dark (&:where(.dark, .dark *));` in `src/index.css`.
-  - *Why*: Tailwind v4 defaults `dark:` utilities to system `prefers-color-scheme`. This rule ensures manual class toggling on `document.documentElement` (`.dark`) works deterministically without split-brain contrast bugs.
+- **القرار 1: التصريح الصريح بحقول الكلاسات (Explicit Class Field Declarations)**
+  - *النهج المختار:* إضافة تعريفات كافة الخصائص أعلى الـ `constructor` في كلاسات قاعدة البيانات، الكيانات، وخدمات المزامنة والمؤشرات.
+  - *لماذا:* يقضي فوراً على مئات أخطاء `TS2339` دون تغيير سطر تنفيذي واحد داخل الدوال.
+  - *البدائل المستبعدة:* تحويل الكلاسات إلى دوال أو إعادة كتابتها من الصفر (مرفوض لأنه قد يكسر `instanceof` أو دورة حياة الـ Singleton).
 
-- **Decision 2: Single Source of Truth Theme State**
-  - *Chosen Approach*: Store theme choice in `STORAGE_KEYS.THEME` and sync state via `useGmaoStore` / `window.dispatchEvent(new Event('gmao_appearance_changed'))`.
-  - *Why*: Ensures seamless sync across `Header.tsx`, `AppearanceLayoutSelector.tsx`, and sidebar layout without state duplication.
+- **القرار 2: توحيد عقود الـ Hooks عبر واجهات مرنة (`GmaoStoreSetters` & `ExcelOperationsContext`)**
+  - *النهج المختار:* ربط خطافات المزامنة وعمليات Excel بواجهات مشتقة من عقد المتجر الفعلي مع السماح بالحقول الاختيارية.
+  - *لماذا:* يمنع خطأ استنتاج النوع `{}` عند استخدام قيم افتراضية مثل `setters = {}`، ويوفر أمان أنواع حقيقي لدوال التحديث.
+  - *البدائل المستبعدة:* فرض أنواع مغلقة صارمة تمنع تمرير كائنات حالة جزئية في الاختبارات الوحدوية.
 
-- **Decision 3: Neutral Headers & Grid Preservations**
-  - *Chosen Approach*: Keep table header backgrounds strictly neutral (`#F1F5F9` light / `#1F2128` dark) and enforce grid lines across all tables (`divide-x divide-y border-collapse`).
-  - *Why*: Fulfills the user's explicit feedback from previous turns to maintain mature, Excel-like table legibility without distracting neon header colors.
+- **القرار 3: امتصاص اختلافات المعاملات (`TS2554`) في تعريف الخدمة**
+  - *النهج المختار:* تحديث توقيعات دوال الكاش والتخزين والتسجيل لتقبل المعاملات الاختيارية التي يمررها الكود الفعلي.
+  - *لماذا:* يمنع لمس عشرات الملفات المستدعية ويحافظ على السلوك التشغيلي المجرب.
 
 ---
 
-## 4. Technical Architecture & Component Flow
+## 4. Technical Architecture & Data Strategy *(Technical Reference)*
+
+### Architecture & Component Diagram
+
+يوضح المخطط التالي الطبقات الأربع التي ستشملها عملية التحصين بالأنواع وعلاقتها بمصدر الحقيقة الوحيد (SSOT):
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          State & Storage                               │
-│  localStorage (STORAGE_KEYS.THEME) <───> useGmaoStore / Appearance     │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ (gmao_appearance_changed event)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                        DOM Theme Dispatcher                            │
-│           document.documentElement.classList.toggle('dark')            │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-           ┌────────────────────────┴────────────────────────┐
-           ▼                                                 ▼
-┌──────────────────────┐                          ┌──────────────────────┐
-│     Header.tsx       │                          │  AppearanceLayout    │
-│ Quick Sun/Moon Icon  │                          │    Selector.tsx      │
-│ (View Transitions)   │                          │ Full Theme Controls  │
-└──────────────────────┘                          └──────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                         Styled Viewports & Tables                      │
-│ - High-Density Data Tables with Grid Lines                             │
-│ - Status Badges (WCAG AA Compliant Red/Amber/Green)                   │
-│ - Stat Cards & Filters (Neutral Canvas + Accent Numbers)              │
-└────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│                   1. Core & Domain Entities Layer                          │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │ Machine & Mouvement  │  │ SparePart & Task     │  │ Diagnostic &     │  │
+│  │ Domain Classes       │  │ Domain Entities      │  │ Component Models │  │
+│  └──────────┬───────────┘  └──────────┬───────────┘  └────────┬─────────┘  │
+└─────────────┼─────────────────────────┼───────────────────────┼────────────┘
+              │ Explicit Field Types    │ Validated Contracts   │
+              ▼                         ▼                       ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                2. Infrastructure & Application Services                    │
+│  ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────┐  │
+│  │ Database & IndexedDB │  │ SyncQueue & Realtime │  │ AlertThreshold & │  │
+│  │ Persistence Engines  │  │ Metrics Services     │  │ Cache Managers   │  │
+│  └──────────┬───────────┘  └──────────┬───────────┘  └────────┬─────────┘  │
+└─────────────┼─────────────────────────┼───────────────────────┼────────────┘
+              │ Optional Arity (TS2554) │ Typed Setters         │
+              ▼                         ▼                       ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                  3. State Orchestration & Excel Hooks                      │
+│  ┌────────────────────────────────────┐  ┌──────────────────────────────┐  │
+│  │ State Sync Hook (LAN / Multi-Tab)  │  │ Excel Import/Export Hook     │  │
+│  │ (Typed via GmaoStoreSetters)       │  │ (Typed State & Diagnostics)  │  │
+│  └──────────────────┬─────────────────┘  └──────────────┬───────────────┘  │
+└─────────────────────┼───────────────────────────────────┼──────────────────┘
+                      │                                   │
+                      ▼                                   ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│               4. Single Source of Truth (Zustand Store)                    │
+│         Flexible Backward-Compatible Domain & Store Interfaces             │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Data Model & State Strategy
 
-## Implementation Steps
+1. **طبقة الكيانات والنواة (Domain & Core Classes):**
+   - تصريح كامل بخصائص الكيانات (المعرفات، المراجع، الكميات، التواريخ، وحالات الصيانة) مع الحفاظ على المرونة لاستيعاب الحقول القادمة من التخزين المحلي أو البذور.
+2. **طبقة الخدمات والبنية التحتية (Services & Persistence):**
+   - تصريح خصائص الاتصال (`isBrowser`, `db`, `indexedDB`, `queue`, `listeners`, `thresholds`, `metrics`) في الكلاسات الخدمية، وضبط توقيعات الدوال لتستقبل المعاملات الاختيارية بأمان.
+3. **طبقة خطافات المزامنة والإكسيل (Hooks Layer):**
+   - توصيف كائنات `state` و `setters` و `validators` في خطافات المزامنة وعمليات Excel بحيث يتعرف المترجم على جميع المصفوفات ودوال التحديث (`setRawStock`, `setMachines`, `setMouvements`, `applyRemoteStateUpdate`...).
 
-1. **CSS Infrastructure (`src/index.css`)**:
-   - Add `@custom-variant dark (&:where(.dark, .dark *));`.
-   - Define CSS variables for Light & Dark theme tokens.
-   - Configure View Transition pseudo-elements (`::view-transition-old(root)` and `::view-transition-new(root)`).
+### Interactive Component & State Mapping
 
-2. **Header Quick Toggle Component (`src/presentation/components/layout/Header.tsx`)**:
-   - Add elegant Sun/Moon icon button with tooltips ("الوضع الداكن" / "الوضع الفاتح").
-   - Wire click handler to invoke `document.startViewTransition` with circular ripple effect.
+| الطبقة المعمارية | نوع الخطأ المستهدف | آلية الإصلاح الآمن (Zero Runtime Mutation) | الأثر المتوقع |
+| :--- | :--- | :--- | :--- |
+| **كلاسات الكيانات (Domain Entities)** | `TS2339` (خصائص غير معرفة على `this`) | إضافة تعريفات الحقول القياسية والاختيارية أعلى كل كلاس | إزالة ~125 خطأ مع توثيق بنية الكيانات |
+| **خدمات البيانات والمزامنة والتنبيهات** | `TS2339` + `TS2554` | تعريف حقول الكلاسات + توسيع توقيعات الدوال بمعاملات اختيارية | إزالة ~200 خطأ دون تغيير منطق الكاش أو الطابور |
+| **خطافات المزامنة وعمليات Excel** | `TS2339` (القراءة من `{}` أو معاملات غير موصفة) | ربط المعاملات بـ `GmaoStoreSetters` وواجهة حالة Excel | إزالة ~175 خطأ وتأمين مسارات الاستيراد والتصدير |
+| **متجر الحالة (`GmaoStore`)** | `TS2558` + `TS2322` + `TS2339` | مواءمة الأنواع العامة وتوقيعات الدوال الداخلية للمتجر | إزالة ~34 خطأ في قلب المتجر |
 
-3. **Appearance Settings Sync (`src/presentation/components/settings/AppearanceLayoutSelector.tsx`)**:
-   - Ensure theme selector cards cleanly control `'light' | 'dark' | 'system'`.
-   - Remove any old code that forced `.dark` removal.
+### Verification Protocol (بروتوكول التحقق الصارم بعد كل خطوة)
 
-4. **Component Surface & Contrast Audit**:
-   - Audit data tables across `MachineRegisteredView`, `WorkOrderView`, `StockView`, and `PreventiveView` to ensure `dark:bg-slate-900/ dark:border-slate-800` styling maintains crisp Excel grid borders.
-   - Verify pagination summary cards use neutral backgrounds with accent numbers as requested by user.
-
----
-
-## Verification Plan
-
-- Test theme toggle from both Header and Settings panel.
-- Verify smooth View Transition effect without visual flickering.
-- Verify text legibility and contrast ratio in Dark Mode for all table cells, headers, badges, and modals.
-- Co-execute `compile_applet` and `lint_applet` to guarantee error-free compilation.
+1. تشغيل فحص الأنواع (`npm run typecheck`) بعد كل مجموعة ملفات للتأكد من الانخفاض الفعلي للأخطاء.
+2. تشغيل بناء الإنتاج (`compile_applet`) وفحص الشيفرة (`lint_applet`) للتأكد من عدم وجود أي خطأ تجميعي.
+3. تشغيل حزمة الاختبارات الآلية (`Vitest`) للتأكد من سلامة حسابات المخزون، المالية، الصيانة الوقائية والتصحيحية، وأمن الصلاحيات.

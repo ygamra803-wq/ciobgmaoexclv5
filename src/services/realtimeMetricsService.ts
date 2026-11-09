@@ -7,7 +7,23 @@ import { Logger } from '../core/logger/LoggerService';
  * Collects live application performance metrics: FPS, Event Loop Lag, Memory Heap, Cache Hit Rate, Formula Latency.
  */
 export class RealtimeMetricsService {
-  static instance = null;
+  static instance: RealtimeMetricsService | null = null;
+  subscribers: Set<Function>;
+  currentMetrics: {
+    fps: number;
+    eventLoopLagMs: number;
+    usedMemoryMB: any;
+    memoryPercentage: any;
+    cacheHitRate: any;
+    totalCacheHits: any;
+    cacheTotalSavedMs: any;
+    formulaAvgLatencyMs: number;
+    timestamp: number;
+  };
+  frameCount: number;
+  lastFpsCheckTime: number;
+  isMonitoring: boolean;
+  lagInterval: any;
 
   constructor() {
     if (RealtimeMetricsService.instance) {

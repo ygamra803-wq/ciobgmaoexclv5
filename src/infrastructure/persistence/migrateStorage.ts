@@ -89,7 +89,7 @@ export function migrateStorageOnce() {
   }
 }
 
-const SNAPSHOT_FIELD_MAP = {
+const SNAPSHOT_FIELD_MAP: Record<string, string> = {
   [STORAGE_KEYS.STOCK_TYPES]: 'types',
   [STORAGE_KEYS.DESIGNATIONS]: 'designations',
   [STORAGE_KEYS.RAW_STOCK]: 'rawStock',
@@ -136,10 +136,10 @@ const SNAPSHOT_FIELD_MAP = {
  * @param {Array|Object} [options.demoSeed=[]] - Seed data to return ONLY when DEMO_MODE is explicitly enabled
  * @param {Array|Object} [options.emptyDefault=[]] - Default empty value when no user data exists and DEMO_MODE is not enabled
  */
-export function loadCollection(
-  canonicalKey,
-  { allowDemoFallback = false, demoSeed = [], emptyDefault = [] } = {}
-) {
+export function loadCollection<T = any>(
+  canonicalKey: string,
+  { allowDemoFallback = false, demoSeed = [] as any, emptyDefault = [] as any }: { allowDemoFallback?: boolean; demoSeed?: any; emptyDefault?: any } = {}
+): any {
   const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
   const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
   const isExplicitDemoMode =

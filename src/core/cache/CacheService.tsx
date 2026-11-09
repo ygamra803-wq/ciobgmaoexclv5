@@ -214,27 +214,27 @@ export class CacheService {
   // Static Delegation Methods
   // ==========================================
 
-  static getInstance(options) {
+  static getInstance(options?: { ttl?: number }): CacheService {
     if (!CacheService.instance) {
       new CacheService(options);
     }
-    return CacheService.instance;
+    return CacheService.instance!;
   }
 
-  static get(key) {
+  static get(key: string) {
     return CacheService.getInstance().get(key);
   }
 
-  static set(key, value, ttl, tagsOrPersist) {
-    const tags = Array.isArray(tagsOrPersist) ? tagsOrPersist : [];
+  static set(key: string, value: any, ttl?: number, tagsOrPersist?: any, extraTags?: any) {
+    const tags = Array.isArray(tagsOrPersist) ? tagsOrPersist : (Array.isArray(extraTags) ? extraTags : []);
     return CacheService.getInstance().set(key, value, ttl, tags);
   }
 
-  static has(key) {
+  static has(key: string) {
     return CacheService.getInstance().has(key);
   }
 
-  static delete(key) {
+  static delete(key: string) {
     return CacheService.getInstance().delete(key);
   }
 
@@ -246,7 +246,7 @@ export class CacheService {
     return CacheService.getInstance().getStats();
   }
 
-  static invalidateByTag(tag) {
+  static invalidateByTag(tag: string) {
     return CacheService.getInstance().invalidateByTag(tag);
   }
 }

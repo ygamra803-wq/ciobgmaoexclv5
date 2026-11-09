@@ -3,12 +3,15 @@ import { CacheService } from '../../../core/cache/CacheService';
 import { MachineEntity } from '../entities/MachineEntity';
 
 export class MachineService {
-  constructor(repository) {
+  repository: any;
+  cache: CacheService;
+
+  constructor(repository: any) {
     this.repository = repository;
     this.cache = new CacheService();
   }
 
-  async createMachine(data) {
+  async createMachine(data: any) {
     Logger.info('Creating machine', { id: data.id });
     const machine = new MachineEntity(data);
     const result = await this.repository.create(machine);
@@ -16,7 +19,7 @@ export class MachineService {
     return result;
   }
 
-  async getMachine(id) {
+  async getMachine(id: string) {
     const cached = this.cache.get(`machine:${id}`);
     if (cached) return cached;
     const machine = await this.repository.findById(id);
@@ -26,7 +29,7 @@ export class MachineService {
     return machine;
   }
 
-  async listMachines(filters = {}) {
+  async listMachines(filters: any = {}) {
     const cacheKey = `machines:${JSON.stringify(filters)}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
@@ -35,7 +38,7 @@ export class MachineService {
     return machines;
   }
 
-  async updateMachine(id, data) {
+  async updateMachine(id: string, data: any) {
     Logger.info('Updating machine', { id });
     const machine = new MachineEntity({ id, ...data });
     const result = await this.repository.update(id, machine);
@@ -44,7 +47,7 @@ export class MachineService {
     return result;
   }
 
-  async deleteMachine(id) {
+  async deleteMachine(id: string) {
     Logger.info('Deleting machine', { id });
     await this.repository.delete(id);
     this.cache.delete(`machine:${id}`);

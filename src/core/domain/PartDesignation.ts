@@ -1,18 +1,24 @@
 export class PartDesignation {
-  constructor(data) {
+  id_designation: string;
+  id_type: string;
+  nom: string;
+  reference: string;
+  [key: string]: any;
+
+  constructor(data: any = {}) {
     this.id_designation = data.id_designation || data.id;
     this.id_type = data.id_type || '';
     this.nom = data.nom || '';
     this.reference = data.reference || '';
   }
 
-  getType(partTypes = []) {
-    return partTypes.find((t) => t.id_type === this.id_type);
+  getType(partTypes: any[] = []) {
+    return partTypes.find((t: any) => t.id_type === this.id_type);
   }
 
-  getWarehouseStock(warehouseItems = []) {
+  getWarehouseStock(warehouseItems: any[] = []) {
     return warehouseItems.filter(
-      (item) => item.id_part_designation === this.id_designation
+      (item: any) => item.id_part_designation === this.id_designation
     );
   }
 }

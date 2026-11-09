@@ -7,6 +7,8 @@ import { isSystemGeneralMachine } from '../utils/activeMachines';
  * détection des clés orphelines, calcul d'empreinte Checksum et routines de réparation bidirectionnelle.
  */
 class DataIntegrityService {
+  checksums: Map<string, string>;
+
   constructor() {
     this.checksums = new Map();
   }
@@ -14,7 +16,7 @@ class DataIntegrityService {
   /**
    * Calcul d'une empreinte numérique (Checksum) rapide pour un jeu de données
    */
-  calculateChecksum(data) {
+  calculateChecksum(data: any) {
     if (!data) return '0';
     const str = typeof data === 'string' ? data : JSON.stringify(data);
     let hash = 0;
@@ -31,7 +33,7 @@ class DataIntegrityService {
   /**
    * Vérification de conformité par rapport à un checksum attendu
    */
-  verify(data, checksum) {
+  verify(data: any, checksum: string) {
     const currentChecksum = this.calculateChecksum(data);
     return currentChecksum === checksum;
   }
@@ -39,7 +41,7 @@ class DataIntegrityService {
   /**
    * Enregistrer le checksum actuel d'une entité
    */
-  save(key, data) {
+  save(key: string, data: any) {
     const checksum = this.calculateChecksum(data);
     this.checksums.set(key, checksum);
     return checksum;
@@ -48,7 +50,7 @@ class DataIntegrityService {
   /**
    * Vérifie si les données ont changé par rapport au dernier checksum enregistré
    */
-  hasChanged(key, data) {
+  hasChanged(key: string, data: any) {
     const currentChecksum = this.calculateChecksum(data);
     const savedChecksum = this.checksums.get(key);
     return currentChecksum !== savedChecksum;
@@ -58,9 +60,9 @@ class DataIntegrityService {
    * Vérification approfondie de l'intégrité du Stock par rapport aux Mouvements
    * Formule Jumelle Excel: Stock Actuel = Stock Initial + Somme(Entrées) - Somme(Sorties)
    */
-  validateStockIntegrity(stock = [], movements = []) {
-    const errors = [];
-    const warnings = [];
+  validateStockIntegrity(stock: any[] = [], movements: any[] = []) {
+    const errors: any[] = [];
+    const warnings: any[] = [];
 
     // Table de pré-agrégation des mouvements par référence d'article
     const mvtsByRef = new Map();
@@ -146,11 +148,11 @@ class DataIntegrityService {
   /**
    * Vérification de l'intégrité des lignes du Journal des Mouvements
    */
-  validateMovementIntegrity(movements = []) {
-    const errors = [];
-    const warnings = [];
+  validateMovementIntegrity(movements: any[] = []) {
+    const errors: any[] = [];
+    const warnings: any[] = [];
 
-    (movements || []).forEach((movement, index) => {
+    (movements || []).forEach((movement: any, index: number) => {
       const rowNum = index + 1;
       const ref = movement.ref || `Ligne ${rowNum}`;
 
@@ -218,13 +220,13 @@ class DataIntegrityService {
     preventiveTasks = [],
     correctiveInterventions = [],
     machineElementsLedger = [],
-  } = {}) {
-    const errors = [];
-    const warnings = [];
+  }: any = {}) {
+    const errors: any[] = [];
+    const warnings: any[] = [];
 
     // 1. Dictionnaires de clés valides
     const registeredRefs = new Set(
-      (rawStock || []).map((s) => String(s.ref || '').toUpperCase().trim()).filter(Boolean)
+      (rawStock || []).map((s: any) => String(s.ref || '').toUpperCase().trim()).filter(Boolean)
     );
     const registeredMachines = new Set(
       (machines || [])
@@ -416,7 +418,7 @@ class DataIntegrityService {
   /**
    * Diagnostic d'intégrité relationnelle rapide avec résumé et score de santé pour le tableau de bord
    */
-  scanReferentialIntegrity(params = {}) {
+  scanReferentialIntegrity(params: any = {}) {
     const rawStock = params.rawStock || params.stock || [];
     const mouvements = params.mouvements || params.movements || [];
     const machines = params.machines || [];
@@ -477,9 +479,9 @@ class DataIntegrityService {
    * 2. Assainit les stocks initiaux et seuils négatifs ou corrompus
    * 3. Retourne les données guéries et le journal des actions correctives
    */
-  autoHealData({ rawStock = [], mouvements = [] } = {}) {
+  autoHealData({ rawStock = [], mouvements = [] }: any = {}) {
     const mvtsByRef = new Map();
-    (mouvements || []).forEach((m) => {
+    (mouvements || []).forEach((m: any) => {
       const r = (m.ref || '').toString().trim().toUpperCase();
       if (!r) return;
       if (!mvtsByRef.has(r)) {
@@ -554,7 +556,7 @@ class DataIntegrityService {
   /**
    * Réparation automatique unitaire d'un article
    */
-  repairData(item) {
+  repairData(item: any) {
     if (!item) return item;
     const repaired = { ...item };
 
@@ -581,7 +583,7 @@ class DataIntegrityService {
       preventiveTasks = [],
       machines = [],
     } = {},
-  }) {
+  }: any) {
     if (!oldKey || !newKey) {
       return { success: false, affectedCount: 0 };
     }
@@ -590,7 +592,7 @@ class DataIntegrityService {
     const oldNormalized = String(oldKey).trim().toUpperCase();
 
     // 1. Mouvements
-    const nextMouvements = (mouvements || []).map((m) => {
+    const nextMouvements = (mouvements || []).map((m: any) => {
       let updated = false;
       const mCopy = { ...m };
 
@@ -616,7 +618,7 @@ class DataIntegrityService {
     });
 
     // 2. Interventions Correctives
-    const nextInterventions = (correctiveInterventions || []).map((ci) => {
+    const nextInterventions = (correctiveInterventions || []).map((ci: any) => {
       let updated = false;
       const cCopy = { ...ci };
 
@@ -642,7 +644,7 @@ class DataIntegrityService {
     });
 
     // 3. Tâches Préventives
-    const nextPreventiveTasks = (preventiveTasks || []).map((pt) => {
+    const nextPreventiveTasks = (preventiveTasks || []).map((pt: any) => {
       let updated = false;
       const pCopy = { ...pt };
 
@@ -660,7 +662,7 @@ class DataIntegrityService {
     });
 
     // 4. Parc Machines (Zones de défaut)
-    const nextMachines = (machines || []).map((mch) => {
+    const nextMachines = (machines || []).map((mch: any) => {
       let updated = false;
       const mCopy = { ...mch };
 
@@ -700,7 +702,7 @@ class DataIntegrityService {
     preventiveTasks = [],
     correctiveInterventions = [],
     machineElementsLedger = [],
-  } = {}) {
+  }: any = {}) {
     const stockValidation = this.validateStockIntegrity(stock, movements);
     const movementValidation = this.validateMovementIntegrity(movements);
     const referentialValidation = this.validateReferentialIntegrity({
@@ -735,7 +737,7 @@ class DataIntegrityService {
    * Dependencies of a machine across modules (Preventive / Corrective / Movements / BOM).
    * Used before delete to decide hard-delete vs soft-archive.
    */
-  getMachineDependencies(machineId, {
+  getMachineDependencies(machineId: any, {
     preventiveTasks = [],
     preventiveExecutions = [],
     correctiveInterventions = [],
@@ -744,7 +746,7 @@ class DataIntegrityService {
     sortiesExterne = [],
     sortieDemands = [],
     warehouseItems = [],
-  } = {}) {
+  }: any = {}) {
     const id = String(machineId || '').trim().toUpperCase();
     if (!id) {
       return {
@@ -764,10 +766,10 @@ class DataIntegrityService {
       };
     }
 
-    const matchMachine = (value) => String(value || '').trim().toUpperCase() === id;
+    const matchMachine = (value: any) => String(value || '').trim().toUpperCase() === id;
 
     const preventiveHits = (preventiveTasks || []).filter(
-      (t) =>
+      (t: any) =>
         matchMachine(t.id_machine) ||
         matchMachine(t.machine_id) ||
         matchMachine(t.code_machine) ||
@@ -775,7 +777,7 @@ class DataIntegrityService {
     );
 
     const executionHits = (preventiveExecutions || []).filter(
-      (ex) =>
+      (ex: any) =>
         matchMachine(ex.machineCode) ||
         matchMachine(ex.id_machine) ||
         matchMachine(ex.code_machine) ||
@@ -783,7 +785,7 @@ class DataIntegrityService {
     );
 
     const correctiveHits = (correctiveInterventions || []).filter(
-      (i) =>
+      (i: any) =>
         matchMachine(i.code_machine) ||
         matchMachine(i.id_machine) ||
         matchMachine(i.machine_id) ||
@@ -791,7 +793,7 @@ class DataIntegrityService {
     );
 
     const movementsHits = (mouvements || []).filter(
-      (m) =>
+      (m: any) =>
         matchMachine(m.id_machine_registered) ||
         matchMachine(m.machine) ||
         matchMachine(m.code_machine) ||
@@ -799,28 +801,28 @@ class DataIntegrityService {
     );
 
     const bomHits = (machineElementsLedger || []).filter(
-      (e) =>
+      (e: any) =>
         matchMachine(e.id_machine_registered) ||
         matchMachine(e.id_machine) ||
         matchMachine(e.code_machine)
     );
 
     const externalHits = (sortiesExterne || []).filter(
-      (se) =>
+      (se: any) =>
         matchMachine(se.id_machine) ||
         matchMachine(se.code_machine) ||
         matchMachine(se.id_machine_registered)
     );
 
     const demandHits = (sortieDemands || []).filter(
-      (sd) =>
+      (sd: any) =>
         matchMachine(sd.id_machine_registered) ||
         matchMachine(sd.code_machine) ||
         matchMachine(sd.id_machine)
     );
 
     const warehouseHits = (warehouseItems || []).filter(
-      (w) =>
+      (w: any) =>
         matchMachine(w.id_machine_registered) ||
         matchMachine(w.id_machine) ||
         matchMachine(w.code_machine)
@@ -848,17 +850,17 @@ class DataIntegrityService {
       warehouseCount: warehouseHits.length,
       total,
       canHardDelete: total === 0,
-      preventiveSample: preventiveHits.slice(0, 5).map((t) => t.id || t.code),
-      correctiveSample: correctiveHits.slice(0, 5).map((i) => i.id || i.num_bt || i.code_bon),
+      preventiveSample: preventiveHits.slice(0, 5).map((t: any) => t.id || t.code),
+      correctiveSample: correctiveHits.slice(0, 5).map((i: any) => i.id || i.num_bt || i.code_bon),
     };
   }
 
   /**
    * Build a Set of ACTIVE machine ids (excludes archived / inactive).
    */
-  buildActiveMachineIdSet(machines = []) {
-    const set = new Set();
-    (machines || []).forEach((m) => {
+  buildActiveMachineIdSet(machines: any[] = []) {
+    const set = new Set<string>();
+    (machines || []).forEach((m: any) => {
       const archived =
         m.status === 'ARCHIVEE' ||
         m.statut === 'Archivée' ||
@@ -876,7 +878,7 @@ class DataIntegrityService {
   /**
    * True if task/intervention machine ref is missing or points to archived machine.
    */
-  isOrphanMachineRef(machineRef, activeMachineIds) {
+  isOrphanMachineRef(machineRef: any, activeMachineIds: Set<string>) {
     const id = String(machineRef || '').trim().toUpperCase();
     if (!id) return true;
     return !activeMachineIds.has(id);
@@ -885,9 +887,9 @@ class DataIntegrityService {
   /**
    * Annotate preventive tasks with _isOrphan flag.
    */
-  annotatePreventiveOrphans(tasks = [], machines = []) {
+  annotatePreventiveOrphans(tasks: any[] = [], machines: any[] = []) {
     const active = this.buildActiveMachineIdSet(machines);
-    return (tasks || []).map((t) => {
+    return (tasks || []).map((t: any) => {
       const ref = t.id_machine || t.machine_id || t.code_machine;
       const isOrphan = this.isOrphanMachineRef(ref, active);
       return isOrphan ? { ...t, _isOrphan: true } : { ...t, _isOrphan: false };
@@ -897,9 +899,9 @@ class DataIntegrityService {
   /**
    * Annotate corrective interventions with _isOrphan flag.
    */
-  annotateCorrectiveOrphans(interventions = [], machines = []) {
+  annotateCorrectiveOrphans(interventions: any[] = [], machines: any[] = []) {
     const active = this.buildActiveMachineIdSet(machines);
-    return (interventions || []).map((i) => {
+    return (interventions || []).map((i: any) => {
       const ref = i.code_machine || i.id_machine || i.machine_id || i.id_machine_registered;
       const isOrphan = this.isOrphanMachineRef(ref, active);
       return isOrphan ? { ...i, _isOrphan: true } : { ...i, _isOrphan: false };
@@ -914,19 +916,19 @@ class DataIntegrityService {
     machines = [],
     preventiveTasks = [],
     correctiveInterventions = [],
-  } = {}) {
+  }: any = {}) {
     const activeIds = this.buildActiveMachineIdSet(machines);
-    const prevOrphans = (preventiveTasks || []).filter((t) =>
+    const prevOrphans = (preventiveTasks || []).filter((t: any) =>
       this.isOrphanMachineRef(t.id_machine || t.machine_id || t.code_machine, activeIds)
     );
-    const corrOrphans = (correctiveInterventions || []).filter((i) =>
+    const corrOrphans = (correctiveInterventions || []).filter((i: any) =>
       this.isOrphanMachineRef(
         i.code_machine || i.id_machine || i.machine_id || i.id_machine_registered,
         activeIds
       )
     );
 
-    const warnings = [];
+    const warnings: string[] = [];
     if (action === 'CLEAR_PREVENTIVE') {
       warnings.push(
         `Cette action va supprimer ${(preventiveTasks || []).length} tâche(s) préventive(s). La liste des machines restera intacte.`
@@ -965,11 +967,11 @@ class DataIntegrityService {
   /**
    * Purge orphan preventive tasks.
    */
-  purgeOrphanPreventiveTasks(tasks = [], machines = []) {
+  purgeOrphanPreventiveTasks(tasks: any[] = [], machines: any[] = []) {
     const active = this.buildActiveMachineIdSet(machines);
-    const kept = [];
-    const removed = [];
-    (tasks || []).forEach((t) => {
+    const kept: any[] = [];
+    const removed: any[] = [];
+    (tasks || []).forEach((t: any) => {
       const ref = t.id_machine || t.machine_id || t.code_machine;
       if (this.isOrphanMachineRef(ref, active)) removed.push(t);
       else kept.push(t);
@@ -980,11 +982,11 @@ class DataIntegrityService {
   /**
    * Purge orphan corrective interventions.
    */
-  purgeOrphanCorrectiveInterventions(interventions = [], machines = []) {
+  purgeOrphanCorrectiveInterventions(interventions: any[] = [], machines: any[] = []) {
     const active = this.buildActiveMachineIdSet(machines);
-    const kept = [];
-    const removed = [];
-    (interventions || []).forEach((i) => {
+    const kept: any[] = [];
+    const removed: any[] = [];
+    (interventions || []).forEach((i: any) => {
       const ref = i.code_machine || i.id_machine || i.machine_id || i.id_machine_registered;
       if (this.isOrphanMachineRef(ref, active)) removed.push(i);
       else kept.push(i);
@@ -1000,14 +1002,14 @@ class DataIntegrityService {
     items = [],
     machines = [],
     newMachineId,
-  } = {}) {
+  }: any = {}) {
     const active = this.buildActiveMachineIdSet(machines);
     const target = String(newMachineId || '').trim().toUpperCase();
     if (!target || !active.has(target)) {
       return { updated: items, changedCount: 0, error: 'INVALID_TARGET_MACHINE' };
     }
     let changedCount = 0;
-    const updated = (items || []).map((item) => {
+    const updated = (items || []).map((item: any) => {
       const ref =
         entityType === 'preventive'
           ? item.id_machine || item.machine_id || item.code_machine
@@ -1031,14 +1033,14 @@ class DataIntegrityService {
   /**
    * Detect machineElementsLedger (BOM) records erroneously linked to SYSTEM_GENERAL machines.
    */
-  getSystemGeneralBomLeaks(machineElementsLedger = [], machines = []) {
+  getSystemGeneralBomLeaks(machineElementsLedger: any[] = [], machines: any[] = []) {
     const sysGenIds = new Set(
       (machines || [])
-        .filter((m) => isSystemGeneralMachine(m))
-        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
+        .filter((m: any) => isSystemGeneralMachine(m))
+        .map((m: any) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
         .filter(Boolean)
     );
-    return (machineElementsLedger || []).filter((e) => {
+    return (machineElementsLedger || []).filter((e: any) => {
       const mId = String(
         e.id_machine_registered || e.id_machine || e.code_machine || e.machine_id || ''
       )
@@ -1051,16 +1053,16 @@ class DataIntegrityService {
   /**
    * Purge/detach machineElementsLedger records erroneously linked to SYSTEM_GENERAL machines.
    */
-  purgeSystemGeneralBomLeaks(machineElementsLedger = [], machines = []) {
+  purgeSystemGeneralBomLeaks(machineElementsLedger: any[] = [], machines: any[] = []) {
     const sysGenIds = new Set(
       (machines || [])
-        .filter((m) => isSystemGeneralMachine(m))
-        .map((m) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
+        .filter((m: any) => isSystemGeneralMachine(m))
+        .map((m: any) => String(m.id_machine_registered || m.id || m.code || m.id_machine || '').trim().toUpperCase())
         .filter(Boolean)
     );
-    const kept = [];
-    const removed = [];
-    (machineElementsLedger || []).forEach((e) => {
+    const kept: any[] = [];
+    const removed: any[] = [];
+    (machineElementsLedger || []).forEach((e: any) => {
       const mId = String(
         e.id_machine_registered || e.id_machine || e.code_machine || e.machine_id || ''
       )

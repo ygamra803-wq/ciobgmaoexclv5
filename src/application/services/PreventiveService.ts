@@ -59,11 +59,11 @@ export class PreventiveService {
     return current;
   }
 
-  static updateAction(id: string, actionData: any) {
+  static updateAction(id: string | number, actionData: any) {
     return ActionService.updateAction(id, actionData);
   }
 
-  static deleteAction(id: string) {
+  static deleteAction(id: string | number) {
     return ActionService.deleteAction(id);
   }
 
@@ -75,23 +75,23 @@ export class PreventiveService {
     return TaskService.saveTasks(tasks);
   }
 
-  static markTaskAsDone(id: string, validationData?: any) {
+  static markTaskAsDone(id: string | number, validationData?: any) {
     return TaskService.markTaskAsDone(id, validationData);
   }
 
-  static updateTaskCounter(id: string, counter: number) {
+  static updateTaskCounter(id: string | number, counter: number) {
     return TaskService.updateTaskCounter(id, counter);
   }
 
-  static updateTaskStatus(id: string, newStatus: string) {
+  static updateTaskStatus(id: string | number, newStatus: string) {
     return TaskService.updateTask(id, { etat: newStatus });
   }
 
-  static updateTask(id: string, taskData: any) {
+  static updateTask(id: string | number, taskData: any) {
     return TaskService.updateTask(id, taskData);
   }
 
-  static deleteTask(id: string) {
+  static deleteTask(id: string | number) {
     return TaskService.deleteTask(id);
   }
 
@@ -163,15 +163,23 @@ export class PreventiveService {
     return PlanService.createPlanWithTasks(planData, taskItems);
   }
 
+  static getGuides() {
+    return GuideService.getGuides();
+  }
+
+  static saveGuides(guides: any[]) {
+    return GuideService.saveGuides(guides);
+  }
+
   static addGuide(guideData: any) {
     return GuideService.addGuide(guideData);
   }
 
-  static updateGuide(id: string, guideData: any) {
+  static updateGuide(id: string | number, guideData: any) {
     return GuideService.updateGuide(id, guideData);
   }
 
-  static deleteGuide(id: string) {
+  static deleteGuide(id: string | number) {
     return GuideService.deleteGuide(id);
   }
 

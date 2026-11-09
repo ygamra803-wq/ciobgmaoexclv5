@@ -3,7 +3,12 @@
  * ✅ جميع الأخطاء ترث من هذا الـ Class
  */
 export class ApplicationError extends Error {
-  constructor(message, code, statusCode = 500, details = {}) {
+  code: string;
+  statusCode: number;
+  details: any;
+  timestamp: Date;
+
+  constructor(message: string, code: string, statusCode = 500, details: any = {}) {
     super(message);
     this.name = 'ApplicationError';
     this.code = code;
@@ -28,7 +33,7 @@ export class ApplicationError extends Error {
  * Database Error
  */
 export class DatabaseError extends ApplicationError {
-  constructor(message, details = {}) {
+  constructor(message: string, details: any = {}) {
     super(message, 'DB_ERROR', 500, details);
     this.name = 'DatabaseError';
   }
@@ -38,7 +43,7 @@ export class DatabaseError extends ApplicationError {
  * Validation Error
  */
 export class ValidationError extends ApplicationError {
-  constructor(message, errors = []) {
+  constructor(message: string, errors: any[] = []) {
     super(message, 'VALIDATION_ERROR', 400, { errors });
     this.name = 'ValidationError';
   }
@@ -48,7 +53,7 @@ export class ValidationError extends ApplicationError {
  * Not Found Error
  */
 export class NotFoundError extends ApplicationError {
-  constructor(message, resource) {
+  constructor(message: string, resource?: any) {
     super(message, 'NOT_FOUND', 404, { resource });
     this.name = 'NotFoundError';
   }
@@ -58,7 +63,7 @@ export class NotFoundError extends ApplicationError {
  * Permission Error
  */
 export class PermissionError extends ApplicationError {
-  constructor(message, permission) {
+  constructor(message: string, permission?: any) {
     super(message, 'PERMISSION_DENIED', 403, { permission });
     this.name = 'PermissionError';
   }
@@ -68,7 +73,7 @@ export class PermissionError extends ApplicationError {
  * Conflict Error
  */
 export class ConflictError extends ApplicationError {
-  constructor(message, conflict) {
+  constructor(message: string, conflict?: any) {
     super(message, 'CONFLICT', 409, { conflict });
     this.name = 'ConflictError';
   }
@@ -78,7 +83,7 @@ export class ConflictError extends ApplicationError {
  * Insufficient Stock Error
  */
 export class InsufficientStockError extends ApplicationError {
-  constructor(ref, available, requested) {
+  constructor(ref: string, available: number, requested: number) {
     super(
       `المخزون غير كافي: ${ref}. المتاح: ${available}, المطلوب: ${requested}`,
       'INSUFFICIENT_STOCK',

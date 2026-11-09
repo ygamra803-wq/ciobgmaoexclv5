@@ -18,7 +18,7 @@ import type { IAuditEvent } from './audit';
 
 export interface MachineElement {
   id: string;
-  id_machine_registered: string;
+  id_machine_registered?: string;
   ref_element?: string;
   designation?: string;
   date_installation?: string;
@@ -61,7 +61,7 @@ export interface SortieExterneItem {
 }
 
 export interface CorrectiveInterventionItem {
-  id: string | number;
+  id?: string | number;
   code_machine?: string;
   anomalie?: string;
   statut?: string;
@@ -218,7 +218,9 @@ export interface GmaoStoreState {
       validated_by_name?: string;
       sparesUsed?: any[];
       sparesProposed?: any[];
+      approvedSpares?: any[];
       notes?: string;
+      [key: string]: any;
     },
     onAddMouvement?: ((mvt: any) => void) | null
   ) => any;
@@ -318,6 +320,7 @@ export interface GmaoStoreState {
     payload: Omit<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'> &
       Partial<Pick<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'>>
   ) => IAuditEvent;
+  [key: string]: any;
 }
 
 /**

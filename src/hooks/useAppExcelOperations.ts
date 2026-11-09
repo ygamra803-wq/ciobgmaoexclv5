@@ -15,7 +15,7 @@ export function useAppExcelOperations({
   diagnostics = [],
   showToast,
   fileInputRef,
-}) {
+}: any) {
   const {
     rawStock,
     setRawStock,
@@ -55,7 +55,7 @@ export function useAppExcelOperations({
     setCorrectiveInterventions,
   } = state;
 
-  const [linkedFileHandle, setLinkedFileHandle] = useState(null);
+  const [linkedFileHandle, setLinkedFileHandle] = useState<any>(null);
   const [linkedFileName, setLinkedFileName] = useState('');
   const [operationProgress, setOperationProgress] = useState({ active: false, percent: 0, status: '' });
 
@@ -113,7 +113,7 @@ export function useAppExcelOperations({
 
         storageService.setItem('gmao_backups_list', updatedList);
         return dateStr;
-      } catch (err) {
+      } catch (err: any) {
       if (err.name === "AbortError") return;
       if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
         showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
@@ -148,12 +148,12 @@ export function useAppExcelOperations({
   const buildWorkbook = useCallback(() => {
     const wb = XLSX.utils.book_new();
 
-    const autoFit = (ws, rows) => {
+    const autoFit = (ws: any, rows: any[]) => {
       if (!rows || rows.length === 0) return;
       const keys = Object.keys(rows[0] || {});
       ws['!cols'] = keys.map((key) => {
         let maxLen = String(key).length;
-        rows.slice(0, 100).forEach((r) => {
+        rows.slice(0, 100).forEach((r: any) => {
           const val = r[key];
           if (val != null) {
             const len = String(val).length;
@@ -164,7 +164,7 @@ export function useAppExcelOperations({
       });
     };
 
-    const appendSheetWithAutofit = (name, data) => {
+    const appendSheetWithAutofit = (name: string, data: any[]) => {
       if (Array.isArray(data) && data.length > 0) {
         const ws = XLSX.utils.json_to_sheet(data);
         autoFit(ws, data);
@@ -173,7 +173,7 @@ export function useAppExcelOperations({
     };
 
     // 1. Stock_Actuel
-    const stockData = stockItems.map((s) => ({
+    const stockData = stockItems.map((s: any) => ({
       Ref: s.ref,
       Désignation: s.designation,
       ID_Type: s.id_type,
@@ -189,7 +189,7 @@ export function useAppExcelOperations({
     appendSheetWithAutofit('Stock_Actuel', stockData);
 
     // 2. Machines_Registered
-    const mchData = machines.map((m) => ({
+    const mchData = machines.map((m: any) => ({
       'Code Machine (Ref)': m.id_machine_registered,
       Désignation: m.designation,
       ID_Family: m.id_family,
@@ -201,7 +201,7 @@ export function useAppExcelOperations({
     appendSheetWithAutofit('Machines_Registered', mchData);
 
     // 3. Warehouse_Items (Entrepôt)
-    const warehouseData = warehouseItems.map((w) => ({
+    const warehouseData = warehouseItems.map((w: any) => ({
       'Code Entrepôt (Ref)': w.id_warehouse_item || w.id_machine_registered,
       Désignation: w.designation,
       Nature: w.nature || 'COMPOSANT',
@@ -413,10 +413,10 @@ export function useAppExcelOperations({
         showToast('Erreur de lecture du fichier sélectionné.', 'error');
       };
 
-      reader.onload = async (evt) => {
+      reader.onload = async (evt: any) => {
         setOperationProgress({ active: true, percent: 30, status: 'Traitement du fichier...' });
         try {
-          let importedData = {};
+          let importedData: Record<string, any> = {};
           if (file.name.endsWith('.json')) {
             importedData = JSON.parse(evt.target.result);
           } else {
@@ -539,7 +539,7 @@ export function useAppExcelOperations({
 
           showToast('Import réussi مع استخراج ذكي! (Backup بتاريخ ' + backupDate + ')', 'success');
           Logger.info('[ExcelOperations] File imported successfully with smart parser', { file: file.name });
-        } catch (err) {
+        } catch (err: any) {
           if (err.name === "AbortError") return;
           if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
             showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
@@ -592,7 +592,7 @@ export function useAppExcelOperations({
     }
 
     try {
-      const [handle] = await window.showOpenFilePicker({
+      const [handle] = await (window as any).showOpenFilePicker({
         types: [
           {
             description: 'Fichiers Excel GMAO (.xlsx)',
@@ -613,7 +613,7 @@ export function useAppExcelOperations({
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
 
-      const importedData = {};
+      const importedData: Record<string, any> = {};
       if (workbook.SheetNames.includes('Stock_Actuel')) {
         importedData.Stock_Actuel = XLSX.utils.sheet_to_json(workbook.Sheets['Stock_Actuel']);
       }
@@ -648,7 +648,7 @@ export function useAppExcelOperations({
         `🔗 Fichier "${file.name}" lié en direct ! (Backup sauvegardé : ${backupDate})`,
         'success'
       );
-    } catch (err) {
+    } catch (err: any) {
       if (err.name === "AbortError") return;
       if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
         showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
@@ -685,7 +685,7 @@ export function useAppExcelOperations({
       await writable.close();
 
       showToast(`💾 Écriture directe avec formules vivantes réussie dans "${linkedFileName}" !`, 'success');
-    } catch (err) {
+    } catch (err: any) {
       if (err.name === "AbortError") return;
       if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
         showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
@@ -715,7 +715,7 @@ export function useAppExcelOperations({
   const exportMasterTopologyWorkbook = useCallback(() => {
     try {
       const wb = XLSX.utils.book_new();
-      const usersData = (technicians || []).map((t) => ({ ID: t.id_technicien || t.id, Nom: t.nom || t.name, Role: t.role || 'Technicien' }));
+      const usersData = (technicians || []).map((t: any) => ({ ID: t.id_technicien || t.id, Nom: t.nom || t.name, Role: t.role || 'Technicien' }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usersData), 'Utilisateurs');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zones || []), 'Zones');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(families || []), 'Family_Machines');

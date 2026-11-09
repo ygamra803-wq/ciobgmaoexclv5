@@ -3,12 +3,15 @@ import { CacheService } from '../../../core/cache/CacheService';
 import { TaskEntity } from '../entities/TaskEntity';
 
 export class TaskService {
-  constructor(repository) {
+  repository: any;
+  cache: CacheService;
+
+  constructor(repository: any) {
     this.repository = repository;
     this.cache = new CacheService();
   }
 
-  async createTask(data) {
+  async createTask(data: any) {
     Logger.info('Creating task/movement', { code_bon: data.code_bon });
     const task = new TaskEntity(data);
     const result = await this.repository.create(task);
@@ -16,7 +19,7 @@ export class TaskService {
     return result;
   }
 
-  async getTask(id) {
+  async getTask(id: string) {
     const cached = this.cache.get(`task:${id}`);
     if (cached) return cached;
     const task = await this.repository.findById(id);
@@ -26,7 +29,7 @@ export class TaskService {
     return task;
   }
 
-  async listTasks(filters = {}) {
+  async listTasks(filters: any = {}) {
     const cacheKey = `tasks:${JSON.stringify(filters)}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
@@ -35,7 +38,7 @@ export class TaskService {
     return tasks;
   }
 
-  async updateTask(id, data) {
+  async updateTask(id: string, data: any) {
     Logger.info('Updating task/movement', { id });
     const existing = await this.repository.findById(id);
     const merged = existing ? { ...(typeof existing.toJSON === 'function' ? existing.toJSON() : existing), ...data, id } : { id, ...data };
@@ -46,7 +49,7 @@ export class TaskService {
     return result;
   }
 
-  async deleteTask(id) {
+  async deleteTask(id: string) {
     Logger.info('Deleting task/movement', { id });
     await this.repository.delete(id);
     this.cache.delete(`task:${id}`);

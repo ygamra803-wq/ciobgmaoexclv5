@@ -5,7 +5,22 @@ import { Logger } from '../core/logger/LoggerService';
  * Configurable alert rules and real-time performance breach detector.
  */
 export class AlertThresholdManager {
-  static instance = null;
+  static instance: AlertThresholdManager | null = null;
+  rules: {
+    fpsWarning: number;
+    fpsCritical: number;
+    memoryWarningRatio: number;
+    memoryCriticalRatio: number;
+    lagWarningMs: number;
+    lagCriticalMs: number;
+    formulaWarningMs: number;
+    formulaCriticalMs: number;
+    cacheMinHitRate: number;
+  };
+  activeAlerts: any[];
+  alertHistory: any[];
+  maxHistorySize: number;
+  subscribers: Set<Function>;
 
   constructor() {
     if (AlertThresholdManager.instance) {
@@ -35,7 +50,7 @@ export class AlertThresholdManager {
   /**
    * Evaluate metric snapshot against rules
    */
-  evaluate(metrics) {
+  evaluate(metrics: any) {
     if (!metrics) return [];
 
     const newAlerts = [];

@@ -15,6 +15,13 @@ const DB_NAME = 'CIOB_GMAO_INDUSTRIAL_DB';
 const DB_VERSION = 3;
 
 class IndexedDBService {
+  dbName: string;
+  version: number;
+  db: any;
+  retries: number;
+  initPromise: Promise<any> | null;
+  fallbackMemoryStore: Map<string, any>;
+
   constructor(dbName = DB_NAME, version = DB_VERSION) {
     this.dbName = dbName;
     this.version = version;
@@ -29,7 +36,7 @@ class IndexedDBService {
     return typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined' && window.indexedDB !== null;
   }
 
-  delay(ms) {
+  delay(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
@@ -134,7 +141,7 @@ class IndexedDBService {
         resolve(request.result);
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = (event: any) => {
         const db = event.target.result;
         const tx = event.target.transaction;
         this._createStores(db, tx);
@@ -142,7 +149,7 @@ class IndexedDBService {
     });
   }
 
-  _createStores(db, tx = null) {
+  _createStores(db: any, tx: any = null) {
     // 1. Primary Key-Value Store for app state, settings, backups, snapshots
     if (!db.objectStoreNames.contains('app_data')) {
       db.createObjectStore('app_data');
@@ -399,7 +406,7 @@ class IndexedDBService {
   async getAll(storeName = 'app_data') {
     if (!this.isSupported()) {
       if (storeName === 'app_data') {
-        const obj = {};
+        const obj: Record<string, any> = {};
         for (const [k, v] of this.fallbackMemoryStore.entries()) {
           obj[k] = v;
         }
@@ -543,10 +550,14 @@ class IndexedDBService {
     }
   }
 
+  async clearAll() {
+    return this.clear('app_data');
+  }
+
   /**
    * Executes an indexed query on an entity store.
    */
-  async query(storeName, indexName, value) {
+  async query(storeName: string, indexName: string, value: any) {
     if (!this.isSupported()) return [];
 
     try {

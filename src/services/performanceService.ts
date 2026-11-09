@@ -5,6 +5,12 @@ import { Logger } from '../core/logger/LoggerService';
  * Permet d'analyser le temps d'exécution des calculs Excel Twin, la consommation mémoire et la latence UI.
  */
 class PerformanceService {
+  metrics: Map<string, any[]>;
+  thresholds: {
+    slow: number;
+    verySlow: number;
+  };
+
   constructor() {
     this.metrics = new Map();
     this.thresholds = {
@@ -16,7 +22,7 @@ class PerformanceService {
   /**
    * Mesure la durée et l'impact mémoire d'une fonction asynchrone ou synchrone
    */
-  async measure(name, fn, options = {}) {
+  async measure(name: string, fn: () => any, options: any = {}) {
     const start = performance.now();
     const startMemory = this.getMemoryUsage();
 
@@ -42,7 +48,7 @@ class PerformanceService {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: any) {
       const duration = performance.now() - start;
       this.recordMetric(name, {
         duration,
@@ -57,12 +63,12 @@ class PerformanceService {
   /**
    * Enregistrement d'un point métrique
    */
-  recordMetric(name, metric) {
+  recordMetric(name: string, metric: any) {
     if (!this.metrics.has(name)) {
       this.metrics.set(name, []);
     }
 
-    const list = this.metrics.get(name);
+    const list = this.metrics.get(name)!;
     list.push(metric);
 
     // Conserver les 100 dernières mesures par opération
@@ -74,13 +80,13 @@ class PerformanceService {
   /**
    * Calcul des statistiques descriptives pour une opération
    */
-  getStats(name) {
+  getStats(name: string) {
     const metrics = this.metrics.get(name) || [];
     if (metrics.length === 0) return null;
 
     const durations = metrics
-      .filter((m) => m.status === 'success')
-      .map((m) => m.duration);
+      .filter((m: any) => m.status === 'success')
+      .map((m: any) => m.duration);
 
     if (durations.length === 0) return null;
 
@@ -97,14 +103,14 @@ class PerformanceService {
       max: Number(max.toFixed(2)),
       p95: Number(p95.toFixed(2)),
       p99: Number(p99.toFixed(2)),
-      errors: metrics.filter((m) => m.status === 'error').length,
+      errors: metrics.filter((m: any) => m.status === 'error').length,
     };
   }
 
   /**
    * Calcul du percentile
    */
-  percentile(arr, p) {
+  percentile(arr: number[], p: number) {
     if (!arr || arr.length === 0) return 0;
     const sorted = [...arr].sort((a, b) => a - b);
     const index = Math.ceil(sorted.length * p) - 1;
@@ -115,8 +121,8 @@ class PerformanceService {
    * Obtention de la mémoire Heap JS en Mo (si disponible)
    */
   getMemoryUsage() {
-    if (typeof window !== 'undefined' && window.performance && window.performance.memory) {
-      return window.performance.memory.usedJSHeapSize / (1024 * 1024);
+    if (typeof window !== 'undefined' && window.performance && (window.performance as any).memory) {
+      return (window.performance as any).memory.usedJSHeapSize / (1024 * 1024);
     }
     return 0;
   }
@@ -171,9 +177,9 @@ class PerformanceService {
   /**
    * Conversion des données en CSV
    */
-  convertToCSV(data) {
+  convertToCSV(data: any[]) {
     const headers = ['Opération', 'Moyenne (ms)', 'Min (ms)', 'Max (ms)', 'P95 (ms)', 'Échantillons', 'Erreurs'];
-    const rows = data.map((item) => [
+    const rows = data.map((item: any) => [
       `"${item.name}"`,
       item.stats?.avg ?? 'N/A',
       item.stats?.min ?? 'N/A',

@@ -15,21 +15,24 @@
  * - العمود H: `id_machine_registered` (الآلة المعنية بالتدخل)
  */
 export class Mouvement {
+  id: string;
+  code_bon: string;
+  type: string;
+  action_id: string;
+  id_machine_registered: string | null;
+  ref: string;
+  qte: number;
+  date: string;
+  technicien: string;
+  usage_type: string | null;
+  id_zone: string | null;
+  commentaire: string;
+  [key: string]: any;
+
   /**
    * بناء كائن حركة مخزون وتوثيق كافة الحقول المرتبطة بالعملية
-   * 
-   * @param {Object} data - البيانات الخام للحركة
-   * @param {string} [data.id] - المعرف الفريد للحركة
-   * @param {string} [data.code_bon] - رمز الوصل
-   * @param {'Entrée' | 'Sortie' | string} [data.type] - نوع الحركة
-   * @param {string} [data.action_id] - نوع الفلتر والتدخل
-   * @param {string} [data.id_machine_registered] - رمز الآلة المعنية
-   * @param {string} [data.ref] - مرجع القطعة المصروفة أو المدخلة
-   * @param {number|string} [data.quantite] - الكمية
-   * @param {string} [data.date] - التاريخ
-   * @param {string} [data.technicien] - اسم أو رمز الفني
    */
-  constructor(data = {}) {
+  constructor(data: any = {}) {
     this.id = data.id || data.code_bon;
     this.code_bon = data.code_bon || this.id;
     this.type = data.type || '';

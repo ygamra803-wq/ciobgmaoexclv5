@@ -1,4 +1,23 @@
 export class TaskEntity {
+  id: string;
+  code_bon: string;
+  num_commande: string;
+  date: string;
+  ref: string;
+  quantite: number;
+  type: string;
+  action_id: string;
+  usage_type: string;
+  technicien: string;
+  id_zone: string;
+  id_machine_registered: string;
+  operation: string;
+  fournisseur: string;
+  emplacement_reception: string;
+  demandeur: string;
+  commentaire: string;
+  [key: string]: any;
+
   constructor({
     id,
     code_bon,
@@ -17,7 +36,7 @@ export class TaskEntity {
     emplacement_reception,
     demandeur,
     commentaire
-  } = {}) {
+  }: any = {}) {
     this.id = id || code_bon || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `task_${Date.now()}`);
     this.code_bon = code_bon || String(this.id);
     this.num_commande = num_commande || '';

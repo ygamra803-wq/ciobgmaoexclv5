@@ -6,7 +6,10 @@ import { Logger } from '../core/logger/LoggerService';
  * Calculates moving averages, degradation trends, and performance stability ratios.
  */
 export class TrendAnalysisService {
-  static instance = null;
+  static instance: TrendAnalysisService | null = null;
+  history: any[];
+  maxSnapshots: number;
+  subscribers: Set<any>;
 
   constructor() {
     if (TrendAnalysisService.instance) {
@@ -23,7 +26,7 @@ export class TrendAnalysisService {
   /**
    * Record a metric snapshot into history
    */
-  record(snapshot) {
+  record(snapshot: any) {
     if (!snapshot) return;
 
     this.history.push({
@@ -46,7 +49,7 @@ export class TrendAnalysisService {
   /**
    * Calculate summary statistics and trends for a specific metric key (e.g. 'fps', 'eventLoopLagMs')
    */
-  getTrend(metricKey) {
+  getTrend(metricKey: string) {
     if (this.history.length === 0) {
       return {
         avg: 0,
@@ -59,7 +62,7 @@ export class TrendAnalysisService {
       };
     }
 
-    const values = this.history.map((h) => Number(h[metricKey]) || 0);
+    const values = this.history.map((h: any) => Number(h[metricKey]) || 0);
     const sum = values.reduce((a, b) => a + b, 0);
     const avg = Number((sum / values.length).toFixed(1));
     const min = Math.min(...values);
@@ -124,7 +127,7 @@ export class TrendAnalysisService {
   /**
    * Subscribe to trend updates
    */
-  subscribe(callback) {
+  subscribe(callback: (report: any) => void) {
     this.subscribers.add(callback);
     callback(this.getReport());
     return () => this.subscribers.delete(callback);

@@ -49,32 +49,36 @@ export interface IStockItem {
 
 export interface IMachine {
   id_machine_registered: string;
+  id_machine?: string;
+  id?: string;
   designation: string;
-  id_family: string;
-  id_templates: string;
-  id_zone_default: string;
+  id_family?: string;
+  id_templates?: string;
+  id_zone_default?: string;
   technician?: string;
-  status: MachineStatus;
+  status?: MachineStatus | string;
   id_blueprint?: string;
-  asset_class?: AssetClass;
+  asset_class?: AssetClass | string;
   id_general_system_type?: string | null;
   parent_id?: string | null;
   id_parent?: string | null;
   previous_parent_id?: string | null;
-  asset_level?: 'MACHINE' | 'LINE';
+  asset_level?: 'MACHINE' | 'LINE' | string;
   serial_number?: string;
   date_mise_en_service?: string;
   components_reels?: Array<{
     id_component: string;
     designation: string;
     ref_pdr?: string;
+    [key: string]: any;
   }>;
   compteur_heures?: number;
   compteur_cycles?: number;
   compteur_km?: number;
   dernier_releve_compteur?: number;
   date_releve_compteur?: string;
-  compteur_unite_defaut?: 'Heures' | 'Cycles' | 'Km';
+  compteur_unite_defaut?: 'Heures' | 'Cycles' | 'Km' | string;
+  [key: string]: any;
 }
 
 export interface IMouvement {
@@ -83,16 +87,17 @@ export interface IMouvement {
   date: string;
   ref: string;
   quantite: number;
-  type: MovementType;
-  action_id: ActionId;
+  type: MovementType | string;
+  action_id?: ActionId | string;
   id_machine_registered?: string;
   id_zone?: string;
   technicien?: string;
   operation?: string;
-  usage_type?: 'technician' | 'operation' | 'chef';
+  usage_type?: 'technician' | 'operation' | 'chef' | string;
   fournisseur?: string;
   emplacement_reception?: string;
   commentaire?: string;
+  [key: string]: any;
 }
 
 export interface IZone {
@@ -101,13 +106,15 @@ export interface IZone {
   libelle: string;
   description?: string;
   philosophie?: string;
+  [key: string]: any;
 }
 
 export interface IOperation {
   id_operation: string;
   nom: string;
   id_zone?: string;
-  type_profil?: ProfileType;
+  type_profil?: ProfileType | string;
+  [key: string]: any;
 }
 
 export interface ITechnician {
@@ -117,6 +124,7 @@ export interface ITechnician {
   id_zone?: string;
   role?: string;
   active?: boolean;
+  [key: string]: any;
 }
 
 export interface IDiagnostic {
@@ -125,6 +133,7 @@ export interface IDiagnostic {
   designation: string;
   id_type?: string;
   description?: string;
+  [key: string]: any;
 }
 
 export interface IType {
@@ -132,6 +141,7 @@ export interface IType {
   nom: string;
   description?: string;
   famille?: string;
+  [key: string]: any;
 }
 
 export interface IBlueprintPreventivePlanItem {
@@ -141,6 +151,7 @@ export interface IBlueprintPreventivePlanItem {
   frequence: string;
   description?: string;
   duree_min?: number;
+  [key: string]: any;
 }
 
 export interface IBlueprintCommonFailureItem {
@@ -151,6 +162,7 @@ export interface IBlueprintCommonFailureItem {
   urgence?: string;
   recommended_action?: string;
   pdr_ref?: string;
+  [key: string]: any;
 }
 
 export interface IBlueprint {
@@ -166,9 +178,11 @@ export interface IBlueprint {
     designation?: string;
     quantite_recommandee?: number;
     type?: string;
+    [key: string]: any;
   }>;
   preventivePlanItems?: IBlueprintPreventivePlanItem[];
   commonFailures?: IBlueprintCommonFailureItem[];
+  [key: string]: any;
 }
 
 export interface IWarehouseItem {
@@ -183,4 +197,5 @@ export interface IWarehouseItem {
   seuil_min: number;
   nature?: string;
   emplacement?: string;
+  [key: string]: any;
 }

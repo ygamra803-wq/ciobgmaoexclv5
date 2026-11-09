@@ -8,6 +8,10 @@ import { Logger } from '../core/logger/LoggerService';
  * Level 3: In-Memory Map (unlimited transient memory)
  */
 class MultiLevelStorageService {
+  memoryCache: Map<string, any>;
+  activeStorageLevel: string;
+  initPromise: Promise<string>;
+
   constructor() {
     this.memoryCache = new Map();
     this.activeStorageLevel = 'unknown'; // 'indexeddb' | 'localstorage' | 'memory'
@@ -57,23 +61,24 @@ class MultiLevelStorageService {
    * Gets current storage status metadata.
    */
   getStorageInfo() {
+    const descriptions: Record<string, string> = {
+      indexeddb: '✅ Stockage IndexedDB haute performance actif',
+      localstorage: '⚠️ Stockage LocalStorage actif (Capacité limitée)',
+      memory: '⚠️⚠️ Stockage Mémoire uniquement (Données volatiles)',
+      unknown: '❌ Analyse du stockage en cours'
+    };
     return {
       level: this.activeStorageLevel,
       available: this.activeStorageLevel !== 'unknown',
       memorySize: this.memoryCache.size,
-      description: {
-        indexeddb: '✅ Stockage IndexedDB haute performance actif',
-        localstorage: '⚠️ Stockage LocalStorage actif (Capacité limitée)',
-        memory: '⚠️⚠️ Stockage Mémoire uniquement (Données volatiles)',
-        unknown: '❌ Analyse du stockage en cours'
-      }[this.activeStorageLevel] || 'Inconnu'
+      description: descriptions[this.activeStorageLevel] || 'Inconnu'
     };
   }
 
   /**
    * Set item with multi-level fallback
    */
-  async setItem(key, value) {
+  async setItem(key: string, value: any) {
     await this.initPromise;
 
     // Always mirror in memory for fast sync access if needed
@@ -105,7 +110,7 @@ class MultiLevelStorageService {
   /**
    * Get item with multi-level fallback
    */
-  async getItem(key, fallback = null) {
+  async getItem(key: string, fallback: any = null) {
     await this.initPromise;
 
     if (this.activeStorageLevel === 'indexeddb') {
@@ -139,7 +144,7 @@ class MultiLevelStorageService {
   /**
    * Remove item from all levels
    */
-  async removeItem(key) {
+  async removeItem(key: string) {
     await this.initPromise;
 
     this.memoryCache.delete(key);

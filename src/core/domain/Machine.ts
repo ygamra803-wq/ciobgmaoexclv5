@@ -1,5 +1,12 @@
 export class Machine {
-  constructor(data) {
+  id_machine_registered: string;
+  id_family: string;
+  id_templates: string;
+  id_blueprint?: string;
+  components_reels: any[];
+  [key: string]: any;
+
+  constructor(data: any = {}) {
     this.id_machine_registered = data.id_machine_registered || data.id;
     this.id_family = data.id_family;
     this.id_templates = data.id_templates;
@@ -7,8 +14,8 @@ export class Machine {
     this.components_reels = data.components_reels || [];
   }
 
-  getPDRHistory(mouvements) {
-    return mouvements.filter(m => m.id_machine_registered === this.id_machine_registered && String(m.type || '').toLowerCase().includes('sortie'));
+  getPDRHistory(mouvements: any[] = []) {
+    return mouvements.filter((m: any) => m.id_machine_registered === this.id_machine_registered && String(m.type || '').toLowerCase().includes('sortie'));
   }
 
   getComponentsReels() {

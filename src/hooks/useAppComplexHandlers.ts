@@ -115,6 +115,9 @@ export function useAppComplexHandlers({
         matchesZone(o.id_zone) ||
         (Array.isArray(o.zones) && o.zones.some((zId) => matchesZone(zId)))
     );
+    const hasWarehouse = (warehouseItems || []).some(
+      (w: any) => matchesZone(w.id_zone_default) || matchesZone(w.id_zone)
+    );
     if (hasMachines || hasTechs || hasOps || hasWarehouse) {
       showToast?.(
         `Suppression refusée : la zone ${id} contient des machines ou techniciens actifs (ou membres/articles d'entrepôt). Réaffectez-les d'abord.`,

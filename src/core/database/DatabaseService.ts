@@ -7,7 +7,10 @@ import { indexedDBService } from '../../infrastructure/database/IndexedDBService
  * Support SQLite in Node environment & In-Memory / LocalStorage / IndexedDB Engine in Browser
  */
 export class DatabaseService {
-  static instance = null;
+  static instance: DatabaseService | null = null;
+  isBrowser: boolean;
+  db: any;
+  indexedDB: any;
 
   constructor(_dbPath = './data/gmao.db') {
     if (DatabaseService.instance) {
@@ -27,7 +30,7 @@ export class DatabaseService {
     DatabaseService.instance = this;
   }
 
-  getStorageKey(storeName) {
+  getStorageKey(storeName?: string) {
     if (!storeName) return 'gmao_data';
     if (storeName.startsWith('gmao_')) return storeName;
     return `gmao_${storeName}`;
