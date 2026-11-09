@@ -206,7 +206,7 @@ export default function AddMachineModal({
 
   // Format blueprint options with clean non-selected default
   const blueprintOptions = useMemo(() => {
-    const list = [
+    const list: any[] = [
       {
         value: '',
         label: '— Non sélectionné (Optionnel) —',

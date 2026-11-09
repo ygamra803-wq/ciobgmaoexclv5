@@ -21,6 +21,19 @@ import { useI18n } from '../../../i18n/I18nContext';
  * 6. Virtual Scrolling (Windowing) haute performance (60fps) pour 10 000+ enregistrements
  * 7. Support triple moteur : '@tanstack/react-virtual' + 'table-window' natif + 'react-window' optionnel
  */
+export interface GmaoColumn<T = any> {
+  key: string;
+  label?: any;
+  header?: any;
+  excelCol?: string;
+  sortable?: boolean;
+  align?: string;
+  width?: string;
+  className?: string;
+  render?: (row: T, index: number) => any;
+  [key: string]: any;
+}
+
 export default function GmaoIndustrialDataGrid({
   title = '',
   icon = null,

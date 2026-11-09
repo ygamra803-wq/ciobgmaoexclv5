@@ -148,6 +148,8 @@ export interface IMachineHierarchyContext {
   levelLabel: string;
   parentId: string | null;
   parentDesignation: string | null;
+  parentMachine: any | null;
+  childrenCount: number;
   breadcrumbIds: string[];
   breadcrumbLabels: string[];
   ownZone: string;
@@ -178,6 +180,7 @@ export function resolveMachineHierarchyContext(
       ? rawParentId
       : null;
   const parentMachine = validParentId ? byId.get(validParentId) || null : null;
+  const childrenCount = selfId ? getDescendantMachineIds(selfId, machines).length : 0;
 
   const breadcrumbIds: string[] = selfId ? [selfId] : [];
   const breadcrumbLabels: string[] = [
@@ -212,6 +215,8 @@ export function resolveMachineHierarchyContext(
     parentDesignation: parentMachine
       ? String(parentMachine.designation || parentMachine.nom || validParentId).trim()
       : null,
+    parentMachine,
+    childrenCount,
     breadcrumbIds,
     breadcrumbLabels,
     ownZone,

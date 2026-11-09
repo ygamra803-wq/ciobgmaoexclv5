@@ -604,9 +604,13 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
 
   // Reactivate archived equipment
   const handleReactivateEquipment = (equip: any) => {
-    const reactivated = transitionMachineLifecycle(equip, 'REACTIVATE');
+    const { updatedMachine } = transitionMachineLifecycle({
+      machine: equip,
+      targetStatus: 'En Service',
+      preventiveTasks,
+    });
     handleUpdateMachine(equip.id_machine_registered, {
-      ...reactivated,
+      ...updatedMachine,
       status: 'En Service',
     });
     showToast?.(`Équipement ${equip.id_machine_registered} réactivé en service`, 'success');
@@ -1185,8 +1189,12 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     const hasHistory = archiveDependencies?.hasHistory;
 
     if (hasHistory) {
-      const archivedMachine = transitionMachineLifecycle(archiveTarget, 'ARCHIVE');
-      handleUpdateMachine(code, archivedMachine);
+      const { updatedMachine } = transitionMachineLifecycle({
+        machine: archiveTarget,
+        targetStatus: 'ARCHIVEE',
+        preventiveTasks,
+      });
+      handleUpdateMachine(code, updatedMachine);
       showToast?.(
         `Équipement ${code} archivé en toute sécurité (historique préservé)`,
         'info'
@@ -2436,13 +2444,14 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      const archivedMachine = transitionMachineLifecycle(
-                        archiveTarget,
-                        'ARCHIVE'
-                      );
+                      const { updatedMachine } = transitionMachineLifecycle({
+                        machine: archiveTarget,
+                        targetStatus: 'ARCHIVEE',
+                        preventiveTasks,
+                      });
                       handleUpdateMachine(
                         archiveTarget.id_machine_registered,
-                        archivedMachine
+                        updatedMachine
                       );
                       showToast?.(
                         `Équipement ${archiveTarget.id_machine_registered} archivé`,

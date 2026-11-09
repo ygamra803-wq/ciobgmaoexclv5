@@ -75,7 +75,7 @@ export default function NexusView({
   onCreatePreventiveFromNexus,
   onNavigate = () => {},
   showToast,
-}) {
+}: any) {
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -133,7 +133,7 @@ export default function NexusView({
   const [searchTerm, setSearchTerm] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isGapModalOpen, setIsGapModalOpen] = useState(false);
-  const [editingElement, setEditingElement] = useState(null);
+  const [editingElement, setEditingElement] = useState<any>(null);
 
   // NEX-3: Active technicians only
   const activeTechnicians = useMemo(

@@ -83,7 +83,7 @@ export default function BlueprintMachineView({
   onNavigateToFamily: _onNavigateToFamily = () => {},
   onNavigateToTemplate: _onNavigateToTemplate = () => {},
   onNavigateToTab = () => {},
-}) {
+}: any) {
   const { t } = useI18n();
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
@@ -98,11 +98,11 @@ export default function BlueprintMachineView({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [activeModalTab, setActiveModalTab] = useState('specs'); // 'specs' | 'components' | 'parts' | 'pdr' | 'preventive'
-  const [selectedInspectBlueprint, setSelectedInspectBlueprint] = useState(null);
+  const [selectedInspectBlueprint, setSelectedInspectBlueprint] = useState<any>(null);
   const [inspectActiveTab, setInspectActiveTab] = useState('specs');
 
   // Form State for Add/Edit Blueprint with BOM + Preventive Plan architecture
-  const initialFormState = {
+  const initialFormState: any = {
     id_blueprint: '',
     libelle: '',
     id_family: families[0]?.id_family || '',
@@ -125,21 +125,21 @@ export default function BlueprintMachineView({
     commonFailures: [],
   };
 
-  const [form, setForm] = useState(initialFormState);
-  const [toEdit, setToEdit] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
+  const [form, setForm] = useState<any>(initialFormState);
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [toDelete, setToDelete] = useState<any>(null);
 
   // Helper inputs for adding items into Tab 2, 3, 4, 5, 6
-  const [newCompItem, setNewCompItem] = useState({ id_component: '', libelle: '', qte: 1 });
-  const [newPartItem, setNewPartItem] = useState({ id_part: '', libelle: '', qte: 1 });
-  const [newPdrItem, setNewPdrItem] = useState({
+  const [newCompItem, setNewCompItem] = useState<any>({ id_component: '', libelle: '', qte: 1 });
+  const [newPartItem, setNewPartItem] = useState<any>({ id_part: '', libelle: '', qte: 1 });
+  const [newPdrItem, setNewPdrItem] = useState<any>({
     id_pdr: '',
     libelle: '',
     qte: 1,
     criticite: 'Haute',
     parent_component_key: '',
   });
-  const [newPreventiveItem, setNewPreventiveItem] = useState({
+  const [newPreventiveItem, setNewPreventiveItem] = useState<any>({
     composant: '',
     action_code: 'C',
     frequence: 'Mensuel',
@@ -147,7 +147,7 @@ export default function BlueprintMachineView({
     description: '',
     pdr_ref: '',
   });
-  const [newCommonFailureItem, setNewCommonFailureItem] = useState({
+  const [newCommonFailureItem, setNewCommonFailureItem] = useState<any>({
     title: '',
     type_panne: 'M',
     urgence: 'HAUTE',
@@ -155,7 +155,7 @@ export default function BlueprintMachineView({
     description: '',
     pdr_ref: '',
   });
-  const [applyFeedback, setApplyFeedback] = useState(null);
+  const [applyFeedback, setApplyFeedback] = useState<any>(null);
 
   // Taken blueprint numbers for SequentialCodePicker
   const takenBlueprintNumbers = useMemo(() => {

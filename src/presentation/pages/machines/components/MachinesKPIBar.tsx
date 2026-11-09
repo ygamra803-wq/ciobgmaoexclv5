@@ -6,7 +6,7 @@ export default function MachinesKPIBar({
   kpis = {},
   statusFilter,
   setStatusFilter,
-}) {
+}: any) {
   const { t } = useI18n();
 
   const total = Number(kpis.total) || 0;

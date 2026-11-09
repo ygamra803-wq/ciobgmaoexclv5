@@ -175,7 +175,7 @@ export default function MachinesRegisteredView({
   onNavigateToPreventive = () => {},
   onNavigateToEquipment = (_machineId?: string) => {},
   showToast,
-}) {
+}: any) {
   const canCreate = usePermission('machine.create');
   const canEdit = usePermission('machine.edit');
   const canDelete = usePermission('machine.delete');
@@ -217,19 +217,19 @@ export default function MachinesRegisteredView({
     return [];
   }, [passedTemplates, effectiveTemplates]);
 
-  const onUpdateMachine = (id, data) => {
+  const onUpdateMachine = (id: any, data: any) => {
     if (propUpdateMachine) propUpdateMachine(id, data);
     else if (dbUpdateMachine) dbUpdateMachine(id, data).catch(() => {});
   };
 
-  const onDeleteMachine = (id) => {
+  const onDeleteMachine = (id: any) => {
     if (propDeleteMachine) propDeleteMachine(id);
     else if (dbDeleteMachine) dbDeleteMachine(id).catch(() => {});
   };
 
-  const [toEdit, setToEdit] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
-  const [preventiveMachine, setPreventiveMachine] = useState(null);
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [toDelete, setToDelete] = useState<any>(null);
+  const [preventiveMachine, setPreventiveMachine] = useState<any>(null);
   const [qrMachine, setQrMachine] = useState<{ machine: any; mode: 'ETIQUETTE' | 'FICHE_TERRAIN' } | null>(null);
   const [passport360Machine, setPassport360Machine] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | 'En Service' | 'En Maintenance' | 'Arrêt'
