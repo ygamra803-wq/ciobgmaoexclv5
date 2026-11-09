@@ -58,7 +58,7 @@ import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePerio
  * Smart OT / Commande resolver:
  * Fallback to INCONNU if empty, null, undefined or whitespace
  */
-export const getSmartOtCommande = (m = {}) => {
+export const getSmartOtCommande = (m: any = {}) => {
   if (!m) return 'INCONNU';
   const val = m.num_commande != null ? String(m.num_commande).trim() : '';
   if (val === '' || val.toUpperCase() === 'NULL' || val.toUpperCase() === 'UNDEFINED') {
@@ -70,7 +70,7 @@ export const getSmartOtCommande = (m = {}) => {
 /**
  * Smart Flux Type Resolver (Column B)
  */
-export const getSmartFluxType = (m = {}) => {
+export const getSmartFluxType = (m: any = {}) => {
   if (!m) return 'Sortie Interne';
   const rawType = String(m.type || '').trim();
   const rawAction = String(m.action_id || '').toUpperCase();
@@ -102,7 +102,7 @@ export const getSmartFluxType = (m = {}) => {
 /**
  * Smart Article Info Resolver (Column D)
  */
-export const resolveArticleInfo = (m = {}, { stockItems = [], warehouseItems = [] } = {}) => {
+export const resolveArticleInfo = (m: any = {}, { stockItems = [], warehouseItems = [] }: any = {}) => {
   const rawRef = String(m.ref || '').trim();
 
   // Source category identification
@@ -198,8 +198,8 @@ export const resolveArticleInfo = (m = {}, { stockItems = [], warehouseItems = [
  * - COMMANDE: Pending Delivery to Stock PDR
  */
 export const resolveDestinationInfo = (
-  m = {},
-  { machines = [], zones = [] } = {}
+  m: any = {},
+  { machines = [], zones = [] }: any = {}
 ) => {
   const flux = getSmartFluxType(m);
   const action = String(m.action_id || '').toUpperCase();
@@ -397,8 +397,8 @@ export const resolveDestinationInfo = (
  * 4. isUnknown flag for incomplete legacy records with clean INCONNU message
  */
 export const resolveIntervenantInfo = (
-  m = {},
-  { technicians = [], operations = [] } = {}
+  m: any = {},
+  { technicians = [], operations = [] }: any = {}
 ) => {
   const flux = getSmartFluxType(m);
   const action = String(m.action_id || '').toUpperCase();
@@ -649,7 +649,7 @@ export const resolveIntervenantInfo = (
  *     - If < seuil: Amber / Yellow (text-amber-600 font-extrabold)
  *     - If >= seuil: Black (text-slate-900 font-bold)
  */
-export const resolveStockEquation = (m = {}, { stockItems = [], warehouseItems = [] } = {}) => {
+export const resolveStockEquation = (m: any = {}, { stockItems = [], warehouseItems = [] }: any = {}) => {
   const isOutflow = String(m.type || '').toLowerCase().includes('sortie');
   const qte = Number(m.quantite) || 0;
 
@@ -722,9 +722,9 @@ export const resolveStockEquation = (m = {}, { stockItems = [], warehouseItems =
 /**
  * Custom Select Helper component
  */
-function TableFilterSelect({ value, onChange, options = [], icon, className = '' }) {
+function TableFilterSelect({ value, onChange, options = [], icon, className = '' }: any) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef(null);
+  const ref = useRef<any>(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -806,7 +806,7 @@ export default function MouvementsJournalTable({
   operations = [],
   onUpdateMouvement,
   onDeleteMouvement,
-}) {
+}: any) {
   // Table Filtering States
   const [tableFilterType, setTableFilterType] = useState('ALL');
   const [tableFilterSource, setTableFilterSource] = useState('ALL');
@@ -818,31 +818,31 @@ export default function MouvementsJournalTable({
   const [localTableSearchText, setLocalTableSearchText] = useState('');
 
   const availableMovementDates = useMemo(() => {
-    return mouvements.map((m) => m.date);
+    return mouvements.map((m: any) => m.date);
   }, [mouvements]);
 
   // Table Sorting States
   const [tableSortField, setTableSortField] = useState('date');
   const [tableSortOrder, setTableSortOrder] = useState('desc');
   const [showTableSortMenu, setShowTableSortMenu] = useState(false);
-  const tableSortMenuRef = useRef(null);
+  const tableSortMenuRef = useRef<any>(null);
 
   // Pagination State & Page Size
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   // Voucher Modal State
-  const [voucherModalMvt, setVoucherModalMvt] = useState(null);
+  const [voucherModalMvt, setVoucherModalMvt] = useState<any>(null);
 
   // RBAC Permission checks
   const canDeleteMovement = usePermission('movement.delete');
   const canEditMovement = usePermission('movement.edit');
 
   // Edit / Delete Movement Modals & Action Menu Popover
-  const [editingMovement, setEditingMovement] = useState(null);
-  const [editFormData, setEditFormData] = useState({});
-  const [deletingMovement, setDeletingMovement] = useState(null);
-  const [activeActionMenuId, setActiveActionMenuId] = useState(null);
+  const [editingMovement, setEditingMovement] = useState<any>(null);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [deletingMovement, setDeletingMovement] = useState<any>(null);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<any>(null);
 
   // Click outside listener for sort menu and action popovers
   useEffect(() => {
@@ -2211,7 +2211,7 @@ export default function MouvementsJournalTable({
                   Commentaire / Observation (I)
                 </label>
                 <textarea
-                  rows="2"
+                  rows={2}
                   value={editFormData.commentaire || ''}
                   onChange={(e) => setEditFormData({ ...editFormData, commentaire: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"

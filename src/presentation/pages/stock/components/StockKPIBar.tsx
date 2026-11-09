@@ -10,7 +10,7 @@ export default function StockKPIBar({
   setActiveKpiFilter,
   stockAlertOnly,
   setStockAlertOnly,
-}) {
+}: any) {
   const { t } = useI18n();
 
   const totalCount = stockItems.length;

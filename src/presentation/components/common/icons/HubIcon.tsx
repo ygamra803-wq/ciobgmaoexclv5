@@ -5,10 +5,10 @@
  */
 export function HubIcon({
   className = 'w-4 h-4',
-  size,
+  size = 24,
   color = 'currentColor',
   ...props
-}) {
+}: any) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

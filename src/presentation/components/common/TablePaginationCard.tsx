@@ -10,7 +10,7 @@ export default function TablePaginationCard({
   pageSizeOptions = [25, 50, 100, 200, 0],
   itemLabel = '',
   className = '',
-}) {
+}: any) {
   const { t } = useTranslation();
   const totalPages = pageSize === 0 ? 1 : Math.ceil(totalItems / pageSize);
   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;

@@ -8,7 +8,7 @@ import { safeNum } from '../utils/formulaEngine';
 /**
  * Normalizes an individual movement entry ensuring Excel-twin compatibility
  */
-export function normalizeMovement(m, idx = 0) {
+export function normalizeMovement(m: any, idx = 0) {
   return {
     id: m.id || idx + 1,
     code_bon:
@@ -94,16 +94,16 @@ export function normalizeMovement(m, idx = 0) {
  * Hook managing Movements log and transactions.
  * Enforces SSOT: canonical STORAGE_KEYS.MOUVEMENTS only, no length >= 300 threshold, no silent seed replacement.
  */
-export function useMovementSubState(groupedState = {}) {
+export function useMovementSubState(groupedState: any = {}) {
   const [mouvements, setMouvements] = useState(() => {
     if (Array.isArray(groupedState.mouvements)) {
-      return groupedState.mouvements.map((m, idx) => normalizeMovement(m, idx));
+      return groupedState.mouvements.map((m: any, idx: number) => normalizeMovement(m, idx));
     }
     const loaded = loadCollection(STORAGE_KEYS.MOUVEMENTS, {
       allowDemoFallback: true,
       demoSeed: initialMouvements,
     });
-    return loaded.map((m, idx) => normalizeMovement(m, idx));
+    return loaded.map((m: any, idx: number) => normalizeMovement(m, idx));
   });
 
   useEffect(() => {

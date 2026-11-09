@@ -7,16 +7,20 @@ import { memo } from 'react';
  */
 function TableSkeletonRowsComponent({
   cols = 12,
+  columnsCount,
   rows = 8,
 }: {
   cols?: number;
+  columnsCount?: number;
   rows?: number;
   color?: string;
+  [key: string]: any;
 }) {
+  const effectiveCols = columnsCount ?? cols;
   const shimmerClass = 'shimmer-wave';
   const textWidths = ['w-28', 'w-36', 'w-44', 'w-32', 'w-40'];
 
-  if (cols === 7) {
+  if (effectiveCols === 7) {
     return (
       <>
         {[...Array(rows)].map((_, rIdx) => (

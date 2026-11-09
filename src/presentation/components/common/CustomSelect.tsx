@@ -39,7 +39,7 @@ export default function CustomSelect({
   onAddNew = null, // Function to trigger when clicking "Ajouter / Créer"
   addNewLabel = 'Nouveau / Ajouter', // Label for the create button
   addNewIcon: AddNewIcon = Plus,
-}) {
+}: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);

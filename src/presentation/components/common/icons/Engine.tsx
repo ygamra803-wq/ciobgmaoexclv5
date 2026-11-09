@@ -4,11 +4,11 @@
  */
 export function Engine({
   className = 'w-4 h-4',
-  size,
+  size = 24,
   color = 'currentColor',
   strokeWidth = 2,
   ...props
-}) {
+}: any) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

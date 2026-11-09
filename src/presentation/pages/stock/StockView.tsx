@@ -87,7 +87,7 @@ export default function StockView({
   onDirectAdjustStock = () => {},
   stockKPIs = { total: 0, alertes: 0, ruptures: 0, ok: 0, totalSorties: 0, totalEntrees: 0 },
   onNavigateToType: _onNavigateToType = () => {},
-}) {
+}: any) {
   const { t } = useI18n();
   const stockItems = propStockItems || [];
   const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
@@ -199,17 +199,17 @@ export default function StockView({
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // Dropdown actions popover menu state for table rows
-  const [activeActionMenuRef, setActiveActionMenuRef] = useState(null);
+  const [activeActionMenuRef, setActiveActionMenuRef] = useState<any>(null);
 
   // Modals state
-  const [quickModalState, setQuickModalState] = useState({
+  const [quickModalState, setQuickModalState] = useState<any>({
     isOpen: false,
     article: null,
     initialFlow: 'Sortie Interne',
     initialAction: 'CORRECTIVE',
   });
 
-  const [editArticleModalState, setEditArticleModalState] = useState({
+  const [editArticleModalState, setEditArticleModalState] = useState<any>({
     isOpen: false,
     article: null,
   });
@@ -218,7 +218,7 @@ export default function StockView({
   const canCreateStock = usePermission('stock.create');
   const canCreateMovement = usePermission('movement.create');
 
-  const sortMenuRef = useRef(null);
+  const sortMenuRef = useRef<any>(null);
 
   // Debounce state for high-performance stock searching
   const [localSearch, setLocalSearch] = useState(stockSearch);
@@ -347,14 +347,15 @@ export default function StockView({
     );
   };
 
-  const hasActiveFilters =
+  const hasActiveFilters = Boolean(
     stockTypeFilter !== 'ALL' ||
     stockEmplacementFilter !== 'ALL' ||
     stockAlertOnly ||
     activeKpiFilter !== 'ALL' ||
     localSearch ||
     sortField !== 'type' ||
-    sortOrder !== 'asc';
+    sortOrder !== 'asc'
+  );
 
   const clearAllFilters = () => {
     setStockTypeFilter('ALL');

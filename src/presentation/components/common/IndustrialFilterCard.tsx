@@ -121,7 +121,7 @@ export function FilterField({
   colBadgeColor = 'slate',
   children,
   className = '',
-}) {
+}: any) {
   const badgeClasses = {
     accent: 'bg-accent-subtle text-accent-main border-accent-subtle font-bold',
     slate: 'bg-slate-100 text-slate-600 border-slate-200/80',
@@ -174,7 +174,7 @@ export function FilterSearchInput({
   colBadgeColor = 'slate',
   focusRingColor = 'focus:ring-accent-500/30 focus:border-accent-main',
   className = '',
-}) {
+}: any) {
   const { t } = useTranslation();
   const effectiveLabel = label || t('common.filters.search');
   const effectivePlaceholder = placeholder || t('common.filters.search_placeholder');
@@ -248,7 +248,7 @@ export default function IndustrialFilterCard({
   onClearAll,
   children,
   className = '',
-}) {
+}: any) {
   const { t } = useTranslation();
   const theme = COLOR_MAP[color] || COLOR_MAP.accent || COLOR_MAP.cyan;
 

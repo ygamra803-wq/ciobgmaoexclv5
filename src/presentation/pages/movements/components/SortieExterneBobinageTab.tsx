@@ -42,7 +42,7 @@ export default function SortieExterneBobinageTab({
   technicians = [],
   onAddMouvement = null, // Sync back to movement journal if desired
   showToast = null,
-}) {
+}: any) {
   const canCreateMovement = usePermission('movement.create');
   const canDeleteMovement = usePermission('movement.delete');
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
@@ -907,8 +907,8 @@ export default function SortieExterneBobinageTab({
                 className="h-7 px-2 rounded-lg border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 outline-none cursor-pointer"
               >
                 <option value="ALL">Tous les Prestataires</option>
-                {distinctFournisseurs.map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                {distinctFournisseurs.map((f: any) => (
+                  <option key={String(f)} value={String(f)}>{String(f)}</option>
                 ))}
               </select>
             </div>

@@ -46,11 +46,11 @@ export default function SequentialCodePicker({
   maxNumbers = 99,
   padLength = 2,
   customBands = null,
-}) {
+}: any) {
   const [isOpen, setIsOpen] = useState(false);
   const bands = customBands || DEFAULT_BANDS_99;
   const [activeBandId, setActiveBandId] = useState(bands[0]?.id || '1-20');
-  const containerRef = useRef(null);
+  const containerRef = useRef<any>(null);
 
   // Extract currently selected numeric value from currentCode
   const selectedNumber = useMemo(() => {

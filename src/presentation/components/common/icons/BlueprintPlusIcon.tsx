@@ -5,9 +5,9 @@
  */
 export function BlueprintPlusIcon({
   className = 'w-3.5 h-3.5',
-  size,
+  size = 24,
   ...props
-}) {
+}: any) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

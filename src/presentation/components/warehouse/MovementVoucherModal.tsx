@@ -29,8 +29,8 @@ export default function MovementVoucherModal({
   destinationInfo = {},
   intervenantInfo = {},
   equationInfo = {}
-}) {
-  const printRef = useRef(null);
+}: any) {
+  const printRef = useRef<HTMLDivElement>(null);
 
   if (!isOpen || !movement) return null;
 

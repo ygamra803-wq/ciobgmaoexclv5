@@ -39,13 +39,13 @@ export class MovementEntity implements IMouvement {
     this.date = date || new Date().toISOString().slice(0, 10);
     this.ref = (ref || '').toUpperCase().trim();
     this.quantite = Number(quantite) || 0;
-    this.type = type;
-    this.action_id = action_id;
+    this.type = type as MovementType;
+    this.action_id = action_id as ActionId;
     this.id_machine_registered = id_machine_registered;
     this.id_zone = id_zone;
     this.technicien = technicien;
     this.operation = operation;
-    this.usage_type = usage_type;
+    this.usage_type = usage_type as 'technician' | 'operation' | 'chef' | undefined;
     this.fournisseur = fournisseur;
     this.emplacement_reception = emplacement_reception;
     this.commentaire = commentaire;

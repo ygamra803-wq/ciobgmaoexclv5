@@ -11,7 +11,7 @@ export default function SortieEntreeIcon({
   upColor = 'text-rose-500',
   strokeWidth = 2.25,
   ...props
-}) {
+}: any) {
   return (
     <svg
       viewBox="0 0 24 24"

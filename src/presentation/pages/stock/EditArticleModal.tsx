@@ -8,7 +8,7 @@ export default function EditArticleModal({
   article,
   types = [],
   onUpdateArticle,
-}) {
+}: any) {
   const [form, setForm] = useState({
     ref: article?.ref || '',
     designation: article?.designation || '',

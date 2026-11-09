@@ -46,13 +46,13 @@ export default function GmaoIndustrialDataGrid({
   pagination = null,
   tableClassName = '',
   containerClassName = '',
-  virtualized,
+  virtualized = undefined,
   virtualThreshold = 35,
   rowHeight = 52,
   overscanCount = 8,
   useReactWindow = false,
-  useTanStack,
-}) {
+  useTanStack = undefined,
+}: any) {
   const { t } = useI18n();
   const scrollContainerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -219,7 +219,7 @@ export default function GmaoIndustrialDataGrid({
   const resolvedEmptyMessage = emptyMessage || t('common.empty_message', 'Aucun enregistrement trouvé');
 
   // React-Window Row Component when useReactWindow is activated
-  const ReactWindowRow = ({ index, style, ariaAttributes }) => {
+  const ReactWindowRow = ({ index, style, ariaAttributes }: any) => {
     const item = data[index];
     if (!item) return null;
     const rowNumber = startIndex + index + 1;
@@ -337,8 +337,8 @@ export default function GmaoIndustrialDataGrid({
             <List
               rowCount={data.length}
               rowHeight={effectiveRowHeight}
-              rowComponent={ReactWindowRow}
-              rowProps={{ data, columns, renderRow, startIndex, showRowNumber }}
+              rowComponent={ReactWindowRow as any}
+              rowProps={{ data, columns, renderRow, startIndex, showRowNumber } as any}
               style={{ height: Math.min(viewportHeight, 520), width: '100%' }}
             />
           </div>
@@ -494,7 +494,7 @@ export default function GmaoIndustrialDataGrid({
   );
 }
 
-export function VirtualizedIndustrialDataGrid(props) {
+export function VirtualizedIndustrialDataGrid(props: any) {
   return <GmaoIndustrialDataGrid {...props} virtualized={true} useReactWindow={true} />;
 }
 

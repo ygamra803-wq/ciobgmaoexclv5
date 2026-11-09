@@ -451,9 +451,9 @@ export class StockCalculationService {
         isValid: mismatches.length === 0,
         mismatches,
       };
-    } catch (error) {
+    } catch (error: any) {
       Logger.error('❌ Verification failed', error, 'StockCalc');
-      return { isValid: false, error: error.message };
+      return { isValid: false, error: error?.message || String(error) };
     }
   }
 }

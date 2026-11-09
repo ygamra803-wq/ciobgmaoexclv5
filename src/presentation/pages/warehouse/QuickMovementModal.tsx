@@ -33,7 +33,7 @@ export default function QuickMovementModal({
   mouvements = [],
   onAddMouvement,
   onDirectAdjustStock,
-}) {
+}: any) {
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
   const activeTechnicians = useMemo(
     () =>

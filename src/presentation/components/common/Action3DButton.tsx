@@ -30,7 +30,7 @@ export default function Action3DButton({
   showAddBadge = false,
   children,
   ...restProps
-}) {
+}: any) {
   // Color palette themes mapping with individual 3D glows and border highlights
   const colorThemes = {
     cyan: {

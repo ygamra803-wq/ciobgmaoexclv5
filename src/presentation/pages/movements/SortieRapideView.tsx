@@ -77,11 +77,11 @@ function CustomSelect({
   options = [],
   placeholder = 'Sélectionner...',
   disabled = false,
-  onAddNew,
+  onAddNew = null,
   addNewLabel = 'Ajouter...',
   className = '',
   icon = null,
-}) {
+}: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -207,7 +207,7 @@ function CustomSelect({
 }
 
 // Floating Form Container with frosted glass backdrop and elevated card
-function FormContainerWrapper({ isFloating, isWizardMode = false, onClose, children }) {
+function FormContainerWrapper({ isFloating, isWizardMode = false, onClose, children }: any) {
   if (isFloating) {
     return (
       <div
@@ -309,7 +309,7 @@ export default function SortieRapideView({
   onOpenAddOperator,
   _onNavigateToWarehouse,
   showToast = null,
-}) {
+}: any) {
   const { user } = useAuth();
   const canCreateMovement = usePermission('movement.create');
   const canEditMovement = usePermission('movement.edit');
@@ -430,6 +430,28 @@ export default function SortieRapideView({
     setReviewDemand(null);
   };
 
+  const handleReloadClarificationDemand = (dem: any) => {
+    if (!dem) return;
+    setEditingDemandId(dem.id);
+    setForm((prev: any) => ({
+      ...prev,
+      code_bon: dem.code_bon_tech || prev.code_bon,
+      num_commande: dem.num_commande || '',
+      date: dem.date || prev.date,
+      heure: dem.heure || prev.heure,
+      action_id: dem.action_id || 'CORRECTIVE',
+      id_zone: dem.id_zone || prev.id_zone,
+      id_machine_registered: dem.id_machine_registered || prev.id_machine_registered,
+      commentaire: dem.commentaire || '',
+    }));
+    if (Array.isArray(dem.items) && dem.items.length > 0) {
+      setMouvementItems(dem.items.map((it: any) => ({ ...it })));
+    }
+    if (viewMode === 'JOURNAL') {
+      setIsFloatingFormOpen(true);
+    }
+  };
+
   // Navigation Sub-Tabs: 'JOURNAL' | 'VALIDATION_TERRAIN' | 'COMMANDES' | 'REPARATION_EXTERNE'
   const [activeSubTab, setActiveSubTab] = useState('JOURNAL');
   // Display Mode for Journal: 'SPLIT' (Vue Scindée) | 'JOURNAL' (Plein Écran Table)
@@ -494,7 +516,7 @@ export default function SortieRapideView({
   const activeMachinesList = useMemo(() => filterActiveMachines(machines), [machines]);
 
   // Form State
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<any>({
     date: new Date().toISOString().split('T')[0],
     heure: getCurrentTimeStr(),
     // 5 Operational Flow Types:
@@ -529,7 +551,7 @@ export default function SortieRapideView({
   });
 
   // Multi-articles list for the current Bon (up to 5 items)
-  const [mouvementItems, setMouvementItems] = useState([
+  const [mouvementItems, setMouvementItems] = useState<any[]>([
     {
       source: 'STOCK_PDR', // 'STOCK_PDR' | 'WAREHOUSE_PARTIE' | 'WAREHOUSE_COMPOSANT'
       ref: '',
@@ -542,7 +564,7 @@ export default function SortieRapideView({
 
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [validationErrors, setValidationErrors] = useState([]);
+  const [validationErrors, setValidationErrors] = useState<any[]>([]);
 
   // Keep code_bon up to date when movements collection updates
   useEffect(() => {
@@ -3181,7 +3203,7 @@ export default function SortieRapideView({
                           key={act.id}
                           type="button"
                           onClick={() => {
-                            const updatedForm = { ...form, action_id: act.id };
+                            const updatedForm: any = { ...form, action_id: act.id };
                             if (act.id === 'USAGE') {
                               const uType = form.usage_type || 'responsable';
                               if (uType === 'technician') {
@@ -5612,11 +5634,11 @@ export default function SortieRapideView({
                     <span>Diagnostic de Réconciliation V4 (Bon & Stock)</span>
                   </div>
                   <div className="space-y-1.5">
-                    {reviewDemandReconciliation.alerts.map((al, i) => (
+                    {reviewDemandReconciliation.alerts.map((al: any, i: number) => (
                       <div
                         key={i}
                         className={`p-2 rounded-lg border text-[11px] ${
-                          al.severity === 'CRITICAL'
+                          String(al.severity || '').toUpperCase() === 'CRITICAL'
                             ? 'bg-rose-50 border-rose-200 text-rose-900'
                             : 'bg-white border-amber-200 text-amber-900'
                         }`}
@@ -5649,12 +5671,15 @@ export default function SortieRapideView({
                     <option value="">
                       — Ne pas fusionner (Créer un nouveau mouvement et déduire le stock) —
                     </option>
-                    {reviewDemandReconciliation.candidateStoreMovements.map((cand) => (
-                      <option key={cand.id} value={cand.id}>
-                        Fusionner avec Bon Magasin {cand.code_bon} ({cand.ref} ×{cand.quantite} •{' '}
-                        {cand.date} • {cand.technicien}) — Zéro double déduction
-                      </option>
-                    ))}
+                    {reviewDemandReconciliation.candidateStoreMovements.map((cand: any) => {
+                      const candId = cand.movementId || cand.id || cand.code_bon;
+                      return (
+                        <option key={candId} value={candId}>
+                          Fusionner avec Bon Magasin {cand.code_bon} ({cand.ref} ×{cand.quantite} •{' '}
+                          {cand.date} • {cand.technicien}) — Zéro double déduction
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -5691,7 +5716,7 @@ export default function SortieRapideView({
                 <div className="font-bold text-slate-800">
                   Articles & Quantités à valider :
                 </div>
-                {reviewItems.map((it, idx) => (
+                {reviewDemandItems.map((it: any, idx: number) => (
                   <div
                     key={`${it.ref}-${idx}`}
                     className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
@@ -5709,7 +5734,7 @@ export default function SortieRapideView({
                         value={it.quantite}
                         onChange={(e) => {
                           const val = Math.max(0, Number(e.target.value) || 0);
-                          setReviewItems((prev) =>
+                          setReviewDemandItems((prev) =>
                             prev.map((row, rIdx) => (rIdx === idx ? { ...row, quantite: val } : row))
                           );
                         }}
@@ -5727,8 +5752,8 @@ export default function SortieRapideView({
                 </label>
                 <textarea
                   rows={2}
-                  value={reviewNote}
-                  onChange={(e) => setReviewNote(e.target.value)}
+                  value={reviewDemandNote}
+                  onChange={(e) => setReviewDemandNote(e.target.value)}
                   placeholder="Ex: Bon BS-104 fusionné avec BS-109 du carnet magasin, ou préciser pourquoi la quantité diffère..."
                   className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs"
                 />
@@ -5739,14 +5764,14 @@ export default function SortieRapideView({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => handleConfirmReviewDemand('NEEDS_CLARIFICATION')}
+                  onClick={() => handleReviewDemandDecision('NEEDS_CLARIFICATION')}
                   className="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs cursor-pointer transition"
                 >
                   À Clarifier (Écart Bon/Qté)
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleConfirmReviewDemand('REJECTED')}
+                  onClick={() => handleReviewDemandDecision('REJECTED')}
                   className="px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-bold text-xs cursor-pointer transition"
                 >
                   Rejeter sans déduction
@@ -5755,7 +5780,7 @@ export default function SortieRapideView({
 
               <button
                 type="button"
-                onClick={() => handleConfirmReviewDemand('APPROVED')}
+                onClick={() => handleReviewDemandDecision('APPROVED')}
                 className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-1.5"
               >
                 <Check className="w-4 h-4" />

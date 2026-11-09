@@ -94,7 +94,7 @@ export default function EntrepotView({
   onNavigateToZone,
   onNavigateToMachine,
   showToast,
-}) {
+}: any) {
   const { t } = useTranslation();
   const families = compFamilies && compFamilies.length > 0 ? compFamilies : propFamilies;
   const templates = compTemplates && compTemplates.length > 0 ? compTemplates : propTemplates;
@@ -102,14 +102,14 @@ export default function EntrepotView({
   const diagnostics = partDesignations && partDesignations.length > 0 ? partDesignations : propDiagnostics;
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
-  const [toEdit, setToEdit] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
-  const [selectedDetails, setSelectedDetails] = useState(null);
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [toDelete, setToDelete] = useState<any>(null);
+  const [selectedDetails, setSelectedDetails] = useState<any>(null);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // Quick Action / Movement Modal State
-  const [activeActionMenuId, setActiveActionMenuId] = useState(null);
-  const [quickModalState, setQuickModalState] = useState({
+  const [activeActionMenuId, setActiveActionMenuId] = useState<any>(null);
+  const [quickModalState, setQuickModalState] = useState<any>({
     isOpen: false,
     article: null,
     initialFlow: 'Sortie Interne',
@@ -205,8 +205,8 @@ export default function EntrepotView({
   }, [localSearch, setWhSearch]);
 
   // Form state for add modal (Dual Twin)
-  const [familyComponentCodes, setFamilyComponentCodes] = useState(() => {
-    const initialMap = {};
+  const [familyComponentCodes, setFamilyComponentCodes] = useState<Record<string, string>>(() => {
+    const initialMap: Record<string, string> = {};
     // 1. From families table (primary source of truth)
     (families || []).forEach((f) => {
       if (f.id_family && f.componentCode) {
@@ -380,7 +380,7 @@ export default function EntrepotView({
     }
   };
 
-  const [addForm, setAddForm] = useState({
+  const [addForm, setAddForm] = useState<any>({
     id_warehouse_item: '',
     designation: '',
     nature: 'COMPONENT', // 'COMPONENT' (Machine Twin) | 'PART' (Stock Twin)
@@ -401,7 +401,7 @@ export default function EntrepotView({
   });
 
   // Form state for edit modal
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<any>({
     id_warehouse_item: '',
     designation: '',
     nature: 'COMPONENT',
@@ -2047,7 +2047,7 @@ export default function EntrepotView({
                   {t('entrepot.modal.notes')}
                 </label>
                 <textarea
-                  rows="2"
+                  rows={2}
                   value={addForm.remarques}
                   onChange={(e) => setAddForm({ ...addForm, remarques: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-teal-500 outline-none"
@@ -2410,7 +2410,7 @@ export default function EntrepotView({
                   {t('entrepot.modal.notes')}
                 </label>
                 <textarea
-                  rows="2"
+                  rows={2}
                   value={editForm.remarques}
                   onChange={(e) => setEditForm({ ...editForm, remarques: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-blue-500 outline-none"
