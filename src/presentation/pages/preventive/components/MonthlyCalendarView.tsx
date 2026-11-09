@@ -61,20 +61,20 @@ export default function MonthlyCalendarView({
   onOpenCorrective = () => {},
   onOpenPrint = () => {},
   onSwitchView = () => {},
-}) {
+}: any) {
   const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // 0 - 11
   const [calendarMode, setCalendarMode] = useState('month'); // 'month' | 'week'
   const [selectedWeekIndex, setSelectedWeekIndex] = useState(0); // 0..4 within current month
   const [techFilter, setTechFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeDayDetail, setActiveDayDetail] = useState(null); // { dateStr, dayNum, machines: [...] }
-  const [expandedMachineInDrawer, setExpandedMachineInDrawer] = useState({});
+  const [activeDayDetail, setActiveDayDetail] = useState<any>(null); // { dateStr, dayNum, machines: [...] }
+  const [expandedMachineInDrawer, setExpandedMachineInDrawer] = useState<Record<string, any>>({});
 
   // Machine lookup map for Strict Relational Engine (Single Source of Truth)
   const masterMachineMap = useMemo(() => {
     const map = new Map();
-    (machines || []).forEach((m) => {
+    (machines || []).forEach((m: any) => {
       const code = String(m.code_machine || m.id_machine_registered || m.id || '').trim().toUpperCase();
       if (code) map.set(code, m);
     });
@@ -82,7 +82,7 @@ export default function MonthlyCalendarView({
   }, [machines]);
 
   // Helper to get ISO week number from date
-  const getISOWeek = (d) => {
+  const getISOWeek = (d: Date) => {
     const date = new Date(d.getTime());
     date.setHours(0, 0, 0, 0);
     date.setDate(date.getDate() + 3 - ((date.getDay() + 6) % 7));
@@ -97,10 +97,10 @@ export default function MonthlyCalendarView({
 
   // Distinct technicians list for filtering
   const techniciansList = useMemo(() => {
-    const set = new Set();
-    tasks.forEach((t) => {
+    const set = new Set<string>();
+    tasks.forEach((t: any) => {
       if (t.responsable && t.responsable !== 'Non assigné') {
-        set.add(t.responsable);
+        set.add(String(t.responsable));
       }
     });
     return Array.from(set).sort();

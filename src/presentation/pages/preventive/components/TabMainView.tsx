@@ -97,7 +97,7 @@ export default function TabMainView({
   _onNavigateToPlanBuilder,
   onCreateCorrective,
   _onNavigateToMachine,
-}) {
+}: any) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
@@ -270,7 +270,7 @@ export default function TabMainView({
   });
 
   // Custom PDR item add form inside modal
-  const [newPdrItem, setNewPdrItem] = useState({
+  const [newPdrItem, setNewPdrItem] = useState<any>({
     id_article: '',
     designation: '',
     reference: '',
@@ -309,21 +309,21 @@ export default function TabMainView({
   }, [machines, tasksWithOrphanFlag, selectedAssetClass, machineMap]);
 
   const zoneList = useMemo(() => {
-    const set = new Set();
+    const set = new Set<string>();
     if (Array.isArray(zones)) {
-      zones.forEach((z) => {
+      zones.forEach((z: any) => {
         const name = typeof z === 'string' ? z : (z?.id_zone || z?.nom_zone || z?.libelle || z?.code_zone || z?.code || z?.name);
         if (name && typeof name === 'string' && name.trim()) set.add(name.trim());
       });
     }
     if (Array.isArray(machines)) {
-      machines.forEach((m) => {
+      machines.forEach((m: any) => {
         const z = m?.id_zone_default || m?.id_zone || m?.zone;
         if (z && typeof z === 'string' && z.trim()) set.add(z.trim());
       });
     }
     if (Array.isArray(tasksWithOrphanFlag)) {
-      tasksWithOrphanFlag.forEach((t) => {
+      tasksWithOrphanFlag.forEach((t: any) => {
         const z = t?.id_zone;
         if (z && typeof z === 'string' && z.trim()) set.add(z.trim());
       });
@@ -333,9 +333,9 @@ export default function TabMainView({
   }, [zones, machines, tasksWithOrphanFlag]);
 
   const techList = useMemo(() => {
-    const set = new Set();
+    const set = new Set<string>();
     if (Array.isArray(technicians)) {
-      technicians.forEach((t) => {
+      technicians.forEach((t: any) => {
         let name = '';
         if (typeof t === 'string') {
           name = t;
@@ -350,7 +350,7 @@ export default function TabMainView({
       });
     }
     if (Array.isArray(tasksWithOrphanFlag)) {
-      tasksWithOrphanFlag.forEach((t) => {
+      tasksWithOrphanFlag.forEach((t: any) => {
         const resp = t?.responsable;
         if (resp && typeof resp === 'string' && resp.trim()) set.add(resp.trim());
       });
@@ -363,7 +363,7 @@ export default function TabMainView({
   const currentWeekNumber = useMemo(() => {
     const d = new Date();
     const start = new Date(d.getFullYear(), 0, 1);
-    const days = Math.floor((d - start) / (24 * 60 * 60 * 1000));
+    const days = Math.floor((d.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
     return Math.min(52, Math.max(1, Math.ceil((days + start.getDay() + 1) / 7)));
   }, []);
 

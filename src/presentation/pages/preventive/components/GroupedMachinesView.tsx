@@ -40,8 +40,8 @@ export default function GroupedMachinesView({
   onOpenPrint = null,
   _onNavigateToMachine = null,
   onSwitchView = () => {},
-}) {
-  const [expandedMachines, setExpandedMachines] = useState({});
+}: any) {
+  const [expandedMachines, setExpandedMachines] = useState<Record<string, any>>({});
   const [allExpanded, setAllExpanded] = useState(false);
   const [localSearch, setLocalSearch] = useState('');
   const [pageSize, setPageSize] = useState(12);
@@ -50,7 +50,7 @@ export default function GroupedMachinesView({
   // Machine lookup map for Strict Relational Engine (Single Source of Truth)
   const machineMap = useMemo(() => {
     const map = new Map();
-    (machines || []).forEach((m) => {
+    (machines || []).forEach((m: any) => {
       const code = String(m.code_machine || m.id_machine_registered || m.id || '').trim().toUpperCase();
       if (code) map.set(code, m);
     });
@@ -59,9 +59,9 @@ export default function GroupedMachinesView({
 
   // Group filtered tasks by machine with dynamic relational resolution
   const groupedData = useMemo(() => {
-    const groups = {};
+    const groups: Record<string, any> = {};
 
-    tasks.forEach((task) => {
+    tasks.forEach((task: any) => {
       const mId = task.id_machine || 'AUTRE';
       if (!groups[mId]) {
         const registeredMach = machineMap.get(String(mId).trim().toUpperCase());
@@ -97,7 +97,7 @@ export default function GroupedMachinesView({
       groups[mId].totalEstimatedMinutes += mins;
     });
 
-    return Object.values(groups).sort((a, b) =>
+    return Object.values(groups).sort((a: any, b: any) =>
       a.id_machine.localeCompare(b.id_machine, undefined, { numeric: true })
     );
   }, [tasks]);
@@ -107,12 +107,12 @@ export default function GroupedMachinesView({
     if (!localSearch.trim()) return groupedData;
     const q = localSearch.toLowerCase();
     return groupedData.filter(
-      (g) =>
+      (g: any) =>
         g.id_machine.toLowerCase().includes(q) ||
         g.nom_machine.toLowerCase().includes(q) ||
         g.zone.toLowerCase().includes(q) ||
         g.tasks.some(
-          (t) =>
+          (t: any) =>
             (t.composant && t.composant.toLowerCase().includes(q)) ||
             (t.action_code && t.action_code.toLowerCase().includes(q)) ||
             (t.responsable && t.responsable.toLowerCase().includes(q))
@@ -135,7 +135,7 @@ export default function GroupedMachinesView({
     return filteredGroups.slice(startIndex, startIndex + effectivePageSize);
   }, [filteredGroups, pageSize, startIndex, effectivePageSize]);
 
-  const toggleExpand = (mId) => {
+  const toggleExpand = (mId: any) => {
     setExpandedMachines((prev) => ({
       ...prev,
       [mId]: !prev[mId],
@@ -145,8 +145,8 @@ export default function GroupedMachinesView({
   const toggleExpandAll = () => {
     const nextState = !allExpanded;
     setAllExpanded(nextState);
-    const newMap = {};
-    filteredGroups.forEach((g) => {
+    const newMap: Record<string, any> = {};
+    filteredGroups.forEach((g: any) => {
       newMap[g.id_machine] = nextState;
     });
     setExpandedMachines(newMap);

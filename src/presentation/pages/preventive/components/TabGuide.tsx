@@ -46,16 +46,16 @@ export default function TabGuide({
   onUpdateGuide,
   onDeleteGuide,
   showToast = null,
-}) {
+}: any) {
   const [search, setSearch] = useState('');
   const [selectedFamille, setSelectedFamille] = useState('ALL');
-  const [expandedGuideId, setExpandedGuideId] = useState(null);
+  const [expandedGuideId, setExpandedGuideId] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingGuide, setEditingGuide] = useState(null);
+  const [editingGuide, setEditingGuide] = useState<any>(null);
   const [formError, setFormError] = useState('');
 
   // Form State
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     composant_nom: '',
     code: '',
     ref: '',
@@ -99,7 +99,10 @@ export default function TabGuide({
     return { available: qte, status: 'OK', label: `Stock OK (${qte})` };
   };
 
-  const familles = ['ALL', ...new Set(guides.map((g) => g.famille).filter(Boolean))];
+  const familles: string[] = [
+    'ALL',
+    ...Array.from(new Set<string>(guides.map((g: any) => String(g.famille || '')).filter(Boolean))),
+  ];
 
   const filteredGuides = guides.filter((g) => {
     const q = search.toLowerCase();
@@ -469,7 +472,7 @@ export default function TabGuide({
               {/* Expanded details */}
               {isExpanded && guide.fiches_actions && (
                 <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 text-xs">
-                  {Object.entries(guide.fiches_actions).map(([actCode, fiche]) => (
+                  {Object.entries(guide.fiches_actions as Record<string, any>).map(([actCode, fiche]: [string, any]) => (
                     <div key={actCode} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
                       <div className="flex items-center justify-between font-bold text-slate-800">
                         <span>Action {actCode} - {fiche.titre || actCode}</span>

@@ -20,10 +20,13 @@ export interface ConsumablePdrInventoryItem {
   reference: string;
   designation: string;
   stockActuel: number;
+  seuil?: number;
   unite: string;
   prix_unitaire: number;
   source: string;
   emplacement: string;
+  isBomRecommended?: boolean;
+  bomSourceLabel?: string;
 }
 
 /**
@@ -57,6 +60,7 @@ export function buildConsumablePdrInventory(stockItems: any[] = []): ConsumableP
         reference: ref,
         designation: item.designation || item.nom || 'Pièce PDR',
         stockActuel: Number(item.stockActuel ?? item.stock_actuel ?? item.stockInitial ?? 0),
+        seuil: Number(item.seuil ?? item.seuil_alerte ?? 2),
         unite: item.unit || item.unite || 'pcs',
         prix_unitaire: Number(item.prix || item.prix_unitaire || item.prix_achat_ht || 0),
         source: 'PDR Magasin',

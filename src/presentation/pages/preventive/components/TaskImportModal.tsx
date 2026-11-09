@@ -55,8 +55,8 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
         onImportSuccess(updated);
         onClose();
       }, 1200);
-    } catch (err) {
-      setError(err.message || "Erreur de format JSON. Vérifiez la syntaxe.");
+    } catch (err: any) {
+      setError(err?.message || "Erreur de format JSON. Vérifiez la syntaxe.");
     }
   };
 

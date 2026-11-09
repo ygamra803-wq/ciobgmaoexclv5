@@ -66,7 +66,7 @@ export default function ViewSwitchButtonGroup({
   currentView = 'matrix',
   onSwitchView = () => {},
   className = '',
-}) {
+}: any) {
   const { t } = useI18n();
 
   // Exclude current view to leave exactly the other navigation destinations

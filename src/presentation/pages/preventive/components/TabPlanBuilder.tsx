@@ -36,7 +36,7 @@ export default function TabPlanBuilder({
   blueprints = [],
   onCreatePlanWithTasks,
   onNavigateToMainView,
-}) {
+}: any) {
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   // Plan Builder State
   const [selectedMachineId, setSelectedMachineId] = useState('');
@@ -54,8 +54,8 @@ export default function TabPlanBuilder({
 
   // Import states
   const [isImporting, setIsImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState(null);
-  const excelFileInputRef = useRef(null);
+  const [importStatus, setImportStatus] = useState<any>(null);
+  const excelFileInputRef = useRef<any>(null);
 
   // NOUVELLES FONCTIONNALITÉS INDUSTRIELLES
   // 1. Mode de calcul récurrence (Fixed vs Floating)
@@ -63,11 +63,11 @@ export default function TabPlanBuilder({
   // 2. Type de Déclenchement (Calendrier vs Compteur Horaire/Cycles)
   const [typeDeclencheur, setTypeDeclencheur] = useState('CALENDRIER'); // 'CALENDRIER' | 'COMPTEUR' | 'HYBRIDE'
   const [compteurUnite, setCompteurUnite] = useState('Heures'); // 'Heures' | 'Cycles' | 'Km'
-  const [compteurIntervalle, setCompteurIntervalle] = useState(500);
-  const [compteurIndexActuel, setCompteurIndexActuel] = useState(0);
+  const [compteurIntervalle, setCompteurIntervalle] = useState<any>(500);
+  const [compteurIndexActuel, setCompteurIndexActuel] = useState<any>(0);
 
   // Selected Tasks to generate
-  const [taskList, setTaskList] = useState([]);
+  const [taskList, setTaskList] = useState<any[]>([]);
   const [includeGlobalMachineAction, setIncludeGlobalMachineAction] = useState(true);
   const [globalActionCode, setGlobalActionCode] = useState('N');
 
@@ -492,7 +492,7 @@ export default function TabPlanBuilder({
           onNavigateToMainView();
         }
       }, 1500);
-    } catch (err) {
+    } catch (err: any) {
       Logger.error('Erreur import Excel:', err);
       setImportStatus({
         type: 'error',
@@ -523,7 +523,7 @@ export default function TabPlanBuilder({
           onNavigateToMainView();
         }
       }, 1400);
-    } catch (err) {
+    } catch (err: any) {
       Logger.error('Erreur chargement JSON:', err);
       setImportStatus({
         type: 'error',

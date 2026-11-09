@@ -13,7 +13,7 @@ export default function PreventiveAnalyticsView({
   zones = [],
   actions = [],
   onSwitchView = () => {},
-}) {
+}: any) {
   const zoneList = Array.isArray(zones)
     ? zones.map((z) => (typeof z === 'string' ? z : z?.nom_zone || z?.id_zone || z?.code_zone || ''))
     : [];

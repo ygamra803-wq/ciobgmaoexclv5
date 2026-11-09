@@ -53,12 +53,12 @@ export default function DetailedTaskListView({
   onSwitchView = () => {},
   hasActiveFilters = false,
   clearAllFilters = () => {},
-}) {
+}: any) {
   const { t } = useI18n();
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [currentPage, setCurrentPage] = useState(1);
   const [groupByMachine, setGroupByMachine] = useState(initialGroupByMachine);
-  const [collapsedMachines, setCollapsedMachines] = useState({});
+  const [collapsedMachines, setCollapsedMachines] = useState<Record<string, any>>({});
 
   // Machine lookup map for Strict Relational Engine (Single Source of Truth)
   const machineMap = useMemo(() => {

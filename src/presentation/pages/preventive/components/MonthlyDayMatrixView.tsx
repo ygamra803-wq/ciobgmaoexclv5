@@ -40,7 +40,7 @@ const MONTH_NAMES = [
 
 const SHORT_DAYS_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
-const ACTION_PILL_MAP = {
+const ACTION_PILL_MAP: Record<string, any> = {
   C: { bg: 'bg-blue-50 text-blue-800 border-blue-300', dot: 'bg-blue-600', label: 'Contrôle' },
   N: { bg: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-600', label: 'Nettoyage' },
   G: { bg: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-600', label: 'Graissage' },
@@ -51,17 +51,17 @@ const ACTION_PILL_MAP = {
   E: { bg: 'bg-orange-50 text-orange-800 border-orange-300', dot: 'bg-orange-600', label: 'Échange' },
 };
 
-const STATUT_BADGES = {
+const STATUT_BADGES: Record<string, any> = {
   'À faire': 'bg-blue-50 text-blue-700 border-blue-200',
   'Fait': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'En retard': 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
-function getDaysInMonth(year, monthIndex) {
+function getDaysInMonth(year: number, monthIndex: number) {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
-function getISOWeekNumber(d) {
+function getISOWeekNumber(d: Date) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
@@ -83,7 +83,7 @@ export default function MonthlyDayMatrixView({
   onSwitchView = () => {},
   hasActiveFilters = false,
   clearAllFilters = () => {},
-}) {
+}: any) {
   const today = useMemo(() => new Date(), []);
   const [selectedYear, setSelectedYear] = useState(() => today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(() => today.getMonth());
@@ -780,14 +780,14 @@ export default function MonthlyDayMatrixView({
                         <td className="py-2 px-2 border-r border-slate-200">
                           <div className="flex items-center gap-1 flex-wrap">
                             {Array.from(
-                              new Set(
-                                group.tasks.map((t) =>
-                                  (t.action_code || 'C').toUpperCase()
+                              new Set<string>(
+                                group.tasks.map((t: any) =>
+                                  String(t.action_code || 'C').toUpperCase()
                                 )
                               )
                             )
                               .slice(0, 3)
-                              .map((code) => {
+                              .map((code: string) => {
                                 const pDef =
                                   ACTION_PILL_MAP[code] || ACTION_PILL_MAP.C;
                                 return (

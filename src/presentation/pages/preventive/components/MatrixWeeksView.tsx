@@ -18,7 +18,7 @@ import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import { useI18n } from '../../../../i18n/I18nContext';
 
-const ACTION_PILL_MAP = {
+const ACTION_PILL_MAP: Record<string, any> = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
   N: { bg: 'bg-emerald-500/10 text-emerald-800 border-emerald-200/80', dot: 'bg-emerald-600', label: 'Nettoyage' },
   G: { bg: 'bg-amber-500/10 text-amber-800 border-amber-200/80', dot: 'bg-amber-600', label: 'Graissage' },
@@ -28,7 +28,7 @@ const ACTION_PILL_MAP = {
   L: { bg: 'bg-cyan-500/10 text-cyan-800 border-cyan-200/80', dot: 'bg-cyan-600', label: 'Lubrification' },
 };
 
-const STATUT_BADGES = {
+const STATUT_BADGES: Record<string, any> = {
   'À faire': 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs',
   'Fait': 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs',
   'En retard': 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs animate-pulse',
@@ -49,12 +49,12 @@ export default function MatrixWeeksView({
   onSwitchView = () => {},
   hasActiveFilters = false,
   clearAllFilters = () => {},
-}) {
+}: any) {
   const { t } = useI18n();
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
-  const [expandedMachines, setExpandedMachines] = useState(() => new Set());
-  const matrixScrollContainerRef = useRef(null);
+  const [expandedMachines, setExpandedMachines] = useState<Set<any>>(() => new Set());
+  const matrixScrollContainerRef = useRef<any>(null);
 
   // Machine lookup map for Strict Relational Engine (Single Source of Truth)
   const machineMap = useMemo(() => {
@@ -444,9 +444,9 @@ export default function MatrixWeeksView({
                         {/* Action Badges Summary */}
                         <td className="py-2 px-2 text-center border-r border-slate-200">
                           <div className="flex items-center justify-center gap-1 flex-wrap">
-                            {Array.from(new Set(group.tasks.map((t) => (t.action_code || 'C').toUpperCase())))
+                            {Array.from(new Set<string>(group.tasks.map((t: any) => String(t.action_code || 'C').toUpperCase())))
                               .slice(0, 3)
-                              .map((code) => {
+                              .map((code: string) => {
                                 const pDef = ACTION_PILL_MAP[code] || ACTION_PILL_MAP.C;
                                 return (
                                   <span
