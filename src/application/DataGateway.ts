@@ -12,7 +12,10 @@ import {
   EMPTY_FISCAL_BUDGET,
   DEMO_FISCAL_BUDGET,
   type FiscalBudgetConfig,
+  type BudgetPeriodMode,
+  type BudgetAuditEntry,
 } from '../domain/finance/entities/FinancialBudget';
+import type { GmaoStoreSetters } from '../types/store';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
@@ -85,11 +88,13 @@ export const DataGateway = {
       case 'movement':
         return ValidationService.validateMovement(item);
       case 'zone':
-        return ValidationService.validateZone(item);
+        return (ValidationService as any).validateZone
+          ? (ValidationService as any).validateZone(item)
+          : { isValid: Boolean(item && (item.id_zone || item.id)), errors: [], data: item };
       case 'user':
         return ValidationService.validateUser(item);
       default:
-        return { valid: true, data: item, errors: [] };
+        return { valid: true, isValid: true, data: item, errors: [] };
     }
   },
 
@@ -115,7 +120,10 @@ export const DataGateway = {
         )
       : [];
     if (validate) {
-      clean = clean.filter((m) => ValidationService.validateMachine(m).valid);
+      clean = clean.filter((m) => {
+        const res = ValidationService.validateMachine(m) as { isValid?: boolean; valid?: boolean };
+        return res.isValid ?? res.valid ?? true;
+      });
     }
     storageService.setItem(STORAGE_KEYS.MACHINES, clean);
     return clean;
@@ -455,7 +463,7 @@ export const DataGateway = {
     const allocatedCorrective = Math.max(0, Number(clean.allocatedCorrective) || 0);
     const allocatedExternal = Math.max(0, Number(clean.allocatedExternal) || 0);
     const allocatedSparesStock = Math.max(0, Number(clean.allocatedSparesStock) || 0);
-    const periodMode =
+    const periodMode: BudgetPeriodMode =
       clean.periodMode === 'MONTHLY' || clean.periodMode === 'QUARTERLY' ? clean.periodMode : 'ANNUAL';
     const burnWarningPercent = Math.max(50, Math.min(100, Number(clean.burnWarningPercent ?? 90)));
     const updatedAt = clean.updatedAt || new Date().toISOString();
@@ -487,7 +495,7 @@ export const DataGateway = {
     const totalAllocated =
       allocatedPreventive + allocatedCorrective + allocatedExternal + allocatedSparesStock;
 
-    let budgetChangeLog = Array.isArray(clean.budgetChangeLog)
+    let budgetChangeLog: BudgetAuditEntry[] = Array.isArray(clean.budgetChangeLog)
       ? clean.budgetChangeLog
       : Array.isArray(prevSaved?.budgetChangeLog)
       ? prevSaved.budgetChangeLog
@@ -496,7 +504,7 @@ export const DataGateway = {
     if (updatedBy === 'FACTORY_RESET') {
       budgetChangeLog = [];
     } else if (updatedBy !== 'DEMO_SEED') {
-      const auditEntry = {
+      const auditEntry: BudgetAuditEntry = {
         id: `bgt-log-${Date.now()}`,
         timestamp: updatedAt,
         updatedBy,
@@ -637,7 +645,7 @@ export const DataGateway = {
   /**
    * Explicitly loads real stock data.
    */
-  initRealStock(setters = {}) {
+  initRealStock(setters: GmaoStoreSetters = {}) {
     this.saveStock(seedStockItems);
     if (setters.setRawStock) setters.setRawStock(seedStockItems);
     // Also update designations if needed, but for now focus on RAW_STOCK
@@ -648,12 +656,12 @@ export const DataGateway = {
    * Explicitly loads all documented factory demo seeds into canonical STORAGE_KEYS.
    * Sets DEMO_MODE = true.
    */
-  loadDemoData(setters = {}) {
+  loadDemoData(setters: GmaoStoreSetters = {}) {
     const derivedDesignations = seedStockItems.map((s) => ({
-      id: s.id,
+      id: (s as any).id || s.ref,
       ref: s.ref,
       designation: s.designation,
-      id_type: s.id_type,
+      id_type: (s as any).id_type || s.type,
       type: s.type,
       stockInitial: s.stockInitial,
       seuil: s.seuil,
@@ -662,7 +670,7 @@ export const DataGateway = {
 
     const formattedCompTemplates = seedCompTemplates.map((t, idx) => ({
       ...t,
-      id_templates: t.id_templates || t.id_template || t.id_comp_template || `TPL-${idx + 1}`,
+      id_templates: t.id_templates || t.id_template || (t as any).id_comp_template || `TPL-${idx + 1}`,
     }));
 
     // 1. Set DEMO_MODE and START_MODE flags explicitly
@@ -1205,16 +1213,16 @@ export const DataGateway = {
    * Loads factory demo seed data for a specific section (or 'all' for the entire factory).
    * Supported sections: 'all' | 'stock' | 'parc' | 'entrepot' | 'zones' | 'mouvements' | 'preventive' | 'corrective'
    */
-  loadDemoSection(section = 'all', setters = {}) {
+  loadDemoSection(section = 'all', setters: GmaoStoreSetters = {}) {
     if (!section || section === 'all') {
       return this.loadDemoData(setters);
     }
 
     const derivedDesignations = seedStockItems.map((s) => ({
-      id: s.id,
+      id: (s as any).id || s.ref,
       ref: s.ref,
       designation: s.designation,
-      id_type: s.id_type,
+      id_type: (s as any).id_type || s.type,
       type: s.type,
       stockInitial: s.stockInitial,
       seuil: s.seuil,
@@ -1223,7 +1231,7 @@ export const DataGateway = {
 
     const formattedCompTemplates = seedCompTemplates.map((t, idx) => ({
       ...t,
-      id_templates: t.id_templates || t.id_template || t.id_comp_template || `TPL-${idx + 1}`,
+      id_templates: t.id_templates || t.id_template || (t as any).id_comp_template || `TPL-${idx + 1}`,
     }));
 
     switch (section) {
@@ -1339,7 +1347,7 @@ export const DataGateway = {
   /**
    * Clears data for a specific section (or 'all' for the entire factory).
    */
-  clearDemoSection(section = 'all', setters = {}) {
+  clearDemoSection(section = 'all', setters: GmaoStoreSetters = {}) {
     if (!section || section === 'all') {
       return this.clearAllForRealFactory(setters);
     }

@@ -40,13 +40,13 @@ interface MobileShellProps {
   correctiveInterventions: any[];
   sortieDemands: any[];
   mouvements: any[];
-  activeLiveInterventionId?: string | null;
+  activeLiveInterventionId?: string | number | null;
   onMarkTaskDone: (id: string, validationData: any) => void;
   onAddDemandeIntervention: (data: any) => any;
   onStartLiveIntervention: (id: string) => void;
   onSubmitInterventionForValidation: (id: string, submissionData: any) => any;
   onOpenMachineQrModal?: (machineId: string) => void;
-  showToast?: (msg: string, type?: string) => void;
+  showToast?: (msg: string, type?: any) => void;
   toast?: { message: string; type?: string } | null;
   setToast?: (t: any) => void;
 }

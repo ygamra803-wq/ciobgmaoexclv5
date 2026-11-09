@@ -319,3 +319,48 @@ export interface GmaoStoreState {
       Partial<Pick<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'>>
   ) => IAuditEvent;
 }
+
+/**
+ * Interface describing optional state setters passed to DataGateway lifecycle methods
+ * (such as initRealStock, loadDemoData, clearAllForRealFactory, loadDemoSection, clearDemoSection).
+ */
+export interface GmaoStoreSetters {
+  setRawStock?: (stock: any) => void;
+  setTypes?: (types: any) => void;
+  setDesignations?: (designations: any) => void;
+  setMachines?: (machines: any) => void;
+  setGeneralSystemTypes?: (types: any) => void;
+  setFamilies?: (families: any) => void;
+  setTemplates?: (templates: any) => void;
+  setBlueprints?: (blueprints: any) => void;
+  setZones?: (zones: any) => void;
+  setMachineElementsLedger?: (ledger: any) => void;
+  setWarehouseItems?: (items: any) => void;
+  setEntrepotComponents?: (comps: any) => void;
+  setCompGroups?: (groups: any) => void;
+  setCompFamilies?: (families: any) => void;
+  setCompTemplates?: (templates: any) => void;
+  setPartTypes?: (types: any) => void;
+  setPartDesignations?: (designations: any) => void;
+  setUsers?: (users: any) => void;
+  setTechnicians?: (techs: any) => void;
+  setOperations?: (ops: any) => void;
+  setMouvements?: (movements: any) => void;
+  setSortieDemands?: (demands: any) => void;
+  setReplenishmentOrders?: (orders: any) => void;
+  setSortiesExterne?: (sorties: any) => void;
+  setPreventiveTasks?: (tasks: any) => void;
+  setPreventiveActions?: (actions: any) => void;
+  setPreventiveGuides?: (guides: any) => void;
+  setPreventivePlans?: (plans: any) => void;
+  setPreventiveExecutions?: (executions: any) => void;
+  setMeterReadings?: (readings: any) => void;
+  setAuditEvents?: (events: any) => void;
+  setCorrectiveInterventions?: (interventions: any) => void;
+  setCorrectiveActionsByPanne?: (actions: any) => void;
+  setCorrectivePanneCategories?: (categories: any) => void;
+  setCorrectiveTravauxAFaire?: (travaux: any) => void;
+  setCorrectiveIntervenants?: (intervenants: any) => void;
+  [key: string]: any;
+}
+

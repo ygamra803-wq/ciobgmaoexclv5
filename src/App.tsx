@@ -169,7 +169,7 @@ export default function App() {
   } = gmaoState;
 
   // Auto Backup and Performance Monitor Initialization
-  const backupDataRef = useRef({});
+  const backupDataRef = useRef<Record<string, any>>({});
   const [scannedQrMachine, setScannedQrMachine] = useState<any | null>(null);
 
   // Detect ?machine_qr=<CODE> on LAN scan to open Fiche Terrain Mobile automatically

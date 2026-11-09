@@ -34,7 +34,7 @@ interface MachineQrFieldModalProps {
   onClose: () => void;
   onNavigateToPreventive?: (machineCode: string) => void;
   onNavigateToQuickSortie?: (machine: any) => void;
-  showToast?: (msg: string, type?: string) => void;
+  showToast?: (msg: string, type?: any) => void;
 }
 
 export default function MachineQrFieldModal({
