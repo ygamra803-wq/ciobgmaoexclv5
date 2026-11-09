@@ -369,7 +369,7 @@ describe('Gap Closure Constitution (Batches A, B, C, D, E)', () => {
           id_family: 'FAM-01',
           id_templates: 'TPL-01',
           id_zone_default: 'Z-01',
-          status: 'En Service',
+          status: 'En service',
           compteur_heures: 400,
         },
       ]);
@@ -500,7 +500,7 @@ describe('Gap Closure Constitution (Batches A, B, C, D, E)', () => {
           id_family: 'F1',
           id_templates: 'T1',
           id_zone_default: 'Z1',
-          status: 'En Service',
+          status: 'En service',
         },
       ]);
       await store.handleRecordMeterReading({

@@ -297,6 +297,8 @@ describe('Five-Point Critical GMAO Verification Suite', () => {
       {
         id_machine_registered: 'PRS-01',
         designation: 'Presse Hydraulique 200T',
+        id_family: 'FAM-HYD',
+        id_templates: 'TPL-PRS-200T',
         id_zone_default: 'Z-PRESSE',
         status: 'En service',
         compteur_heures: 1200,

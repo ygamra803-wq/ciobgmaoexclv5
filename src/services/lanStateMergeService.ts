@@ -12,6 +12,10 @@ export interface MergeCollectionOptions {
    */
   preserveServerOnlyItems?: boolean;
   /**
+   * Alias for preserveServerOnlyItems for backward compatibility
+   */
+  preserveServerOnly?: boolean;
+  /**
    * Explicit list of record IDs intentionally deleted by the client.
    */
   deletedIds?: string[];
@@ -261,7 +265,8 @@ export function mergeEntityCollection(
     return incomingList;
   }
 
-  const preserveServerOnly = options.preserveServerOnlyItems !== false;
+  const preserveServerOnly =
+    options.preserveServerOnlyItems !== false && options.preserveServerOnly !== false;
   const deletedSet = new Set(
     (options.deletedIds || []).map((id) => String(id).trim()).filter(Boolean)
   );

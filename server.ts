@@ -146,6 +146,7 @@ async function startServer() {
     const clientOrigin = req.headers['x-gmao-client-origin'];
     const expectedToken = process.env.GMAO_API_TOKEN;
 
+    // Guard: expectedToken && token !== undefined && token !== expectedToken
     const tokenGuard = evaluateServerApiTokenGuard({
       method: req.method,
       providedToken: token,

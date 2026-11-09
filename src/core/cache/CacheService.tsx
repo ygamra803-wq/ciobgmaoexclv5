@@ -13,8 +13,17 @@ import { Logger } from '../logger/LoggerService';
  * -  Singleton Pattern لضمان مشاركة نفس المخرجات عبر مكونات النظام.
  */
 export class CacheService {
-  /** @type {CacheService|null} */
-  static instance = null;
+  static instance: CacheService | null = null;
+  cache: Map<string, any>;
+  ttl: number;
+  tags: Map<string, Set<string>>;
+  stats: {
+    hits: number;
+    misses: number;
+    sets: number;
+    deletes: number;
+    invalidations: number;
+  };
 
   /**
    * إنشاء خادم التخزين المؤقت مع تكوين الخيارات المحددة
@@ -22,18 +31,14 @@ export class CacheService {
    * @param {Object} [options={}] - خيارات التكوين
    * @param {number} [options.ttl=300000] - الصلاحية الافتراضية بالميلي ثانية (5 دقائق)
    */
-  constructor(options = {}) {
+  constructor(options: { ttl?: number } = {}) {
     if (CacheService.instance) {
       return CacheService.instance;
     }
 
-    /** @type {Map<string, {value: any, expiresAt: number, tags: string[], createdAt: number, size: number}>} */
     this.cache = new Map();
-    /** @type {number} */
     this.ttl = options.ttl || 5 * 60 * 1000;
-    /** @type {Map<string, Set<string>>} */
     this.tags = new Map();
-    /** @type {{hits: number, misses: number, sets: number, deletes: number, invalidations: number}} */
     this.stats = {
       hits: 0,
       misses: 0,

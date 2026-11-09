@@ -33,10 +33,19 @@ const dictionaries = {
   en: { ...en, zones: enZones, utilisateurs: enUtilisateurs, entrepot: enEntrepot, corrective: enCorrective, preventive: enPreventive, machines: enMachines },
 };
 
-const I18nContext = createContext({
+export interface I18nContextType {
+  language: string;
+  setLanguage: (lang: string) => void;
+  t: (path: string, fallbackOrParams?: string | Record<string, any>, params?: Record<string, any>) => string;
+  dir: string;
+  isRTL: boolean;
+  availableLanguages?: Array<{ code: string; label: string; flag: string }>;
+}
+
+const I18nContext = createContext<I18nContextType>({
   language: 'fr',
   setLanguage: () => {},
-  t: (key) => key,
+  t: (key, fallback) => (typeof fallback === 'string' ? fallback : key),
   dir: 'ltr',
   isRTL: false,
 });

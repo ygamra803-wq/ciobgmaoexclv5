@@ -167,9 +167,9 @@ export function useAppRouterProps({
     handleLoadDemoSection,
     handleClearDemoSection,
   },
-  setters = {},
+  setters = {} as any,
   showToast,
-}) {
+}: any) {
   const navigateTo = useCallback((tab) => startTransition(() => setCurrentTab(tab)), [setCurrentTab]);
 
   return useMemo(() => ({
@@ -1000,7 +1000,7 @@ export function useAppRouterProps({
         }
       },
       onNavigateToReferentiel: () => navigateTo('preventive_referentiel'),
-      onCreateCorrective: (taskOrPayload = {}, btData = {}) => {
+      onCreateCorrective: (taskOrPayload: any = {}, btData: any = {}) => {
         if (typeof handleAddDemandeIntervention === 'function') {
           const { id: preventiveTaskId, etat: _etat, statut: _statut, ...restTask } = taskOrPayload || {};
           handleAddDemandeIntervention({

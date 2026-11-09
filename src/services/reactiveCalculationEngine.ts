@@ -11,6 +11,16 @@ import { INITIAL_STOCK_LOOKUP } from '../utils/baselineStock';
 import { stockIndexStore } from '../application/StockIndexStore';
 
 class ReactiveCalculationEngine {
+  hf: any;
+  stockSheetId: any;
+  _lastRawStock: any;
+  _lastMouvements: any;
+  _lastGlobalVersion: number;
+  _lastComputedItems: any;
+  _dirtyHyperFormula: boolean;
+  _latestComputedStock: any[];
+  _kpiCache: WeakMap<object, any>;
+
   constructor() {
     this.hf = null;
     this.stockSheetId = null;

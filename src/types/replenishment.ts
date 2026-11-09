@@ -36,4 +36,7 @@ export interface IReplenishmentOrder {
   notes?: string;
   numero_bon_reception?: string;
   motif_annulation?: string;
+  demandeur?: string;
+  priorite?: string;
+  [key: string]: any;
 }

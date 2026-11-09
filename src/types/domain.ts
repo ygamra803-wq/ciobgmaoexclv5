@@ -41,6 +41,10 @@ export interface IStockItem {
   seuil: number;
   alerte: AlertStatus;
   emplacement?: string;
+  prixUnitaire?: number;
+  prix_unitaire?: number;
+  prix?: number;
+  [key: string]: any;
 }
 
 export interface IMachine {

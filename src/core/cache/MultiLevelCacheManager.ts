@@ -8,7 +8,18 @@ import { Logger } from '../logger/LoggerService';
  * and L3 (Formula / Calculation Cache) with Cache Warming, Tag Invalidation, and Impact Measurement.
  */
 export class MultiLevelCacheManager {
-  static instance = null;
+  static instance: MultiLevelCacheManager | null = null;
+  l1Cache: any;
+  l2Storage: any;
+  l3FormulaCache: Map<string, any>;
+  impactStats: {
+    l1Hits: number;
+    l2Hits: number;
+    l3Hits: number;
+    misses: number;
+    totalSavedMs: number;
+    warmedEntriesCount: number;
+  };
 
   constructor() {
     if (MultiLevelCacheManager.instance) {
@@ -36,7 +47,7 @@ export class MultiLevelCacheManager {
   /**
    * Set item in Multi-Level Cache
    */
-  async set(key, value, options = {}) {
+  async set(key: string, value: any, options: any = {}) {
     const { ttl = 5 * 60 * 1000, tags = [], persist = false, level = 'all' } = options;
 
     // 1. L1 Memory Cache
