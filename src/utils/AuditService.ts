@@ -78,13 +78,13 @@ export class AuditService {
   /**
    * الحصول على السجل
    */
-  async getLog(filters: any = {}) {
+  async getLog(filters: any = {}): Promise<any[]> {
     try {
       const db = await this.getDB();
       const tx = db.transaction(['auditLog'], 'readonly');
       const store = tx.objectStore('auditLog');
 
-      return new Promise((resolve, reject) => {
+      return new Promise<any[]>((resolve, reject) => {
         const request = store.getAll();
         request.onsuccess = () => {
           let results = request.result;

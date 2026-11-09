@@ -3294,7 +3294,7 @@ export default function DashboardView({
                     min="1"
                     required
                     value={orderForm.quantite}
-                    onChange={(e) => setOrderForm({ ...orderForm, quantite: e.target.value })}
+                    onChange={(e) => setOrderForm({ ...orderForm, quantite: Number(e.target.value) || 0 })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-900 focus:bg-white focus:border-amber-500 outline-none"
                   />
                 </div>
@@ -3370,7 +3370,7 @@ export default function DashboardView({
               <div className="space-y-1">
                 <label className="font-bold text-slate-700">Notes & Justification</label>
                 <textarea
-                  rows="2"
+                  rows={2}
                   value={orderForm.commentaire}
                   onChange={(e) => setOrderForm({ ...orderForm, commentaire: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:border-amber-500 outline-none"

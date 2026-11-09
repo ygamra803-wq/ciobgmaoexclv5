@@ -18,8 +18,9 @@ export function useMobileOptimization() {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
 
-    if (navigator.getBattery) {
-      navigator.getBattery().then(battery => {
+    const nav = navigator as any;
+    if (nav.getBattery) {
+      nav.getBattery().then((battery: any) => {
         setBatteryLevel(battery.level * 100);
         battery.addEventListener('levelchange', () => {
           setBatteryLevel(battery.level * 100);
@@ -119,8 +120,9 @@ export function useMobilePerformance() {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     setShouldReduceAnimations(prefersReducedMotion);
 
+    const nav = navigator as any;
     const handleConnectionChange = () => {
-      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      const connection = nav.connection || nav.mozConnection || nav.webkitConnection;
       if (connection) {
         const effectiveType = connection.effectiveType;
         setShouldReduceImages(effectiveType !== '4g');
@@ -128,10 +130,10 @@ export function useMobilePerformance() {
     };
 
     handleConnectionChange();
-    navigator.connection?.addEventListener('change', handleConnectionChange);
+    nav.connection?.addEventListener('change', handleConnectionChange);
 
     return () => {
-      navigator.connection?.removeEventListener('change', handleConnectionChange);
+      nav.connection?.removeEventListener('change', handleConnectionChange);
     };
   }, []);
 

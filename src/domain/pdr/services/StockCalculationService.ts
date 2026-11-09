@@ -28,6 +28,7 @@ export class StockCalculationService {
   static cache = new Map();
   static cacheTtlMs = 5000; // 5s cache TTL
   static movementQueue = new Map(); // Key: ref -> Promise chain for concurrency control
+  static normalizeType = normalizeType;
 
   /**
    * Helper to compute unique hash for movement arrays

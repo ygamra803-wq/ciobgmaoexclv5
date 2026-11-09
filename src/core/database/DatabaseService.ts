@@ -167,8 +167,8 @@ export class DatabaseService {
       try {
         const stmt = this.db.prepare(sql);
         return stmt.get(...params);
-      } catch (error) {
-        Logger.error('❌ QueryOne failed', { sql, params, error: error.message });
+      } catch (error: any) {
+        Logger.error('❌ QueryOne failed', { sql, params, error: error?.message });
         return null;
       }
     }
@@ -184,8 +184,8 @@ export class DatabaseService {
           changes: result.changes,
           lastInsertRowid: result.lastInsertRowid
         };
-      } catch (error) {
-        Logger.error('❌ Execute failed', { sql, params, error: error.message });
+      } catch (error: any) {
+        Logger.error('❌ Execute failed', { sql, params, error: error?.message });
         return { changes: 0, lastInsertRowid: 0 };
       }
     }

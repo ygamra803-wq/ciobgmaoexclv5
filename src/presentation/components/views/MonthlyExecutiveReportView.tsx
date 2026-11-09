@@ -1357,7 +1357,7 @@ export default function MonthlyExecutiveReportView({
                       {formatCurrency(currentReport.preventiveTotalCost)}
                     </td>
                     <td className="py-3 px-3 text-right border-r border-slate-200">
-                      {formatCurrency(currentReport.externalBobinageTotalCost ?? 0)}
+                      {formatCurrency(currentReport.externalBobinageCost ?? 0)}
                     </td>
                     <td className="py-3 px-3 text-right text-emerald-800 bg-emerald-50/50">
                       {formatCurrency(currentReport.totalOfficialMaintenanceCost ?? 0)}

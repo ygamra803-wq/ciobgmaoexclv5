@@ -164,8 +164,8 @@ export default function UtilisateursView({
         setUserForAccessModal(null);
         setAccessSavedMsg(null);
       }, 650);
-    } catch (err) {
-      setAccessError(err.message || "Erreur lors de la mise à jour de l'accès");
+    } catch (err: any) {
+      setAccessError(err?.message || "Erreur lors de la mise à jour de l'accès");
     }
   };
 

@@ -11,7 +11,7 @@ class ExcelEngineService {
   /**
    * Palette de styles industriels GMAO
    */
-  getStyles() {
+  getStyles(): Record<string, any> {
     return {
       headerFill: {
         type: 'pattern',
@@ -515,10 +515,10 @@ class ExcelEngineService {
   /**
    * Analyse et décode un fichier Excel (.xlsx) avec extraction rigoureuse des valeurs calculées (Data-Only Evaluation)
    */
-  async parseWorkbookFile(fileOrBuffer) {
+  async parseWorkbookFile(fileOrBuffer: any) {
     const wb = new ExcelJS.Workbook();
     if (fileOrBuffer instanceof ArrayBuffer || ArrayBuffer.isView(fileOrBuffer)) {
-      await wb.xlsx.load(fileOrBuffer);
+      await wb.xlsx.load(fileOrBuffer as any);
     } else if (fileOrBuffer.arrayBuffer) {
       const buf = await fileOrBuffer.arrayBuffer();
       await wb.xlsx.load(buf);
@@ -526,7 +526,7 @@ class ExcelEngineService {
       throw new Error('Type de fichier ou tampon non reconnu');
     }
 
-    const result = {
+    const result: Record<string, any[]> = {
       Stock_Actuel: [],
       Mouvements: [],
       Machines_Registered: [],
@@ -548,6 +548,7 @@ class ExcelEngineService {
       Part_Types: [],
       Part_Designations: [],
       Blueprints: [],
+      Machine_BOM_Ledger: [],
     };
 
     const extractCellValue = (cell) => {

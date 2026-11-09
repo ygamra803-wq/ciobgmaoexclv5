@@ -138,8 +138,10 @@ const SNAPSHOT_FIELD_MAP: Record<string, string> = {
  */
 export function loadCollection<T = any>(
   canonicalKey: string,
-  { allowDemoFallback = false, demoSeed = [] as any, emptyDefault = [] as any }: { allowDemoFallback?: boolean; demoSeed?: any; emptyDefault?: any } = {}
+  optionsOrLegacySeed: { allowDemoFallback?: boolean; demoSeed?: any; emptyDefault?: any } | any[] = {}
 ): any {
+  const opts = Array.isArray(optionsOrLegacySeed) ? {} : optionsOrLegacySeed || {};
+  const { allowDemoFallback = false, demoSeed = [] as any, emptyDefault = [] as any } = opts;
   const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
   const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
   const isExplicitDemoMode =

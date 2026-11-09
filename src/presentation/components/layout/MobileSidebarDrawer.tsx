@@ -47,13 +47,14 @@ export default function MobileSidebarDrawer({
   setCurrentTab,
   mobileMenuOpen,
   setMobileMenuOpen,
-  counts = {},
+  counts = {} as Record<string, any>,
   currentUser,
   fileInputRef,
   _handleImportFile,
+  handleImportFile: _unusedHandleImportFile,
   handleExportExcel,
   onLogout,
-}) {
+}: any) {
   const { t } = useTranslation();
   // Sidebar Dark / Light Theme state (persisted in storageService — NH-5 unified default 'light')
   const [sidebarTheme, setSidebarTheme] = useState(() => {

@@ -33,8 +33,8 @@ export class NotificationService {
       this.permission = perm;
       Logger.info(`Notification permission status: ${perm}`, 'NotificationService');
       return perm;
-    } catch (err) {
-      Logger.error('Failed to request notification permission:', 'NotificationService', err);
+    } catch (err: any) {
+      Logger.error('Failed to request notification permission:', err, 'NotificationService');
       return 'denied';
     }
   }
@@ -73,8 +73,8 @@ export class NotificationService {
       }
 
       return true;
-    } catch (err) {
-      Logger.error('Error triggering notification:', 'NotificationService', err);
+    } catch (err: any) {
+      Logger.error('Error triggering notification:', err, 'NotificationService');
       return false;
     }
   }

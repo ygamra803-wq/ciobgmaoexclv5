@@ -222,7 +222,7 @@ export class SecurityService {
       }
       Logger.debug('Data decrypted successfully');
       return JSON.parse(decrypted);
-    } catch (error) {
+    } catch (error: any) {
       Logger.warn('[SecurityService] Decryption or UTF-8 decode failed (stale key or legacy format)', error?.message || error);
       throw error;
     }
@@ -258,7 +258,7 @@ export class SecurityService {
       
       Logger.debug('Token generated successfully');
       return `${encoded}.${signature}`;
-    } catch (error) {
+    } catch (error: any) {
       Logger.warn('[SecurityService] Token generation failed:', error?.message || error);
       throw error;
     }
@@ -305,7 +305,7 @@ export class SecurityService {
     const nowSec = Math.floor(Date.now() / 1000);
     if (!ignoreExpiration && decoded.payload.exp && decoded.payload.exp < nowSec) {
       Logger.info('[SecurityService] Session token expired naturally');
-      const error = new Error('Token expired');
+      const error = new Error('Token expired') as Error & { isExpired?: boolean };
       error.name = 'TokenExpiredError';
       error.isExpired = true;
       throw error;

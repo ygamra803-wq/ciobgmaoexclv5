@@ -52,7 +52,7 @@ export class BackupService {
    * @param {Object|string} dbOrSnapshotId - Database instance or snapshot ID to restore
    * @param {string} [backupId] - Optional backup ID if db instance is passed first
    */
-  static async restoreBackup(dbOrSnapshotId, backupId) {
+  static async restoreBackup(dbOrSnapshotId: any, backupId?: string) {
     try {
       Logger.debug('🔄 Restoring backup...');
 

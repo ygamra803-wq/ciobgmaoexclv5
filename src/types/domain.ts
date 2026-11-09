@@ -29,17 +29,17 @@ export interface IGeneralSystemType {
 export type ProfileType = 'TECHNICIEN' | 'RESPONSABLE' | 'OPERATEUR' | 'CHEF';
 
 export interface IStockItem {
-  id: string | number;
+  id?: string | number;
   ref: string;
   designation: string;
   id_type?: string;
   type?: string;
   stockInitial: number;
-  entrees: number;
-  sorties: number;
-  stockActuel: number;
-  seuil: number;
-  alerte: AlertStatus;
+  entrees?: number;
+  sorties?: number;
+  stockActuel?: number;
+  seuil?: number;
+  alerte?: AlertStatus | string;
   emplacement?: string;
   prixUnitaire?: number;
   prix_unitaire?: number;

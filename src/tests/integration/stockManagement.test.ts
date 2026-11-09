@@ -152,7 +152,7 @@ describe('Stock Management Integration Tests', () => {
       }
 
       const start = performance.now();
-      const results = Array.from(mockDatabase.values()).filter(i => i.designation.includes('Roulement'));
+      const results = Array.from(mockDatabase.values()).filter((i: any) => i.designation.includes('Roulement'));
       const duration = performance.now() - start;
 
       expect(duration).toBeLessThan(50);

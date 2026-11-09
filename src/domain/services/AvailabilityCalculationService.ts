@@ -252,7 +252,7 @@ export class AvailabilityCalculationService {
    * @param {Array} interventions 
    * @returns {Object} verification result
    */
-  static verifyCalculations(machine = {}, interventions = []) {
+  static verifyCalculations(machine: any = {}, interventions: any[] = []) {
     const errors = [];
     const mtbf = this.calculateMTBF(interventions);
     const mttr = this.calculateMTTR(interventions);

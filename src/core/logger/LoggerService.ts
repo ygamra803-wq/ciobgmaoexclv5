@@ -47,9 +47,21 @@ export class Logger {
     }
   }
 
-  static table(data) {
+  static table(data: any, _context = '') {
     if (this.currentLevel <= this.LOG_LEVELS.DEBUG) {
       console.table(data);
+    }
+  }
+
+  static group(label: string, context = '') {
+    if (this.currentLevel <= this.LOG_LEVELS.DEBUG && typeof console.group === 'function') {
+      console.group(`${context ? `[${context}] ` : ''}${label}`);
+    }
+  }
+
+  static groupEnd() {
+    if (this.currentLevel <= this.LOG_LEVELS.DEBUG && typeof console.groupEnd === 'function') {
+      console.groupEnd();
     }
   }
 }

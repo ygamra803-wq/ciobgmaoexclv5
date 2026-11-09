@@ -16,7 +16,7 @@ import {
 interface TodayTabProps {
   techScope: any;
   activeMachines: any[];
-  activeLiveInterventionId?: string | null;
+  activeLiveInterventionId?: string | number | null;
   onOpenQrScanner: () => void;
   onOpenMachineQrModal?: (machineId: string) => void;
   onNavigateToPreventive: (filter?: 'TODO' | 'OVERDUE' | 'CLARIFY' | 'PENDING' | 'DONE' | 'ALL', taskToExecute?: any) => void;

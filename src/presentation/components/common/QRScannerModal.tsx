@@ -4,12 +4,20 @@ import { QrCode, X, Camera, CheckCircle2 } from 'lucide-react';
 /**
  * 📷 QRScannerModal: Interactive Camera-based QR / Barcode Scanner Modal
  */
-export const QRScannerModal = ({ isOpen, onClose, onScan }) => {
-  const [stream, setStream] = useState(null);
-  const [error, setError] = useState(null);
+export const QRScannerModal = ({
+  isOpen = true,
+  onClose,
+  onScan,
+}: {
+  isOpen?: boolean;
+  onClose?: () => void;
+  onScan?: (code: string) => void;
+}) => {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState('');
-  const [scannedResult, setScannedResult] = useState(null);
-  const videoRef = useRef(null);
+  const [scannedResult, setScannedResult] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const handleSuccessScan = useCallback((code) => {
     setScannedResult(code);
@@ -42,7 +50,8 @@ export const QRScannerModal = ({ isOpen, onClose, onScan }) => {
 
       // Try native BarcodeDetector API if available
       if ('BarcodeDetector' in window) {
-        const barcodeDetector = new window.BarcodeDetector({
+        const BarcodeDetectorCtor = (window as any).BarcodeDetector;
+        const barcodeDetector = new BarcodeDetectorCtor({
           formats: ['qr_code', 'code_128', 'code_39', 'ean_13']
         });
 
@@ -65,8 +74,8 @@ export const QRScannerModal = ({ isOpen, onClose, onScan }) => {
         };
         requestAnimationFrame(scanLoop);
       }
-    } catch (err) {
-      setError(err.message || 'عذراً، تعذر تشغيل الكاميرا المادية.');
+    } catch (err: any) {
+      setError(err?.message || 'عذراً، تعذر تشغيل الكاميرا المادية.');
     }
   };
 

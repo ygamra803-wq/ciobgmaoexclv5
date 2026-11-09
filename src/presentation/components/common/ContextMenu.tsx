@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { contextMenu } from '../../../services/ContextMenuService';
 
 export default function ContextMenu() {
-  const [menuState, setMenuState] = useState({
+  const [menuState, setMenuState] = useState<any>({
     isOpen: false,
     x: 0,
     y: 0,

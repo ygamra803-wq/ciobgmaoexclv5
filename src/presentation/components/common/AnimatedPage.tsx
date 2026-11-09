@@ -24,7 +24,7 @@ export const itemVariants = {
     y: 0,
     transition: {
       duration: 0.52, // Peaceful, steady streaming duration
-      ease: [0.22, 1, 0.36, 1], // Silky smooth deceleration curve
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number], // Silky smooth deceleration curve
     },
   },
 };
@@ -40,7 +40,7 @@ export const headerSpringVariants = {
     y: 0,
     transition: {
       duration: 0.56,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
     },
   },
 };

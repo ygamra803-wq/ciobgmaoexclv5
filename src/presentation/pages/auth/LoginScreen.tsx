@@ -231,8 +231,8 @@ export default function LoginScreen() {
 
     try {
       await login(username, password);
-    } catch (err) {
-      setErrorMsg(err.message || 'Échec de connexion');
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Échec de connexion');
     } finally {
       setIsLoading(false);
     }
@@ -254,8 +254,8 @@ export default function LoginScreen() {
       } else {
         await login('admin', pinCode);
       }
-    } catch (err) {
-      setErrorMsg(err.message || 'Code PIN chiffré invalide');
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Code PIN chiffré invalide');
     } finally {
       setIsLoading(false);
     }
@@ -274,8 +274,8 @@ export default function LoginScreen() {
       await setupMasterPin(pinCode);
       setAuthMode('CREDENTIALS');
       setErrorMsg('Master PIN configuré avec succès. Vous pouvez maintenant vous connecter.');
-    } catch (err) {
-      setErrorMsg(err.message || 'Échec de configuration du PIN');
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Échec de configuration du PIN');
     } finally {
       setIsLoading(false);
     }

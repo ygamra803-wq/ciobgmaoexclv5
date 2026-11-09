@@ -19,8 +19,8 @@ if (typeof window !== 'undefined') {
   });
 
   // Mock performance.memory
-  if (!window.performance.memory) {
-    window.performance.memory = {
+  if (!(window.performance as any).memory) {
+    (window.performance as any).memory = {
       usedJSHeapSize: 10485760,
       totalJSHeapSize: 20971520,
       jsHeapSizeLimit: 41943040,

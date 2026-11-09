@@ -3,7 +3,7 @@ import { calculateNextDueDate, getComplianceRate } from '@/domain/preventiveSche
 
 describe('Preventive Task Integration Flow', () => {
   it('يجب تنفيذ مهمة وقائية وتحديث تاريخ الاستحقاق التالي وحساب نسبة الإنجاز', () => {
-    const task = {
+    const task: Record<string, any> = {
       id: 'PREV-001',
       titre: 'Graissage paliers',
       machine: 'Extrudeuse 01',

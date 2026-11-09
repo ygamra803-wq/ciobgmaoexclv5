@@ -59,7 +59,7 @@ class IndexedDBService {
           await this.requestPersistentStorage();
           Logger.info(`✅ IndexedDB [${this.dbName} v${this.version}] initialized successfully`);
           return this.db;
-        } catch (error) {
+        } catch (error: any) {
           Logger.warn(`⚠️ IndexedDB open retry ${attempt}/${this.retries}: ${error?.message || error}`);
           if (attempt === this.retries) {
             Logger.error('❌ Failed to open IndexedDB after retries:', error);

@@ -72,8 +72,8 @@ export class KeyboardShortcutsService {
     this.listeners.forEach((listener) => {
       try {
         listener(list);
-      } catch (err) {
-        Logger.error('Error notifying shortcut listener:', 'KeyboardShortcuts', err);
+      } catch (err: any) {
+        Logger.error('Error notifying shortcut listener:', err, 'KeyboardShortcuts');
       }
     });
   }
@@ -109,8 +109,8 @@ export class KeyboardShortcutsService {
 
         try {
           shortcut.callback(event);
-        } catch (err) {
-          Logger.error(`Error executing shortcut callback [${shortcut.id}]:`, 'KeyboardShortcuts', err);
+        } catch (err: any) {
+          Logger.error(`Error executing shortcut callback [${shortcut.id}]:`, err, 'KeyboardShortcuts');
         }
         break;
       }

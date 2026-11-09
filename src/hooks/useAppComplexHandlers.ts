@@ -53,7 +53,7 @@ export function useAppComplexHandlers({
   setMachineElementsLedger,
   showToast,
   setCurrentTab,
-}) {
+}: Record<string, any>) {
   const activeMachines = machines || _machines || [];
   const handleUpdateZone = (id, updatedZone) => {
     setZones((prev) => prev.map((z) => (z.id_zone === id ? updatedZone : z)));

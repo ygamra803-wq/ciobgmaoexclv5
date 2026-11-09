@@ -261,9 +261,9 @@ export class AutoBackupService {
     const defaultName = suggestedName || `CIOB_GMAO_Enterprise_Backup_${new Date().toISOString().split('T')[0]}.json`;
     const jsonStr = JSON.stringify(payloadData, null, 2);
 
-    if (typeof window !== 'undefined' && window.showSaveFilePicker) {
+    if (typeof window !== 'undefined' && (window as any).showSaveFilePicker) {
       try {
-        const handle = await window.showSaveFilePicker({
+        const handle = await (window as any).showSaveFilePicker({
           suggestedName: defaultName,
           types: [{
             description: 'Fichier de sauvegarde GMAO (JSON)',
@@ -275,7 +275,7 @@ export class AutoBackupService {
         await writable.close();
         Logger.info('[AutoBackupService] Backup written directly to file system via File System Access API');
         return true;
-      } catch (err) {
+      } catch (err: any) {
         if (err && err.name === 'AbortError') {
           return false; // User cancelled dialog
         }

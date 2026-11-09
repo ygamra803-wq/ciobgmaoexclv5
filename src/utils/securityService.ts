@@ -39,7 +39,7 @@ export class SecurityService {
    * @param {string} [secretKey] - Optional encryption key
    * @returns {string} Encrypted string payload
    */
-  static encrypt(data, secretKey) {
+  static encrypt(data: any, secretKey?: string) {
     try {
       if (data === undefined || data === null) return '';
       const key = resolveSecretKey(secretKey);
@@ -72,7 +72,7 @@ export class SecurityService {
    * @param {string} [secretKey] - Optional encryption key
    * @returns {any} Decrypted data object or null if invalid
    */
-  static decrypt(encrypted, secretKey) {
+  static decrypt(encrypted: string, secretKey?: string) {
     if (!encrypted) return null;
     const key = resolveSecretKey(secretKey);
     try {

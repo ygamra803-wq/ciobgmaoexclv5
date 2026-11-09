@@ -254,7 +254,7 @@ class SyncQueueService {
       }
 
       Logger.info('[SyncQueueService] ✅ Opération synchronisée avec succès:', item.id);
-    } catch (error) {
+    } catch (error: any) {
       Logger.error('[SyncQueueService] ❌ Erreur d’exécution de l’opération:', error);
 
       item.retries = (item.retries || 0) + 1;
@@ -277,7 +277,7 @@ class SyncQueueService {
   /**
    * Mise à jour d'un élément dans IndexedDB
    */
-  async updateQueueItem(item) {
+  async updateQueueItem(item: any) {
     if (!this.db) return;
     return new Promise((resolve, reject) => {
       try {
@@ -296,7 +296,7 @@ class SyncQueueService {
   /**
    * Lecture de tous les éléments de la file
    */
-  async getQueue() {
+  async getQueue(): Promise<any[]> {
     if (!this.db) {
       await this.init();
     }

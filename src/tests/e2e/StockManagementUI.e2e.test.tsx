@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import AddArticleModal from '../../presentation/pages/stock/AddArticleModal.jsx';
-import { ValidationService } from '../../core/validation/ValidationService.ts';
+import { ValidationService } from '../../core/validation/ValidationService';
 import { StockCalculationService } from '../../domain/pdr/services/StockCalculationService';
 
 /**

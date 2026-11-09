@@ -159,7 +159,11 @@ export function buildTechnicianDashboardScope({
   preventiveExecutions?: any[];
   correctiveInterventions?: any[];
   mouvements?: any[];
+  machines?: any[];
+  sortieDemands?: any[];
   currentWeekKey?: string;
+  now?: Date | string;
+  [key: string]: any;
 }) {
   const isTechUser = isTechnicianRole(user);
   const badgeLabel = getTechnicianBadgeLabel(user, technicians);

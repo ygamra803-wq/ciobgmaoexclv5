@@ -358,7 +358,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                 </div>
               ) : (
                 snapshots.map((snap) => {
-                  const totalItems = Object.values(snap.counts || {}).reduce((acc, c) => acc + (Number(c) || 0), 0);
+                  const totalItems = Object.values(snap.counts || {}).reduce<number>((acc, c) => acc + (Number(c) || 0), 0);
                   const isConfirming = confirmRestoreId === snap.id;
 
                   return (

@@ -184,14 +184,16 @@ export default function SupervisoryMobileCockpit({
         ? r.pieces_utilisees
         : [];
       return reconcileFieldClaim({
-        recordType: 'CORRECTIVE_BT',
-        recordId: r.id || r.num_bt,
+        claimType: 'CORRECTIVE',
+        claimId: String(r.id || r.num_bt || ''),
         machineCode: r.code_machine,
         numBonSaisi: r.num_bon_saisi_par_tech,
-        proposedItems: pieces,
+        proposedSpares: pieces,
         stockItems,
         mouvements,
-        reservedStockMap: queues.reservedStockMap,
+        correctiveInterventions,
+        preventiveExecutions,
+        sortieDemands,
       });
     }
     if (selectedItem.kind === 'PREVENTIVE') {
@@ -201,28 +203,39 @@ export default function SupervisoryMobileCockpit({
         ? r.sparesUsed
         : [];
       return reconcileFieldClaim({
-        recordType: 'PREVENTIVE_EXEC',
-        recordId: r.id,
+        claimType: 'PREVENTIVE',
+        claimId: String(r.id || ''),
         machineCode: r.machineCode,
         numBonSaisi: r.num_bon_saisi_par_tech,
-        proposedItems: pieces,
+        proposedSpares: pieces,
         stockItems,
         mouvements,
-        reservedStockMap: queues.reservedStockMap,
+        correctiveInterventions,
+        preventiveExecutions,
+        sortieDemands,
       });
     }
     const items = Array.isArray(r.items) ? r.items : [];
     return reconcileFieldClaim({
-      recordType: 'SORTIE_DEMAND',
-      recordId: r.id,
+      claimType: 'SORTIE',
+      claimId: String(r.id || ''),
       machineCode: r.id_machine_registered,
-      numBonSaisi: r.code_bon_magasin || r.id,
-      proposedItems: items,
+      numBonSaisi: r.code_bon_magasin || r.code_bon_tech || r.id,
+      proposedSpares: items,
       stockItems,
       mouvements,
-      reservedStockMap: queues.reservedStockMap,
+      correctiveInterventions,
+      preventiveExecutions,
+      sortieDemands,
     });
-  }, [selectedItem, stockItems, mouvements, queues.reservedStockMap]);
+  }, [
+    selectedItem,
+    stockItems,
+    mouvements,
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+  ]);
 
   const handleOpenReview = (kind: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE', record: any) => {
     setReviewNote('');
@@ -237,14 +250,16 @@ export default function SupervisoryMobileCockpit({
     const rec =
       kind !== 'SORTIE'
         ? reconcileFieldClaim({
-            recordType: kind === 'CORRECTIVE' ? 'CORRECTIVE_BT' : 'PREVENTIVE_EXEC',
-            recordId: record.id,
+            claimType: kind === 'CORRECTIVE' ? 'CORRECTIVE' : 'PREVENTIVE',
+            claimId: String(record.id || ''),
             machineCode: record.code_machine || record.machineCode,
             numBonSaisi: record.num_bon_saisi_par_tech,
-            proposedItems: pieces,
+            proposedSpares: pieces,
             stockItems,
             mouvements,
-            reservedStockMap: queues.reservedStockMap,
+            correctiveInterventions,
+            preventiveExecutions,
+            sortieDemands,
           })
         : null;
     setSkipStockDeduction(Boolean(rec?.exactMovementMatch));
@@ -276,6 +291,7 @@ export default function SupervisoryMobileCockpit({
       reviewCorrective(record.id, {
         decision,
         reviewer_name: reviewerName,
+        validated_by_name: reviewerName,
         validation_note: reviewNote.trim(),
         action_realisee: record.action_realisee || record.observations || 'Intervention validée',
         pieces_utilisees: pieces,
@@ -296,6 +312,7 @@ export default function SupervisoryMobileCockpit({
       reviewPreventive(record.id, {
         decision,
         reviewer_name: reviewerName,
+        validated_by_name: reviewerName,
         validation_note: reviewNote.trim(),
         sparesUsed: spares,
         skipStockDeduction,
@@ -312,10 +329,10 @@ export default function SupervisoryMobileCockpit({
     } else if (kind === 'SORTIE' && profile.canValidateSortieDemand) {
       reviewSortieDemand(record.id, {
         decision,
-        reviewer_name: reviewerName,
+        validated_by_name: reviewerName,
         validation_note: reviewNote.trim(),
         code_bon_magasin: codeBonMagasin.trim() || record.id,
-        items: Array.isArray(record.items) ? record.items : [],
+        approvedItems: Array.isArray(record.items) ? record.items : [],
       });
       showToast?.(
         decision === 'APPROVED'

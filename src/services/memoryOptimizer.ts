@@ -14,8 +14,8 @@ export class MemoryOptimizer {
    * Gets current memory usage stats from window.performance.memory (if available)
    */
   static getMemoryInfo() {
-    if (typeof window !== 'undefined' && window.performance && window.performance.memory) {
-      const mem = window.performance.memory;
+    if (typeof window !== 'undefined' && window.performance && (window.performance as any).memory) {
+      const mem = (window.performance as any).memory;
       const usedMB = (mem.usedJSHeapSize / (1024 * 1024)).toFixed(1);
       const totalMB = (mem.totalJSHeapSize / (1024 * 1024)).toFixed(1);
       const limitMB = (mem.jsHeapSizeLimit / (1024 * 1024)).toFixed(1);

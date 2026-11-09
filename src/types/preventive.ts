@@ -107,34 +107,34 @@ export type PreventiveValidationStatus =
  */
 export interface PreventiveExecutionRecord {
   id: string;
-  taskId: string;
+  taskId?: string;
   taskCode?: string;
-  machineCode: string;
+  machineCode?: string;
   machineName?: string;
   zone?: string;
-  organe: string;
+  organe?: string;
   id_composant?: string;
   nom_composant?: string;
   id_part?: string;
   nom_part?: string;
-  actionCode: string;
+  actionCode?: string;
   taskDescription?: string;
   frequence?: string;
   scheduledDueDate?: string; // YYYY-MM-DD target due date at time of execution
-  executedAt: string; // ISO date or YYYY-MM-DD
-  periodMonth: string; // YYYY-MM
+  executedAt?: string; // ISO date or YYYY-MM-DD
+  periodMonth?: string; // YYYY-MM
   periodWeek?: string; // e.g., S14
-  executorName: string;
-  durationMinutes: number;
+  executorName?: string;
+  durationMinutes?: number;
   laborRate?: number;
   sparesCost?: number;
   totalCost?: number;
-  status: 'DONE' | 'SKIPPED' | 'PARTIAL';
+  status?: 'DONE' | 'SKIPPED' | 'PARTIAL' | string;
   notes?: string;
   sparesUsed?: PreventiveExecutionSpareItem[];
   sparesProposed?: PreventiveExecutionSpareItem[];
   num_bon_saisi_par_tech?: string;
-  validation_status?: PreventiveValidationStatus;
+  validation_status?: PreventiveValidationStatus | string;
   submitted_by_id?: string;
   submitted_by_name?: string;
   submitted_at?: string;
@@ -148,7 +148,7 @@ export interface PreventiveExecutionRecord {
   hasAnomaly?: boolean;
   followUpDiAnomalie?: string;
   followUpDiPriorite?: string;
-  createdAt: string;
+  createdAt?: string;
   [key: string]: any;
 }
 

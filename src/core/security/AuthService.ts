@@ -209,7 +209,11 @@ export class AuthService {
   /**
    * Build an AuthAccount object from a technician reference record.
    */
-  buildTechnicianAccount(tech, existingAccount = null, options = {}) {
+  buildTechnicianAccount(
+    tech: any,
+    existingAccount: any = null,
+    options: { isActive?: boolean; activateByDefault?: boolean } = {}
+  ) {
     const techId = String(tech?.id_technician || tech?.id || '').trim();
     const nom = String(tech?.nom || techId).trim();
     const zone = String(tech?.id_zone || '').trim() || null;
@@ -329,7 +333,10 @@ export class AuthService {
    * Synchronize technician login accounts from a list of technician reference records.
    * Used when demo data is loaded or when syncing personnel directory.
    */
-  syncTechnicianAccountsFromPersonnel(technicians = [], options = {}) {
+  syncTechnicianAccountsFromPersonnel(
+    technicians: any[] = [],
+    options: { activateByDefault?: boolean; emitEvent?: boolean } = {}
+  ) {
     const { activateByDefault = true, emitEvent = true } = options;
     let users = this.getStoredUsersList().filter(
       (u) => !(u.id === 'tech' && u.username === 'tech' && !u.personnelId)

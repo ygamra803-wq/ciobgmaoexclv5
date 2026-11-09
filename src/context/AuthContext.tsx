@@ -244,9 +244,9 @@ export const AuthProvider = ({ children }) => {
           password: String(passwordRaw || '').trim(),
           pin: pinRaw ? String(pinRaw).trim() : undefined,
         });
-      } catch (err) {
+      } catch (err: any) {
         throw new Error(
-          `Validation des données : ${err.errors?.[0]?.message || 'Entrées invalides'}`,
+          `Validation des données : ${err?.errors?.[0]?.message || 'Entrées invalides'}`,
           { cause: err }
         );
       }

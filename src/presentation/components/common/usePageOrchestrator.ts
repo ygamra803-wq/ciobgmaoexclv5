@@ -8,7 +8,10 @@ import { useState, useEffect, useRef } from 'react';
  * 3. On all subsequent visits to already-visited tabs, the Skeleton NEVER shows; the page renders immediately with its streaming cascade.
  * 4. Zero flash / zero flicker on tab transitions because visited state is derived synchronously.
  */
-export function usePageOrchestrator(currentTab, options = {}) {
+export function usePageOrchestrator(
+  currentTab: string,
+  options: { initialLoadDuration?: number; tabFirstLoadDuration?: number } = {}
+) {
   const {
     initialLoadDuration = 450, // Duration for the very first app launch (ms)
     tabFirstLoadDuration = 380, // Duration for an unvisited tab first load (ms)

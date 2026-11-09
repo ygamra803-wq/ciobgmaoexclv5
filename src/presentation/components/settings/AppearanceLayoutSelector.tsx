@@ -31,6 +31,10 @@ export function AppearanceLayoutSelector({
   onChange,
   showToast,
   className = '',
+}: {
+  onChange?: (prefs: any) => void;
+  showToast?: any;
+  className?: string;
 }) {
   // 1. Mode de rendu de l'appareil : 'auto' (détection dynamique) | 'desktop' (bureau forcé) | 'mobile' (compagnon terrain)
   const [deviceMode, setDeviceMode] = useState(() => {

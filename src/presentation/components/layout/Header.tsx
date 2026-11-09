@@ -695,11 +695,11 @@ export default function Header({
                         /
                       </span>
                     )}
-                    {crumb.onClick && !isLast ? (
+                    {(crumb as any).onClick && !isLast ? (
                       <button
                         type="button"
-                        onClick={crumb.onClick}
-                        title={crumb.title || `Aller à ${crumb.label}`}
+                        onClick={(crumb as any).onClick}
+                        title={(crumb as any).title || `Aller à ${crumb.label}`}
                         className="text-zinc-500 hover:text-emerald-700 hover:underline font-semibold cursor-pointer truncate transition-colors focus-visible:outline-hidden"
                       >
                         {crumb.label}

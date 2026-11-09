@@ -162,6 +162,7 @@ export interface GmaoStoreState {
       validation_note?: string;
       validated_by_id?: string;
       validated_by_name?: string;
+      [key: string]: any;
     },
     onAddMouvement?: ((mvt: any) => void) | null
   ) => any;

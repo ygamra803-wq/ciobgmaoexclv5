@@ -1564,7 +1564,7 @@ export default function SettingsView({
           if (!r) continue;
           if (!mvtsMap.has(r)) mvtsMap.set(r, { in: 0, out: 0 });
           const item = mvtsMap.get(r)!;
-          const normType = StockCalculationService.normalizeType(m.type);
+          const normType: string = StockCalculationService.normalizeType(m.type);
           const qty = Math.max(0, Number(m.quantite) || 0);
           if (normType === 'ENTREE' || normType === 'RETOUR') {
             item.in += qty;

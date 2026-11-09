@@ -2,13 +2,13 @@ import { Menu, Save, ShieldCheck, Smartphone, Monitor } from 'lucide-react';
 
 export function MobileHeader({
   currentTab = 'dashboard',
-  setMobileMenuOpen = () => {},
+  setMobileMenuOpen = (_open?: boolean) => {},
   linkedFileName = '',
   onDirectSave = () => {},
   mobileViewMode = 'compact',
-  setMobileViewMode = () => {},
-  currentUser = null,
-}) {
+  setMobileViewMode = (_mode?: string) => {},
+  currentUser = null as any,
+}: any) {
   const getTabTitle = (tab) => {
     switch (tab) {
       case 'dashboard':

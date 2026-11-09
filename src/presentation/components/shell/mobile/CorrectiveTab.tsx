@@ -38,7 +38,7 @@ interface CorrectiveTabProps {
   machines: any[];
   zones: any[];
   stockItems: any[];
-  activeLiveInterventionId?: string | null;
+  activeLiveInterventionId?: string | number | null;
   initialFilter?: MobileCorrFilter;
   initialOpenNewDi?: boolean;
   initialBtToSubmit?: any | null;

@@ -36,16 +36,20 @@ export interface ClaimReconciliationResult {
 }
 
 export interface ReconcileFieldClaimParams {
-  claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
-  claimId: string;
+  claimType?: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
+  claimId?: string;
+  recordType?: 'CORRECTIVE_BT' | 'PREVENTIVE_EXEC' | 'SORTIE_DEMAND' | string;
+  recordId?: string;
   numBonSaisi?: string | null;
   machineCode?: string | null;
   proposedSpares?: any[];
+  proposedItems?: any[];
   stockItems?: any[];
   mouvements?: any[];
   correctiveInterventions?: any[];
   preventiveExecutions?: any[];
   sortieDemands?: any[];
+  reservedStockMap?: Map<string, any> | Record<string, any>;
 }
 
 function normalizeToken(value: unknown): string {
@@ -72,17 +76,34 @@ function extractSpareRefAndQty(raw: any): { ref: string; designation: string; qt
  * for interactive BS-Tech × BS-Magasin merge/discrepancy resolution.
  */
 export function reconcileFieldClaim({
-  claimType,
-  claimId,
+  claimType: rawClaimType,
+  claimId: rawClaimId,
+  recordType,
+  recordId,
   numBonSaisi,
   machineCode,
   proposedSpares = [],
+  proposedItems = [],
   stockItems = [],
   mouvements = [],
   correctiveInterventions = [],
   preventiveExecutions = [],
   sortieDemands = [],
 }: ReconcileFieldClaimParams): ClaimReconciliationResult {
+  const claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE' =
+    rawClaimType ||
+    (recordType === 'CORRECTIVE_BT'
+      ? 'CORRECTIVE'
+      : recordType === 'PREVENTIVE_EXEC'
+      ? 'PREVENTIVE'
+      : 'SORTIE');
+  const claimId = rawClaimId ?? recordId ?? '';
+  const effectiveSpares =
+    Array.isArray(proposedSpares) && proposedSpares.length > 0
+      ? proposedSpares
+      : Array.isArray(proposedItems)
+      ? proposedItems
+      : [];
   const alerts: ReconciliationAlert[] = [];
   const candidateStoreMovements: CandidateStoreMovementMatch[] = [];
   let exactMovementMatch: any | null = null;
@@ -90,7 +111,7 @@ export function reconcileFieldClaim({
   const normBon = normalizeToken(numBonSaisi);
   const normMachine = normalizeToken(machineCode);
 
-  const normalizedSpares = (Array.isArray(proposedSpares) ? proposedSpares : [])
+  const normalizedSpares = effectiveSpares
     .map(extractSpareRefAndQty)
     .filter((s) => Boolean(s.ref && s.qty > 0));
 

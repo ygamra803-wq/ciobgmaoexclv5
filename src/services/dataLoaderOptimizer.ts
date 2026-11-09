@@ -12,7 +12,11 @@ export class DataLoaderOptimizer {
    * Process large datasets in non-blocking chunks using requestAnimationFrame / idle callbacks.
    * Prevents UI stutter and main thread freeze when rendering/transforming large lists.
    */
-  static async loadInChunks(data = [], processFn, options = {}) {
+  static async loadInChunks(
+    data: any[] = [],
+    processFn: (item: any, index: number, array: any[]) => any,
+    options: { chunkSize?: number; onProgress?: ((pct: number) => void) | null } = {}
+  ) {
     const { chunkSize = 200, onProgress = null } = options;
 
     if (!Array.isArray(data) || data.length === 0) {
@@ -32,11 +36,11 @@ export class DataLoaderOptimizer {
       }
 
       // Yield main thread to allow browser UI frame render
-      await new Promise((resolve) => {
+      await new Promise<void>((resolve) => {
         if (typeof requestAnimationFrame === 'function') {
           requestAnimationFrame(() => resolve());
         } else {
-          setTimeout(resolve, 0);
+          setTimeout(() => resolve(), 0);
         }
       });
     }

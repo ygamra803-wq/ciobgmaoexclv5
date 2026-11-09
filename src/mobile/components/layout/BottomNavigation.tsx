@@ -10,10 +10,10 @@ import {
 export function BottomNavigation({
   activeTab = 'dashboard',
   isMobile = false,
-  onTabChange = () => {},
+  onTabChange = (_tabId?: string) => {},
   onOpenMenu = () => {},
-  counts = {},
-}) {
+  counts = {} as Record<string, any>,
+}: any) {
   if (!isMobile) return null;
 
   const tabs = [

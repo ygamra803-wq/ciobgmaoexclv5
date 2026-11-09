@@ -1481,14 +1481,14 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     handleRecordMeterReading: (payload: {
       machineId: string;
       valeur: number;
-      unite?: MeterUnit;
+      unite?: MeterUnit | string;
       date_releve?: string;
       releve_par?: string;
-      source?: IMeterReading['source'];
+      source?: IMeterReading['source'] | any;
       commentaire?: string;
     }) => {
       const result = MeterService.recordReading(
-        payload,
+        { ...payload, unite: payload.unite as MeterUnit | undefined },
         get().meterReadings,
         get().machines,
         get().preventiveTasks
@@ -1677,13 +1677,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
           source_preventive_task_id: newestExec.taskId || '',
         });
         if (createdDi?.id) {
-          newestExec.generated_di_id = createdDi.id;
+          newestExec.generated_di_id = String(createdDi.id);
           set({ preventiveExecutions: executions });
           PreventiveService.saveExecutions(executions);
           DataGateway.savePreventiveExecutions(executions);
         }
       } else if (newestExec && existingLinkedDiForNewest?.id && !newestExec.generated_di_id) {
-        newestExec.generated_di_id = existingLinkedDiForNewest.id;
+        newestExec.generated_di_id = String(existingLinkedDiForNewest.id);
         set({ preventiveExecutions: executions });
         PreventiveService.saveExecutions(executions);
         DataGateway.savePreventiveExecutions(executions);

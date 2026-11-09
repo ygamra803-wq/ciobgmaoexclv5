@@ -313,14 +313,21 @@ export function useCurrency() {
     [config]
   );
 
+  const setCurrency = useCallback(
+    (code: CurrencyCode) => updateConfig({ activeCurrencyCode: code }),
+    [updateConfig]
+  );
+
   return {
     config,
     currencyCode,
     currencySymbol,
+    symbol: currencySymbol,
     spec,
     formatCurrency: format,
     convertAmount: useCallback((amt: number) => convertCurrencyAmount(amt, config), [config]),
     updateConfig,
+    setCurrency,
     resetToDefault,
   };
 }

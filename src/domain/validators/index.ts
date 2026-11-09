@@ -117,9 +117,9 @@ export class ValidationService {
         data: validated,
         errors: []
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof z.ZodError) {
-        const errors = (error.issues || error.errors || []).map(err => ({
+        const errors = ((error as any).issues || (error as any).errors || []).map((err: any) => ({
           field: err.path.join('.'),
           message: err.message
         }));
@@ -135,7 +135,7 @@ export class ValidationService {
       return {
         valid: false,
         data: null,
-        errors: [{ message: error.message }],
+        errors: [{ message: error?.message || String(error) }],
         summary: `خطأ غير متوقع في ${entityName}`
       };
     }
