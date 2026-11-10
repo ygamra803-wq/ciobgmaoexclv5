@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../../i18n/I18nContext';
 import {
@@ -57,10 +56,6 @@ export default function TravauxStandardTab({
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (safeCurrentPage - 1) * effectivePageSize;
   const endIndex = pageSize === 0 || pageSize === 'ALL' ? totalItems : Math.min(startIndex + effectivePageSize, totalItems);
-
-  const paginatedTravaux = useMemo(() => {
-    return filteredTravaux.slice(startIndex, endIndex);
-  }, [filteredTravaux, startIndex, endIndex]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -287,151 +282,127 @@ export default function TravauxStandardTab({
         </div>
       </div>
 
-      {/* 2. MAIN CONTENT DISPLAY: EXCEL SPREADSHEET TABLE MODE */}
-      {displayMode === 'excel' && (
-        <GmaoIndustrialDataGrid
-          title="Tableau Travaux_Standard • Ordre Excel Row 3 : N° → Description → Actions"
-          icon={<BookOpen className="w-4 h-4 text-blue-600" />}
-          excelMapping="N° d'Ordre (A) | Description / Tâche Standard d'Atelier (B) | Actions & Outils (C)"
-          bannerColor="blue"
-          columns={travauxColumns}
-          data={paginatedFormattedTravaux}
-          startIndex={startIndex}
-          showRowNumber={true}
-          emptyIcon={<BookOpen className="w-8 h-8 text-slate-300" />}
-          emptyMessage="Aucune tâche standard trouvée."
-          pagination={{
-            currentPage: safeCurrentPage,
-            setCurrentPage: handlePageChange,
-            pageSize,
-            setPageSize,
-            totalItems,
-            pageSizeOptions: [20, 25, 50, 100, 200, 0],
-            color: 'blue',
-            itemLabel: 'tâches',
-          }}
-        />
-      )}
+      {/* 2. UNIFIED DUAL-MODE DATA GRID (EXCEL TABLE ⇄ OPERATIONAL CARDS) */}
+      <GmaoIndustrialDataGrid
+        title="Tableau Travaux_Standard • Ordre Excel Row 3 : N° → Description → Actions"
+        icon={<BookOpen className="w-4 h-4 text-blue-600" />}
+        excelMapping="N° d'Ordre (A) | Description / Tâche Standard d'Atelier (B) | Actions & Outils (C)"
+        bannerColor="blue"
+        columns={travauxColumns}
+        data={paginatedFormattedTravaux}
+        startIndex={startIndex}
+        showRowNumber={true}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        showDisplayModeToggle={false}
+        cardGridClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5"
+        renderCard={(item, _idx, rowNumber) => {
+          const travail = item.description;
+          const absoluteIdx = item.rawIndex;
 
-      {/* 3. GRID / CARDS DISPLAY MODE */}
-      {displayMode === 'grid' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {paginatedTravaux.map((travail, relativeIdx) => {
-              const absoluteIdx = startIndex + relativeIdx;
-
-              return (
-                <div
-                  key={absoluteIdx}
-                  className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
-                        N° {absoluteIdx + 1}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(travail)}
-                          className="p-1 rounded-lg bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-500 transition cursor-pointer"
-                          title="Modifier"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTravailToDelete(travail)}
-                          className="p-1 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-700 text-slate-500 transition cursor-pointer"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <p className="font-bold text-slate-800 text-xs leading-relaxed group-hover:text-blue-900 transition-colors">
-                      {travail}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          return (
+            <div
+              key={absoluteIdx}
+              className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
+            >
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10.5px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200">
+                    N° {rowNumber}
+                  </span>
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => handleCopyText(travail, absoluteIdx)}
-                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 border border-slate-200"
+                      onClick={() => handleOpenEditModal(travail)}
+                      className="p-1 rounded-lg bg-slate-50 hover:bg-blue-50 hover:text-blue-700 text-slate-500 transition cursor-pointer border border-slate-200/70"
+                      title="Modifier"
                     >
-                      {copiedIndex === absoluteIdx ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-700">Copié</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-slate-500" />
-                          <span>Copier texte</span>
-                        </>
-                      )}
+                      <Edit2 className="w-3.5 h-3.5" />
                     </button>
-
                     <button
                       type="button"
-                      onClick={() => {
-                        if (typeof onAddDemandeWithPreset === 'function') {
-                          onAddDemandeWithPreset({
-                            travail_demande: travail,
-                          });
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 ml-auto"
+                      onClick={() => setTravailToDelete(travail)}
+                      className="p-1 rounded-lg bg-slate-50 hover:bg-rose-50 hover:text-rose-700 text-slate-500 transition cursor-pointer border border-slate-200/70"
+                      title="Supprimer"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Créer DI</span>
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* 4. EMPTY STATE */}
-      {filteredTravaux.length === 0 && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-10 text-center text-slate-500 shadow-2xs">
-          <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-extrabold text-slate-800">Aucune tâche standard trouvée.</p>
-          <div className="flex items-center justify-center gap-2 mt-4">
+                <p className="font-bold text-slate-800 text-xs leading-relaxed group-hover:text-blue-900 transition-colors">
+                  {travail}
+                </p>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopyText(travail, absoluteIdx)}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 border border-slate-200"
+                >
+                  {copiedIndex === absoluteIdx ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Copié</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Copier texte</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof onAddDemandeWithPreset === 'function') {
+                      onAddDemandeWithPreset({
+                        travail_demande: travail,
+                      });
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 ml-auto"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Créer DI</span>
+                </button>
+              </div>
+            </div>
+          );
+        }}
+        emptyIcon={<BookOpen className="w-8 h-8 text-slate-300" />}
+        emptyMessage="Aucune tâche standard trouvée."
+        emptyAction={
+          <div className="flex items-center justify-center gap-2 mt-2">
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
             >
               Effacer la recherche
             </button>
             <button
               type="button"
               onClick={handleOpenAddModal}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
             >
               + Ajouter une Tâche
             </button>
           </div>
-        </div>
-      )}
-
-      {/* 5. FOOTER PAGINATION BAR (For Grid Mode) */}
-      {displayMode === 'grid' && (
-        <TablePaginationCard
-          currentPage={safeCurrentPage}
-          setCurrentPage={handlePageChange}
-          pageSize={pageSize}
-          setPageSize={setPageSize}
-          totalItems={totalItems}
-          pageSizeOptions={[20, 25, 50, 100, 200, 0]}
-          color="blue"
-        />
-      )}
+        }
+        pagination={{
+          currentPage: safeCurrentPage,
+          setCurrentPage: handlePageChange,
+          pageSize,
+          setPageSize,
+          totalItems,
+          pageSizeOptions: [20, 25, 50, 100, 200, 0],
+          color: 'blue',
+          itemLabel: 'tâches',
+        }}
+      />
 
       {/* 6. MODAL: AJOUTER UNE TÂCHE STANDARD */}
       {isAddModalOpen && (

@@ -351,6 +351,20 @@ const columns = [
 ];
 ```
 
+### 6.3 المبدأ المعماري للعرض المزدوج (`Dual-Mode Container: Tableau Excel ⇄ Cartes / Grille`)
+يدعم **`GmaoIndustrialDataGrid`** رسمياً وضع العرض المزدوج داخل **نفس الحاوية ثلاثية الأبعاد** دون تكرار كود الترقيم (`TablePaginationCard`) أو الحالة الفارغة (`Empty State`):
+
+1. **التفعيل التلقائي عبر `renderCard`:**
+   - بمجرد تمرير الدالة الاختيارية `renderCard={(item, index, rowNumber) => ReactNode}` إلى `<GmaoIndustrialDataGrid>`، يتفعّل تلقائياً مفتاح التبديل المدمج في يمين البانر العلوي (`Tableau Excel` ⇄ `Cartes / Grille`).
+   - يمكن أيضاً التحكم بالوضع خارجياً عبر تمرير `displayMode` و `onDisplayModeChange` مع `showDisplayModeToggle={false}` (كما في تبويبات `Catalogue & Données GMAO`).
+2. **ثبات الحاوية والخدمات المشتركة:**
+   - في كلا الوضعين (`excel` و `grid`)، تظل البطاقة الخارجية (`rounded-2xl border border-slate-200 shadow-[...]`)، وشريط البانر العلوي الملوّن (`bannerColor`)، وحالة التحميل (`Skeleton`)، والحالة الفارغة (`Empty State`)، وبطاقة قاع الجدول (`TablePaginationCard`) موحّدة بالكامل.
+3. **تصميم البطاقات التشغيلية المخصّصة (`Domain-Specific Operational Cards`):**
+   - في وضع `Cartes / Grille`، تُعرض كل سجل كبطاقة هوية تشغيلية (`bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md`) داخل منطقة التمرير المؤطرة (`bg-slate-50/40 p-4 md:p-5`)، وتضمّ:
+     - **رأس البطاقة (`Card Header`):** الكود المرجعي (`font-mono`) + الآلة/الكيان + شارة الحالة أو الأولوية.
+     - **جسم البطاقة (`Card Body`):** صندوق معلومات مؤطر (`bg-slate-50 rounded-xl border border-slate-200/70 p-2.5`) يعرض المسؤول، التاريخ، ووصف العطل/العمل.
+     - **تذييل البطاقة (`Card Footer`):** شارة الاعتماد أو الارتباط (`ValidationStatusBadge` / `BT Lié`) على اليسار، وزر الإجراء المباشر (`Générer BT`, `Chrono Live`, `Valider`, `Progression Atelier`, `Fiche Rapport`) على اليمين.
+
 ---
 
 ## 7. منظومة بطاقة الفلاتر والفرز المتقدمة (`Excel Filter & Sort Card`)

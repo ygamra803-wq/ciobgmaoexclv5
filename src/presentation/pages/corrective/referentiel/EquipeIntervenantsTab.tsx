@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { useI18n } from '../../../../i18n/I18nContext';
 import {
@@ -375,153 +374,124 @@ export default function EquipeIntervenantsTab({
         </div>
       </div>
 
-      {/* 2. MAIN CONTENT DISPLAY: EXCEL SPREADSHEET TABLE MODE */}
-      {displayMode === 'excel' && (
-        <GmaoIndustrialDataGrid
-          title="Tableau Équipe_Intervenants • Ordre Excel Row 3 : A → G"
-          icon={<Users className="w-4 h-4 text-purple-600" />}
-          excelMapping="N° | ID (A) | Nom (B) | Zone (C) | Spécialité (D) | BTs (E) | Statut (F) | Actions (G)"
-          bannerColor="purple"
-          columns={techColumns}
-          data={paginatedIntervenants}
-          startIndex={startIndex}
-          showRowNumber={true}
-          emptyIcon={<Users className="w-8 h-8 text-slate-300" />}
-          emptyMessage="Aucun technicien trouvé pour cette recherche."
-          pagination={{
-            currentPage: safeCurrentPage,
-            setCurrentPage: handlePageChange,
-            pageSize,
-            setPageSize,
-            totalItems,
-            pageSizeOptions: [20, 25, 50, 100, 200, 0],
-            color: 'purple',
-            itemLabel: 'techniciens',
-          }}
-        />
-      )}
+      {/* 2. UNIFIED DUAL-MODE DATA GRID (EXCEL TABLE ⇄ OPERATIONAL CARDS) */}
+      <GmaoIndustrialDataGrid
+        title="Tableau Équipe_Intervenants • Ordre Excel Row 3 : A → G"
+        icon={<Users className="w-4 h-4 text-purple-600" />}
+        excelMapping="N° | ID (A) | Nom (B) | Zone (C) | Spécialité (D) | BTs (E) | Statut (F) | Actions (G)"
+        bannerColor="purple"
+        columns={techColumns}
+        data={paginatedIntervenants}
+        startIndex={startIndex}
+        showRowNumber={true}
+        displayMode={displayMode}
+        onDisplayModeChange={setDisplayMode}
+        showDisplayModeToggle={false}
+        cardGridClassName="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+        renderCard={(tech, _relativeIdx, rowNumber) => {
+          const name = tech.nom || tech.name || 'Technicien';
+          const idCode = tech.id_technician || tech.id || `TECH-${String(rowNumber).padStart(2, '0')}`;
+          const total = tech.total || 0;
+          const zone = tech.id_zone || tech.zone || 'Toutes zones';
+          const spec = tech.specialite || 'Maintenance & Dépannage';
 
-      {/* 3. MAIN CONTENT DISPLAY: GRID CARDS MODE */}
-      {displayMode === 'grid' && (
-        <div className="overflow-y-auto max-h-[65vh] pr-1">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 content-start">
-            {paginatedIntervenants.map((tech, relativeIdx) => {
-              const absoluteIdx = startIndex + relativeIdx;
-              const name = tech.nom || tech.name || 'Technicien';
-              const idCode = tech.id_technician || tech.id || `TECH-${String(absoluteIdx + 1).padStart(2, '0')}`;
-              const total = tech.total || 0;
-              const zone = tech.id_zone || tech.zone || 'Toutes zones';
-              const spec = tech.specialite || 'Maintenance & Dépannage';
+          return (
+            <div
+              key={idCode}
+              className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                    {idCode}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>Habilité</span>
+                  </span>
+                </div>
 
-              return (
-                <div
-                  key={idCode}
-                  className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                        {idCode}
-                      </span>
-                      <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Habilité</span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 border border-purple-300/80 flex items-center justify-center font-black text-sm shadow-2xs">
-                        {name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="text-sm font-bold text-slate-900 leading-snug truncate">{name}</h4>
-                        <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{zone}</span>
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-[11px] text-slate-400">Spécialité :</span>
-                        <span className="font-semibold text-slate-800 truncate">{spec}</span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-slate-600">
-                        <span className="text-[11px] text-slate-400">Total BT Réalisés :</span>
-                        <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 text-[11px]">
-                          {total} interventions
-                        </span>
-                      </div>
-                    </div>
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-800 border border-purple-300/80 flex items-center justify-center font-black text-sm shadow-2xs">
+                    {name.charAt(0).toUpperCase()}
                   </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditModal(tech)}
-                        className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition cursor-pointer active:scale-95"
-                        title="Modifier ce technicien"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setTechToDelete(tech)}
-                        className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer active:scale-95"
-                        title="Supprimer ce technicien"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (typeof onAddDemandeWithPreset === 'function') {
-                          onAddDemandeWithPreset({
-                            intervenant: name,
-                          });
-                        }
-                      }}
-                      className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
-                      title="Créer une DI avec ce technicien"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Affecter DI</span>
-                    </button>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-slate-900 leading-snug truncate">{name}</h4>
+                    <span className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5 truncate">
+                      <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span>{zone}</span>
+                    </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {/* 4. EMPTY STATE */}
-      {filteredIntervenants.length === 0 && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-10 text-center text-slate-500 shadow-2xs">
-          <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-sm font-extrabold text-slate-800">Aucun technicien trouvé pour cette recherche.</p>
-          <p className="text-xs text-slate-400 mt-1">Vérifiez les mots-clés saisis.</p>
-        </div>
-      )}
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[11px] text-slate-400">Spécialité :</span>
+                    <span className="font-semibold text-slate-800 truncate">{spec}</span>
+                  </div>
 
-      {/* 5. FOOTER PAGINATION BAR (For Grid Mode) */}
-      {displayMode === 'grid' && (
-        <TablePaginationCard
-          currentPage={safeCurrentPage}
-          setCurrentPage={handlePageChange}
-          pageSize={pageSize}
-          setPageSize={setPageSize}
-          totalItems={totalItems}
-          pageSizeOptions={[20, 25, 50, 100, 200, 0]}
-          color="purple"
-        />
-      )}
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span className="text-[11px] text-slate-400">Total BT Réalisés :</span>
+                    <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 text-[11px]">
+                      {total} interventions
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditModal(tech)}
+                    className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition cursor-pointer active:scale-95"
+                    title="Modifier ce technicien"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTechToDelete(tech)}
+                    className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer active:scale-95"
+                    title="Supprimer ce technicien"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof onAddDemandeWithPreset === 'function') {
+                      onAddDemandeWithPreset({
+                        intervenant: name,
+                      });
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-2xs"
+                  title="Créer une DI avec ce technicien"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Affecter DI</span>
+                </button>
+              </div>
+            </div>
+          );
+        }}
+        emptyIcon={<Users className="w-8 h-8 text-slate-300" />}
+        emptyMessage="Aucun technicien trouvé pour cette recherche."
+        pagination={{
+          currentPage: safeCurrentPage,
+          setCurrentPage: handlePageChange,
+          pageSize,
+          setPageSize,
+          totalItems,
+          pageSizeOptions: [20, 25, 50, 100, 200, 0],
+          color: 'purple',
+          itemLabel: 'techniciens',
+        }}
+      />
 
       {/* 6. MODAL: NOUVEAU TECHNICIEN */}
       {isAddModalOpen && (

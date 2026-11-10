@@ -1,6 +1,6 @@
 import { isValidElement, useState, useRef, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
-import { ArrowUpDown, ArrowUp, ArrowDown, Inbox, Zap } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Inbox, Zap, Table, LayoutGrid } from 'lucide-react';
 import { List } from 'react-window';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import TableSkeletonRows from './TableSkeletonRows';
@@ -8,18 +8,18 @@ import TablePaginationCard from './TablePaginationCard';
 import { useI18n } from '../../../i18n/I18nContext';
 
 /**
- * 🏛️ GMAO Industrial Data Grid (Unified Master Table Component)
+ * 🏛️ GMAO Industrial Data Grid (Unified Dual-Mode Master Table & Card Grid Component)
  * Conforme à la Constitution GMAO : Composant unifié pour toutes les grilles
  * de données industrielles (Stock, Machines, Entrepôt, Référentiel, Interventions).
  * 
  * Garantit:
  * 1. Présentation 3D unifiée avec ombrage et bordures industrielles
  * 2. Bandeau d'information et mappage officiel des colonnes Excel (A → Z)
- * 3. En-tête figé (Sticky thead) avec tri dynamique et numérotation des lignes
- * 4. Gestion automatique du chargement (Skeletons) et de l'état vide
- * 5. Intégration transparente de la carte de pagination (TablePaginationCard)
- * 6. Virtual Scrolling (Windowing) haute performance (60fps) pour 10 000+ enregistrements
- * 7. Support triple moteur : '@tanstack/react-virtual' + 'table-window' natif + 'react-window' optionnel
+ * 3. Bascule native Dual-Mode : Tableau Excel (Col A → Z) ⇄ Cartes / Grille (renderCard)
+ * 4. En-tête figé (Sticky thead) avec tri dynamique et numérotation des lignes
+ * 5. Gestion automatique du chargement (Skeletons) et de l'état vide partagés
+ * 6. Intégration transparente de la carte de pagination (TablePaginationCard)
+ * 7. Virtual Scrolling (Windowing) haute performance (60fps) pour 10 000+ enregistrements
  */
 export interface GmaoColumn<T = any> {
   key: string;
@@ -56,6 +56,12 @@ export default function GmaoIndustrialDataGrid({
   emptyIcon = null,
   emptyAction = null,
   renderRow = null,
+  renderCard = null,
+  cardGridClassName = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4',
+  displayMode: controlledDisplayMode = undefined,
+  defaultDisplayMode = 'excel',
+  onDisplayModeChange = null,
+  showDisplayModeToggle = true,
   pagination = null,
   tableClassName = '',
   containerClassName = '',
@@ -70,6 +76,23 @@ export default function GmaoIndustrialDataGrid({
   const scrollContainerRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(500);
+  const [internalDisplayMode, setInternalDisplayMode] = useState<'excel' | 'grid'>(
+    defaultDisplayMode === 'grid' ? 'grid' : 'excel'
+  );
+
+  const hasCardMode = typeof renderCard === 'function';
+  const effectiveDisplayMode: 'excel' | 'grid' = hasCardMode
+    ? (controlledDisplayMode === 'grid' || controlledDisplayMode === 'excel'
+        ? controlledDisplayMode
+        : internalDisplayMode)
+    : 'excel';
+
+  const handleDisplayModeChange = (nextMode: 'excel' | 'grid') => {
+    setInternalDisplayMode(nextMode);
+    if (typeof onDisplayModeChange === 'function') {
+      onDisplayModeChange(nextMode);
+    }
+  };
 
   // Strip synthetic __isEmptyPlaceholder objects so empty tables display Empty State cleanly
   // and column renderers never receive fake "empty-0" records.
@@ -281,11 +304,21 @@ export default function GmaoIndustrialDataGrid({
     );
   };
 
+  const modeIconColorStyles: Record<string, string> = {
+    indigo: 'text-indigo-600',
+    blue: 'text-blue-600',
+    emerald: 'text-emerald-600',
+    amber: 'text-amber-600',
+    purple: 'text-purple-600',
+    slate: 'text-slate-700',
+  };
+  const activeModeIconColor = modeIconColorStyles[bannerColor] || modeIconColorStyles.slate;
+
   return (
     <div className={`space-y-4 animate-view-transition ${containerClassName}`}>
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out">
         {/* Top Header / Info Banner */}
-        {(title || excelMapping || headerRight) && (
+        {(title || excelMapping || headerRight || (hasCardMode && showDisplayModeToggle)) && (
           <div
             className={`px-5 py-3 border-b flex flex-wrap items-center justify-between text-xs gap-3 ${
               bannerColorStyles[bannerColor] || bannerColorStyles.slate
@@ -294,12 +327,17 @@ export default function GmaoIndustrialDataGrid({
             <div className="flex items-center gap-2.5 flex-wrap">
               {renderBannerIcon(icon)}
               {title && <span className="font-bold tracking-tight">{title}</span>}
-              {excelMapping && (
+              {excelMapping && effectiveDisplayMode === 'excel' && (
                 <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-white/80 border border-slate-200 text-slate-700 shadow-2xs font-semibold">
                   {excelMapping}
                 </span>
               )}
-              {isVirtualized && (
+              {effectiveDisplayMode === 'grid' && (
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-white/85 border border-slate-200 text-slate-700 shadow-2xs font-bold">
+                  {t('common.view_cards_badge', 'Mode Cartes Opérationnelles')} • {data.length}
+                </span>
+              )}
+              {isVirtualized && effectiveDisplayMode === 'excel' && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                   <Zap className="w-3 h-3 text-emerald-600" />
                   <span>Virtual 60fps</span>
@@ -307,14 +345,93 @@ export default function GmaoIndustrialDataGrid({
               )}
             </div>
 
-            {headerRight && (
-              <div className="flex items-center gap-2 ml-auto text-xs">{headerRight}</div>
+            {(headerRight || (hasCardMode && showDisplayModeToggle)) && (
+              <div className="flex items-center gap-2 ml-auto text-xs flex-wrap">
+                {headerRight}
+                {hasCardMode && showDisplayModeToggle && (
+                  <div className="inline-flex items-center p-1 bg-white/80 rounded-xl border border-slate-200/90 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => handleDisplayModeChange('excel')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                        effectiveDisplayMode === 'excel'
+                          ? 'bg-slate-900 text-white shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      }`}
+                      title={t('corrective.pannes.view_table', 'Vue Tableau Excel')}
+                    >
+                      <Table
+                        className={`w-3.5 h-3.5 ${
+                          effectiveDisplayMode === 'excel' ? 'text-white' : activeModeIconColor
+                        }`}
+                      />
+                      <span>{t('corrective.pannes.view_table', 'Tableau Excel')}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDisplayModeChange('grid')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                        effectiveDisplayMode === 'grid'
+                          ? 'bg-slate-900 text-white shadow-2xs font-black'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+                      }`}
+                      title={t('corrective.pannes.view_cards', 'Vue Cartes / Grille')}
+                    >
+                      <LayoutGrid
+                        className={`w-3.5 h-3.5 ${
+                          effectiveDisplayMode === 'grid' ? 'text-white' : activeModeIconColor
+                        }`}
+                      />
+                      <span>{t('corrective.pannes.view_cards', 'Cartes / Grille')}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
 
-        {/* Scrollable Table Viewport */}
-        {useReactWindow && isVirtualized && !isLoading && data.length > 0 ? (
+        {/* Dual-Mode Viewport: Card Grid Mode vs Excel Table Mode */}
+        {effectiveDisplayMode === 'grid' && hasCardMode ? (
+          <div className={`${maxHeight} overflow-y-auto p-4 md:p-5 bg-slate-50/40`}>
+            {isLoading ? (
+              <div className={cardGridClassName}>
+                {Array.from({ length: Math.min(loadingRowsCount, 6) }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="h-40 rounded-2xl border border-slate-200/80 bg-white p-4 animate-pulse space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="h-4 w-24 rounded bg-slate-200" />
+                      <div className="h-4 w-16 rounded-full bg-slate-200" />
+                    </div>
+                    <div className="h-3.5 w-3/4 rounded bg-slate-100" />
+                    <div className="h-3 w-1/2 rounded bg-slate-100" />
+                    <div className="pt-4 flex justify-end gap-2">
+                      <div className="h-7 w-20 rounded-lg bg-slate-200" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !data || data.length === 0 ? (
+              <div className="py-14 text-center text-slate-400 bg-white rounded-2xl border border-slate-200/70">
+                <div className="flex flex-col items-center justify-center gap-2">
+                  {emptyIcon || <Inbox className="w-8 h-8 text-slate-300 stroke-1" />}
+                  <span className="font-semibold text-xs text-slate-500">{resolvedEmptyMessage}</span>
+                  {emptyAction}
+                </div>
+              </div>
+            ) : (
+              <div className={cardGridClassName}>
+                {data.map((item, localIdx) => {
+                  const rowNumber = startIndex + localIdx + 1;
+                  return renderCard(item, localIdx, rowNumber);
+                })}
+              </div>
+            )}
+          </div>
+        ) : useReactWindow && isVirtualized && !isLoading && data.length > 0 ? (
           <div className={`${maxHeight} overflow-x-auto`}>
             {/* Sticky Column Headers for react-window mode */}
             <div className={`gmao-thead-header sticky top-0 bg-slate-100 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-300 z-10 shadow-2xs select-none flex items-center ${minWidth}`}>
@@ -545,6 +662,12 @@ GmaoIndustrialDataGrid.propTypes = {
   emptyIcon: PropTypes.node,
   emptyAction: PropTypes.node,
   renderRow: PropTypes.func,
+  renderCard: PropTypes.func,
+  cardGridClassName: PropTypes.string,
+  displayMode: PropTypes.oneOf(['excel', 'grid']),
+  defaultDisplayMode: PropTypes.oneOf(['excel', 'grid']),
+  onDisplayModeChange: PropTypes.func,
+  showDisplayModeToggle: PropTypes.bool,
   pagination: PropTypes.shape({
     currentPage: PropTypes.number.isRequired,
     setCurrentPage: PropTypes.func.isRequired,
