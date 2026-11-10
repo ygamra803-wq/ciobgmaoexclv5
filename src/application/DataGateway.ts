@@ -52,6 +52,13 @@ import seedCompTemplates from '../data/warehouse/seedCompTemplates.json';
 import seedPartTypes from '../data/warehouse/seedPartTypes.json';
 import seedPartDesignations from '../data/warehouse/seedPartDesignations.json';
 
+/**
+ * Builds an initial stock lookup map (`ref -> stockInitial`) used to re-prime
+ * `movementRepository` during bulk seed or server state synchronization.
+ *
+ * @param rawStock - Array of stock articles (`IStockItem[]`).
+ * @returns Map of trimmed reference strings to numeric `stockInitial` balances.
+ */
 function buildInitialStockMap(rawStock: any[] = []): Map<string, number> {
   const map = new Map<string, number>();
   if (!Array.isArray(rawStock)) return map;
@@ -65,19 +72,39 @@ function buildInitialStockMap(rawStock: any[] = []): Map<string, number> {
 }
 
 /**
- * Thin Write Gateway (Single Write Path for all Canonical Entities).
- * Ensures every write targets the canonical STORAGE_KEYS only and supports optional referential checks.
+ * @namespace DataGateway
+ * @description
+ * Canonical Single Source of Truth (SSOT) Write & Lifecycle Gateway for CIOB GMAO v4.
+ *
+ * ### Architectural Invariants (`AGENTS.md` §1.1, §1.2, §1.6, §1.7):
+ * 1. **Single Write Path:** Every entity mutation persists exclusively through `STORAGE_KEYS`
+ *    via `storageService` and `indexedDBService`.
+ * 2. **Zero Silent Seed Reinjection:** Empty collections (`[]`) are valid factory states.
+ *    Demo data is loaded exclusively via explicit user invocation (`loadDemoData` / `loadDemoSection`).
+ *    When `START_MODE === 'empty'`, `clearAllForRealFactory` purges all legacy keys so reload (`F5`) remains `0`.
+ * 3. **Referential Integrity & Orphan Tagging:** `savePreventiveTasks`, `saveCorrectiveInterventions`,
+ *    and `saveMouvements` support referential validation against registered active machines/stock (`_isOrphan` tagging or strict filtering).
+ * 4. **Append-Only Institutional Audit Ledger:** `appendAuditEvent` freezes (`Object.freeze`) `before`/`after`
+ *    snapshots and prepends immutable audit entries to `STORAGE_KEYS.AUDIT_EVENTS`.
  */
 export const DataGateway = {
   /**
-   * Sanitizes any incoming entity payload against XSS injection while preserving non-string types.
+   * Recursively sanitizes an incoming entity payload against XSS/HTML injection
+   * while preserving numeric, boolean, and structural types.
+   *
+   * @param payload - Raw object, array, or primitive payload.
+   * @returns Sanitized deep clone of `payload`.
    */
   sanitizePayload(payload) {
     return sanitizeObject(payload);
   },
 
   /**
-   * Validates an entity using ValidationService when strict validation is requested.
+   * Validates an entity record against its domain schema in {@link ValidationService}.
+   *
+   * @param entityType - Domain entity discriminator (`'stock' | 'machine' | 'movement' | 'zone' | 'user'`).
+   * @param item - Candidate entity payload to validate.
+   * @returns Validation outcome containing `isValid`/`valid`, `errors`, and normalized `data`.
    */
   validateEntity(entityType, item) {
     switch (entityType) {
@@ -101,6 +128,15 @@ export const DataGateway = {
   // ==========================================
   // 1. MACHINES & TOPOLOGY
   // ==========================================
+  /**
+   * Persists the registered shopfloor machines collection (`STORAGE_KEYS.MACHINES` / Tier 2 Physical Assets).
+   * Normalizes `asset_class` (`'PRODUCTION' | 'SYSTEM_GENERAL'`), enforces acyclic `parent_id` line hierarchy
+   * via `sanitizeMachinesHierarchy`, and optionally filters invalid records via `ValidationService.validateMachine`.
+   *
+   * @param list - Array of machine records (`IMachine[]`).
+   * @param options - Optional `{ validate?: boolean }` flag.
+   * @returns Normalized and persisted array of machines.
+   */
   saveMachines(list = [], { validate = false } = {}) {
     let clean = Array.isArray(list)
       ? sanitizeMachinesHierarchy(
@@ -147,6 +183,14 @@ export const DataGateway = {
     return clean;
   },
 
+  /**
+   * Persists Tier 3 virtual cognitive blueprints (`STORAGE_KEYS.BLUEPRINTS`).
+   * Guarantees that `preventivePlanItems` and `commonFailures` are always initialized as arrays.
+   * Note: Blueprints are virtual cognitive twins and never own a physical `Zone` or `Technician`.
+   *
+   * @param list - Array of blueprint records (`IBlueprint[]`).
+   * @returns Normalized blueprint array.
+   */
   saveBlueprints(list = []) {
     const clean = Array.isArray(list)
       ? list.map((b) => ({
@@ -174,6 +218,12 @@ export const DataGateway = {
   // ==========================================
   // 2. STOCK & MOVEMENTS
   // ==========================================
+  /**
+   * Persists the canonical spare parts catalog (`STORAGE_KEYS.RAW_STOCK`).
+   *
+   * @param list - Array of stock items (`IStockItem[]`).
+   * @returns Persisted stock array.
+   */
   saveStock(list = []) {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.RAW_STOCK, clean);
@@ -192,6 +242,14 @@ export const DataGateway = {
     return clean;
   },
 
+  /**
+   * Persists the stock movement ledger (`STORAGE_KEYS.MOUVEMENTS`).
+   * When `strict === true` and `stock` is provided, filters out movements referencing unknown `ref` codes.
+   *
+   * @param list - Array of stock movement records (`IMouvement[]`).
+   * @param options - Optional `{ stock?: IStockItem[] | null, strict?: boolean }` referential filter config.
+   * @returns Persisted movement array.
+   */
   saveMouvements(list = [], { stock = null, strict = false } = {}) {
     let clean = Array.isArray(list) ? list : [];
     if (strict && Array.isArray(stock) && stock.length > 0) {
@@ -226,6 +284,16 @@ export const DataGateway = {
   // ==========================================
   // 3. PREVENTIVE MAINTENANCE
   // ==========================================
+  /**
+   * Persists preventive maintenance tasks (`STORAGE_KEYS.PREVENTIVE_TASKS`) with optional
+   * referential integrity checking against registered `machines`.
+   * - In non-strict mode (`strict: false`), tasks referencing unknown/archived machines are tagged with `_isOrphan: true`.
+   * - In strict mode (`strict: true`), orphan tasks are excluded from persistence.
+   *
+   * @param list - Array of preventive task records (`IPreventiveTask[]`).
+   * @param options - Optional `{ machines?: IMachine[] | null, strict?: boolean }`.
+   * @returns `{ saved: IPreventiveTask[], orphanCount: number }`.
+   */
   savePreventiveTasks(list = [], { machines = null, strict = false } = {}) {
     let clean = Array.isArray(list) ? list : [];
     let orphanCount = 0;
@@ -290,6 +358,14 @@ export const DataGateway = {
   // ==========================================
   // 4. CORRECTIVE MAINTENANCE
   // ==========================================
+  /**
+   * Persists corrective maintenance interventions (`DI` / `BT` in `STORAGE_KEYS.CORRECTIVE_INTERVENTIONS`)
+   * with optional referential integrity checking against registered `machines`.
+   *
+   * @param list - Array of corrective intervention records (`ICorrectiveIntervention[]`).
+   * @param options - Optional `{ machines?: IMachine[] | null, strict?: boolean }`.
+   * @returns `{ saved: ICorrectiveIntervention[], orphanCount: number }`.
+   */
   saveCorrectiveInterventions(list = [], { machines = null, strict = false } = {}) {
     let clean = Array.isArray(list) ? list : [];
     let orphanCount = 0;
@@ -345,6 +421,13 @@ export const DataGateway = {
     return clean;
   },
 
+  /**
+   * Persists Internal Mechanical Workshop Orders (`Bon de Réalisation / Rectification` — `COR-ATELIER-P0`)
+   * to `STORAGE_KEYS.WORKSHOP_ORDERS` (`gmao_workshop_orders_v1`).
+   *
+   * @param list - Array of workshop order records (`IWorkshopOrder[]`).
+   * @returns Persisted workshop orders array.
+   */
   saveWorkshopOrders(list: any[] = []) {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.WORKSHOP_ORDERS, clean);
@@ -439,6 +522,13 @@ export const DataGateway = {
   // ==========================================
   // 7b. FINANCIAL BUDGETS & COSTING CONFIG
   // ==========================================
+  /**
+   * Retrieves the active fiscal budget configuration (`STORAGE_KEYS.FINANCIAL_BUDGETS`).
+   * Enforces the `FIN-P0` zero-seed invariant: when `START_MODE === 'empty'` and the stored
+   * budget originated from `'DEMO_SEED'`, returns a clean `EMPTY_FISCAL_BUDGET`.
+   *
+   * @returns Normalized {@link FiscalBudgetConfig}.
+   */
   getFinancialBudget(): FiscalBudgetConfig {
     const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
     const saved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
@@ -460,6 +550,16 @@ export const DataGateway = {
     return isDemo && startMode !== 'empty' ? { ...DEMO_FISCAL_BUDGET } : { ...EMPTY_FISCAL_BUDGET };
   },
 
+  /**
+   * Sanitizes, validates, and persists the fiscal budget configuration (`STORAGE_KEYS.FINANCIAL_BUDGETS`).
+   * Automatically records a `BudgetAuditEntry` in `budgetChangeLog` (retaining the latest 5 revisions),
+   * appends an immutable `BUDGET_UPDATED` event to `STORAGE_KEYS.AUDIT_EVENTS` (unless triggered by
+   * `FACTORY_RESET` or `DEMO_SEED`), and dispatches the `'gmao_financial_budget_updated'` DOM event.
+   *
+   * @param budget - Partial or complete {@link FiscalBudgetConfig} update payload.
+   * @param actorName - Identifier of the administrator or system actor performing the update.
+   * @returns Normalized and persisted {@link FiscalBudgetConfig}.
+   */
   saveFinancialBudget(budget: Partial<FiscalBudgetConfig>, actorName?: string): FiscalBudgetConfig {
     const clean = this.sanitizePayload(budget || {}) as Partial<FiscalBudgetConfig>;
     const prevSaved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS) as Partial<FiscalBudgetConfig> | null;
@@ -585,11 +685,23 @@ export const DataGateway = {
   // ==========================================
   // 7c. APPEND-ONLY ENTERPRISE AUDIT LEDGER (AUDIT-LEDGER-P0)
   // ==========================================
+  /**
+   * Reads the institutional append-only audit ledger (`STORAGE_KEYS.AUDIT_EVENTS`).
+   *
+   * @returns Array of immutable audit event records (`IAuditEvent[]`).
+   */
   getAuditEvents(): any[] {
     const raw = storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS);
     return Array.isArray(raw) ? raw : [];
   },
 
+  /**
+   * Persists the audit events collection to `STORAGE_KEYS.AUDIT_EVENTS` and dispatches
+   * `'gmao_audit_events_synced'`.
+   *
+   * @param list - Array of audit events.
+   * @returns Persisted audit events array.
+   */
   saveAuditEvents(list: any[] = []): any[] {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.AUDIT_EVENTS, clean);
@@ -599,6 +711,13 @@ export const DataGateway = {
     return clean;
   },
 
+  /**
+   * Constructs an immutable (`Object.freeze`) audit event with frozen `before`, `after`, and `meta`
+   * snapshots, prepends it to `STORAGE_KEYS.AUDIT_EVENTS`, and dispatches `'gmao_audit_event_appended'`.
+   *
+   * @param payload - Audit event descriptor (`actionType`, `entityType`, `entityId`, `before`, `after`, actor details).
+   * @returns `{ event, list }` containing the newly frozen event and updated ledger.
+   */
   appendAuditEvent(payload: {
     id?: string;
     ts?: string;
@@ -659,8 +778,12 @@ export const DataGateway = {
   },
 
   /**
-   * Explicitly loads all documented factory demo seeds into canonical STORAGE_KEYS.
-   * Sets DEMO_MODE = true.
+   * Explicitly loads all documented factory demo seeds into canonical `STORAGE_KEYS`
+   * and synchronizes React state setters (`GmaoStoreSetters`).
+   * Sets `DEMO_MODE = true` and `START_MODE = 'demo'`.
+   *
+   * @param setters - Optional store setter callbacks to update live React state in-place.
+   * @returns Summary counts of loaded seed entities (`machinesCount`, `stockCount`, `preventiveCount`, `correctiveCount`, `movementsCount`).
    */
   loadDemoData(setters: GmaoStoreSetters = {}) {
     const derivedDesignations = seedStockItems.map((s) => ({
@@ -795,7 +918,10 @@ export const DataGateway = {
   },
 
   /**
-   * Purges all legacy keys mapped to a given canonical key (or all legacy keys if canonicalKey is null).
+   * Purges all legacy storage keys mapped to a given canonical key (or all legacy keys
+   * in `ALL_LEGACY_KEYS` when `canonicalKey === null`) to prevent stale data resurrection.
+   *
+   * @param canonicalKey - Specific canonical `STORAGE_KEYS` value, or `null` to purge all legacy keys.
    */
   purgeLegacyKeysFor(canonicalKey: string | null = null) {
     const canonicalSet = new Set(Object.values(STORAGE_KEYS));
@@ -832,9 +958,13 @@ export const DataGateway = {
   },
 
   /**
-   * Explicitly clears all operational data for a clean real-factory deployment.
-   * Sets DEMO_MODE = false, START_MODE = 'empty', removes FULL_STATE_SNAPSHOT, purges all legacy keys,
-   * writes [] to all canonical keys in memory + localStorage + IndexedDB, and clears IndexedDB entity stores.
+   * Atomically clears all operational data for a clean real-factory deployment (`START_MODE = 'empty'`).
+   * Sets `DEMO_MODE = false`, `START_MODE = 'empty'`, removes `FULL_STATE_SNAPSHOT`, purges all legacy keys,
+   * writes empty collections (`[]` / `{}`) to all canonical keys in memory, `localStorage`, and `IndexedDB`,
+   * and clears all `IndexedDB` object stores.
+   *
+   * @param setters - Optional store setter callbacks to zero out live React state immediately.
+   * @returns Promise resolving to `{ cleared: true }` once all synchronous and asynchronous stores are wiped.
    */
   clearAllForRealFactory(setters: Record<string, any> = {}) {
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);

@@ -1,8 +1,23 @@
+/**
+ * @module StockCalculationService
+ * @description
+ * Canonical Spare Parts (`PDR`) Stock Calculation Engine for CIOB GMAO v4.
+ *
+ * ### Core Mathematical Invariant (`AGENTS.md` §1.3):
+ * - `stockActuel = Math.max(0, stockInitial + entrées − sorties)`
+ * - Never combine direct `stockInitial` mutation with a `SORTIE` movement (prevents double deduction).
+ * - Maker-Checker unapproved demands (`PENDING_VALIDATION` in `sortieDemands`) remain excluded from `movements`
+ *   until explicitly approved by a supervisor.
+ */
+
 import { Logger } from '../../../core/logger/LoggerService';
 import { safeNum, calculateStockStatus } from '../../../utils/formulaEngine';
 import { multiLevelCacheManager } from '../../../core/cache/MultiLevelCacheManager';
 import { normalizeType } from '../../../application/IncrementalStockIndex';
 
+/**
+ * Computed stock snapshot for a single spare part reference (`PDR`).
+ */
 export interface StockCalculationResult {
   ref: string;
   designation: string;
@@ -16,13 +31,13 @@ export interface StockCalculationResult {
 }
 
 /**
- * Enhanced Stock Calculation Service for CIOB GMAO Light
- * Features:
- * - Multi-Level Caching with L1/L2/L3 MultiLevelCacheManager integration
- * - O(1) Lookups & Movement Hash Caching
- * - Pre-dispatch Stock Availability Validation
- * - Concurrent Movement Lock Queueing
- * - Stock Report & Metrics Generation
+ * Canonical Stock Calculation Service for CIOB GMAO v4.
+ *
+ * ### Capabilities & Performance Guarantees:
+ * - **Multi-Level Caching:** L1 in-memory TTL map (`5000ms`) synchronized with `multiLevelCacheManager` (`stock` & `formula` tags).
+ * - **Single-Pass Batch Aggregation:** `calculateAllStocks` and `generateStockReport` execute in `O(A + M)` linear time (`A` = articles, `M` = movements).
+ * - **Pre-Dispatch Availability Guard:** `checkAvailability` validates requested quantities and computes exact shortages prior to movement creation.
+ * - **Per-Reference Serial Concurrency Queue:** `queueConcurrentMovement` serializes concurrent async mutations targeting the same `ref` key to eliminate race conditions.
  */
 export class StockCalculationService {
   static cache = new Map();
@@ -31,7 +46,11 @@ export class StockCalculationService {
   static normalizeType = normalizeType;
 
   /**
-   * Helper to compute unique hash for movement arrays
+   * Computes a lightweight `O(1)` fingerprint hash for a movement array based on its length
+   * and boundary/midpoint elements (`first`, `mid`, `last`).
+   *
+   * @param movements - Array of stock movement records (`IMouvement[]`).
+   * @returns Deterministic string fingerprint used as part of the L1 cache key.
    */
   static getMovementHash(movements) {
     if (!Array.isArray(movements) || movements.length === 0) return 'mvt_0';
@@ -43,7 +62,8 @@ export class StockCalculationService {
   }
 
   /**
-   * Clears calculation cache and invalidates multi-level cache tags
+   * Clears the L1 calculation cache and invalidates the `'stock'` and `'formula'` tags
+   * in the global `multiLevelCacheManager`.
    */
   static clearCache() {
     this.cache.clear();
@@ -52,8 +72,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Calculate total entrees for an article with caching
-   * ✅ Excel SUMIFS equivalent
+   * Calculates cumulative stock entries (`ENTREE`) for a given spare part reference (`ref`)
+   * with L1 TTL caching (`5s`). Equivalent to Excel `SUMIFS` on normalized `ENTREE` movements.
+   *
+   * @param ref - Spare part reference code (case-insensitive).
+   * @param movements - Array of stock movement records.
+   * @returns Total quantity entered (`>= 0`). Returns `0` on empty ref or error.
    */
   static calculateEntrees(ref, movements = []) {
     try {
@@ -87,8 +111,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Calculate total sorties for an article with caching
-   * ✅ Excel SUMIFS equivalent
+   * Calculates cumulative stock withdrawals (`SORTIE`) for a given spare part reference (`ref`)
+   * with L1 TTL caching (`5s`). Equivalent to Excel `SUMIFS` on normalized `SORTIE` movements.
+   *
+   * @param ref - Spare part reference code (case-insensitive).
+   * @param movements - Array of stock movement records.
+   * @returns Total quantity withdrawn (`>= 0`). Returns `0` on empty ref or error.
    */
   static calculateSorties(ref, movements = []) {
     try {
@@ -122,8 +150,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Calculate current stock balance
-   * ✅ Formula: Initial + Entrees - Sorties
+   * Computes current stock balance (`stockActuel`) for a single article according to the
+   * canonical invariant: `stockInitial + entrées - sorties` via `calculateStockStatus`.
+   *
+   * @param article - Stock item entity (`IStockItem`) containing `ref`, `stockInitial`, and `seuil`.
+   * @param movements - Array of stock movement records (`IMouvement[]`).
+   * @returns Current stock balance. Falls back to `stockInitial` if an unexpected error occurs.
    */
   static calculateStockActuel(article, movements = []) {
     try {
@@ -149,8 +181,15 @@ export class StockCalculationService {
   }
 
   /**
-   * Get alert status
-   * ✅ Logic: RUPTURE (<=0), ALERTE (<=seuil), OK
+   * Evaluates the stock alert threshold state for a given article and its current stock level.
+   * - One-off purchase items (`isAchatUnique === true`) always return `'OK'`.
+   * - `currentStock <= 0` -> `'RUPTURE'`
+   * - `currentStock <= seuil` -> `'ALERTE'`
+   * - Otherwise -> `'OK'`
+   *
+   * @param article - Stock item entity (`IStockItem`).
+   * @param currentStock - Computed current stock balance.
+   * @returns Alert level: `'OK' | 'ALERTE' | 'RUPTURE'`.
    */
   static getAlertStatus(article, currentStock) {
     try {
@@ -166,7 +205,14 @@ export class StockCalculationService {
   }
 
   /**
-   * Stock Availability Validation before dispatching sorties
+   * Pre-dispatch availability validator executed before recording a `SORTIE` movement.
+   * Verifies that `requestedQty > 0` and `currentStock >= requestedQty`, returning exact shortage metrics.
+   *
+   * @param ref - Spare part reference code.
+   * @param requestedQty - Quantity requested for withdrawal.
+   * @param article - Target stock article record (`IStockItem`).
+   * @param movements - Movement history used to compute live availability.
+   * @returns Availability check object (`available`, `currentStock`, `requestedQty`, `shortage`, `message`).
    */
   static checkAvailability(ref, requestedQty, article, movements = []) {
     try {
@@ -214,8 +260,13 @@ export class StockCalculationService {
   }
 
   /**
-   * Concurrent Movement Handler with Serial Promise Queueing
-   * Guarantees atomic sequential processing when multiple movements affect the same stock reference simultaneously.
+   * Serializes concurrent asynchronous stock movement mutations targeting the same `ref` key
+   * via a per-reference Promise chain. Invalidates calculation caches prior to each task execution
+   * so subsequent tasks in the queue always observe the latest committed balance.
+   *
+   * @param ref - Spare part reference code (or `'global'` fallback) acting as the mutex key.
+   * @param movementTaskFn - Async callback performing the stock check and movement persistence.
+   * @returns Promise resolving with the result of `movementTaskFn()`.
    */
   static async queueConcurrentMovement(ref, movementTaskFn) {
     const key = String(ref || 'global').toLowerCase().trim();
@@ -237,7 +288,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Generates a comprehensive Stock Report according to Excel Twin rules in O(A + M).
+   * Generates a complete financial and operational stock valuation report in `O(A + M)` linear time.
+   * Indexes all movements in a single `O(M)` pass, then computes valuation and alert buckets in `O(A)`.
+   *
+   * @param articles - Array of stock articles (`IStockItem[]`).
+   * @param movements - Array of stock movements (`IMouvement[]`).
+   * @returns Aggregated valuation report (`totalArticles`, `totalQuantity`, `totalValue`, `summary`, `ruptureItems`, `alerteItems`).
    */
   static generateStockReport(articles = [], movements = []) {
     try {
@@ -330,7 +386,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Batch calculate all stocks in O(A + M) time using normalized ref & movement types
+   * Batch-calculates `StockCalculationResult` for all articles in `O(A + M)` linear time
+   * using normalized reference keys and movement types (`ENTREE` / `SORTIE`).
+   *
+   * @param articles - Collection of stock items (`IStockItem[]`).
+   * @param movements - Collection of stock movements (`IMouvement[]`).
+   * @returns Array of {@link StockCalculationResult} in the same order as `articles`.
    */
   static calculateAllStocks(
     articles: any[] = [],
@@ -384,17 +445,37 @@ export class StockCalculationService {
     });
   }
 
+  /**
+   * Computes {@link StockCalculationResult} for a single article against the movement ledger.
+   *
+   * @param article - Single stock item (`IStockItem`).
+   * @param movements - Movement ledger (`IMouvement[]`).
+   * @returns Computed {@link StockCalculationResult}.
+   */
   static calculateStockByRef(article: any, movements: any[] = []): StockCalculationResult {
     const [res] = this.calculateAllStocks([article], movements);
     return res;
   }
 
+  /**
+   * Pure threshold comparator mapping `(stockActuel, seuil)` to `'OK' | 'ALERTE' | 'RUPTURE'`.
+   *
+   * @param stockActuel - Computed current stock balance.
+   * @param seuil - Minimum alert threshold.
+   * @returns `'RUPTURE'` when `<= 0`, `'ALERTE'` when `<= seuil`, otherwise `'OK'`.
+   */
   static getStockStatus(stockActuel: number, seuil: number): 'OK' | 'ALERTE' | 'RUPTURE' {
     if (stockActuel <= 0) return 'RUPTURE';
     if (stockActuel <= seuil) return 'ALERTE';
     return 'OK';
   }
 
+  /**
+   * Partitions an array of {@link StockCalculationResult} into `rupture`, `alerte`, and `ok` buckets.
+   *
+   * @param stocks - Array of computed stock results.
+   * @returns Partitioned buckets `{ rupture, alerte, ok }`.
+   */
   static getStockAlerts(stocks: StockCalculationResult[] = []) {
     return {
       rupture: stocks.filter((s) => s.alerte === 'RUPTURE'),
@@ -403,6 +484,12 @@ export class StockCalculationService {
     };
   }
 
+  /**
+   * Computes summary KPIs across an array of {@link StockCalculationResult}.
+   *
+   * @param stocks - Array of computed stock results.
+   * @returns Summary metrics (`totalArticles`, `totalValue`, `articlesInRupture`, `articlesInAlerte`, `articlesOK`, `averageStock`).
+   */
   static getStockStatistics(stocks: StockCalculationResult[] = []) {
     return {
       totalArticles: stocks.length,
@@ -418,7 +505,12 @@ export class StockCalculationService {
   }
 
   /**
-   * Verify calculations against expected values
+   * Audits pre-stored `stockActuel` and `alerte` fields on `articles` against fresh
+   * recalculations from `movements`, returning any discrepancies exceeding `0.01`.
+   *
+   * @param articles - Array of stock articles containing cached/expected `stockActuel` and `alerte`.
+   * @param movements - Authoritative movement ledger.
+   * @returns Audit result `{ isValid, mismatches }`.
    */
   static async verifyCalculations(articles = [], movements = []) {
     try {
@@ -460,3 +552,4 @@ export class StockCalculationService {
 }
 
 export default StockCalculationService;
+

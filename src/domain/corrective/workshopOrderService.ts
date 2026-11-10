@@ -1,7 +1,37 @@
+/**
+ * @module workshopOrderService
+ * @description
+ * Domain service and Finite State Machine (FSM) for Internal Mechanical Workshop Orders
+ * (`COR-ATELIER-P0`: Bon de Réalisation `BR` & Bon de Rectification `RECT` issued by
+ * Section Maintenance `SM` to `Atelier Fabrication Mécanique`).
+ *
+ * ### Architectural Invariants:
+ * 1. **Zero Stock Mutation:** Workshop orders represent internal manufacturing/machining tasks;
+ *    they **never** deduct `stockActuel` or traverse `IncrementalStockIndex` / `StockCalculationService`.
+ * 2. **Strict Separation from External Subcontracting:** Internal machining (`gmao_workshop_orders_v1`)
+ *    is strictly separate from external vendor subcontracting (`SortieExterne` / bobinage).
+ * 3. **Parent Work Order Coupling:** A workshop order optionally links to a corrective `BT` (`id_bt`)
+ *    or `DI` (`id_di`). While the workshop order is in an active state (`EMIS`, `EN_COURS_FABRICATION`,
+ *    `PRET_LIVRAISON`), closing the linked parent `BT` is blocked by `WorkOrderStateMachine`.
+ */
+
 import { safeId } from '../../utils/safeId';
 
+/**
+ * Nature of the internal mechanical workshop request:
+ * - `'REALISATION'`: Manufacturing/fabricating a new part (`BR-YYYY-NNN`).
+ * - `'RECTIFICATION'`: Machining, turning, grinding, or modifying an existing part (`RECT-YYYY-NNN`).
+ */
 export type WorkshopOrderType = 'REALISATION' | 'RECTIFICATION';
 
+/**
+ * Canonical 5-state lifecycle of an Internal Mechanical Workshop Order (`Bon d'Atelier`).
+ * - `'EMIS'`: Issued by Section Maintenance (`SM`), awaiting workshop intake.
+ * - `'EN_COURS_FABRICATION'`: Machining/fabrication actively underway in the mechanical workshop.
+ * - `'PRET_LIVRAISON'`: Part finished and inspected, ready for handover to Maintenance (`SM`).
+ * - `'RECEPTIONNE_MONTAGE'`: Terminal state — received and mounted on the target machine.
+ * - `'ANNULE'`: Terminal state — request cancelled.
+ */
 export type WorkshopOrderStatus =
   | 'EMIS'
   | 'EN_COURS_FABRICATION'
@@ -9,6 +39,9 @@ export type WorkshopOrderStatus =
   | 'RECEPTIONNE_MONTAGE'
   | 'ANNULE';
 
+/**
+ * Granular machining/workshop operation item inside a {@link IWorkshopOrder}.
+ */
 export interface IWorkshopTaskItem {
   id: string;
   libelle: string;
@@ -17,8 +50,9 @@ export interface IWorkshopTaskItem {
 
 /**
  * Canonical SSOT entity for Internal Mechanical Workshop Orders
- * (Bon de Réalisation / Rectification — Section Maintenance -> Atelier Fabrication Mécanique).
- * Strictly distinct from stock movements (IncrementalStockIndex) and external subcontracting (SortieExterne).
+ * (`Bon de Réalisation / Rectification` — `Section Maintenance -> Atelier Fabrication Mécanique`),
+ * persisted under `STORAGE_KEYS.WORKSHOP_ORDERS` (`gmao_workshop_orders_v1`).
+ * Strictly distinct from stock movements (`IncrementalStockIndex`) and external subcontracting (`SortieExterne`).
  */
 export interface IWorkshopOrder {
   id: string;
@@ -44,6 +78,9 @@ export interface IWorkshopOrder {
 
 export type BonAtelierMecanique = IWorkshopOrder;
 
+/**
+ * Validation result returned by {@link validateWorkshopOrderTransition}.
+ */
 export interface WorkshopTransitionValidation {
   valid: boolean;
   fromStatus: WorkshopOrderStatus;
@@ -52,6 +89,9 @@ export interface WorkshopTransitionValidation {
   reason?: string;
 }
 
+/**
+ * Directed transition matrix for {@link WorkshopOrderStatus}.
+ */
 const ALLOWED_WORKSHOP_TRANSITIONS: Record<
   WorkshopOrderStatus,
   ReadonlyArray<WorkshopOrderStatus>
@@ -63,6 +103,9 @@ const ALLOWED_WORKSHOP_TRANSITIONS: Record<
   ANNULE: [],
 };
 
+/**
+ * Human-readable French UI labels for each {@link WorkshopOrderStatus}.
+ */
 export const WORKSHOP_STATUS_LABELS: Record<WorkshopOrderStatus, string> = {
   EMIS: 'Émis (Attente Atelier)',
   EN_COURS_FABRICATION: 'En cours fabrication / usinage',
@@ -71,17 +114,34 @@ export const WORKSHOP_STATUS_LABELS: Record<WorkshopOrderStatus, string> = {
   ANNULE: 'Annulé',
 };
 
+/**
+ * Human-readable French UI labels for each {@link WorkshopOrderType}.
+ */
 export const WORKSHOP_TYPE_LABELS: Record<WorkshopOrderType, string> = {
   REALISATION: 'Réalisation (BR)',
   RECTIFICATION: 'Rectification (RECT)',
 };
 
+/**
+ * Normalizes an arbitrary input into a canonical {@link WorkshopOrderType}.
+ * Recognizes `'RECTIFICATION'` and `'RECT'` (case-insensitive); defaults to `'REALISATION'`.
+ *
+ * @param raw - Raw request type value.
+ * @returns Canonical {@link WorkshopOrderType} (`'REALISATION'` | `'RECTIFICATION'`).
+ */
 export function normalizeWorkshopOrderType(raw?: unknown): WorkshopOrderType {
   const clean = String(raw || '').trim().toUpperCase();
   if (clean === 'RECTIFICATION' || clean === 'RECT') return 'RECTIFICATION';
   return 'REALISATION';
 }
 
+/**
+ * Normalizes an arbitrary input into a canonical {@link WorkshopOrderStatus}.
+ * Unrecognized or empty values default safely to `'EMIS'`.
+ *
+ * @param raw - Raw status value.
+ * @returns Canonical {@link WorkshopOrderStatus}.
+ */
 export function normalizeWorkshopOrderStatus(raw?: unknown): WorkshopOrderStatus {
   const clean = String(raw || '').trim().toUpperCase();
   if (
@@ -97,13 +157,18 @@ export function normalizeWorkshopOrderStatus(raw?: unknown): WorkshopOrderStatus
 }
 
 /**
- * Single guarded FSM transition validator for WorkshopOrder (COR-ATELIER-P0).
- * Allowed transitions:
- * - EMIS -> EN_COURS_FABRICATION | ANNULE
- * - EN_COURS_FABRICATION -> PRET_LIVRAISON | ANNULE
- * - PRET_LIVRAISON -> RECEPTIONNE_MONTAGE | ANNULE
- * - RECEPTIONNE_MONTAGE -> (terminal)
- * - ANNULE -> (terminal)
+ * Single guarded FSM transition validator for {@link IWorkshopOrder} (`COR-ATELIER-P0`).
+ *
+ * ### Allowed Transitions:
+ * - `EMIS` -> `EN_COURS_FABRICATION` | `ANNULE`
+ * - `EN_COURS_FABRICATION` -> `PRET_LIVRAISON` | `ANNULE`
+ * - `PRET_LIVRAISON` -> `RECEPTIONNE_MONTAGE` | `ANNULE`
+ * - `RECEPTIONNE_MONTAGE` -> *(terminal)*
+ * - `ANNULE` -> *(terminal)*
+ *
+ * @param currentRaw - Current status of the workshop order.
+ * @param targetRaw - Requested target status.
+ * @returns {@link WorkshopTransitionValidation} indicating validity and rejection reason if invalid.
  */
 export function validateWorkshopOrderTransition(
   currentRaw: unknown,
@@ -139,6 +204,12 @@ export function validateWorkshopOrderTransition(
   };
 }
 
+/**
+ * Returns the list of legal next statuses reachable from `currentRaw`.
+ *
+ * @param currentRaw - Current status string or value.
+ * @returns Readonly array of allowed next {@link WorkshopOrderStatus} states.
+ */
 export function getAllowedNextWorkshopStatuses(
   currentRaw: unknown
 ): ReadonlyArray<WorkshopOrderStatus> {
@@ -147,7 +218,12 @@ export function getAllowedNextWorkshopStatuses(
 }
 
 /**
- * Returns true if the workshop order is still active/in-progress (blocks parent BT closure).
+ * Determines whether a workshop order (or raw status) is still active/in-progress
+ * (`EMIS`, `EN_COURS_FABRICATION`, or `PRET_LIVRAISON`).
+ * Active workshop orders block parent `BT` closure in {@link WorkOrderStateMachine}.
+ *
+ * @param orderOrStatus - Either an {@link IWorkshopOrder} object or a raw status string.
+ * @returns `true` if the order has not yet reached `RECEPTIONNE_MONTAGE` or `ANNULE`.
  */
 export function isWorkshopOrderActive(orderOrStatus: unknown): boolean {
   const status =
@@ -161,6 +237,15 @@ export function isWorkshopOrderActive(orderOrStatus: unknown): boolean {
   );
 }
 
+/**
+ * Generates a sequential, human-readable workshop order code scoped by type and year.
+ * Format: `BR-YYYY-NNN` for `REALISATION` or `RECT-YYYY-NNN` for `RECTIFICATION`.
+ *
+ * @param typeDemande - `'REALISATION'` or `'RECTIFICATION'`.
+ * @param existingOrders - Existing workshop orders used to compute the next sequence number.
+ * @param year - Four-digit calendar year (defaults to current year).
+ * @returns Formatted code such as `'BR-2026-001'` or `'RECT-2026-004'`.
+ */
 export function generateWorkshopOrderCode(
   typeDemande: WorkshopOrderType,
   existingOrders: ReadonlyArray<Partial<IWorkshopOrder>> = [],
@@ -183,6 +268,15 @@ export function generateWorkshopOrderCode(
   return `${prefix}-${year}-${nextSeq}`;
 }
 
+/**
+ * Factory function that validates and constructs a canonical {@link IWorkshopOrder} record
+ * in initial state `'EMIS'`.
+ *
+ * @param payload - Partial workshop order fields (`id_machine` or `code_machine` and `description_travaux` are mandatory).
+ * @param existingOrders - Existing collection used to generate a collision-free `code_bon`.
+ * @returns Newly constructed {@link IWorkshopOrder} ready for persistence via `DataGateway.saveWorkshopOrders`.
+ * @throws {Error} When `id_machine`/`code_machine` or `description_travaux` is missing/blank.
+ */
 export function createWorkshopOrderRecord(
   payload: Partial<IWorkshopOrder> & {
     id_machine?: string;
@@ -235,6 +329,14 @@ export function createWorkshopOrderRecord(
   };
 }
 
+/**
+ * Retrieves all {@link IWorkshopOrder} records linked to a specific corrective intervention
+ * (`DI` or `BT`) by matching `id_bt` or `id_di` against `intervention.id` or `intervention.num_bt` (case-insensitive).
+ *
+ * @param intervention - Corrective intervention (`ICorrectiveIntervention`) to inspect.
+ * @param workshopOrders - Full collection of workshop orders from store state.
+ * @returns Array of matching {@link IWorkshopOrder} records.
+ */
 export function getLinkedWorkshopOrdersForIntervention(
   intervention: Record<string, any> | null | undefined,
   workshopOrders: ReadonlyArray<IWorkshopOrder> = []
@@ -255,3 +357,4 @@ export function getLinkedWorkshopOrdersForIntervention(
     return false;
   });
 }
+

@@ -6,66 +6,207 @@
 import type {
   IStockItem,
   IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IBlueprint,
   IGeneralSystemType,
   IMouvement,
+  ISortieDemand,
+  ISortieDemandItem,
   IZone,
   IOperation,
   ITechnician,
+  IUserRecord,
+  IType,
+  IPartType,
+  IPartDesignation,
+  ICompGroup,
+  ICompFamily,
+  ICompTemplate,
+  IEntrepotComponent,
+  IWarehouseItem,
+  ValidationWorkflowStatus,
 } from './domain';
-import type { IMeterReading } from './meter';
+import type {
+  PreventiveExecutionRecord,
+  PreventiveExecutionSpareItem,
+  PreventiveRequiredPdrItem,
+} from './preventive';
+import type { IMeterReading, MeterReadingSource, MeterUnit } from './meter';
 import type { IReplenishmentOrder, ReplenishmentOrderStatus } from './replenishment';
 import type { IAuditEvent } from './audit';
 import type { IWorkshopOrder, WorkshopOrderStatus } from '../domain/corrective/workshopOrderService';
 
+export type StateUpdater<T> = T | ((prev: T) => T);
+
 export interface MachineElement {
   id: string;
   id_machine_registered?: string;
+  element_type?: 'COMPONENT' | 'PART' | 'PDR' | string;
+  id_element?: string;
   ref_element?: string;
   designation?: string;
-  date_installation?: string;
+  qte_montee?: number;
+  unite?: string;
+  criticalite?: string;
+  duree_vie_estimee_heures?: number;
   heures_actuelles?: number;
+  date_installation?: string;
+  technicien?: string;
+  statut?: string;
+  emplacement_machine?: string;
+  remarques?: string;
   [key: string]: any;
 }
 
 export interface PreventiveTaskItem {
   id: string | number;
+  code_tache?: string;
   machine_id?: string;
   id_machine?: string;
   id_machine_registered?: string;
+  machine_nom?: string;
+  zone?: string;
   composant?: string;
   id_composant?: string;
   nom_composant?: string;
   id_part?: string;
   nom_part?: string;
-  pdr_requises?: Array<{
-    ref: string;
-    nom?: string;
-    designation?: string;
-    quantite: number;
-    unite?: string;
-    prix_unitaire?: number;
-  }>;
+  pdr_requises?: PreventiveRequiredPdrItem[];
   titre?: string;
+  description?: string;
+  action_code?: string;
   periodicite?: string;
+  frequence?: string;
+  statut?: string;
+  date_echeance?: string;
+  prochaine_echeance?: string;
+  derniere_execution?: string;
   dernier_releve?: number;
+  compteur_actuel?: number;
+  compteur_seuil_intervalle?: number;
+  compteur_prochain_declenchement?: number;
+  compteur_unite?: MeterUnit | string;
+  type_declencheur?: 'CALENDRIER' | 'COMPTEUR' | 'HYBRIDE' | string;
   updated_at?: string;
+  [key: string]: any;
+}
+
+export interface IPreventiveActionCatalogItem {
+  id: string | number;
+  code: string;
+  ref?: string;
+  libelle: string;
+  description?: string;
+  couleur?: string;
+  icone?: string;
+  duree_standard?: number | string;
+  outils?: string[] | string;
+  created_at?: string;
+  [key: string]: any;
+}
+
+export interface IPreventiveGuideCatalogItem {
+  id: string | number;
+  code: string;
+  ref?: string;
+  composant_nom: string;
+  famille?: string;
+  actions_liees?: string[];
+  pieces_rechange?: Array<Record<string, any>>;
+  fiches_actions?: Record<string, any> | Array<Record<string, any>>;
+  consignes_securite?: string[] | string;
+  criticite?: string;
+  created_at?: string;
+  [key: string]: any;
+}
+
+export interface IPreventivePlanCatalogItem {
+  id?: string | number;
+  id_plan?: string;
+  code?: string;
+  code_plan?: string;
+  ref?: string;
+  titre?: string;
+  id_machine?: string;
+  nom_machine?: string;
+  machine_designation?: string;
+  id_zone?: string;
+  id_technicien?: string;
+  technicien_responsable?: string;
+  date_creation?: string;
+  is_groupee?: boolean;
+  semaine_cible?: string;
+  description?: string;
+  nb_taches?: number;
+  created_at?: string;
   [key: string]: any;
 }
 
 export interface SortieExterneItem {
   id: string | number;
+  code?: string;
+  id_corrective?: string;
+  id_machine_registered?: string;
+  machine_designation?: string;
+  designation_organe?: string;
+  nature_travail?: string;
+  type_probleme?: string;
+  fournisseur_externe?: string;
+  cout_bobinage?: number;
+  cout_atelier?: number;
   statut?: string;
+  etat?: string;
   date_sortie?: string;
   date_retour_prevue?: string;
   date_retour_reelle?: string;
+  date_remontage?: string;
+  technicien_sortie?: string;
+  technicien_retour?: string;
+  remarques?: string;
+  [key: string]: any;
+}
+
+export interface SortieMountedPayload {
+  date_montage: string;
+  id_machine_cible: string;
+  note: string;
+  technicien_montage: string;
+  [key: string]: any;
+}
+
+export interface CorrectivePdrConsumedItem {
+  ref: string;
+  designation?: string;
+  quantite: number;
+  unit?: string;
+  prix_unitaire?: number;
+  num_bon_saisi_par_tech?: string;
   [key: string]: any;
 }
 
 export interface CorrectiveInterventionItem {
-  id?: string | number;
+  id?: string;
+  num_bt?: string;
   code_machine?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  zone?: string;
+  id_zone?: string;
+  demandeur?: string;
+  intervenant?: string;
+  technicien_matricule?: string;
   anomalie?: string;
+  type_panne?: string;
+  priorite?: string;
+  travail_a_faire?: string;
+  action_realisee?: string;
+  intervention_nature?: 'REPLACE' | 'ATELIER' | 'REPAIR' | 'CLEAN' | 'ADJUST' | 'INSPECT' | 'OTHER' | string;
+  stock_effect?: string;
   statut?: string;
+  action_fermee?: 'OUI' | 'NON' | string;
+  arret_machine?: 'OUI' | 'NON' | boolean | string;
+  temps_arret?: string | number;
   demande_date?: string;
   demande_heure?: string;
   date_debut?: string;
@@ -74,107 +215,198 @@ export interface CorrectiveInterventionItem {
   heure_fin?: string;
   temps_intervention?: string;
   temps_intervention_mins?: number;
-  num_bt?: string;
   pdr_ref?: string;
+  pdr_designation?: string;
   pdr_quantite?: number;
+  pdr_utilisees?: CorrectivePdrConsumedItem[];
+  pdr_proposees?: CorrectivePdrConsumedItem[];
+  pieces_utilisees?: CorrectivePdrConsumedItem[];
+  pieces_proposees?: CorrectivePdrConsumedItem[];
+  pieces_claimed?: CorrectivePdrConsumedItem[];
+  num_bon_saisi_par_tech?: string;
+  marque?: string;
+  etat_piece?: string;
+  rapport_redige?: string;
+  id_sortie_atelier?: string;
+  code_sortie_atelier?: string;
+  id_bon_atelier?: string;
+  code_bon_atelier?: string;
+  cout_pdr?: number;
+  cout_atelier?: number;
+  cout_total?: number;
+  nature_travail_atelier?: string;
+  prestataire_atelier?: string;
+  validation_status?: ValidationWorkflowStatus | string;
+  previous_validation_status?: ValidationWorkflowStatus | string;
+  previous_validation_note?: string;
+  resubmitted_count?: number;
+  submitted_by_id?: string;
+  submitted_by_name?: string;
+  submitted_at?: string;
+  validated_by_id?: string;
+  validated_by_name?: string;
+  validated_at?: string;
+  validation_note?: string;
+  stock_deducted?: boolean;
+  emitted_movement_ids?: string[];
+  created_at?: string;
+  updated_at?: string;
   [key: string]: any;
+}
+
+export type CorrectiveIntervenantEntry =
+  | string
+  | {
+      id?: string;
+      nom: string;
+      role?: string;
+      specialite?: string;
+      [key: string]: any;
+    };
+
+export interface CorrectiveKpiComputedSummary {
+  totalInterventions: number;
+  cloturesCount: number;
+  enCoursCount: number;
+  totalDowntimeMinutes: number;
+  mttrMinutes: string;
+  tauxResolution: number;
+}
+
+export interface CorrectiveParetoItem {
+  name: string;
+  count: number;
+  percentage: number;
+  cumulativePercentage: number;
+}
+
+export interface CorrectivePreventiveRecommendationItem {
+  machine: string;
+  code_machine: string;
+  count: number;
+  repetitionCount: number;
+  anomalie: string;
+  zone: string;
+  suggestedIntervalDays: number;
+  recommendedAction: string;
+  recommendation: string;
+}
+
+export interface ValidationReviewDecisionPayload {
+  decision?: 'APPROVED' | 'REJECTED' | 'NEEDS_CLARIFICATION' | string;
+  code_bon_magasin?: string;
+  mergeWithMovementId?: string | null;
+  approvedItems?: ISortieDemandItem[];
+  sparesUsed?: PreventiveExecutionSpareItem[];
+  sparesProposed?: PreventiveExecutionSpareItem[];
+  approvedSpares?: PreventiveExecutionSpareItem[];
+  validation_note?: string;
+  notes?: string;
+  validated_by_id?: string;
+  validated_by_name?: string;
+  [key: string]: any;
+}
+
+export interface MeterReadingRecordPayload {
+  machineId: string;
+  valeur: number;
+  unite?: MeterUnit;
+  date_releve?: string;
+  releve_par?: string;
+  source?: MeterReadingSource;
+  commentaire?: string;
 }
 
 export interface GmaoStoreState {
   // ==========================================
   // 1. Stock Slice
   // ==========================================
-  types: any[];
+  types: IType[];
   rawStock: IStockItem[];
-  designations: any[];
-  setTypes: (types: any[] | ((prev: any[]) => any[])) => void;
-  setRawStock: (rawStock: IStockItem[] | ((prev: IStockItem[]) => IStockItem[])) => void;
-  setDesignations: (designations: any[] | ((prev: any[]) => any[])) => void;
+  designations: IPartDesignation[];
+  setTypes: (types: StateUpdater<IType[]>) => void;
+  setRawStock: (rawStock: StateUpdater<IStockItem[]>) => void;
+  setDesignations: (designations: StateUpdater<IPartDesignation[]>) => void;
 
   // ==========================================
   // 2. Machines & Topology Slice
   // ==========================================
-  families: any[];
-  templates: any[];
-  blueprints: any[];
+  families: IMachineFamily[];
+  templates: IMachineTemplate[];
+  blueprints: IBlueprint[];
   machines: IMachine[];
   generalSystemTypes: IGeneralSystemType[];
   zones: IZone[];
   machineElementsLedger: MachineElement[];
-  setFamilies: (families: any[] | ((prev: any[]) => any[])) => void;
-  setTemplates: (templates: any[] | ((prev: any[]) => any[])) => void;
-  setBlueprints: (blueprints: any[] | ((prev: any[]) => any[])) => void;
-  setMachines: (machines: IMachine[] | ((prev: IMachine[]) => IMachine[])) => void;
-  setGeneralSystemTypes: (types: IGeneralSystemType[] | ((prev: IGeneralSystemType[]) => IGeneralSystemType[])) => void;
+  setFamilies: (families: StateUpdater<IMachineFamily[]>) => void;
+  setTemplates: (templates: StateUpdater<IMachineTemplate[]>) => void;
+  setBlueprints: (blueprints: StateUpdater<IBlueprint[]>) => void;
+  setMachines: (machines: StateUpdater<IMachine[]>) => void;
+  setGeneralSystemTypes: (types: StateUpdater<IGeneralSystemType[]>) => void;
   handleAddGeneralSystemType: (payload: { name: string; code?: string; id?: string }) => IGeneralSystemType | null;
   handleToggleGeneralSystemType: (id: string, isActive?: boolean) => void;
-  setZones: (zones: IZone[] | ((prev: IZone[]) => IZone[])) => void;
-  setMachineElementsLedger: (ledger: MachineElement[] | ((prev: MachineElement[]) => MachineElement[])) => void;
+  setZones: (zones: StateUpdater<IZone[]>) => void;
+  setMachineElementsLedger: (ledger: StateUpdater<MachineElement[]>) => void;
   addMachineElement: (element: Partial<MachineElement>) => void;
   updateMachineElement: (id: string, updates: Partial<MachineElement>) => void;
   deleteMachineElement: (id: string) => void;
   duplicateBOMToTwins: (sourceMachineId: string, targetMachineIds: string[]) => void;
-  isValidMachineFamilies: (arr: any[]) => boolean;
-  isValidMachineTemplates: (arr: any[]) => boolean;
+  isValidMachineFamilies: (arr: IMachineFamily[]) => boolean;
+  isValidMachineTemplates: (arr: IMachineTemplate[]) => boolean;
 
   // ==========================================
   // 3. Warehouse / Entrepôt Slice
   // ==========================================
-  warehouseItems: any[];
-  entrepotComponents: any[];
-  compGroups: any[];
-  compFamilies: any[];
-  compTemplates: any[];
-  partTypes: any[];
-  partDesignations: any[];
-  setWarehouseItems: (items: any[] | ((prev: any[]) => any[])) => void;
-  setEntrepotComponents: (comps: any[] | ((prev: any[]) => any[])) => void;
-  setCompGroups: (groups: any[] | ((prev: any[]) => any[])) => void;
-  setCompFamilies: (families: any[] | ((prev: any[]) => any[])) => void;
-  setCompTemplates: (templates: any[] | ((prev: any[]) => any[])) => void;
-  setPartTypes: (types: any[] | ((prev: any[]) => any[])) => void;
-  setPartDesignations: (designations: any[] | ((prev: any[]) => any[])) => void;
+  warehouseItems: IWarehouseItem[];
+  entrepotComponents: IEntrepotComponent[];
+  compGroups: ICompGroup[];
+  compFamilies: ICompFamily[];
+  compTemplates: ICompTemplate[];
+  partTypes: IPartType[];
+  partDesignations: IPartDesignation[];
+  setWarehouseItems: (items: StateUpdater<IWarehouseItem[]>) => void;
+  setEntrepotComponents: (comps: StateUpdater<IEntrepotComponent[]>) => void;
+  setCompGroups: (groups: StateUpdater<ICompGroup[]>) => void;
+  setCompFamilies: (families: StateUpdater<ICompFamily[]>) => void;
+  setCompTemplates: (templates: StateUpdater<ICompTemplate[]>) => void;
+  setPartTypes: (types: StateUpdater<IPartType[]>) => void;
+  setPartDesignations: (designations: StateUpdater<IPartDesignation[]>) => void;
 
   // ==========================================
   // 4. Personnel & Users Slice
   // ==========================================
-  users: any[];
+  users: IUserRecord[];
   technicians: ITechnician[];
   operations: IOperation[];
-  setUsers: (users: any[] | ((prev: any[]) => any[])) => void;
-  setTechnicians: (techs: ITechnician[] | ((prev: ITechnician[]) => ITechnician[])) => void;
-  setOperations: (ops: IOperation[] | ((prev: IOperation[]) => IOperation[])) => void;
+  setUsers: (users: StateUpdater<IUserRecord[]>) => void;
+  setTechnicians: (techs: StateUpdater<ITechnician[]>) => void;
+  setOperations: (ops: StateUpdater<IOperation[]>) => void;
 
   // ==========================================
   // 5. Movements Slice & V3/V4 Sortie Demands
   // ==========================================
   mouvements: IMouvement[];
-  setMouvements: (movements: IMouvement[] | ((prev: IMouvement[]) => IMouvement[])) => void;
-  sortieDemands: any[];
-  setSortieDemands: (demands: any[] | ((prev: any[]) => any[])) => void;
-  handleSubmitSortieDemand: (demandPayload: any) => any;
+  setMouvements: (movements: StateUpdater<IMouvement[]>) => void;
+  sortieDemands: ISortieDemand[];
+  setSortieDemands: (demands: StateUpdater<ISortieDemand[]>) => void;
+  handleSubmitSortieDemand: (demandPayload: Partial<ISortieDemand> & Record<string, any>) => ISortieDemand | null;
   handleReviewSortieDemandValidation: (
     demandId: string,
-    decisionData?: {
-      decision: 'APPROVED' | 'REJECTED' | 'NEEDS_CLARIFICATION';
-      code_bon_magasin?: string;
-      mergeWithMovementId?: string | null;
-      approvedItems?: any[];
-      validation_note?: string;
-      validated_by_id?: string;
-      validated_by_name?: string;
-      [key: string]: any;
-    },
-    onAddMouvement?: ((mvt: any) => void) | null
-  ) => any;
+    decisionData?: ValidationReviewDecisionPayload,
+    onAddMouvement?: ((mvt: IMouvement) => void) | null
+  ) => ISortieDemand | null;
 
   // ==========================================
   // 5b. Replenishment & Purchase Orders Slice (المحور 4)
   // ==========================================
   replenishmentOrders: IReplenishmentOrder[];
-  setReplenishmentOrders: (orders: IReplenishmentOrder[] | ((prev: IReplenishmentOrder[]) => IReplenishmentOrder[])) => void;
+  setReplenishmentOrders: (orders: StateUpdater<IReplenishmentOrder[]>) => void;
   handleCreateReplenishmentOrder: (orderData: Partial<IReplenishmentOrder>) => Promise<IReplenishmentOrder>;
-  handleUpdateReplenishmentOrderStatus: (orderId: string, status: ReplenishmentOrderStatus, metadata?: any) => Promise<void>;
+  handleUpdateReplenishmentOrderStatus: (
+    orderId: string,
+    status: ReplenishmentOrderStatus,
+    metadata?: Record<string, any>
+  ) => Promise<void>;
   handleReceiveReplenishmentOrder: (
     orderId: string,
     receivedItems: { ref: string; quantite_recue: number }[],
@@ -186,83 +418,94 @@ export interface GmaoStoreState {
   // 6. Preventive Maintenance Slice
   // ==========================================
   preventiveTasks: PreventiveTaskItem[];
-  preventiveActions: any[];
-  preventiveGuides: any[];
-  preventivePlans: any[];
-  preventiveExecutions: any[];
+  preventiveActions: IPreventiveActionCatalogItem[];
+  preventiveGuides: IPreventiveGuideCatalogItem[];
+  preventivePlans: IPreventivePlanCatalogItem[];
+  preventiveExecutions: PreventiveExecutionRecord[];
   meterReadings: IMeterReading[];
-  setPreventiveTasks: (tasks: PreventiveTaskItem[] | ((prev: PreventiveTaskItem[]) => PreventiveTaskItem[])) => void;
-  setPreventiveActions: (actions: any[] | ((prev: any[]) => any[])) => void;
-  setPreventiveGuides: (guides: any[] | ((prev: any[]) => any[])) => void;
-  setPreventivePlans: (plans: any[] | ((prev: any[]) => any[])) => void;
-  setPreventiveExecutions: (executions: any[] | ((prev: any[]) => any[])) => void;
-  setMeterReadings: (readings: IMeterReading[] | ((prev: IMeterReading[]) => IMeterReading[])) => void;
-  handleRecordMeterReading: (payload: {
-    machineId: string;
-    valeur: number;
-    unite?: string;
-    date_releve?: string;
-    releve_par?: string;
-    source?: any;
-    commentaire?: string;
-  }) => any;
-  handleBatchRecordMeterReadings: (readingsPayload: any[]) => any[];
-  handleUpdateTask: (id: string | number, updates: any) => void;
+  setPreventiveTasks: (tasks: StateUpdater<PreventiveTaskItem[]>) => void;
+  setPreventiveActions: (actions: StateUpdater<IPreventiveActionCatalogItem[]>) => void;
+  setPreventiveGuides: (guides: StateUpdater<IPreventiveGuideCatalogItem[]>) => void;
+  setPreventivePlans: (plans: StateUpdater<IPreventivePlanCatalogItem[]>) => void;
+  setPreventiveExecutions: (executions: StateUpdater<PreventiveExecutionRecord[]>) => void;
+  setMeterReadings: (readings: StateUpdater<IMeterReading[]>) => void;
+  handleRecordMeterReading: (payload: MeterReadingRecordPayload) => IMeterReading | null;
+  handleBatchRecordMeterReadings: (readingsPayload: MeterReadingRecordPayload[]) => IMeterReading[];
+  handleUpdateTask: (id: string | number, updates: Partial<PreventiveTaskItem> & Record<string, any>) => void;
   handleDeleteTask: (id: string | number) => void;
   handleUpdateTaskCounter: (id: string | number, newCounterValue: number | string) => void;
-  handleMarkTaskDone: (id: string | number, validationData: any) => void;
+  handleMarkTaskDone: (
+    id: string | number,
+    validationData?: Record<string, any>
+  ) => PreventiveExecutionRecord | null | void;
   handleReviewPreventiveExecutionValidation: (
     executionId: string,
-    decisionData?: {
-      decision: 'APPROVED' | 'REJECTED' | 'NEEDS_CLARIFICATION';
-      validation_note?: string;
-      validated_by_id?: string;
-      validated_by_name?: string;
-      sparesUsed?: any[];
-      sparesProposed?: any[];
-      approvedSpares?: any[];
-      notes?: string;
-      [key: string]: any;
-    },
-    onAddMouvement?: ((mvt: any) => void) | null
-  ) => any;
+    decisionData?: ValidationReviewDecisionPayload,
+    onAddMouvement?: ((mvt: IMouvement) => void) | null
+  ) => PreventiveExecutionRecord | null;
   handleDeletePreventiveExecution: (id: string) => void;
-  handleCreatePlanWithTasks: (planData: any, taskItems: any[]) => any;
-  handleAddAction: (actionData: any) => any;
-  handleUpdateAction: (id: string | number, actionData: any) => any;
-  handleDeleteAction: (id: string | number) => any;
-  handleAddGuide: (guideData: any) => any;
-  handleUpdateGuide: (id: string | number, guideData: any) => any;
-  handleDeleteGuide: (id: string | number) => any;
-  handleResetPreventiveToBaseline: (ctx?: any) => Promise<any>;
-  handleClearPreventiveForRealFactory: (ctx?: any) => any;
+  handleCreatePlanWithTasks: (
+    planData: Partial<IPreventivePlanCatalogItem> & Record<string, any>,
+    taskItems: Array<Partial<PreventiveTaskItem> & Record<string, any>>
+  ) => { plan: IPreventivePlanCatalogItem; tasks: PreventiveTaskItem[] };
+  handleAddAction: (
+    actionData: Partial<IPreventiveActionCatalogItem> & Record<string, any>
+  ) => IPreventiveActionCatalogItem[];
+  handleUpdateAction: (
+    id: string | number,
+    actionData: Partial<IPreventiveActionCatalogItem> & Record<string, any>
+  ) => IPreventiveActionCatalogItem[];
+  handleDeleteAction: (id: string | number) => IPreventiveActionCatalogItem[];
+  handleAddGuide: (
+    guideData: Partial<IPreventiveGuideCatalogItem> & Record<string, any>
+  ) => IPreventiveGuideCatalogItem[];
+  handleUpdateGuide: (
+    id: string | number,
+    guideData: Partial<IPreventiveGuideCatalogItem> & Record<string, any>
+  ) => IPreventiveGuideCatalogItem[];
+  handleDeleteGuide: (id: string | number) => IPreventiveGuideCatalogItem[];
+  handleResetPreventiveToBaseline: (
+    ctx?: Record<string, any>
+  ) => Promise<{ cancelled: boolean; restoredCount?: number; orphanCountAfter?: number }>;
+  handleClearPreventiveForRealFactory: (
+    ctx?: Record<string, any>
+  ) => Promise<{ cancelled: boolean; clearedCount?: number }>;
 
   // ==========================================
   // 7. Sorties Externe Slice
   // ==========================================
   sortiesExterne: SortieExterneItem[];
-  setSortiesExterne: (sorties: SortieExterneItem[] | ((prev: SortieExterneItem[]) => SortieExterneItem[])) => void;
-  handleAddSortieExterne: (sortieData: any) => any;
-  handleUpdateSortieExterne: (id: string | number, sortieData: any) => any;
+  setSortiesExterne: (sorties: StateUpdater<SortieExterneItem[]>) => void;
+  handleAddSortieExterne: (sortieData: Partial<SortieExterneItem> & Record<string, any>) => SortieExterneItem;
+  handleUpdateSortieExterne: (
+    id: string | number,
+    sortieData: Partial<SortieExterneItem> & Record<string, any>
+  ) => SortieExterneItem | null;
   handleDeleteSortieExterne: (id: string | number) => void;
-  handleMarkSortieReturned: (id: string | number, returnData: any) => any;
-  handleMarkSortieMounted: (id: string | number, mountData: any) => any;
-  handleClearSortiesForRealFactory: () => any;
-  handleResetSortiesToBaseline: () => any;
+  handleMarkSortieReturned: (
+    id: string | number,
+    returnData?: number | Record<string, any>
+  ) => SortieExterneItem | null;
+  handleMarkSortieMounted: (
+    id: string | number,
+    mountData: SortieMountedPayload
+  ) => SortieExterneItem | null;
+  handleClearSortiesForRealFactory: () => Promise<{ cancelled: boolean; clearedCount?: number }>;
+  handleResetSortiesToBaseline: () => { cancelled: boolean; count: number };
 
   // ==========================================
   // 8. Corrective Nexus Slice
   // ==========================================
   correctiveInterventions: CorrectiveInterventionItem[];
-  setCorrectiveInterventions: (interventions: CorrectiveInterventionItem[] | ((prev: CorrectiveInterventionItem[]) => CorrectiveInterventionItem[])) => void;
+  setCorrectiveInterventions: (interventions: StateUpdater<CorrectiveInterventionItem[]>) => void;
   correctiveActionsByPanne: Record<string, string[]>;
-  setCorrectiveActionsByPanne: (actions: any | ((prev: any) => any)) => void;
+  setCorrectiveActionsByPanne: (actions: StateUpdater<Record<string, string[]>>) => void;
   correctivePanneCategories: Record<string, string[]>;
-  setCorrectivePanneCategories: (categories: any | ((prev: any) => any)) => void;
+  setCorrectivePanneCategories: (categories: StateUpdater<Record<string, string[]>>) => void;
   correctiveTravauxAFaire: string[];
-  setCorrectiveTravauxAFaire: (travaux: string[] | ((prev: string[]) => string[])) => void;
-  correctiveIntervenants: string[];
-  setCorrectiveIntervenants: (intervenants: string[] | ((prev: string[]) => string[])) => void;
+  setCorrectiveTravauxAFaire: (travaux: StateUpdater<string[]>) => void;
+  correctiveIntervenants: CorrectiveIntervenantEntry[];
+  setCorrectiveIntervenants: (intervenants: StateUpdater<CorrectiveIntervenantEntry[]>) => void;
   activeLiveInterventionId: string | number | null;
   setActiveLiveInterventionId: (id: string | number | null) => void;
   handleGetCorrectiveActionsForPanne: (anomalie: string) => string[];
@@ -276,24 +519,54 @@ export interface GmaoStoreState {
   handleUpdateTravail: (oldText: string, newText: string) => void;
   handleDeleteTravail: (travailText: string) => void;
   handleResetCorrectiveActions: () => Promise<void>;
-  handleForceSyncCorrectiveSeed: () => Promise<any>;
-  handleAddDemandeIntervention: (data: any) => any;
-  handleConvertToBt: (id: string | number, btDetails?: any) => any;
+  handleForceSyncCorrectiveSeed: () => Promise<{
+    interventionsCount: number;
+    pannesCount?: number | unknown;
+    categoriesCount?: number;
+    travauxCount?: number;
+    actionsCount?: number;
+    intervenantsCount?: number;
+  }>;
+  handleAddDemandeIntervention: (
+    data: Partial<CorrectiveInterventionItem> & Record<string, any>
+  ) => CorrectiveInterventionItem;
+  handleConvertToBt: (
+    id: string | number,
+    btDetails?: Record<string, any>
+  ) => CorrectiveInterventionItem | null;
   handleStartLiveIntervention: (id: string | number) => void;
-  handleSubmitInterventionForValidation: (id: string | number, submissionData?: any) => any;
-  handleReviewInterventionValidation: (id: string | number, decisionData?: any, onAddMouvement?: any) => any;
-  handleClotureIntervention: (id: string | number, clotureData?: any, onAddMouvement?: any) => any;
-  handleUpdateCorrectiveIntervention: (id: string | number, patch?: any) => void;
+  handleSubmitInterventionForValidation: (
+    id: string | number,
+    submissionData?: Partial<CorrectiveInterventionItem> & Record<string, any>
+  ) => CorrectiveInterventionItem | null;
+  handleReviewInterventionValidation: (
+    id: string | number,
+    decisionData?: ValidationReviewDecisionPayload,
+    onAddMouvement?: ((mvt: IMouvement) => void) | null
+  ) => CorrectiveInterventionItem | null;
+  handleClotureIntervention: (
+    id: string | number,
+    clotureData?: Partial<CorrectiveInterventionItem> & Record<string, any>,
+    onAddMouvement?: ((mvt: IMouvement) => void) | null
+  ) => CorrectiveInterventionItem | null;
+  handleUpdateCorrectiveIntervention: (
+    id: string | number,
+    patch?: Partial<CorrectiveInterventionItem> & Record<string, any>
+  ) => void;
   handleDeleteCorrectiveIntervention: (id: string | number) => void;
-  handleBulkImportCorrective: (importedItems: any[]) => void;
-  handleResetCorrectiveToSeed: (ctx?: any) => Promise<any>;
+  handleBulkImportCorrective: (importedItems: CorrectiveInterventionItem[]) => void;
+  handleResetCorrectiveToSeed: (
+    ctx?: Record<string, any>
+  ) => Promise<{ cancelled: boolean; restoredCount?: number; orphanCountAfter?: number }>;
 
   // ==========================================
   // 8b. Mechanical Workshop Orders (COR-ATELIER-P0)
   // ==========================================
   workshopOrders: IWorkshopOrder[];
-  setWorkshopOrders: (orders: IWorkshopOrder[] | ((prev: IWorkshopOrder[]) => IWorkshopOrder[])) => void;
-  handleCreateWorkshopOrder: (payload: Partial<IWorkshopOrder> & { id_machine: string; description_travaux: string }) => IWorkshopOrder | null;
+  setWorkshopOrders: (orders: StateUpdater<IWorkshopOrder[]>) => void;
+  handleCreateWorkshopOrder: (
+    payload: Partial<IWorkshopOrder> & { id_machine: string; description_travaux: string }
+  ) => IWorkshopOrder | null;
   handleTransitionWorkshopOrderStatus: (
     orderId: string,
     nextStatus: WorkshopOrderStatus,
@@ -301,25 +574,25 @@ export interface GmaoStoreState {
   ) => { valid: boolean; reason?: string; order?: IWorkshopOrder };
 
   // Derived Corrective KPIs
-  correctiveKpis: () => any;
-  correctiveParetoAnomalies: () => any[];
-  correctiveParetoMachines: () => any[];
-  correctiveParetoTypes: () => any[];
-  correctivePreventiveRecommendations: () => any[];
+  correctiveKpis: () => CorrectiveKpiComputedSummary;
+  correctiveParetoAnomalies: () => CorrectiveParetoItem[];
+  correctiveParetoMachines: () => CorrectiveParetoItem[];
+  correctiveParetoTypes: () => CorrectiveParetoItem[];
+  correctivePreventiveRecommendations: () => CorrectivePreventiveRecommendationItem[];
 
   // ==========================================
   // 9. Derived State Getters (Zero unnecessary re-renders)
   // ==========================================
-  stockItems: () => any[];
-  effectiveDesignations: () => any[];
+  stockItems: () => IStockItem[];
+  effectiveDesignations: () => IPartDesignation[];
 
   // ==========================================
   // 10. Global Data Operations
   // ==========================================
-  handleLoadDemoData: () => any;
-  handleClearAllForRealFactory: () => any;
-  handleLoadDemoSection: (sectionId: string) => any;
-  handleClearDemoSection: (sectionId: string) => any;
+  handleLoadDemoData: () => unknown;
+  handleClearAllForRealFactory: () => unknown;
+  handleLoadDemoSection: (sectionId: string) => unknown;
+  handleClearDemoSection: (sectionId: string) => unknown;
 
   // ==========================================
   // 11. Multi-Tab State Synchronization
@@ -342,43 +615,42 @@ export interface GmaoStoreState {
  * (such as initRealStock, loadDemoData, clearAllForRealFactory, loadDemoSection, clearDemoSection).
  */
 export interface GmaoStoreSetters {
-  setRawStock?: (stock: any) => void;
-  setTypes?: (types: any) => void;
-  setDesignations?: (designations: any) => void;
-  setMachines?: (machines: any) => void;
-  setGeneralSystemTypes?: (types: any) => void;
-  setFamilies?: (families: any) => void;
-  setTemplates?: (templates: any) => void;
-  setBlueprints?: (blueprints: any) => void;
-  setZones?: (zones: any) => void;
-  setMachineElementsLedger?: (ledger: any) => void;
-  setWarehouseItems?: (items: any) => void;
-  setEntrepotComponents?: (comps: any) => void;
-  setCompGroups?: (groups: any) => void;
-  setCompFamilies?: (families: any) => void;
-  setCompTemplates?: (templates: any) => void;
-  setPartTypes?: (types: any) => void;
-  setPartDesignations?: (designations: any) => void;
-  setUsers?: (users: any) => void;
-  setTechnicians?: (techs: any) => void;
-  setOperations?: (ops: any) => void;
-  setMouvements?: (movements: any) => void;
-  setSortieDemands?: (demands: any) => void;
-  setReplenishmentOrders?: (orders: any) => void;
-  setSortiesExterne?: (sorties: any) => void;
-  setPreventiveTasks?: (tasks: any) => void;
-  setPreventiveActions?: (actions: any) => void;
-  setPreventiveGuides?: (guides: any) => void;
-  setPreventivePlans?: (plans: any) => void;
-  setPreventiveExecutions?: (executions: any) => void;
-  setMeterReadings?: (readings: any) => void;
-  setAuditEvents?: (events: any) => void;
-  setCorrectiveInterventions?: (interventions: any) => void;
-  setCorrectiveActionsByPanne?: (actions: any) => void;
-  setCorrectivePanneCategories?: (categories: any) => void;
-  setCorrectiveTravauxAFaire?: (travaux: any) => void;
-  setCorrectiveIntervenants?: (intervenants: any) => void;
-  setWorkshopOrders?: (orders: any) => void;
+  setRawStock?: (stock: StateUpdater<IStockItem[]>) => void;
+  setTypes?: (types: StateUpdater<IType[]>) => void;
+  setDesignations?: (designations: StateUpdater<IPartDesignation[]>) => void;
+  setMachines?: (machines: StateUpdater<IMachine[]>) => void;
+  setGeneralSystemTypes?: (types: StateUpdater<IGeneralSystemType[]>) => void;
+  setFamilies?: (families: StateUpdater<IMachineFamily[]>) => void;
+  setTemplates?: (templates: StateUpdater<IMachineTemplate[]>) => void;
+  setBlueprints?: (blueprints: StateUpdater<IBlueprint[]>) => void;
+  setZones?: (zones: StateUpdater<IZone[]>) => void;
+  setMachineElementsLedger?: (ledger: StateUpdater<MachineElement[]>) => void;
+  setWarehouseItems?: (items: StateUpdater<IWarehouseItem[]>) => void;
+  setEntrepotComponents?: (comps: StateUpdater<IEntrepotComponent[]>) => void;
+  setCompGroups?: (groups: StateUpdater<ICompGroup[]>) => void;
+  setCompFamilies?: (families: StateUpdater<ICompFamily[]>) => void;
+  setCompTemplates?: (templates: StateUpdater<ICompTemplate[]>) => void;
+  setPartTypes?: (types: StateUpdater<IPartType[]>) => void;
+  setPartDesignations?: (designations: StateUpdater<IPartDesignation[]>) => void;
+  setUsers?: (users: StateUpdater<IUserRecord[]>) => void;
+  setTechnicians?: (techs: StateUpdater<ITechnician[]>) => void;
+  setOperations?: (ops: StateUpdater<IOperation[]>) => void;
+  setMouvements?: (movements: StateUpdater<IMouvement[]>) => void;
+  setSortieDemands?: (demands: StateUpdater<ISortieDemand[]>) => void;
+  setReplenishmentOrders?: (orders: StateUpdater<IReplenishmentOrder[]>) => void;
+  setSortiesExterne?: (sorties: StateUpdater<SortieExterneItem[]>) => void;
+  setPreventiveTasks?: (tasks: StateUpdater<PreventiveTaskItem[]>) => void;
+  setPreventiveActions?: (actions: StateUpdater<IPreventiveActionCatalogItem[]>) => void;
+  setPreventiveGuides?: (guides: StateUpdater<IPreventiveGuideCatalogItem[]>) => void;
+  setPreventivePlans?: (plans: StateUpdater<IPreventivePlanCatalogItem[]>) => void;
+  setPreventiveExecutions?: (executions: StateUpdater<PreventiveExecutionRecord[]>) => void;
+  setMeterReadings?: (readings: StateUpdater<IMeterReading[]>) => void;
+  setAuditEvents?: (events: IAuditEvent[]) => void;
+  setCorrectiveInterventions?: (interventions: StateUpdater<CorrectiveInterventionItem[]>) => void;
+  setCorrectiveActionsByPanne?: (actions: StateUpdater<Record<string, string[]>>) => void;
+  setCorrectivePanneCategories?: (categories: StateUpdater<Record<string, string[]>>) => void;
+  setCorrectiveTravauxAFaire?: (travaux: StateUpdater<string[]>) => void;
+  setCorrectiveIntervenants?: (intervenants: StateUpdater<CorrectiveIntervenantEntry[]>) => void;
+  setWorkshopOrders?: (orders: StateUpdater<IWorkshopOrder[]>) => void;
   [key: string]: any;
 }
-

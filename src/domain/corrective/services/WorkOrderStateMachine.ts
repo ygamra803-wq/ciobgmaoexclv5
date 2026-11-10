@@ -1,3 +1,26 @@
+/**
+ * @module WorkOrderStateMachine
+ * @description
+ * Deterministic Finite State Machine (FSM) governing the lifecycle of Corrective Maintenance
+ * Work Orders (`DI` — Demande d'Intervention & `BT` — Bon de Travail).
+ *
+ * ### Architectural Invariants (`AGENTS.md` §1.5):
+ * 1. **Canonical Lifecycle Graph:**
+ *    - `DEMANDE` -> `BT_PLANIFIE` | `EN_COURS` | `ANNULE` (plus guarded emergency direct `CLOTURE` when `num_bt` is assigned)
+ *    - `BT_PLANIFIE` -> `EN_COURS` | `EN_ATTENTE_PDR` | `CLOTURE` | `ANNULE`
+ *    - `EN_COURS` -> `EN_ATTENTE_PDR` | `BT_PLANIFIE` | `CLOTURE` | `ANNULE`
+ *    - `EN_ATTENTE_PDR` -> `EN_COURS` | `BT_PLANIFIE` | `CLOTURE` | `ANNULE`
+ *    - `CLOTURE` -> `[]` (Terminal immutable state without explicit administrative reopen)
+ *    - `ANNULE` -> `[]` (Terminal immutable state)
+ * 2. **Alias Normalization (`COR-ATELIER-P0`):**
+ *    - Legacy and domain-specific waiting states (`EN_ATTENTE_ATELIER`, `ON_HOLD`, `SUSPENDU`) normalize to `EN_ATTENTE_PDR` at the FSM layer while UI components (`BonsTravailTab`) distinguish `ATTENTE ATELIER` vs `ATTENTE PDR` via linked `WorkshopOrder` records.
+ * 3. **Anti-False-Closure Guard:**
+ *    - Transitioning to `CLOTURE` is strictly rejected if `hasOpenWorkshopOrder === true` (active `Bon d'Atelier` or external subcontracting order not yet received/mounted) or if work performed (`action_realisee`) is empty.
+ */
+
+/**
+ * Canonical status values for a Corrective Work Order (`DI` / `BT`).
+ */
 export type WorkOrderStatus =
   | 'DEMANDE'
   | 'BT_PLANIFIE'
@@ -6,6 +29,14 @@ export type WorkOrderStatus =
   | 'CLOTURE'
   | 'ANNULE';
 
+/**
+ * Structured validation outcome returned by {@link WorkOrderStateMachine.validateTransition}.
+ *
+ * @property valid - `true` when both the state graph edge and all target domain invariants pass.
+ * @property fromStatus - Normalized origin state of the intervention.
+ * @property toStatus - Normalized target state requested by the caller.
+ * @property reason - Human-readable French explanation when `valid === false`.
+ */
 export interface TransitionValidationResult {
   valid: boolean;
   fromStatus: WorkOrderStatus;
@@ -13,6 +44,10 @@ export interface TransitionValidationResult {
   reason?: string;
 }
 
+/**
+ * Lookup dictionary mapping legacy, French/English, and workshop waiting aliases
+ * to their canonical {@link WorkOrderStatus}.
+ */
 const STATUS_ALIASES: Record<string, WorkOrderStatus> = {
   DEMANDE: 'DEMANDE',
   DEMANDE_CREEE: 'DEMANDE',
@@ -48,6 +83,9 @@ const STATUS_ALIASES: Record<string, WorkOrderStatus> = {
   CANCELLED: 'ANNULE',
 };
 
+/**
+ * Adjacency list defining legal directed transitions between canonical work order states.
+ */
 const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, ReadonlyArray<WorkOrderStatus>> = {
   DEMANDE: ['BT_PLANIFIE', 'EN_COURS', 'ANNULE'],
   BT_PLANIFIE: ['EN_COURS', 'EN_ATTENTE_PDR', 'CLOTURE', 'ANNULE'],
@@ -57,9 +95,21 @@ const ALLOWED_TRANSITIONS: Record<WorkOrderStatus, ReadonlyArray<WorkOrderStatus
   ANNULE: [],  // Terminal state
 };
 
+/**
+ * Stateless domain service enforcing Corrective Maintenance Work Order (`DI`/`BT`)
+ * lifecycle transitions and business invariants.
+ */
 export class WorkOrderStateMachine {
   /**
-   * Normalizes any raw status string into a canonical WorkOrderStatus.
+   * Normalizes any raw or legacy status string into a canonical {@link WorkOrderStatus}.
+   * Unrecognized, null, or empty inputs default safely to `'DEMANDE'`.
+   *
+   * @param rawStatus - Raw status string from UI, Excel import, or persisted record (e.g., `'EN_ATTENTE_ATELIER'`, `'CLÔTURÉ'`).
+   * @returns Canonical {@link WorkOrderStatus}.
+   *
+   * @example
+   * WorkOrderStateMachine.normalizeStatus('EN_ATTENTE_ATELIER'); // => 'EN_ATTENTE_PDR'
+   * WorkOrderStateMachine.normalizeStatus('CLÔTURÉ');            // => 'CLOTURE'
    */
   static normalizeStatus(rawStatus?: string | null): WorkOrderStatus {
     if (!rawStatus) return 'DEMANDE';
@@ -68,7 +118,14 @@ export class WorkOrderStateMachine {
   }
 
   /**
-   * Checks if a transition between two states is permitted by the FSM graph.
+   * Checks whether a transition between two status strings is permitted by the FSM graph.
+   * Same-state updates (e.g., editing fields on an `EN_COURS` work order) are allowed
+   * for non-terminal states (`DEMANDE`, `BT_PLANIFIE`, `EN_COURS`, `EN_ATTENTE_PDR`)
+   * and rejected for terminal states (`CLOTURE`, `ANNULE`).
+   *
+   * @param fromRaw - Current status string of the work order.
+   * @param toRaw - Requested target status string.
+   * @returns `true` if the directed edge is valid in {@link ALLOWED_TRANSITIONS} or is a valid non-terminal self-update.
    */
   static canTransition(fromRaw?: string | null, toRaw?: string | null): boolean {
     const fromStatus = this.normalizeStatus(fromRaw);
@@ -84,7 +141,19 @@ export class WorkOrderStateMachine {
   }
 
   /**
-   * Validates both the state transition and required domain invariants for the target state.
+   * Validates both the state transition graph edge and required domain invariants for the target state.
+   *
+   * ### Enforced Domain Invariants:
+   * - **Terminal Immutability:** Rejects any transition out of `CLOTURE` or `ANNULE`.
+   * - **Emergency Direct Closure:** Permits `DEMANDE -> CLOTURE` only when `num_bt` is already assigned on the intervention or supplied in `payload.num_bt`.
+   * - **Machine Identification Guard:** Transitions into `BT_PLANIFIE` or `EN_COURS` require a non-empty `code_machine` (from `payload` or `intervention`).
+   * - **Closure Completeness Guard:** Transitions into `CLOTURE` require a non-empty work description (`action_realisee`, `travail_a_faire`, or `anomalie`).
+   * - **Workshop / External Order Guard (`COR-ATELIER-P0`):** Transitions into `CLOTURE` are blocked when `hasOpenWorkshopOrder === true` on either `payload` or `intervention`.
+   *
+   * @param intervention - Existing persisted intervention/work order object (`ICorrectiveIntervention`).
+   * @param targetRawStatus - Desired target status string.
+   * @param payload - Optional partial update payload being applied during the transition.
+   * @returns {@link TransitionValidationResult} indicating whether the transition is legal and providing `reason` on failure.
    */
   static validateTransition(
     intervention: Record<string, any>,

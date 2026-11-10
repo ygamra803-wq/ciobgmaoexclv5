@@ -72,6 +72,7 @@ export const ALLOWED_ENTITIES = [
   'sortieDemands',
   'meterReadings',
   'replenishmentOrders',
+  'workshopOrders',
   'auditEvents',
 ] as const;
 
@@ -861,19 +862,13 @@ async function startServer() {
         return null;
       });
 
-    // Wait briefly for Vite middleware to be ready before accepting pre-warm requests
-    await Promise.race([
-      viteReadyPromise,
-      new Promise((resolve) => setTimeout(resolve, 4000)),
-    ]);
-
     app.use(async (req, res, next) => {
       try {
         const vite = viteInstance || (await viteReadyPromise);
         if (vite && vite.middlewares) {
           vite.middlewares(req, res, next);
         } else {
-          next(new Error('Vite middleware is unavailable'));
+          res.status(503).send('Server initializing, please retry...');
         }
       } catch (err) {
         next(err);
@@ -888,8 +883,26 @@ async function startServer() {
     console.log('[Server] Production static serving enabled from dist/');
   }
 
-  const listenWithRetry = (port: number, retriesLeft = 5) => {
+  let activeHttpServer: any = null;
+  const shutdown = () => {
+    try {
+      if (activeHttpServer) {
+        activeHttpServer.close(() => {
+          process.exit(0);
+        });
+      }
+      setTimeout(() => process.exit(0), 500).unref();
+    } catch {
+      process.exit(0);
+    }
+  };
+
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
+
+  const listenWithRetry = (port: number, retriesLeft = 25) => {
     const httpServer = app.listen(port, '0.0.0.0', () => {
+      activeHttpServer = httpServer;
       console.log(`🚀 GMAO Enterprise Server running on http://localhost:${port}`);
     });
 
@@ -908,20 +921,6 @@ async function startServer() {
       }
       console.error('[Server] HTTP server error:', err);
     });
-
-    const shutdown = () => {
-      try {
-        httpServer.close(() => {
-          process.exit(0);
-        });
-        setTimeout(() => process.exit(0), 500).unref();
-      } catch {
-        process.exit(0);
-      }
-    };
-
-    process.once('SIGTERM', shutdown);
-    process.once('SIGINT', shutdown);
   };
 
   listenWithRetry(Number(PORT));

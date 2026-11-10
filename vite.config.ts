@@ -180,6 +180,7 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // 1. Seed & Reference Data Chunks (Pure leaf data modules)
           if (id.includes('src/data/corrective')) {
             return 'data-corrective';
           }
@@ -204,29 +205,66 @@ export default defineConfig(({ command }) => ({
           if (id.includes('src/data/movements')) {
             return 'data-movements';
           }
+          if (id.includes('src/data/')) {
+            return 'data-common';
+          }
+
+          // 2. Third-Party Vendor Chunks (Heavy Spreadsheet, Formula, PDF, Charts, UI & Framework)
           if (id.includes('node_modules')) {
             if (id.includes('exceljs')) {
               return 'vendor-exceljs';
             }
-            if (id.includes('hyperformula')) {
+            if (id.includes('hyperformula') || id.includes('chevrotain')) {
               return 'vendor-hyperformula';
-            }
-            if (id.includes('recharts') || id.includes('d3-')) {
-              return 'vendor-recharts';
             }
             if (id.includes('xlsx')) {
               return 'vendor-xlsx';
             }
+            if (id.includes('jspdf') || id.includes('html2canvas')) {
+              return 'vendor-jspdf';
+            }
+            if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+              return 'vendor-recharts';
+            }
             if (id.includes('lucide-react')) {
               return 'vendor-lucide';
             }
-            if (id.includes('motion')) {
+            if (id.includes('motion') || id.includes('framer-motion')) {
               return 'vendor-motion';
             }
             if (id.includes('zod')) {
               return 'vendor-zod';
             }
+            if (
+              id.includes('/react/') ||
+              id.includes('/react-dom/') ||
+              id.includes('/react-router') ||
+              id.includes('/scheduler/') ||
+              id.includes('/zustand/')
+            ) {
+              return 'vendor-react';
+            }
             return 'vendor-core';
+          }
+
+          // 3. Static Translations / Locales Leaf Chunk (~260 kB)
+          if (id.includes('src/i18n/translations/') || id.includes('src/i18n/locales/')) {
+            return 'app-i18n';
+          }
+
+          // 4. Self-Contained Non-UI GMAO Engine Layer (Store, Application, Domain, Services, Core, Utils)
+          if (
+            id.includes('src/store/') ||
+            id.includes('src/application/') ||
+            id.includes('src/domain/') ||
+            id.includes('src/infrastructure/') ||
+            id.includes('src/services/') ||
+            id.includes('src/core/') ||
+            id.includes('src/utils/') ||
+            id.includes('src/config/') ||
+            id.includes('src/types/')
+          ) {
+            return 'app-engine';
           }
         }
       },

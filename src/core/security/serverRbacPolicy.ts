@@ -43,6 +43,7 @@ export const FIELD_WRITABLE_ENTITIES = new Set<string>([
   'preventiveExecutions',
   'meterReadings',
   'sortieDemands',
+  'workshopOrders',
   'machines',
   'machineElementsLedger',
   'auditEvents',
