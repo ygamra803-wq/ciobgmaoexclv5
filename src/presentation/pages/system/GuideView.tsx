@@ -94,13 +94,15 @@ const MODULE_ROADMAP: RoadmapGroupMeta[] = [
   {
     groupId: '04-corrective-di-bt',
     number: '04',
-    title: 'Maintenance Corrective (DI / BT & Clôture)',
+    title: 'Maintenance Corrective (DI / BT, Atelier Mécanique & Clôture)',
     description:
-      'Cycle complet Demande d’Intervention (DI) ➔ Bon de Travail (BT) ➔ Clôture, machine à états finis, symptômes/causes/remèdes et historique pannes.',
+      'Cycle complet Demande d’Intervention (DI) ➔ Bon de Travail (BT) ➔ Intervention Live ➔ Atelier Fabrication Mécanique (BR / Rectification) ➔ Clôture, machine à états finis et Pareto.',
     icon: Wrench,
     tabs: [
       { tabId: 'corrective_di', label: 'Demandes d’Intervention (DI)' },
       { tabId: 'corrective_bt', label: 'Bons de Travail (BT)' },
+      { tabId: 'corrective_live', label: 'Intervention Live (Chrono)' },
+      { tabId: 'corrective_atelier', label: 'Atelier Mécanique (BR / RECT)' },
       { tabId: 'corrective_cloture', label: 'Clôture & Retour d’Expérience' },
       { tabId: 'corrective_referentiel', label: 'Catalogue Symptômes / Causes' },
     ],
@@ -175,7 +177,10 @@ const TAB_LABELS: Record<string, string> = {
   corrective: 'Maintenance Corrective',
   corrective_di: 'Demandes (DI)',
   corrective_bt: 'Bons de Travail (BT)',
+  corrective_live: 'Intervention Live (Chrono)',
+  corrective_atelier: 'Atelier Mécanique (BR / RECT)',
   corrective_cloture: 'Clôture BT',
+  corrective_analyse: 'Analyse Corrective & Pareto',
   corrective_referentiel: 'Catalogue Données Correctives',
   entrepot: 'Entrepôt Organes & Pièces',
   validation_center: 'Centre de Validation (Maker-Checker)',

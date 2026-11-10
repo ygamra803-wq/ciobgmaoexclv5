@@ -798,6 +798,24 @@ export default function BonsTravailTab({
             );
           }
           if (isWaitingPdr) {
+            const linkedInternal = getLinkedWorkshopOrdersForIntervention(bt, workshopOrders);
+            const hasInternalAtelier =
+              linkedInternal.length > 0 || Boolean(bt.code_bon_atelier || bt.id_bon_atelier);
+            const linkedExt = SortieExterneService.getLinkedOrdersForBt(bt, sortiesExterne);
+            const hasExtAtelier =
+              linkedExt.length > 0 || Boolean(bt.code_sortie_atelier || bt.id_sortie_atelier);
+
+            if (hasInternalAtelier || hasExtAtelier) {
+              return (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-indigo-100 text-indigo-900 border border-indigo-300 font-mono shadow-2xs"
+                  title="BT en attente de réalisation / rectification à l'atelier mécanique ou retour externe"
+                >
+                  <Wrench className="w-3 h-3 text-indigo-700 shrink-0" />
+                  <span>ATTENTE ATELIER</span>
+                </span>
+              );
+            }
             return (
               <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-amber-100 text-amber-900 border border-amber-300 font-mono shadow-2xs">
                 ATTENTE PDR

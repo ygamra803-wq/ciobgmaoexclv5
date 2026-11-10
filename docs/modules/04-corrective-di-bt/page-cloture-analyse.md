@@ -10,6 +10,7 @@ subtitle: Archive immuable des BT clôturés, valorisation financière, diagramm
 summary: Guide complet pour la consultation des interventions passées, l'analyse Pareto des défaillances et machines critiques, le calcul de la disponibilité opérationnelle et l'exportation des PV sous Excel.
 relatedTabs:
   - corrective_bt
+  - corrective_atelier
   - dashboard
   - finance
   - machines
@@ -47,7 +48,8 @@ L'onglet `#corrective_cloture` regroupe l'historique exhaustif des BT finalisés
      - Symptôme d'origine et diagnostic constaté.
      - Actions techniques exécutées.
      - Liste détaillée des pièces de rechange avec référence, quantité et coût unitaire PUMP (`cout_pdr`).
-     - Détail du **Bon d'Atelier / Sous-Traitance Externe** associé (`code_sortie_atelier`, nature d'usinage/bobinage, prestataire et `cout_atelier`).
+     - Détail des **Bons d'Atelier Fabrication Mécanique internes (`BR` / `RECT`)** associés (`code_bon`, type Réalisation/Rectification, quantité, description des travaux et statut d'avancement), avec possibilité d'émettre un nouveau bon (`+ Demande Réalisation / Rectification`) si le BT est encore actif ou d'ouvrir directement l'onglet de suivi (`Ouvrir Suivi Atelier` → `#corrective_atelier`).
+     - Détail du **Bon de Sortie Externe / Sous-Traitance** associé (`code_sortie_atelier`, nature d'usinage/bobinage externe, prestataire et `cout_atelier`).
      - Coût global consolidé de l'intervention : $\text{Coût Total} = \text{Coût PDR} + \text{Coût Atelier / Externe}$ (+ valorisation MO).
 3. **Export Excel et Impression :**
    - Bouton **« Exporter vers Excel »** : Génération immédiate d'un classeur structuré pour audit et reporting hiérarchique.

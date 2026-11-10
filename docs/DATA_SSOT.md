@@ -46,6 +46,7 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **correctivePanneCategories**| `categoryKey` (Map)| — | `gmao_corrective_panne_categories_v4` | `src/data/corrective/seedPanneByCategory.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **correctiveTravauxAFaire** | `index` (String) | — | `gmao_corrective_travaux_v4` | `src/data/corrective/seedTravailAFaire.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **correctiveIntervenants** | `id` (`nom`) | — | `gmao_corrective_intervenants_v4` | `src/data/corrective/seedIntervenants.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
+| **workshopOrders** | `id` (`code_bon`) | → `machines.id_machine_registered` (`id_machine`), `correctiveInterventions.id` (`id_bt`, `id_di` optionnels) | `gmao_workshop_orders_v1` | `[]` | `DataGateway.saveWorkshopOrders` / `useGmaoStore` |
 | **correctiveActiveLive** | `id` | → `correctiveInterventions.id` | `gmao_corrective_active_live` | `null` | `DataGateway.saveCollection` / `useGmaoStore` |
 | **users (Personnel Master)** | `id` | → `zones.id_zone` | `gmao_personnel_users_v2` | `src/data/users/seedUsers.json` | `DataGateway.savePersonnel` / `useGmaoStore` |
 | **technicians (Vue dérivée)**| `id_technician` | → `users.id`, `zones.id_zone` | `gmao_technicians_v2` | `src/data/users/seedTechnicians.json` | Dérivé de `users` (`useGmaoStore`) |

@@ -10,6 +10,7 @@ subtitle: Planification des ordres de travail, chronomètre d'atelier, gestion d
 summary: Guide d'exécution terrain pour les techniciens et superviseurs de maintenance. Décrit le chronométrage Live avec neutralisation automatique de la pause déjeuner, la saisie des PDR et la réconciliation Maker-Checker.
 relatedTabs:
   - corrective_di
+  - corrective_atelier
   - corrective_cloture
   - validation_center
   - stock
@@ -45,10 +46,11 @@ Tout BT traverse les phases suivantes conformément à la machine à états :
 [ Planifié ] ➔ [ En Cours ] ➔ [ En Attente PDR (si blocage) ] ➔ [ Réconciliation ] ➔ [ Clôturé ]
 ```
 
-### Statuts et Significations
+### Statuts et Significations (Distinction Sémantique `ATTENTE ATELIER` vs `ATTENTE PDR`)
 - **BT Planifié :** Créé et attribué à un technicien, en attente de prise en charge physique.
 - **En Cours :** Le technicien est activement sur la machine ou le chronomètre Live a été déclenché.
-- **En Attente PDR :** L'intervention est suspendue car une pièce nécessaire n'est pas disponible en stock magasin.
+- **Attente Atelier (`ATTENTE ATELIER`) :** Le `BT` est mis en attente car un **Bon de Réalisation (`BR-YYYY-NNN`)**, un **Bon de Rectification (`RECT-YYYY-NNN`)** ou une **Sortie Externe** est en cours d'exécution à l'Atelier Fabrication Mécanique ou chez un sous-traitant.
+- **Attente PDR (`ATTENTE PDR`) :** L'intervention est suspendue car une pièce de rechange magasin est en rupture de stock.
 - **En Attente de Validation (Maker-Checker) :** L'intervention est physiquement terminée par le technicien ; les pièces et heures déclarées doivent être visées par le superviseur.
 - **Clôturé :** Intervention finalisée, pièces déduites, coût calculé, machine remise à disposition de la production.
 
@@ -73,34 +75,36 @@ L'onglet Live permet un suivi dynamique des équipes sur le terrain :
 
 ---
 
-## 4. Déclaration Terrain : Pièces Consommées & Bons d'Atelier / Rectification
+## 4. Déclaration Terrain : Pièces Consommées, Bon Atelier Mécanique (`BR / RECT`) & Sortie Externe
 
-Lors de la saisie du rapport d'intervention (en mode **Formulaire Classique** ou **Assistant Wizard 3 Étapes**) :
+Lors de la saisie du rapport d'intervention dans `#corrective_live` :
 1. **Nature de l'Intervention (Contrôle de cohérence `VAL-4`) :**
    - Choisissez la nature réelle du dépannage : *Remplacement PDR (`+PDR`)*, *Réparation*, *Réglage*, *Nettoyage*, *Diagnostic* ou **`Atelier / Rectif.`** (*Bon d’Atelier / Rectification / Externe*).
-2. **Cas d'un Usinage / Rectification Atelier ou Bobinage Externe (`Atelier / Rectif.`) :**
-   - Lorsque la pièce ou l'organe défaillant doit être rectifié à l'atelier mécanique interne (**`BON-ATEL-xxx`** : *Usinage, Tournage d'arbre, Soudure/Rechargement, Confection sur mesure*) ou envoyé en sous-traitance externe (**`SORT-EXT-xxx`** : *Bobinage moteur, Réparation variateur*), un panneau dédié **« Bon d’Atelier / Rectification & Sous-Traitance lié au BT »** s'ouvre directement dans l'écran Live.
-   - Vous pouvez créer et lier le bon en 1 clic sans quitter l'intervention, et cocher **« Suspendre automatiquement le BT en EN_ATTENTE_PDR après création du bon »**.
-   - **Règle d'Or Anti-Clôture Prématurée :** Tant que le Bon d'Atelier ou Externe lié n'est pas terminé et réceptionné (**`Retourné OK`** ou **`Monté`**), le système **empêche la clôture définitive du BT** afin que les délais d'atelier et les coûts d'usinage/bobinage ne soient jamais oubliés.
-3. **Ajout des Pièces de Rechange (PDR) :**
-   - Sélectionnez l'article dans le catalogue du magasin (avec mise en avant automatique `★ BOM` des pièces recommandées pour cette machine).
-   - Indiquez la quantité physiquement montée et ajoutez une ou plusieurs références.
-4. **Soumission ou Clôture :**
-   - **Technicien :** Cliquez sur **« Soumettre pour Validation Responsable »**. Le BT passe au statut `PENDING_VALIDATION` sans débiter le stock physique immédiatement.
-   - **Administrateur / Responsable :** Si aucun Bon d'Atelier n'est encore ouvert, l'intervention est validée et clôturée directement avec calcul automatique du coût global ($\text{Coût Total} = \text{Coût PDR} + \text{Coût Atelier}$).
+2. **Émission d'un Bon Atelier Mécanique Interne (`BR / RECT`) depuis l'Intervention Live :**
+   - Cliquez sur le bouton ambre **« Bon atelier mécanique (BR / RECT) »**.
+   - Sélectionnez la nature de la demande :
+     - **`REALISATION`** : Confection / usinage d'une pièce mécanique neuve (`BR-YYYY-NNN`).
+     - **`RECTIFICATION`** : Tournage, fraisage, alésage ou rectification d'une pièce existante (`RECT-YYYY-NNN`).
+   - Saisissez la **quantité**, la **description technique des travaux** (obligatoire) et l'observation éventuelle, puis cliquez sur **« Émettre Bon Atelier & Mettre BT en Attente »**.
+   - Le bon est immédiatement créé vers `Atelier Fabrication Mécanique` (sans aucun impact sur le stock PDR magasin), un Toast confirme son numéro, et le `BT` passe en **`ATTENTE ATELIER`** sans être clôturé.
+   - Dès que l'atelier marque le bon **`PRET_LIVRAISON`**, un bouton **« Réceptionner Montage »** apparaît directement dans la carte du `BT` Live pour passer le bon à **`RECEPTIONNE_MONTAGE`** et débloquer la clôture du `BT`.
+3. **Cas d'une Sous-Traitance Externe (`+ Sortie Externe / Bobinage`) :**
+   - Pour un envoi externe (ex. bobinage moteur chez un prestataire), cliquez sur **« + Sortie Externe / Bobinage »** (`SORT-EXT-xxx`).
+4. **Règle d'Or Anti-Clôture Prématurée :**
+   - Tant qu'un Bon Atelier Mécanique (`EMIS`, `EN_COURS_FABRICATION`, `PRET_LIVRAISON`) ou un Bon Externe lié est actif, le système **verrouille la clôture définitive du BT**.
+5. **Ajout des Pièces de Rechange (PDR) & Soumission :**
+   - Sélectionnez les articles PDR consommés (avec mise en avant `★ BOM`).
+   - **Technicien :** Cliquez sur **« Soumettre pour Validation Responsable »** (`PENDING_VALIDATION` sans déstockage immédiat).
+   - **Administrateur / Responsable :** Clôture directe uniquement si aucun bon d'atelier n'est encore ouvert.
 
 ---
 
-## 5. Validation Superviseur : Protocole Maker-Checker & Réception Atelier
+## 5. Validation Superviseur : Protocole Maker-Checker & Contrôle Atelier
 
 Pour les chefs d'équipe et responsables maintenance dans l'onglet **Bons de Travail (`#corrective_bt`)** :
 
-1. La colonne **`PDR & Atelier (Col L)`** affiche à la fois les pièces PDR et le badge du **Bon d'Atelier / Externe** lié (ex. `BON-ATEL-001 • 450 DH`), en orange s'il est encore en cours ou en indigo s'il est réceptionné.
-2. Cliquez sur **« Contrôler & Valider »** sur un BT en attente pour ouvrir la modale de réconciliation (`MakerCheckerReviewModal`).
-3. Le superviseur examine :
-   - Les alertes automatiques de concordance **V4** (stock disponible, doublon de bon magasin).
-   - Les pièces de rechange proposées et leurs quantités.
-   - Les **Bons d'Atelier / Externe associés** : si un bon d'atelier vient d'être terminé, le superviseur peut cliquer directement sur **« Réceptionner OK »** dans la modale pour valider son retour et débloquer l'approbation du BT.
-4. Choix de décision :
-   - **Approuver & Clôturer :** Les pièces sont définitivement déduites du stock magasin (`Sortie`), le coût d'atelier (`cout_atelier`) est consolidé avec le coût PDR (`cout_pdr`) dans `cout_total`, et un enregistrement immuable est consigné dans le journal d'audit.
-   - **Demander Clarification / Rejeter :** Le BT est renvoyé au technicien avec une note explicative sans aucun impact sur le stock.
+1. **Colonne `PDR & Atelier (Col L)` :** Affiche les pièces PDR ainsi que le badge **`Atelier: BR-2026-001 (EMIS)`** ou **`Atelier: RECT-2026-001 (EN_COURS_FABRICATION)`** en ambre tant que le bon est actif, et en indigo lorsqu'il est **`RECEPTIONNE_MONTAGE`**.
+2. **Colonne `Statut & Validation` :** Distingue visuellement **`ATTENTE ATELIER`** (badge indigo avec icône clé) de **`ATTENTE PDR`** (badge ambre).
+3. **Modale de Réconciliation (`Valider`) :**
+   - Si un Bon d'Atelier Mécanique (`BR / RECT`) ou Externe lié au `BT` est encore actif, l'approbation (`APPROVED`) est bloquée avec un message explicite indiquant le code du bon en cours.
+   - Une fois le bon réceptionné et monté (`RECEPTIONNE_MONTAGE`), l'approbation déduit les éventuelles PDR consommées et archive l'événement dans `AUDIT_EVENTS`.

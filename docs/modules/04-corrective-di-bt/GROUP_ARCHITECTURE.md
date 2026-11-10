@@ -9,6 +9,8 @@ summary: Spécification complète du cycle curatif, machine à états finis Work
 relatedTabs:
   - corrective_di
   - corrective_bt
+  - corrective_live
+  - corrective_atelier
   - corrective_cloture
   - corrective_referentiel
 ---
@@ -79,19 +81,28 @@ Le fichier `src/domain/corrective/services/WorkOrderStateMachine.ts` gouverne to
 
 ---
 
-## 3. Passerelle Atelier Mécanique & Sous-Traitance (`CORRECTIVE-ATELIER-P0`)
+## 3. Passerelle Atelier Fabrication Mécanique (`COR-ATELIER-P0`) & Sous-Traitance Externe
 
-Pour refléter fidèlement la réalité terrain d'une usine, le service `src/application/services/SortieExterneService.ts` et le store `useGmaoStore.ts` orchestrent deux flux complémentaires liés aux Bons de Travail (`id_corrective`) :
+Pour refléter fidèlement les **4 issues possibles d'une panne industrielle** (A: Remplacement PDR direct, B: Sous-traitance externe, C: Atelier Fabrication Mécanique interne, D: Attente achat PDR), l'architecture sépare strictement l'usinage interne de la sous-traitance externe et des mouvements de stock PDR :
 
-1. **`ATELIER_MECANIQUE` (`BON-ATEL-xxx` / Bon `BA-YYYY-xxx`) :**
-   - Usinage, rectification, tournage d'arbre/axe, soudure/rechargement, confection de pièce sur mesure ou alésage réalisé à l'atelier mécanique.
-   - Statut initial : `'En cours atelier'`.
-2. **`SOUS_TRAITANCE_EXTERNE` (`SORT-EXT-xxx` / Bon `BS-YYYY-xxx`) :**
-   - Bobinage moteur électrique, réparation de variateur/carte électronique ou révision chez un prestataire externe.
-   - Statut initial : `'En réparation externe'`.
-3. **Synchronisation Bidirectionnelle & Verrouillage de Clôture :**
-   - Dès qu'un bon est créé ou mis à jour avec `id_corrective = bt.num_bt`, `syncCorrectiveInterventionsWithSortieRecord` met à jour sur le `BT` parent : `id_sortie_atelier`, `code_sortie_atelier`, `cout_atelier`, `nature_travail_atelier`, `prestataire_atelier` et `cout_total`.
-   - Tant que `SortieExterneService.isWorkshopOrderOpen(etat)` est vrai, toute tentative de clôture directe (`handleClotureIntervention`) ou d'approbation Maker-Checker (`handleReviewDecision('APPROVED')`) est bloquée jusqu'à ce que le bon passe à `'Retourné OK'` ou `'Monté'`.
+### 3.1 Bon de Réalisation / Rectification Interne (`IWorkshopOrder` — `STORAGE_KEYS.WORKSHOP_ORDERS`)
+- **Service & Persistance :** `src/domain/corrective/workshopOrderService.ts`, persisté dans `gmao_workshop_orders_v1` via `DataGateway.saveWorkshopOrders` et `useGmaoStore` (`workshopOrders`, `handleCreateWorkshopOrder`, `handleTransitionWorkshopOrderStatus`).
+- **Émetteur & Destinataire :** Émis par `Section Maintenance (SM)` vers `Atelier Fabrication Mécanique`.
+- **Types (`type_demande`) :**
+  - `REALISATION` (`BR-YYYY-NNN`) : Confection / usinage d'une pièce mécanique neuve.
+  - `RECTIFICATION` (`RECT-YYYY-NNN`) : Réparation, tournage, fraisage, alésage ou ajustage d'une pièce existante.
+- **Automate à États Finis (`validateWorkshopOrderTransition`) :**
+  - `EMIS ➔ EN_COURS_FABRICATION | ANNULE`
+  - `EN_COURS_FABRICATION ➔ PRET_LIVRAISON | ANNULE`
+  - `PRET_LIVRAISON ➔ RECEPTIONNE_MONTAGE | ANNULE`
+  - `RECEPTIONNE_MONTAGE` & `ANNULE` : États terminaux.
+- **Séparation Stricte & Invariants :**
+  - **Zéro impact Stock PDR :** Ne modifie jamais `rawStock` ni `IncrementalStockIndex`.
+  - **Anti-Clôture Fictive du BT :** Créer un bon depuis un `BT` ouvert place le `BT` en `EN_ATTENTE_PDR` (affiché sémantiquement **`ATTENTE ATELIER`** dans `BonsTravailTab.tsx`) avec `action_fermee = 'NON'`. Tant qu'un bon lié est actif (`EMIS`, `EN_COURS_FABRICATION`, `PRET_LIVRAISON`), `isWorkshopOrderActive` bloque `handleClotureIntervention` et l'approbation `Maker-Checker`. Même à l'état `RECEPTIONNE_MONTAGE`, le `BT` n'est pas clôturé automatiquement : il est déverrouillé pour suivre sa clôture corrective normale.
+
+### 3.2 Sous-Traitance Externe (`SortieExterneService` — `STORAGE_KEYS.SORTIE_EXTERNE`)
+- **Périmètre :** Bobinage moteur électrique, réparation de variateur/carte électronique ou révision chez un prestataire externe (`SORT-EXT-xxx` / `BON-ATEL-xxx`).
+- **Synchronisation Bidirectionnelle :** Met à jour `id_sortie_atelier`, `code_sortie_atelier`, `cout_atelier` et `cout_total` sur le `BT` parent et bloque la clôture tant que `SortieExterneService.isWorkshopOrderOpen(etat)` est vrai.
 
 ---
 
@@ -138,11 +149,11 @@ Le module `AnalyseCorrectiveTab.tsx` calcule la distribution de Pareto :
 
 ## 6. Matrice des Droits d'Accès (RBAC)
 
-| Rôle Utilisateur | Créer une DI (`#corrective_di`) | Créer/Planifier un BT (`#corrective_bt`) | Lancer le Live Timer (`#corrective_live`) | Valider Maker-Checker | Clôturer & Analyser (`#corrective_cloture`) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **OPERATEUR** | ✅ | ❌ | ❌ | ❌ | ❌ (Lecture seule DI) |
-| **TECHNICIEN** | ✅ | ✅ (Auto-assignation) | ✅ | ❌ (Soumission uniquement) | ✅ (Saisie rapport) |
-| **SUPERVISEUR** | ✅ | ✅ | ✅ | ✅ (Approbation finale) | ✅ (Export & Clôture) |
-| **RESPONSABLE_MAINT**| ✅ | ✅ | ✅ | ✅ | ✅ (Totalité des droits) |
-| **ADMIN** | ✅ | ✅ | ✅ | ✅ | ✅ (Configuration & Override) |
-| **MAGASINIER** | ❌ | ❌ (Consultation PDR) | ❌ | ❌ | ❌ (Consultation sorties) |
+| Rôle Utilisateur | Créer une DI (`#corrective_di`) | Créer/Planifier un BT (`#corrective_bt`) | Lancer le Live Timer (`#corrective_live`) | Atelier Mécanique (`#corrective_atelier`) | Valider Maker-Checker | Clôturer & Analyser (`#corrective_cloture`) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **OPERATEUR** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ (Lecture seule DI) |
+| **TECHNICIEN** | ✅ | ✅ (Auto-assignation) | ✅ | ✅ (Émission & Suivi BR/RECT) | ❌ (Soumission uniquement) | ✅ (Saisie rapport) |
+| **SUPERVISEUR** | ✅ | ✅ | ✅ | ✅ (Gestion complète) | ✅ (Approbation finale) | ✅ (Export & Clôture) |
+| **RESPONSABLE_MAINT**| ✅ | ✅ | ✅ | ✅ (Gestion complète) | ✅ | ✅ (Totalité des droits) |
+| **ADMIN** | ✅ | ✅ | ✅ | ✅ (Gestion complète) | ✅ | ✅ (Configuration & Override) |
+| **VIEWER / MAGASINIER**| ❌ | ❌ (Consultation) | ❌ | 👁️ (Lecture seule) | ❌ | ❌ (Consultation) |
