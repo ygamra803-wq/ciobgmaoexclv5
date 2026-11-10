@@ -30,6 +30,12 @@ import {
 } from '../../../core/security/technicianScope';
 import { INTERVENTION_NATURE_OPTIONS } from '../../components/common/ValidationStatusBadge';
 import { SortieExterneService } from '../../../application/services/SortieExterneService';
+import {
+  getLinkedWorkshopOrdersForIntervention,
+  isWorkshopOrderActive,
+  WORKSHOP_STATUS_LABELS,
+  type WorkshopOrderType,
+} from '../../../domain/corrective/workshopOrderService';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -61,6 +67,11 @@ export default function InterventionLiveTab({
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const handleAddSortieExterne = useGmaoStore((s) => s.handleAddSortieExterne);
   const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
+  const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
+  const handleCreateWorkshopOrder = useGmaoStore((s) => s.handleCreateWorkshopOrder);
+  const handleTransitionWorkshopOrderStatus = useGmaoStore(
+    (s) => s.handleTransitionWorkshopOrderStatus
+  );
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
 
@@ -234,9 +245,84 @@ export default function InterventionLiveTab({
     return SortieExterneService.getLinkedOrdersForBt(activeIntervention, sortiesExterne);
   }, [activeIntervention, sortiesExterne]);
 
+  const linkedInternalWorkshopOrders = useMemo(() => {
+    if (!activeIntervention) return [];
+    return getLinkedWorkshopOrdersForIntervention(activeIntervention, workshopOrders);
+  }, [activeIntervention, workshopOrders]);
+
   const openWorkshopOrders = useMemo(() => {
-    return linkedWorkshopOrders.filter((o) => SortieExterneService.isWorkshopOrderOpen(o.etat));
-  }, [linkedWorkshopOrders]);
+    const extOpen = linkedWorkshopOrders.filter((o) =>
+      SortieExterneService.isWorkshopOrderOpen(o.etat)
+    );
+    const intOpen = linkedInternalWorkshopOrders.filter((o) => isWorkshopOrderActive(o.statut));
+    return [...intOpen, ...extOpen];
+  }, [linkedWorkshopOrders, linkedInternalWorkshopOrders]);
+
+  const [showBonAtelierMecaniqueForm, setShowBonAtelierMecaniqueForm] = useState(false);
+  const [bonAtelierForm, setBonAtelierForm] = useState<{
+    type_demande: WorkshopOrderType;
+    quantite: number;
+    description_travaux: string;
+    observation: string;
+  }>({
+    type_demande: 'REALISATION',
+    quantite: 1,
+    description_travaux: '',
+    observation: '',
+  });
+
+  const handleEmitBonAtelierMecanique = () => {
+    if (!activeIntervention) return;
+    const desc = String(bonAtelierForm.description_travaux || '').trim();
+    if (!desc) {
+      showToast?.(
+        'Veuillez saisir la description des travaux pour l’Atelier Fabrication Mécanique.',
+        'warning'
+      );
+      return;
+    }
+    const created = handleCreateWorkshopOrder({
+      type_demande: bonAtelierForm.type_demande,
+      id_machine: String(activeIntervention.code_machine || activeIntervention.machine || '').trim(),
+      id_bt: String(activeIntervention.num_bt || activeIntervention.id || '').trim(),
+      id_di: activeIntervention.id_di ? String(activeIntervention.id_di) : null,
+      id_composant: formState.id_composant || activeIntervention.id_composant || null,
+      id_part: formState.id_part || activeIntervention.id_part || null,
+      quantite: Math.max(1, Number(bonAtelierForm.quantite) || 1),
+      description_travaux: desc,
+      observation: String(bonAtelierForm.observation || '').trim() || undefined,
+      emetteur_section: 'SM',
+      emetteur_user_id: user?.id || user?.code || 'SM',
+      emetteur_name: user?.name || activeIntervention.intervenant || 'Section Maintenance',
+      destinataire: 'Atelier Fabrication Mécanique',
+    });
+
+    if (created) {
+      setFormState((prev: any) => ({
+        ...prev,
+        intervention_nature: 'ATELIER',
+        action_realisee:
+          prev.action_realisee ||
+          `Bon Atelier ${created.code_bon} (${created.type_demande}) : ${desc}`,
+        travail_a_faire:
+          prev.travail_a_faire ||
+          `Bon Atelier ${created.code_bon} (${created.type_demande}) : ${desc}`,
+      }));
+      setBonAtelierForm({
+        type_demande: 'REALISATION',
+        quantite: 1,
+        description_travaux: '',
+        observation: '',
+      });
+      setShowBonAtelierMecaniqueForm(false);
+      showToast?.(
+        `Bon Atelier Mécanique ${created.code_bon} émis. Le BT ${
+          activeIntervention.num_bt || activeIntervention.id
+        } est placé en attente atelier (non clôturé).`,
+        'success'
+      );
+    }
+  };
 
   const [showQuickWorkshopForm, setShowQuickWorkshopForm] = useState(false);
   const [workshopQuickForm, setWorkshopQuickForm] = useState({
@@ -789,16 +875,191 @@ export default function InterventionLiveTab({
                 Tant qu’un bon d’atelier ou externe est en cours, le BT ne peut pas être clôturé définitivement (reste ou passe en <b>EN_ATTENTE_PDR</b>).
               </p>
             </div>
-            <button
-              type="button"
-              data-testid="toggle-quick-workshop-btn"
-              onClick={() => setShowQuickWorkshopForm((v) => !v)}
-              className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs transition cursor-pointer shrink-0 inline-flex items-center gap-1.5 shadow-2xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>{showQuickWorkshopForm ? 'Fermer' : '+ Créer Bon d’Atelier / Externe'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              <button
+                type="button"
+                data-testid="toggle-bon-atelier-mecanique-btn"
+                onClick={() => setShowBonAtelierMecaniqueForm((v) => !v)}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>
+                  {showBonAtelierMecaniqueForm
+                    ? 'Fermer Bon Atelier'
+                    : 'Bon atelier mécanique (BR / RECT)'}
+                </span>
+              </button>
+              <button
+                type="button"
+                data-testid="toggle-quick-workshop-btn"
+                onClick={() => setShowQuickWorkshopForm((v) => !v)}
+                className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>{showQuickWorkshopForm ? 'Fermer' : '+ Sortie Externe / Bobinage'}</span>
+              </button>
+            </div>
           </div>
+
+          {/* Dedicated Bon Atelier Mécanique (REALISATION / RECTIFICATION) Form */}
+          {showBonAtelierMecaniqueForm && (
+            <div
+              data-testid="bon-atelier-mecanique-form"
+              className="p-3.5 rounded-xl bg-amber-50/90 border-2 border-amber-300 space-y-3"
+            >
+              <div className="flex items-center justify-between text-xs font-black text-amber-950 uppercase">
+                <span>
+                  Demande Réalisation / Rectification — Atelier Fabrication Mécanique (Machine:{' '}
+                  {activeIntervention.code_machine})
+                </span>
+                <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded border border-amber-300">
+                  Section SM ➔ Atelier Interne (Sans impact Stock PDR)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Type de Demande *
+                  </label>
+                  <select
+                    value={bonAtelierForm.type_demande}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({
+                        ...p,
+                        type_demande: e.target.value as WorkshopOrderType,
+                      }))
+                    }
+                    className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-amber-300 bg-white"
+                  >
+                    <option value="REALISATION">REALISATION (Confection / Usinage neuf)</option>
+                    <option value="RECTIFICATION">RECTIFICATION (Réparation / Tournage / Ajustage)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Quantité *
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={bonAtelierForm.quantite}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({
+                        ...p,
+                        quantite: Math.max(1, Number(e.target.value) || 1),
+                      }))
+                    }
+                    className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-amber-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Observation / Tolérance
+                  </label>
+                  <input
+                    type="text"
+                    value={bonAtelierForm.observation}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({ ...p, observation: e.target.value }))
+                    }
+                    placeholder="Urgence, plan, matière..."
+                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-amber-300 bg-white"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                  Description des travaux demandés *
+                </label>
+                <input
+                  type="text"
+                  value={bonAtelierForm.description_travaux}
+                  onChange={(e) =>
+                    setBonAtelierForm((p) => ({ ...p, description_travaux: e.target.value }))
+                  }
+                  placeholder="Ex: Usinage bague bronze Ø40x60 ou rectification arbre moteur..."
+                  className="w-full py-2 px-2.5 text-xs rounded-lg border border-amber-300 bg-white"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowBonAtelierMecaniqueForm(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="button"
+                  data-testid="submit-bon-atelier-mecanique-btn"
+                  onClick={handleEmitBonAtelierMecanique}
+                  className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase shadow-xs cursor-pointer"
+                >
+                  Émettre Bon Atelier & Mettre BT en Attente
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Existing Linked Internal Mechanical Workshop Orders (BR / RECT) */}
+          {linkedInternalWorkshopOrders.length > 0 && (
+            <div className="space-y-2">
+              {linkedInternalWorkshopOrders.map((ord) => {
+                const isOpen = isWorkshopOrderActive(ord.statut);
+                return (
+                  <div
+                    key={ord.id}
+                    className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                      isOpen
+                        ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                        : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
+                        {ord.code_bon}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-white/80">
+                        {ord.type_demande} (Qté: {ord.quantite})
+                      </span>
+                      <span className="font-bold">{ord.description_travaux}</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                          isOpen
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        }`}
+                      >
+                        Atelier: {WORKSHOP_STATUS_LABELS[ord.statut] || ord.statut}
+                      </span>
+                      {ord.statut === 'PRET_LIVRAISON' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const res = handleTransitionWorkshopOrderStatus(
+                              ord.id,
+                              'RECEPTIONNE_MONTAGE'
+                            );
+                            if (res.valid) {
+                              showToast?.(
+                                `Bon ${ord.code_bon} réceptionné pour montage. Le BT peut maintenant être clôturé.`,
+                                'success'
+                              );
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                        >
+                          Réceptionner Montage
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Existing Linked Workshop Orders */}
           {linkedWorkshopOrders.length > 0 && (

@@ -8,12 +8,14 @@ import {
   Flame,
   RefreshCw,
   FileSpreadsheet,
+  Hammer,
 } from 'lucide-react';
 import DemandesInterventionTab from './DemandesInterventionTab';
 import BonsTravailTab from './BonsTravailTab';
 import InterventionLiveTab from './InterventionLiveTab';
 import ClotureRapportsTab from './ClotureRapportsTab';
 import AnalyseCorrectiveTab from './AnalyseCorrectiveTab';
+import AtelierFabricationTab from './AtelierFabricationTab';
 import CorrectiveFormulasModal from './CorrectiveFormulasModal';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
@@ -26,6 +28,8 @@ import {
   matchesTechnicianRecord,
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import { isWorkshopOrderActive } from '../../../domain/corrective/workshopOrderService';
 import * as XLSX from 'xlsx';
 
 export default function CorrectiveView({
@@ -68,6 +72,7 @@ export default function CorrectiveView({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
 
   // Local active tab fallback if not controlled from router
   const [activeTab, setActiveTab] = useState(subTab || 'corrective_di');
@@ -191,6 +196,9 @@ export default function CorrectiveView({
       (i.validation_status === 'NEEDS_CLARIFICATION' || i.validation_status === 'REJECTED')
   ).length;
   const closedCount = techScopedInterventions.filter((i) => i.statut === 'CLOTURE').length;
+  const activeWorkshopCount = (workshopOrders || []).filter((o) =>
+    isWorkshopOrderActive(o.statut)
+  ).length;
   const isLiveRunning = Boolean(activeLiveId);
 
   const allTabs = [
@@ -213,6 +221,13 @@ export default function CorrectiveView({
       label: t('corrective.tabs.live'),
       icon: Play,
       isPulsing: isLiveRunning,
+    },
+    {
+      id: 'corrective_atelier',
+      label: 'Atelier Mécanique (BR/RECT)',
+      icon: Hammer,
+      badge: activeWorkshopCount,
+      badgeColor: 'bg-amber-100 text-amber-900 border border-amber-300',
     },
     {
       id: 'corrective_cloture',
@@ -476,6 +491,13 @@ export default function CorrectiveView({
             />
           )}
 
+          {activeTab === 'corrective_atelier' && (
+            <AtelierFabricationTab
+              onNavigateToBt={() => handleTabChange('corrective_bt')}
+              showToast={showToast}
+            />
+          )}
+
           {activeTab === 'corrective_cloture' && (
             <ClotureRapportsTab
               interventions={interventions}
@@ -484,6 +506,7 @@ export default function CorrectiveView({
               warehouseItems={warehouseItems}
               technicians={technicians}
               onUpdateIntervention={onUpdateIntervention}
+              onNavigateToTab={handleTabChange}
               showToast={showToast}
             />
           )}

@@ -52,6 +52,14 @@ import SortieExterneService, { INITIAL_SORTIES_BOBINAGE } from '../application/s
 import { CorrectiveIntervention } from '../domain/corrective/entities/CorrectiveIntervention';
 import { CorrectiveCalculationService } from '../domain/corrective/services/CorrectiveCalculationService';
 import { WorkOrderStateMachine } from '../domain/corrective/services/WorkOrderStateMachine';
+import {
+  createWorkshopOrderRecord,
+  getLinkedWorkshopOrdersForIntervention,
+  isWorkshopOrderActive,
+  validateWorkshopOrderTransition,
+  type IWorkshopOrder,
+  type WorkshopOrderStatus,
+} from '../domain/corrective/workshopOrderService';
 import { movementRepository } from '../application/MovementRepository';
 import { getEntityRecordId } from '../services/lanStateMergeService';
 
@@ -534,6 +542,10 @@ function getInitialCorrective() {
     allowDemoFallback: true,
     demoSeed: initialIntervenants,
   });
+  const workshopOrders = loadCollection<IWorkshopOrder>(STORAGE_KEYS.WORKSHOP_ORDERS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
   const activeLiveId = storageService.getItem(ACTIVE_LIVE_KEY) || null;
   return {
     interventions,
@@ -541,6 +553,7 @@ function getInitialCorrective() {
     panneCategories,
     travauxAFaire,
     intervenants,
+    workshopOrders,
     activeLiveId,
   };
 }
@@ -2521,6 +2534,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // 8. Corrective Nexus Slice
     // ==========================================
     correctiveInterventions: correctiveInit.interventions,
+    workshopOrders: correctiveInit.workshopOrders,
     correctiveActionsByPanne: correctiveInit.actionsByPanne,
     actionsByPanne: correctiveInit.actionsByPanne,
     correctivePanneCategories: correctiveInit.panneCategories,
@@ -3340,9 +3354,18 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         },
         get().sortiesExterne
       );
+      const linkedInternalWorkshopOrders = getLinkedWorkshopOrdersForIntervention(
+        {
+          ...existing,
+          id_bon_atelier: clotureData.id_bon_atelier ?? existing.id_bon_atelier,
+          code_bon_atelier: clotureData.code_bon_atelier ?? existing.code_bon_atelier,
+        },
+        get().workshopOrders
+      );
       const hasOpenWorkshopOrder =
         clotureData.hasOpenWorkshopOrder === true ||
-        linkedWorkshopOrders.some((s) => SortieExterneService.isWorkshopOrderOpen(s?.etat));
+        linkedWorkshopOrders.some((s) => SortieExterneService.isWorkshopOrderOpen(s?.etat)) ||
+        linkedInternalWorkshopOrders.some((ord) => isWorkshopOrderActive(ord.statut));
 
       const validation = WorkOrderStateMachine.validateTransition(existing, 'CLOTURE', {
         ...clotureData,
@@ -3821,6 +3844,190 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       CorrectiveCalculationService.detectPreventiveRecommendations(get().correctiveInterventions),
 
     // ==========================================
+    // 8b. Mechanical Workshop Orders (COR-ATELIER-P0)
+    // ==========================================
+    setWorkshopOrders: (updater) => {
+      const prev = get().workshopOrders || [];
+      const next = resolveUpdate(updater, prev);
+      set({ workshopOrders: next });
+      DataGateway.saveWorkshopOrders(next);
+    },
+
+    handleCreateWorkshopOrder: (payload) => {
+      const actor = resolveActiveActorContext();
+      const currentOrders = get().workshopOrders || [];
+      const cleanMachine = String(payload?.id_machine || '').trim();
+      const cleanDesc = String(payload?.description_travaux || '').trim();
+      if (!cleanMachine || !cleanDesc) {
+        console.warn('[useGmaoStore] handleCreateWorkshopOrder requires id_machine and description_travaux.');
+        return null;
+      }
+
+      const record = createWorkshopOrderRecord(
+        {
+          ...payload,
+          id_machine: cleanMachine,
+          description_travaux: cleanDesc,
+          emetteur_user_id: payload.emetteur_user_id || actor.actorId,
+          emetteur_name: payload.emetteur_name || actor.actorName,
+        },
+        currentOrders
+      );
+
+      const nextOrders = [record, ...currentOrders];
+      set({ workshopOrders: nextOrders });
+      DataGateway.saveWorkshopOrders(nextOrders);
+
+      // If linked to an open BT, place the BT in workshop waiting status (EN_ATTENTE_ATELIER -> EN_ATTENTE_PDR in FSM)
+      // NEVER close the BT (CLOTURE / action_fermee = 'OUI') when creating a workshop order
+      const targetBtKey = String(record.id_bt || '').trim();
+      if (targetBtKey) {
+        const currentInterventions = get().correctiveInterventions || [];
+        let btUpdated = false;
+        const nextInterventions = currentInterventions.map((item) => {
+          const itemId = String(item.id || '').trim();
+          const itemNumBt = String(item.num_bt || '').trim();
+          if (
+            itemId === targetBtKey ||
+            itemId.toUpperCase() === targetBtKey.toUpperCase() ||
+            (itemNumBt && itemNumBt.toUpperCase() === targetBtKey.toUpperCase())
+          ) {
+            const currentStatut = WorkOrderStateMachine.normalizeStatus(item.statut);
+            const isClosedOrCancelled =
+              currentStatut === 'CLOTURE' ||
+              currentStatut === 'ANNULE' ||
+              String(item.action_fermee || '').trim().toUpperCase() === 'OUI';
+            if (isClosedOrCancelled) return item;
+
+            btUpdated = true;
+            // WorkOrderStateMachine maps EN_ATTENTE_ATELIER -> EN_ATTENTE_PDR and keeps action_fermee = 'NON'
+            const waitingStatut = WorkOrderStateMachine.normalizeStatus('EN_ATTENTE_ATELIER');
+            return new CorrectiveIntervention({
+              ...item,
+              statut: waitingStatut,
+              action_fermee: 'NON',
+              id_bon_atelier: record.id,
+              code_bon_atelier: record.code_bon,
+              statut_bon_atelier: record.statut,
+              type_bon_atelier: record.type_demande,
+              ...(item.intervention_nature ? {} : { intervention_nature: 'ATELIER' }),
+            }).toJSON();
+          }
+          return item;
+        });
+
+        if (btUpdated) {
+          set({ correctiveInterventions: nextInterventions });
+          DataGateway.saveCorrectiveInterventions(nextInterventions);
+        }
+      }
+
+      get().appendAuditEvent({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
+        actionType: 'WORKSHOP_ORDER_CREATED',
+        entityType: 'WORKSHOP_ORDER',
+        entityId: record.code_bon,
+        before: null,
+        after: {
+          id: record.id,
+          code_bon: record.code_bon,
+          type_demande: record.type_demande,
+          statut: record.statut,
+          id_machine: record.id_machine,
+          id_bt: record.id_bt,
+          quantite: record.quantite,
+        },
+        meta: {
+          summary: `Émission Bon Atelier ${record.code_bon} (${record.type_demande}) pour machine ${record.id_machine}`,
+        },
+      });
+
+      return record;
+    },
+
+    handleTransitionWorkshopOrderStatus: (orderId, nextStatus, observation) => {
+      const currentOrders = get().workshopOrders || [];
+      const existing = currentOrders.find(
+        (ord) => String(ord.id) === String(orderId) || String(ord.code_bon) === String(orderId)
+      );
+      if (!existing) {
+        return { valid: false, reason: `Bon d'atelier introuvable (${orderId}).` };
+      }
+
+      const check = validateWorkshopOrderTransition(existing.statut, nextStatus);
+      if (!check.valid || !check.normalizedTarget) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedOrder: IWorkshopOrder = {
+        ...existing,
+        statut: check.normalizedTarget,
+        date_statut: nowIso,
+        ...(observation !== undefined && String(observation).trim()
+          ? { observation: String(observation).trim() }
+          : {}),
+      };
+
+      const nextOrders = currentOrders.map((ord) =>
+        ord.id === existing.id ? updatedOrder : ord
+      );
+      set({ workshopOrders: nextOrders });
+      DataGateway.saveWorkshopOrders(nextOrders);
+
+      // Sync linked BT badge metadata without auto-closing the BT (even on RECEPTIONNE_MONTAGE)
+      if (updatedOrder.id_bt) {
+        const targetBtKey = String(updatedOrder.id_bt).trim().toUpperCase();
+        const currentInterventions = get().correctiveInterventions || [];
+        let btChanged = false;
+        const nextInterventions = currentInterventions.map((item) => {
+          const itemId = String(item.id || '').trim().toUpperCase();
+          const itemNumBt = String(item.num_bt || '').trim().toUpperCase();
+          const itemBonId = String(item.id_bon_atelier || '').trim();
+          if (
+            itemId === targetBtKey ||
+            (itemNumBt && itemNumBt === targetBtKey) ||
+            itemBonId === updatedOrder.id
+          ) {
+            btChanged = true;
+            return {
+              ...item,
+              id_bon_atelier: updatedOrder.id,
+              code_bon_atelier: updatedOrder.code_bon,
+              statut_bon_atelier: updatedOrder.statut,
+              type_bon_atelier: updatedOrder.type_demande,
+            };
+          }
+          return item;
+        });
+
+        if (btChanged) {
+          set({ correctiveInterventions: nextInterventions });
+          DataGateway.saveCorrectiveInterventions(nextInterventions);
+        }
+      }
+
+      const actor = resolveActiveActorContext();
+      get().appendAuditEvent({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
+        actionType: 'WORKSHOP_ORDER_STATUS_CHANGED',
+        entityType: 'WORKSHOP_ORDER',
+        entityId: updatedOrder.code_bon,
+        before: { statut: existing.statut },
+        after: { statut: updatedOrder.statut, date_statut: updatedOrder.date_statut },
+        meta: {
+          summary: `Transition Bon Atelier ${updatedOrder.code_bon}: ${existing.statut} → ${updatedOrder.statut}`,
+        },
+      });
+
+      return { valid: true, order: updatedOrder };
+    },
+
+    // ==========================================
     // 9. Derived State Getters
     // ==========================================
     stockItems: () => {
@@ -3889,6 +4096,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setWorkshopOrders: get().setWorkshopOrders,
         setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
@@ -3929,6 +4137,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setWorkshopOrders: get().setWorkshopOrders,
         setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
@@ -4099,6 +4308,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.correctiveIntervenants)) {
         updates.correctiveIntervenants = remoteState.correctiveIntervenants;
         updates.intervenants = remoteState.correctiveIntervenants;
+      }
+      if (Array.isArray(remoteState.workshopOrders)) {
+        updates.workshopOrders = remoteState.workshopOrders;
       }
 
       if (Object.keys(updates).length > 0) {

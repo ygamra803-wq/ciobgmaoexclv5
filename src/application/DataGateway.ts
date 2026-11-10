@@ -345,6 +345,12 @@ export const DataGateway = {
     return clean;
   },
 
+  saveWorkshopOrders(list: any[] = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.WORKSHOP_ORDERS, clean);
+    return clean;
+  },
+
   // ==========================================
   // 5. PERSONNEL & USERS
   // ==========================================
@@ -710,6 +716,7 @@ export const DataGateway = {
     this.saveCorrectivePanneCategories(seedPanneByCategory);
     this.saveCorrectiveTravaux(seedTravailAFaire);
     this.saveCorrectiveIntervenants(seedIntervenants);
+    this.saveWorkshopOrders([]);
 
     this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
     try {
@@ -760,6 +767,7 @@ export const DataGateway = {
     if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(seedPanneByCategory);
     if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(seedTravailAFaire);
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
+    if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
 
     if (setters.setUsers) setters.setUsers(seedUsers);
     if (setters.setTechnicians) setters.setTechnicians(seedTechnicians);
@@ -870,6 +878,7 @@ export const DataGateway = {
     this.saveCorrectivePanneCategories({});
     this.saveCorrectiveTravaux([]);
     this.saveCorrectiveIntervenants([]);
+    this.saveWorkshopOrders([]);
 
     this.savePersonnel([], [], []);
     try {
@@ -917,6 +926,7 @@ export const DataGateway = {
     if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories({});
     if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire([]);
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants([]);
+    if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
 
     if (setters.setUsers) setters.setUsers([]);
     if (setters.setTechnicians) setters.setTechnicians([]);
@@ -967,6 +977,7 @@ export const DataGateway = {
       [STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES]: {},
       [STORAGE_KEYS.CORRECTIVE_TRAVAUX]: [],
       [STORAGE_KEYS.CORRECTIVE_INTERVENANTS]: [],
+      [STORAGE_KEYS.WORKSHOP_ORDERS]: [],
       [STORAGE_KEYS.PERSONNEL]: [],
       [STORAGE_KEYS.TECHNICIANS]: [],
       [STORAGE_KEYS.OPERATIONS]: [],
@@ -1061,6 +1072,7 @@ export const DataGateway = {
       : [];
     const meterReadings = Array.isArray(serverData.meterReadings) ? serverData.meterReadings : [];
     const auditEvents = Array.isArray(serverData.auditEvents) ? serverData.auditEvents : [];
+    const workshopOrders = Array.isArray(serverData.workshopOrders) ? serverData.workshopOrders : [];
 
     const hasData =
       rawStock.length > 0 ||
@@ -1102,6 +1114,7 @@ export const DataGateway = {
     this.saveCorrectivePanneCategories(correctivePanneCategories);
     this.saveCorrectiveTravaux(correctiveTravauxAFaire);
     this.saveCorrectiveIntervenants(correctiveIntervenants);
+    this.saveWorkshopOrders(workshopOrders);
     this.savePersonnel(users, technicians, operations);
     try {
       const authSvc = new AuthService();
@@ -1149,6 +1162,7 @@ export const DataGateway = {
         correctivePanneCategories,
         correctiveTravauxAFaire,
         correctiveIntervenants,
+        workshopOrders,
         users,
         technicians,
         operations,

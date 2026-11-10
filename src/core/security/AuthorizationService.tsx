@@ -125,6 +125,25 @@ export const PERMISSIONS: Record<string, string[]> = {
     ROLES.OPERATEUR,
   ],
   'corrective.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
+  'workshop.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'workshop.create': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+  ],
+  'workshop.manage': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+  ],
 
   // إدارة المستخدمين والملفات الشخصية (User Management)
   'user.view': [ROLES.ADMIN],
@@ -201,6 +220,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective_di',
     'corrective_bt',
     'corrective_live',
+    'corrective_atelier',
     'corrective_cloture',
     'corrective_analytics',
     'corrective_history',
@@ -230,6 +250,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective',
     'corrective_di',
     'corrective_bt',
+    'corrective_atelier',
     'corrective_cloture',
     'corrective_analyse',
     'corrective_analytics',

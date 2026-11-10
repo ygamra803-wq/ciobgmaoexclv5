@@ -38,6 +38,12 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
 import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import {
+  getLinkedWorkshopOrdersForIntervention,
+  WORKSHOP_STATUS_LABELS,
+  type WorkshopOrderType,
+} from '../../../domain/corrective/workshopOrderService';
 
 export default function ClotureRapportsTab({
   interventions = [],
@@ -45,11 +51,19 @@ export default function ClotureRapportsTab({
   stockItems = [],
   technicians = [],
   onUpdateIntervention: _onUpdateIntervention,
+  onNavigateToTab,
   showToast,
 }: any) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
+  const handleCreateWorkshopOrder = useGmaoStore((s) => s.handleCreateWorkshopOrder);
+  const [showModalAtelierForm, setShowModalAtelierForm] = useState(false);
+  const [modalAtelierType, setModalAtelierType] = useState<WorkshopOrderType>('REALISATION');
+  const [modalAtelierQty, setModalAtelierQty] = useState<number>(1);
+  const [modalAtelierDesc, setModalAtelierDesc] = useState<string>('');
+  const [modalAtelierObs, setModalAtelierObs] = useState<string>('');
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
@@ -1420,6 +1434,158 @@ export default function ClotureRapportsTab({
                       </div>
                     )}
                   </>
+                );
+              })()}
+            </div>
+
+            <div className="p-6 pt-0 space-y-3 text-xs">
+              {(() => {
+                const linkedOrders = getLinkedWorkshopOrdersForIntervention(
+                  previewItem,
+                  workshopOrders
+                );
+                return (
+                  <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-[10.5px] font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Wrench className="w-3.5 h-3.5 text-amber-700" />
+                        Atelier Fabrication Mécanique (Bon de Réalisation / Rectification)
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {onNavigateToTab && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreviewItem(null);
+                              onNavigateToTab('corrective_atelier');
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-amber-900 font-bold text-[11px] hover:bg-amber-100 cursor-pointer"
+                          >
+                            Ouvrir Suivi Atelier
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setShowModalAtelierForm((v) => !v)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer"
+                        >
+                          {showModalAtelierForm
+                            ? 'Fermer'
+                            : '+ Demande Réalisation / Rectification'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {linkedOrders.length > 0 && (
+                      <div className="space-y-1.5">
+                        {linkedOrders.map((ord) => (
+                          <div
+                            key={ord.id}
+                            className="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-amber-200"
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-black text-slate-900">
+                                {ord.code_bon}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-bold text-[10px]">
+                                {ord.type_demande} ×{ord.quantite}
+                              </span>
+                              <span className="text-slate-700 font-medium">
+                                {ord.description_travaux}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                              {WORKSHOP_STATUS_LABELS[ord.statut] || ord.statut}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {showModalAtelierForm && (
+                      <div className="p-3 rounded-xl bg-white border border-amber-300 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <select
+                            value={modalAtelierType}
+                            onChange={(e) =>
+                              setModalAtelierType(e.target.value as WorkshopOrderType)
+                            }
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          >
+                            <option value="REALISATION">REALISATION (BR)</option>
+                            <option value="RECTIFICATION">RECTIFICATION (RECT)</option>
+                          </select>
+                          <input
+                            type="number"
+                            min={1}
+                            value={modalAtelierQty}
+                            onChange={(e) =>
+                              setModalAtelierQty(Math.max(1, Number(e.target.value) || 1))
+                            }
+                            placeholder="Quantité"
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-bold"
+                          />
+                          <input
+                            type="text"
+                            value={modalAtelierObs}
+                            onChange={(e) => setModalAtelierObs(e.target.value)}
+                            placeholder="Observation (optionnel)"
+                            className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={modalAtelierDesc}
+                            onChange={(e) => setModalAtelierDesc(e.target.value)}
+                            placeholder="Description travaux atelier (obligatoire)..."
+                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const desc = modalAtelierDesc.trim();
+                              if (!desc) {
+                                showToast?.(
+                                  'Veuillez décrire les travaux demandés à l’atelier.',
+                                  'warning'
+                                );
+                                return;
+                              }
+                              const isClosed =
+                                previewItem.statut === 'CLOTURE' ||
+                                String(previewItem.action_fermee || '').toUpperCase() === 'OUI';
+                              const created = handleCreateWorkshopOrder({
+                                type_demande: modalAtelierType,
+                                id_machine: String(previewItem.code_machine || '').trim(),
+                                id_bt: !isClosed
+                                  ? String(previewItem.num_bt || previewItem.id || '').trim()
+                                  : null,
+                                quantite: modalAtelierQty,
+                                description_travaux: desc,
+                                observation: modalAtelierObs.trim() || undefined,
+                                emetteur_section: 'SM',
+                                destinataire: 'Atelier Fabrication Mécanique',
+                              });
+                              if (created) {
+                                setModalAtelierDesc('');
+                                setModalAtelierObs('');
+                                setModalAtelierQty(1);
+                                setShowModalAtelierForm(false);
+                                showToast?.(
+                                  `Bon Atelier ${created.code_bon} émis pour ${created.id_machine}.`,
+                                  'success'
+                                );
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase cursor-pointer shrink-0"
+                          >
+                            Émettre Bon
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 );
               })()}
             </div>

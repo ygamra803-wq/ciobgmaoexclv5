@@ -44,6 +44,11 @@ import ValidationStatusBadge, {
   INTERVENTION_NATURE_OPTIONS,
 } from '../../components/common/ValidationStatusBadge';
 import { SortieExterneService } from '../../../application/services/SortieExterneService';
+import {
+  getLinkedWorkshopOrdersForIntervention,
+  isWorkshopOrderActive,
+  WORKSHOP_STATUS_LABELS,
+} from '../../../domain/corrective/workshopOrderService';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -73,6 +78,7 @@ export default function BonsTravailTab({
   const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions);
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
+  const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
@@ -160,10 +166,15 @@ export default function BonsTravailTab({
     if (decision === 'APPROVED') {
       const linkedOrders = SortieExterneService.getLinkedOrdersForBt(reviewModalBt, sortiesExterne);
       const openOrders = linkedOrders.filter((o) => SortieExterneService.isWorkshopOrderOpen(o.etat));
-      if (openOrders.length > 0) {
-        const codes = openOrders.map((o) => o.code).join(', ');
+      const linkedInternal = getLinkedWorkshopOrdersForIntervention(reviewModalBt, workshopOrders);
+      const openInternal = linkedInternal.filter((o) => isWorkshopOrderActive(o.statut));
+      if (openOrders.length > 0 || openInternal.length > 0) {
+        const codes = [
+          ...openInternal.map((o) => `${o.code_bon} (${o.statut})`),
+          ...openOrders.map((o) => o.code),
+        ].join(', ');
         showToast?.(
-          `Approbation bloquée : le Bon d'Atelier / Externe [${codes}] est encore en cours. Cliquez sur « Réceptionner OK » ou laissez le BT en attente.`,
+          `Approbation bloquée : le Bon d'Atelier / Externe [${codes}] est encore en cours. Réceptionnez le bon avant de clôturer le BT.`,
           'warning'
         );
         return;
@@ -662,8 +673,19 @@ export default function BonsTravailTab({
           const pdrObj = resolvePdrDisplay(bt);
           const linkedWorkshop = SortieExterneService.getLinkedOrdersForBt(bt, sortiesExterne);
           const primaryWorkshop = linkedWorkshop[0] || null;
-          const workshopCode = primaryWorkshop?.code || bt.code_sortie_atelier || '';
-          const workshopOpen = primaryWorkshop
+          const linkedInternal = getLinkedWorkshopOrdersForIntervention(bt, workshopOrders);
+          const primaryInternal = linkedInternal[0] || null;
+
+          const workshopCode =
+            primaryInternal?.code_bon ||
+            bt.code_bon_atelier ||
+            primaryWorkshop?.code ||
+            bt.code_sortie_atelier ||
+            '';
+          const internalStatut = primaryInternal?.statut || bt.statut_bon_atelier || '';
+          const workshopOpen = primaryInternal
+            ? isWorkshopOrderActive(primaryInternal.statut)
+            : primaryWorkshop
             ? SortieExterneService.isWorkshopOrderOpen(primaryWorkshop.etat)
             : false;
 
@@ -674,11 +696,21 @@ export default function BonsTravailTab({
                   ? 'bg-amber-50 text-amber-900 border-amber-300'
                   : 'bg-indigo-50 text-indigo-900 border-indigo-200'
               }`}
-              title={`${primaryWorkshop?.nature_travail || bt.nature_travail_atelier || 'Bon Atelier'} (${primaryWorkshop?.etat || 'Lié'})`}
+              title={
+                primaryInternal
+                  ? `Atelier Mécanique: ${primaryInternal.code_bon} (${primaryInternal.type_demande}) — ${
+                      WORKSHOP_STATUS_LABELS[primaryInternal.statut] || primaryInternal.statut
+                    }`
+                  : `${primaryWorkshop?.nature_travail || bt.nature_travail_atelier || 'Bon Atelier'} (${
+                      primaryWorkshop?.etat || 'Lié'
+                    })`
+              }
             >
               <Wrench className="w-3 h-3 shrink-0" />
-              <span className="truncate">{workshopCode}</span>
-              {Number(primaryWorkshop?.cout_bobinage ?? bt.cout_atelier ?? 0) > 0 && (
+              <span className="truncate">
+                {internalStatut ? `Atelier: ${workshopCode} (${internalStatut})` : workshopCode}
+              </span>
+              {!primaryInternal && Number(primaryWorkshop?.cout_bobinage ?? bt.cout_atelier ?? 0) > 0 && (
                 <span className="text-[9.5px] opacity-80">
                   • {Number(primaryWorkshop?.cout_bobinage ?? bt.cout_atelier ?? 0)} DH
                 </span>
@@ -882,7 +914,7 @@ export default function BonsTravailTab({
         },
       },
     ],
-    [technicians, stockItems, onUpdateIntervention, isTechUser, canExecuteBt, canValidateBt, t]
+    [technicians, stockItems, onUpdateIntervention, isTechUser, canExecuteBt, canValidateBt, t, workshopOrders, sortiesExterne]
   );
 
   return (

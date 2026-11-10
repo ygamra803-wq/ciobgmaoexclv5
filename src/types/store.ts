@@ -15,6 +15,7 @@ import type {
 import type { IMeterReading } from './meter';
 import type { IReplenishmentOrder, ReplenishmentOrderStatus } from './replenishment';
 import type { IAuditEvent } from './audit';
+import type { IWorkshopOrder, WorkshopOrderStatus } from '../domain/corrective/workshopOrderService';
 
 export interface MachineElement {
   id: string;
@@ -287,6 +288,18 @@ export interface GmaoStoreState {
   handleBulkImportCorrective: (importedItems: any[]) => void;
   handleResetCorrectiveToSeed: (ctx?: any) => Promise<any>;
 
+  // ==========================================
+  // 8b. Mechanical Workshop Orders (COR-ATELIER-P0)
+  // ==========================================
+  workshopOrders: IWorkshopOrder[];
+  setWorkshopOrders: (orders: IWorkshopOrder[] | ((prev: IWorkshopOrder[]) => IWorkshopOrder[])) => void;
+  handleCreateWorkshopOrder: (payload: Partial<IWorkshopOrder> & { id_machine: string; description_travaux: string }) => IWorkshopOrder | null;
+  handleTransitionWorkshopOrderStatus: (
+    orderId: string,
+    nextStatus: WorkshopOrderStatus,
+    observation?: string
+  ) => { valid: boolean; reason?: string; order?: IWorkshopOrder };
+
   // Derived Corrective KPIs
   correctiveKpis: () => any;
   correctiveParetoAnomalies: () => any[];
@@ -365,6 +378,7 @@ export interface GmaoStoreSetters {
   setCorrectivePanneCategories?: (categories: any) => void;
   setCorrectiveTravauxAFaire?: (travaux: any) => void;
   setCorrectiveIntervenants?: (intervenants: any) => void;
+  setWorkshopOrders?: (orders: any) => void;
   [key: string]: any;
 }
 
