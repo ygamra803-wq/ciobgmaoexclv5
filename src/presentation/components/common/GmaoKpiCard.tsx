@@ -11,6 +11,7 @@ export type GmaoKpiColor =
   | 'cyan'
   | 'indigo'
   | 'teal'
+  | 'orange'
   | 'slate';
 
 export interface GmaoKpiCardProps {
@@ -30,12 +31,16 @@ export interface GmaoKpiCardProps {
   badgePrefix?: React.ReactNode;
   /** Left label in the 4th tier footer */
   footerLabel?: React.ReactNode;
+  /** Alias for footerLabel */
+  footerText?: React.ReactNode;
   /** Right value in the 4th tier footer */
   footerValue?: React.ReactNode;
   /** Optional progress bar percentage (0-100) rendered inside the footer */
   progressBarPercent?: number;
   /** Interactive filter active state */
   isActive?: boolean;
+  /** Alias for isActive */
+  active?: boolean;
   /** Click handler for filtering or navigation */
   onClick?: () => void;
   /** Pulse animation on the icon (e.g., critical alerts) */
@@ -167,6 +172,18 @@ const COLOR_MAP: Record<GmaoKpiColor, ColorThemeStyles> = {
     progressBarBg: 'bg-teal-100',
     progressBarFill: 'bg-teal-600',
   },
+  orange: {
+    activeBorder: 'border-orange-400 ring-2 ring-orange-400/30 shadow-md',
+    hoverBorder: 'border-slate-200/90 hover:border-orange-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(249,115,22,0.12)]',
+    glow: 'bg-orange-500/5 group-hover:bg-orange-500/10',
+    iconText: 'text-orange-600',
+    valueText: 'text-orange-600',
+    valueHover: 'text-slate-900 group-hover:text-orange-600',
+    badgeBg: 'text-orange-700 bg-orange-50 border-orange-200/80',
+    footerText: 'text-orange-700',
+    progressBarBg: 'bg-orange-100',
+    progressBarFill: 'bg-orange-600',
+  },
   slate: {
     activeBorder: 'border-slate-400 ring-2 ring-slate-400/30 shadow-md',
     hoverBorder: 'border-slate-200/90 hover:border-slate-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(100,116,139,0.12)]',
@@ -201,9 +218,11 @@ export function GmaoKpiCard({
   badgeText,
   badgePrefix,
   footerLabel,
+  footerText,
   footerValue,
   progressBarPercent,
-  isActive = false,
+  isActive,
+  active,
   onClick,
   pulseIcon = false,
   pulseBadge = false,
@@ -211,6 +230,8 @@ export function GmaoKpiCard({
 }: GmaoKpiCardProps) {
   const theme = COLOR_MAP[color] || COLOR_MAP.blue;
   const isClickable = typeof onClick === 'function';
+  const activeState = Boolean(isActive ?? active ?? false);
+  const effectiveFooterLabel = footerText !== undefined ? footerText : footerLabel;
 
   return (
     <div
@@ -218,7 +239,7 @@ export function GmaoKpiCard({
       onClick={onClick}
       className={`bg-white p-5 rounded-2xl border transition-all duration-300 relative overflow-hidden group flex flex-col justify-between ${
         isClickable ? 'cursor-pointer hover:-translate-y-1' : ''
-      } ${isActive ? theme.activeBorder : theme.hoverBorder} ${className}`}
+      } ${activeState ? theme.activeBorder : theme.hoverBorder} ${className}`}
     >
       {/* Ambient Corner Glow */}
       <div
@@ -281,11 +302,11 @@ export function GmaoKpiCard({
       </div>
 
       {/* Tier 4: Analytical Footer */}
-      {(footerLabel !== undefined || footerValue !== undefined || progressBarPercent !== undefined) && (
+      {(effectiveFooterLabel !== undefined || footerValue !== undefined || progressBarPercent !== undefined) && (
         <div className="mt-3 pt-3 border-t border-slate-100">
-          {(footerLabel !== undefined || footerValue !== undefined) && (
+          {(effectiveFooterLabel !== undefined || footerValue !== undefined) && (
             <div className="flex items-center justify-between text-[11px] gap-2">
-              <span className="text-slate-400 font-medium truncate">{footerLabel}</span>
+              <span className="text-slate-400 font-medium truncate">{effectiveFooterLabel}</span>
               <span className={`font-mono font-bold shrink-0 ${theme.footerText}`}>
                 {footerValue}
               </span>

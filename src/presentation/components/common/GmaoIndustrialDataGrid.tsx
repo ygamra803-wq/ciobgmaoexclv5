@@ -34,6 +34,9 @@ export interface GmaoColumn<T = any> {
   [key: string]: any;
 }
 
+export type IndustrialGridColumn<T = any> = GmaoColumn<T>;
+export type IndustrialColumn<T = any> = GmaoColumn<T>;
+
 export default function GmaoIndustrialDataGrid({
   title = '',
   icon = null,

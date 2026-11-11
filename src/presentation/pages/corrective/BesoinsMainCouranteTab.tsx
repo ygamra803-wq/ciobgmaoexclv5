@@ -796,7 +796,7 @@ export default function BesoinsMainCouranteTab({
           unit="Demandes"
           icon={Package}
           color="amber"
-          active={filterStatus === 'ALL'}
+          isActive={filterStatus === 'ALL'}
           onClick={() => setFilterStatus('ALL')}
           footerText={`${kpis.activeCount} en cours de traitement`}
         />
@@ -806,7 +806,7 @@ export default function BesoinsMainCouranteTab({
           unit="Att. Canal"
           icon={ShieldCheck}
           color="purple"
-          active={filterStatus === 'TO_REVIEW'}
+          isActive={filterStatus === 'TO_REVIEW'}
           onClick={() => setFilterStatus(filterStatus === 'TO_REVIEW' ? 'ALL' : 'TO_REVIEW')}
           footerText="DEMANDE_TECH / CLARIFICATION"
         />
@@ -816,7 +816,7 @@ export default function BesoinsMainCouranteTab({
           unit="En cours"
           icon={Truck}
           color="blue"
-          active={filterStatus === 'APPROVISIONNEMENT'}
+          isActive={filterStatus === 'APPROVISIONNEMENT'}
           onClick={() =>
             setFilterStatus(
               filterStatus === 'APPROVISIONNEMENT' ? 'ALL' : 'APPROVISIONNEMENT'
@@ -830,7 +830,7 @@ export default function BesoinsMainCouranteTab({
           unit="À monter"
           icon={UserCheck}
           color="cyan"
-          active={filterStatus === 'RECU_STRUCTURE'}
+          isActive={filterStatus === 'RECU_STRUCTURE'}
           onClick={() =>
             setFilterStatus(filterStatus === 'RECU_STRUCTURE' ? 'ALL' : 'RECU_STRUCTURE')
           }
@@ -842,7 +842,7 @@ export default function BesoinsMainCouranteTab({
           unit="En test"
           icon={Wrench}
           color="orange"
-          active={filterStatus === 'POSE_ESSAI'}
+          isActive={filterStatus === 'POSE_ESSAI'}
           onClick={() =>
             setFilterStatus(filterStatus === 'POSE_ESSAI' ? 'ALL' : 'POSE_ESSAI')
           }
@@ -854,7 +854,7 @@ export default function BesoinsMainCouranteTab({
           unit="Validés"
           icon={CheckCircle2}
           color="emerald"
-          active={filterStatus === 'CLOTURE_FIELD'}
+          isActive={filterStatus === 'CLOTURE_FIELD'}
           onClick={() =>
             setFilterStatus(filterStatus === 'CLOTURE_FIELD' ? 'ALL' : 'CLOTURE_FIELD')
           }

@@ -38,6 +38,9 @@ import {
   Calculator,
   Lock,
   ShoppingCart,
+  FileSpreadsheet,
+  Download,
+  Upload,
 } from 'lucide-react';
 import StockReplenishmentModal from './components/StockReplenishmentModal';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -53,6 +56,8 @@ import {
   resolvePdrHierarchy,
 } from '../../../domain/stock/pdrHierarchyService';
 import PdrGroupsModal from './components/PdrGroupsModal';
+import PdrCatalogExcelModal from './components/PdrCatalogExcelModal';
+import { downloadPdrCatalogWorkbook } from '../../../services/pdrHierarchyExcelService';
 
 const TYPE_STYLES = {
   Foret: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -108,6 +113,7 @@ export default function StockView({
 
   const [stockGroupFilter, setStockGroupFilter] = useState('ALL');
   const [showGroupsModal, setShowGroupsModal] = useState(false);
+  const [showPdrExcelModal, setShowPdrExcelModal] = useState(false);
 
   const availableTypes = useMemo(
     () => listPdrTypesByGroup(types, stockGroupFilter),
@@ -981,34 +987,64 @@ export default function StockView({
         onClearAll={clearAllFilters}
       >
         {/* PDR Hierarchy Summary & Management */}
-        {canEditStock && (
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-amber-100/90">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                Hiérarchie PDR (N1 ➔ N2 ➔ SKU) :
-              </span>
-              <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10.5px] font-bold">
-                Groupe ({effectivePdrGroups.length})
-              </span>
-              <span className="text-slate-400 text-xs font-bold">➔</span>
-              <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10.5px] font-bold">
-                Type ({availableTypes.length})
-              </span>
-              <span className="text-slate-400 text-xs font-bold">➔</span>
-              <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[10.5px] font-bold">
-                SKU / Ref ({stockItems.length})
-              </span>
-            </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-amber-100/90">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+              Hiérarchie PDR (N1 ➔ N2 ➔ SKU) :
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10.5px] font-bold">
+              Groupe ({effectivePdrGroups.length})
+            </span>
+            <span className="text-slate-400 text-xs font-bold">➔</span>
+            <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10.5px] font-bold">
+              Type ({availableTypes.length})
+            </span>
+            <span className="text-slate-400 text-xs font-bold">➔</span>
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[10.5px] font-bold">
+              SKU / Ref ({stockItems.length})
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={() => setShowGroupsModal(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+              onClick={() =>
+                downloadPdrCatalogWorkbook({
+                  pdrGroups: effectivePdrGroups,
+                  types,
+                  rawStock: stockItems,
+                })
+              }
+              data-testid="btn-quick-export-pdr-catalog"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+              title="Exporter le catalogue PDR à 3 feuilles (PDR_GROUPS, PDR_TYPES, PDR_ITEMS)"
             >
-              <Package className="w-3.5 h-3.5 text-indigo-300" />
-              <span>Gérer Groupes PDR</span>
+              <Download className="w-3.5 h-3.5" />
+              <span>Exporter catalogue PDR (Groupes / Types / Articles)</span>
             </button>
+            {canEditStock && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowPdrExcelModal(true)}
+                  data-testid="btn-open-pdr-excel-modal"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                  title="Importer ou exporter un classeur Excel PDR hiérarchique (.xlsx)"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Importer Catalogue PDR (.xlsx)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowGroupsModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+                >
+                  <Package className="w-3.5 h-3.5 text-indigo-300" />
+                  <span>Gérer Groupes PDR</span>
+                </button>
+              </>
+            )}
           </div>
-        )}
+        </div>
 
         {/* 5-Column Multi-Criteria Filter Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
@@ -1574,6 +1610,17 @@ export default function StockView({
         }}
         types={types}
         stockItems={stockItems}
+      />
+
+      {/* PDR 3-Sheet Excel Catalog Import/Export Modal */}
+      <PdrCatalogExcelModal
+        isOpen={showPdrExcelModal}
+        onClose={() => setShowPdrExcelModal(false)}
+        pdrGroups={effectivePdrGroups}
+        types={types}
+        rawStock={stockItems}
+        mouvements={mouvements}
+        canEditStock={canEditStock}
       />
 
       {/* Excel Formulas Preview Modal */}

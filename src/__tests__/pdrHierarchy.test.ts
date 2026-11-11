@@ -399,3 +399,299 @@ describe('SEED-RESET-P0 — 3-Tier PDR Seed Referential Integrity & Ordered Demo
   });
 });
 
+describe('PDR-EXCEL-HIERARCHY-P0 — 3-Sheet Excel Export / Import & Validation Guards', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('1. Rejects a type with an orphan group_code with an explicit row error (no silent drop)', async () => {
+    const { validateAndReconcilePdrCatalogImport } = await import(
+      '../services/pdrHierarchyExcelService'
+    );
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: [
+          {
+            code: 'ROUL',
+            libelle: 'Roulements & Paliers',
+            description: 'Roulements',
+            default_policy_tags: 'REPLACING',
+            sort_order: 10,
+            is_active: true,
+          },
+        ],
+        types: [
+          {
+            code_type: 'TYP-ORPHAN',
+            libelle: 'Type sans groupe valide',
+            group_code: 'UNKNOWN_GROUP',
+            is_active: true,
+          },
+        ],
+        items: [],
+      },
+      { mode: 'MERGE', actorRole: 'ADMIN' }
+    );
+
+    expect(report.success).toBe(false);
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].sheet).toBe('PDR_TYPES');
+    expect(report.errors[0].row).toBe(2);
+    expect(report.errors[0].message).toContain('UNKNOWN_GROUP');
+    expect(report.created.types).toBe(0);
+  });
+
+  it('2. Rejects duplicate item.ref within PDR_ITEMS sheet with an explicit row error', async () => {
+    const { validateAndReconcilePdrCatalogImport } = await import(
+      '../services/pdrHierarchyExcelService'
+    );
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: [
+          {
+            code: 'ROUL',
+            libelle: 'Roulements',
+            default_policy_tags: 'REPLACING',
+            sort_order: 10,
+            is_active: true,
+          },
+        ],
+        types: [
+          {
+            code_type: 'TYP-RLM-BILLE',
+            libelle: 'Roulement à billes',
+            group_code: 'ROUL',
+            is_active: true,
+          },
+        ],
+        items: [
+          {
+            ref: 'RLM-6205',
+            designation: 'Roulement 6205',
+            type_code_or_id: 'TYP-RLM-BILLE',
+            group_code: 'ROUL',
+            seuil: 5,
+            emplacement: 'MAG-A-01',
+            stockInitial: 10,
+            policy_tags: 'REPLACING',
+          },
+          {
+            ref: 'rlm-6205',
+            designation: 'Doublon Roulement 6205',
+            type_code_or_id: 'TYP-RLM-BILLE',
+            group_code: 'ROUL',
+            seuil: 5,
+            emplacement: 'MAG-A-02',
+            stockInitial: 4,
+            policy_tags: 'REPLACING',
+          },
+        ],
+      },
+      { mode: 'MERGE', actorRole: 'ADMIN' }
+    );
+
+    expect(report.success).toBe(false);
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].sheet).toBe('PDR_ITEMS');
+    expect(report.errors[0].row).toBe(3);
+    expect(report.errors[0].message).toContain('dupliquée');
+    expect(report.created.items).toBe(1);
+  });
+
+  it('3. Rejects an item whose group_code conflicts with its resolved type group (item group != type group)', async () => {
+    const { validateAndReconcilePdrCatalogImport } = await import(
+      '../services/pdrHierarchyExcelService'
+    );
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: [
+          { code: 'ROUL', libelle: 'Roulements', sort_order: 10, is_active: true },
+          { code: 'ETAN', libelle: 'Étanchéité', sort_order: 20, is_active: true },
+        ],
+        types: [
+          {
+            code_type: 'TYP-RLM-BILLE',
+            libelle: 'Roulement à billes',
+            group_code: 'ROUL',
+            is_active: true,
+          },
+        ],
+        items: [
+          {
+            ref: 'RLM-MISMATCH',
+            designation: 'Roulement classé par erreur dans ETAN',
+            type_code_or_id: 'TYP-RLM-BILLE',
+            group_code: 'ETAN',
+            seuil: 2,
+            emplacement: 'MAG-A-01',
+            stockInitial: 5,
+          },
+        ],
+      },
+      { mode: 'MERGE', actorRole: 'ADMIN' }
+    );
+
+    expect(report.success).toBe(false);
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].sheet).toBe('PDR_ITEMS');
+    expect(report.errors[0].row).toBe(2);
+    expect(report.errors[0].message).toContain('incohérence hiérarchique');
+    expect(report.created.items).toBe(0);
+  });
+
+  it('4. Defaults empty policy_tags to ["REPLACING"] and ignores stockActuel column on import', async () => {
+    const { validateAndReconcilePdrCatalogImport } = await import(
+      '../services/pdrHierarchyExcelService'
+    );
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: [{ code: 'ROUL', libelle: 'Roulements', default_policy_tags: '' }],
+        types: [{ code_type: 'TYP-RLM-BILLE', libelle: 'Roulement à billes', group_code: 'ROUL' }],
+        items: [
+          {
+            ref: 'RLM-6205',
+            designation: 'Roulement 6205',
+            type_code_or_id: 'TYP-RLM-BILLE',
+            group_code: 'ROUL',
+            seuil: 4,
+            emplacement: 'MAG-A-01',
+            stockInitial: 10,
+            policy_tags: '',
+            stockActuel: 999,
+            stockActuel_info: 999,
+          },
+        ],
+      },
+      {
+        mode: 'MERGE',
+        actorRole: 'ADMIN',
+        existingStock: [
+          {
+            ref: 'RLM-6205',
+            designation: 'Ancien 6205',
+            stockInitial: 8,
+            entrees: 5,
+            sorties: 3,
+            stockActuel: 10,
+          },
+        ],
+      }
+    );
+
+    expect(report.success).toBe(true);
+    expect(report.errors).toHaveLength(0);
+    expect(report.nextGroups[0].default_policy_tags).toEqual(['REPLACING']);
+    expect(report.nextStock[0].policy_tags).toEqual(['REPLACING']);
+    // stockActuel_info=999 is ignored; computed from stockInitial (10) + entrees (5) - sorties (3) = 12
+    expect(report.nextStock[0].stockActuel).toBe(12);
+  });
+
+  it('5. Supports full 3-sheet .xlsx Round-Trip (Objects -> Workbook -> Buffer -> Parse -> Validate)', async () => {
+    const XLSX = await import('xlsx');
+    const {
+      buildPdrCatalogWorkbook,
+      parsePdrCatalogWorkbookBuffer,
+      validateAndReconcilePdrCatalogImport,
+    } = await import('../services/pdrHierarchyExcelService');
+
+    const seedPdrGroups = (await import('../data/stock/seedPdrGroups.json')).default as PdrGroup[];
+    const seedStockTypes = (await import('../data/stock/seedStockTypes.json')).default as StockType[];
+    const seedStockItems = (await import('../data/stock/seedStockItems.json')).default as IStockItem[];
+
+    const wb = buildPdrCatalogWorkbook({
+      pdrGroups: seedPdrGroups,
+      types: seedStockTypes,
+      rawStock: seedStockItems,
+    });
+
+    expect(wb.SheetNames).toEqual(['PDR_GROUPS', 'PDR_TYPES', 'PDR_ITEMS']);
+
+    const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as ArrayBuffer;
+    const parsedSheets = parsePdrCatalogWorkbookBuffer(buffer);
+
+    expect(parsedSheets.groups?.length).toBe(seedPdrGroups.length);
+    expect(parsedSheets.types?.length).toBe(seedStockTypes.length);
+    expect(parsedSheets.items?.length).toBe(seedStockItems.length);
+
+    const report = validateAndReconcilePdrCatalogImport(parsedSheets, {
+      mode: 'MERGE',
+      actorRole: 'ADMIN',
+      existingGroups: [],
+      existingTypes: [],
+      existingStock: [],
+    });
+
+    expect(report.success).toBe(true);
+    expect(report.errors).toHaveLength(0);
+    expect(report.created.groups).toBe(seedPdrGroups.length);
+    expect(report.created.types).toBe(seedStockTypes.length);
+    expect(report.created.items).toBe(seedStockItems.length);
+  });
+
+  it('6. Guards REPLACE_CATALOG mode against non-ADMIN role and refuses deleting items that have historical movements', async () => {
+    const { validateAndReconcilePdrCatalogImport } = await import(
+      '../services/pdrHierarchyExcelService'
+    );
+
+    const existingStock: IStockItem[] = [
+      {
+        ref: 'RLM-PROTECTED',
+        designation: 'Roulement avec mouvement historique',
+        id_group: 'GRP-ROUL',
+        id_type: 'TYP-RLM-BILLE',
+        stockInitial: 10,
+        entrees: 0,
+        sorties: 2,
+        stockActuel: 8,
+      },
+    ];
+
+    const existingMouvements = [
+      { id: 1, date: '2026-01-10', type: 'Sortie', ref: 'RLM-PROTECTED', quantite: 2 },
+    ];
+
+    const newCatalogSheets = {
+      groups: [{ code: 'ROUL', libelle: 'Roulements' }],
+      types: [{ code_type: 'TYP-RLM-BILLE', libelle: 'Roulement à billes', group_code: 'ROUL' }],
+      items: [
+        {
+          ref: 'RLM-NEW-ONLY',
+          designation: 'Nouveau roulement uniquement',
+          type_code_or_id: 'TYP-RLM-BILLE',
+          group_code: 'ROUL',
+          stockInitial: 5,
+        },
+      ],
+    };
+
+    // 6a. Non-ADMIN role is blocked from REPLACE_CATALOG
+    const nonAdminReport = validateAndReconcilePdrCatalogImport(newCatalogSheets, {
+      mode: 'REPLACE_CATALOG',
+      actorRole: 'MAGASINIER',
+      existingStock,
+      existingMouvements,
+    });
+    expect(nonAdminReport.success).toBe(false);
+    expect(nonAdminReport.errors[0].message).toContain('ADMIN');
+
+    // 6b. ADMIN is blocked when REPLACE_CATALOG would delete 'RLM-PROTECTED' which has movements
+    const fkGuardReport = validateAndReconcilePdrCatalogImport(newCatalogSheets, {
+      mode: 'REPLACE_CATALOG',
+      actorRole: 'ADMIN',
+      existingStock,
+      existingMouvements,
+    });
+    expect(fkGuardReport.success).toBe(false);
+    expect(fkGuardReport.errors[0].message).toContain('Protection FK Mouvements');
+    expect(fkGuardReport.errors[0].message).toContain('RLM-PROTECTED');
+    // Original stock remains untouched
+    expect(fkGuardReport.nextStock).toEqual(existingStock);
+  });
+});
+
+

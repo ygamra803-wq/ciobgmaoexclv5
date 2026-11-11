@@ -1420,7 +1420,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
 
           return (
             <div
-              key={ord.id_bon_atelier || rowNumber}
+              key={ord.id || ord.code_bon || rowNumber}
               className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
             >
               <div className="space-y-3">

@@ -796,12 +796,12 @@ export const DataGateway = {
    * Explicitly loads real stock data.
    */
   initRealStock(setters: GmaoStoreSetters = {}) {
-    this.savePdrGroups(seedPdrGroups);
-    this.saveStockTypes(seedStockTypes);
-    this.saveStock(seedStockItems);
-    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
-    if (setters.setTypes) setters.setTypes(seedStockTypes);
-    if (setters.setRawStock) setters.setRawStock(seedStockItems);
+    this.savePdrGroups(seedPdrGroups as any);
+    this.saveStockTypes(seedStockTypes as any);
+    this.saveStock(seedStockItems as any);
+    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
+    if (setters.setTypes) setters.setTypes(seedStockTypes as any);
+    if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
     // Also update designations if needed, but for now focus on RAW_STOCK
     return { stockCount: seedStockItems.length };
   },
@@ -902,11 +902,11 @@ export const DataGateway = {
     if (setters.setZones) setters.setZones(seedZones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
 
-    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
-    if (setters.setTypes) setters.setTypes(seedStockTypes);
-    if (setters.setRawStock) setters.setRawStock(seedStockItems);
-    if (setters.setDesignations) setters.setDesignations(derivedDesignations);
-    if (setters.setMouvements) setters.setMouvements(seedMouvements);
+    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
+    if (setters.setTypes) setters.setTypes(seedStockTypes as any);
+    if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
+    if (setters.setDesignations) setters.setDesignations(derivedDesignations as any);
+    if (setters.setMouvements) setters.setMouvements(seedMouvements as any);
     if (setters.setSortieDemands) setters.setSortieDemands([]);
     if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
@@ -1434,10 +1434,10 @@ export const DataGateway = {
           (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
           buildInitialStockMap(seedStockItems)
         );
-        if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
-        if (setters.setTypes) setters.setTypes(seedStockTypes);
-        if (setters.setRawStock) setters.setRawStock(seedStockItems);
-        if (setters.setDesignations) setters.setDesignations(derivedDesignations);
+        if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
+        if (setters.setTypes) setters.setTypes(seedStockTypes as any);
+        if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
+        if (setters.setDesignations) setters.setDesignations(derivedDesignations as any);
         break;
 
       case 'parc':
@@ -1499,7 +1499,7 @@ export const DataGateway = {
           seedMouvements as any[],
           buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
         );
-        if (setters.setMouvements) setters.setMouvements(seedMouvements);
+        if (setters.setMouvements) setters.setMouvements(seedMouvements as any);
         if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
         break;
 

@@ -512,6 +512,7 @@ export default function PartDesignationView({
                   id_type: partTypes[0]?.id_type || '',
                   seuil: 5,
                   emplacement: '',
+                  policy_tags: ['REPAIRABLE', 'REPLACING'],
                 });
                 setShowAddModal(true);
               }}
