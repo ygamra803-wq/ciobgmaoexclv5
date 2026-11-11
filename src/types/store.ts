@@ -35,7 +35,13 @@ import type {
 import type { IMeterReading, MeterReadingSource, MeterUnit } from './meter';
 import type { IReplenishmentOrder, ReplenishmentOrderStatus } from './replenishment';
 import type { IAuditEvent } from './audit';
-import type { IWorkshopOrder, WorkshopOrderStatus } from '../domain/corrective/workshopOrderService';
+import type { IWorkshopOrder, WorkshopOrderStatus, WorkshopOrderType } from '../domain/corrective/workshopOrderService';
+import type {
+  INeedRequest,
+  NeedRequestStatus,
+  NeedApproChannel,
+  CreateNeedRequestInput,
+} from '../domain/corrective/needRequestService';
 
 export type StateUpdater<T> = T | ((prev: T) => T);
 
@@ -572,6 +578,50 @@ export interface GmaoStoreState {
     nextStatus: WorkshopOrderStatus,
     observation?: string
   ) => { valid: boolean; reason?: string; order?: IWorkshopOrder };
+
+  // ==========================================
+  // 8c. Need Requests & Field Handoff (COR-HANDOFF-P0)
+  // ==========================================
+  needRequests: INeedRequest[];
+  setNeedRequests: (requests: StateUpdater<INeedRequest[]>) => void;
+  handleCreateNeedRequest: (payload: CreateNeedRequestInput) => INeedRequest | null;
+  handleReviewNeedRequest: (
+    needId: string,
+    decisionPayload: {
+      decision:
+        | 'APPROVISIONNEMENT'
+        | 'REVUE_SUPERVISEUR'
+        | 'CLARIFICATION'
+        | 'REJETE'
+        | 'ANNULE';
+      canal_appro?: NeedApproChannel | null;
+      notes_superviseur?: string;
+      motif_rejet?: string;
+      workshopOrderType?: WorkshopOrderType;
+      id_sortie_demand?: string | null;
+      actorRole?: string;
+      actorId?: string;
+      actorName?: string;
+    }
+  ) => {
+    valid: boolean;
+    reason?: string;
+    needRequest?: INeedRequest;
+    workshopOrder?: IWorkshopOrder | null;
+  };
+  handleTransitionNeedRequestStatus: (
+    needId: string,
+    nextStatus: NeedRequestStatus,
+    context?: {
+      observation_pose_essai?: string;
+      notes_superviseur?: string;
+      motif_rejet?: string;
+      actorRole?: string;
+      isTechnician?: boolean;
+      actorId?: string;
+      actorName?: string;
+    }
+  ) => { valid: boolean; reason?: string; needRequest?: INeedRequest };
 
   // Derived Corrective KPIs
   correctiveKpis: () => CorrectiveKpiComputedSummary;

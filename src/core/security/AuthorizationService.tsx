@@ -144,6 +144,32 @@ export const PERMISSIONS: Record<string, string[]> = {
     'RESPONSABLE',
     ROLES.RESPONSABLE_MAINTENANCE,
   ],
+  'need.view': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+    ROLES.TECHNICIEN,
+    ROLES.OPERATEUR,
+    ROLES.VIEWER,
+  ],
+  'need.create': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.TECHNICIEN,
+  ],
+  'need.review': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+  ],
+  'need.handoff': [
+    ROLES.ADMIN,
+    'RESPONSABLE',
+    ROLES.RESPONSABLE_MAINTENANCE,
+    ROLES.RESPONSABLE_MAGASIN,
+  ],
 
   // إدارة المستخدمين والملفات الشخصية (User Management)
   'user.view': [ROLES.ADMIN],
@@ -207,6 +233,8 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'templates',
     'blueprints',
     'zones',
+    'corrective',
+    'corrective_besoins',
     'guide',
   ]),
   [ROLES.TECHNICIEN]: new Set([
@@ -220,6 +248,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective_di',
     'corrective_bt',
     'corrective_live',
+    'corrective_besoins',
     'corrective_atelier',
     'corrective_cloture',
     'corrective_analytics',
@@ -250,6 +279,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'corrective',
     'corrective_di',
     'corrective_bt',
+    'corrective_besoins',
     'corrective_atelier',
     'corrective_cloture',
     'corrective_analyse',

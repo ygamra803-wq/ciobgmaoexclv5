@@ -16,6 +16,7 @@ import InterventionLiveTab from './InterventionLiveTab';
 import ClotureRapportsTab from './ClotureRapportsTab';
 import AnalyseCorrectiveTab from './AnalyseCorrectiveTab';
 import AtelierFabricationTab from './AtelierFabricationTab';
+import BesoinsMainCouranteTab from './BesoinsMainCouranteTab';
 import CorrectiveFormulasModal from './CorrectiveFormulasModal';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
@@ -30,6 +31,8 @@ import {
 } from '../../../core/security/technicianScope';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { isWorkshopOrderActive } from '../../../domain/corrective/workshopOrderService';
+import { isNeedRequestActive } from '../../../domain/corrective/needRequestService';
+import { Package } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 export default function CorrectiveView({
@@ -73,6 +76,7 @@ export default function CorrectiveView({
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
   const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
+  const needRequests = useGmaoStore((s) => s.needRequests || []);
 
   // Local active tab fallback if not controlled from router
   const [activeTab, setActiveTab] = useState(subTab || 'corrective_di');
@@ -199,6 +203,9 @@ export default function CorrectiveView({
   const activeWorkshopCount = (workshopOrders || []).filter((o) =>
     isWorkshopOrderActive(o.statut)
   ).length;
+  const activeNeedRequestsCount = (needRequests || []).filter((r) =>
+    isNeedRequestActive(r.statut)
+  ).length;
   const isLiveRunning = Boolean(activeLiveId);
 
   const allTabs = [
@@ -221,6 +228,13 @@ export default function CorrectiveView({
       label: t('corrective.tabs.live'),
       icon: Play,
       isPulsing: isLiveRunning,
+    },
+    {
+      id: 'corrective_besoins',
+      label: 'Besoins & Main Courante',
+      icon: Package,
+      badge: activeNeedRequestsCount,
+      badgeColor: 'bg-purple-100 text-purple-900 border border-purple-300',
     },
     {
       id: 'corrective_atelier',
@@ -487,6 +501,13 @@ export default function CorrectiveView({
               travauxAFaire={travauxAFaire}
               getActionsForPanne={getActionsForPanne}
               onAddActionForPanne={onAddActionForPanne}
+              showToast={showToast}
+            />
+          )}
+
+          {activeTab === 'corrective_besoins' && (
+            <BesoinsMainCouranteTab
+              onNavigateToTab={handleTabChange}
               showToast={showToast}
             />
           )}

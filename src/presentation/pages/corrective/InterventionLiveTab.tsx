@@ -36,6 +36,14 @@ import {
   WORKSHOP_STATUS_LABELS,
   type WorkshopOrderType,
 } from '../../../domain/corrective/workshopOrderService';
+import {
+  getLinkedNeedRequestsForIntervention,
+  isNeedRequestBlockingBtClosure,
+  NEED_MATERIAL_CLASS_LABELS,
+  NEED_STATUS_LABELS,
+  type NeedMaterialClass,
+  type NeedRequestStatus,
+} from '../../../domain/corrective/needRequestService';
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -71,6 +79,11 @@ export default function InterventionLiveTab({
   const handleCreateWorkshopOrder = useGmaoStore((s) => s.handleCreateWorkshopOrder);
   const handleTransitionWorkshopOrderStatus = useGmaoStore(
     (s) => s.handleTransitionWorkshopOrderStatus
+  );
+  const needRequests = useGmaoStore((s) => s.needRequests || []);
+  const handleCreateNeedRequest = useGmaoStore((s) => s.handleCreateNeedRequest);
+  const handleTransitionNeedRequestStatus = useGmaoStore(
+    (s) => s.handleTransitionNeedRequestStatus
   );
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
@@ -257,6 +270,89 @@ export default function InterventionLiveTab({
     const intOpen = linkedInternalWorkshopOrders.filter((o) => isWorkshopOrderActive(o.statut));
     return [...intOpen, ...extOpen];
   }, [linkedWorkshopOrders, linkedInternalWorkshopOrders]);
+
+  // COR-HANDOFF-P0: Linked Need Requests for the active BT
+  const linkedNeedRequests = useMemo(() => {
+    if (!activeIntervention) return [];
+    return getLinkedNeedRequestsForIntervention(activeIntervention, needRequests);
+  }, [activeIntervention, needRequests]);
+
+  const blockingNeedRequests = useMemo(() => {
+    return linkedNeedRequests.filter((req) => isNeedRequestBlockingBtClosure(req));
+  }, [linkedNeedRequests]);
+
+  const [showNeedRequestForm, setShowNeedRequestForm] = useState(false);
+  const [needForm, setNeedForm] = useState<{
+    material_class: NeedMaterialClass;
+    quantite: number;
+    description_besoin: string;
+    id_ref_pdr: string;
+  }>({
+    material_class: 'PDR',
+    quantite: 1,
+    description_besoin: '',
+    id_ref_pdr: '',
+  });
+
+  const handleEmitNeedRequest = () => {
+    if (!activeIntervention) return;
+    const desc = String(needForm.description_besoin || '').trim();
+    if (!desc) {
+      showToast?.('Veuillez décrire le besoin matière / pièce avant de soumettre.', 'warning');
+      return;
+    }
+    const created = handleCreateNeedRequest({
+      id_machine: String(activeIntervention.code_machine || activeIntervention.machine || '').trim(),
+      id_bt: String(activeIntervention.num_bt || activeIntervention.id || '').trim(),
+      id_di: activeIntervention.id_di ? String(activeIntervention.id_di) : null,
+      id_technicien_demandeur:
+        user?.personnelId || user?.code || user?.id || activeIntervention.technicien_matricule || 'TECH',
+      nom_technicien_demandeur:
+        user?.name || activeIntervention.intervenant || 'Technicien',
+      material_class: needForm.material_class,
+      id_ref_pdr: needForm.id_ref_pdr.trim() || formState.pdr_ref || null,
+      designation_pdr: formState.pdr_designation || null,
+      id_part: formState.id_part || activeIntervention.id_part || null,
+      nom_part: formState.nom_part || activeIntervention.nom_part || null,
+      id_composant: formState.id_composant || activeIntervention.id_composant || null,
+      nom_composant: formState.nom_composant || activeIntervention.nom_composant || null,
+      quantite: Math.max(1, Number(needForm.quantite) || 1),
+      description_besoin: desc,
+    });
+
+    if (created) {
+      setNeedForm({
+        material_class: 'PDR',
+        quantite: 1,
+        description_besoin: '',
+        id_ref_pdr: '',
+      });
+      setShowNeedRequestForm(false);
+      showToast?.(
+        `Demande de besoin ${created.code_demande} créée (DEMANDE_TECH · Canal en attente d'arbitrage responsable). Le BT reste en attente.`,
+        'success'
+      );
+    }
+  };
+
+  const handleNeedFieldHandoff = (needId: string, nextStatus: NeedRequestStatus) => {
+    const res = handleTransitionNeedRequestStatus(needId, nextStatus, {
+      actorRole: user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN'),
+      isTechnician: isTechUser,
+      actorId: user?.id || user?.code || 'tech',
+      actorName: user?.name || activeIntervention?.intervenant || 'Technicien',
+    });
+    if (!res.valid) {
+      showToast?.(res.reason || 'Transition refusée.', 'warning');
+      return;
+    }
+    showToast?.(
+      `Besoin ${res.needRequest?.code_demande || needId} mis à jour : ${
+        NEED_STATUS_LABELS[nextStatus] || nextStatus
+      }.`,
+      'success'
+    );
+  };
 
   const [showBonAtelierMecaniqueForm, setShowBonAtelierMecaniqueForm] = useState(false);
   const [bonAtelierForm, setBonAtelierForm] = useState<{
@@ -711,9 +807,22 @@ export default function InterventionLiveTab({
 
     // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
     if (openWorkshopOrders.length > 0) {
-      const openCodes = openWorkshopOrders.map((o) => o.code).join(', ');
+      const openCodes = openWorkshopOrders
+        .map((o: any) => o.code_bon || o.code)
+        .join(', ');
       showToast?.(
         `Clôture bloquée : le Bon d'Atelier / Externe [${openCodes}] est encore en cours. Réceptionnez le bon (Retourné OK) ou suspendez le BT en attente (EN_ATTENTE_PDR).`,
+        'warning'
+      );
+      return false;
+    }
+
+    if (blockingNeedRequests.length > 0) {
+      const openNeeds = blockingNeedRequests
+        .map((r) => `${r.code_demande} (${r.statut})`)
+        .join(', ');
+      showToast?.(
+        `Clôture bloquée : la Demande de Besoin [${openNeeds}] n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD).`,
         'warning'
       );
       return false;
@@ -856,6 +965,205 @@ export default function InterventionLiveTab({
             );
           })}
         </div>
+      </div>
+
+      {/* COR-HANDOFF-P0: Demande de Besoin & Chaîne de Remise Terrain (NeedRequest) */}
+      <div
+        data-testid="live-need-handoff-panel"
+        className="p-4 rounded-2xl bg-purple-50/60 border border-purple-200/90 space-y-3"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="text-xs font-black uppercase tracking-wider text-purple-950 flex items-center gap-1.5">
+              <Package className="w-4 h-4 text-purple-700" />
+              Demande de Besoin & Remise Terrain (`COR-HANDOFF`)
+            </span>
+            <p className="text-[11px] text-purple-800 mt-0.5">
+              Déclarez un besoin matière (`PDR`, `Part`, `Composant`). Le responsable choisit le canal (`STOCK`, `ACHAT`, `ATELIER`, `EXTERNE`), puis vous validez la pose et l’essai (`POSE_ESSAI` ➔ `CLOTURE_FIELD`).
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="toggle-need-request-form-btn"
+              onClick={() => setShowNeedRequestForm((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>
+                {showNeedRequestForm ? 'Fermer Formulaire Besoin' : '+ Demande de Besoin (ND)'}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {showNeedRequestForm && (
+          <div
+            data-testid="need-request-live-form"
+            className="p-3.5 rounded-xl bg-white border-2 border-purple-300 space-y-3"
+          >
+            <div className="flex items-center justify-between text-xs font-black text-purple-950 uppercase">
+              <span>
+                Nouvelle Demande de Besoin (Machine: {activeIntervention.code_machine} • BT:{' '}
+                {activeIntervention.num_bt || activeIntervention.id})
+              </span>
+              <span className="text-[10px] font-mono bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                Statut initial: DEMANDE_TECH (Canal arbitré par Responsable)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                  Classe Matière *
+                </label>
+                <select
+                  value={needForm.material_class}
+                  onChange={(e) =>
+                    setNeedForm((p) => ({
+                      ...p,
+                      material_class: e.target.value as NeedMaterialClass,
+                    }))
+                  }
+                  className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-purple-200 bg-slate-50"
+                >
+                  {(Object.keys(NEED_MATERIAL_CLASS_LABELS) as NeedMaterialClass[]).map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls} — {NEED_MATERIAL_CLASS_LABELS[cls]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                  Quantité *
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={needForm.quantite}
+                  onChange={(e) =>
+                    setNeedForm((p) => ({
+                      ...p,
+                      quantite: Math.max(1, Number(e.target.value) || 1),
+                    }))
+                  }
+                  className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-purple-200 bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                  Réf. PDR (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  value={needForm.id_ref_pdr}
+                  onChange={(e) =>
+                    setNeedForm((p) => ({ ...p, id_ref_pdr: e.target.value }))
+                  }
+                  placeholder={formState.pdr_ref || 'Ex: RLM-6205...'}
+                  className="w-full py-2 px-2.5 text-xs font-mono rounded-lg border border-purple-200 bg-white"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                Description du Besoin Technique *
+              </label>
+              <input
+                type="text"
+                value={needForm.description_besoin}
+                onChange={(e) =>
+                  setNeedForm((p) => ({ ...p, description_besoin: e.target.value }))
+                }
+                placeholder="Ex: Roulement palier principal usé, bague d'usure à remplacer ou confectionner..."
+                className="w-full py-2 px-2.5 text-xs rounded-lg border border-purple-200 bg-white"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNeedRequestForm(false)}
+                className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                data-testid="submit-need-request-live-btn"
+                onClick={handleEmitNeedRequest}
+                className="px-4 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-black uppercase shadow-xs cursor-pointer"
+              >
+                Émettre Demande de Besoin (`DEMANDE_TECH`)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {linkedNeedRequests.length > 0 && (
+          <div className="space-y-2">
+            {linkedNeedRequests.map((req) => {
+              const isBlocking = isNeedRequestBlockingBtClosure(req);
+              return (
+                <div
+                  key={req.id}
+                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                    isBlocking
+                      ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                      : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
+                      {req.code_demande}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-white/80 font-mono">
+                      {req.material_class} ×{req.quantite}
+                    </span>
+                    {req.canal_appro && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-300">
+                        Canal: {req.canal_appro}
+                        {req.code_workshop_order ? ` (${req.code_workshop_order})` : ''}
+                      </span>
+                    )}
+                    <span className="font-bold">{req.description_besoin}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                        isBlocking
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      }`}
+                    >
+                      {NEED_STATUS_LABELS[req.statut] || req.statut}
+                    </span>
+
+                    {req.statut === 'REMIS_TECHNICIEN' && (
+                      <button
+                        type="button"
+                        onClick={() => handleNeedFieldHandoff(req.id, 'POSE_ESSAI')}
+                        className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                      >
+                        Démarrer Pose & Essai
+                      </button>
+                    )}
+
+                    {req.statut === 'POSE_ESSAI' && (
+                      <button
+                        type="button"
+                        onClick={() => handleNeedFieldHandoff(req.id, 'CLOTURE_FIELD')}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs"
+                      >
+                        Valider Essai OK (Clôturer Besoin)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* CORRECTIVE-ATELIER-P0: Bon de Réalisation & Rectification (Atelier / Externe) lié au BT */}

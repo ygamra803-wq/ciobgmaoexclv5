@@ -60,6 +60,16 @@ import {
   type IWorkshopOrder,
   type WorkshopOrderStatus,
 } from '../domain/corrective/workshopOrderService';
+import {
+  createNeedRequestRecord,
+  getLinkedNeedRequestsForIntervention,
+  hasBlockingNeedRequestForIntervention,
+  isNeedRequestBlockingBtClosure,
+  validateNeedRequestTransition,
+  type INeedRequest,
+  type NeedApproChannel,
+  type NeedRequestStatus,
+} from '../domain/corrective/needRequestService';
 import { movementRepository } from '../application/MovementRepository';
 import { getEntityRecordId } from '../services/lanStateMergeService';
 
@@ -546,6 +556,10 @@ function getInitialCorrective() {
     allowDemoFallback: false,
     demoSeed: [],
   });
+  const needRequests = loadCollection<INeedRequest>(STORAGE_KEYS.NEED_REQUESTS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
   const activeLiveId = storageService.getItem(ACTIVE_LIVE_KEY) || null;
   return {
     interventions,
@@ -554,6 +568,7 @@ function getInitialCorrective() {
     travauxAFaire,
     intervenants,
     workshopOrders,
+    needRequests,
     activeLiveId,
   };
 }
@@ -2535,6 +2550,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // ==========================================
     correctiveInterventions: correctiveInit.interventions,
     workshopOrders: correctiveInit.workshopOrders,
+    needRequests: correctiveInit.needRequests,
     correctiveActionsByPanne: correctiveInit.actionsByPanne,
     actionsByPanne: correctiveInit.actionsByPanne,
     correctivePanneCategories: correctiveInit.panneCategories,
@@ -3367,9 +3383,21 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         linkedWorkshopOrders.some((s) => SortieExterneService.isWorkshopOrderOpen(s?.etat)) ||
         linkedInternalWorkshopOrders.some((ord) => isWorkshopOrderActive(ord.statut));
 
+      // COR-HANDOFF-P0 Guard: block BT closure if any linked NeedRequest (requires_material !== false) has not reached CLOTURE_FIELD / REJETE / ANNULE
+      const explicitlySansMateriel =
+        clotureData.requires_material === false ||
+        clotureData.sans_materiel === true ||
+        existing.requires_material === false ||
+        existing.sans_materiel === true;
+      const hasOpenNeedRequest =
+        !explicitlySansMateriel &&
+        (clotureData.hasOpenNeedRequest === true ||
+          hasBlockingNeedRequestForIntervention(existing, get().needRequests));
+
       const validation = WorkOrderStateMachine.validateTransition(existing, 'CLOTURE', {
         ...clotureData,
         hasOpenWorkshopOrder,
+        hasOpenNeedRequest,
       });
       if (!validation.valid) {
         console.warn('[useGmaoStore] handleClotureIntervention blocked:', validation.reason);
@@ -4009,6 +4037,37 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         }
       }
 
+      // COR-HANDOFF-P0: When a linked WorkshopOrder reaches RECEPTIONNE_MONTAGE, advance any linked NeedRequest in APPROVISIONNEMENT to RECU_STRUCTURE
+      if (updatedOrder.statut === 'RECEPTIONNE_MONTAGE') {
+        const currentNeeds = get().needRequests || [];
+        let needsChanged = false;
+        const nextNeeds = currentNeeds.map((req) => {
+          if (
+            req &&
+            req.statut === 'APPROVISIONNEMENT' &&
+            req.canal_appro === 'ATELIER' &&
+            (req.id_workshop_order === updatedOrder.id ||
+              req.code_workshop_order === updatedOrder.code_bon)
+          ) {
+            needsChanged = true;
+            return {
+              ...req,
+              statut: 'RECU_STRUCTURE' as NeedRequestStatus,
+              date_statut: nowIso,
+              timestamps: {
+                ...(req.timestamps || {}),
+                RECU_STRUCTURE: nowIso,
+              },
+            };
+          }
+          return req;
+        });
+        if (needsChanged) {
+          set({ needRequests: nextNeeds });
+          DataGateway.saveNeedRequests(nextNeeds);
+        }
+      }
+
       const actor = resolveActiveActorContext();
       get().appendAuditEvent({
         actorId: actor.actorId,
@@ -4025,6 +4084,405 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       });
 
       return { valid: true, order: updatedOrder };
+    },
+
+    // ==========================================
+    // 8c. Need Requests & Field Handoff (COR-HANDOFF-P0)
+    // ==========================================
+    setNeedRequests: (updater) => {
+      const prev = get().needRequests || [];
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      set({ needRequests: next });
+      DataGateway.saveNeedRequests(next);
+    },
+
+    handleCreateNeedRequest: (payload) => {
+      const currentNeeds = get().needRequests || [];
+      const actor = resolveActiveActorContext();
+
+      try {
+        const newNeed = createNeedRequestRecord(
+          {
+            ...payload,
+            id_technicien_demandeur:
+              payload.id_technicien_demandeur || actor.actorId || 'TECH',
+            nom_technicien_demandeur:
+              payload.nom_technicien_demandeur || actor.actorName || 'Technicien',
+          },
+          currentNeeds
+        );
+
+        const nextNeeds = [newNeed, ...currentNeeds];
+        set({ needRequests: nextNeeds });
+        DataGateway.saveNeedRequests(nextNeeds);
+
+        // If linked to an open BT, place BT into EN_ATTENTE_PDR (waiting need handoff) without closing it
+        if (newNeed.id_bt) {
+          const targetBtKey = String(newNeed.id_bt).trim().toUpperCase();
+          const currentInterventions = get().correctiveInterventions || [];
+          let btUpdated = false;
+
+          const nextInterventions = currentInterventions.map((item) => {
+            const itemId = String(item.id || '').trim().toUpperCase();
+            const itemNumBt = String(item.num_bt || '').trim().toUpperCase();
+            if (itemId === targetBtKey || (itemNumBt && itemNumBt === targetBtKey)) {
+              const isAlreadyClosed =
+                String(item.statut || '').toUpperCase() === 'CLOTURE' ||
+                String(item.action_fermee || '').toUpperCase() === 'OUI';
+              btUpdated = true;
+              return {
+                ...item,
+                id_need_request: newNeed.id,
+                code_need_request: newNeed.code_demande,
+                statut_need_request: newNeed.statut,
+                canal_need_request: null,
+                ...(isAlreadyClosed
+                  ? {}
+                  : {
+                      statut: 'EN_ATTENTE_PDR',
+                      action_fermee: 'NON',
+                    }),
+              };
+            }
+            return item;
+          });
+
+          if (btUpdated) {
+            set({ correctiveInterventions: nextInterventions });
+            DataGateway.saveCorrectiveInterventions(nextInterventions);
+          }
+        }
+
+        get().appendAuditEvent({
+          actorId: newNeed.id_technicien_demandeur || actor.actorId,
+          actorName: newNeed.nom_technicien_demandeur || actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'NEED_REQUEST_CREATED',
+          entityType: 'NEED_REQUEST',
+          entityId: newNeed.code_demande,
+          before: null,
+          after: {
+            code_demande: newNeed.code_demande,
+            material_class: newNeed.material_class,
+            id_machine: newNeed.id_machine,
+            id_bt: newNeed.id_bt,
+            quantite: newNeed.quantite,
+            statut: newNeed.statut,
+            canal_appro: newNeed.canal_appro,
+          },
+          meta: {
+            summary: `Création Demande de Besoin ${newNeed.code_demande} (${newNeed.material_class}) pour machine ${newNeed.id_machine}${
+              newNeed.id_bt ? ` [BT: ${newNeed.id_bt}]` : ''
+            }`,
+          },
+        });
+
+        return newNeed;
+      } catch (err) {
+        console.warn('[useGmaoStore] handleCreateNeedRequest error:', err);
+        return null;
+      }
+    },
+
+    handleReviewNeedRequest: (needId, decisionPayload) => {
+      const currentNeeds = get().needRequests || [];
+      const existing = currentNeeds.find(
+        (req) =>
+          String(req.id) === String(needId) ||
+          String(req.code_demande) === String(needId)
+      );
+      if (!existing) {
+        return { valid: false, reason: `Demande de besoin introuvable (${needId}).` };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(decisionPayload.actorRole || actor.actorRole || 'ADMIN')
+        .trim()
+        .toUpperCase();
+      const isTech = effectiveRole === 'TECHNICIEN' || effectiveRole === 'OPERATEUR';
+
+      const targetStatus = decisionPayload.decision;
+      const canalAppro = (decisionPayload.canal_appro ?? existing.canal_appro ?? null) as
+        | NeedApproChannel
+        | null;
+
+      const check = validateNeedRequestTransition(existing.statut, targetStatus, {
+        actorRole: effectiveRole,
+        isTechnician: isTech,
+        canal_appro: canalAppro,
+        existingCanalAppro: existing.canal_appro,
+        motif_rejet: decisionPayload.motif_rejet,
+        notes_superviseur: decisionPayload.notes_superviseur,
+      });
+
+      if (!check.valid) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      let createdWorkshopOrder: IWorkshopOrder | null = null;
+      let linkedWorkshopId = existing.id_workshop_order || null;
+      let linkedWorkshopCode = existing.code_workshop_order || null;
+
+      // Coupling with COR-ATELIER-P0: when supervisor approves APPROVISIONNEMENT with canal_appro === 'ATELIER',
+      // automatically create and link an IWorkshopOrder if none exists yet.
+      if (targetStatus === 'APPROVISIONNEMENT' && canalAppro === 'ATELIER') {
+        if (!linkedWorkshopId) {
+          createdWorkshopOrder = get().handleCreateWorkshopOrder({
+            type_demande: decisionPayload.workshopOrderType || 'REALISATION',
+            id_machine: existing.id_machine,
+            id_bt: existing.id_bt || null,
+            id_di: existing.id_di || null,
+            id_composant: existing.id_composant || null,
+            id_part: existing.id_part || null,
+            quantite: existing.quantite,
+            description_travaux: `[${existing.code_demande}] ${existing.description_besoin}`,
+            observation: decisionPayload.notes_superviseur || undefined,
+            emetteur_section: 'SM',
+            emetteur_user_id: decisionPayload.actorId || actor.actorId,
+            emetteur_name: decisionPayload.actorName || actor.actorName,
+          });
+          if (createdWorkshopOrder) {
+            linkedWorkshopId = createdWorkshopOrder.id;
+            linkedWorkshopCode = createdWorkshopOrder.code_bon;
+          }
+        }
+      }
+
+      const updatedNeed: INeedRequest = {
+        ...existing,
+        statut: targetStatus,
+        canal_appro:
+          targetStatus === 'APPROVISIONNEMENT' ? canalAppro : existing.canal_appro ?? canalAppro,
+        id_workshop_order: linkedWorkshopId,
+        code_workshop_order: linkedWorkshopCode,
+        id_sortie_demand:
+          decisionPayload.id_sortie_demand !== undefined
+            ? decisionPayload.id_sortie_demand
+            : existing.id_sortie_demand || null,
+        ...(decisionPayload.notes_superviseur !== undefined
+          ? { notes_superviseur: String(decisionPayload.notes_superviseur).trim() }
+          : {}),
+        ...(decisionPayload.motif_rejet !== undefined
+          ? { motif_rejet: String(decisionPayload.motif_rejet).trim() }
+          : {}),
+        date_statut: nowIso,
+        timestamps: {
+          ...(existing.timestamps || {}),
+          ...(existing.statut === 'DEMANDE_TECH' && targetStatus === 'APPROVISIONNEMENT'
+            ? { REVUE_SUPERVISEUR: nowIso }
+            : {}),
+          [targetStatus]: nowIso,
+        },
+      };
+
+      const nextNeeds = get().needRequests.map((req) =>
+        req.id === existing.id ? updatedNeed : req
+      );
+      set({ needRequests: nextNeeds });
+      DataGateway.saveNeedRequests(nextNeeds);
+
+      // Sync parent BT metadata without closing the BT
+      if (updatedNeed.id_bt) {
+        const targetBtKey = String(updatedNeed.id_bt).trim().toUpperCase();
+        const currentInterventions = get().correctiveInterventions || [];
+        let btChanged = false;
+        const nextInterventions = currentInterventions.map((item) => {
+          const itemId = String(item.id || '').trim().toUpperCase();
+          const itemNumBt = String(item.num_bt || '').trim().toUpperCase();
+          if (itemId === targetBtKey || (itemNumBt && itemNumBt === targetBtKey)) {
+            btChanged = true;
+            const isClosed =
+              String(item.statut || '').toUpperCase() === 'CLOTURE' ||
+              String(item.action_fermee || '').toUpperCase() === 'OUI';
+            return {
+              ...item,
+              id_need_request: updatedNeed.id,
+              code_need_request: updatedNeed.code_demande,
+              statut_need_request: updatedNeed.statut,
+              canal_need_request: updatedNeed.canal_appro || null,
+              ...(isClosed
+                ? {}
+                : {
+                    statut:
+                      targetStatus === 'APPROVISIONNEMENT'
+                        ? 'EN_ATTENTE_PDR'
+                        : item.statut || 'EN_COURS',
+                    action_fermee: 'NON',
+                  }),
+            };
+          }
+          return item;
+        });
+
+        if (btChanged) {
+          set({ correctiveInterventions: nextInterventions });
+          DataGateway.saveCorrectiveInterventions(nextInterventions);
+        }
+      }
+
+      get().appendAuditEvent({
+        actorId: decisionPayload.actorId || actor.actorId,
+        actorName: decisionPayload.actorName || actor.actorName,
+        actorRole: effectiveRole,
+        actionType: 'NEED_REQUEST_REVIEWED',
+        entityType: 'NEED_REQUEST',
+        entityId: updatedNeed.code_demande,
+        before: { statut: existing.statut, canal_appro: existing.canal_appro },
+        after: {
+          statut: updatedNeed.statut,
+          canal_appro: updatedNeed.canal_appro,
+          id_workshop_order: updatedNeed.id_workshop_order,
+        },
+        meta: {
+          summary: `Revue Demande de Besoin ${updatedNeed.code_demande} : ${existing.statut} ➔ ${updatedNeed.statut}${
+            updatedNeed.canal_appro ? ` (Canal: ${updatedNeed.canal_appro})` : ''
+          }`,
+        },
+      });
+
+      return {
+        valid: true,
+        needRequest: updatedNeed,
+        workshopOrder: createdWorkshopOrder,
+      };
+    },
+
+    handleTransitionNeedRequestStatus: (needId, nextStatus, context = {}) => {
+      const currentNeeds = get().needRequests || [];
+      const existing = currentNeeds.find(
+        (req) =>
+          String(req.id) === String(needId) ||
+          String(req.code_demande) === String(needId)
+      );
+      if (!existing) {
+        return { valid: false, reason: `Demande de besoin introuvable (${needId}).` };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(context.actorRole || actor.actorRole || 'ADMIN')
+        .trim()
+        .toUpperCase();
+      const isTech =
+        context.isTechnician === true ||
+        effectiveRole === 'TECHNICIEN' ||
+        effectiveRole === 'OPERATEUR';
+
+      const allWorkshopOrders = get().workshopOrders || [];
+      const linkedWorkshopOrder = existing.id_workshop_order
+        ? allWorkshopOrders.find(
+            (w) =>
+              w.id === existing.id_workshop_order ||
+              w.code_bon === existing.id_workshop_order ||
+              w.code_bon === existing.code_workshop_order
+          ) || null
+        : null;
+
+      const hasOpenWorkshopOrder =
+        linkedWorkshopOrder != null && isWorkshopOrderActive(linkedWorkshopOrder.statut);
+
+      const check = validateNeedRequestTransition(existing.statut, nextStatus, {
+        actorRole: effectiveRole,
+        isTechnician: isTech,
+        existingCanalAppro: existing.canal_appro,
+        linkedWorkshopOrder,
+        hasOpenWorkshopOrder,
+        motif_rejet: context.motif_rejet,
+        notes_superviseur: context.notes_superviseur,
+        observation_pose_essai: context.observation_pose_essai,
+      });
+
+      if (!check.valid) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      const updatedNeed: INeedRequest = {
+        ...existing,
+        statut: nextStatus,
+        ...(context.observation_pose_essai !== undefined
+          ? { observation_pose_essai: String(context.observation_pose_essai).trim() }
+          : {}),
+        ...(context.notes_superviseur !== undefined
+          ? { notes_superviseur: String(context.notes_superviseur).trim() }
+          : {}),
+        ...(context.motif_rejet !== undefined
+          ? { motif_rejet: String(context.motif_rejet).trim() }
+          : {}),
+        date_statut: nowIso,
+        timestamps: {
+          ...(existing.timestamps || {}),
+          [nextStatus]: nowIso,
+        },
+      };
+
+      const nextNeeds = currentNeeds.map((req) =>
+        req.id === existing.id ? updatedNeed : req
+      );
+      set({ needRequests: nextNeeds });
+      DataGateway.saveNeedRequests(nextNeeds);
+
+      // Sync parent BT metadata (never auto-close the BT)
+      if (updatedNeed.id_bt) {
+        const targetBtKey = String(updatedNeed.id_bt).trim().toUpperCase();
+        const currentInterventions = get().correctiveInterventions || [];
+        let btChanged = false;
+        const nextInterventions = currentInterventions.map((item) => {
+          const itemId = String(item.id || '').trim().toUpperCase();
+          const itemNumBt = String(item.num_bt || '').trim().toUpperCase();
+          if (itemId === targetBtKey || (itemNumBt && itemNumBt === targetBtKey)) {
+            btChanged = true;
+            const isClosed =
+              String(item.statut || '').toUpperCase() === 'CLOTURE' ||
+              String(item.action_fermee || '').toUpperCase() === 'OUI';
+            const stillHasBlocking = nextNeeds
+              .filter((r) => {
+                const rBt = String(r.id_bt || '').trim().toUpperCase();
+                return rBt === itemId || rBt === itemNumBt;
+              })
+              .some((r) => isNeedRequestBlockingBtClosure(r));
+
+            return {
+              ...item,
+              id_need_request: updatedNeed.id,
+              code_need_request: updatedNeed.code_demande,
+              statut_need_request: updatedNeed.statut,
+              canal_need_request: updatedNeed.canal_appro || null,
+              ...(isClosed
+                ? {}
+                : {
+                    statut:
+                      !stillHasBlocking && item.statut === 'EN_ATTENTE_PDR'
+                        ? 'EN_COURS'
+                        : item.statut || 'EN_COURS',
+                    action_fermee: 'NON',
+                  }),
+            };
+          }
+          return item;
+        });
+
+        if (btChanged) {
+          set({ correctiveInterventions: nextInterventions });
+          DataGateway.saveCorrectiveInterventions(nextInterventions);
+        }
+      }
+
+      get().appendAuditEvent({
+        actorId: context.actorId || actor.actorId,
+        actorName: context.actorName || actor.actorName,
+        actorRole: effectiveRole,
+        actionType: 'NEED_REQUEST_STATUS_CHANGED',
+        entityType: 'NEED_REQUEST',
+        entityId: updatedNeed.code_demande,
+        before: { statut: existing.statut },
+        after: { statut: updatedNeed.statut, id_bt: updatedNeed.id_bt },
+        meta: {
+          summary: `Handoff Besoin ${updatedNeed.code_demande} : ${existing.statut} ➔ ${updatedNeed.statut}`,
+        },
+      });
+
+      return { valid: true, needRequest: updatedNeed };
     },
 
     // ==========================================
@@ -4311,6 +4769,9 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       }
       if (Array.isArray(remoteState.workshopOrders)) {
         updates.workshopOrders = remoteState.workshopOrders;
+      }
+      if (Array.isArray(remoteState.needRequests)) {
+        updates.needRequests = remoteState.needRequests;
       }
 
       if (Object.keys(updates).length > 0) {

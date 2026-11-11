@@ -49,6 +49,11 @@ import {
   isWorkshopOrderActive,
   WORKSHOP_STATUS_LABELS,
 } from '../../../domain/corrective/workshopOrderService';
+import {
+  getLinkedNeedRequestsForIntervention,
+  isNeedRequestBlockingBtClosure,
+  NEED_STATUS_LABELS,
+} from '../../../domain/corrective/needRequestService';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -79,6 +84,7 @@ export default function BonsTravailTab({
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
   const workshopOrders = useGmaoStore((s) => s.workshopOrders || []);
+  const needRequests = useGmaoStore((s) => s.needRequests || []);
   const techBadgeLabel = useMemo(
     () => getTechnicianBadgeLabel(user, technicians),
     [user, technicians]
@@ -175,6 +181,21 @@ export default function BonsTravailTab({
         ].join(', ');
         showToast?.(
           `Approbation bloquée : le Bon d'Atelier / Externe [${codes}] est encore en cours. Réceptionnez le bon avant de clôturer le BT.`,
+          'warning'
+        );
+        return;
+      }
+
+      const linkedNeeds = getLinkedNeedRequestsForIntervention(reviewModalBt, needRequests);
+      const openNeeds = linkedNeeds.filter((r) => isNeedRequestBlockingBtClosure(r));
+      const explicitlySansMateriel =
+        reviewModalBt.requires_material === false || reviewModalBt.sans_materiel === true;
+      if (!explicitlySansMateriel && openNeeds.length > 0) {
+        const needCodes = openNeeds
+          .map((r) => `${r.code_demande} (${r.statut})`)
+          .join(', ');
+        showToast?.(
+          `Approbation bloquée : la Demande de Besoin [${needCodes}] n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD).`,
           'warning'
         );
         return;
@@ -718,6 +739,29 @@ export default function BonsTravailTab({
             </span>
           ) : null;
 
+          const linkedNeeds = getLinkedNeedRequestsForIntervention(bt, needRequests);
+          const primaryNeed = linkedNeeds[0] || null;
+          const needBlocking = primaryNeed ? isNeedRequestBlockingBtClosure(primaryNeed) : false;
+
+          const needBadge = primaryNeed ? (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-mono font-bold shadow-2xs ${
+                needBlocking
+                  ? 'bg-purple-50 text-purple-900 border-purple-300'
+                  : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+              }`}
+              title={`Demande de besoin: ${primaryNeed.code_demande} (${
+                NEED_STATUS_LABELS[primaryNeed.statut] || primaryNeed.statut
+              })`}
+            >
+              <Package className="w-3 h-3 shrink-0" />
+              <span className="truncate">
+                Besoin: {primaryNeed.code_demande} ({primaryNeed.statut})
+                {primaryNeed.canal_appro ? ` · ${primaryNeed.canal_appro}` : ''}
+              </span>
+            </span>
+          ) : null;
+
           if (pdrObj) {
             return (
               <div className="flex flex-col gap-1 items-start">
@@ -729,6 +773,7 @@ export default function BonsTravailTab({
                   <span className="truncate">{pdrObj.ref}</span>
                 </span>
                 {workshopBadge}
+                {needBadge}
               </div>
             );
           }
@@ -753,11 +798,17 @@ export default function BonsTravailTab({
                   </span>
                 )}
                 {workshopBadge}
+                {needBadge}
               </div>
             );
           }
-          if (workshopBadge) {
-            return workshopBadge;
+          if (workshopBadge || needBadge) {
+            return (
+              <div className="flex flex-col gap-1 items-start">
+                {workshopBadge}
+                {needBadge}
+              </div>
+            );
           }
           if (bt.num_bon_saisi_par_tech) {
             return (
@@ -804,8 +855,15 @@ export default function BonsTravailTab({
             const linkedExt = SortieExterneService.getLinkedOrdersForBt(bt, sortiesExterne);
             const hasExtAtelier =
               linkedExt.length > 0 || Boolean(bt.code_sortie_atelier || bt.id_sortie_atelier);
+            const linkedNeeds = getLinkedNeedRequestsForIntervention(bt, needRequests);
+            const primaryNeed = linkedNeeds[0] || null;
 
-            if (hasInternalAtelier || hasExtAtelier) {
+            if (
+              hasInternalAtelier ||
+              hasExtAtelier ||
+              primaryNeed?.canal_appro === 'ATELIER' ||
+              primaryNeed?.canal_appro === 'EXTERNE'
+            ) {
               return (
                 <span
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-indigo-100 text-indigo-900 border border-indigo-300 font-mono shadow-2xs"
@@ -813,6 +871,17 @@ export default function BonsTravailTab({
                 >
                   <Wrench className="w-3 h-3 text-indigo-700 shrink-0" />
                   <span>ATTENTE ATELIER</span>
+                </span>
+              );
+            }
+            if (primaryNeed?.canal_appro === 'STOCK' || primaryNeed?.canal_appro === 'ACHAT') {
+              return (
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-cyan-100 text-cyan-900 border border-cyan-300 font-mono shadow-2xs"
+                  title={`BT en attente d'approvisionnement magasin/achat (${primaryNeed.canal_appro})`}
+                >
+                  <Package className="w-3 h-3 text-cyan-700 shrink-0" />
+                  <span>ATTENTE APPRO / PDR</span>
                 </span>
               );
             }
@@ -932,7 +1001,7 @@ export default function BonsTravailTab({
         },
       },
     ],
-    [technicians, stockItems, onUpdateIntervention, isTechUser, canExecuteBt, canValidateBt, t, workshopOrders, sortiesExterne]
+    [technicians, stockItems, onUpdateIntervention, isTechUser, canExecuteBt, canValidateBt, t, workshopOrders, sortiesExterne, needRequests]
   );
 
   return (

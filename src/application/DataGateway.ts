@@ -434,6 +434,19 @@ export const DataGateway = {
     return clean;
   },
 
+  /**
+   * Persists Need Requests & Handoff records (`COR-HANDOFF-P0`)
+   * to `STORAGE_KEYS.NEED_REQUESTS` (`gmao_need_requests_v1`).
+   *
+   * @param list - Array of need request records (`INeedRequest[]`).
+   * @returns Persisted need requests array.
+   */
+  saveNeedRequests(list: any[] = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.NEED_REQUESTS, clean);
+    return clean;
+  },
+
   // ==========================================
   // 5. PERSONNEL & USERS
   // ==========================================
@@ -1009,6 +1022,7 @@ export const DataGateway = {
     this.saveCorrectiveTravaux([]);
     this.saveCorrectiveIntervenants([]);
     this.saveWorkshopOrders([]);
+    this.saveNeedRequests([]);
 
     this.savePersonnel([], [], []);
     try {
@@ -1057,6 +1071,7 @@ export const DataGateway = {
     if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire([]);
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants([]);
     if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
+    if (setters.setNeedRequests) setters.setNeedRequests([]);
 
     if (setters.setUsers) setters.setUsers([]);
     if (setters.setTechnicians) setters.setTechnicians([]);
@@ -1108,6 +1123,7 @@ export const DataGateway = {
       [STORAGE_KEYS.CORRECTIVE_TRAVAUX]: [],
       [STORAGE_KEYS.CORRECTIVE_INTERVENANTS]: [],
       [STORAGE_KEYS.WORKSHOP_ORDERS]: [],
+      [STORAGE_KEYS.NEED_REQUESTS]: [],
       [STORAGE_KEYS.PERSONNEL]: [],
       [STORAGE_KEYS.TECHNICIANS]: [],
       [STORAGE_KEYS.OPERATIONS]: [],
@@ -1203,6 +1219,7 @@ export const DataGateway = {
     const meterReadings = Array.isArray(serverData.meterReadings) ? serverData.meterReadings : [];
     const auditEvents = Array.isArray(serverData.auditEvents) ? serverData.auditEvents : [];
     const workshopOrders = Array.isArray(serverData.workshopOrders) ? serverData.workshopOrders : [];
+    const needRequests = Array.isArray(serverData.needRequests) ? serverData.needRequests : [];
 
     const hasData =
       rawStock.length > 0 ||
@@ -1245,6 +1262,7 @@ export const DataGateway = {
     this.saveCorrectiveTravaux(correctiveTravauxAFaire);
     this.saveCorrectiveIntervenants(correctiveIntervenants);
     this.saveWorkshopOrders(workshopOrders);
+    this.saveNeedRequests(needRequests);
     this.savePersonnel(users, technicians, operations);
     try {
       const authSvc = new AuthService();
@@ -1293,6 +1311,7 @@ export const DataGateway = {
         correctiveTravauxAFaire,
         correctiveIntervenants,
         workshopOrders,
+        needRequests,
         users,
         technicians,
         operations,

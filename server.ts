@@ -73,6 +73,7 @@ export const ALLOWED_ENTITIES = [
   'meterReadings',
   'replenishmentOrders',
   'workshopOrders',
+  'needRequests',
   'auditEvents',
 ] as const;
 

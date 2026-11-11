@@ -237,6 +237,25 @@ export class WorkOrderStateMachine {
             "Clôture refusée : un Bon d'Atelier / Réparation Externe lié à ce BT est encore en cours. Réceptionnez ou montez l'organe avant de clôturer le BT.",
         };
       }
+
+      const explicitlySansMateriel =
+        payload.requires_material === false ||
+        payload.sans_materiel === true ||
+        intervention?.requires_material === false ||
+        intervention?.sans_materiel === true;
+
+      if (
+        !explicitlySansMateriel &&
+        (payload.hasOpenNeedRequest === true || intervention?.hasOpenNeedRequest === true)
+      ) {
+        return {
+          valid: false,
+          fromStatus,
+          toStatus,
+          reason:
+            "Clôture refusée : une Demande de Besoin liée à ce BT n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD). Terminez la remise et l'essai sur machine avant de clôturer le BT.",
+        };
+      }
     }
 
     return {
