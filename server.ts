@@ -39,6 +39,7 @@ export const ALLOWED_ENTITIES = [
   'rawStock',
   'stock',
   'types',
+  'pdrGroups',
   'designations',
   'machines',
   'generalSystemTypes',

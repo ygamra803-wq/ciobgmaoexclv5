@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   // 2. Stock & Movements
   RAW_STOCK: 'gmao_raw_stock_v8',
   STOCK_TYPES: 'gmao_types_v5',
+  PDR_GROUPS: 'gmao_pdr_groups_v1',
   DESIGNATIONS: 'gmao_designations_v3',
   MOUVEMENTS: 'gmao_mouvements_v2',
   SORTIE_DEMANDS: 'gmao_sortie_demands_v1',
@@ -111,6 +112,7 @@ export const LEGACY_KEY_MAP = {
   gmao_types_v3: STORAGE_KEYS.STOCK_TYPES,
   gmao_types_v2: STORAGE_KEYS.STOCK_TYPES,
   gmao_types_v1: STORAGE_KEYS.STOCK_TYPES,
+  gmao_pdr_groups: STORAGE_KEYS.PDR_GROUPS,
   gmao_designations_v2: STORAGE_KEYS.DESIGNATIONS,
   gmao_designations_v1: STORAGE_KEYS.DESIGNATIONS,
   gmao_diagnostics: STORAGE_KEYS.DESIGNATIONS,

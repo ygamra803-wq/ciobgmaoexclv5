@@ -236,6 +236,17 @@ export const DataGateway = {
     return clean;
   },
 
+  savePdrGroups(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.PDR_GROUPS, clean);
+    return clean;
+  },
+
+  loadPdrGroups() {
+    const data = storageService.getItem(STORAGE_KEYS.PDR_GROUPS);
+    return Array.isArray(data) ? data : [];
+  },
+
   saveDesignations(list = []) {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.DESIGNATIONS, clean);
@@ -1003,6 +1014,7 @@ export const DataGateway = {
 
     this.saveStock([]);
     this.saveStockTypes([]);
+    this.savePdrGroups([]);
     this.saveDesignations([]);
     this.saveMouvements([]);
     this.saveSortieDemands([]);
@@ -1053,6 +1065,7 @@ export const DataGateway = {
 
     if (setters.setRawStock) setters.setRawStock([]);
     if (setters.setTypes) setters.setTypes([]);
+    if (setters.setPdrGroups) setters.setPdrGroups([]);
     if (setters.setDesignations) setters.setDesignations([]);
     if (setters.setMouvements) setters.setMouvements([]);
     if (setters.setSortieDemands) setters.setSortieDemands([]);
@@ -1107,6 +1120,7 @@ export const DataGateway = {
       [STORAGE_KEYS.MACHINE_BOM]: [],
       [STORAGE_KEYS.RAW_STOCK]: [],
       [STORAGE_KEYS.STOCK_TYPES]: [],
+      [STORAGE_KEYS.PDR_GROUPS]: [],
       [STORAGE_KEYS.DESIGNATIONS]: [],
       [STORAGE_KEYS.MOUVEMENTS]: [],
       [STORAGE_KEYS.SORTIE_DEMANDS]: [],
@@ -1519,6 +1533,7 @@ export const DataGateway = {
       case 'stock':
         this.saveStock([]);
         this.saveStockTypes([]);
+        this.savePdrGroups([]);
         this.saveDesignations([]);
         movementRepository.bulkReplace(
           (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
@@ -1526,6 +1541,7 @@ export const DataGateway = {
         );
         if (setters.setRawStock) setters.setRawStock([]);
         if (setters.setTypes) setters.setTypes([]);
+        if (setters.setPdrGroups) setters.setPdrGroups([]);
         if (setters.setDesignations) setters.setDesignations([]);
         break;
 

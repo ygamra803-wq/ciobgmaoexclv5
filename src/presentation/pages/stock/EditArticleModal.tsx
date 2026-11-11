@@ -7,11 +7,13 @@ export default function EditArticleModal({
   onClose,
   article,
   types = [],
+  pdrGroups = [],
   onUpdateArticle,
 }: any) {
   const [form, setForm] = useState({
     ref: article?.ref || '',
     designation: article?.designation || '',
+    id_group: article?.id_group || '',
     id_type: article?.id_type || types[0]?.id_type || '',
     stockInitial: article?.stockInitial ?? 0,
     seuil: article?.seuil ?? 5,
@@ -24,6 +26,7 @@ export default function EditArticleModal({
       setForm({
         ref: article.ref || '',
         designation: article.designation || '',
+        id_group: article.id_group || '',
         id_type: article.id_type || types[0]?.id_type || '',
         stockInitial: article.stockInitial ?? 0,
         seuil: article.seuil ?? 5,
@@ -54,6 +57,7 @@ export default function EditArticleModal({
       ...article,
       id: targetId,
       designation: form.designation.trim(),
+      id_group: form.id_group || null,
       id_type: form.id_type,
       type: form.id_type,
       stockInitial: Number(form.stockInitial) || 0,
@@ -123,16 +127,34 @@ export default function EditArticleModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
-                <Boxes className="w-3 h-3 text-indigo-600" />
-                <span>Type de Pièce (D)</span>
+                <Package className="w-3 h-3 text-indigo-600" />
+                <span>Groupe PDR (Niveau 1)</span>
+              </label>
+              <CustomSelect
+                value={form.id_group || 'NONE'}
+                onChange={(val) => setForm({ ...form, id_group: val === 'NONE' ? '' : val })}
+                options={[
+                  { value: 'NONE', label: 'Non classé / Sans groupe' },
+                  ...pdrGroups.map((g: any) => ({
+                    value: g.id,
+                    label: `${g.code} — ${g.libelle}`,
+                  })),
+                ]}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1.5 flex items-center gap-1">
+                <Boxes className="w-3 h-3 text-amber-600" />
+                <span>Type de Pièce (Niveau 2)</span>
               </label>
               <CustomSelect
                 value={form.id_type}
                 onChange={(val) => setForm({ ...form, id_type: val })}
-                options={types.map((t) => ({
+                options={types.map((t: any) => ({
                   value: t.id_type,
                   label: `${t.libelle} (${t.id_type})`,
                 }))}

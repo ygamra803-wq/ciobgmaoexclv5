@@ -39,10 +39,34 @@ export type ValidationWorkflowStatus =
   | 'REJECTED'
   | 'NEEDS_CLARIFICATION';
 
+/**
+ * PDR Functional Classification Group (`CATALOG-GROUP-P1`)
+ * Top-tier organizational entity for PDR stock catalog (e.g. GRP-ROUL, GRP-ETAN).
+ */
+export interface PdrGroup {
+  id: string;              // e.g. 'GRP-ROUL'
+  code: string;            // 'ROUL' — unique short code
+  libelle: string;         // 'Roulements & paliers'
+  description?: string;
+  default_policy_tags?: MaterialPolicyTag[];  // default ['REPLACING'] for standard PDR
+  sort_order?: number;
+  is_active?: boolean;
+  [key: string]: any;
+}
+
+export interface StockType {
+  id_type: string;
+  libelle: string;
+  id_group?: string | null;
+  is_active?: boolean;
+  [key: string]: any;
+}
+
 export interface IStockItem {
   id?: string | number;
   ref: string;
   designation: string;
+  id_group?: string | null;
   id_type?: string;
   type?: string;
   stockInitial: number;

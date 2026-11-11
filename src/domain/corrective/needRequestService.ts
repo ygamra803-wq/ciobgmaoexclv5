@@ -234,7 +234,8 @@ export function normalizePolicyTags(input?: unknown): MaterialPolicyTag[] {
  */
 export function getEffectivePolicyTags(
   entity: unknown,
-  materialClass: NeedMaterialClass
+  materialClass: NeedMaterialClass,
+  groupContext?: { default_policy_tags?: MaterialPolicyTag[] } | null
 ): MaterialPolicyTag[] {
   const obj = entity as { policy_tags?: unknown; tags?: unknown; [key: string]: any } | null;
   const explicit = normalizePolicyTags(obj?.policy_tags ?? obj?.tags);
@@ -245,6 +246,13 @@ export function getEffectivePolicyTags(
       return pdrFiltered.length > 0 ? pdrFiltered : ['REPLACING'];
     }
     return explicit;
+  }
+
+  if (materialClass === 'PDR' && groupContext?.default_policy_tags) {
+    const groupDefaults = normalizePolicyTags(groupContext.default_policy_tags).filter(
+      (t) => t === 'REPLACING'
+    );
+    if (groupDefaults.length > 0) return groupDefaults;
   }
 
   switch (materialClass) {

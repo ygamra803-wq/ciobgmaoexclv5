@@ -45,6 +45,14 @@ import {
   computeReservedStockMap,
   computeStockReorderAlerts,
 } from '../../../core/security/validationReconciliation';
+import { PdrGroup } from '../../../types/domain';
+import {
+  listPdrGroups,
+  listPdrTypesByGroup,
+  listStockItemsByGroupType,
+  resolvePdrHierarchy,
+} from '../../../domain/stock/pdrHierarchyService';
+import PdrGroupsModal from './components/PdrGroupsModal';
 
 const TYPE_STYLES = {
   Foret: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -87,9 +95,25 @@ export default function StockView({
   onDirectAdjustStock = () => {},
   stockKPIs = { total: 0, alertes: 0, ruptures: 0, ok: 0, totalSorties: 0, totalEntrees: 0 },
   onNavigateToType: _onNavigateToType = () => {},
+  pdrGroups: propPdrGroups = [],
+  setPdrGroups: propSetPdrGroups,
 }: any) {
   const { t } = useI18n();
   const stockItems = propStockItems || [];
+  const storePdrGroups = useGmaoStore((s) => s.pdrGroups) || [];
+  const setStorePdrGroups = useGmaoStore((s) => s.setPdrGroups);
+  const effectivePdrGroups =
+    propPdrGroups && propPdrGroups.length > 0 ? propPdrGroups : storePdrGroups;
+  const effectiveSetPdrGroups = propSetPdrGroups || setStorePdrGroups;
+
+  const [stockGroupFilter, setStockGroupFilter] = useState('ALL');
+  const [showGroupsModal, setShowGroupsModal] = useState(false);
+
+  const availableTypes = useMemo(
+    () => listPdrTypesByGroup(types, stockGroupFilter),
+    [types, stockGroupFilter]
+  );
+
   const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
   const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
@@ -159,15 +183,14 @@ export default function StockView({
   const filteredStock = useMemo(() => {
     if (!stockItems || stockItems.length === 0) return [];
 
-    return stockItems.filter((item) => {
-      // Filter by type
-      if (stockTypeFilter !== 'ALL') {
-        const itemType = (item.id_type || item.type || '').toString();
-        if (itemType !== stockTypeFilter) {
-          return false;
-        }
-      }
+    const baseGroupFiltered = listStockItemsByGroupType(
+      stockItems,
+      types,
+      stockGroupFilter,
+      stockTypeFilter
+    );
 
+    return baseGroupFiltered.filter((item) => {
       // Filter by emplacement
       if (stockEmplacementFilter !== 'ALL') {
         if (item.emplacement !== stockEmplacementFilter) {
@@ -183,12 +206,24 @@ export default function StockView({
 
       // Filter by search
       if (deferredStockSearch) {
-        return multiTokenSearch(item, ['ref', 'designation', 'emplacement', 'type', 'id_type'], deferredStockSearch);
+        return multiTokenSearch(
+          item,
+          ['ref', 'designation', 'emplacement', 'type', 'id_type', 'id_group'],
+          deferredStockSearch
+        );
       }
 
       return true;
     });
-  }, [stockItems, stockTypeFilter, stockEmplacementFilter, stockAlertOnly, deferredStockSearch]);
+  }, [
+    stockItems,
+    types,
+    stockGroupFilter,
+    stockTypeFilter,
+    stockEmplacementFilter,
+    stockAlertOnly,
+    deferredStockSearch,
+  ]);
 
   const [pageSize, setPageSize] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
@@ -348,6 +383,7 @@ export default function StockView({
   };
 
   const hasActiveFilters = Boolean(
+    stockGroupFilter !== 'ALL' ||
     stockTypeFilter !== 'ALL' ||
     stockEmplacementFilter !== 'ALL' ||
     stockAlertOnly ||
@@ -358,6 +394,7 @@ export default function StockView({
   );
 
   const clearAllFilters = () => {
+    setStockGroupFilter('ALL');
     setStockTypeFilter('ALL');
     setStockEmplacementFilter('ALL');
     setStockAlertOnly(false);
@@ -451,6 +488,14 @@ export default function StockView({
           setLocalSearch('');
           setStockSearch('');
         },
+      });
+    }
+    if (stockGroupFilter !== 'ALL') {
+      const grp = effectivePdrGroups.find((g: any) => g.id === stockGroupFilter);
+      chips.push({
+        key: 'group',
+        label: `Groupe: ${grp ? grp.code : stockGroupFilter === 'UNCLASSIFIED' ? 'Non classé' : stockGroupFilter}`,
+        onRemove: () => setStockGroupFilter('ALL'),
       });
     }
     if (stockTypeFilter !== 'ALL') {
@@ -935,6 +980,36 @@ export default function StockView({
         activeFilters={activeStockFilterChips}
         onClearAll={clearAllFilters}
       >
+        {/* PDR Hierarchy Summary & Management */}
+        {canEditStock && (
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-amber-100/90">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                Hiérarchie PDR (N1 ➔ N2 ➔ SKU) :
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10.5px] font-bold">
+                Groupe ({effectivePdrGroups.length})
+              </span>
+              <span className="text-slate-400 text-xs font-bold">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10.5px] font-bold">
+                Type ({availableTypes.length})
+              </span>
+              <span className="text-slate-400 text-xs font-bold">➔</span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[10.5px] font-bold">
+                SKU / Ref ({stockItems.length})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowGroupsModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
+            >
+              <Package className="w-3.5 h-3.5 text-indigo-300" />
+              <span>Gérer Groupes PDR</span>
+            </button>
+          </div>
+        )}
+
         {/* 5-Column Multi-Criteria Filter Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
           {/* 1. Omni-Text Search */}
@@ -952,8 +1027,38 @@ export default function StockView({
             className="w-full sm:col-span-2 lg:col-span-1"
           />
 
-          {/* 2. Type de Pièce (Col. D) */}
-          <FilterField label={t('stock.piece_type', 'Type de Pièce')} colBadge="Col. D" colBadgeColor="amber">
+          {/* 2. Groupe PDR (Niveau 1) */}
+          <FilterField label={t('stock.pdr_group', 'Groupe PDR')} colBadge="Niveau 1" colBadgeColor="indigo">
+            <CustomSelect
+              value={stockGroupFilter}
+              prefixIcon={
+                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs">
+                  <Package className="w-3 h-3" />
+                </span>
+              }
+              onChange={(val) => {
+                setStockGroupFilter(val);
+                if (val !== 'ALL' && stockTypeFilter !== 'ALL') {
+                  const subTypes = listPdrTypesByGroup(types, val);
+                  const stillValid = subTypes.some(
+                    (t: any) => (t.id_type || t.libelle) === stockTypeFilter
+                  );
+                  if (!stillValid) setStockTypeFilter('ALL');
+                }
+              }}
+              options={[
+                { value: 'ALL', label: `Tous les Groupes (${effectivePdrGroups.length})` },
+                { value: 'UNCLASSIFIED', label: 'Non classé / Sans groupe' },
+                ...effectivePdrGroups.map((g: any) => ({
+                  value: g.id,
+                  label: `${g.code} — ${g.libelle}`,
+                })),
+              ]}
+            />
+          </FilterField>
+
+          {/* 3. Type de Pièce (Niveau 2) */}
+          <FilterField label={t('stock.piece_type', 'Type de Pièce')} colBadge="Niveau 2" colBadgeColor="amber">
             <CustomSelect
               value={stockTypeFilter}
               prefixIcon={
@@ -963,8 +1068,11 @@ export default function StockView({
               }
               onChange={(val) => setStockTypeFilter(val)}
               options={[
-                { value: 'ALL', label: `${t('stock.all_types', 'Tous les Types')} (${types.length})` },
-                ...types.map((tItem) => {
+                {
+                  value: 'ALL',
+                  label: `${t('stock.all_types', 'Tous les Types')} (${availableTypes.length})`,
+                },
+                ...availableTypes.map((tItem: any) => {
                   const val = typeof tItem === 'string' ? tItem : tItem.id_type || tItem.libelle;
                   const label = typeof tItem === 'string' ? tItem : tItem.libelle || tItem.id_type;
                   return {
@@ -1167,20 +1275,35 @@ export default function StockView({
                         {item.designation}
                       </td>
 
-                      {/* Type (Badge) */}
+                      {/* Type (Badge) & Hierarchical Group */}
                       <td className="py-3 px-3 whitespace-nowrap">
-                        <button
-                          onClick={() => {
-                            const filterVal = item.type || item.id_type;
-                            if (filterVal) {
-                              setStockTypeFilter(filterVal);
-                            }
-                          }}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition cursor-pointer shadow-2xs ${getTypeStyle(item.type)}`}
-                          title={t('stock.filter_by_type_tooltip', 'Filtrer par ce Type')}
-                        >
-                          <span>{item.type || (typeObj ? typeObj.libelle : item.id_type)}</span>
-                        </button>
+                        {(() => {
+                          const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
+                          return (
+                            <div className="flex flex-col gap-1 items-start">
+                              {hierarchy.group && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                  title={`Groupe PDR: ${hierarchy.group.libelle} (${hierarchy.group.code})`}
+                                >
+                                  <span>{hierarchy.group.code}</span>
+                                </span>
+                              )}
+                              <button
+                                onClick={() => {
+                                  const filterVal = item.type || item.id_type;
+                                  if (filterVal) {
+                                    setStockTypeFilter(filterVal);
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition cursor-pointer shadow-2xs ${getTypeStyle(item.type)}`}
+                                title={t('stock.filter_by_type_tooltip', 'Filtrer par ce Type')}
+                              >
+                                <span>{item.type || (typeObj ? typeObj.libelle : item.id_type)}</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Initial (E) */}
@@ -1436,8 +1559,21 @@ export default function StockView({
         onClose={() => setEditArticleModalState({ isOpen: false, article: null })}
         article={editArticleModalState.article}
         types={types}
+        pdrGroups={effectivePdrGroups}
         onUpdateArticle={onUpdateArticle}
         onOpenAddTypeModal={onOpenAddArticle}
+      />
+
+      {/* PDR Groups Management Modal (Niveau 1) */}
+      <PdrGroupsModal
+        isOpen={showGroupsModal}
+        onClose={() => setShowGroupsModal(false)}
+        pdrGroups={effectivePdrGroups}
+        onSaveGroups={(nextGroups) => {
+          effectiveSetPdrGroups(nextGroups);
+        }}
+        types={types}
+        stockItems={stockItems}
       />
 
       {/* Excel Formulas Preview Modal */}

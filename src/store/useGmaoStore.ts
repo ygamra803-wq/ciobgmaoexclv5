@@ -368,7 +368,11 @@ function getInitialStock() {
     allowDemoFallback: true,
     demoSeed: demoDesignations,
   });
-  return { types, rawStock, designations };
+  const pdrGroups = loadCollection(STORAGE_KEYS.PDR_GROUPS, {
+    allowDemoFallback: false,
+    demoSeed: [],
+  });
+  return { types, rawStock, designations, pdrGroups };
 }
 
 function normalizeMachinesList(list: any[] = []) {
@@ -598,11 +602,19 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     types: stockInit.types,
     rawStock: stockInit.rawStock,
     designations: stockInit.designations,
+    pdrGroups: stockInit.pdrGroups || [],
 
     setTypes: (updater) => {
       const next = resolveUpdate(updater, get().types);
       set({ types: next });
       DataGateway.saveStockTypes(next);
+    },
+
+    setPdrGroups: (updater) => {
+      const prev = get().pdrGroups || [];
+      const next = resolveUpdate(updater, prev);
+      set({ pdrGroups: next });
+      DataGateway.savePdrGroups(next);
     },
 
     setRawStock: (updater) => {
@@ -4601,6 +4613,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     handleClearAllForRealFactory: () =>
       DataGateway.clearAllForRealFactory({
         setTypes: get().setTypes,
+        setPdrGroups: get().setPdrGroups,
         setDesignations: get().setDesignations,
         setRawStock: get().setRawStock,
         setFamilies: get().setFamilies,
@@ -4852,6 +4865,8 @@ export const useStockSlice = () =>
   useGmaoStore((state) => ({
     types: state.types,
     setTypes: state.setTypes,
+    pdrGroups: state.pdrGroups,
+    setPdrGroups: state.setPdrGroups,
     designations: state.designations,
     setDesignations: state.setDesignations,
     rawStock: state.rawStock,

@@ -140,6 +140,7 @@ class TabSyncService {
         const granularSliceMap: Record<string, string> = {
           [STORAGE_KEYS.RAW_STOCK]: 'rawStock',
           [STORAGE_KEYS.STOCK_TYPES]: 'types',
+          [STORAGE_KEYS.PDR_GROUPS]: 'pdrGroups',
           [STORAGE_KEYS.DESIGNATIONS]: 'designations',
           [STORAGE_KEYS.MACHINES]: 'machines',
           [STORAGE_KEYS.FAMILIES]: 'families',
