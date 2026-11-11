@@ -44,6 +44,7 @@ export function useGmaoState() {
   // Persistence & Multi-tab synchronization connected directly to the Zustand store
   useGmaoPersistence({
     state: {
+      pdrGroups: store.pdrGroups,
       types: store.types,
       designations: store.designations,
       rawStock: store.rawStock,
@@ -78,6 +79,7 @@ export function useGmaoState() {
       correctiveIntervenants: store.correctiveIntervenants,
     },
     setters: {
+      setPdrGroups: store.setPdrGroups,
       setTypes: store.setTypes,
       setDesignations: store.setDesignations,
       setRawStock: store.setRawStock,
@@ -121,6 +123,8 @@ export function useGmaoState() {
 
   return {
     // 1. Stock
+    pdrGroups: store.pdrGroups,
+    setPdrGroups: store.setPdrGroups,
     types: store.types,
     setTypes: store.setTypes,
     designations: store.designations,

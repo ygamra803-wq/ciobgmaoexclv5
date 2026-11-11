@@ -413,6 +413,7 @@ export default function MobileSidebarDrawer({
           {/* GROUPE 1: STOCK & ARTICLES */}
           {(canAccess('stock') ||
             canAccess('sortie') ||
+            canAccess('pdr_groups') ||
             canAccess('types') ||
             canAccess('designations')) && (
             <div>
@@ -451,6 +452,32 @@ export default function MobileSidebarDrawer({
                         </span>
                       )}
                       <span className={getBadgeClass('sortie')}>Mvt</span>
+                    </span>
+                  </button>
+                )}
+
+                {/* L2: Groupes PDR */}
+                {canAccess('pdr_groups') && (
+                  <button
+                    onClick={() => navTo('pdr_groups')}
+                    className={getTabClass('pdr_groups', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Boxes
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('pdr_groups')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
+                      />
+                      <span>{t('nav.subtabs.pdr_groups', 'Groupes PDR')}</span>
+                    </span>
+                    <span className={getBadgeClass('pdr_groups')}>
+                      {counts.pdr_groups ?? counts.pdrGroups ?? 0}
                     </span>
                   </button>
                 )}

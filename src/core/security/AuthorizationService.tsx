@@ -217,6 +217,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'shift_weekly_report',
     'executive_report',
     'stock',
+    'pdr_groups',
     'types',
     'designations',
     'diagnostics',

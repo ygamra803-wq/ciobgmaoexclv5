@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { Package, X, Check, Edit2, Power, Plus, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Package, X, Check, Edit2, Power, Plus, ShieldCheck, AlertCircle, ExternalLink } from 'lucide-react';
 import { PdrGroup, MaterialPolicyTag } from '../../../../types/domain';
+import {
+  computePdrGroupStats,
+  validateAndUpsertPdrGroup,
+} from '../../../../domain/stock/pdrHierarchyService';
 
 interface PdrGroupsModalProps {
   isOpen: boolean;
@@ -9,6 +13,7 @@ interface PdrGroupsModalProps {
   onSaveGroups: (groups: PdrGroup[]) => void;
   types?: any[];
   stockItems?: any[];
+  onNavigateToPdrGroups?: () => void;
 }
 
 export default function PdrGroupsModal({
@@ -18,6 +23,7 @@ export default function PdrGroupsModal({
   onSaveGroups,
   types = [],
   stockItems = [],
+  onNavigateToPdrGroups,
 }: PdrGroupsModalProps) {
   const [editingGroup, setEditingGroup] = useState<PdrGroup | null>(null);
   const [form, setForm] = useState<{
@@ -63,50 +69,13 @@ export default function PdrGroupsModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanCode = form.code.trim().toUpperCase();
-    const cleanLibelle = form.libelle.trim();
-
-    if (!cleanCode || !cleanLibelle) {
-      setErrorMsg('Le code et le libellé sont obligatoires.');
+    const res = validateAndUpsertPdrGroup(pdrGroups, form, editingGroup?.id || null);
+    if (!res.ok) {
+      setErrorMsg(res.error || 'Erreur de validation.');
       return;
     }
 
-    // Check code uniqueness
-    const exists = pdrGroups.some(
-      (g) => g.code.toUpperCase() === cleanCode && (!editingGroup || g.id !== editingGroup.id)
-    );
-    if (exists) {
-      setErrorMsg(`Un groupe avec le code "${cleanCode}" existe déjà.`);
-      return;
-    }
-
-    if (editingGroup) {
-      const updated = pdrGroups.map((g) =>
-        g.id === editingGroup.id
-          ? {
-              ...g,
-              code: cleanCode,
-              libelle: cleanLibelle,
-              description: form.description.trim(),
-              default_policy_tags: form.default_policy_tags,
-              is_active: form.is_active,
-            }
-          : g
-      );
-      onSaveGroups(updated);
-    } else {
-      const newGroup: PdrGroup = {
-        id: `GRP-${cleanCode}`,
-        code: cleanCode,
-        libelle: cleanLibelle,
-        description: form.description.trim(),
-        default_policy_tags: form.default_policy_tags,
-        sort_order: pdrGroups.length + 1,
-        is_active: form.is_active,
-      };
-      onSaveGroups([...pdrGroups, newGroup]);
-    }
-
+    onSaveGroups(res.groups);
     handleStartCreate();
   };
 
@@ -145,13 +114,28 @@ export default function PdrGroupsModal({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onNavigateToPdrGroups && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onNavigateToPdrGroups();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Gérer dans Groupes PDR</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -279,15 +263,8 @@ export default function PdrGroupsModal({
                   </tr>
                 ) : (
                   pdrGroups.map((g) => {
-                    const linkedTypesCount = types.filter(
-                      (t) =>
-                        String(t.id_group || '').trim().toUpperCase() === String(g.id).trim().toUpperCase()
-                    ).length;
-                    const linkedItemsCount = stockItems.filter(
-                      (item) =>
-                        String(item.id_group || '').trim().toUpperCase() ===
-                        String(g.id).trim().toUpperCase()
-                    ).length;
+                    const { typesCount: linkedTypesCount, itemsCount: linkedItemsCount } =
+                      computePdrGroupStats(g, types, stockItems);
 
                     return (
                       <tr key={g.id} className="hover:bg-slate-50 transition">

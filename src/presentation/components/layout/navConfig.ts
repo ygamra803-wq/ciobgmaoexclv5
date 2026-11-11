@@ -49,6 +49,7 @@ export const PARENT_MODULES = [
     children: [
       { id: 'stock', label: 'Stock Articles' },
       { id: 'sortie', label: 'Sortie & Entrée Rapide' },
+      { id: 'pdr_groups', label: 'Groupes PDR' },
       { id: 'types', label: 'Types PDR' },
       { id: 'designations', label: 'Désignations PDR' }
     ]

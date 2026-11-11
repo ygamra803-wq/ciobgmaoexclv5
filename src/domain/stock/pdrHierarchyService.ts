@@ -158,3 +158,185 @@ export function getEffectivePdrPolicyTags(
   }
   return ['REPLACING'];
 }
+
+/**
+ * Computes the number of linked StockTypes and StockItems (direct or via linked types) for a given PdrGroup.
+ */
+export function computePdrGroupStats(
+  group: PdrGroup,
+  types?: ReadonlyArray<StockType | any> | null,
+  stockItems?: ReadonlyArray<IStockItem | any> | null
+): { typesCount: number; itemsCount: number; hasChildren: boolean } {
+  const gIdUpper = String(group?.id || '').trim().toUpperCase();
+  const gCodeUpper = String(group?.code || '').trim().toUpperCase();
+  const safeTypes = Array.isArray(types) ? types : [];
+  const safeItems = Array.isArray(stockItems) ? stockItems : [];
+
+  const linkedTypeKeys = new Set<string>();
+  let typesCount = 0;
+
+  for (const t of safeTypes) {
+    if (!t) continue;
+    const tGroupUpper = String(t.id_group || '').trim().toUpperCase();
+    if (tGroupUpper && (tGroupUpper === gIdUpper || (gCodeUpper && tGroupUpper === gCodeUpper))) {
+      typesCount += 1;
+      if (t.id_type) linkedTypeKeys.add(String(t.id_type).trim().toUpperCase());
+      if (t.libelle) linkedTypeKeys.add(String(t.libelle).trim().toUpperCase());
+    }
+  }
+
+  let itemsCount = 0;
+  for (const item of safeItems) {
+    if (!item) continue;
+    const directGroupUpper = String(item.id_group || '').trim().toUpperCase();
+    const itemTypeUpper = String(item.id_type || item.type || '').trim().toUpperCase();
+    const matchesDirect =
+      Boolean(directGroupUpper) &&
+      (directGroupUpper === gIdUpper || (Boolean(gCodeUpper) && directGroupUpper === gCodeUpper));
+    const matchesViaType = Boolean(itemTypeUpper) && linkedTypeKeys.has(itemTypeUpper);
+    if (matchesDirect || matchesViaType) {
+      itemsCount += 1;
+    }
+  }
+
+  return {
+    typesCount,
+    itemsCount,
+    hasChildren: typesCount > 0 || itemsCount > 0,
+  };
+}
+
+/**
+ * Shared validation and upsert logic for PdrGroup (used by both PdrGroupView and PdrGroupsModal).
+ */
+export function validateAndUpsertPdrGroup(
+  pdrGroups: ReadonlyArray<PdrGroup> = [],
+  payload: {
+    code: string;
+    libelle: string;
+    description?: string;
+    default_policy_tags?: MaterialPolicyTag[];
+    sort_order?: number;
+    is_active?: boolean;
+  },
+  editingGroupId?: string | null
+): { ok: boolean; error?: string; groups: PdrGroup[]; savedGroup?: PdrGroup } {
+  const cleanCode = String(payload.code || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+  const cleanLibelle = String(payload.libelle || '').trim();
+  const cleanDesc = String(payload.description || '').trim();
+
+  if (!cleanCode || !cleanLibelle) {
+    return {
+      ok: false,
+      error: 'Le code et le libellé du groupe PDR sont obligatoires.',
+      groups: [...pdrGroups],
+    };
+  }
+
+  const normalizedTags = normalizePolicyTags(payload.default_policy_tags);
+  const effectiveTags: MaterialPolicyTag[] =
+    normalizedTags.length > 0 ? normalizedTags : ['REPLACING'];
+
+  const duplicate = pdrGroups.some(
+    (g) =>
+      String(g.code || '').trim().toUpperCase() === cleanCode &&
+      (!editingGroupId || g.id !== editingGroupId)
+  );
+  if (duplicate) {
+    return {
+      ok: false,
+      error: `Un groupe PDR avec le code "${cleanCode}" existe déjà.`,
+      groups: [...pdrGroups],
+    };
+  }
+
+  if (editingGroupId) {
+    let updatedRecord: PdrGroup | undefined;
+    const nextGroups = pdrGroups.map((g) => {
+      if (g.id !== editingGroupId) return g;
+      updatedRecord = {
+        ...g,
+        code: cleanCode,
+        libelle: cleanLibelle,
+        description: cleanDesc,
+        default_policy_tags: effectiveTags,
+        sort_order:
+          payload.sort_order !== undefined && Number.isFinite(Number(payload.sort_order))
+            ? Number(payload.sort_order)
+            : g.sort_order ?? 1,
+        is_active: payload.is_active !== false,
+      };
+      return updatedRecord;
+    });
+    return { ok: true, groups: nextGroups, savedGroup: updatedRecord };
+  }
+
+  const newId = `GRP-${cleanCode}`;
+  const idCollision = pdrGroups.some((g) => String(g.id || '').toUpperCase() === newId);
+  const finalId = idCollision ? `${newId}-${pdrGroups.length + 1}` : newId;
+
+  const newGroup: PdrGroup = {
+    id: finalId,
+    code: cleanCode,
+    libelle: cleanLibelle,
+    description: cleanDesc,
+    default_policy_tags: effectiveTags,
+    sort_order:
+      payload.sort_order !== undefined && Number.isFinite(Number(payload.sort_order))
+        ? Number(payload.sort_order)
+        : pdrGroups.length + 1,
+    is_active: payload.is_active !== false,
+  };
+
+  return {
+    ok: true,
+    groups: [...pdrGroups, newGroup],
+    savedGroup: newGroup,
+  };
+}
+
+/**
+ * Safe deletion / deactivation policy for PdrGroup:
+ * - If the group has linked StockTypes or StockItems, it is NEVER hard-deleted; instead it is safely deactivated (is_active = false).
+ * - If the group has 0 linked types and 0 linked items, it can be cleanly removed.
+ */
+export function safeDeleteOrDeactivatePdrGroup(
+  pdrGroups: ReadonlyArray<PdrGroup> = [],
+  groupId: string,
+  types?: ReadonlyArray<StockType | any> | null,
+  stockItems?: ReadonlyArray<IStockItem | any> | null
+): {
+  mode: 'DELETED' | 'DEACTIVATED' | 'NOT_FOUND';
+  groups: PdrGroup[];
+  typesCount: number;
+  itemsCount: number;
+} {
+  const target = pdrGroups.find((g) => g.id === groupId);
+  if (!target) {
+    return { mode: 'NOT_FOUND', groups: [...pdrGroups], typesCount: 0, itemsCount: 0 };
+  }
+
+  const stats = computePdrGroupStats(target, types, stockItems);
+  if (stats.hasChildren) {
+    const nextGroups = pdrGroups.map((g) =>
+      g.id === groupId ? { ...g, is_active: false } : g
+    );
+    return {
+      mode: 'DEACTIVATED',
+      groups: nextGroups,
+      typesCount: stats.typesCount,
+      itemsCount: stats.itemsCount,
+    };
+  }
+
+  return {
+    mode: 'DELETED',
+    groups: pdrGroups.filter((g) => g.id !== groupId),
+    typesCount: 0,
+    itemsCount: 0,
+  };
+}
+

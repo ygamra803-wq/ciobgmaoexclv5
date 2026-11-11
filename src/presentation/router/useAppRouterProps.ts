@@ -20,6 +20,8 @@ export function useAppRouterProps({
   machines,
   warehouseItemsComputed,
   mouvements,
+  pdrGroups,
+  setPdrGroups,
   types,
   diagnostics,
   zones,
@@ -302,10 +304,23 @@ export function useAppRouterProps({
       onUpdateArticle: handleUpdateArticle,
       onDirectAdjustStock: handleDirectAdjustStock,
       stockKPIs,
+      pdrGroups,
+      setPdrGroups: setPdrGroups || setters.setPdrGroups,
       onNavigateToType: navigation.handleNavigateToStockFiltered,
       onNavigateToTypes: () => navigateTo('types'),
+      onNavigateToPdrGroups: navigation.handleNavigateToPdrGroups || (() => navigateTo('pdr_groups')),
       onNavigateToDesignations: navigation.handleNavigateToDesignationsFiltered,
       onNavigateToSortie: () => navigateTo('sortie'),
+    },
+
+    pdrGroups: {
+      pdrGroups,
+      setPdrGroups: setPdrGroups || setters.setPdrGroups,
+      types,
+      stockItems,
+      onNavigateToTypesByGroup: navigation.handleNavigateToTypesByGroup,
+      onNavigateToStockByGroup: navigation.handleNavigateToStockByGroup,
+      showToast: showToast || navigation?.showToast,
     },
 
     sortie: {
@@ -408,14 +423,18 @@ export function useAppRouterProps({
 
     types: {
       types,
+      pdrGroups,
       designations: diagnostics || designations,
       stockItems,
+      groupFilter: filters.typeGroupFilter,
+      setGroupFilter: filters.setTypeGroupFilter,
       onAddType: handleAddType,
       onUpdateType: handleUpdateType,
       onDeleteType: handleDeleteType,
       onNavigateToStockFiltered: navigation.handleNavigateToStockFiltered,
       onNavigateToDesignationsFiltered: navigation.handleNavigateToDesignationsFiltered,
       onQuickCreateDesignation: navigation.handleNavigateToCreateDesignationForType,
+      onNavigateToPdrGroups: navigation.handleNavigateToPdrGroups || (() => navigateTo('pdr_groups')),
     },
 
     designations: {

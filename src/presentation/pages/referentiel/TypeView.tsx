@@ -4,9 +4,12 @@ import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import { usePermission } from '../../components/common/PermissionGate';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import { listPdrGroups, listPdrTypesByGroup } from '../../../domain/stock/pdrHierarchyService';
 import {
   Tag,
   Layers,
@@ -35,17 +38,30 @@ export default function TypeView({
   types = [],
   designations = [],
   stockItems = [],
+  pdrGroups: propPdrGroups,
+  groupFilter: propGroupFilter,
+  setGroupFilter: propSetGroupFilter,
   onAddType,
   onUpdateType,
   onDeleteType,
+  onNavigateToPdrGroups,
   onNavigateToStockFiltered,
   onNavigateToDesignationsFiltered,
   onQuickCreateDesignation,
-}) {
+}: any) {
   const { t } = useI18n();
   const canCreateStock = usePermission('stock.create');
   const canEditStock = usePermission('stock.edit');
   const canDeleteStock = usePermission('stock.delete');
+
+  const storePdrGroups = useGmaoStore((s) => s.pdrGroups) || [];
+  const pdrGroups = propPdrGroups ?? storePdrGroups;
+  const activePdrGroups = useMemo(() => listPdrGroups(pdrGroups, true), [pdrGroups]);
+
+  const [localGroupFilter, setLocalGroupFilter] = useState('ALL');
+  const effectiveGroupFilter = propGroupFilter || localGroupFilter || 'ALL';
+  const setEffectiveGroupFilter = propSetGroupFilter || setLocalGroupFilter;
+
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -58,11 +74,30 @@ export default function TypeView({
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
-  const [form, setForm] = useState({ id_type: '', libelle: '' });
-  const [toEdit, setToEdit] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
+  const [form, setForm] = useState<{ id_type: string; libelle: string; id_group?: string }>({
+    id_type: '',
+    libelle: '',
+    id_group: '',
+  });
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [toDelete, setToDelete] = useState<any>(null);
 
   const safeTypes = Array.isArray(types) ? types : [];
+
+  const groupMap = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const g of pdrGroups || []) {
+      if (!g) continue;
+      if (g.id) map.set(String(g.id).trim().toUpperCase(), g);
+      if (g.code) map.set(String(g.code).trim().toUpperCase(), g);
+    }
+    return map;
+  }, [pdrGroups]);
+
+  const resolveTypeGroup = (item: any) => {
+    const gKey = String(item?.id_group || '').trim().toUpperCase();
+    return gKey ? groupMap.get(gKey) || null : null;
+  };
 
   const autoTypeId = useMemo(() => {
     const nums = safeTypes
@@ -89,17 +124,27 @@ export default function TypeView({
       setForm((prev) => ({
         ...prev,
         id_type: prev.id_type || autoTypeId,
+        id_group:
+          prev.id_group ||
+          (effectiveGroupFilter !== 'ALL' && effectiveGroupFilter !== 'UNCLASSIFIED'
+            ? effectiveGroupFilter
+            : ''),
       }));
     }
-  }, [showAddModal, autoTypeId]);
+  }, [showAddModal, autoTypeId, effectiveGroupFilter]);
 
-  const filtered = types.filter((t) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const id = String(t.id_type || '').toLowerCase();
-    const lib = String(t.libelle || '').toLowerCase();
-    return id.includes(q) || lib.includes(q);
-  });
+  const filtered = useMemo(() => {
+    const byGroup = listPdrTypesByGroup(types, effectiveGroupFilter);
+    return byGroup.filter((tItem) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      const id = String(tItem.id_type || '').toLowerCase();
+      const lib = String(tItem.libelle || '').toLowerCase();
+      const grp = resolveTypeGroup(tItem);
+      const grpText = grp ? `${grp.code} ${grp.libelle}`.toLowerCase() : '';
+      return id.includes(q) || lib.includes(q) || grpText.includes(q);
+    });
+  }, [types, effectiveGroupFilter, search, groupMap]);
 
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
@@ -197,13 +242,17 @@ export default function TypeView({
   const displayedData = rawDisplayedData;
 
   const handleExportExcel = () => {
-    const headers = ['ID Type', 'Libellé Type PDR', 'Nb Désignations', 'Nb Articles Stock'];
-    const rows = filtered.map((t) => [
-      t.id_type || t.type || '',
-      t.libelle || '',
-      designations.filter((d) => (d.id_type || d.type) === (t.id_type || t.type)).length,
-      stockItems.filter((s) => (s.id_type || s.type) === (t.id_type || t.type)).length,
-    ]);
+    const headers = ['ID Type', 'Libellé Type PDR', 'Groupe PDR', 'Nb Désignations', 'Nb Articles Stock'];
+    const rows = filtered.map((tItem) => {
+      const grp = resolveTypeGroup(tItem);
+      return [
+        tItem.id_type || tItem.type || '',
+        tItem.libelle || '',
+        grp ? `${grp.code} - ${grp.libelle}` : 'Non classé',
+        designations.filter((d) => (d.id_type || d.type) === (tItem.id_type || tItem.type)).length,
+        stockItems.filter((s) => (s.id_type || s.type) === (tItem.id_type || tItem.type)).length,
+      ];
+    });
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
       [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
@@ -220,8 +269,13 @@ export default function TypeView({
     e.preventDefault();
     if (!canCreateStock) return;
     if (!form.id_type || !form.libelle) return;
-    onAddType(form);
-    setForm({ id_type: '', libelle: '' });
+    const payload = {
+      id_type: form.id_type.trim(),
+      libelle: form.libelle.trim(),
+      ...(form.id_group ? { id_group: form.id_group } : {}),
+    };
+    onAddType(payload);
+    setForm({ id_type: '', libelle: '', id_group: '' });
     setShowAddModal(false);
   };
 
@@ -254,9 +308,38 @@ export default function TypeView({
         },
       },
       {
+        key: 'id_group',
+        label: t('article_types.col_group', 'GROUPE PDR (NIV 1)'),
+        colLetter: 'C',
+        icon: Boxes,
+        sortable: true,
+        render: (item) => {
+          const grp = resolveTypeGroup(item);
+          if (!grp) {
+            return (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-medium italic">
+                Non classé
+              </span>
+            );
+          }
+          return (
+            <button
+              type="button"
+              onClick={() => setEffectiveGroupFilter(grp.id)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 hover:bg-indigo-100 border border-indigo-200 text-[11px] font-semibold transition cursor-pointer"
+              title={`Filtrer par le groupe ${grp.code} — ${grp.libelle}`}
+            >
+              <Boxes className="w-3 h-3 text-indigo-600" />
+              <span className="font-mono font-bold">{grp.code}</span>
+              <span className="text-slate-600 truncate max-w-[140px]">• {grp.libelle}</span>
+            </button>
+          );
+        },
+      },
+      {
         key: 'desig_count',
         label: t('article_types.col_desig_count', 'DÉSIGNATIONS LIÉES'),
-        colLetter: 'C',
+        colLetter: 'D',
         icon: Boxes,
         sortable: true,
         render: (item) => {
@@ -282,7 +365,7 @@ export default function TypeView({
       {
         key: 'article_count',
         label: t('article_types.col_article_count', 'ARTICLES EN STOCK'),
-        colLetter: 'D',
+        colLetter: 'E',
         icon: Package,
         sortable: true,
         render: (item) => {
@@ -464,7 +547,7 @@ export default function TypeView({
         },
       },
     ],
-    [designations, stockItems, activeActionMenuId, canCreateStock, canEditStock, canDeleteStock, t]
+    [designations, stockItems, activeActionMenuId, canCreateStock, canEditStock, canDeleteStock, t, resolveTypeGroup, setEffectiveGroupFilter]
   );
 
   return (
@@ -525,7 +608,7 @@ export default function TypeView({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                {t('article_types.filters_subtitle', 'Référentiel des Familles & Types de Pièces de Rechange • Colonnes A → D')}
+                {t('article_types.filters_subtitle', 'Référentiel des Familles & Types de Pièces de Rechange • Colonnes A → E')}
               </p>
             </div>
           </div>
@@ -542,10 +625,11 @@ export default function TypeView({
             </button>
 
             {/* Circular Reset Button */}
-            {(localSearch || sortField !== 'id_type' || sortOrder !== 'asc') && (
+            {(localSearch || effectiveGroupFilter !== 'ALL' || sortField !== 'id_type' || sortOrder !== 'asc') && (
               <button
                 onClick={() => {
                   setLocalSearch('');
+                  setEffectiveGroupFilter('ALL');
                   setSortField('id_type');
                   setSortOrder('asc');
                 }}
@@ -558,7 +642,7 @@ export default function TypeView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
           {/* Search */}
           <div className="relative w-full">
             <div className="flex items-center justify-between mb-1.5">
@@ -589,6 +673,31 @@ export default function TypeView({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Groupe PDR Filter (Niveau 1) */}
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                GROUPE PDR (NIVEAU 1)
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+                Col. C
+              </span>
+            </div>
+            <CustomSelect
+              value={effectiveGroupFilter}
+              onChange={(val) => setEffectiveGroupFilter(val || 'ALL')}
+              options={[
+                { value: 'ALL', label: `Tous les groupes PDR (${types.length})` },
+                { value: 'UNASSIGNED', label: 'Non classés (Sans Groupe)' },
+                ...activeGroups.map((g) => ({
+                  value: g.id,
+                  label: `${g.code} — ${g.libelle}`,
+                })),
+              ]}
+              placeholder="Tous les groupes PDR"
+            />
           </div>
 
           {/* Sort Dropdown */}
@@ -667,6 +776,23 @@ export default function TypeView({
                   </button>
 
                   <button
+                    onClick={() => handleTableSort('id_group')}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
+                      sortField === 'id_group'
+                        ? 'bg-amber-50 text-amber-800 font-bold'
+                        : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>Groupe PDR (C)</span>
+                    {sortField === 'id_group' &&
+                      (sortOrder === 'asc' ? (
+                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      ) : (
+                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      ))}
+                  </button>
+
+                  <button
                     onClick={() => handleTableSort('desig_count')}
                     className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
                       sortField === 'desig_count'
@@ -674,7 +800,7 @@ export default function TypeView({
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <span>{t('article_types.sort_desig_count', 'Nb Désignations Liées (C)')}</span>
+                    <span>{t('article_types.sort_desig_count', 'Nb Désignations Liées (D)')}</span>
                     {sortField === 'desig_count' &&
                       (sortOrder === 'asc' ? (
                         <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -691,7 +817,7 @@ export default function TypeView({
                         : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
                     }`}
                   >
-                    <span>{t('article_types.sort_article_count', 'Nb Articles en Stock (D)')}</span>
+                    <span>{t('article_types.sort_article_count', 'Nb Articles en Stock (E)')}</span>
                     {sortField === 'article_count' &&
                       (sortOrder === 'asc' ? (
                         <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
@@ -789,6 +915,23 @@ export default function TypeView({
                   required
                 />
               </div>
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  {t('article_types.group_label', 'Groupe PDR (Niveau 1)')}
+                </label>
+                <select
+                  value={form.id_group || ''}
+                  onChange={(e) => setForm({ ...form, id_group: e.target.value || undefined })}
+                  className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800"
+                >
+                  <option value="">Non classé (Sans groupe PDR)</option>
+                  {activePdrGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.code} — {g.libelle}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="flex gap-2 pt-3">
                 <button
                   type="button"
@@ -817,7 +960,10 @@ export default function TypeView({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!canEditStock) return;
-                onUpdateType(toEdit.id_type, toEdit);
+                onUpdateType(toEdit.id_type, {
+                  ...toEdit,
+                  id_group: toEdit.id_group || undefined,
+                });
                 setToEdit(null);
               }}
               className="space-y-3"
@@ -840,6 +986,23 @@ export default function TypeView({
                   required
                   className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                 />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-500">
+                  {t('article_types.group_label', 'Groupe PDR (Niveau 1)')}
+                </label>
+                <select
+                  value={toEdit.id_group || ''}
+                  onChange={(e) => setToEdit({ ...toEdit, id_group: e.target.value || undefined })}
+                  className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800"
+                >
+                  <option value="">Non classé (Sans groupe PDR)</option>
+                  {activePdrGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.code} — {g.libelle}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex gap-2 pt-3">
                 <button

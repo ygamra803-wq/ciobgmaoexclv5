@@ -11,6 +11,7 @@ const FinanceView = lazy(() => import('../pages/finance/FinanceView'));
 const ShiftWeeklyReportView = lazy(() => import('../components/views/ShiftWeeklyReportView'));
 const MonthlyExecutiveReportView = lazy(() => import('../components/views/MonthlyExecutiveReportView'));
 const StockView = lazy(() => import('../pages/stock/StockView'));
+const PdrGroupView = lazy(() => import('../pages/referentiel/PdrGroupView'));
 const TypeView = lazy(() => import('../pages/referentiel/TypeView'));
 const DesignationView = lazy(() => import('../pages/referentiel/DesignationView'));
 const MachinesRegisteredView = lazy(() => import('../pages/machines/MachinesRegisteredView'));
@@ -152,6 +153,12 @@ export default function AppRouter({
                       {currentTab === 'entrepot' && (
                         <ErrorBoundary sectionName="Magasin & Entrepôt Réserve">
                           <EntrepotView {...props.entrepot} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'pdr_groups' && (
+                        <ErrorBoundary sectionName="Référentiel Groupes PDR (Niveau 1)">
+                          <PdrGroupView {...props.pdrGroups} />
                         </ErrorBoundary>
                       )}
 

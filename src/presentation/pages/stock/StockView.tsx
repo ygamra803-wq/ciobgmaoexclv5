@@ -100,6 +100,7 @@ export default function StockView({
   onDirectAdjustStock = () => {},
   stockKPIs = { total: 0, alertes: 0, ruptures: 0, ok: 0, totalSorties: 0, totalEntrees: 0 },
   onNavigateToType: _onNavigateToType = () => {},
+  onNavigateToPdrGroups,
   pdrGroups: propPdrGroups = [],
   setPdrGroups: propSetPdrGroups,
 }: any) {
@@ -1610,6 +1611,7 @@ export default function StockView({
         }}
         types={types}
         stockItems={stockItems}
+        onNavigateToPdrGroups={onNavigateToPdrGroups}
       />
 
       {/* PDR 3-Sheet Excel Catalog Import/Export Modal */}

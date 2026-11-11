@@ -48,6 +48,9 @@ export function useStateSync(setters: Record<string, any> = {}, validators: Reco
         }
 
         // 1. Stock Slice
+        if (fresh.pdrGroups && typeof currentSetters.setPdrGroups === 'function') {
+          currentSetters.setPdrGroups(fresh.pdrGroups);
+        }
         if (fresh.types && typeof currentSetters.setTypes === 'function') {
           currentSetters.setTypes(fresh.types);
         }

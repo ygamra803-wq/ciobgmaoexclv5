@@ -694,4 +694,96 @@ describe('PDR-EXCEL-HIERARCHY-P0 — 3-Sheet Excel Export / Import & Validation 
   });
 });
 
+describe('PDR-GROUP-PAGE-P0 — Groupes PDR Referentiel CRUD, Safe Deactivation & RBAC', () => {
+  it('1. validateAndUpsertPdrGroup creates a group with normalized uppercase code, defaults policy_tags to [REPLACING], and rejects duplicate codes', async () => {
+    const { validateAndUpsertPdrGroup } = await import('../domain/stock/pdrHierarchyService');
+
+    const res1 = validateAndUpsertPdrGroup([], {
+      code: '  hydr  ',
+      libelle: 'Hydraulique & Pneumatique',
+      description: 'Vérins, distributeurs et flexibles',
+    });
+
+    expect(res1.ok).toBe(true);
+    expect(res1.savedGroup?.code).toBe('HYDR');
+    expect(res1.savedGroup?.id).toBe('GRP-HYDR');
+    expect(res1.savedGroup?.default_policy_tags).toEqual(['REPLACING']);
+    expect(res1.savedGroup?.is_active).toBe(true);
+    expect(res1.groups).toHaveLength(1);
+
+    // Reject duplicate code on creation
+    const dupRes = validateAndUpsertPdrGroup(res1.groups, {
+      code: 'hydr',
+      libelle: 'Doublon Hydraulique',
+    });
+    expect(dupRes.ok).toBe(false);
+    expect(dupRes.error).toContain('existe déjà');
+
+    // Allow updating existing group when editingGroupId matches
+    const editRes = validateAndUpsertPdrGroup(
+      res1.groups,
+      {
+        code: 'HYDR',
+        libelle: 'Hydraulique Haute Pression',
+        sort_order: 5,
+      },
+      'GRP-HYDR'
+    );
+    expect(editRes.ok).toBe(true);
+    expect(editRes.savedGroup?.libelle).toBe('Hydraulique Haute Pression');
+    expect(editRes.savedGroup?.sort_order).toBe(5);
+  });
+
+  it('2. safeDeleteOrDeactivatePdrGroup soft-archives (is_active=false) when linked types or articles exist, and hard-deletes when 0 children exist', async () => {
+    const { safeDeleteOrDeactivatePdrGroup, computePdrGroupStats } = await import(
+      '../domain/stock/pdrHierarchyService'
+    );
+
+    const groups: PdrGroup[] = [
+      { id: 'GRP-ROUL', code: 'ROUL', libelle: 'Roulements', is_active: true },
+      { id: 'GRP-EMPTY', code: 'EMPT', libelle: 'Groupe Vide', is_active: true },
+    ];
+    const types: StockType[] = [
+      { id_type: 'TYP-BILLE', libelle: 'Roulement à billes', id_group: 'GRP-ROUL' },
+    ];
+    const items: IStockItem[] = [
+      { ref: 'SKF-6205', designation: 'Roulement 6205', id_type: 'TYP-BILLE', stockInitial: 4 },
+    ];
+
+    const stats = computePdrGroupStats(groups[0], types, items);
+    expect(stats.typesCount).toBe(1);
+    expect(stats.itemsCount).toBe(1);
+
+    // Group with children -> soft-archived (DEACTIVATED), never deleted
+    const deactRes = safeDeleteOrDeactivatePdrGroup(groups, 'GRP-ROUL', types, items);
+    expect(deactRes.mode).toBe('DEACTIVATED');
+    expect(deactRes.groups).toHaveLength(2);
+    expect(deactRes.groups.find((g) => g.id === 'GRP-ROUL')?.is_active).toBe(false);
+
+    // Group with 0 children -> hard-deleted (DELETED)
+    const delRes = safeDeleteOrDeactivatePdrGroup(deactRes.groups, 'GRP-EMPTY', types, items);
+    expect(delRes.mode).toBe('DELETED');
+    expect(delRes.groups).toHaveLength(1);
+    expect(delRes.groups[0].id).toBe('GRP-ROUL');
+  });
+
+  it('3. AuthorizationService.canAccessTab grants pdr_groups to ADMIN, RESPONSABLE_MAINTENANCE, RESPONSABLE_MAGASIN and denies VIEWER/TECHNICIEN/OPERATEUR', async () => {
+    const { AuthorizationService } = await import('../core/security/AuthorizationService');
+    const { ROLES } = await import('../core/security/Roles');
+
+    expect(AuthorizationService.canAccessTab({ role: ROLES.ADMIN }, 'pdr_groups')).toBe(true);
+    expect(
+      AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAINTENANCE }, 'pdr_groups')
+    ).toBe(true);
+    expect(
+      AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAGASIN }, 'pdr_groups')
+    ).toBe(true);
+
+    expect(AuthorizationService.canAccessTab({ role: ROLES.TECHNICIEN }, 'pdr_groups')).toBe(false);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.OPERATEUR }, 'pdr_groups')).toBe(false);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.VIEWER }, 'pdr_groups')).toBe(false);
+  });
+});
+
+
 

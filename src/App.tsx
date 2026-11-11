@@ -72,6 +72,8 @@ export default function App() {
   // Core Data States
   const gmaoState = useGmaoState();
   const {
+    pdrGroups,
+    setPdrGroups,
     types,
     designations,
     families,
@@ -340,6 +342,8 @@ export default function App() {
     machines,
     warehouseItemsComputed,
     mouvements,
+    pdrGroups,
+    setPdrGroups,
     types,
     diagnostics,
     zones,
@@ -542,6 +546,8 @@ export default function App() {
         navigation={navigation}
         counts={{
           stock: stockItems.length,
+          pdr_groups: (pdrGroups || []).length,
+          pdrGroups: (pdrGroups || []).length,
           types: types.length,
           designations: effectiveDesignations.length,
           diagnostics: effectiveDesignations.length,

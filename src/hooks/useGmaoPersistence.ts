@@ -54,6 +54,7 @@ export function useGmaoPersistence({
 
         const patch = {};
         const arrayFields = [
+          'pdrGroups',
           'types',
           'designations',
           'rawStock',

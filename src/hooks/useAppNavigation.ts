@@ -15,6 +15,7 @@ export function useAppNavigation({ setCurrentTab }) {
   const [mchZoneFilter, setMchZoneFilter] = useState('ALL');
 
   const [diagTypeFilter, setDiagTypeFilter] = useState('ALL');
+  const [typeGroupFilter, setTypeGroupFilter] = useState('ALL');
   const [quickCreateDesignationType, setQuickCreateDesignationType] = useState(null);
   const [quickCreateCompTemplateFamily, setQuickCreateCompTemplateFamily] = useState(null);
   const [quickCreateTemplateFamily, setQuickCreateTemplateFamily] = useState(null);
@@ -53,6 +54,21 @@ export function useAppNavigation({ setCurrentTab }) {
   const handleNavigateToDesignationsFiltered = (typeId) => {
     setDiagTypeFilter(typeId);
     startTransition(() => setCurrentTab('designations'));
+  };
+
+  const handleNavigateToPdrGroups = () => {
+    startTransition(() => setCurrentTab('pdr_groups'));
+  };
+
+  const handleNavigateToTypesByGroup = (groupId) => {
+    setTypeGroupFilter(groupId || 'ALL');
+    startTransition(() => setCurrentTab('types'));
+  };
+
+  const handleNavigateToStockByGroup = (_groupId) => {
+    setStockTypeFilter('ALL');
+    setStockAlertOnly(false);
+    startTransition(() => setCurrentTab('stock'));
   };
 
   const handleNavigateToCreateDesignationForType = (typeId) => {
@@ -285,6 +301,8 @@ export function useAppNavigation({ setCurrentTab }) {
       setMchZoneFilter,
       diagTypeFilter,
       setDiagTypeFilter,
+      typeGroupFilter,
+      setTypeGroupFilter,
       quickCreateDesignationType,
       setQuickCreateDesignationType,
       quickCreateCompTemplateFamily,
@@ -328,6 +346,9 @@ export function useAppNavigation({ setCurrentTab }) {
       handleNavigateToStockFiltered,
       handleNavigateToStockFilteredByRef,
       handleNavigateToDesignationsFiltered,
+      handleNavigateToPdrGroups,
+      handleNavigateToTypesByGroup,
+      handleNavigateToStockByGroup,
       handleNavigateToCreateDesignationForType,
       handleNavigateToQuickSortieFromDesignation,
       handleNavigateToQuickSortieFromPartDesignation,
