@@ -10,6 +10,7 @@ import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import { loadCollection, migrateStorageOnce } from '../infrastructure/persistence/migrateStorage';
 import { DataGateway } from '../application/DataGateway';
 import { storageService } from '../utils/storageService';
+import { Logger } from '../core/logger/LoggerService';
 import { MeterService } from '../application/services/meter/MeterService';
 import type { IMeterReading, MeterUnit } from '../types/meter';
 import type { IReplenishmentOrder, ReplenishmentOrderStatus } from '../types/replenishment';
@@ -77,23 +78,21 @@ import { movementRepository } from '../application/MovementRepository';
 import { getEntityRecordId } from '../services/lanStateMergeService';
 
 import type { IAuditEvent } from '../types/audit';
+import { SecurityService } from '../core/security/SecurityService';
 
 const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
 const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
 
 function resolveActiveActorContext(): { actorId: string; actorName: string; actorRole: string } {
   try {
-    if (typeof sessionStorage !== 'undefined') {
-      const raw = sessionStorage.getItem('gmao_session_v2');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const payload = parsed?.payload || parsed || {};
-        return {
-          actorId: String(payload.userId || payload.id || payload.username || 'ADMIN').trim(),
-          actorName: String(payload.nom || payload.name || payload.username || 'Administrateur').trim(),
-          actorRole: String(payload.role || 'ADMIN').trim().toUpperCase(),
-        };
-      }
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    if (parsed && typeof parsed === 'object') {
+      const payload = parsed?.payload || parsed || {};
+      return {
+        actorId: String(payload.userId || payload.id || payload.username || 'ADMIN').trim(),
+        actorName: String(payload.nom || payload.name || payload.username || 'Administrateur').trim(),
+        actorRole: String(payload.role || 'ADMIN').trim().toUpperCase(),
+      };
     }
   } catch {
     // ignore
@@ -121,13 +120,10 @@ function isMachineArchivedState(m: any): boolean {
 
 function resolveActiveSessionRole(): string {
   try {
-    if (typeof sessionStorage !== 'undefined') {
-      const raw = sessionStorage.getItem('gmao_session_v2');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const role = parsed?.payload?.role || parsed?.role || '';
-        return String(role).trim().toUpperCase();
-      }
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    if (parsed && typeof parsed === 'object') {
+      const role = parsed?.payload?.role || parsed?.role || '';
+      return String(role).trim().toUpperCase();
     }
   } catch {
     // ignore
@@ -830,7 +826,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         (m) => m.id_machine_registered === targetMachineId
       );
       if (targetMachine && String(targetMachine.asset_class || '').toUpperCase() === 'SYSTEM_GENERAL') {
-        console.warn('[useGmaoStore] Blocked adding production BOM element to SYSTEM_GENERAL asset:', targetMachine.id_machine_registered);
+        Logger.warn('[useGmaoStore] Blocked adding production BOM element to SYSTEM_GENERAL asset:', targetMachine.id_machine_registered);
         return;
       }
       const id = element.id || `BOM-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
@@ -1093,7 +1089,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (!existing) return null;
 
       if (existing.validation_status === 'APPROVED' && existing.stock_deducted === true) {
-        console.warn(
+        Logger.warn(
           `[useGmaoStore] handleReviewSortieDemandValidation blocked: demand ${demandId} is already approved and stock deducted.`
         );
         return null;
@@ -1225,7 +1221,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               try {
                 onAddMouvement(mvt);
               } catch (err) {
-                console.warn('[useGmaoStore] onAddMouvement error in sortie demand approval:', err);
+                Logger.warn('[useGmaoStore] onAddMouvement error in sortie demand approval:', err);
               }
             });
           } else {
@@ -1233,7 +1229,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               try {
                 movementRepository.add(mvt);
               } catch (err) {
-                console.warn('[useGmaoStore] movementRepository.add error in sortie demand approval:', err);
+                Logger.warn('[useGmaoStore] movementRepository.add error in sortie demand approval:', err);
               }
             });
             get().setMouvements((prev) => [...movementsToRecord, ...prev]);
@@ -1833,7 +1829,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               try {
                 validationData.onAddMouvement(mvt);
               } catch (err) {
-                console.warn('[useGmaoStore] onAddMouvement error in direct preventive execution:', err);
+                Logger.warn('[useGmaoStore] onAddMouvement error in direct preventive execution:', err);
               }
             });
           } else {
@@ -1841,7 +1837,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
               try {
                 movementRepository.add(mvt);
               } catch (err) {
-                console.warn('[useGmaoStore] movementRepository.add error in direct preventive execution:', err);
+                Logger.warn('[useGmaoStore] movementRepository.add error in direct preventive execution:', err);
               }
             });
             get().setMouvements((prev) => [...movementsToRecord, ...prev]);
@@ -1877,7 +1873,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const nowIso = new Date().toISOString();
 
       if (existingExec.validation_status === 'APPROVED') {
-        console.warn(`[useGmaoStore] handleReviewPreventiveExecutionValidation blocked: execution ${executionId} is already approved.`);
+        Logger.warn(`[useGmaoStore] handleReviewPreventiveExecutionValidation blocked: execution ${executionId} is already approved.`);
         return null;
       }
 
@@ -2113,7 +2109,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
                 try {
                   onAddMouvement(mvt);
                 } catch (err) {
-                  console.warn('[useGmaoStore] onAddMouvement error in preventive approval:', err);
+                  Logger.warn('[useGmaoStore] onAddMouvement error in preventive approval:', err);
                 }
               });
             } else {
@@ -2121,7 +2117,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
                 try {
                   movementRepository.add(mvt);
                 } catch (err) {
-                  console.warn('[useGmaoStore] movementRepository.add error in preventive approval:', err);
+                  Logger.warn('[useGmaoStore] movementRepository.add error in preventive approval:', err);
                 }
               });
               get().setMouvements((prev) => [...movementsToRecord, ...prev]);
@@ -2241,7 +2237,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             try {
               movementRepository.remove(m);
             } catch (err) {
-              console.warn('[useGmaoStore] Failed to remove movement on preventive execution delete:', err);
+              Logger.warn('[useGmaoStore] Failed to remove movement on preventive execution delete:', err);
             }
           });
           get().setMouvements((prev) => (prev || []).filter((m: any) => !removeIds.has(m.id)));
@@ -2880,7 +2876,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         num_bt: btDetails.num_bt || target.num_bt || 'BT-PENDING',
       });
       if (!validation.valid) {
-        console.warn('[useGmaoStore] handleConvertToBt transition blocked:', validation.reason);
+        Logger.warn('[useGmaoStore] handleConvertToBt transition blocked:', validation.reason);
         return null;
       }
 
@@ -2911,7 +2907,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       const validation = WorkOrderStateMachine.validateTransition(target, 'EN_COURS');
       if (!validation.valid) {
-        console.warn('[useGmaoStore] handleStartLiveIntervention transition blocked:', validation.reason);
+        Logger.warn('[useGmaoStore] handleStartLiveIntervention transition blocked:', validation.reason);
         return;
       }
 
@@ -2943,7 +2939,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         String(existing.action_fermee || '').trim().toUpperCase() === 'OUI' ||
         String(existing.statut || '').trim().toUpperCase() === 'CLOTURE'
       ) {
-        console.warn(`[useGmaoStore] handleSubmitInterventionForValidation blocked: intervention ${id} is already closed.`);
+        Logger.warn(`[useGmaoStore] handleSubmitInterventionForValidation blocked: intervention ${id} is already closed.`);
         return null;
       }
 
@@ -2958,7 +2954,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         ).trim()
       );
       if (!hasAction) {
-        console.warn('[useGmaoStore] handleSubmitInterventionForValidation blocked: missing work description.');
+        Logger.warn('[useGmaoStore] handleSubmitInterventionForValidation blocked: missing work description.');
         return null;
       }
 
@@ -3291,7 +3287,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
         if (String(existing.action_fermee || '').trim().toUpperCase() === 'OUI') {
-          console.warn(`[useGmaoStore] handleReviewInterventionValidation blocked: intervention ${id} is already closed.`);
+          Logger.warn(`[useGmaoStore] handleReviewInterventionValidation blocked: intervention ${id} is already closed.`);
           return null;
         }
 
@@ -3373,7 +3369,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       // Re-closure & FSM guard: never re-close an already closed BT or emit duplicate stock movements
       if (String(existing.action_fermee || '').trim().toUpperCase() === 'OUI') {
-        console.warn(`[useGmaoStore] handleClotureIntervention blocked: intervention ${id} is already closed.`);
+        Logger.warn(`[useGmaoStore] handleClotureIntervention blocked: intervention ${id} is already closed.`);
         return null;
       }
 
@@ -3415,7 +3411,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         hasOpenNeedRequest,
       });
       if (!validation.valid) {
-        console.warn('[useGmaoStore] handleClotureIntervention blocked:', validation.reason);
+        Logger.warn('[useGmaoStore] handleClotureIntervention blocked:', validation.reason);
         return null;
       }
 
@@ -3710,7 +3706,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             try {
               onAddMouvement(mvt);
             } catch (e) {
-              console.warn('[useGmaoStore] onAddMouvement error:', e);
+              Logger.warn('[useGmaoStore] onAddMouvement error:', e);
             }
           });
         } else {
@@ -3718,7 +3714,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             try {
               movementRepository.add(mvt);
             } catch (err) {
-              console.warn('[useGmaoStore] Failed to add movement via repository:', err);
+              Logger.warn('[useGmaoStore] Failed to add movement via repository:', err);
             }
           });
           get().setMouvements((prev) => [...movementsToRecord, ...prev]);
@@ -3764,7 +3760,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (patch.statut && patch.statut !== existing.statut) {
         const validation = WorkOrderStateMachine.validateTransition(existing, patch.statut, patch);
         if (!validation.valid) {
-          console.warn('[useGmaoStore] handleUpdateCorrectiveIntervention transition blocked:', validation.reason);
+          Logger.warn('[useGmaoStore] handleUpdateCorrectiveIntervention transition blocked:', validation.reason);
           return;
         }
       }
@@ -3821,7 +3817,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
             try {
               movementRepository.remove(m);
             } catch (err) {
-              console.warn('[useGmaoStore] Failed to remove movement on corrective BT delete:', err);
+              Logger.warn('[useGmaoStore] Failed to remove movement on corrective BT delete:', err);
             }
           });
           get().setMouvements((prev) => (prev || []).filter((m: any) => !removeIds.has(m.id)));
@@ -3902,7 +3898,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const cleanMachine = String(payload?.id_machine || '').trim();
       const cleanDesc = String(payload?.description_travaux || '').trim();
       if (!cleanMachine || !cleanDesc) {
-        console.warn('[useGmaoStore] handleCreateWorkshopOrder requires id_machine and description_travaux.');
+        Logger.warn('[useGmaoStore] handleCreateWorkshopOrder requires id_machine and description_travaux.');
         return null;
       }
 
@@ -4228,7 +4224,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
         return newNeed;
       } catch (err) {
-        console.warn('[useGmaoStore] handleCreateNeedRequest error:', err);
+        Logger.warn('[useGmaoStore] handleCreateNeedRequest error:', err);
         return null;
       }
     },

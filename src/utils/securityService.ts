@@ -1,4 +1,4 @@
-import CryptoJS from 'crypto-js';
+import { pbkdf2Sha256Hex, symmetricEncrypt, symmetricDecrypt } from '../core/security/nativeCrypto';
 import { Logger } from '../core/logger/LoggerService';
 import { SecurityService as CoreSecurityService } from '../core/security/SecurityService';
 
@@ -46,7 +46,7 @@ export class SecurityService {
       if (!key) {
         throw new Error('[SecurityService] Encryption aborted: key is null or empty');
       }
-      return CryptoJS.AES.encrypt(JSON.stringify(data), key).toString();
+      return symmetricEncrypt(JSON.stringify(data), key);
     } catch (e) {
       const isProd = Boolean(
         import.meta.env.PROD ||
@@ -56,7 +56,7 @@ export class SecurityService {
         Logger.error('Encryption failed in production:', e, 'SecurityService');
         throw e;
       }
-      // Dev-only fallback to safe base64 encoding if AES fails
+      // Dev-only fallback to safe base64 encoding if symmetric encryption fails
       try {
         return btoa(JSON.stringify(data));
       } catch {
@@ -77,25 +77,24 @@ export class SecurityService {
     const key = resolveSecretKey(secretKey);
     try {
       if (key) {
-        const bytes = CryptoJS.AES.decrypt(encrypted, key);
-        const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
+        const decryptedData = symmetricDecrypt(encrypted, key);
         if (decryptedData) {
           return JSON.parse(decryptedData);
         }
       }
     } catch {
-      // Dev-only fallback base64 decode attempt
-      const isProd = Boolean(
-        import.meta.env.PROD ||
-        (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
-      );
-      if (!isProd) {
-        try {
-          return JSON.parse(atob(encrypted));
-        } catch (err) {
-          Logger.error('Failed to decrypt data:', err, 'SecurityService');
-          return null;
-        }
+      // Fall through to dev-only fallback
+    }
+    const isProd = Boolean(
+      import.meta.env.PROD ||
+      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
+    );
+    if (!isProd) {
+      try {
+        return JSON.parse(atob(encrypted));
+      } catch (err) {
+        Logger.error('Failed to decrypt data:', err, 'SecurityService');
+        return null;
       }
     }
     return null;
@@ -119,6 +118,18 @@ export class SecurityService {
     return CoreSecurityService.getSecure(key);
   }
 
+  static removeSecure(key: string) {
+    return CoreSecurityService.removeSecure(key);
+  }
+
+  static saveSessionSecure(key: string, data: any) {
+    return CoreSecurityService.saveSessionSecure(key, data);
+  }
+
+  static getSessionSecure(key: string) {
+    return CoreSecurityService.getSessionSecure(key);
+  }
+
   /**
    * Hash PIN code securely using PBKDF2-SHA256
    * @param {string} pin
@@ -126,21 +137,9 @@ export class SecurityService {
    */
   static hashPin(pin) {
     if (!pin) return '';
-    if (typeof globalThis !== 'undefined' && globalThis.process && globalThis.process.versions && globalThis.process.versions.node) {
-      try {
-        const crypto = require('crypto');
-        const salt = crypto.randomBytes(16);
-        const hash = crypto.pbkdf2Sync(pin, salt, 10000, 32, 'sha256');
-        return `pbkdf2:v1:${salt.toString('hex')}:10000:${hash.toString('hex')}`;
-      } catch {}
-    }
-    const salt = CryptoJS.lib.WordArray.random(128 / 8).toString(CryptoJS.enc.Hex);
-    const key = CryptoJS.PBKDF2(pin, CryptoJS.enc.Hex.parse(salt), {
-      keySize: 256 / 32,
-      iterations: 10000,
-      hasher: CryptoJS.algo.SHA256,
-    });
-    return `pbkdf2:v1:${salt}:10000:${key.toString(CryptoJS.enc.Hex)}`;
+    const salt = CoreSecurityService.generateRandomHex(16);
+    const keyHex = pbkdf2Sha256Hex(pin, salt, 10000, 32);
+    return `pbkdf2:v1:${salt}:10000:${keyHex}`;
   }
 
   /**
@@ -157,20 +156,8 @@ export class SecurityService {
       if (parts.length === 5) {
         const [, , saltHex, iterStr, expectedHashHex] = parts;
         const iterations = parseInt(iterStr, 10) || 10000;
-        if (typeof globalThis !== 'undefined' && globalThis.process && globalThis.process.versions && globalThis.process.versions.node) {
-          try {
-            const crypto = require('crypto');
-            const salt = Buffer.from(saltHex, 'hex');
-            const hash = crypto.pbkdf2Sync(enteredPIN, salt, iterations, 32, 'sha256');
-            return hash.toString('hex') === expectedHashHex;
-          } catch {}
-        }
-        const key = CryptoJS.PBKDF2(enteredPIN, CryptoJS.enc.Hex.parse(saltHex), {
-          keySize: 256 / 32,
-          iterations,
-          hasher: CryptoJS.algo.SHA256,
-        });
-        return key.toString(CryptoJS.enc.Hex) === expectedHashHex;
+        const keyHex = pbkdf2Sha256Hex(enteredPIN, saltHex, iterations, 32);
+        return keyHex === expectedHashHex;
       }
     }
     return false;

@@ -44,6 +44,53 @@ import {
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
+import type {
+  IBlueprint,
+  ICompTemplate,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IMouvement,
+  IPartDesignation,
+  IPartType,
+  IStockItem,
+  ITechnician,
+  IWarehouseItem,
+  IZone,
+  MachineElement,
+} from '../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  PreventiveTaskItem,
+} from '../../../types/store';
+
+export interface NexusViewProps {
+  machines?: IMachine[];
+  zones?: IZone[];
+  families?: IMachineFamily[];
+  _templates?: IMachineTemplate[];
+  blueprints?: IBlueprint[];
+  technicians?: ITechnician[];
+  stockItems?: IStockItem[];
+  warehouseItems?: IWarehouseItem[];
+  partTypes?: IPartType[];
+  partDesignations?: IPartDesignation[];
+  compTemplates?: ICompTemplate[];
+  mouvements?: IMouvement[];
+  machineElementsLedger?: MachineElement[];
+  preventiveTasks?: PreventiveTaskItem[];
+  correctiveInterventions?: CorrectiveInterventionItem[];
+  onAddMachineElement?: (el: Partial<MachineElement>) => void;
+  onUpdateMachineElement?: (id: string, el: Partial<MachineElement>) => void;
+  onDeleteMachineElement?: (id: string) => void;
+  onDuplicateBOMToTwins?: (sourceMachineId: string, targetMachineIds: string[]) => number | void;
+  onNavigateToQuickSortie?: (preset?: Record<string, unknown>) => void;
+  setQuickSortiePreset?: (preset: Record<string, unknown> | null) => void;
+  onCreateCorrectiveFromNexus?: (payload: Record<string, unknown>) => void;
+  onCreatePreventiveFromNexus?: (payload: Record<string, unknown>) => void;
+  onNavigate?: (tab: string) => void;
+  showToast?: (message: string, type?: string) => void;
+}
 
 /**
  * NexusView — Registre Central des Éléments & BOM Machines (As-Built SSOT)
@@ -75,7 +122,7 @@ export default function NexusView({
   onCreatePreventiveFromNexus,
   onNavigate = () => {},
   showToast,
-}: any) {
+}: NexusViewProps) {
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
   const fileInputRef = useRef<HTMLInputElement | null>(null);

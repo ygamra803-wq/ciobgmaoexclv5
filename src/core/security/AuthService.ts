@@ -1,4 +1,5 @@
 import { SecurityService } from './SecurityService';
+import { Logger } from '../logger/LoggerService';
 import { indexedDBService } from '../../infrastructure/database/IndexedDBService';
 import { vaultService } from '../../utils/vaultService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
@@ -855,7 +856,7 @@ export class AuthService {
           }
           if (!AuthService._warnedDevBootstrap) {
             AuthService._warnedDevBootstrap = true;
-            console.warn(
+            Logger.warn(
               `[AuthService] Connexion de développement avec mot de passe d'initialisation par défaut pour '${user.username}'. Veuillez le modifier avant la mise en production.`
             );
           }
@@ -890,12 +891,7 @@ export class AuthService {
   }
 
   logout() {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.removeItem(SESSION_KEY);
-    }
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(SESSION_KEY);
-    }
+    SecurityService.removeSecure(SESSION_KEY);
     indexedDBService.removeItem(SESSION_KEY).catch(() => {});
   }
 

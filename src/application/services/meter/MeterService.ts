@@ -6,6 +6,7 @@
  */
 
 import { storageService } from '../../../utils/storageService';
+import { Logger } from '../../../core/logger/LoggerService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
 import type { IMeterReading, MeterEvaluationResult, MeterTriggerStatus, MeterUnit } from '../../../types/meter';
@@ -29,7 +30,7 @@ export class MeterService {
     try {
       storageService.setItem(STORAGE_KEYS.METER_READINGS, clean);
     } catch (err) {
-      console.warn('[MeterService] Storage error saving meter readings:', err);
+      Logger.warn('[MeterService] Storage error saving meter readings:', err);
     }
     return clean;
   }

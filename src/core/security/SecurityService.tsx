@@ -1,4 +1,12 @@
-import CryptoJS from 'crypto-js';
+import {
+  randomBytes,
+  randomBytesHex,
+  sha256Hex,
+  hmacSha256Hex,
+  pbkdf2Sha256Hex,
+  symmetricEncrypt,
+  symmetricDecrypt,
+} from './nativeCrypto';
 import { Logger } from '../logger/LoggerService';
 
 /**
@@ -17,6 +25,10 @@ export class SecurityService {
   static _volatileInstanceKey = null;
   static _warnedMissingKey = false;
 
+  static generateRandomHex(byteLength = 16): string {
+    return randomBytesHex(byteLength);
+  }
+
   /**
    * المفتاح السري الديناميكي للتشفير والتوقيع الرقمي
    * @returns {string}
@@ -34,11 +46,11 @@ export class SecurityService {
     if (!this._warnedMissingKey) {
       this._warnedMissingKey = true;
       if (isProd) {
-        console.error(
+        Logger.error(
           '[SecurityService] VITE_SECRET_KEY is missing in production environment (.env.local). Falling back to generated instance key.'
         );
       } else {
-        console.warn(
+        Logger.warn(
           '[SecurityService] VITE_SECRET_KEY missing in development — using locally generated random key.'
         );
       }
@@ -47,13 +59,13 @@ export class SecurityService {
     try {
       let instanceKey = localStorage.getItem('_gmao_sec_instance_key');
       if (!instanceKey) {
-        instanceKey = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+        instanceKey = this.generateRandomHex(32);
         localStorage.setItem('_gmao_sec_instance_key', instanceKey);
       }
       return instanceKey;
     } catch {
       if (!this._volatileInstanceKey) {
-        this._volatileInstanceKey = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+        this._volatileInstanceKey = this.generateRandomHex(32);
       }
       return this._volatileInstanceKey;
     }
@@ -77,9 +89,7 @@ export class SecurityService {
       const enc = new TextEncoder();
       const saltBytes = saltHex
         ? new Uint8Array(saltHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)))
-        : (typeof crypto !== 'undefined' && crypto.getRandomValues
-            ? crypto.getRandomValues(new Uint8Array(16))
-            : new Uint8Array(CryptoJS.lib.WordArray.random(16).words.flatMap((w) => [(w >> 24) & 0xff, (w >> 16) & 0xff, (w >> 8) & 0xff, w & 0xff])));
+        : randomBytes(16);
 
       const activeSaltHex = Array.from(saltBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
@@ -111,13 +121,9 @@ export class SecurityService {
         return `pbkdf2:v1:${activeSaltHex}:${iterations}:${hashHex}`;
       }
 
-      // 2. CryptoJS fallback if WebCrypto is unavailable in testing/legacy env
-      const derived = CryptoJS.PBKDF2(password, CryptoJS.enc.Hex.parse(activeSaltHex), {
-        keySize: 256 / 32,
-        iterations: iterations,
-        hasher: CryptoJS.algo.SHA256
-      });
-      return `pbkdf2:v1:${activeSaltHex}:${iterations}:${derived.toString(CryptoJS.enc.Hex)}`;
+      // 2. Native PBKDF2-SHA256 fallback if WebCrypto is unavailable in testing/legacy env
+      const derivedHex = pbkdf2Sha256Hex(password, activeSaltHex, iterations, 32);
+      return `pbkdf2:v1:${activeSaltHex}:${iterations}:${derivedHex}`;
     } catch (error) {
       Logger.error('Password hashing failed', error);
       throw error;
@@ -154,7 +160,7 @@ export class SecurityService {
 
       // 3. Fallback for plain SHA-256 or unhashed legacy development passwords
       if (storedHash.length === 64 && /^[0-9a-f]+$/i.test(storedHash)) {
-        return CryptoJS.SHA256(password).toString() === storedHash;
+        return sha256Hex(password) === storedHash;
       }
 
       return password === storedHash;
@@ -183,10 +189,7 @@ export class SecurityService {
    */
   static encrypt(data) {
     try {
-      const encrypted = CryptoJS.AES.encrypt(
-        JSON.stringify(data),
-        this.SECRET_KEY
-      ).toString();
+      const encrypted = symmetricEncrypt(JSON.stringify(data), this.SECRET_KEY);
       Logger.debug('Data encrypted successfully');
       return encrypted;
     } catch (error) {
@@ -215,8 +218,7 @@ export class SecurityService {
     }
 
     try {
-      const bytes = CryptoJS.AES.decrypt(encrypted, this.SECRET_KEY);
-      const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+      const decrypted = symmetricDecrypt(encrypted, this.SECRET_KEY);
       if (!decrypted) {
         throw new Error('Empty decrypted payload or key mismatch');
       }
@@ -254,7 +256,7 @@ export class SecurityService {
       };
 
       const encoded = btoa(JSON.stringify(token));
-      const signature = CryptoJS.HmacSHA256(encoded, this.SECRET_KEY).toString();
+      const signature = hmacSha256Hex(encoded, this.SECRET_KEY);
       
       Logger.debug('Token generated successfully');
       return `${encoded}.${signature}`;
@@ -284,7 +286,7 @@ export class SecurityService {
     }
 
     const [encoded, signature] = parts;
-    const expectedSignature = CryptoJS.HmacSHA256(encoded, this.SECRET_KEY).toString();
+    const expectedSignature = hmacSha256Hex(encoded, this.SECRET_KEY);
     
     if (signature !== expectedSignature) {
       Logger.warn('[SecurityService] Invalid token signature detected');
@@ -358,17 +360,61 @@ export class SecurityService {
   }
 
   /**
+   * Remove secure item from localStorage and sessionStorage
+   */
+  static removeSecure(key: string) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(key);
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem(key);
+      }
+    } catch (error) {
+      Logger.warn(`Failed to remove secure item: ${key}`, error);
+    }
+  }
+
+  /**
+   * Save encrypted payload to sessionStorage
+   */
+  static saveSessionSecure(key: string, data: any) {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      const encrypted = this.encrypt(data);
+      sessionStorage.setItem(key, encrypted);
+    } catch (error) {
+      Logger.error(`Failed to save secure session item: ${key}`, error);
+    }
+  }
+
+  /**
+   * Retrieve and decrypt/verify payload from sessionStorage (supports encrypted payloads and signed HMAC session envelopes)
+   */
+  static getSessionSecure(key: string): any {
+    try {
+      if (typeof sessionStorage === 'undefined') return null;
+      const raw = sessionStorage.getItem(key);
+      if (!raw) return null;
+      const trimmed = raw.trim();
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        const parsed = JSON.parse(trimmed);
+        return parsed;
+      }
+      return this.decrypt(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Fast PBKDF2 PIN hashing
    */
   static hashPin(pin) {
     if (!pin) return '';
-    const salt = CryptoJS.lib.WordArray.random(128 / 8).toString(CryptoJS.enc.Hex);
-    const key = CryptoJS.PBKDF2(pin, CryptoJS.enc.Hex.parse(salt), {
-      keySize: 256 / 32,
-      iterations: 10000,
-      hasher: CryptoJS.algo.SHA256,
-    });
-    return `pbkdf2:v1:${salt}:10000:${key.toString(CryptoJS.enc.Hex)}`;
+    const salt = this.generateRandomHex(16);
+    const keyHex = pbkdf2Sha256Hex(pin, salt, 10000, 32);
+    return `pbkdf2:v1:${salt}:10000:${keyHex}`;
   }
 
   /**
@@ -382,12 +428,8 @@ export class SecurityService {
       if (parts.length === 5) {
         const [, , saltHex, iterStr, expectedHashHex] = parts;
         const iterations = parseInt(iterStr, 10) || 10000;
-        const key = CryptoJS.PBKDF2(enteredPIN, CryptoJS.enc.Hex.parse(saltHex), {
-          keySize: 256 / 32,
-          iterations,
-          hasher: CryptoJS.algo.SHA256,
-        });
-        return key.toString(CryptoJS.enc.Hex) === expectedHashHex;
+        const keyHex = pbkdf2Sha256Hex(enteredPIN, saltHex, iterations, 32);
+        return keyHex === expectedHashHex;
       }
     }
     return false;
@@ -404,6 +446,6 @@ export class SecurityService {
     const timezone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
     
     const fingerprint = `${userAgent}|${language}|${timezone}`;
-    return CryptoJS.SHA256(fingerprint).toString();
+    return sha256Hex(fingerprint);
   }
 }

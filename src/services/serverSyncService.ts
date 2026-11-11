@@ -3,6 +3,7 @@ import { storageService } from '../utils/storageService';
 import { DataGateway } from '../application/DataGateway';
 import { useGmaoStore } from '../store/useGmaoStore';
 import { networkConfigService } from './networkConfigService';
+import { SecurityService } from '../core/security/SecurityService';
 
 export interface ServerStateSummary {
   version?: number;
@@ -60,14 +61,12 @@ let lastUnresolvedConflictState: ConflictDetectionResult | null = null;
 
 const resolveSessionUser = (): Record<string, any> | null => {
   try {
-    if (typeof sessionStorage !== 'undefined') {
-      const signedRaw = sessionStorage.getItem('gmao_session_v2');
-      if (signedRaw) {
-        const parsed = JSON.parse(signedRaw);
-        if (parsed?.payload && typeof parsed.payload === 'object') {
-          return parsed.payload;
-        }
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.payload && typeof parsed.payload === 'object') {
+        return parsed.payload;
       }
+      return parsed;
     }
     const activeUser = storageService.getItem('gmao_active_user');
     if (activeUser && typeof activeUser === 'object') {

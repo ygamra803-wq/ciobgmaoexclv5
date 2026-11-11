@@ -50,20 +50,32 @@ import GmaoIndustrialDataGrid, {
 } from '../../components/common/GmaoIndustrialDataGrid';
 import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
+import type {
+  IGeneralSystemType,
+  IMachine,
+  IMouvement,
+  ITechnician,
+  IZone,
+} from '../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  PreventiveTaskItem,
+  StateUpdater,
+} from '../../../types/store';
 
 export interface EquipmentViewProps {
-  machines: any[];
-  generalSystemTypes: any[];
-  setGeneralSystemTypes?: (updater: any) => void;
-  handleAddGeneralSystemType: (payload: { code: string; name: string }) => any;
+  machines: IMachine[];
+  generalSystemTypes: IGeneralSystemType[];
+  setGeneralSystemTypes?: (updater: StateUpdater<IGeneralSystemType[]>) => void;
+  handleAddGeneralSystemType: (payload: { code: string; name: string }) => IGeneralSystemType | null | void;
   handleToggleGeneralSystemType: (id: string) => void;
-  zones: any[];
-  technicians: any[];
-  mouvements: any[];
-  preventiveTasks: any[];
-  correctiveInterventions: any[];
-  handleAddMachine: (machine: any) => boolean | void;
-  handleUpdateMachine: (id: string, machine: any) => boolean | void;
+  zones: IZone[];
+  technicians: ITechnician[];
+  mouvements: IMouvement[];
+  preventiveTasks: PreventiveTaskItem[];
+  correctiveInterventions: CorrectiveInterventionItem[];
+  handleAddMachine: (machine: Partial<IMachine>) => boolean | void;
+  handleUpdateMachine: (id: string, machine: Partial<IMachine>) => boolean | void;
   handleDeleteMachine: (id: string) => void;
   onNavigateToZone?: (zoneId: string) => void;
   onNavigateToQuickSortie?: (machineId: string) => void;

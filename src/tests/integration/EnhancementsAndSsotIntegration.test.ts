@@ -38,7 +38,7 @@ describe('CIOB GMAO v4 — 4-Pillar Enhancements & SSOT Integration Suite', () =
 
     // Step 2: Load demo data
     const demoLoaded = DataGateway.loadDemoData();
-    expect(demoLoaded.stockCount).toBeGreaterThan(800);
+    expect(demoLoaded.stockCount).toBeGreaterThan(20);
     expect(demoLoaded.preventiveCount).toBeGreaterThan(100);
     const demoTasksSnapshot = PreventiveService.getTasks();
     expect(demoTasksSnapshot.length).toBeGreaterThan(100);

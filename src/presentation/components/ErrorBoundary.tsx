@@ -1,6 +1,7 @@
 // ✅ ملف: src/presentation/components/ErrorBoundary.tsx
 
 import React from 'react';
+import { Logger } from '../../core/logger/LoggerService';
 
 interface Props {
   children: React.ReactNode;
@@ -32,7 +33,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    Logger.error('ErrorBoundary caught error:', { error, errorInfo }, 'ErrorBoundary');
     this.setState((prevState) => ({
       errorInfo,
       errorCount: prevState.errorCount + 1,

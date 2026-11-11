@@ -3,8 +3,10 @@
 // Données au repos chiffrées sans aucun mot de passe ni sel statique stocké dans le code source.
 // Master PIN conservé uniquement en mémoire vive (RAM) et coffre persisté dans IndexedDB + cache chiffré.
 
-import CryptoJS from 'crypto-js';
+import { symmetricEncrypt, symmetricDecrypt } from '../core/security/nativeCrypto';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
+import { SecurityService } from '../core/security/SecurityService';
+import { Logger } from '../core/logger/LoggerService';
 
 const VAULT_SALT_KEY = 'gmao_vault_salt_v2';
 const VAULT_CIPHER_KEY = 'gmao_vault_cipher_v2';
@@ -29,9 +31,7 @@ export function setMasterPin(pin) {
   }
   masterPinInMemory = pin.trim();
   // Nettoyage systématique de toute trace historique dans localStorage
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('gmao_admin_pin');
-  }
+  SecurityService.removeSecure('gmao_admin_pin');
 }
 
 export function getMasterPin() {
@@ -124,7 +124,7 @@ export async function encryptVault(vaultObject, pin) {
   const ivB64 = bufToBase64(iv);
   localStorage.setItem(VAULT_CIPHER_KEY, cipherB64);
   localStorage.setItem(VAULT_IV_KEY, ivB64);
-  localStorage.removeItem('gmao_admin_pin');
+  SecurityService.removeSecure('gmao_admin_pin');
 
   // Persistance sécurisée de l'enveloppe chiffrée dans IndexedDB
   await indexedDBService.setItem(IDB_VAULT_KEY, {
@@ -272,7 +272,7 @@ export async function changeMasterPin(currentPin, newPin) {
   const ivB64 = bufToBase64(iv);
   localStorage.setItem(VAULT_CIPHER_KEY, cipherB64);
   localStorage.setItem(VAULT_IV_KEY, ivB64);
-  localStorage.removeItem('gmao_admin_pin');
+  SecurityService.removeSecure('gmao_admin_pin');
 
   await indexedDBService.setItem(IDB_VAULT_KEY, {
     cipherB64,
@@ -304,10 +304,8 @@ export async function setPinHash(pin) {
   const hash = await hashPinSHA256(cleanPin);
   masterPinHashInMemory = hash;
   // Supprimer toute trace du hash de PIN dans localStorage (protection anti-XSS / anti-brute-force)
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(VAULT_PIN_HASH_KEY);
-    localStorage.removeItem('gmao_admin_pin');
-  }
+  SecurityService.removeSecure(VAULT_PIN_HASH_KEY);
+  SecurityService.removeSecure('gmao_admin_pin');
   await indexedDBService.setItem(VAULT_PIN_HASH_KEY, hash);
   return hash;
 }
@@ -362,10 +360,10 @@ function resolveSymmetricKey(password) {
   if (password) return password;
   if (import.meta.env.VITE_CRYPTO_KEY) return import.meta.env.VITE_CRYPTO_KEY;
   if (import.meta.env.PROD || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')) {
-    console.error('[vaultService] VITE_CRYPTO_KEY is missing in production — using generated salt.');
+    Logger.error('VITE_CRYPTO_KEY is missing in production — using generated salt.', null, 'vaultService');
     return getOrCreateSalt();
   }
-  console.warn('[vaultService] VITE_CRYPTO_KEY missing in development — using locally generated salt.');
+  Logger.warn('VITE_CRYPTO_KEY missing in development — using locally generated salt.', null, 'vaultService');
   return getOrCreateSalt();
 }
 
@@ -375,9 +373,9 @@ export function encrypt(text, password) {
     throw new Error('[vaultService] Encryption aborted: symmetric key is null or empty');
   }
   try {
-    return CryptoJS.AES.encrypt(String(text), key).toString();
+    return symmetricEncrypt(String(text), key);
   } catch (err) {
-    console.error('[vaultService] encrypt failed:', err);
+    Logger.error('encrypt failed:', err, 'vaultService');
     throw err;
   }
 }
@@ -391,8 +389,7 @@ export function decrypt(cipher, password) {
       return decodeURIComponent(atob(parts[1]));
     }
     const key = resolveSymmetricKey(password);
-    const bytes = CryptoJS.AES.decrypt(cipher, key);
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    const decrypted = symmetricDecrypt(cipher, key);
     return decrypted || cipher;
   } catch {
     return cipher;

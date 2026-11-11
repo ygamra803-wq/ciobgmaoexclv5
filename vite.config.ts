@@ -31,7 +31,6 @@ export default defineConfig(({ command }) => ({
       'lucide-react',
       'zod',
       '@tanstack/react-virtual',
-      'crypto-js',
       'date-fns',
       'dompurify',
       'exceljs',

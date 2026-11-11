@@ -1,3 +1,5 @@
+import { Logger } from '../core/logger/LoggerService';
+
 export interface ConfirmDialogOptions {
   title?: string;
   message: string;
@@ -89,7 +91,7 @@ export function confirmAction(
       try {
         listener(currentState);
       } catch (err) {
-        console.error('[confirmAction] listener error:', err);
+        Logger.error('[confirmAction] listener error:', err);
       }
     });
   });
@@ -108,7 +110,7 @@ export function resolveConfirm(confirmed: boolean): void {
     try {
       listener(currentState);
     } catch (err) {
-      console.error('[confirmAction] listener error:', err);
+      Logger.error('[confirmAction] listener error:', err);
     }
   });
 }

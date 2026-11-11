@@ -28,11 +28,9 @@ const LoginSchema = z.object({
 
 function getStoredAttempts() {
   try {
-    if (typeof sessionStorage !== 'undefined') {
-      const saved = sessionStorage.getItem('gmao_login_attempts');
-      if (saved) {
-        return new Map(Object.entries(JSON.parse(saved)));
-      }
+    const saved = SecurityService.getSessionSecure('gmao_login_attempts');
+    if (saved && typeof saved === 'object') {
+      return new Map(Object.entries(saved));
     }
   } catch {
     // ignore
@@ -42,10 +40,8 @@ function getStoredAttempts() {
 
 function persistAttempts(map) {
   try {
-    if (typeof sessionStorage !== 'undefined') {
-      const obj = Object.fromEntries(map.entries());
-      sessionStorage.setItem('gmao_login_attempts', JSON.stringify(obj));
-    }
+    const obj = Object.fromEntries(map.entries());
+    SecurityService.saveSessionSecure('gmao_login_attempts', obj);
   } catch {
     // ignore
   }
@@ -156,9 +152,7 @@ export const AuthProvider = ({ children }) => {
       await vaultService.encryptVault(newVault, cleanPin);
       await vaultService.setPinHash(cleanPin);
 
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem('gmao_admin_pin');
-      }
+      SecurityService.removeSecure('gmao_admin_pin');
 
       setIsVaultExists(true);
       setIsVaultUnlocked(true);
@@ -355,9 +349,9 @@ export const AuthProvider = ({ children }) => {
         await vaultService.decryptVault(masterPin);
       }
       vaultService.clearMasterPin?.();
-      localStorage.removeItem('gmao_vault_cipher_v2');
-      localStorage.removeItem('gmao_vault_iv_v2');
-      localStorage.removeItem('gmao_vault_pin_hash_v2');
+      SecurityService.removeSecure('gmao_vault_cipher_v2');
+      SecurityService.removeSecure('gmao_vault_iv_v2');
+      SecurityService.removeSecure('gmao_vault_pin_hash_v2');
       setIsVaultExists(false);
       setIsVaultUnlocked(false);
       if (authService?.resetAllAccountsToDefaults) {

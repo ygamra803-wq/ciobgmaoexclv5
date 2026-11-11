@@ -1,4 +1,14 @@
 import { startTransition, useMemo, useCallback } from 'react';
+import type { GmaoStoreSetters } from '../../types/store';
+
+export interface UseAppRouterPropsInput {
+  setCurrentTab: (tab: string) => void;
+  setters?: Partial<GmaoStoreSetters> & Record<string, unknown>;
+  showToast?: (message: string, type?: string) => void;
+  modals: Record<string, (...args: any[]) => void>;
+  handlers: Record<string, (...args: any[]) => any>;
+  [key: string]: any;
+}
 
 /**
  * Hook to build clean, memoized or structured props for each module in AppRouter.
@@ -167,10 +177,10 @@ export function useAppRouterProps({
     handleLoadDemoSection,
     handleClearDemoSection,
   },
-  setters = {} as any,
+  setters = {},
   showToast,
-}: any) {
-  const navigateTo = useCallback((tab) => startTransition(() => setCurrentTab(tab)), [setCurrentTab]);
+}: UseAppRouterPropsInput) {
+  const navigateTo = useCallback((tab: string) => startTransition(() => setCurrentTab(tab)), [setCurrentTab]);
 
   return useMemo(() => ({
     dashboard: {

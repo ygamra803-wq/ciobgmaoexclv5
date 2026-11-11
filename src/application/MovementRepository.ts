@@ -1,6 +1,7 @@
 import { stockIndexStore } from './StockIndexStore';
 import type { MovementDelta } from './IncrementalStockIndex';
 import { storageService } from '../utils/storageService';
+import { Logger } from '../core/logger/LoggerService';
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
 export interface MovementEntity {
@@ -190,7 +191,7 @@ export class MovementRepository {
         stockIndexStore.markHydrated();
         stockIndexStore.notifyAll();
       } catch (err) {
-        console.error('[MovementRepository] Failed to handle remote REBUILD message:', err);
+        Logger.error('[MovementRepository] Failed to handle remote REBUILD message:', err);
       }
     }
   };

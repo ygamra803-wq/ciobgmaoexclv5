@@ -26,6 +26,7 @@ import type {
   IEntrepotComponent,
   IWarehouseItem,
   ValidationWorkflowStatus,
+  PdrGroup,
 } from './domain';
 import type {
   PreventiveExecutionRecord,
@@ -327,9 +328,11 @@ export interface GmaoStoreState {
   // ==========================================
   // 1. Stock Slice
   // ==========================================
+  pdrGroups: PdrGroup[];
   types: IType[];
   rawStock: IStockItem[];
   designations: IPartDesignation[];
+  setPdrGroups: (groups: StateUpdater<PdrGroup[]>) => void;
   setTypes: (types: StateUpdater<IType[]>) => void;
   setRawStock: (rawStock: StateUpdater<IStockItem[]>) => void;
   setDesignations: (designations: StateUpdater<IPartDesignation[]>) => void;
@@ -665,6 +668,7 @@ export interface GmaoStoreState {
  * (such as initRealStock, loadDemoData, clearAllForRealFactory, loadDemoSection, clearDemoSection).
  */
 export interface GmaoStoreSetters {
+  setPdrGroups?: (groups: StateUpdater<PdrGroup[]>) => void;
   setRawStock?: (stock: StateUpdater<IStockItem[]>) => void;
   setTypes?: (types: StateUpdater<IType[]>) => void;
   setDesignations?: (designations: StateUpdater<IPartDesignation[]>) => void;

@@ -1,4 +1,4 @@
-import CryptoJS from 'crypto-js';
+import { sha256Hex, symmetricDecrypt } from '../core/security/nativeCrypto';
 import { Logger } from '../core/logger/LoggerService';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { STORAGE_KEYS, ALL_LEGACY_KEYS } from '../infrastructure/persistence/storageKeys';
@@ -84,13 +84,17 @@ const ENV_CRYPTO_KEY = import.meta.env.VITE_CRYPTO_KEY;
 function getLegacyPersistenceSecret() {
   if (ENV_CRYPTO_KEY) return ENV_CRYPTO_KEY;
   if (import.meta.env.PROD || (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')) {
-    console.error(
-      '[storageService] VITE_CRYPTO_KEY is required in production. Refusing hardcoded fallback.'
+    Logger.error(
+      '[storageService] VITE_CRYPTO_KEY is required in production. Refusing hardcoded fallback.',
+      null,
+      'storageService'
     );
     return null;
   }
-  console.warn(
-    '[storageService] VITE_CRYPTO_KEY missing — dev-only insecure fallback.'
+  Logger.warn(
+    '[storageService] VITE_CRYPTO_KEY missing — dev-only insecure fallback.',
+    null,
+    'storageService'
   );
   return 'CIOB_GMAO_CLIENT_PERSISTENCE_SALT_KEY_987654321!';
 }
@@ -149,7 +153,7 @@ try {
       const k = localStorage.key(i);
       if (k && k.startsWith('gmao_')) {
         const item = localStorage.getItem(k);
-        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1')) {
+        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1') && !item.startsWith('NC1:')) {
           try {
             const parsed = JSON.parse(item);
             memoryCache.set(k, { data: parsed, _lastAccessed: Date.now() });
@@ -330,12 +334,11 @@ export const storageService = {
             } catch (e) {
               Logger.warn(`WC migration skipped for ${k}:`, e, 'storageService');
             }
-          } else if (item.startsWith('U2FsdGVkX1')) {
+          } else if (item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:')) {
             const legacySecret = getLegacyPersistenceSecret();
             if (legacySecret) {
               try {
-                const bytes = CryptoJS.AES.decrypt(item, legacySecret);
-                const decryptedText = bytes.toString(CryptoJS.enc.Utf8);
+                const decryptedText = symmetricDecrypt(item, legacySecret);
                 if (decryptedText) decryptedObj = JSON.parse(decryptedText);
               } catch (e) {
                 Logger.warn(`Legacy AES migration skipped for ${k}:`, e, 'storageService');
@@ -395,8 +398,8 @@ export const storageService = {
       const item = localStorage.getItem(key);
       if (item === null || item === undefined) return fallback;
 
-      // If it's a legacy encrypted token waiting for migration, return fallback safely
-      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1'))) {
+      // If it's a legacy or SecurityService encrypted token, return fallback safely
+      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:'))) {
         return fallback;
       }
 
@@ -638,7 +641,7 @@ export const storageService = {
    * Hash PIN code using SHA-256 (synchronous helper for legacy callers)
    */
   hashPin(pin) {
-    return CryptoJS.SHA256(String(pin || '').trim()).toString();
+    return sha256Hex(String(pin || '').trim());
   },
 
   /**
@@ -648,7 +651,7 @@ export const storageService = {
     if (!storedValue) return false;
     const cleanInput = String(inputPin || '').trim();
     if (storedValue.length === 64 && /^[0-9a-f]+$/i.test(storedValue)) {
-      return CryptoJS.SHA256(cleanInput).toString() === storedValue;
+      return sha256Hex(cleanInput) === storedValue;
     }
     return cleanInput === String(storedValue).trim();
   },
