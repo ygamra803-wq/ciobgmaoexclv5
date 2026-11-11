@@ -23,6 +23,7 @@ import {
 import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDataGrid';
 import { EntrepotItem } from '../../../../core/domain';
 import { useTranslation } from '../../../../i18n/I18nContext';
+import { getEffectivePolicyTags } from '../../../../domain/corrective/needRequestService';
 
 export default function PartsTable({
   displayedData = [],
@@ -255,6 +256,25 @@ export default function PartsTable({
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 text-xs sm:text-[12.5px] leading-snug" title={item.designation}>
                             {item.designation}
+                          </div>
+
+                          {/* Policy Tags (`POLICY-TAGS-P0`) */}
+                          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                            {getEffectivePolicyTags(item, 'PART').map((tag) => (
+                              <span
+                                key={tag}
+                                className={`px-1.5 py-0.2 rounded font-mono text-[9px] font-bold border ${
+                                  tag === 'MODIFYING'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : tag === 'REPAIRABLE'
+                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                    : 'bg-slate-100 text-slate-700 border-slate-300'
+                                }`}
+                                title={`Politique de Maintenance: ${tag}`}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
 
                           <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-slate-500 truncate">

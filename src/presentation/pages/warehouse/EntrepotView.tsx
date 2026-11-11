@@ -51,6 +51,8 @@ import {
 import { filterProductionMachines, filterActiveMachines } from '../../../utils/activeMachines';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { evaluateComponentWearAndLifecycle } from '../../../utils/componentHealthScore';
+import { MaterialPolicyTag } from '../../../types/domain';
+import { getEffectivePolicyTags } from '../../../domain/corrective/needRequestService';
 
 export default function EntrepotView({
   warehouseItems = [],
@@ -398,6 +400,7 @@ export default function EntrepotView({
     stockInitial: 1,
     seuil: 0,
     remarques: '',
+    policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
   // Form state for edit modal
@@ -418,6 +421,7 @@ export default function EntrepotView({
     stockInitial: 1,
     seuil: 0,
     remarques: '',
+    policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
   // Open Add Modal initialized with smart auto-code
@@ -545,6 +549,7 @@ export default function EntrepotView({
       stockInitial: item.stockInitial != null ? item.stockInitial : 1,
       seuil: item.seuil != null ? item.seuil : 0,
       remarques: item.remarques || '',
+      policy_tags: getEffectivePolicyTags(item, isComponentNature(item.nature) ? 'COMPONENT' : 'PART'),
     });
     setActiveActionMenuId(null);
   };
@@ -692,6 +697,9 @@ export default function EntrepotView({
         stockInitial: Number(addForm.stockInitial) || 1,
         seuil: Number(addForm.seuil) || 0,
         remarques: addForm.remarques,
+        policy_tags: addForm.policy_tags && addForm.policy_tags.length > 0
+          ? addForm.policy_tags
+          : (isComp ? ['REPAIRABLE', 'REPLACING'] : ['REPAIRABLE', 'REPLACING']),
       });
     }
     setShowAddModal(false);
@@ -726,6 +734,9 @@ export default function EntrepotView({
         stockInitial: Number(editForm.stockInitial) || 1,
         seuil: Number(editForm.seuil) || 0,
         remarques: editForm.remarques,
+        policy_tags: editForm.policy_tags && editForm.policy_tags.length > 0
+          ? editForm.policy_tags
+          : (toEdit.policy_tags || (isComp ? ['REPAIRABLE', 'REPLACING'] : ['REPAIRABLE', 'REPLACING'])),
       });
     }
     setToEdit(null);
@@ -2054,6 +2065,59 @@ export default function EntrepotView({
                 />
               </div>
 
+              {/* Politique de Maintenance (POLICY-TAGS) */}
+              <div className="bg-slate-50/90 p-3 rounded-2xl border border-slate-200/90">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider block">
+                    Politique de Maintenance & Orientation Organe (`POLICY-TAGS`)
+                  </label>
+                  <span className="text-[9.5px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {isComponentNature(addForm.nature) ? 'COMPOSANT' : 'PART'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">
+                  {isComponentNature(addForm.nature)
+                    ? 'Pour un organe COMPOSANT : orientation standard REPAIRABLE (révision / rebobinage externe ou atelier) et REPLACING (remplacement).'
+                    : 'Pour une PART magasin : orientation REPAIRABLE (rectification), REPLACING (remplacement), ou MODIFYING (adaptation atelier).'}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(
+                    isComponentNature(addForm.nature)
+                      ? (['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[])
+                      : (['REPAIRABLE', 'REPLACING', 'MODIFYING'] as MaterialPolicyTag[])
+                  ).map((tag) => {
+                    const active = (addForm.policy_tags || []).includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const prev = addForm.policy_tags || [];
+                          const next = active ? prev.filter((t: string) => t !== tag) : [...prev, tag];
+                          if (next.length === 0) return;
+                          setAddForm({ ...addForm, policy_tags: next });
+                        }}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer text-xs ${
+                          active
+                            ? 'bg-slate-900 text-white border-slate-900 font-bold shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10.5px]">{tag}</span>
+                          {active && <span className="text-amber-400 text-[10px]">● Actif</span>}
+                        </div>
+                        <div className={`text-[9.5px] mt-0.5 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {tag === 'REPAIRABLE' && 'Réparable / Révisable'}
+                          {tag === 'REPLACING' && 'Remplacement Neuf'}
+                          {tag === 'MODIFYING' && 'Usinage / Adaptation'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Actions */}
               <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">
                 <button
@@ -2415,6 +2479,59 @@ export default function EntrepotView({
                   onChange={(e) => setEditForm({ ...editForm, remarques: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:border-blue-500 outline-none"
                 />
+              </div>
+
+              {/* Politique de Maintenance (POLICY-TAGS) */}
+              <div className="bg-slate-50/90 p-3 rounded-2xl border border-slate-200/90">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider block">
+                    Politique de Maintenance & Orientation Organe (`POLICY-TAGS`)
+                  </label>
+                  <span className="text-[9.5px] font-mono text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {isComponentNature(toEdit?.nature || editForm.nature) ? 'COMPOSANT' : 'PART'}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 mb-2">
+                  {isComponentNature(toEdit?.nature || editForm.nature)
+                    ? 'Pour un organe COMPOSANT : orientation standard REPAIRABLE (révision / rebobinage externe ou atelier) et REPLACING (remplacement).'
+                    : 'Pour une PART magasin : orientation REPAIRABLE (rectification), REPLACING (remplacement), ou MODIFYING (adaptation atelier).'}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(
+                    isComponentNature(toEdit?.nature || editForm.nature)
+                      ? (['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[])
+                      : (['REPAIRABLE', 'REPLACING', 'MODIFYING'] as MaterialPolicyTag[])
+                  ).map((tag) => {
+                    const active = (editForm.policy_tags || []).includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const prev = editForm.policy_tags || [];
+                          const next = active ? prev.filter((t: string) => t !== tag) : [...prev, tag];
+                          if (next.length === 0) return;
+                          setEditForm({ ...editForm, policy_tags: next });
+                        }}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer text-xs ${
+                          active
+                            ? 'bg-slate-900 text-white border-slate-900 font-bold shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10.5px]">{tag}</span>
+                          {active && <span className="text-amber-400 text-[10px]">● Actif</span>}
+                        </div>
+                        <div className={`text-[9.5px] mt-0.5 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {tag === 'REPAIRABLE' && 'Réparable / Révisable'}
+                          {tag === 'REPLACING' && 'Remplacement Neuf'}
+                          {tag === 'MODIFYING' && 'Usinage / Adaptation'}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2.5">

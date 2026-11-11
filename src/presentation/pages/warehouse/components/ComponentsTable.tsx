@@ -28,6 +28,7 @@ import { EntrepotItem } from '../../../../core/domain';
 import { useTranslation } from '../../../../i18n/I18nContext';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { evaluateComponentWearAndLifecycle } from '../../../../utils/componentHealthScore';
+import { getEffectivePolicyTags } from '../../../../domain/corrective/needRequestService';
 
 export default function ComponentsTable({
   displayedData = [],
@@ -256,6 +257,25 @@ export default function ComponentsTable({
                         <div className="min-w-0 flex-1">
                           <div className="font-bold text-slate-900 text-xs sm:text-[12.5px] leading-snug" title={item.designation}>
                             {item.designation}
+                          </div>
+
+                          {/* Policy Tags (`POLICY-TAGS-P0`) */}
+                          <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                            {getEffectivePolicyTags(item, 'COMPONENT').map((tag) => (
+                              <span
+                                key={tag}
+                                className={`px-1.5 py-0.2 rounded font-mono text-[9px] font-bold border ${
+                                  tag === 'REPAIRABLE'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : tag === 'REPLACING'
+                                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                    : 'bg-amber-50 text-amber-800 border-amber-300'
+                                }`}
+                                title={`Politique de Maintenance: ${tag}`}
+                              >
+                                {tag}
+                              </span>
+                            ))}
                           </div>
 
                           {/* Historique Bobinage & Score d'Usure BER */}
