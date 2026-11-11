@@ -29,6 +29,9 @@ export interface IGeneralSystemType {
 
 export type ProfileType = 'TECHNICIEN' | 'RESPONSABLE' | 'OPERATEUR' | 'CHEF';
 
+export type MaterialPolicyTag = 'REPLACING' | 'REPAIRABLE' | 'MODIFYING';
+export type MaintenancePolicyTag = MaterialPolicyTag;
+
 export type ValidationWorkflowStatus =
   | 'NONE'
   | 'PENDING_VALIDATION'
@@ -55,6 +58,7 @@ export interface IStockItem {
   unite?: string;
   fournisseur?: string;
   code_barre?: string;
+  policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }
 
@@ -310,6 +314,7 @@ export interface IPartDesignation {
   seuil?: number;
   stockInitial?: number;
   emplacement?: string;
+  policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }
 
@@ -461,5 +466,6 @@ export interface IWarehouseItem {
   technician?: string;
   remarques?: string;
   historique_bobinage?: Array<Record<string, any>>;
+  policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }

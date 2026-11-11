@@ -29,6 +29,11 @@ import {
   MoreVertical,
   FileSpreadsheet,
 } from 'lucide-react';
+import {
+  getEffectivePolicyTags,
+  POLICY_TAG_LABELS,
+  type MaterialPolicyTag,
+} from '../../../domain/corrective/needRequestService';
 
 export default function PartDesignationView({
   partDesignations = [],
@@ -81,6 +86,7 @@ export default function PartDesignationView({
     id_type: '',
     seuil: 5,
     emplacement: '',
+    policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
   // Filter
@@ -205,6 +211,10 @@ export default function PartDesignationView({
       id_part: cleanRef,
       ref: cleanRef,
       seuil: Number(form.seuil) || 0,
+      policy_tags:
+        form.policy_tags && form.policy_tags.length > 0
+          ? form.policy_tags
+          : (['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[]),
     });
     setForm({
       id_part: '',
@@ -213,6 +223,7 @@ export default function PartDesignationView({
       id_type: '',
       seuil: 5,
       emplacement: '',
+      policy_tags: ['REPAIRABLE', 'REPLACING'],
     });
     setShowAddModal(false);
   };
@@ -326,6 +337,33 @@ export default function PartDesignationView({
         },
       },
       {
+        key: 'policy_tags',
+        label: 'POLITIQUE MAINTENANCE',
+        colLetter: 'G',
+        icon: Tag,
+        render: (item) => {
+          const tags = getEffectivePolicyTags(item, 'PART');
+          return (
+            <div className="flex items-center gap-1 flex-wrap">
+              {tags.map((t) => (
+                <span
+                  key={t}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                    t === 'REPAIRABLE'
+                      ? 'bg-amber-50 text-amber-900 border-amber-200'
+                      : t === 'MODIFYING'
+                      ? 'bg-purple-50 text-purple-900 border-purple-200'
+                      : 'bg-sky-50 text-sky-900 border-sky-200'
+                  }`}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          );
+        },
+      },
+      {
         key: 'actions',
         label: '•••',
         colLetter: '',
@@ -400,7 +438,10 @@ export default function PartDesignationView({
                       type="button"
                       onClick={() => {
                         setActiveActionMenuId(null);
-                        setToEdit({ ...item });
+                        setToEdit({
+                          ...item,
+                          policy_tags: getEffectivePolicyTags(item, 'PART'),
+                        });
                       }}
                       className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer border-t border-slate-100 mt-1 pt-2"
                     >
@@ -915,6 +956,42 @@ export default function PartDesignationView({
                 </div>
               </div>
 
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Politique de Maintenance & Orientation Pièce (`POLICY-TAGS`)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(['REPLACING', 'REPAIRABLE', 'MODIFYING'] as MaterialPolicyTag[]).map((tag) => {
+                    const active = (form.policy_tags || []).includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const prev = form.policy_tags || [];
+                          const next = active ? prev.filter((t) => t !== tag) : [...prev, tag];
+                          if (next.length === 0) return;
+                          setForm({ ...form, policy_tags: next });
+                        }}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer text-xs ${
+                          active
+                            ? 'bg-slate-900 text-white border-slate-900 font-bold shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10.5px]">{tag}</span>
+                          {active && <span className="text-amber-400 text-[10px]">● Actif</span>}
+                        </div>
+                        <div className={`text-[9.5px] mt-0.5 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {POLICY_TAG_LABELS[tag]}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -1009,6 +1086,42 @@ export default function PartDesignationView({
                     onChange={(e) => setToEdit({ ...toEdit, emplacement: e.target.value })}
                     className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                  Politique de Maintenance & Orientation Pièce (`POLICY-TAGS`)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(['REPLACING', 'REPAIRABLE', 'MODIFYING'] as MaterialPolicyTag[]).map((tag) => {
+                    const active = (toEdit.policy_tags || []).includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const prev = toEdit.policy_tags || [];
+                          const next = active ? prev.filter((t) => t !== tag) : [...prev, tag];
+                          if (next.length === 0) return;
+                          setToEdit({ ...toEdit, policy_tags: next });
+                        }}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer text-xs ${
+                          active
+                            ? 'bg-slate-900 text-white border-slate-900 font-bold shadow-2xs'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10.5px]">{tag}</span>
+                          {active && <span className="text-amber-400 text-[10px]">● Actif</span>}
+                        </div>
+                        <div className={`text-[9.5px] mt-0.5 ${active ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {POLICY_TAG_LABELS[tag]}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

@@ -28,7 +28,13 @@ import { AuthorizationService } from '../../../core/security/AuthorizationServic
 import { isTechnicianRole } from '../../../core/security/technicianScope';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import {
+  getSuggestedChannels,
   getSuggestedChannelsForMaterialClass,
+  getSuggestedChannelsForNeed,
+  POLICY_TAG_LABELS,
+  suggestWorkshopType,
+  type MaintenancePolicyTag,
+  type MaterialPolicyTag,
   isNeedRequestActive,
   NEED_APPRO_CHANNEL_LABELS,
   NEED_MATERIAL_CLASS_LABELS,
@@ -43,6 +49,27 @@ import {
   WORKSHOP_STATUS_LABELS,
   type WorkshopOrderType,
 } from '../../../domain/corrective/workshopOrderService';
+
+const POLICY_TAG_META: Record<
+  MaintenancePolicyTag,
+  { label: string; badge: string; desc: string }
+> = {
+  REPLACING: {
+    label: 'Remplacement Standard (Neuf)',
+    badge: 'bg-sky-50 text-sky-800 border-sky-200',
+    desc: 'Neuf / Consommable standard (Orientation: STOCK / ACHAT)',
+  },
+  REPAIRABLE: {
+    label: 'Réparable / Rectifiable (Atelier/Externe)',
+    badge: 'bg-amber-50 text-amber-900 border-amber-200',
+    desc: 'Usinage / Réparation (Orientation: ATELIER / EXTERNE / STOCK)',
+  },
+  MODIFYING: {
+    label: 'Modifiable / Confection sur mesure',
+    badge: 'bg-purple-50 text-purple-900 border-purple-200',
+    desc: 'Sur mesure / Bon de Réalisation (Orientation: ATELIER / EXTERNE)',
+  },
+};
 import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import GmaoIndustrialDataGrid, {
   type IndustrialGridColumn,
@@ -129,6 +156,7 @@ export default function BesoinsMainCouranteTab({
     id_machine: string;
     id_bt: string;
     material_class: NeedMaterialClass;
+    policy_tag: MaintenancePolicyTag;
     id_ref_pdr: string;
     quantite: number;
     description_besoin: string;
@@ -136,6 +164,7 @@ export default function BesoinsMainCouranteTab({
     id_machine: '',
     id_bt: '',
     material_class: 'PDR',
+    policy_tag: 'REPLACING',
     id_ref_pdr: '',
     quantite: 1,
     description_besoin: '',
@@ -153,11 +182,13 @@ export default function BesoinsMainCouranteTab({
   const [reviewMotifRejet, setReviewMotifRejet] = useState<string>('');
 
   const openSupervisorReview = (req: INeedRequest) => {
-    const suggested = getSuggestedChannelsForMaterialClass(req.material_class);
+    const suggested = getSuggestedChannels(req.material_class, req.policy_tags_snapshot);
+    const suggestedType =
+      suggestWorkshopType(req.policy_tags_snapshot, req.material_class) || 'REALISATION';
     setReviewModalItem(req);
     setReviewDecision('APPROVISIONNEMENT');
     setReviewCanal((req.canal_appro as NeedApproChannel) || suggested[0] || 'STOCK');
-    setReviewWorkshopType('REALISATION');
+    setReviewWorkshopType(suggestedType);
     setReviewNotes(req.notes_superviseur || '');
     setReviewMotifRejet(req.motif_rejet || '');
   };
@@ -313,6 +344,7 @@ export default function BesoinsMainCouranteTab({
       id_machine: createForm.id_machine.trim(),
       id_bt: createForm.id_bt.trim() || null,
       material_class: createForm.material_class,
+      policy_tags_snapshot: [createForm.policy_tag],
       id_ref_pdr: createForm.id_ref_pdr.trim() || null,
       designation_pdr: stockItem ? String(stockItem.designation || stockItem.nom || '') : null,
       quantite: Math.max(1, Number(createForm.quantite) || 1),
@@ -331,6 +363,7 @@ export default function BesoinsMainCouranteTab({
         id_machine: '',
         id_bt: '',
         material_class: 'PDR',
+        policy_tag: 'REPLACING',
         id_ref_pdr: '',
         quantite: 1,
         description_besoin: '',
@@ -348,6 +381,18 @@ export default function BesoinsMainCouranteTab({
     }
     if (reviewDecision === 'CLARIFICATION' && !reviewNotes.trim()) {
       showToast?.('Veuillez préciser la clarification demandée au technicien.', 'warning');
+      return;
+    }
+    if (
+      reviewDecision === 'APPROVISIONNEMENT' &&
+      reviewCanal === 'ATELIER' &&
+      reviewModalItem.material_class === 'PDR' &&
+      !reviewNotes.trim()
+    ) {
+      showToast?.(
+        "Dérogation obligatoire : veuillez motiver l'orientation de cette PDR vers l'Atelier dans les notes du superviseur.",
+        'warning'
+      );
       return;
     }
 
@@ -659,22 +704,34 @@ export default function BesoinsMainCouranteTab({
       },
       {
         key: 'material_class',
-        label: 'Classe Matière',
+        label: 'Classe & Politique',
         colLetter: 'Col C',
         icon: Layers,
         sortable: true,
-        render: (req) => (
-          <div className="flex flex-col gap-0.5 items-start">
-            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono font-bold text-[11px]">
-              {req.material_class} (×{req.quantite})
-            </span>
-            {req.id_ref_pdr && (
-              <span className="text-[10px] font-mono font-bold text-cyan-800">
-                Réf: {req.id_ref_pdr}
+        render: (req) => {
+          const firstTag = req.policy_tags_snapshot?.[0];
+          const tagMeta = firstTag ? POLICY_TAG_META[firstTag] : null;
+          return (
+            <div className="flex flex-col gap-1 items-start">
+              <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono font-bold text-[11px]">
+                {req.material_class} (×{req.quantite})
               </span>
-            )}
-          </div>
-        ),
+              {tagMeta && (
+                <span
+                  title={tagMeta.desc}
+                  className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${tagMeta.badge}`}
+                >
+                  {firstTag}
+                </span>
+              )}
+              {req.id_ref_pdr && (
+                <span className="text-[10px] font-mono font-bold text-cyan-800">
+                  Réf: {req.id_ref_pdr}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: 'description_besoin',
@@ -1108,12 +1165,20 @@ export default function BesoinsMainCouranteTab({
                   </label>
                   <select
                     value={createForm.material_class}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const nextClass = e.target.value as NeedMaterialClass;
+                      const nextDefaultTag: MaintenancePolicyTag =
+                        nextClass === 'PDR'
+                          ? 'REPLACING'
+                          : nextClass === 'OTHER'
+                          ? 'MODIFYING'
+                          : 'REPAIRABLE';
                       setCreateForm((p) => ({
                         ...p,
-                        material_class: e.target.value as NeedMaterialClass,
-                      }))
-                    }
+                        material_class: nextClass,
+                        policy_tag: nextDefaultTag,
+                      }));
+                    }}
                     className="w-full py-2 px-3 text-xs font-bold rounded-xl border border-slate-200 bg-slate-50"
                   >
                     {(Object.keys(NEED_MATERIAL_CLASS_LABELS) as NeedMaterialClass[]).map(
@@ -1143,6 +1208,41 @@ export default function BesoinsMainCouranteTab({
                     }
                     className="w-full py-2 px-3 text-xs font-mono font-bold rounded-xl border border-slate-200 bg-white"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                  Politique de Maintenance & Tag Pièce (`POLICY-TAGS`)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(['REPLACING', 'REPAIRABLE', 'MODIFYING'] as MaintenancePolicyTag[]).map((tag) => {
+                    const meta = POLICY_TAG_META[tag];
+                    const isSelected = createForm.policy_tag === tag;
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setCreateForm((p) => ({ ...p, policy_tag: tag }))}
+                        className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col gap-0.5 ${
+                          isSelected
+                            ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                            : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className="font-mono font-black text-[11px]">{tag}</span>
+                          {isSelected && <span className="text-[10px] text-amber-400 font-bold">● Actif</span>}
+                        </div>
+                        <div className={`text-[10px] font-bold ${isSelected ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {meta.label}
+                        </div>
+                        <div className={`text-[9px] line-clamp-2 ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {meta.desc}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1223,14 +1323,27 @@ export default function BesoinsMainCouranteTab({
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-1">
                 <span>
                   Machine : <b className="font-mono">{reviewModalItem.id_machine}</b>
                   {reviewModalItem.id_bt ? ` • BT : ${reviewModalItem.id_bt}` : ''}
                 </span>
-                <span className="font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded">
-                  Classe : {reviewModalItem.material_class} (×{reviewModalItem.quantite})
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded">
+                    Classe : {reviewModalItem.material_class} (×{reviewModalItem.quantite})
+                  </span>
+                  {reviewModalItem.policy_tags_snapshot?.[0] && (
+                    <span
+                      title={POLICY_TAG_META[reviewModalItem.policy_tags_snapshot[0]]?.desc}
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                        POLICY_TAG_META[reviewModalItem.policy_tags_snapshot[0]]?.badge ||
+                        'bg-slate-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      Tag : {reviewModalItem.policy_tags_snapshot[0]}
+                    </span>
+                  )}
+                </div>
               </div>
               <p className="font-bold text-slate-900">{reviewModalItem.description_besoin}</p>
               <p className="text-[11px] text-slate-500">
@@ -1284,17 +1397,20 @@ export default function BesoinsMainCouranteTab({
                       Canal d’Approvisionnement (`canal_appro`) *
                     </label>
                     <span className="text-[10px] font-mono font-bold text-purple-800 bg-white px-2 py-0.5 rounded border border-purple-200">
-                      Recommandé ({reviewModalItem.material_class}) :{' '}
-                      {getSuggestedChannelsForMaterialClass(
-                        reviewModalItem.material_class
+                      Recommandé ({reviewModalItem.material_class} ·{' '}
+                      {reviewModalItem.policy_tags_snapshot?.[0] || 'Standard'}) :{' '}
+                      {getSuggestedChannelsForNeed(
+                        reviewModalItem.material_class,
+                        reviewModalItem.policy_tags_snapshot
                       ).join(', ')}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {ALL_CHANNELS.map((ch) => {
-                      const suggested = getSuggestedChannelsForMaterialClass(
-                        reviewModalItem.material_class
+                      const suggested = getSuggestedChannelsForNeed(
+                        reviewModalItem.material_class,
+                        reviewModalItem.policy_tags_snapshot
                       ).includes(ch);
                       const isSelected = reviewCanal === ch;
                       return (
@@ -1335,11 +1451,20 @@ export default function BesoinsMainCouranteTab({
                     })}
                   </div>
 
-                  {reviewModalItem.material_class === 'PDR' && reviewCanal === 'ATELIER' && (
+                  {reviewModalItem.policy_tags_snapshot?.includes('REPLACING') && reviewCanal === 'ATELIER' && (
                     <div className="p-2.5 rounded-xl bg-amber-100 border border-amber-300 text-amber-950 text-[11px] flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 shrink-0 text-amber-700" />
                       <span>
-                        Attention : une PDR standard est habituellement achetée ou sortie du stock (`STOCK` / `ACHAT`). L’orientation vers `ATELIER` reste autorisée uniquement sur dérogation superviseur.
+                        Attention : Cette référence est balisée en Remplacement Standard (`REPLACING`). L’orientation vers l’Atelier Mécanique (`ATELIER`) requiert une dérogation (confection de substitution ou retouche d'adaptation).
+                      </span>
+                    </div>
+                  )}
+
+                  {reviewModalItem.policy_tags_snapshot?.includes('MODIFYING') && (reviewCanal === 'STOCK' || reviewCanal === 'ACHAT') && (
+                    <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-[11px] flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0 text-blue-700" />
+                      <span>
+                        Note : Cette pièce est balisée en Modifiable / Sur mesure (`MODIFYING`). Vérifiez la faisabilité si vous l'orientez vers `{reviewCanal}` au lieu de l'Atelier / Externe.
                       </span>
                     </div>
                   )}

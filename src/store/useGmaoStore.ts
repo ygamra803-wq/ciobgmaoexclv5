@@ -62,9 +62,11 @@ import {
 } from '../domain/corrective/workshopOrderService';
 import {
   createNeedRequestRecord,
+  getEffectivePolicyTags,
   getLinkedNeedRequestsForIntervention,
   hasBlockingNeedRequestForIntervention,
   isNeedRequestBlockingBtClosure,
+  suggestWorkshopType,
   validateNeedRequestTransition,
   type INeedRequest,
   type NeedApproChannel,
@@ -4100,10 +4102,44 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const currentNeeds = get().needRequests || [];
       const actor = resolveActiveActorContext();
 
+      // Resolve policy_tags_snapshot from catalog entity if not explicitly provided
+      let effectiveSnapshot = payload.policy_tags_snapshot;
+      if (!effectiveSnapshot || !Array.isArray(effectiveSnapshot) || effectiveSnapshot.length === 0) {
+        const matClass = payload.material_class || 'PDR';
+        let foundEntity: any = null;
+        if (matClass === 'PDR' && payload.id_ref_pdr) {
+          const raw = get().rawStock || [];
+          const cleanKey = String(payload.id_ref_pdr).trim().toUpperCase();
+          foundEntity = raw.find(
+            (r: any) =>
+              String(r.ref || r.code_article || '').trim().toUpperCase() === cleanKey ||
+              String(r.id || '').trim().toUpperCase() === cleanKey
+          );
+        } else if (matClass === 'PART' && (payload.id_part || payload.id_ref_pdr)) {
+          const parts = get().partDesignations || [];
+          const cleanKey = String(payload.id_part || payload.id_ref_pdr).trim().toUpperCase();
+          foundEntity = parts.find(
+            (p: any) =>
+              String(p.ref || p.id_part || '').trim().toUpperCase() === cleanKey ||
+              String(p.id || '').trim().toUpperCase() === cleanKey
+          );
+        } else if (matClass === 'COMPONENT' && payload.id_composant) {
+          const wh = get().warehouseItems || [];
+          const cleanKey = String(payload.id_composant).trim().toUpperCase();
+          foundEntity = wh.find(
+            (w: any) =>
+              String(w.code || w.ref || w.id_warehouse_item || '').trim().toUpperCase() === cleanKey ||
+              String(w.id || '').trim().toUpperCase() === cleanKey
+          );
+        }
+        effectiveSnapshot = getEffectivePolicyTags(foundEntity, matClass);
+      }
+
       try {
         const newNeed = createNeedRequestRecord(
           {
             ...payload,
+            policy_tags_snapshot: effectiveSnapshot,
             id_technicien_demandeur:
               payload.id_technicien_demandeur || actor.actorId || 'TECH',
             nom_technicien_demandeur:
@@ -4211,6 +4247,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         isTechnician: isTech,
         canal_appro: canalAppro,
         existingCanalAppro: existing.canal_appro,
+        material_class: existing.material_class,
         motif_rejet: decisionPayload.motif_rejet,
         notes_superviseur: decisionPayload.notes_superviseur,
       });
@@ -4228,8 +4265,11 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       // automatically create and link an IWorkshopOrder if none exists yet.
       if (targetStatus === 'APPROVISIONNEMENT' && canalAppro === 'ATELIER') {
         if (!linkedWorkshopId) {
+          const suggestedType =
+            suggestWorkshopType(existing.policy_tags_snapshot, existing.material_class) ||
+            'REALISATION';
           createdWorkshopOrder = get().handleCreateWorkshopOrder({
-            type_demande: decisionPayload.workshopOrderType || 'REALISATION',
+            type_demande: decisionPayload.workshopOrderType || suggestedType,
             id_machine: existing.id_machine,
             id_bt: existing.id_bt || null,
             id_di: existing.id_di || null,

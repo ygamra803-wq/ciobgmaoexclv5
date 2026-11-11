@@ -41,6 +41,8 @@ import {
   isNeedRequestBlockingBtClosure,
   NEED_MATERIAL_CLASS_LABELS,
   NEED_STATUS_LABELS,
+  POLICY_TAG_LABELS,
+  type MaintenancePolicyTag,
   type NeedMaterialClass,
   type NeedRequestStatus,
 } from '../../../domain/corrective/needRequestService';
@@ -284,11 +286,13 @@ export default function InterventionLiveTab({
   const [showNeedRequestForm, setShowNeedRequestForm] = useState(false);
   const [needForm, setNeedForm] = useState<{
     material_class: NeedMaterialClass;
+    policy_tag: MaintenancePolicyTag;
     quantite: number;
     description_besoin: string;
     id_ref_pdr: string;
   }>({
     material_class: 'PDR',
+    policy_tag: 'REPLACING',
     quantite: 1,
     description_besoin: '',
     id_ref_pdr: '',
@@ -310,6 +314,7 @@ export default function InterventionLiveTab({
       nom_technicien_demandeur:
         user?.name || activeIntervention.intervenant || 'Technicien',
       material_class: needForm.material_class,
+      policy_tags_snapshot: [needForm.policy_tag],
       id_ref_pdr: needForm.id_ref_pdr.trim() || formState.pdr_ref || null,
       designation_pdr: formState.pdr_designation || null,
       id_part: formState.id_part || activeIntervention.id_part || null,
@@ -323,6 +328,7 @@ export default function InterventionLiveTab({
     if (created) {
       setNeedForm({
         material_class: 'PDR',
+        policy_tag: 'REPLACING',
         quantite: 1,
         description_besoin: '',
         id_ref_pdr: '',
@@ -1018,12 +1024,20 @@ export default function InterventionLiveTab({
                 </label>
                 <select
                   value={needForm.material_class}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const nextCls = e.target.value as NeedMaterialClass;
+                    const nextTag: MaintenancePolicyTag =
+                      nextCls === 'PDR'
+                        ? 'REPLACING'
+                        : nextCls === 'OTHER'
+                        ? 'MODIFYING'
+                        : 'REPAIRABLE';
                     setNeedForm((p) => ({
                       ...p,
-                      material_class: e.target.value as NeedMaterialClass,
-                    }))
-                  }
+                      material_class: nextCls,
+                      policy_tag: nextTag,
+                    }));
+                  }}
                   className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-purple-200 bg-slate-50"
                 >
                   {(Object.keys(NEED_MATERIAL_CLASS_LABELS) as NeedMaterialClass[]).map((cls) => (
@@ -1065,6 +1079,38 @@ export default function InterventionLiveTab({
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                Politique & Nature du Besoin (`POLICY-TAGS`)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(['REPLACING', 'REPAIRABLE', 'MODIFYING'] as MaintenancePolicyTag[]).map((tag) => {
+                  const isSelected = needForm.policy_tag === tag;
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setNeedForm((p) => ({ ...p, policy_tag: tag }))}
+                      className={`p-2 rounded-lg border text-left transition cursor-pointer flex flex-col gap-0.5 ${
+                        isSelected
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                          : 'bg-white text-slate-800 border-purple-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="font-mono font-bold text-[10px]">{tag}</span>
+                        {isSelected && <span className="text-[9px] text-amber-400 font-bold">● Choisi</span>}
+                      </div>
+                      <span className={`text-[9.5px] font-medium leading-tight ${isSelected ? 'text-slate-300' : 'text-slate-600'}`}>
+                        {POLICY_TAG_LABELS[tag]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div>
               <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
                 Description du Besoin Technique *
@@ -1103,6 +1149,7 @@ export default function InterventionLiveTab({
           <div className="space-y-2">
             {linkedNeedRequests.map((req) => {
               const isBlocking = isNeedRequestBlockingBtClosure(req);
+              const firstTag = req.policy_tags_snapshot?.[0];
               return (
                 <div
                   key={req.id}
@@ -1119,6 +1166,11 @@ export default function InterventionLiveTab({
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase bg-white/80 font-mono">
                       {req.material_class} ×{req.quantite}
                     </span>
+                    {firstTag && (
+                      <span className="px-1.5 py-0.5 rounded text-[9.5px] font-mono font-bold bg-white text-slate-800 border border-slate-300">
+                        Tag: {firstTag}
+                      </span>
+                    )}
                     {req.canal_appro && (
                       <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-300">
                         Canal: {req.canal_appro}

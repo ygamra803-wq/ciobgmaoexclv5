@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createNeedRequestRecord,
   getSuggestedChannelsForMaterialClass,
+  getSuggestedChannelsForNeed,
   validateNeedRequestTransition,
 } from '../domain/corrective/needRequestService';
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
@@ -285,4 +286,62 @@ describe('COR-HANDOFF-P0 — Need Request & Multi-Actor Handoff Lifecycle above 
     expect(storageService.getItem(STORAGE_KEYS.NEED_REQUESTS)).toEqual([]);
     expect(useGmaoStore.getState().needRequests).toEqual([]);
   });
+
+  it('6. POLICY-TAGS-P0: getSuggestedChannelsForNeed enforces recommendation matrix (REPLACING, REPAIRABLE, MODIFYING) and preserves snapshot', () => {
+    const store = useGmaoStore.getState();
+
+    // 6a. Direct domain helper tests
+    const replacingPdrSuggested = getSuggestedChannelsForNeed('PDR', ['REPLACING']);
+    expect(replacingPdrSuggested).toEqual(['STOCK', 'ACHAT']);
+    expect(replacingPdrSuggested).not.toContain('ATELIER');
+
+    const replacingPartSuggested = getSuggestedChannelsForNeed('PART', ['REPLACING']);
+    expect(replacingPartSuggested).toEqual(['STOCK', 'ACHAT', 'ATELIER']);
+    expect(replacingPartSuggested).toContain('ATELIER');
+
+    const repairableSuggested = getSuggestedChannelsForNeed('PART', ['REPAIRABLE']);
+    expect(repairableSuggested).toContain('ATELIER');
+    expect(repairableSuggested).toContain('STOCK');
+
+    const modifyingSuggested = getSuggestedChannelsForNeed('PART', ['MODIFYING']);
+    expect(modifyingSuggested).toContain('ATELIER');
+    expect(modifyingSuggested).toContain('EXTERNE');
+
+    // 6b. Snapshot is persisted on NeedRequest creation
+    const needWithTag = store.handleCreateNeedRequest({
+      id_machine: 'PRESS-01',
+      id_bt: 'BT-2026-099',
+      material_class: 'PART',
+      policy_tags_snapshot: ['MODIFYING'],
+      quantite: 1,
+      description_besoin: 'Fabrication bride sur mesure avec alésage Ø45',
+    });
+
+    expect(needWithTag).not.toBeNull();
+    expect(needWithTag?.policy_tags_snapshot).toEqual(['MODIFYING']);
+
+    // Persisted in storage
+    const inStore = useGmaoStore
+      .getState()
+      .needRequests.find((r) => r.id === needWithTag!.id);
+    expect(inStore?.policy_tags_snapshot).toEqual(['MODIFYING']);
+
+    // 6c. Default tag resolution if omitted
+    const pdrDefault = store.handleCreateNeedRequest({
+      id_machine: 'PRESS-01',
+      material_class: 'PDR',
+      quantite: 1,
+      description_besoin: 'Joint torique NBR 70',
+    });
+    expect(pdrDefault?.policy_tags_snapshot).toEqual(['REPLACING']);
+
+    const partDefault = store.handleCreateNeedRequest({
+      id_machine: 'PRESS-01',
+      material_class: 'PART',
+      quantite: 1,
+      description_besoin: 'Arbre intermédiaire cannelé',
+    });
+    expect(partDefault?.policy_tags_snapshot).toEqual(['REPAIRABLE', 'REPLACING']);
+  });
 });
+

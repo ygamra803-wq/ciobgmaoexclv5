@@ -31,6 +31,21 @@ import { isWorkshopOrderActive, type IWorkshopOrder } from './workshopOrderServi
 
 export type NeedMaterialClass = 'PDR' | 'PART' | 'COMPONENT' | 'OTHER';
 
+export type MaterialPolicyTag = 'REPLACING' | 'REPAIRABLE' | 'MODIFYING';
+export type MaintenancePolicyTag = MaterialPolicyTag;
+
+export const VALID_POLICY_TAGS: ReadonlyArray<MaterialPolicyTag> = [
+  'REPLACING',
+  'REPAIRABLE',
+  'MODIFYING',
+];
+
+export const POLICY_TAG_LABELS: Record<MaterialPolicyTag, string> = {
+  REPLACING: 'Remplacement Standard (Neuf / Consommable)',
+  REPAIRABLE: 'Réparable / Rectifiable (Atelier / Externe)',
+  MODIFYING: 'Modifiable / Confection sur mesure',
+};
+
 export type NeedApproChannel = 'STOCK' | 'ACHAT' | 'ATELIER' | 'EXTERNE';
 
 export type NeedRequestStatus =
@@ -188,6 +203,166 @@ export function getSuggestedChannelsForMaterialClass(
   }
 }
 
+/**
+ * Normalizes input tags: trims, uppercases, validates against VALID_POLICY_TAGS, and deduplicates.
+ */
+export function normalizePolicyTags(input?: unknown): MaterialPolicyTag[] {
+  if (!input) return [];
+  const list: unknown[] = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+    ? input.split(/[,;\s]+/)
+    : [];
+
+  const result: MaterialPolicyTag[] = [];
+  for (const raw of list) {
+    const clean = String(raw || '').trim().toUpperCase() as MaterialPolicyTag;
+    if (VALID_POLICY_TAGS.includes(clean) && !result.includes(clean)) {
+      result.push(clean);
+    }
+  }
+  return result;
+}
+
+/**
+ * Resolves effective policy tags for an entity or material class.
+ * Respects strict catalog invariants:
+ *  - PDR: strictly ['REPLACING'] (filters out stray MODIFYING/REPAIRABLE for catalog PDR)
+ *  - PART: defaults to ['REPAIRABLE', 'REPLACING'] if unconfigured
+ *  - COMPONENT: defaults to ['REPAIRABLE'] if unconfigured
+ *  - OTHER: defaults to ['REPLACING']
+ */
+export function getEffectivePolicyTags(
+  entity: unknown,
+  materialClass: NeedMaterialClass
+): MaterialPolicyTag[] {
+  const obj = entity as { policy_tags?: unknown; tags?: unknown; [key: string]: any } | null;
+  const explicit = normalizePolicyTags(obj?.policy_tags ?? obj?.tags);
+
+  if (explicit.length > 0) {
+    if (materialClass === 'PDR') {
+      const pdrFiltered = explicit.filter((t) => t === 'REPLACING');
+      return pdrFiltered.length > 0 ? pdrFiltered : ['REPLACING'];
+    }
+    return explicit;
+  }
+
+  switch (materialClass) {
+    case 'PDR':
+      return ['REPLACING'];
+    case 'PART':
+      return ['REPAIRABLE', 'REPLACING'];
+    case 'COMPONENT':
+      return ['REPAIRABLE'];
+    case 'OTHER':
+    default:
+      return ['REPLACING'];
+  }
+}
+
+/**
+ * Suggests valid supply channels (`NeedApproChannel[]`) based on `material_class`
+ * and policy tags snapshot (`REPLACING` | `REPAIRABLE` | `MODIFYING` — `POLICY-TAGS-P0`).
+ *
+ * Deterministic Rules:
+ *  1) `materialClass === 'PDR'`:
+ *     ➔ Strictly `['STOCK', 'ACHAT']` (ignores REPAIRABLE/MODIFYING for ATELIER suggestion).
+ *  2) `materialClass === 'PART'`:
+ *     - If `MODIFYING` or `REPAIRABLE` in tags: includes `ATELIER` (e.g. `['ATELIER', 'STOCK', 'ACHAT', 'EXTERNE']`).
+ *     - If `REPLACING` only without repair: `['STOCK', 'ACHAT', 'ATELIER']` (allows manufacturing new replacement).
+ *     - If empty: `['STOCK', 'ACHAT', 'ATELIER']`.
+ *  3) `materialClass === 'COMPONENT'`:
+ *     - If `REPAIRABLE` or `MODIFYING`: `['EXTERNE', 'ATELIER', 'ACHAT']` (repair first).
+ *     - If `REPLACING` only: `['ACHAT', 'EXTERNE']`.
+ *  4) `OTHER`:
+ *     ➔ `['STOCK', 'ACHAT', 'ATELIER', 'EXTERNE']`.
+ */
+export function getSuggestedChannels(
+  materialClassRaw: unknown,
+  policyTags?: ReadonlyArray<MaterialPolicyTag | string> | null
+): ReadonlyArray<NeedApproChannel> {
+  const normClass = String(materialClassRaw || 'OTHER').trim().toUpperCase() as NeedMaterialClass;
+  const tags = normalizePolicyTags(policyTags);
+
+  // 1. PDR: strictly STOCK and ACHAT
+  if (normClass === 'PDR') {
+    return ['STOCK', 'ACHAT'];
+  }
+
+  // 2. PART
+  if (normClass === 'PART') {
+    const hasModifying = tags.includes('MODIFYING');
+    const hasRepairable = tags.includes('REPAIRABLE');
+
+    if (hasModifying || hasRepairable) {
+      return ['ATELIER', 'STOCK', 'ACHAT', 'EXTERNE'];
+    }
+    return ['STOCK', 'ACHAT', 'ATELIER'];
+  }
+
+  // 3. COMPONENT
+  if (normClass === 'COMPONENT') {
+    const hasRepairable = tags.includes('REPAIRABLE');
+    const hasModifying = tags.includes('MODIFYING');
+    const hasReplacing = tags.includes('REPLACING');
+
+    if (hasRepairable || hasModifying) {
+      return ['EXTERNE', 'ATELIER', 'ACHAT'];
+    }
+    if (hasReplacing) {
+      return ['ACHAT', 'EXTERNE'];
+    }
+    return ['EXTERNE', 'ATELIER', 'ACHAT'];
+  }
+
+  // 4. OTHER
+  return ['STOCK', 'ACHAT', 'ATELIER', 'EXTERNE'];
+}
+
+export const getSuggestedChannelsForNeed = getSuggestedChannels;
+
+/**
+ * Suggests the mechanical workshop order type (`RECTIFICATION` vs `REALISATION`)
+ * according to policy tags and material class.
+ */
+export function suggestWorkshopType(
+  tags?: ReadonlyArray<MaterialPolicyTag | string> | null,
+  materialClass?: NeedMaterialClass | string
+): 'RECTIFICATION' | 'REALISATION' | null {
+  const normClass = String(materialClass || '').trim().toUpperCase() as NeedMaterialClass;
+  if (normClass === 'PDR') return null;
+
+  const normTags = normalizePolicyTags(tags);
+  if (normClass === 'PART') {
+    if (normTags.includes('MODIFYING') || normTags.includes('REPAIRABLE')) {
+      return 'RECTIFICATION';
+    }
+    if (normTags.includes('REPLACING')) {
+      return 'REALISATION';
+    }
+    return 'REALISATION';
+  }
+
+  if (normClass === 'COMPONENT') {
+    if (normTags.includes('REPAIRABLE') || normTags.includes('MODIFYING')) {
+      return 'RECTIFICATION';
+    }
+    return 'REALISATION';
+  }
+
+  return 'REALISATION';
+}
+
+/**
+ * Resolves default policy tags for a given material class or catalog reference (legacy alias).
+ */
+export function resolveDefaultPolicyTags(
+  materialClass: NeedMaterialClass,
+  item?: { policy_tags?: string[]; tags?: string[]; nature?: string } | null
+): MaterialPolicyTag[] {
+  return getEffectivePolicyTags(item, materialClass);
+}
+
 export interface NeedTransitionContext {
   actorRole?: string;
   isTechnician?: boolean;
@@ -195,6 +370,7 @@ export interface NeedTransitionContext {
   existingCanalAppro?: NeedApproChannel | null;
   linkedWorkshopOrder?: IWorkshopOrder | null;
   hasOpenWorkshopOrder?: boolean;
+  material_class?: NeedMaterialClass;
   motif_rejet?: string;
   notes_superviseur?: string;
   observation_pose_essai?: string;
@@ -284,6 +460,17 @@ export function validateNeedRequestTransition(
         reason:
           "Passage en APPROVISIONNEMENT refusé : le responsable doit obligatoirement définir le canal d'approvisionnement (STOCK, ACHAT, ATELIER ou EXTERNE).",
       };
+    }
+
+    // Guard 1b: If material_class === 'PDR' and canal_appro === 'ATELIER', require explicit supervisor justification (notes_superviseur)
+    if (effectiveCanal === 'ATELIER' && context.material_class === 'PDR') {
+      if (!context.notes_superviseur || !String(context.notes_superviseur).trim()) {
+        return {
+          valid: false,
+          reason:
+            "Passage en ATELIER pour une PDR standard refusé : une justification superviseur écrite (notes_superviseur) est obligatoire pour déroger au circuit standard (STOCK / ACHAT).",
+        };
+      }
     }
   }
 
@@ -425,9 +612,10 @@ export function createNeedRequestRecord(
     code_workshop_order: null,
     id_sortie_demand: null,
     requires_material: payload.requires_material !== false,
-    policy_tags_snapshot: Array.isArray(payload.policy_tags_snapshot)
-      ? payload.policy_tags_snapshot
-      : [],
+    policy_tags_snapshot:
+      normalizePolicyTags(payload.policy_tags_snapshot).length > 0
+        ? normalizePolicyTags(payload.policy_tags_snapshot)
+        : getEffectivePolicyTags(payload, material_class),
     date_creation: nowIso,
     date_statut: nowIso,
     timestamps: {

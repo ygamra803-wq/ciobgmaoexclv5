@@ -198,6 +198,21 @@ export default function EditArticleModal({
             </div>
           </div>
 
+          {/* Policy Tag Display (PDR Catalog: strictly REPLACING standard) */}
+          <div className="bg-sky-50/70 p-3 rounded-2xl border border-sky-200/80 flex items-center justify-between text-xs">
+            <div>
+              <span className="text-sky-900 font-bold block text-[11px] uppercase tracking-wider">
+                Politique Pièce Catalogue (POLICY-TAGS)
+              </span>
+              <span className="text-[10.5px] text-sky-700">
+                PDR Standard Catalogue : Remplacement neuf nominal (STOCK / ACHAT)
+              </span>
+            </div>
+            <span className="px-2 py-0.5 rounded font-mono font-bold text-[10px] bg-sky-200 text-sky-900 border border-sky-300">
+              REPLACING
+            </span>
+          </div>
+
           {/* Current Live Calculations Info */}
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs font-mono">
             <div>
