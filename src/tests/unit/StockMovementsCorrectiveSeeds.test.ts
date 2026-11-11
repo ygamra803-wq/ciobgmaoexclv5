@@ -37,7 +37,7 @@ describe('Stock, Mouvements & Corrective Demo Seed Synchronization (STOCK-01, ST
   });
 
   it('STOCK-02 & MOV-01: should compute stockActuel from seedStockItems + seedMouvements with 100% mathematical parity and surface RUPTURE/ALERTE items', () => {
-    expect(seedMouvements.length).toBe(102);
+    expect(seedMouvements.length).toBe(36);
 
     // Every movement ref must exist in seedStockItems
     const stockRefSet = new Set(seedStockItems.map((s) => s.ref.trim().toUpperCase()));

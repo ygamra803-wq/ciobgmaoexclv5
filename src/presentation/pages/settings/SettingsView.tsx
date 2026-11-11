@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import { Settings as SettingsIcon } from 'lucide-react';
 
+import initialPdrGroups from '../../../data/stock/seedPdrGroups.json';
 import initialStock from '../../../data/stock/seedStockItems.json';
 import initialStockTypes from '../../../data/stock/seedStockTypes.json';
 import initialMouvements from '../../../data/movements/seedMouvements.json';
@@ -965,6 +966,7 @@ export default function SettingsView({
       if (typeof onClearAllForRealFactory === 'function') {
         onClearAllForRealFactory();
       } else {
+        useGmaoStore.getState().setPdrGroups([]);
         setRawStock([]);
         setMouvements([]);
         setMachines([]);
@@ -990,7 +992,7 @@ export default function SettingsView({
     if (typeof onLoadDemoSection === 'function') {
       onLoadDemoSection(group);
       const labels: Record<string, string> = {
-        stock: 'Stock, Types & Désignations',
+        stock: 'Groupes PDR, Types, Stock & Désignations',
         parc: 'Parc Machines, Familles, Modèles & Plans',
         entrepot: 'Entrepôt, Organes & Pièces Détachées',
         zones: 'Zones & Équipes Techniques',
@@ -1003,8 +1005,9 @@ export default function SettingsView({
     }
 
     if (group === 'stock') {
-      setRawStock(initialStock);
+      useGmaoStore.getState().setPdrGroups(initialPdrGroups as any);
       setTypes(initialStockTypes);
+      setRawStock(initialStock);
       showToast(`${initialStock.length} articles injectés dans le stock avec quantités.`, 'success');
     } else if (group === 'parc') {
       setMachines(initialMachines);

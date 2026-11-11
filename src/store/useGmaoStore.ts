@@ -19,6 +19,7 @@ import { loadBaselineCorrectiveData } from '../utils/baselineCorrective';
 import { confirmAction } from '../utils/confirmAction';
 import { sanitizeMachinesHierarchy } from '../utils/assetHierarchy';
 
+import initialPdrGroups from '../data/stock/seedPdrGroups.json';
 import initialStockSeed from '../data/stock/seedStockItems.json';
 import initialStockTypes from '../data/stock/seedStockTypes.json';
 import initialFamilies from '../data/machines/seedFamilies.json';
@@ -369,8 +370,8 @@ function getInitialStock() {
     demoSeed: demoDesignations,
   });
   const pdrGroups = loadCollection(STORAGE_KEYS.PDR_GROUPS, {
-    allowDemoFallback: false,
-    demoSeed: [],
+    allowDemoFallback: true,
+    demoSeed: initialPdrGroups,
   });
   return { types, rawStock, designations, pdrGroups };
 }
@@ -4571,6 +4572,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // ==========================================
     handleLoadDemoData: () =>
       DataGateway.loadDemoData({
+        setPdrGroups: get().setPdrGroups,
         setTypes: get().setTypes,
         setDesignations: get().setDesignations,
         setRawStock: get().setRawStock,
@@ -4654,6 +4656,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleLoadDemoSection: (sectionId: string) =>
       DataGateway.loadDemoSection(sectionId, {
+        setPdrGroups: get().setPdrGroups,
         setTypes: get().setTypes,
         setDesignations: get().setDesignations,
         setRawStock: get().setRawStock,
@@ -4693,6 +4696,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
     handleClearDemoSection: (sectionId: string) =>
       DataGateway.clearDemoSection(sectionId, {
+        setPdrGroups: get().setPdrGroups,
         setTypes: get().setTypes,
         setDesignations: get().setDesignations,
         setRawStock: get().setRawStock,

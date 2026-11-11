@@ -25,6 +25,7 @@ import seedBlueprints from '../data/machines/seedBlueprints.json';
 import seedZones from '../data/machines/seedZones.json';
 import seedMachineBomLedger from '../data/machines/seedMachineBomLedger.json';
 
+import seedPdrGroups from '../data/stock/seedPdrGroups.json';
 import seedStockItems from '../data/stock/seedStockItems.json';
 import seedStockTypes from '../data/stock/seedStockTypes.json';
 import seedMouvements from '../data/movements/seedMouvements.json';
@@ -795,7 +796,11 @@ export const DataGateway = {
    * Explicitly loads real stock data.
    */
   initRealStock(setters: GmaoStoreSetters = {}) {
+    this.savePdrGroups(seedPdrGroups);
+    this.saveStockTypes(seedStockTypes);
     this.saveStock(seedStockItems);
+    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
+    if (setters.setTypes) setters.setTypes(seedStockTypes);
     if (setters.setRawStock) setters.setRawStock(seedStockItems);
     // Also update designations if needed, but for now focus on RAW_STOCK
     return { stockCount: seedStockItems.length };
@@ -814,6 +819,7 @@ export const DataGateway = {
       id: (s as any).id || s.ref,
       ref: s.ref,
       designation: s.designation,
+      id_group: (s as any).id_group || null,
       id_type: (s as any).id_type || s.type,
       type: s.type,
       stockInitial: s.stockInitial,
@@ -834,7 +840,7 @@ export const DataGateway = {
       localStorage.setItem(STORAGE_KEYS.START_MODE, 'demo');
     }
 
-    // 2. Write all seeds to canonical STORAGE_KEYS only
+    // 2. Write all seeds to canonical STORAGE_KEYS only (Groups -> Types -> Items -> Mouvements)
     this.saveMachines(seedMachines);
     this.saveGeneralSystemTypes(seedGeneralSystemTypes);
     this.saveFamilies(seedFamilies);
@@ -843,8 +849,9 @@ export const DataGateway = {
     this.saveZones(seedZones);
     this.saveMachineBom(seedMachineBomLedger);
 
-    this.saveStock(seedStockItems);
+    this.savePdrGroups(seedPdrGroups);
     this.saveStockTypes(seedStockTypes);
+    this.saveStock(seedStockItems);
     this.saveDesignations(derivedDesignations);
     this.saveMouvements(seedMouvements);
     this.saveSortieDemands([]);
@@ -895,8 +902,9 @@ export const DataGateway = {
     if (setters.setZones) setters.setZones(seedZones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
 
-    if (setters.setRawStock) setters.setRawStock(seedStockItems);
+    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
     if (setters.setTypes) setters.setTypes(seedStockTypes);
+    if (setters.setRawStock) setters.setRawStock(seedStockItems);
     if (setters.setDesignations) setters.setDesignations(derivedDesignations);
     if (setters.setMouvements) setters.setMouvements(seedMouvements);
     if (setters.setSortieDemands) setters.setSortieDemands([]);
@@ -1177,6 +1185,7 @@ export const DataGateway = {
       : Array.isArray(serverData.stock)
       ? serverData.stock
       : [];
+    const pdrGroups = Array.isArray(serverData.pdrGroups) ? serverData.pdrGroups : [];
     const types = Array.isArray(serverData.types) ? serverData.types : [];
     const designations = Array.isArray(serverData.designations) ? serverData.designations : [];
     const machines = Array.isArray(serverData.machines) ? serverData.machines : [];
@@ -1249,8 +1258,9 @@ export const DataGateway = {
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, hasData ? 'custom' : 'empty');
 
-    this.saveStock(rawStock);
+    this.savePdrGroups(pdrGroups);
     this.saveStockTypes(types);
+    this.saveStock(rawStock);
     this.saveDesignations(designations);
     this.saveMachines(machines);
     this.saveGeneralSystemTypes(generalSystemTypes);
@@ -1299,6 +1309,7 @@ export const DataGateway = {
 
     if (typeof setters.applyRemoteStateUpdate === 'function') {
       setters.applyRemoteStateUpdate({
+        pdrGroups,
         rawStock,
         types,
         designations,
@@ -1339,8 +1350,9 @@ export const DataGateway = {
         sortiesExterne,
       });
     } else {
-      if (setters.setRawStock) setters.setRawStock(rawStock);
+      if (setters.setPdrGroups) setters.setPdrGroups(pdrGroups);
       if (setters.setTypes) setters.setTypes(types);
+      if (setters.setRawStock) setters.setRawStock(rawStock);
       if (setters.setDesignations) setters.setDesignations(designations);
       if (setters.setMachines) setters.setMachines(machines);
       if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(generalSystemTypes);
@@ -1399,6 +1411,7 @@ export const DataGateway = {
       id: (s as any).id || s.ref,
       ref: s.ref,
       designation: s.designation,
+      id_group: (s as any).id_group || null,
       id_type: (s as any).id_type || s.type,
       type: s.type,
       stockInitial: s.stockInitial,
@@ -1413,15 +1426,17 @@ export const DataGateway = {
 
     switch (section) {
       case 'stock':
-        this.saveStock(seedStockItems);
+        this.savePdrGroups(seedPdrGroups);
         this.saveStockTypes(seedStockTypes);
+        this.saveStock(seedStockItems);
         this.saveDesignations(derivedDesignations);
         movementRepository.bulkReplace(
           (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
           buildInitialStockMap(seedStockItems)
         );
-        if (setters.setRawStock) setters.setRawStock(seedStockItems);
+        if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups);
         if (setters.setTypes) setters.setTypes(seedStockTypes);
+        if (setters.setRawStock) setters.setRawStock(seedStockItems);
         if (setters.setDesignations) setters.setDesignations(derivedDesignations);
         break;
 

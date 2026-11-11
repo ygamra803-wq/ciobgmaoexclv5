@@ -258,3 +258,144 @@ describe('CATALOG-GROUP-P1 — PDR 3-Tier Hierarchy (Group -> Type -> SKU/Ref)',
     expect(activeOnly.some((g) => g.code === 'ARCH')).toBe(false);
   });
 });
+
+describe('SEED-RESET-P0 — 3-Tier PDR Seed Referential Integrity & Ordered Demo Lifecycle', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('1. Every type.id_group in seedStockTypes.json references an existing group in seedPdrGroups.json (0 orphan types)', async () => {
+    const seedPdrGroups = (await import('../data/stock/seedPdrGroups.json')).default as PdrGroup[];
+    const seedStockTypes = (await import('../data/stock/seedStockTypes.json')).default as StockType[];
+
+    expect(seedPdrGroups.length).toBeGreaterThanOrEqual(7);
+    expect(seedStockTypes.length).toBeGreaterThanOrEqual(14);
+
+    const groupIds = new Set(seedPdrGroups.map((g) => g.id));
+    expect(groupIds.size).toBe(seedPdrGroups.length);
+
+    for (const grp of seedPdrGroups) {
+      expect(grp.default_policy_tags).toEqual(['REPLACING']);
+      expect(grp.is_active).toBe(true);
+    }
+
+    for (const t of seedStockTypes) {
+      expect(t.id_type).toBeTruthy();
+      expect(t.libelle).toBeTruthy();
+      expect(t.id_group).toBeTruthy();
+      expect(groupIds.has(String(t.id_group))).toBe(true);
+    }
+  });
+
+  it('2. Every item in seedStockItems.json has a unique ref, valid id_type, matching id_group === type.id_group, and policy_tags = [REPLACING] (0 orphan items)', async () => {
+    const seedPdrGroups = (await import('../data/stock/seedPdrGroups.json')).default as PdrGroup[];
+    const seedStockTypes = (await import('../data/stock/seedStockTypes.json')).default as StockType[];
+    const seedStockItems = (await import('../data/stock/seedStockItems.json')).default as IStockItem[];
+
+    expect(seedStockItems.length).toBeGreaterThanOrEqual(15);
+    expect(seedStockItems.length).toBeLessThanOrEqual(40);
+
+    const groupMap = new Map(seedPdrGroups.map((g) => [g.id, g]));
+    const typeMap = new Map(seedStockTypes.map((t) => [t.id_type, t]));
+    const seenRefs = new Set<string>();
+
+    for (const item of seedStockItems) {
+      const normalizedRef = String(item.ref).trim().toUpperCase();
+      expect(normalizedRef.length).toBeGreaterThan(0);
+      expect(seenRefs.has(normalizedRef)).toBe(false);
+      seenRefs.add(normalizedRef);
+
+      expect(item.id_type).toBeTruthy();
+      const matchedType = typeMap.get(String(item.id_type));
+      expect(matchedType).toBeDefined();
+
+      expect(item.id_group).toBeTruthy();
+      expect(groupMap.has(String(item.id_group))).toBe(true);
+      expect(item.id_group).toBe(matchedType?.id_group);
+
+      expect(item.policy_tags).toEqual(['REPLACING']);
+      expect(item.stockActuel).toBe(
+        Number(item.stockInitial || 0) + Number(item.entrees || 0) - Number(item.sorties || 0)
+      );
+    }
+  });
+
+  it('3. Every mov.ref in seedMouvements.json exists in seedStockItems.json and matches dynamic stock calculation', async () => {
+    const seedStockItems = (await import('../data/stock/seedStockItems.json')).default as IStockItem[];
+    const seedMouvements = (await import('../data/movements/seedMouvements.json')).default as any[];
+
+    expect(seedMouvements.length).toBeGreaterThan(0);
+
+    const itemByRef = new Map(
+      seedStockItems.map((item) => [String(item.ref).trim().toUpperCase(), item])
+    );
+
+    for (const mov of seedMouvements) {
+      const refKey = String(mov.ref || '').trim().toUpperCase();
+      expect(itemByRef.has(refKey)).toBe(true);
+      expect(Number(mov.quantite)).toBeGreaterThan(0);
+    }
+
+    for (const item of seedStockItems) {
+      const itemMovs = seedMouvements.filter(
+        (m) => String(m.ref).trim().toUpperCase() === String(item.ref).trim().toUpperCase()
+      );
+      const computed = StockCalculationService.calculateStockActuel(item, itemMovs);
+      expect(computed).toBe(item.stockActuel);
+    }
+  });
+
+  it('4. DataGateway.loadDemoData loads Groups -> Types -> Items -> Mouvements and clearAllForRealFactory wipes them with zero silent reinjection', async () => {
+    const { loadCollection } = await import('../infrastructure/persistence/migrateStorage');
+    const callOrder: string[] = [];
+
+    DataGateway.loadDemoData({
+      setPdrGroups: () => callOrder.push('pdrGroups'),
+      setTypes: () => callOrder.push('types'),
+      setRawStock: () => callOrder.push('rawStock'),
+      setMouvements: () => callOrder.push('mouvements'),
+    });
+
+    expect(callOrder).toEqual(['pdrGroups', 'types', 'rawStock', 'mouvements']);
+
+    const storedGroups = storageService.getItem(STORAGE_KEYS.PDR_GROUPS);
+    const storedTypes = storageService.getItem(STORAGE_KEYS.STOCK_TYPES);
+    const storedStock = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
+    const storedMovs = storageService.getItem(STORAGE_KEYS.MOUVEMENTS);
+
+    expect(Array.isArray(storedGroups) && storedGroups.length).toBe(7);
+    expect(Array.isArray(storedTypes) && storedTypes.length).toBe(21);
+    expect(Array.isArray(storedStock) && storedStock.length).toBe(28);
+    expect(Array.isArray(storedMovs) && storedMovs.length).toBe(36);
+
+    // Clear all for real factory
+    await DataGateway.clearAllForRealFactory();
+
+    expect(storageService.getItem(STORAGE_KEYS.PDR_GROUPS)).toEqual([]);
+    expect(storageService.getItem(STORAGE_KEYS.STOCK_TYPES)).toEqual([]);
+    expect(storageService.getItem(STORAGE_KEYS.RAW_STOCK)).toEqual([]);
+    expect(storageService.getItem(STORAGE_KEYS.MOUVEMENTS)).toEqual([]);
+
+    // Simulate F5 reload with allowDemoFallback: true -> must remain [] when START_MODE === 'empty'
+    expect(
+      loadCollection(STORAGE_KEYS.PDR_GROUPS, {
+        allowDemoFallback: true,
+        demoSeed: storedGroups,
+      })
+    ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.STOCK_TYPES, {
+        allowDemoFallback: true,
+        demoSeed: storedTypes,
+      })
+    ).toEqual([]);
+    expect(
+      loadCollection(STORAGE_KEYS.RAW_STOCK, {
+        allowDemoFallback: true,
+        demoSeed: storedStock,
+      })
+    ).toEqual([]);
+  });
+});
+

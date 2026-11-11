@@ -1,0 +1,65 @@
+[
+  {
+    "id": "GRP-ROUL",
+    "code": "ROUL",
+    "libelle": "Roulements & paliers",
+    "description": "Roulements à billes, à rouleaux, butées et paliers auto-aligneurs",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 10,
+    "is_active": true
+  },
+  {
+    "id": "GRP-ETAN",
+    "code": "ETAN",
+    "libelle": "Étanchéité & joints",
+    "description": "Joints toriques NBR/Viton, bagues SPI et rubans PTFE",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 20,
+    "is_active": true
+  },
+  {
+    "id": "GRP-TRAN",
+    "code": "TRAN",
+    "libelle": "Transmission (courroies, chaînes)",
+    "description": "Courroies trapézoïdales, chaînes à rouleaux et accouplements élastiques",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 30,
+    "is_active": true
+  },
+  {
+    "id": "GRP-HYDR",
+    "code": "HYDR",
+    "libelle": "Hydraulique & lubrification",
+    "description": "Distributeurs, raccords rapides, ventouses et filtration hydraulique",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 40,
+    "is_active": true
+  },
+  {
+    "id": "GRP-ELEC",
+    "code": "ELEC",
+    "libelle": "Électrique & automatisme",
+    "description": "Capteurs inductifs, fins de course, alimentations 24V et ventilation armoire",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 50,
+    "is_active": true
+  },
+  {
+    "id": "GRP-FIXA",
+    "code": "FIXA",
+    "libelle": "Fixation & quincaillerie",
+    "description": "Visserie industrielle CHC/TH, boulonnerie et chevilles d'ancrage",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 60,
+    "is_active": true
+  },
+  {
+    "id": "GRP-DIV",
+    "code": "DIV",
+    "libelle": "Divers consommables",
+    "description": "Pastilles carbure d'usinage, forets HSS et consommables d'atelier",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 70,
+    "is_active": true
+  }
+]

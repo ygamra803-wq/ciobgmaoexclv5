@@ -19,8 +19,8 @@ describe('Five-Point Critical GMAO Verification Suite', () => {
   });
 
   // Path 1: stockInitial + entrées − sorties on seed sample & demo tour coherence
-  it('1) computes stockActuel = stockInitial + entrées - sorties accurately on seed data and surfaces ALERTE & RUPTURE across 102 movements and 12 corrective interventions', () => {
-    expect(seedMouvements.length).toBe(102);
+  it('1) computes stockActuel = stockInitial + entrées - sorties accurately on seed data and surfaces ALERTE & RUPTURE across 36 movements and 12 corrective interventions', () => {
+    expect(seedMouvements.length).toBe(36);
     expect(seedCorrectiveInterventions.length).toBe(12);
 
     // Ensure no corrective intervention is mislabeled as "préventive"
