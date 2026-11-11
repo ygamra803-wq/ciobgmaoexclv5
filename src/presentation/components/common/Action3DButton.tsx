@@ -28,11 +28,12 @@ export default function Action3DButton({
   disabled = false,
   className = '',
   showAddBadge = false,
+  badgeCount,
   children,
   ...restProps
 }: any) {
   // Color palette themes mapping with individual 3D glows and border highlights
-  const colorThemes = {
+  const colorThemes: Record<string, any> = {
     cyan: {
       border: 'border-slate-200/90 hover:border-cyan-400',
       bgHover: 'hover:bg-cyan-50/80',
@@ -106,6 +107,8 @@ export default function Action3DButton({
       solidBg: 'bg-accent-main hover:bg-accent-hover text-white border-accent-subtle shadow-xs',
     },
   };
+  colorThemes.warning = colorThemes.amber;
+  colorThemes.blue = colorThemes.indigo;
 
   const theme = colorThemes[color] || colorThemes.accent || colorThemes.cyan;
 
@@ -146,6 +149,11 @@ export default function Action3DButton({
           {showAddBadge && (
             <span className="absolute -top-1.5 -right-2 bg-accent-main text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black shadow-[0_2px_6px_rgba(0,0,0,0.22)] ring-2 ring-white transform scale-95 group-hover:scale-110 transition-transform">
               +
+            </span>
+          )}
+          {typeof badgeCount === 'number' && badgeCount > 0 && (
+            <span className="absolute -top-2 -right-2.5 bg-amber-600 text-white rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center text-[9px] font-black shadow-[0_2px_6px_rgba(0,0,0,0.22)] ring-2 ring-white transform scale-95 group-hover:scale-110 transition-transform">
+              {badgeCount > 99 ? '99+' : badgeCount}
             </span>
           )}
         </div>

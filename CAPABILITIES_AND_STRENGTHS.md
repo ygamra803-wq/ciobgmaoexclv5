@@ -107,14 +107,16 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
   - `src/services/reactiveCalculationEngine.ts`: الدالة `recalculateStockReactive(rawStock, mouvements)` و `computeStockKPIs(stockItems)`.
   - `src/domain/pdr/services/StockCalculationService.ts`: خدمة حساب المخزون والمدخلات والمخرجات مع التخزين المؤقت (`MultiLevelCacheManager`).
 
-### ج) ترابط البذور القياسية الموثّق بالاختبارات
-- تحتوي بيانات العرض القياسية على:
-  - **`102` حركة مخزون** في `src/data/movements/seedMouvements.json`، جميع مراجعها (`ref`) موجودة ومطابقة بنسبة 100% لأصناف `src/data/stock/seedStockItems.json`.
+### ج) ترابط البذور القياسية الموثّق بالاختبارات (`SEED-RESET-P0` & `CATALOG-GROUP-P1`)
+- تحتوي بيانات العرض القياسية لهرم قطع الغيار (`PDR`) على مصنع مصغّر متسق 100% خالٍ من أي يتامى مرجعية:
+  - **`7` مجموعات عليا (`PdrGroup`)** في `src/data/stock/seedPdrGroups.json` (`GRP-PDR-01` إلى `GRP-PDR-07`) مزودة بوسوم السياسة الافتراضية (`default_policy_tags`).
+  - **`21` نوعاً تقنياً (`StockType`)** في `src/data/stock/seedStockTypes.json` (`TYP-01` إلى `TYP-21`) مربوطة بالكامل بمجموعاتها عبر `id_group`.
+  - **`28` صنفاً قياسياً (`IStockItem`)** في `src/data/stock/seedStockItems.json`، جميعها متوافقة مع `item.id_group === type.id_group` ومزودة بوسوم `policy_tags`.
+  - **`36` حركة مخزون (`IMouvement`)** في `src/data/movements/seedMouvements.json`، جميع مراجعها (`ref`) موجودة ومطابقة بنسبة 100% لأصناف `seedStockItems.json`.
   - **`12` تدخلاً تصحيحياً** في `src/data/corrective/seedCorrectiveInterventions.json`، مرتبطة بآلات مسجلة في `seedMachines.json` وبأصناف مخزون حقيقية عبر `pdr_ref`.
-  - **أمثلة رقمية موثّقة في الاختبارات الآلية:**
-    - الصنف `Raccord01`: رصيد أولي `stockInitial = 82`، حركات صرف `sorties = 4` ← الرصيد المحسوب `stockActuel = 78`.
-    - الصنف `Distributeur05`: رصيد أولي `stockInitial = 4`، حركات صرف `sorties = 4` ← الرصيد المحسوب `stockActuel = 0` وحالة التنبيه `alerte = 'RUPTURE'`.
 - **الاختبارات المُثبتة:**
+  - `src/__tests__/pdrHierarchy.test.ts` (17 اختباراً شاملاً لهرم PDR واستيراد/تصدير Excel الثلاثي).
+  - `src/__tests__/policyTags.test.ts` (اختبارات وسوم السياسة المادية `MaterialPolicyTag`).
   - `src/tests/unit/StockMovementsCorrectiveSeeds.test.ts`
   - `src/tests/unit/ThreeCriticalPaths.test.ts` (المسار الأول)
 
@@ -421,6 +423,11 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
 | **الصيانة بالعدادات وساعات التشغيل** | رتابة قراءات العدادات، حساب الفوارق التراكمية، إنذارات الاقتراب من السقف، وتقييم المهام الهجينة | `src/tests/unit/MeterMaintenance.test.ts` |
 | **السجل الفني 360° ومحرك التموين** | حساب TCO ومؤشرات صحة الآلة، حراسة دورة أوامر الشراء، والتوليد التلقائي لحركات Entrée المخزنية | `src/tests/unit/MachinePassportAndReplenishment.test.ts` |
 | **دستور إغلاق الفجوات (`Batch A–E`)** | سجل التدقيق المؤسسي `AUDIT_EVENTS`، التجميع التشغيلي للخطوط `MACHINE \| LINE` ومنع الحلقات واستقلالية المنطقة/الـ `Blueprint`، حراسة العدادات وأوامر الشراء وRBAC | `src/tests/unit/GapClosureConstitution.test.ts` |
+| **هرم PDR الثلاثي واستيراد Excel (`CATALOG-GROUP-P1`)** | هرم `Group ➔ Type ➔ SKU`، التعطيل الآمن دون حذف يتيم، واستيراد/تصدير Excel من 3 أوراق (`PDR_GROUPS`, `PDR_TYPES`, `PDR_ITEMS`) بوضعي `MERGE` و`REPLACE_CATALOG` | `src/__tests__/pdrHierarchy.test.ts` |
+| **وسوم السياسة المادية (`POLICY-TAGS-P1`)** | وراثة وتخصيص `MaterialPolicyTag` (`PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE`) | `src/__tests__/policyTags.test.ts` |
+| **جسر الورشة الميكانيكية وطلبات الاحتياج التصحيحية** | أوامر التصنيع والتجليخ (`BR / RECT` في `workshopOrderService.ts`)، طلبات الاحتياج (`NeedRequest` في `needRequestService.ts`)، ومنع الإغلاق المبكر لأمر العمل (`BT`) | `src/__tests__/correctiveAtelierBridge.test.ts`<br>`src/__tests__/correctiveNeedHandoff.test.ts` |
+| **عزل معدات النظام العام (`SYSTEM_GENERAL`)** | فصل آلات الإنتاج (`PRODUCTION`) عن معدات المرافق (`SYSTEM_GENERAL`) ومنع إضافة عناصر BOM إنتاجية لمعدات النظام العام | `src/__tests__/systemGeneralMachines.test.ts` |
+| **التشفير الأصيل وأمن الجلسات والخزنة (`Native Crypto`)** | محرك `nativeCrypto.ts` (`SHA-256`, `HMAC-SHA256`, `PBKDF2-HMAC-SHA256`, `NC1:` CTR-HMAC) بدون اعتماديات خارجية، وتشفير `localStorage` / `sessionStorage` والخزنة `AES-256-GCM` | `src/tests/unit/SecurityAndProtection.test.tsx`<br>`src/tests/unit/securityBootstrapP0.test.ts` |
 | **المعمارية وأداء العرض** | التصفح الافتراضي 60fps لـ 1,000 سجل دون إجهاد المتصفح (`GmaoIndustrialDataGrid`) | `src/tests/unit/VirtualScrolling.test.tsx` |
 
 ---

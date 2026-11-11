@@ -19,10 +19,10 @@
     تسميات الأجزاء (Part Designations - 5)
 ```
 
-1. **المجموعات الكبرى (`CompGroupView.jsx`):** التصنيفات الهندسية العليا (`Mécanique`, `Électrique`, `Hydraulique`, `Pneumatique`).
-2. **عائلات المكونات (`CompFamilyView.jsx`):** المجموعات الوظيفية (`Moteurs Électriques`, `Pompes`, `Vérins`, `Réducteurs`...).
-3. **قوالب المكونات (`CompTemplateView.jsx`):** 126 قالباً وموديلاً للمكونات الصناعية.
-4. **أنواع وتسميات الأجزاء (`PartTypeView.jsx` & `PartDesignationView.jsx`):** تفصيل قطع الغيار والأجزاء الدقيقة التابعة للمكونات.
+1. **المجموعات الكبرى (`CompGroupView.tsx`):** التصنيفات الهندسية العليا (`Mécanique`, `Électrique`, `Hydraulique`, `Pneumatique`).
+2. **عائلات المكونات (`CompFamilyView.tsx`):** المجموعات الوظيفية (`Moteurs Électriques`, `Pompes`, `Vérins`, `Réducteurs`...).
+3. **قوالب المكونات (`CompTemplateView.tsx`):** 126 قالباً وموديلاً للمكونات الصناعية.
+4. **أنواع وتسميات الأجزاء (`PartTypeView.tsx` & `PartDesignationView.tsx`):** تفصيل قطع الغيار والأجزاء الدقيقة التابعة للمكونات.
 
 ---
 
@@ -37,7 +37,7 @@
                       │
            /src/store/useGmaoStore.ts (DataGateway & Unified SSOT)
                       │
-           /src/presentation/router/useAppRouterProps.js
+           /src/presentation/router/useAppRouterProps.ts
                       │
    ┌───────────┬───────────┬───────────┬───────────┬───────────┐
    │           │           │           │           │           │

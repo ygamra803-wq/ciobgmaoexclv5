@@ -58,7 +58,7 @@
 ## 🔍 3. تفصيل المستويات الأربعة مع الأمثلة الصناعية
 
 ### 🔷 المستوى 1: Groupe Composant (المجموعة الكبرى)
-* **الشاشة المسؤولة:** `CompGroupView.jsx` (المسار: `src/presentation/pages/referentiel/CompGroupView.jsx`)
+* **الشاشة المسؤولة:** `CompGroupView.tsx` (المسار: `src/presentation/pages/referentiel/CompGroupView.tsx`)
 * **المفهوم:** الصنف التكنولوجي العام للمكون الصناعي.
 * **الهدف:** منع تكدس عشرات العائلات في قائمة مسطحة واحدة وتوفير تجميع منطقي عالي المستوى.
 * **أمثلة في النظام الأساسي:**
@@ -70,7 +70,7 @@
 ---
 
 ### 🔶 المستوى 2: Famille Composant (العائلة التقنية)
-* **الشاشة المسؤولة:** `CompFamilyView.jsx` (المسار: `src/presentation/pages/referentiel/CompFamilyView.jsx`)
+* **الشاشة المسؤولة:** `CompFamilyView.tsx` (المسار: `src/presentation/pages/referentiel/CompFamilyView.tsx`)
 * **المفهوم:** التكنولوجيا الدقيقة أو مبدأ التشغيل الفيزيائي داخل المجموعة الواحدة.
 * **الهدف:** توحيد الخصائص المشتركة لمجموعة فرعية مع ربطها بالمجموعة الأب (`id_groupe`).
 * **أمثلة تابعة لمجموعة `MOTEUR`:**
@@ -84,7 +84,7 @@
 ---
 
 ### 🔮 المستوى 3: Template Composant (النموذج القياسي / بطاقة المواصفات)
-* **الشاشة المسؤولة:** `CompTemplateView.jsx` (المسار: `src/presentation/pages/referentiel/CompTemplateView.jsx`)
+* **الشاشة المسؤولة:** `CompTemplateView.tsx` (المسار: `src/presentation/pages/referentiel/CompTemplateView.tsx`)
 * **المفهوم:** بطاقة المواصفات الفنية المعيارية (القدرة، السرعة، الجهد، الشدة، الهيكل).
 * **الهدف:** تعريف النموذج مرة واحدة في المرجع الفني دون الحاجة لإعادة كتابة المواصفات لكل قطعة مخزنية.
 * **أمثلة تابعة لعائلة `MOT-3PH`:**
@@ -104,7 +104,7 @@
 ---
 
 ### 🟢 المستوى 4: Stock Entrepôt (القطعة المادية الحقيقية في الرف)
-* **الشاشة المسؤولة:** `EntrepotView.jsx` (المسار: `src/presentation/pages/warehouse/EntrepotView.jsx`)
+* **الشاشة المسؤولة:** `EntrepotView.tsx` (المسار: `src/presentation/pages/warehouse/EntrepotView.tsx`)
 * **المفهوم:** المحرك أو المكون الفعلي الملموس الموجود على رفوف المستودع.
 * **الخصائص الخاصة به:**
   * الرقم التسلسلي الفردي (N° de Série).
@@ -129,10 +129,10 @@
 
 | الكيان | مفتاح التخزين في LocalStorage | آلية الإدارة والحفظ |
 | :--- | :--- | :--- |
-| **Groupes** | `gmao_comp_groups_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
-| **Familles** | `gmao_comp_families_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
-| **Templates** | `gmao_comp_templates_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
-| **Entrepôt Stock** | `gmao_entrepot_components_v1` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Groupes** | `gmao_comp_groups_v2` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Familles** | `gmao_comp_families_v3` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Templates** | `gmao_comp_templates_v3` | `DataGateway.ts` + `useGmaoStore.ts` |
+| **Entrepôt Stock** | `gmao_entrepot_components_v3` | `DataGateway.ts` + `useGmaoStore.ts` |
 
 ---
 

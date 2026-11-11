@@ -104,6 +104,14 @@ Pour refléter fidèlement les **4 issues possibles d'une panne industrielle** (
 - **Périmètre :** Bobinage moteur électrique, réparation de variateur/carte électronique ou révision chez un prestataire externe (`SORT-EXT-xxx` / `BON-ATEL-xxx`).
 - **Synchronisation Bidirectionnelle :** Met à jour `id_sortie_atelier`, `code_sortie_atelier`, `cout_atelier` et `cout_total` sur le `BT` parent et bloque la clôture tant que `SortieExterneService.isWorkshopOrderOpen(etat)` est vrai.
 
+### 3.3 Expression de Besoin Corrective & Routage Hybride (`CORRECTIVE-NEED-HANDOFF-P1` — `STORAGE_KEYS.NEED_REQUESTS`)
+- **Service & Persistance :** `src/domain/corrective/needRequestService.ts`, persisté dans `gmao_need_requests_v1` via `DataGateway.saveNeedRequests` et `useGmaoStore` (`needRequests`, `handleCreateNeedRequest`, `handleUpdateNeedRequestStatus`).
+- **Rôle Opérationnel :** Lorsqu'un intervenant constate sur un `BT` qu'une pièce, un organe ou un usinage est manquant pour poursuivre le dépannage, il émet une **Expression de Besoin (`BES-YYYY-NNN`)** orientée selon les `MaterialPolicyTag` (`policyTagsService.ts`) vers :
+  - `ACHAT_PDR` (Réapprovisionnement Magasin / Commande `PO`)
+  - `ATELIER_FAB` / `ATELIER_REPARATION` (Génération d'un `WorkshopOrder` `BR / RECT` avec fiche imprimable `AtelierFabOrderPrintModal.tsx`)
+  - `SOUS_TRAITANCE` (Envoi externe)
+- **Garde FSM (`hasOpenNeedRequest`) :** Tant qu'un besoin bloquant rattaché au `BT` est encore ouvert (`OUVERT`, `EN_COURS`), le `BT` reste suspendu en `EN_ATTENTE_PDR` et sa clôture définitive (`CLOTURE`) est verrouillée par `WorkOrderStateMachine.ts`.
+
 ---
 
 ## 4. Protocole Maker-Checker & Réconciliation des Pièces (`VAL-1..VAL-5`)

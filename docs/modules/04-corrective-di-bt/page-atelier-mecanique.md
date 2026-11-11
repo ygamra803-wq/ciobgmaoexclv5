@@ -111,10 +111,12 @@ L'écran `#corrective_atelier` offre une vue industrielle complète :
    - Recherche instantanée par numéro de bon (`BR-2026-001`, `RECT-2026-001`), code machine, numéro de `BT`, description ou émetteur.
    - Filtre par statut (*Tous*, *Actifs uniquement*, *Émis*, *En cours fabrication*, *Prêt livraison*, *Réceptionné & Monté*, *Annulé*).
    - Filtre par type (*Réalisation BR* / *Rectification RECT*) et par machine active.
-3. **Actions Directes de Progression :**
+3. **Actions Directes de Progression & Impression Officielle :**
    - Sur chaque ligne, les boutons d'action proposent uniquement les transitions autorisées par la machine à états :
      - **`Lancer Fabrication`** (`EMIS ➔ EN_COURS_FABRICATION`)
      - **`Prêt Livraison`** (`EN_COURS_FABRICATION ➔ PRET_LIVRAISON`)
      - **`Réceptionner & Monter`** (`PRET_LIVRAISON ➔ RECEPTIONNE_MONTAGE`)
      - **`Annuler`** (`➔ ANNULE`)
+   - **Filtrage par Tags de Politique Matérielle (`POLICY-TAGS-P1`) :** Lors de la sélection d'une cible dans le catalogue, le sélecteur met en évidence les éléments porteurs des tags `FABRICABLE_ATELIER` (pour `REALISATION`) et `REPARABLE_ATELIER` (pour `RECTIFICATION`) via `policyTagsService.ts`.
+   - **Impression de la Fiche Officielle (`AtelierFabOrderPrintModal.tsx`) :** Cliquez sur l'icône **Imprimer (🖨️)** d'un bon pour générer l'ordre officiel d'usinage / rectification avec cartouche normalisé, spécifications techniques et cadres de visa (Émetteur Maintenance, Chef d'Atelier Mécanique, Contrôle Réception).
    - Un clic sur le badge du **`BT Lié`** bascule directement vers l'onglet **Bons de Travail (`#corrective_bt`)**.

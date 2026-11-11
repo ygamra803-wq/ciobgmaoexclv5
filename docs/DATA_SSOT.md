@@ -29,9 +29,10 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **blueprints** | `id_blueprint` | → `templates.id_templates` | `gmao_blueprints_v2` | `src/data/machines/seedBlueprints.json` | `DataGateway.saveBlueprints` / `useGmaoStore` |
 | **zones** | `id_zone` (`code_zone`) | — | `gmao_zones_v2` | `src/data/machines/seedZones.json` | `DataGateway.saveZones` / `useGmaoStore` |
 | **machineElementsLedger** | `id` | → `machines.id_machine_registered` | `gmao_machine_bom_ledger_v1` | `src/data/machines/seedMachineBomLedger.json` | `DataGateway.saveMachineBom` / `useGmaoStore` |
-| **rawStock** | `ref` (`id`) | → `stockTypes.id_type` | `gmao_raw_stock_v8` | `src/data/stock/seedStockItems.json` | `DataGateway.saveStock` / `useGmaoStore` |
-| **stockTypes** | `id_type` | — | `gmao_types_v5` | `src/data/stock/seedStockTypes.json` | `DataGateway.saveStockTypes` / `useGmaoStore` |
-| **designations** | `ref` (`id`) | → `stockTypes.id_type` | `gmao_designations_v3` | Dérivé de `seedStockItems.json` | `DataGateway.saveDesignations` / `useGmaoStore` |
+| **pdrGroups** | `id_group` (`code`) | — | `gmao_pdr_groups_v1` | `src/data/stock/seedPdrGroups.json` | `DataGateway.savePdrGroups` / `useGmaoStore` |
+| **rawStock** | `ref` (`id`) | → `stockTypes.id_type`, `pdrGroups.id_group` | `gmao_raw_stock_v8` | `src/data/stock/seedStockItems.json` | `DataGateway.saveStock` / `useGmaoStore` |
+| **stockTypes** | `id_type` | → `pdrGroups.id_group` | `gmao_types_v5` | `src/data/stock/seedStockTypes.json` | `DataGateway.saveStockTypes` / `useGmaoStore` |
+| **designations** | `ref` (`id`) | → `stockTypes.id_type`, `pdrGroups.id_group` | `gmao_designations_v3` | Dérivé de `seedStockItems.json` | `DataGateway.saveDesignations` / `useGmaoStore` |
 | **mouvements** | `id` (`code_bon`) | → `rawStock.ref`, `machines.id_machine_registered`, `zones.id_zone` | `gmao_mouvements_v2` | `src/data/movements/seedMouvements.json` | `DataGateway.saveMouvements` / `useGmaoStore` |
 | **sortieDemands** | `id` (`code_demande`) | → `rawStock.ref`, `machines.id_machine_registered` | `gmao_sortie_demands_v1` | `[]` | `DataGateway.saveSortieDemands` / `useGmaoStore` |
 | **replenishmentOrders** | `id` (`code_commande`) | → `rawStock.ref` (`items[].ref`) | `gmao_replenishment_orders_v1` | `[]` | `DataGateway.saveReplenishmentOrders` / `useGmaoStore` |
@@ -47,6 +48,7 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 | **correctiveTravauxAFaire** | `index` (String) | — | `gmao_corrective_travaux_v4` | `src/data/corrective/seedTravailAFaire.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **correctiveIntervenants** | `id` (`nom`) | — | `gmao_corrective_intervenants_v4` | `src/data/corrective/seedIntervenants.json` | `DataGateway.saveCorrectiveDictionaries` / `useGmaoStore` |
 | **workshopOrders** | `id` (`code_bon`) | → `machines.id_machine_registered` (`id_machine`), `correctiveInterventions.id` (`id_bt`, `id_di` optionnels) | `gmao_workshop_orders_v1` | `[]` | `DataGateway.saveWorkshopOrders` / `useGmaoStore` |
+| **needRequests** | `id` (`code_besoin`) | → `correctiveInterventions.id` (`id_bt`), `machines.id_machine_registered` (`id_machine`), `rawStock.ref` | `gmao_need_requests_v1` | `[]` | `DataGateway.saveNeedRequests` / `useGmaoStore` |
 | **correctiveActiveLive** | `id` | → `correctiveInterventions.id` | `gmao_corrective_active_live` | `null` | `DataGateway.saveCollection` / `useGmaoStore` |
 | **users (Personnel Master)** | `id` | → `zones.id_zone` | `gmao_personnel_users_v2` | `src/data/users/seedUsers.json` | `DataGateway.savePersonnel` / `useGmaoStore` |
 | **technicians (Vue dérivée)**| `id_technician` | → `users.id`, `zones.id_zone` | `gmao_technicians_v2` | `src/data/users/seedTechnicians.json` | Dérivé de `users` (`useGmaoStore`) |
@@ -78,17 +80,22 @@ Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY
 ## 4. Politique d'Intégrité Référentielle
 
 - **Suppression d'une machine (`machines`) ou d'un technicien (`users`)** : Vérification obligatoire des dépendances historiques. Si l'entité possède un historique (Préventif, Correctif, Mouvements, BOM), elle est archivée (`status: 'ARCHIVEE'` ou `is_active: false`) au lieu d'une suppression physique. L'archivage d'une ligne mère détache proprement ses machines filles (`detachChildrenOnParentArchive`).
+- **Suppression / Désactivation d'un Groupe ou Type PDR (`pdrGroups`, `stockTypes`)** : Gouvernée par `pdrHierarchyService.ts` (`canDeactivateOrDeletePdrGroup`, `canDeactivateOrDeletePdrType`). Un groupe ou type rattaché à des éléments actifs est protégé contre la suppression physique et bascule en désactivation sécurisée (`is_active: false`).
 - **Création d'interventions / tâches** : Les listes déroulantes de sélection d'équipements utilisent exclusivement `filterActiveMachines(machines)` (`src/utils/activeMachines.ts`), excluant les machines archivées et sans jamais injecter de machines fictives codées en dur.
 - **Détection et purge des orphelins** : Gérées via `src/services/dataIntegrityService.ts` dans `Paramètres > Intégrité` et persistées via `DataGateway` sur les clés canoniques.
 
 ---
 
-## 5. Philosophie Industrielle à 3 Niveaux (`Family/Template ➔ Machine Registered ➔ Blueprint`) & `BOM Nexus`
+## 5. Philosophie Industrielle à 3 Niveaux (`Family/Template ➔ Machine Registered ➔ Blueprint`), Hiérarchie PDR (`Group ➔ Type ➔ SKU`) & `BOM Nexus`
 
 1. **Niveau 1 — `Family` & `Template` (`gmao_families_v2`, `gmao_templates_v2`)** : Classification industrielle et fiche de spécifications standard constructeur (puissance, vitesse, modèle).
-2. **Niveau 2 — `Machine Registered` (`gmao_machines_v2`)** : L'équipement physique réel installé dans l'atelier (ou `System General`). **Elle seule possède** sa zone géographique (`id_zone_default`), son technicien référent (`technician`), son compteur d'exploitation (`compteur_actuel` / `meterReadings`), et ses organes montés (`machineElementsLedger`). Elle peut optionnellement déclarer un `asset_level: 'MACHINE' | 'LINE'` et un `parent_id` pour l'agrégation opérationnelle de ligne (`src/utils/assetHierarchy.ts`), sans jamais hériter de la `Zone`, de la `Family` ou du `Blueprint` de la ligne mère.
+2. **Niveau 2 — `Machine Registered` (`gmao_machines_v2`)** : L'équipement physique réel installé dans l'atelier (`asset_class: 'PRODUCTION' | 'SYSTEM_GENERAL'`). **Elle seule possède** sa zone géographique (`id_zone_default`), son technicien référent (`technician`), son compteur d'exploitation (`compteur_actuel` / `meterReadings`), et ses organes montés (`machineElementsLedger`). Elle peut optionnellement déclarer un `asset_level: 'MACHINE' | 'LINE'` et un `parent_id` pour l'agrégation opérationnelle de ligne (`src/utils/assetHierarchy.ts`), sans jamais hériter de la `Zone`, de la `Family` ou du `Blueprint` de la ligne mère.
 3. **Niveau 3 — `Blueprint` (`gmao_blueprints_v2`)** : Empreinte cognitive virtuelle rattachée au `Template` et à la `Machine`. Elle capitalise la connaissance technique au fil des interventions (`components_theoriques`, `parts_theoriques`, `pdr_theoriques`, `preventivePlanItems`, `commonFailures`). **Un `Blueprint` est virtuel : il ne possède jamais de `Zone` ni de `Technicien`.**
-4. **Nomenclature `BOM Nexus` (`Component` vs `Part` vs `PDR`)** :
+4. **Hiérarchie PDR à 3 Niveaux (`CATALOG-GROUP-P1` : `PdrGroup ➔ StockType ➔ StockItem SKU`)** :
+   - **`PdrGroup` (`gmao_pdr_groups_v1`)** : Domaine technologique supérieur (`GRP-PDR-01` Roulements & Paliers, `GRP-PDR-02` Transmission, etc.) portant des `default_policy_tags`.
+   - **`StockType` (`gmao_types_v5`)** : Famille technique rattachée au groupe via `id_group` (`TYP-01`..`TYP-21`).
+   - **`StockItem` (`gmao_raw_stock_v8`)** : Article SKU identifié par `ref`, rattaché à `id_type` et `id_group`, avec héritage ou surcharge explicite des `policy_tags` (`MaterialPolicyTag`: `PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE`). Les soldes et mouvements demeurent exclusivement au niveau `ref`.
+5. **Nomenclature `BOM Nexus` (`Component` vs `Part` vs `PDR`)** :
    - **`Components` (`warehouseItems`, `nature === 'COMPONENT'`)** : Sous-ensembles rotatifs suivis par cycle de vie d'état (`Actif`, `En réserve`, `En bobinage`, `HS`).
    - **`Parts` (`warehouseItems`, `nature === 'PART'`)** : Éléments mécaniques ou fonctionnels localisés sur la machine (`id_part`, `Pareto Organes`).
    - **`PDR` (`rawStock` — `gmao_raw_stock_v8`)** : Pièces de rechange consommables gérées exclusivement par quantité mathématique (`stockActuel = stockInitial + entrées − sorties` via `IncrementalStockIndex`).

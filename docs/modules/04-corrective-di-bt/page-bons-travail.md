@@ -88,14 +88,17 @@ Lors de la saisie du rapport d'intervention dans `#corrective_live` :
    - Saisissez la **quantité**, la **description technique des travaux** (obligatoire) et l'observation éventuelle, puis cliquez sur **« Émettre Bon Atelier & Mettre BT en Attente »**.
    - Le bon est immédiatement créé vers `Atelier Fabrication Mécanique` (sans aucun impact sur le stock PDR magasin), un Toast confirme son numéro, et le `BT` passe en **`ATTENTE ATELIER`** sans être clôturé.
    - Dès que l'atelier marque le bon **`PRET_LIVRAISON`**, un bouton **« Réceptionner Montage »** apparaît directement dans la carte du `BT` Live pour passer le bon à **`RECEPTIONNE_MONTAGE`** et débloquer la clôture du `BT`.
-3. **Cas d'une Sous-Traitance Externe (`+ Sortie Externe / Bobinage`) :**
+3. **Expression de Besoin Corrective (`NeedRequest` — `BES-YYYY-NNN`) :**
+   - Lorsqu'une pièce ou un organe manque pour terminer le dépannage, cliquez sur **« Exprimer un Besoin »** (`NeedRequestsModal.tsx`) depuis la ligne du `BT` ou l'écran Live.
+   - Le système oriente automatiquement le besoin selon les **Tags de Politique Matérielle (`MaterialPolicyTag`)** vers un **Achat PDR (`PO`)**, une **Fabrication / Rectification Atelier (`BR / RECT`)** ou une **Sous-traitance externe**, et suspend le `BT` en `EN_ATTENTE_PDR`.
+4. **Cas d'une Sous-Traitance Externe (`+ Sortie Externe / Bobinage`) :**
    - Pour un envoi externe (ex. bobinage moteur chez un prestataire), cliquez sur **« + Sortie Externe / Bobinage »** (`SORT-EXT-xxx`).
-4. **Règle d'Or Anti-Clôture Prématurée :**
-   - Tant qu'un Bon Atelier Mécanique (`EMIS`, `EN_COURS_FABRICATION`, `PRET_LIVRAISON`) ou un Bon Externe lié est actif, le système **verrouille la clôture définitive du BT**.
-5. **Ajout des Pièces de Rechange (PDR) & Soumission :**
+5. **Règle d'Or Anti-Clôture Prématurée :**
+   - Tant qu'un Bon Atelier Mécanique (`EMIS`, `EN_COURS_FABRICATION`, `PRET_LIVRAISON`), une Expression de Besoin bloquante (`hasOpenNeedRequest`) ou un Bon Externe lié est actif, le système **verrouille la clôture définitive du BT**.
+6. **Ajout des Pièces de Rechange (PDR) & Soumission :**
    - Sélectionnez les articles PDR consommés (avec mise en avant `★ BOM`).
    - **Technicien :** Cliquez sur **« Soumettre pour Validation Responsable »** (`PENDING_VALIDATION` sans déstockage immédiat).
-   - **Administrateur / Responsable :** Clôture directe uniquement si aucun bon d'atelier n'est encore ouvert.
+   - **Administrateur / Responsable :** Clôture directe uniquement si aucun bon d'atelier ni besoin bloquant n'est encore ouvert.
 
 ---
 

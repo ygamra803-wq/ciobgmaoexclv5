@@ -40,11 +40,17 @@ En cliquant sur l'une des cartes situées en haut de l'écran, le tableau se fil
 
 ## 3. Opérations Courantes Pas-à-Pas
 
-### A. Créer un Nouvel Article de Stock (`+ Nouvel Article`)
+### A. Filtrer par Hiérarchie `Groupe ➔ Type` & Gérer les Groupes PDR (`Groupes PDR`)
+1. Dans la barre de filtres supérieure, sélectionnez un **Groupe PDR** (ex. `GRP-PDR-01 — Roulements & Paliers`, `GRP-PDR-02 — Transmission`, etc.) ou l'option **`Non classé`** pour isoler les articles sans groupe.
+2. La liste déroulante **Type PDR** se filtre automatiquement pour n'afficher que les types appartenant au groupe sélectionné.
+3. Cliquez sur le bouton **« Groupes PDR »** pour ouvrir la fenêtre `PdrGroupsModal` : vous pouvez créer ou modifier un groupe, définir ses **Tags de Politique par défaut** (`PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE`) ou désactiver en toute sécurité un groupe existant sans créer d'orphelins.
+4. Utilisez les boutons **Export / Import Catalogue Excel 3 Feuilles** (`PDR_GROUPS`, `PDR_TYPES`, `PDR_ITEMS`) pour exporter ou importer la hiérarchie complète en mode **Fusion (`MERGE`)** ou **Remplacement (`REPLACE_CATALOG`)**.
+
+### B. Créer un Nouvel Article de Stock (`+ Nouvel Article`)
 1. Cliquez sur le bouton vert **« + Nouvel Article »** en haut à droite.
-2. Sélectionnez le **Type PDR** (ex. `Roulements`) puis la **Désignation PDR** (ex. `Roulement Rigide à Billes`).
+2. Sélectionnez le **Groupe PDR** puis le **Type PDR** (ex. `Roulements`) et la **Désignation PDR** (ex. `Roulement Rigide à Billes`).
    - *Astuce :* Si le Type ou la Désignation n'existe pas encore, utilisez le bouton rapide **`+`** directement à côté de la liste déroulante sans quitter votre fenêtre.
-3. Le **Code Article** est généré automatiquement de manière unique, mais vous pouvez saisir la **Référence Principale Constructeur** (ex. `SKF 6205-2RS`).
+3. Le **Code / Référence SKU (`ref`)** est vérifié contre les doublons, et l'article hérite automatiquement des **Policy Tags** de son groupe (sauf personnalisation explicite).
 4. Renseignez :
    - **Stock Initial** : Quantité comptée lors de l'inventaire de départ.
    - **Seuil Minimum** : Niveau d'alerte déclenchant une recommandation d'achat.
@@ -52,7 +58,7 @@ En cliquant sur l'une des cartes situées en haut de l'écran, le tableau se fil
    - **Emplacement Magasin** : Allée / Rayon / Casier (ex. `RAYON-A-12`) pour retrouver la pièce en quelques secondes.
 5. *(Optionnel)* Dans l'encadré **Affectation Technique**, liez l'article à une **Machine**, un **Organe** ou une **Pièce** spécifique afin qu'il apparaisse automatiquement dans le passeport technique de la machine.
 
-### B. Enregistrer une Entrée ou une Sortie Rapide depuis une Ligne Article
+### C. Enregistrer une Entrée ou une Sortie Rapide depuis une Ligne Article
 Sur chaque ligne du tableau :
 - Cliquez sur **`+ Entrée`** (bouton vert) pour ouvrir directement une réception de stock pré-remplie sur cet article.
 - Cliquez sur **`- Sortie`** (bouton orange/rouge) pour enregistrer immédiatement un prélèvement de pièce vers une machine.

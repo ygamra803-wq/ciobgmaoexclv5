@@ -15,37 +15,35 @@ relatedTabs:
 
 # Référentiel des Types PDR (`Classification Niveau 1`)
 
-## 1. Rôle de cet Écran
+## 1. Rôle de cet Écran (`Hiérarchie Groupe ➔ Type ➔ Désignation/SKU`)
 
-L'écran **Types PDR** représente le **premier niveau de classement** de votre magasin de pièces de rechange. Il regroupe vos articles par grandes familles technologiques homogènes, par exemple :
-- **`TYP-01` — Roulements & Paliers**
-- **`TYP-02` — Courroies & Transmission Mécanique**
-- **`TYP-03` — Composants Électriques & Capteurs**
-- **`TYP-04` — Hydraulique, Pneumatique & Joints**
-- **`TYP-05` — Lubrifiants, Huiles & Consommables**
+L'écran **Types PDR** représente le **deuxième niveau de classement** de votre magasin de pièces de rechange, directement rattaché à un **Groupe PDR parent (`id_group`)** (`GRP-PDR-01` à `GRP-PDR-07`). Il structure chaque grand domaine technologique en familles techniques précises, par exemple :
+- Sous **`GRP-PDR-01` (Roulements & Paliers)** : `TYP-01` Roulements rigides à billes, `TYP-02` Roulements à rouleaux coniques, `TYP-03` Paliers auto-aligneurs.
+- Sous **`GRP-PDR-02` (Transmission & Courroies)** : `TYP-04` Courroies trapézoïdales, `TYP-05` Chaînes à rouleaux, `TYP-06` Accouplements élastiques.
+- Sous **`GRP-PDR-04` (Électrotechnique & Automatisme)** : `TYP-10` Contacteurs & Relais, `TYP-11` Disjoncteurs & Fusibles, `TYP-12` Capteurs inductifs & cellules.
 
-Une bonne structuration des **Types PDR** permet de filtrer le magasin en un clic et d'analyser les coûts de consommation par grande spécialité technique.
+Une bonne structuration **Groupe PDR ➔ Type PDR** permet de filtrer le magasin en cascade et d'hériter automatiquement des politiques matérielles (`MaterialPolicyTag`).
 
 ---
 
 ## 2. Fonctionnalités Clés de l'Écran
 
-### A. Numérotation Automatique Intelligente (`TYP-XX`)
-- Lorsque vous cliquez sur **« + Nouveau Type »**, l'identifiant **`TYP-XX`** est attribué automatiquement à la suite du dernier numéro existant.
-- Il vous suffit de saisir le **Nom du Type** (ex. `Électromécanique`) et une courte description si nécessaire.
+### A. Rattachement au Groupe Parent (`id_group`) & Numérotation (`TYP-XX`)
+- Lorsque vous cliquez sur **« + Nouveau Type »**, l'identifiant **`TYP-XX`** est attribué automatiquement et vous sélectionnez son **Groupe PDR parent** (`id_group`).
+- Un filtre par **Groupe PDR** (incluant l'option **`Non classé`**) permet d'isoler immédiatement les types d'un domaine technologique ou de gérer les groupes via le bouton **« Groupes PDR »**.
 
 ### B. Compteurs Croisés & Navigation Directe (`Liens Intelligents`)
 Sur chaque carte ou ligne de **Type PDR**, le système affiche en temps réel :
-1. **Le nombre de Désignations PDR rattachées** : Cliquez dessus pour basculer directement vers l'écran **Désignations PDR** filtré sur ce type.
-2. **Le nombre d'Articles de Stock rattachés** : Cliquez dessus pour ouvrir l'écran **Stock Articles** filtré uniquement sur les pièces de cette famille.
+1. **Le badge du Groupe PDR parent** : Indique le domaine technologique auquel appartient le type.
+2. **Le nombre de Désignations / Articles de Stock rattachés** : Cliquez dessus pour basculer directement vers l'écran **Désignations PDR** ou **Stock Articles** filtré sur ce type.
 3. **L'indicateur de Santé du Stock** : Visualisez d'un coup d'œil si ce type comporte des articles en rupture ou sous seuil critique.
 
 ### C. Ajout Rapide d'une Désignation (`Bouton +`)
-Depuis la ligne d'un Type PDR, vous pouvez créer directement une nouvelle **Désignation PDR** déjà pré-rattachée à ce type sans avoir à changer d'écran.
+Depuis la ligne d'un Type PDR, vous pouvez créer directement une nouvelle **Désignation PDR** déjà pré-rattachée à ce type et à son groupe parent sans avoir à changer d'écran.
 
 ---
 
 ## 3. Règles de Gouvernance & Sécurité des Données
 
-- **Contrôle anti-doublon** : Le système vérifie que deux types ne portent pas le même intitulé afin d'éviter la dispersion des articles dans des catégories redondantes.
-- **Intégrité référentielle avant suppression** : Si un **Type PDR** contient déjà des **Désignations** ou des **Articles en stock**, le système vous avertit avant toute suppression pour éviter de créer des articles orphelins de classification.
+- **Cohérence Groupe ➔ Type** : Toute modification du `id_group` d'un Type PDR propage proprement le nouveau groupe aux articles rattachés afin de maintenir l'invariant `item.id_group === type.id_group`.
+- **Désactivation sécurisée avant suppression** : Si un **Type PDR** contient déjà des **Articles en stock**, `canDeactivateOrDeletePdrType` empêche la suppression destructive pour éviter de créer des articles orphelins.

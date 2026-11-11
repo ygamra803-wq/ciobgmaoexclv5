@@ -15,14 +15,14 @@ relatedTabs:
 
 # Architecture & Logique Métier — Groupe 01 : Stock PDR, Mouvements & Commandes (PO)
 
-## 1. Périmètre & Philosophie du Groupe
+## 1. Périmètre & Philosophie du Groupe (`CATALOG-GROUP-P1` & `POLICY-TAGS-P1`)
 
-Ce groupe constitue le cœur transactionnel et financier des **Pièces de Rechange (PDR)** et consommables industriels de **CIOB GMAO v4**. Il fédère quatre écrans complémentaires autour d'une taxonomie normalisée à 3 niveaux :
+Ce groupe constitue le cœur transactionnel et financier des **Pièces de Rechange (PDR)** et consommables industriels de **CIOB GMAO v4**. Il fédère les écrans du magasin autour d'une **hiérarchie canonique à 3 niveaux (`Group ➔ Type ➔ Designation/SKU`)** :
 
-1. **Niveau 1 — `Types PDR` (`types` / `STORAGE_KEYS.TYPES`)** : Familles macroscopiques du magasin (`TYP-01` Roulements, `TYP-02` Courroies, `TYP-03` Hydraulique, etc.).
-2. **Niveau 2 — `Désignations PDR` (`designations` / `STORAGE_KEYS.DESIGNATIONS`)** : Sous-familles fonctionnelles rattachées à un `id_type` avec génération de préfixe intelligent (`ROUL-01`, `COUR-01`, etc.).
-3. **Niveau 3 — `Articles de Stock PDR` (`stock` / `STORAGE_KEYS.STOCK`)** : Articles physiques identifiés par `id_article`, `code_article`, `reference_principale`, `stock_initial`, `seuil_minimum`, `unite`, `emplacement` et `prix_unitaire` (MAD).
-4. **Flux Transactionnels — `Sortie & Entrée Rapide` (`sortie` / `STORAGE_KEYS.MOUVEMENTS`, `SORTIE_DEMANDS`, `REPLENISHMENT_ORDERS`, `BONS_SORTIE`)** : Journal immuable des mouvements de magasin, demandes terrain soumises au contrôle Maker-Checker, bons de sortie externes (réparation/usinage sous-traitant) et commandes d'approvisionnement fournisseurs (`PO`).
+1. **Niveau 1 — `Groupes PDR` (`pdrGroups` / `STORAGE_KEYS.PDR_GROUPS = 'gmao_pdr_groups_v1'`)** : Domaines technologiques supérieurs (`GRP-PDR-01` Roulements & Paliers, `GRP-PDR-02` Transmission & Courroies, `GRP-PDR-03` Étanchéité & Joints, `GRP-PDR-04` Électrotechnique, `GRP-PDR-05` Hydraulique & Pneumatique, `GRP-PDR-06` Lubrifiants & Fluides, `GRP-PDR-07` Visserie & Fixation) portant des `default_policy_tags` et gérés via `PdrGroupsModal.tsx` avec désactivation sécurisée (`is_active: false`).
+2. **Niveau 2 — `Types PDR` (`stockTypes` / `STORAGE_KEYS.STOCK_TYPES = 'gmao_types_v5'`)** : Familles techniques rattachées au groupe parent via le champ canonique `id_group` (`TYP-01`..`TYP-21`).
+3. **Niveau 3 — `Articles & Désignations SKU` (`rawStock` / `STORAGE_KEYS.RAW_STOCK = 'gmao_raw_stock_v8'` & `STORAGE_KEYS.DESIGNATIONS`)** : Articles physiques identifiés par `ref` (`id`), rattachés à `id_type` et `id_group`, avec héritage ou surcharge explicite des tags de politique matérielle (`MaterialPolicyTag` : `PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE` via `pdrHierarchyService.ts` et `policyTagsService.ts`). **Les soldes et mouvements demeurent exclusivement au niveau du SKU (`ref`).**
+4. **Flux Transactionnels — `Sortie & Entrée Rapide` (`sortie` / `STORAGE_KEYS.MOUVEMENTS`, `SORTIE_DEMANDS`, `REPLENISHMENT_ORDERS`, `SORTIE_EXTERNE`)** : Journal immuable des mouvements de magasin, demandes terrain soumises au contrôle Maker-Checker, bons de sortie externes et commandes d'approvisionnement fournisseurs (`PO`).
 
 ---
 
@@ -116,11 +116,14 @@ Toutes les mutations critiques de ce groupe inscrivent un événement horodaté 
 
 | Fichier | Rôle Architectural |
 | :--- | :--- |
-| `src/presentation/pages/stock/StockView.tsx` | Vue principale du magasin PDR, KPIs de valorisation, filtres intelligents (Rupture, Alerte, Réservé Maker-Checker) et modales associées. |
+| `src/presentation/pages/stock/StockView.tsx` | Vue principale du magasin PDR, filtres cascadés `Group ➔ Type ➔ SKU` (+ `Non classé`), import/export Excel 3 feuilles, KPIs de valorisation et modales associées. |
+| `src/presentation/pages/stock/components/PdrGroupsModal.tsx` | Gestion du référentiel `Groupes PDR` (`GRP-PDR-XX`), affectation des `default_policy_tags` et désactivation sécurisée sans suppression orpheline. |
+| `src/domain/stock/pdrHierarchyService.ts` | Résolution hiérarchique (`resolvePdrHierarchy`), héritage des `policy_tags` (`getEffectivePdrPolicyTags`) et gardes de suppression/désactivation. |
+| `src/services/pdrHierarchyExcelService.ts` & `src/services/pdr/types/pdrExcelTypes.ts` | Moteur d'import/export Excel 3 feuilles (`PDR_GROUPS`, `PDR_TYPES`, `PDR_ITEMS`) avec modes `MERGE` et `REPLACE_CATALOG` et validation stricte sans perte silencieuse. |
 | `src/presentation/pages/stock/components/StockReplenishmentModal.tsx` | Centre de réapprovisionnement & commandes `PO` (sélection d'alertes, création de PO, réception partielle/totale, impression BC). |
-| `src/presentation/pages/stock/AddArticleModal.tsx` & `EditArticleModal.tsx` | Création et édition d'article avec contrôle de doublon `code_article`, liaison Machine/Organe/Pièce et `prix_unitaire` (MAD). |
+| `src/presentation/pages/stock/AddArticleModal.tsx` & `EditArticleModal.tsx` | Création et édition d'article avec sélection cascadée `Group ➔ Type`, tags `MaterialPolicyTag`, contrôle de doublon `ref` et `prix_unitaire` (MAD). |
 | `src/presentation/pages/movements/SortieRapideView.tsx` | Guichet opérationnel des 5 flux magasin, Demandes de Sortie Terrain, Bons de Sortie Externes, Vue Scindée et Assistant Wizard. |
-| `src/presentation/pages/referentiel/TypeView.tsx` | Gestion du référentiel `Types PDR` (`TYP-XX`) avec compteurs croisés Désignations/Articles. |
-| `src/presentation/pages/referentiel/DesignationView.tsx` | Gestion du référentiel `Désignations PDR` avec préfixes intelligents et raccourcis vers Stock & Mouvements. |
-| `src/application/IncrementalStockIndex.ts` | Moteur de calcul incrémental $O(1)$ des quantités en stock et derniers mouvements. |
+| `src/presentation/pages/referentiel/TypeView.tsx` | Gestion du référentiel `Types PDR` (`TYP-XX`) rattachés à `id_group` avec compteurs croisés Désignations/Articles. |
+| `src/presentation/pages/referentiel/DesignationView.tsx` | Gestion du référentiel `Désignations PDR` avec filtre par Groupe/Type, préfixes intelligents et raccourcis vers Stock & Mouvements. |
+| `src/application/IncrementalStockIndex.ts` | Moteur de calcul incrémental $O(1)$ des quantités en stock et derniers mouvements par `ref`. |
 | `src/utils/stockReplenishmentUtils.ts` | Calcul pur des réservations Maker-Checker (`computeReservedStockMap`) et des alertes de réapprovisionnement (`computeStockReorderAlerts`). |

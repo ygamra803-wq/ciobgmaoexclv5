@@ -55,11 +55,11 @@
 
 هذه الملفات تُقرأ مباشرة داخل شاشة **`Guide d'utilisation`** (`src/presentation/pages/system/GuideView.tsx`) وتجمع بين **مرجع الهندسة والمعمارية للمطورين/الوكلاء (`GROUP_ARCHITECTURE.md`)** و**الأدلة التشغيلية للمستخدمين (`page-*.md`)**:
 
-### المجموعة 01: `Stock PDR, Mouvements & Commandes (PO)` (`docs/modules/01-stock-pdr/`)
-- **[`docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md`](./docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (`IncrementalStockIndex` $O(1)$، الحجز المؤقت `Maker-Checker`، دورة أوامر الشراء `PO`، الصلاحيات `RBAC`، وسجل التدقيق `AUDIT_EVENTS`).
-- **[`docs/modules/01-stock-pdr/page-stock-articles.md`](./docs/modules/01-stock-pdr/page-stock-articles.md)** — دليل المستخدم التشغيلي لشاشة `Stock Articles` ومركز التموين وأوامر الشراء `PO`.
+### المجموعة 01: `Stock PDR, Hiérarchie 3-Niveaux, Mouvements & Commandes (PO)` (`docs/modules/01-stock-pdr/`)
+- **[`docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md`](./docs/modules/01-stock-pdr/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (هرم `Group ➔ Type ➔ Designation/SKU` `CATALOG-GROUP-P1`، وسوم السياسات `POLICY-TAGS-P1`، محرك Excel ثلاثي الأوراق `pdrHierarchyExcelService.ts`، فهرس `IncrementalStockIndex` $O(1)$، الحجز المؤقت `Maker-Checker`، دورة أوامر الشراء `PO`، وسجل التدقيق `AUDIT_EVENTS`).
+- **[`docs/modules/01-stock-pdr/page-stock-articles.md`](./docs/modules/01-stock-pdr/page-stock-articles.md)** — دليل المستخدم التشغيلي لشاشة `Stock Articles`، إدارة `Groupes PDR` (`PdrGroupsModal.tsx`)، الفلاتر الشلالية، ومركز التموين وأوامر الشراء `PO`.
 - **[`docs/modules/01-stock-pdr/page-sortie-entree-rapide.md`](./docs/modules/01-stock-pdr/page-sortie-entree-rapide.md)** — دليل المستخدم التشغيلي لشاشة `Sortie & Entrée Rapide` (التدفقات الخمسة، طلبيات الصرف الميدانية، وأذونات الخروج الخارجية).
-- **[`docs/modules/01-stock-pdr/page-types-pdr.md`](./docs/modules/01-stock-pdr/page-types-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Types PDR` (`TYP-XX`).
+- **[`docs/modules/01-stock-pdr/page-types-pdr.md`](./docs/modules/01-stock-pdr/page-types-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Types PDR` (`TYP-XX` المرتبطة بـ `id_group`).
 - **[`docs/modules/01-stock-pdr/page-designations-pdr.md`](./docs/modules/01-stock-pdr/page-designations-pdr.md)** — دليل المستخدم التشغيلي لشاشة `Désignations PDR`.
 
 ### المجموعة 02: `Parc Machines, Blueprints & Architecture 3-Tiers` (`docs/modules/02-parc-machines/`)
@@ -75,11 +75,11 @@
 - **[`docs/modules/03-preventive-meters/page-preventive-planning-meters.md`](./docs/modules/03-preventive-meters/page-preventive-planning-meters.md)** — دليل المستخدم التشغيلي لشاشة `Planning & Compteurs Préventifs` (أوضاع العرض الـ 6، تسجيل الزيارات، جولات العدادات المجمعة `Tournée d'Atelier`، وجولات النظام العام).
 - **[`docs/modules/03-preventive-meters/page-preventive-referentiel.md`](./docs/modules/03-preventive-meters/page-preventive-referentiel.md)** — دليل المستخدم التشغيلي لشاشة `Ingénierie & Référentiel Préventif` (مصمم الخطط `Plan Builder`، بطاقات الإرشاد للأعضاء `Guides & PDR`، وكتالوج أفعال `AFNOR`).
 
-### المجموعة 04: `Maintenance Corrective (DI / BT / Atelier Mécanique / Clôture & Catalogue)` (`docs/modules/04-corrective-di-bt/`)
-- **[`docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md`](./docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (آلة الحالات المحدودة `WorkOrderStateMachine`، كيان أوامر ورشة التصنيع الميكانيكي الداخلية `IWorkshopOrder` `COR-ATELIER-P0` ومنع الإغلاق المبكر `hasOpenWorkshopOrder`، بروتوكول `Maker-Checker`، حسابات الورديات الصناعية `Shifts 08:00–17:00`، وخوارزميات `MTTR/MTBF/Pareto`).
+### المجموعة 04: `Maintenance Corrective (DI / BT / Besoins / Atelier Mécanique / Clôture & Catalogue)` (`docs/modules/04-corrective-di-bt/`)
+- **[`docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md`](./docs/modules/04-corrective-di-bt/GROUP_ARCHITECTURE.md)** — المرجع المعماري للمطورين والوكيل (آلة الحالات المحدودة `WorkOrderStateMachine`، جسر طلبات الاحتياج `NeedRequest` `CORRECTIVE-NEED-HANDOFF-P1`، أوامر ورشة التصنيع الميكانيكي الداخلية `IWorkshopOrder` `COR-ATELIER-P0` ومنع الإغلاق المبكر `hasOpenWorkshopOrder` / `hasOpenNeedRequest`، بروتوكول `Maker-Checker`، وخوارزميات `MTTR/MTBF/Pareto`).
 - **[`docs/modules/04-corrective-di-bt/page-demandes-intervention.md`](./docs/modules/04-corrective-di-bt/page-demandes-intervention.md)** — دليل المستخدم التشغيلي لشاشة `Demandes d'Intervention` (تسجيل البلاغات الطارئة، درجات الاستعجال P1-P4، التحقق من الآلات النشطة، والتحويل إلى أمر عمل BT).
-- **[`docs/modules/04-corrective-di-bt/page-bons-travail.md`](./docs/modules/04-corrective-di-bt/page-bons-travail.md)** — دليل المستخدم التشغيلي لشاشتي `Bons de Travail` و `Intervention Live` (التشغيل الزمني المباشر، إنشاء بون ورشة ميكانيكية `BR / RECT` مرتبط بالـ BT، الفصل الدلالي بين `ATTENTE ATELIER` و `ATTENTE PDR`، ومراجعة المشرف `Maker-Checker`).
-- **[`docs/modules/04-corrective-di-bt/page-atelier-mecanique.md`](./docs/modules/04-corrective-di-bt/page-atelier-mecanique.md)** — دليل المستخدم التشغيلي لتبويب `Atelier Fabrication Mécanique — Bons de Réalisation (BR) & Rectification (RECT)` (`AtelierFabricationTab.tsx` — `#corrective_atelier`).
+- **[`docs/modules/04-corrective-di-bt/page-bons-travail.md`](./docs/modules/04-corrective-di-bt/page-bons-travail.md)** — دليل المستخدم التشغيلي لشاشتي `Bons de Travail` و `Intervention Live` (التشغيل الزمني المباشر، طلبات الاحتياج `NeedRequest`، إنشاء بون ورشة ميكانيكية `BR / RECT` مرتبط بالـ BT، الفصل الدلالي بين `ATTENTE ATELIER` و `ATTENTE PDR`، ومراجعة المشرف `Maker-Checker`).
+- **[`docs/modules/04-corrective-di-bt/page-atelier-mecanique.md`](./docs/modules/04-corrective-di-bt/page-atelier-mecanique.md)** — دليل المستخدم التشغيلي لتبويب `Atelier Fabrication Mécanique — Bons de Réalisation (BR) & Rectification (RECT)` (`AtelierFabricationTab.tsx` وطباعة الأوامر الرسمية `AtelierFabOrderPrintModal.tsx` — `#corrective_atelier`).
 - **[`docs/modules/04-corrective-di-bt/page-cloture-analyse.md`](./docs/modules/04-corrective-di-bt/page-cloture-analyse.md)** — دليل المستخدم التشغيلي لشاشتي `Rapports Clôturés` و `Analyse Corrective & Pareto` (تحليلات باريتو 80/20، مؤشرات الاعتمادية MTTR/MTBF، متابعة وإصدار بونات الورشة من بطاقة التقرير، وتصدير التقارير).
 - **[`docs/modules/04-corrective-di-bt/page-catalogue-correctif.md`](./docs/modules/04-corrective-di-bt/page-catalogue-correctif.md)** — دليل المستخدم التشغيلي لشاشة `Catalogue des Données / Référentiel Correctif` (قاعدة الأعراض، الأعمال المعيارية، مصفوفة العرض-الحل، والفنيين المؤهلين).
 
@@ -138,20 +138,20 @@
   - **[`docs/modules/07-settings-systeme/page-dev-matching-audit.md`](./docs/modules/07-settings-systeme/page-dev-matching-audit.md)** — المرجع التقني (خوارزميات فحص المفاتيح الأجنبية Orphaned FKs، وإعادة الربط التلقائي).
   - **[`docs/modules/07-settings-systeme/page-user-matching-audit.md`](./docs/modules/07-settings-systeme/page-user-matching-audit.md)** — دليل المستخدم التشغيلي (اكتشاف الآلات أو القطع المعزولة، وإعادة تعيينها بنقرة واحدة).
 - **6. محرر قاعدة البيانات (`JSON Database Editor`):**
-  - **[`docs/modules/07-settings-systeme/page-dev-settings-json-editor.md`](./docs/modules/07-settings-systeme/page-dev-settings-json-editor.md)** — المرجع التقني (الفحص النحوي، حماية التراكيب الحيوية، وحفظ التعديلات الطارئة).
-  - **[`docs/modules/07-settings-systeme/page-user-settings-json-editor.md`](./docs/modules/07-settings-systeme/page-user-settings-json-editor.md)** — دليل المستخدم التشغيلي (عرض البيانات الخام، البحث بالكلمات، وضوابط الحذر).
+  - **[`docs/modules/07-settings-systeme/page-dev-json-editor.md`](./docs/modules/07-settings-systeme/page-dev-json-editor.md)** — المرجع التقني (الفحص النحوي، حماية التراكيب الحيوية، وحفظ التعديلات الطارئة).
+  - **[`docs/modules/07-settings-systeme/page-user-json-editor.md`](./docs/modules/07-settings-systeme/page-user-json-editor.md)** — دليل المستخدم التشغيلي (عرض البيانات الخام، البحث بالكلمات، وضوابط الحذر).
 - **7. النسخ الاحتياطي والتدقيق المؤسسي (`Backup & Audit Ledger`):**
-  - **[`docs/modules/07-settings-systeme/page-dev-settings-backup-audit.md`](./docs/modules/07-settings-systeme/page-dev-settings-backup-audit.md)** — المرجع التقني (سجل AUDIT_EVENTS غير القابل للتعديل، التقاط الفروقات قبل/بعد، واستعادة الحالة الكاملة).
+  - **[`docs/modules/07-settings-systeme/page-dev-backup-audit.md`](./docs/modules/07-settings-systeme/page-dev-backup-audit.md)** — المرجع التقني (سجل AUDIT_EVENTS غير القابل للتعديل، التقاط الفروقات قبل/بعد، واستعادة الحالة الكاملة).
   - **[`docs/modules/07-settings-systeme/page-user-settings-backup-audit.md`](./docs/modules/07-settings-systeme/page-user-settings-backup-audit.md)** — دليل المستخدم التشغيلي (تصدير النسخ الدورية، الاسترجاع بعد الأعطال، وتتبع تاريخ العمليات).
 - **8. حساب المسؤول والخزنة المشفرة (`Admin Account & Vault`):**
-  - **[`docs/modules/07-settings-systeme/page-dev-settings-admin-vault.md`](./docs/modules/07-settings-systeme/page-dev-settings-admin-vault.md)** — المرجع التقني (توليد المفاتيح بـ PBKDF2، التشفير بـ AES-GCM 256-bit، وقفل التخمين).
-  - **[`docs/modules/07-settings-systeme/page-user-settings-admin-vault.md`](./docs/modules/07-settings-systeme/page-user-settings-admin-vault.md)** — دليل المستخدم التشغيلي (تعيين الرمز السري Master PIN، فتح الخزنة وقفلها التلقائي).
+  - **[`docs/modules/07-settings-systeme/page-dev-admin-vault.md`](./docs/modules/07-settings-systeme/page-dev-admin-vault.md)** — المرجع التقني (توليد المفاتيح بـ PBKDF2، التشفير الأصيل `nativeCrypto.ts` + AES-GCM 256-bit، وقفل التخمين).
+  - **[`docs/modules/07-settings-systeme/page-user-admin-vault.md`](./docs/modules/07-settings-systeme/page-user-admin-vault.md)** — دليل المستخدم التشغيلي (تعيين الرمز السري Master PIN، فتح الخزنة وقفلها التلقائي).
 - **9. الأداء وذاكرة التخزين المؤقت (`Performance & Cache`):**
-  - **[`docs/modules/07-settings-systeme/page-dev-settings-performance-cache.md`](./docs/modules/07-settings-systeme/page-dev-settings-performance-cache.md)** — المرجع التقني (هيكلية الكاش L1/L2/L3، الإبطال الذكي بالوسوم Tag Invalidation، ومراقبة الـ Latency).
+  - **[`docs/modules/07-settings-systeme/page-dev-performance-cache.md`](./docs/modules/07-settings-systeme/page-dev-performance-cache.md)** — المرجع التقني (هيكلية الكاش L1/L2/L3، الإبطال الذكي بالوسوم Tag Invalidation، ومراقبة الـ Latency).
   - **[`docs/modules/07-settings-systeme/page-user-settings-performance-cache.md`](./docs/modules/07-settings-systeme/page-user-settings-performance-cache.md)** — دليل المستخدم التشغيلي (مؤشرات سرعة الاستجابة، وتفريغ الذاكرة المؤقتة لتحسين الأداء).
 - **10. العملات والمالية الدولية (`Currency & Multi-Currency ISO`):**
-  - **[`docs/modules/07-settings-systeme/page-dev-settings-currency-finance.md`](./docs/modules/07-settings-systeme/page-dev-settings-currency-finance.md)** — المرجع التقني (معايير ISO 4217، التحويل الآني للـ PUMP، والاحتفاظ بسعر الصرف التاريخي).
-  - **[`docs/modules/07-settings-systeme/page-user-settings-currency-finance.md`](./docs/modules/07-settings-systeme/page-user-settings-currency-finance.md)** — دليل المستخدم التشغيلي (اختيار العملة الأساسية DA/MAD/EUR/USD، وتسجيل أسعار الصرف).
+  - **[`docs/modules/07-settings-systeme/page-dev-currency-finance.md`](./docs/modules/07-settings-systeme/page-dev-currency-finance.md)** — المرجع التقني (معايير ISO 4217، التحويل الآني للـ PUMP، والاحتفاظ بسعر الصرف التاريخي).
+  - **[`docs/modules/07-settings-systeme/page-user-currency-finance.md`](./docs/modules/07-settings-systeme/page-user-currency-finance.md)** — دليل المستخدم التشغيلي (اختيار العملة الأساسية DA/MAD/EUR/USD، وتسجيل أسعار الصرف).
 
 
 

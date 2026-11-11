@@ -21,7 +21,6 @@
     "@tanstack/react-virtual": "^3.14.14",
     "axios": "^1.20.0",
     "cors": "^2.8.6",
-    "crypto-js": "^4.2.0",
     "date-fns": "^4.4.0",
     "dompurify": "^3.4.16",
     "exceljs": "^4.4.0",
