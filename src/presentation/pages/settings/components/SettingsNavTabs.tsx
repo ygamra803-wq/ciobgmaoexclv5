@@ -1,81 +1,200 @@
+import React from 'react';
 import {
-  HardDrive,
-  Cpu,
-  FileUp,
+  Activity,
+  RotateCcw,
+  Sparkles,
   FolderSync,
   ShieldAlert,
-  FileCode,
+  FileSpreadsheet,
   Shield,
-  UserCheck,
-  Activity,
+  Lock,
+  Gauge,
   Palette,
   Coins,
+  Wrench,
+  Sliders,
 } from 'lucide-react';
 import { useTranslation } from '../../../../i18n/I18nContext';
 
-const TAB_TRANSLATIONS: Record<
-  string,
-  { fr: { label: string; sub: string }; ar: { label: string; sub: string }; en: { label: string; sub: string } }
-> = {
-  overview: {
-    fr: { label: 'Supervision & Stockage', sub: 'Statistiques & Excel' },
-    ar: { label: 'الإشراف والتخزين', sub: 'الإحصائيات وملف Excel' },
-    en: { label: 'Supervision & Storage', sub: 'Statistics & Excel' },
+interface SettingsTabItem {
+  id: string;
+  category: 'factory' | 'advanced';
+  icon: React.ComponentType<{ className?: string }>;
+  title: { fr: string; ar: string; en: string };
+  sub: { fr: string; ar: string; en: string };
+}
+
+const SETTINGS_TABS_LIST: SettingsTabItem[] = [
+  {
+    id: 'overview',
+    category: 'factory',
+    icon: Activity,
+    title: {
+      fr: "Vue d'ensemble",
+      ar: 'نظرة عامة',
+      en: 'System Overview',
+    },
+    sub: {
+      fr: 'Capacité & état SSOT',
+      ar: 'السعة وحالة التخزين',
+      en: 'Storage & SSOT state',
+    },
   },
-  'mvt-logic': {
-    fr: { label: 'Logique & Flux Mouvements', sub: '3 Catégories & 5 Flux' },
-    ar: { label: 'منطق وتدفقات الحركات', sub: '3 فئات و 5 مسارات' },
-    en: { label: 'Movement Logic & Flows', sub: '3 Categories & 5 Flows' },
+  {
+    id: 'appearance',
+    category: 'factory',
+    icon: Palette,
+    title: {
+      fr: 'Apparence & Layout',
+      ar: 'المظهر والتخطيط',
+      en: 'Appearance & Layout',
+    },
+    sub: {
+      fr: 'PC, Mobile & Densité',
+      ar: 'العرض والكثافة',
+      en: 'Device mode & density',
+    },
   },
-  injection: {
-    fr: { label: 'Injection Données Excel', sub: 'Import Sécurisé' },
-    ar: { label: 'حقن واستيراد البيانات', sub: 'استيراد آمن ومعاينة' },
-    en: { label: 'Excel Data Injection', sub: 'Secure Import' },
+  {
+    id: 'currency',
+    category: 'factory',
+    icon: Coins,
+    title: {
+      fr: 'Devise & Fiscalité',
+      ar: 'العملة والضرائب',
+      en: 'Currency & Tax',
+    },
+    sub: {
+      fr: 'MAD / EUR / USD & TVA',
+      ar: 'العملة والضريبة',
+      en: 'ISO 4217 & VAT',
+    },
   },
-  directory: {
-    fr: { label: 'Dossier Partagé & Sync', sub: 'Twin Dossier Réseau' },
-    ar: { label: 'المجلد المشترك والمزامنة', sub: 'التوأم الرقمي للشبكة' },
-    en: { label: 'Shared Folder & Sync', sub: 'Network Folder Twin' },
+  {
+    id: 'directory',
+    category: 'factory',
+    icon: FolderSync,
+    title: {
+      fr: 'Réseau LAN & Excel',
+      ar: 'الشبكة وملف Excel',
+      en: 'LAN & Excel Sync',
+    },
+    sub: {
+      fr: 'Poste Hôte/Client & QR',
+      ar: 'مزامنة الشبكة والمرآة',
+      en: 'Host/Client & Mirror',
+    },
   },
-  matching: {
-    fr: { label: 'Appairage', sub: 'Audit & Synchro' },
-    ar: { label: 'المطابقة والربط', sub: 'التدقيق والمزامنة' },
-    en: { label: 'Entity Matching', sub: 'Audit & Sync' },
+  {
+    id: 'backup-audit',
+    category: 'factory',
+    icon: Shield,
+    title: {
+      fr: 'Sauvegarde & Audit',
+      ar: 'النسخ والتدقيق',
+      en: 'Backups & Audit',
+    },
+    sub: {
+      fr: 'Restauration & Intégrité',
+      ar: 'الاستعادة وسلامة البيانات',
+      en: 'Restore & Integrity',
+    },
   },
-  'json-editor': {
-    fr: { label: 'Base JSON', sub: 'Éditeur de Base' },
-    ar: { label: 'قاعدة JSON', sub: 'محرر قاعدة البيانات' },
-    en: { label: 'JSON Database', sub: 'Raw Store Editor' },
+  {
+    id: 'admin',
+    category: 'factory',
+    icon: Lock,
+    title: {
+      fr: 'Sécurité & Comptes',
+      ar: 'الأمان والحسابات',
+      en: 'Security & Accounts',
+    },
+    sub: {
+      fr: 'Master PIN & Accès',
+      ar: 'رمز PIN والصلاحيات',
+      en: 'Master PIN & Roles',
+    },
   },
-  'backup-audit': {
-    fr: { label: "Logs d'Accès & Audit", sub: 'Historique, IP & Restauration' },
-    ar: { label: 'سجلات الدخول والتدقيق', sub: 'السجل، الاستعادة والفحص' },
-    en: { label: 'Access Logs & Audit', sub: 'History, IP & Restore' },
+  {
+    id: 'mvt-logic',
+    category: 'factory',
+    icon: RotateCcw,
+    title: {
+      fr: 'Logique Mouvements',
+      ar: 'منطق الحركات',
+      en: 'Movement Rules',
+    },
+    sub: {
+      fr: '5 flux magasin usine',
+      ar: 'قواعد تدفقات المخزن',
+      en: '5 warehouse flows',
+    },
   },
-  admin: {
-    fr: { label: 'Compte Admin', sub: 'Profil & Sécurité' },
-    ar: { label: 'حساب المسؤول', sub: 'الملف الشخصي والأمان' },
-    en: { label: 'Admin Account', sub: 'Profile & Security' },
+  {
+    id: 'matching',
+    category: 'advanced',
+    icon: ShieldAlert,
+    title: {
+      fr: 'Appairage Données',
+      ar: 'مطابقة البيانات',
+      en: 'Data Matching',
+    },
+    sub: {
+      fr: 'Réconciliation orphelins',
+      ar: 'ربط السجلات غير المطابقة',
+      en: 'Orphan reconciliation',
+    },
   },
-  performance: {
-    fr: { label: 'Performance & Cache', sub: 'Dashboard, Caching & Alertes' },
-    ar: { label: 'الأداء وذاكرة التخزين', sub: 'السرعة، الفهرسة والتنبيهات' },
-    en: { label: 'Performance & Cache', sub: 'Dashboard, Caching & Alerts' },
+  {
+    id: 'injection',
+    category: 'advanced',
+    icon: Sparkles,
+    title: {
+      fr: 'Données Démo & Reset',
+      ar: 'بيانات التجربة والتصفير',
+      en: 'Demo Data & Reset',
+    },
+    sub: {
+      fr: 'Jeux de test & Remise à 0',
+      ar: 'حقن تجريبي أو ضبط مصنع',
+      en: 'Test seeds & Factory wipe',
+    },
   },
-  appearance: {
-    fr: { label: 'Apparence', sub: 'Thème, disposition & interface' },
-    ar: { label: 'المظهر والواجهة', sub: 'السمة، التخطيط والواجهة' },
-    en: { label: 'Appearance', sub: 'Theme, Layout & UI' },
+  {
+    id: 'json-editor',
+    category: 'advanced',
+    icon: FileSpreadsheet,
+    title: {
+      fr: 'Inspecteur JSON',
+      ar: 'محرر JSON الخام',
+      en: 'Raw JSON Inspector',
+    },
+    sub: {
+      fr: 'Maintenance directe SSOT',
+      ar: 'فحص وتعديل مباشر',
+      en: 'Direct SSOT inspection',
+    },
   },
-  currency: {
-    fr: { label: 'Devise & Finance', sub: 'ISO 4217 (MAD, USD, EUR)' },
-    ar: { label: 'العملة والمالية', sub: 'معيار ISO 4217 (MAD, USD, EUR)' },
-    en: { label: 'Currency & Finance', sub: 'ISO 4217 (MAD, USD, EUR)' },
+  {
+    id: 'performance',
+    category: 'advanced',
+    icon: Gauge,
+    title: {
+      fr: 'Performance & Cache',
+      ar: 'الأداء وذاكرة الكاش',
+      en: 'Performance & Cache',
+    },
+    sub: {
+      fr: 'FPS & Cache L1/L2/L3',
+      ar: 'سرعة الحساب والكاش',
+      en: 'FPS & L1/L2/L3 Cache',
+    },
   },
-};
+];
 
 /**
- * Navigation tabs for SettingsView.
+ * Top navigation tab bar for SettingsView.
+ * Uses a unified industrial light design: single active color, uniform height, and sans-serif subtitles.
  */
 export default function SettingsNavTabs({
   activeTab,
@@ -89,179 +208,104 @@ export default function SettingsNavTabs({
   allowedTabIds?: string[];
 }) {
   const { language } = useTranslation();
-  const langKey = (language === 'ar' || language === 'en' ? language : 'fr') as 'fr' | 'ar' | 'en';
-
-  const getTabCopy = (id: string) => {
-    const entry = TAB_TRANSLATIONS[id]?.[langKey] || TAB_TRANSLATIONS[id]?.fr || { label: id, sub: '' };
-    if (id === 'matching') {
-      return {
-        label: `${entry.label} (${discoveredItemsCount})`,
-        sub: entry.sub,
-      };
-    }
-    return entry;
-  };
-
-  const tabs = [
-    {
-      id: 'overview',
-      ...getTabCopy('overview'),
-      icon: HardDrive,
-      color: 'text-cyan-600',
-      activeBg: 'bg-cyan-50/70',
-      activeBorder: 'border-cyan-500',
-      activeText: 'text-cyan-950',
-      activeIconBg: 'bg-cyan-100/80',
-    },
-    {
-      id: 'mvt-logic',
-      ...getTabCopy('mvt-logic'),
-      icon: Cpu,
-      color: 'text-blue-600',
-      activeBg: 'bg-blue-50/70',
-      activeBorder: 'border-blue-500',
-      activeText: 'text-blue-950',
-      activeIconBg: 'bg-blue-100/80',
-    },
-    {
-      id: 'injection',
-      ...getTabCopy('injection'),
-      icon: FileUp,
-      color: 'text-emerald-600',
-      activeBg: 'bg-emerald-50/70',
-      activeBorder: 'border-emerald-500',
-      activeText: 'text-emerald-950',
-      activeIconBg: 'bg-emerald-100/80',
-    },
-    {
-      id: 'directory',
-      ...getTabCopy('directory'),
-      icon: FolderSync,
-      color: 'text-indigo-600',
-      activeBg: 'bg-indigo-50/70',
-      activeBorder: 'border-indigo-500',
-      activeText: 'text-indigo-950',
-      activeIconBg: 'bg-indigo-100/80',
-    },
-    {
-      id: 'matching',
-      ...getTabCopy('matching'),
-      icon: ShieldAlert,
-      color: 'text-amber-500',
-      activeBg: 'bg-amber-50/70',
-      activeBorder: 'border-amber-500',
-      activeText: 'text-amber-950',
-      activeIconBg: 'bg-amber-100/80',
-    },
-    {
-      id: 'json-editor',
-      ...getTabCopy('json-editor'),
-      icon: FileCode,
-      color: 'text-rose-500',
-      activeBg: 'bg-rose-50/70',
-      activeBorder: 'border-rose-500',
-      activeText: 'text-rose-950',
-      activeIconBg: 'bg-rose-100/80',
-    },
-    {
-      id: 'backup-audit',
-      ...getTabCopy('backup-audit'),
-      icon: Shield,
-      color: 'text-fuchsia-600',
-      activeBg: 'bg-fuchsia-50/70',
-      activeBorder: 'border-fuchsia-500',
-      activeText: 'text-fuchsia-950',
-      activeIconBg: 'bg-fuchsia-100/80',
-    },
-    {
-      id: 'admin',
-      ...getTabCopy('admin'),
-      icon: UserCheck,
-      color: 'text-violet-600',
-      activeBg: 'bg-violet-50/70',
-      activeBorder: 'border-violet-500',
-      activeText: 'text-violet-950',
-      activeIconBg: 'bg-violet-100/80',
-    },
-    {
-      id: 'performance',
-      ...getTabCopy('performance'),
-      icon: Activity,
-      color: 'text-teal-600',
-      activeBg: 'bg-teal-50/70',
-      activeBorder: 'border-teal-500',
-      activeText: 'text-teal-950',
-      activeIconBg: 'bg-teal-100/80',
-    },
-    {
-      id: 'appearance',
-      ...getTabCopy('appearance'),
-      icon: Palette,
-      color: 'text-purple-600',
-      activeBg: 'bg-purple-50/70',
-      activeBorder: 'border-purple-500',
-      activeText: 'text-purple-950',
-      activeIconBg: 'bg-purple-100/80',
-    },
-    {
-      id: 'currency',
-      ...getTabCopy('currency'),
-      icon: Coins,
-      color: 'text-emerald-700',
-      activeBg: 'bg-emerald-50/70',
-      activeBorder: 'border-emerald-600',
-      activeText: 'text-emerald-950',
-      activeIconBg: 'bg-emerald-100/80',
-    },
-  ];
+  const langKey = language === 'ar' ? 'ar' : language === 'en' ? 'en' : 'fr';
 
   const visibleTabs = Array.isArray(allowedTabIds)
-    ? tabs.filter((t) => allowedTabIds.includes(t.id))
-    : tabs;
+    ? SETTINGS_TABS_LIST.filter((t) => allowedTabIds.includes(t.id))
+    : [];
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3 sm:p-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-        {visibleTabs.map((tab) => {
-          const IconComponent = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all text-left cursor-pointer w-full ${
-                isActive
-                  ? `${tab.activeBg} ${tab.activeBorder} ${tab.activeText} shadow-xs font-bold scale-[1.01]`
-                  : 'bg-slate-50/50 hover:bg-slate-50 border-slate-200/80 text-slate-600'
+  const factoryTabs = visibleTabs.filter((t) => t.category === 'factory');
+  const advancedTabs = visibleTabs.filter((t) => t.category === 'advanced');
+
+  const renderTabButton = (tab: SettingsTabItem) => {
+    const isActive = activeTab === tab.id;
+    const Icon = tab.icon;
+
+    return (
+      <button
+        key={tab.id}
+        type="button"
+        onClick={() => setActiveTab(tab.id)}
+        className={`group relative flex items-center gap-2.5 px-3 py-2.5 min-h-[48px] rounded-xl border text-left transition-all cursor-pointer select-none ${
+          isActive
+            ? 'bg-indigo-50/90 border-indigo-600 text-slate-900 shadow-2xs ring-1 ring-indigo-600/15'
+            : 'bg-white border-slate-200/90 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+        }`}
+      >
+        <div
+          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+            isActive
+              ? 'bg-indigo-600 text-white shadow-2xs'
+              : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200/80 group-hover:text-slate-800'
+          }`}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-1.5">
+            <span
+              className={`text-xs font-bold truncate ${
+                isActive ? 'text-indigo-950' : 'text-slate-800'
               }`}
             >
-              <div
-                className={`p-2 rounded-lg shrink-0 border transition-all ${
-                  isActive ? `${tab.activeBorder} ${tab.activeIconBg}` : 'bg-white border-slate-200/80'
-                }`}
-              >
-                <IconComponent className={`w-4 h-4 ${tab.color}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div
-                  className={`text-xs font-bold leading-tight truncate ${
-                    isActive ? 'text-slate-900' : 'text-slate-700'
-                  }`}
-                >
-                  {tab.label}
-                </div>
-                <div
-                  className={`text-[10px] mt-0.5 font-mono truncate ${
-                    isActive ? 'text-slate-600' : 'text-slate-400'
-                  }`}
-                >
-                  {tab.sub}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              {tab.title[langKey]}
+            </span>
+            {tab.id === 'matching' && discoveredItemsCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+                {discoveredItemsCount}
+              </span>
+            )}
+          </div>
+          <div
+            className={`text-[11px] truncate mt-0.5 ${
+              isActive ? 'text-indigo-700/90 font-medium' : 'text-slate-500'
+            }`}
+          >
+            {tab.sub[langKey]}
+          </div>
+        </div>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-3" data-testid="settings-nav-tabs">
+      {factoryTabs.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+            <span>
+              {language === 'ar'
+                ? 'إعدادات تشغيل المصنع اليومية'
+                : language === 'en'
+                  ? 'Daily Factory Operations'
+                  : 'Exploitation Usine & Quotidien'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+            {factoryTabs.map(renderTabButton)}
+          </div>
+        </div>
+      )}
+
+      {advancedTabs.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+            <Wrench className="w-3.5 h-3.5 text-slate-500" />
+            <span>
+              {language === 'ar'
+                ? 'أدوات الصيانة المتقدمة والنظام'
+                : language === 'en'
+                  ? 'Advanced System & Maintenance Tools'
+                  : 'Maintenance Avancée & Diagnostic Système'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+            {advancedTabs.map(renderTabButton)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -48,6 +48,7 @@ import SettingsJsonEditorTab from './components/SettingsJsonEditorTab';
 import SettingsBackupAuditTab from './components/SettingsBackupAuditTab';
 import SettingsAdminTab from './components/SettingsAdminTab';
 import SettingsCurrencyTab from './components/SettingsCurrencyTab';
+import { SettingsPageHeader } from './components/settingsUi';
 import {
   AuditZoneModal,
   AuditUserModal,
@@ -728,7 +729,8 @@ export default function SettingsView({
     if (jsonTarget === 'rawStock') targetData = rawStock;
     else if (jsonTarget === 'mouvements') targetData = mouvements;
     else if (jsonTarget === 'machines') targetData = machines;
-    else if (jsonTarget === 'preventiveTasks') targetData = preventiveTasks;
+    else if (jsonTarget === 'preventiveTasks' || jsonTarget === 'preventive')
+      targetData = preventiveTasks;
     else if (jsonTarget === 'correctiveInterventions') targetData = correctiveInterventions;
     else if (jsonTarget === 'warehouseItems') targetData = warehouseItems;
     else if (jsonTarget === 'sortiesExterne') targetData = sortiesExterne;
@@ -739,6 +741,15 @@ export default function SettingsView({
     else if (jsonTarget === 'technicians') targetData = technicians;
     else if (jsonTarget === 'operations') targetData = operations;
     else if (jsonTarget === 'types') targetData = types;
+    else if (jsonTarget === 'users')
+      targetData = (accountsList || []).map((u: any) => ({
+        id: u.id,
+        username: u.username || u.code,
+        name: u.name || u.libelle,
+        role: u.role,
+        personnelId: u.personnelId || null,
+        isActive: u.isActive !== false,
+      }));
     return JSON.stringify(targetData, null, 2);
   }, [
     jsonTarget,
@@ -756,6 +767,7 @@ export default function SettingsView({
     technicians,
     operations,
     types,
+    accountsList,
   ]);
 
   const isJsonModified = useMemo(() => {
@@ -833,8 +845,10 @@ export default function SettingsView({
         setMouvements(parsed);
         if (setRawStock) setRawStock(recalculatedStock);
         storageService.saveArticles(recalculatedStock);
-      } else if (jsonTarget === 'machines') setMachines(parsed);
-      else if (jsonTarget === 'preventiveTasks') {
+      } else if (jsonTarget === 'machines') {
+        if (setMachines) setMachines(parsed);
+        else store.setMachines(parsed);
+      } else if (jsonTarget === 'preventiveTasks' || jsonTarget === 'preventive') {
         if (setPreventiveTasks) setPreventiveTasks(parsed);
         else store.setPreventiveTasks(parsed);
       } else if (jsonTarget === 'correctiveInterventions') {
@@ -847,12 +861,25 @@ export default function SettingsView({
       } else if (jsonTarget === 'machineElementsLedger') {
         if (setMachineElementsLedger) setMachineElementsLedger(parsed);
         else store.setMachineElementsLedger(parsed);
-      } else if (jsonTarget === 'families') setFamilies(parsed);
-      else if (jsonTarget === 'templates') setTemplates(parsed);
-      else if (jsonTarget === 'zones') setZones(parsed);
-      else if (jsonTarget === 'technicians') setTechnicians(parsed);
-      else if (jsonTarget === 'operations') setOperations(parsed);
-      else if (jsonTarget === 'types') setTypes(parsed);
+      } else if (jsonTarget === 'families') {
+        if (setFamilies) setFamilies(parsed);
+        else store.setFamilies(parsed);
+      } else if (jsonTarget === 'templates') {
+        if (setTemplates) setTemplates(parsed);
+        else store.setTemplates(parsed);
+      } else if (jsonTarget === 'zones') {
+        if (setZones) setZones(parsed);
+        else store.setZones(parsed);
+      } else if (jsonTarget === 'technicians') {
+        if (setTechnicians) setTechnicians(parsed);
+        else store.setTechnicians(parsed);
+      } else if (jsonTarget === 'operations') {
+        if (setOperations) setOperations(parsed);
+        else store.setOperations(parsed);
+      } else if (jsonTarget === 'types') {
+        if (setTypes) setTypes(parsed);
+        else store.setTypes(parsed);
+      }
 
       setJsonError(null);
       showToast('Modification appliquée et synchronisée avec succès !', 'success');
@@ -1748,26 +1775,24 @@ export default function SettingsView({
       {/* Header Banner */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
-              <SettingsIcon className="w-5 h-5 text-slate-600 animate-spin-slow" />
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200/80 flex items-center justify-center text-indigo-600 shrink-0">
+              <SettingsIcon className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
                 <span>{headerCopy.title}</span>
-                <span className="text-xs font-normal text-slate-400 font-mono">
+                <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
                   {headerCopy.subTitle}
                 </span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {headerCopy.desc}
-              </p>
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5">{headerCopy.desc}</p>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-cyan-50 text-cyan-800 border border-cyan-200/60 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
+          <span className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
             {headerCopy.badge}
           </span>
         </div>
@@ -1783,8 +1808,11 @@ export default function SettingsView({
 
       {/* Modular Tab Panels */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 w-full max-w-full overflow-hidden">
+        <SettingsPageHeader tabId={activeTab} />
+
         {activeTab === 'overview' && allowedTabIds.includes('overview') && (
           <SettingsOverviewTab
+            storageUsage={{ kb: localStorageSizeKB }}
             localStorageSizeKB={localStorageSizeKB}
             totalUsedMB={totalUsedMB}
             allocatedCacheCeilingMB={allocatedCacheCeilingMB}
@@ -1792,14 +1820,20 @@ export default function SettingsView({
             handleCeilingChange={handleCeilingChange}
             storagePercentage={storagePercentage}
             rawStock={rawStock}
+            rawStockCount={rawStock.length}
             machines={machines}
+            machinesCount={machines.length}
             mouvements={mouvements}
+            mouvementsCount={mouvements.length}
             zones={zones}
+            zonesCount={zones.length}
             technicians={technicians}
+            techniciansCount={technicians.length}
             operations={operations}
             warehouseItems={warehouseItems}
             sortiesExterne={sortiesExterne}
             preventiveTasks={preventiveTasks}
+            preventiveCount={preventiveTasks.length}
             correctiveInterventions={correctiveInterventions}
             linkedFileName={linkedFileName}
             fileDetails={fileDetails}
@@ -1894,6 +1928,7 @@ export default function SettingsView({
             handleUploadJSON={handleUploadJSON}
             handleDownloadJSON={handleDownloadJSON}
             jsonError={jsonError}
+            setJsonError={setJsonError}
             jsonText={jsonText}
             setJsonText={setJsonText}
             handleCancelEdits={handleCancelEdits}

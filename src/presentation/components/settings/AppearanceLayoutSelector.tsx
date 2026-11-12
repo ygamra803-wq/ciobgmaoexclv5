@@ -21,6 +21,10 @@ import {
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { setShellMode, SHELL_OVERRIDE_STORAGE_KEY } from '../../../core/shell/shellPolicy';
+import {
+  SettingsSectionCard,
+  SETTINGS_BUTTON_STYLES,
+} from '../../pages/settings/components/settingsUi';
 
 /**
  * Composant de sélection et personnalisation de l'apparence
@@ -266,60 +270,26 @@ export function AppearanceLayoutSelector({
 
   return (
     <div className={`w-full space-y-6 text-slate-800 ${className}`}>
-      {/* 1. EN-TÊTE PRINCIPAL (Format Light UI Excel - Pleine Largeur) */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-start sm:items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent-main text-white flex items-center justify-center shrink-0 shadow-xs">
-            <Palette className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                Personnalisation de l'Apparence & Ergonomie
-              </h3>
-              <span className="text-xs text-slate-400">·</span>
-              <span className="text-xs font-semibold text-accent-main bg-accent-subtle px-2.5 py-0.5 rounded-md border border-accent-subtle">
-                CIOB GMAO v4
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-3xl leading-relaxed">
-              Configurez le mode d'affichage (Auto / Desktop / Mobile), le style du menu flottant ou fixe, l'horloge supérieure et la densité des tableaux.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleResetDefaults}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition active:scale-95 shrink-0 cursor-pointer"
-        >
-          <RefreshCw className="w-4 h-4 text-slate-500" />
-          <span>Valeurs d'usine</span>
-        </button>
-      </div>
-
-      {/* 2. GRILLE RESPONSIVE 2 COLONNES SUR PC / 1 COLONNE SUR MOBILE */}
+      {/* 1. GRILLE RESPONSIVE 2 COLONNES SUR PC / 1 COLONNE SUR MOBILE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* COLONNE GAUCHE */}
         <div className="space-y-6">
           {/* SECTION 1 : MODE D'AFFICHAGE ET APPAREIL (Auto vs Desktop vs Mobile) */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent-main border border-accent-subtle flex items-center justify-center shrink-0">
-                  <Monitor className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Mode d'affichage & Cible de l'appareil
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Adaptation automatique ou mode Ordinateur de Bureau forcé.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <SettingsSectionCard
+            title="Mode d'affichage & Cible de l'appareil"
+            description="Adaptation automatique ou mode Ordinateur de Bureau / Terminal Mobile forcé."
+            icon={<Monitor className="w-4 h-4" />}
+            headerRight={
+              <button
+                type="button"
+                onClick={handleResetDefaults}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Valeurs d&apos;usine</span>
+              </button>
+            }
+          >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Mode Automatique */}
               <button
@@ -399,26 +369,14 @@ export function AppearanceLayoutSelector({
                 </div>
               </button>
             </div>
-          </div>
+          </SettingsSectionCard>
 
           {/* SECTION 2 : STYLE ET DISPOSITION DU MENU LATÉRAL */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center shrink-0">
-                  <PanelLeft className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Disposition & Style de la barre latérale
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Menu flottant rétractable ou barre fixe ancrée déployée.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <SettingsSectionCard
+            title="Disposition & Style de la barre latérale"
+            description="Menu flottant rétractable ou barre fixe ancrée déployée."
+            icon={<PanelLeft className="w-4 h-4" />}
+          >
             <div className="space-y-4">
               {/* Choix Style */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -523,26 +481,14 @@ export function AppearanceLayoutSelector({
                 </div>
               )}
             </div>
-          </div>
+          </SettingsSectionCard>
 
           {/* SECTION 3 : THÈME VISUEL */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0">
-                  <Sun className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Thème d'affichage de la navigation
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Contraste visuel pour la barre latérale et les menus.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <SettingsSectionCard
+            title="Thème d'affichage de la navigation"
+            description="Contraste visuel pour la barre latérale et les menus."
+            icon={<Sun className="w-4 h-4" />}
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <button
                 type="button"
@@ -580,26 +526,24 @@ export function AppearanceLayoutSelector({
                 {theme === 'dark' && <CheckCircle2 className="w-4 h-4 text-slate-800" />}
               </button>
             </div>
-          </div>
+          </SettingsSectionCard>
         </div>
 
         {/* COLONNE DROITE */}
         <div className="space-y-6">
           {/* SECTION 4 : APERÇU INTERACTIF EN DIRECT */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <Eye className="w-4 h-4 text-accent-main" />
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Aperçu en direct de l'espace de travail
-                </h4>
-              </div>
+          <SettingsSectionCard
+            title="Aperçu en direct de l'espace de travail"
+            description="Prévisualisation immédiate de l'ergonomie sélectionnée."
+            icon={<Eye className="w-4 h-4" />}
+            headerRight={
               <div className="flex items-center gap-2 text-xs text-slate-500 font-mono">
                 <span>Mode : {deviceMode}</span>
                 <span aria-hidden="true">·</span>
                 <span>Menu : {sidebarStyle === 'floating' ? 'Flottant' : 'Barre Fixe'}</span>
               </div>
-            </div>
+            }
+          >
 
             {/* Maquette dynamique en Light UI Excel */}
             <div className="h-52 w-full rounded-xl p-3 relative overflow-hidden border border-slate-200 bg-slate-50/90 text-slate-900 shadow-inner">
@@ -676,26 +620,14 @@ export function AppearanceLayoutSelector({
                 </div>
               </div>
             </div>
-          </div>
+          </SettingsSectionCard>
 
           {/* SECTION 5 : DENSITÉ & IDENTITÉ VISUELLE */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-accent-subtle text-accent-main border border-accent-subtle flex items-center justify-center shrink-0">
-                  <Table className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Densité des tableaux & Couleur d'accent
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Espacement des lignes de données et palette dominante.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <SettingsSectionCard
+            title="Densité des tableaux & Couleur d'accent"
+            description="Espacement des lignes de données et palette dominante."
+            icon={<Table className="w-4 h-4" />}
+          >
             <div className="space-y-4">
               {/* Densité */}
               <div className="grid grid-cols-2 gap-3">
@@ -766,26 +698,14 @@ export function AppearanceLayoutSelector({
                 </div>
               </div>
             </div>
-          </div>
+          </SettingsSectionCard>
 
           {/* SECTION 6 : OPTIONS ERGONOMIQUES ET HORLOGE INDUSTRIELLE */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-4">
-            <div className="pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 border border-purple-200 flex items-center justify-center shrink-0">
-                  <Zap className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-900">
-                    Options de la barre supérieure et fluidité
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Horloge industrielle en direct et transitions fluides.
-                  </p>
-                </div>
-              </div>
-            </div>
-
+          <SettingsSectionCard
+            title="Options de la barre supérieure et fluidité"
+            description="Horloge industrielle en direct et transitions fluides."
+            icon={<Zap className="w-4 h-4" />}
+          >
             <div className="divide-y divide-slate-100">
               {/* Option Horloge en direct */}
               <div className="py-2.5 flex items-center justify-between gap-4">
@@ -849,7 +769,7 @@ export function AppearanceLayoutSelector({
                 </button>
               </div>
             </div>
-          </div>
+          </SettingsSectionCard>
         </div>
       </div>
     </div>
@@ -857,3 +777,4 @@ export function AppearanceLayoutSelector({
 }
 
 export default AppearanceLayoutSelector;
+

@@ -1,297 +1,386 @@
-import { HardDrive, Database, Activity, FileSpreadsheet, Download, RotateCcw } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import {
+  HardDrive,
+  Database,
+  CheckCircle2,
+  ShieldAlert,
+  Lock,
+  Sparkles,
+  Layers,
+  Wrench,
+  MapPin,
+  Users,
+  Calendar,
+  FileSpreadsheet,
+  Download,
+} from 'lucide-react';
+import { indexedDBService } from '../../../../utils/indexedDBService';
 import { AutoBackupService } from '../../../../core/backup/AutoBackupService';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+
+const STORAGE_CEILING_KEY = 'gmao_storage_ceiling_mb';
 
 /**
- * Overview & Storage System Supervision Panel.
+ * Overview Tab — Storage Quota (L1 localStorage & L2 IndexedDB), Data Volume Counters, and Excel Twin Export.
  */
 export default function SettingsOverviewTab({
+  storageUsage,
   localStorageSizeKB,
-  totalUsedMB = '0.00',
-  allocatedCacheCeilingMB = 1024,
-  idbQuotaInfo = { isPersisted: false, browserQuotaGB: '1.0' },
-  handleCeilingChange,
-  storagePercentage,
-  rawStock = [],
-  machines = [],
-  mouvements = [],
-  zones = [],
-  technicians = [],
-  operations = [],
-  warehouseItems = [],
-  sortiesExterne = [],
-  preventiveTasks = [],
-  correctiveInterventions = [],
-  linkedFileName,
-  fileDetails = { size: '0 KB', lastModified: 'Non disponible' },
-  linkedFileHandle,
+  rawStockCount,
+  rawStock,
+  mouvementsCount,
+  mouvements,
+  machinesCount,
+  machines,
+  zonesCount,
+  zones,
+  techniciansCount,
+  technicians,
+  preventiveCount,
+  preventiveTasks,
   onDownloadBlankTemplate,
   onExportExcel,
   onOpenBackupManager,
   showToast,
 }: any) {
+  const effectiveStorageKb = Number(storageUsage?.kb ?? localStorageSizeKB ?? 0);
+  const effectiveRawStockCount = rawStockCount ?? (Array.isArray(rawStock) ? rawStock.length : 0);
+  const effectiveMouvementsCount =
+    mouvementsCount ?? (Array.isArray(mouvements) ? mouvements.length : 0);
+  const effectiveMachinesCount = machinesCount ?? (Array.isArray(machines) ? machines.length : 0);
+  const effectiveZonesCount = zonesCount ?? (Array.isArray(zones) ? zones.length : 0);
+  const effectiveTechniciansCount =
+    techniciansCount ?? (Array.isArray(technicians) ? technicians.length : 0);
+  const effectivePreventiveCount =
+    preventiveCount ?? (Array.isArray(preventiveTasks) ? preventiveTasks.length : 0);
+
+  const [ceilingMB, setCeilingMB] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_CEILING_KEY);
+    return saved ? Number(saved) : 1024;
+  });
+
+  const [idbInfo, setIdbInfo] = useState({
+    activeTier: 'IndexedDB',
+    usageMB: 0,
+    quotaMB: 2048,
+    usagePercent: 0,
+    isPersisted: false,
+  });
+
+  const [requestingPersist, setRequestingPersist] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadIdbStats = async () => {
+      try {
+        const info = await indexedDBService.getStorageInfo();
+        let persisted = false;
+        if (navigator.storage && navigator.storage.persisted) {
+          persisted = await navigator.storage.persisted();
+        }
+        if (mounted) {
+          setIdbInfo({ ...info, isPersisted: persisted });
+        }
+      } catch {
+        // Ignore fallback
+      }
+    };
+    loadIdbStats();
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveRawStockCount, effectiveMouvementsCount]);
+
+  const handleCeilingChange = async (newCeiling: number) => {
+    setCeilingMB(newCeiling);
+    localStorage.setItem(STORAGE_CEILING_KEY, String(newCeiling));
+    setRequestingPersist(true);
+    try {
+      const granted = await indexedDBService.requestPersistentStorage();
+      setIdbInfo((prev) => ({ ...prev, isPersisted: granted }));
+      if (showToast) {
+        showToast(
+          `Capacité cible configurée à ${newCeiling >= 1024 ? `${newCeiling / 1024} Go` : `${newCeiling} Mo`} (IndexedDB L2 Actif)`,
+          'success'
+        );
+      }
+    } finally {
+      setRequestingPersist(false);
+    }
+  };
+
+  const l1MB = Number((effectiveStorageKb / 1024).toFixed(2));
+  const totalUsedMB = Number(Math.max(l1MB, idbInfo.usageMB || l1MB).toFixed(2));
+  const effectiveQuotaMB = ceilingMB;
+  const effectivePercent = Math.min(100, Number(((totalUsedMB / effectiveQuotaMB) * 100).toFixed(2)));
+
   return (
     <div className="space-y-6">
-      <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-        <HardDrive className="w-4 h-4 text-cyan-600" />
-        Statistiques globales du stockage local
-      </h3>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* LocalStorage & IndexedDB High-Capacity Usage */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-3">
-          <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-            <span className="flex items-center gap-1.5">
-              <Database className="w-4 h-4 text-cyan-600" />
-              Cache Navigateur (IndexedDB L2 + L1)
+      {/* 1. Storage Engine & Volume Metrics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SettingsSectionCard
+          title="Moteur de Stockage Hybride (L1 + L2 IndexedDB)"
+          description="Allocation dynamique de la mémoire locale et protection contre l'éviction navigateur."
+          icon={<HardDrive className="w-4 h-4" />}
+          headerRight={
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Sparkles className="w-3 h-3" />
+              Capacité Étendue ({ceilingMB >= 1024 ? `${ceilingMB / 1024} Go` : `${ceilingMB} Mo`})
             </span>
-            <span className="font-mono text-cyan-800">
-              {totalUsedMB} MB /{' '}
-              {allocatedCacheCeilingMB >= 1024
-                ? `${allocatedCacheCeilingMB / 1024} GB`
-                : `${allocatedCacheCeilingMB} MB`}
-            </span>
-          </div>
-          <div className="w-full h-2 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
-            <div
-              className="h-full bg-cyan-600 rounded-full transition-all duration-500"
-              style={{ width: `${Math.max(1, parseFloat(storagePercentage) || 0)}%` }}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-medium pt-0.5">
-            <span>
-              L1 Rapide: <b className="text-slate-700 font-mono">{localStorageSizeKB} KB</b> • L2 IndexedDB:{' '}
-              <b className="text-emerald-700 font-mono">
-                {idbQuotaInfo?.isPersisted ? 'Persistant' : 'Actif'} (Disque: {idbQuotaInfo?.browserQuotaGB || '1.0'} GB)
-              </b>
-            </span>
-            {typeof handleCeilingChange === 'function' && (
-              <select
-                value={allocatedCacheCeilingMB}
-                onChange={(e) => handleCeilingChange(e.target.value)}
-                className="px-2 py-0.5 text-[10px] font-bold bg-slate-50 border border-slate-200 rounded-lg text-slate-700 cursor-pointer focus:outline-none focus:border-cyan-500"
-                title="Plafond de capacité alloué au cache industriel"
-              >
-                <option value={256}>Plafond: 256 MB</option>
-                <option value={512}>Plafond: 512 MB</option>
-                <option value={1024}>Plafond: 1 GB (Recommandé)</option>
-                <option value={2048}>Plafond: 2 GB (Big Data)</option>
-                <option value={5120}>Plafond: 5 GB (Max Usine)</option>
-              </select>
-            )}
-          </div>
-        </div>
+          }
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-slate-600">
+                  Volume Utilisé :{' '}
+                  <b className="font-mono text-slate-900">{effectiveStorageKb} KB</b> ({totalUsedMB}{' '}
+                  MB)
+                </span>
+                <span
+                  className={`font-mono ${
+                    effectivePercent > 80 ? 'text-rose-600' : 'text-indigo-600'
+                  }`}
+                >
+                  {effectivePercent}% sur{' '}
+                  {ceilingMB >= 1024 ? `${ceilingMB / 1024} Go` : `${ceilingMB} Mo`}
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/80">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    effectivePercent > 80
+                      ? 'bg-rose-500'
+                      : effectivePercent > 50
+                        ? 'bg-amber-500'
+                        : 'bg-indigo-600'
+                  }`}
+                  style={{ width: `${Math.max(2, Math.min(100, effectivePercent))}%` }}
+                />
+              </div>
+            </div>
 
-        {/* Counts Card */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-2">
-          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <Activity className="w-4 h-4 text-emerald-600" />
-            Nombre de fiches enregistrées
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-slate-500 pt-1">
-            <div>
-              Articles:{' '}
-              <b className="text-slate-900 font-mono font-bold">{rawStock.length}</b>
-            </div>
-            <div>
-              Machines:{' '}
-              <b className="text-slate-900 font-mono font-bold">{machines.length}</b>
-            </div>
-            <div>
-              Mouvements:{' '}
-              <b className="text-slate-900 font-mono font-bold">{mouvements.length}</b>
-            </div>
-            <div>
-              Zones: <b className="text-slate-900 font-mono font-bold">{zones.length}</b>
-            </div>
-            <div>
-              Techniciens:{' '}
-              <b className="text-slate-900 font-mono font-bold">{technicians.length}</b>
-            </div>
-            <div>
-              Chefs & Ops:{' '}
-              <b className="text-slate-900 font-mono font-bold">{operations.length}</b>
-            </div>
-          </div>
-        </div>
-
-        {/* Excel Linked */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white shadow-xs space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
-          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
-            Fichier Excel lié
-          </div>
-          <div className="text-xs pt-1 space-y-1 text-slate-500 font-medium">
-            <div className="truncate">
-              Nom:{' '}
-              <span className="text-slate-900 font-mono font-bold">
-                {linkedFileName || 'GMAO_Light_Template.xlsx'}
-              </span>
-            </div>
-            <div>
-              Taille: <span className="text-slate-900 font-mono">{fileDetails.size}</span>
-            </div>
-            <div>
-              Modifié le:{' '}
-              <span className="text-slate-900 font-mono">{fileDetails.lastModified}</span>
-            </div>
-            <div className="flex items-center gap-1 text-[10px] font-bold mt-1 text-emerald-600">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
-              Liaison:{' '}
-              {linkedFileHandle ? 'Connecté en Direct' : 'Simulation Active (Excel Twin)'}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* UNIFIED OPERATIONAL JSON SNAPSHOT BACKUP & RESTORE CARD (A3) */}
-      <div
-        data-testid="a3-operational-snapshot-card"
-        className="p-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-      >
-        <div className="flex items-start gap-3">
-          <span className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs shrink-0">
-            <Database className="w-5 h-5" />
-          </span>
-          <div className="space-y-1">
-            <h4 className="text-sm font-black text-slate-900 flex items-center gap-2 flex-wrap">
-              <span>Sauvegarde & Restauration Snapshot Opérationnel (.JSON)</span>
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-indigo-100 text-indigo-800 rounded-full border border-indigo-200">
-                SSOT Complet • Sans Secrets
-              </span>
-            </h4>
-            <p className="text-xs text-slate-600 font-medium">
-              Exportez l&apos;intégralité de l&apos;état de l&apos;usine en fichier JSON autonome ou restaurez un point/fichier avec confirmation explicite avant écrasement.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              AutoBackupService.exportFullBackupJSON();
-              showToast?.('Export du snapshot opérationnel JSON déclenché.', 'success');
-            }}
-            className="px-4 py-2.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Download className="w-4 h-4 text-indigo-600" />
-            <span>Exporter Snapshot JSON</span>
-          </button>
-
-          {typeof onOpenBackupManager === 'function' && (
-            <button
-              type="button"
-              onClick={onOpenBackupManager}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Restaurer / Points de Sauvegarde</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* FULL FACTORY EXCEL TWIN EXPORT CARD */}
-      <div className="p-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/40 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
-                <FileSpreadsheet className="w-5 h-5" />
-              </span>
-              <div>
-                <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  Exportateur Global Excel Twin (Full Factory .XLSX)
-                  <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">
-                    100% Offline
+            {/* Tier Selector */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Plafond d&apos;Allocation Stockage (IndexedDB L2)
+                </span>
+                {idbInfo.isPersisted ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <Lock className="w-2.5 h-2.5" /> Stockage Persistant Verrouillé
                   </span>
-                </h4>
-                <p className="text-xs text-slate-500 font-medium">
-                  Génère en 1 clic un classeur Excel complet multi-onglets structuré et calibré avec l'ensemble des données de l'usine.
-                </p>
+                ) : (
+                  <span className="text-[10px] font-mono text-slate-500">
+                     Quota Navigateur :{' '}
+                    {idbInfo.quotaMB > 0 ? `${Math.round(idbInfo.quotaMB)} Mo dispo` : 'Auto'}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[
+                  { label: '50 Mo', val: 50 },
+                  { label: '250 Mo', val: 250 },
+                  { label: '1 Go', val: 1024 },
+                  { label: '2 Go (Max)', val: 2048 },
+                ].map((tier) => (
+                  <button
+                    key={tier.val}
+                    type="button"
+                    disabled={requestingPersist}
+                    onClick={() => handleCeilingChange(tier.val)}
+                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                      ceilingMB === tier.val
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40'
+                    }`}
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                <div className="text-[11px] text-slate-500 font-medium">L1 Cache Rapide</div>
+                <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>localStorage ({effectiveStorageKb} KB)</span>
+                </div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                <div className="text-[11px] text-slate-500 font-medium">L2 Base Massive</div>
+                <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
+                  <Database className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>IndexedDB ({idbInfo.activeTier})</span>
+                </div>
               </div>
             </div>
           </div>
+        </SettingsSectionCard>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <SettingsSectionCard
+          title="Volumétrie des Référentiels & Données (SSOT)"
+          description="Décompte en temps réel des enregistrements actifs stockés dans la base locale."
+          icon={<Layers className="w-4 h-4" />}
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <Database className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectiveRawStockCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Articles PDR</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectiveMouvementsCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Mouvements</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <Wrench className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectiveMachinesCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Machines</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <MapPin className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectiveZonesCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Zones</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectiveTechniciansCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Intervenants</div>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
+                <Calendar className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
+                  {effectivePreventiveCount}
+                </div>
+                <div className="text-[11px] text-slate-600 font-semibold mt-1">Tâches Prév.</div>
+              </div>
+            </div>
+          </div>
+        </SettingsSectionCard>
+      </div>
+
+      {/* 2. A3 Operational Snapshot Banner (Quick JSON Backup & Restore) */}
+      <SettingsSectionCard
+        testId="a3-operational-snapshot-card"
+        title="Sauvegarde Opérationnelle Instantanée (Snapshot JSON Complet)"
+        description="Téléchargez une copie complète de toutes les tables de l'usine (Machines, Stock PDR, Mouvements, Bons de Travail, Préventif, Entrepôt) en un clic avant toute opération majeure."
+        icon={<ShieldAlert className="w-4 h-4" />}
+        headerRight={
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={() => {
-                if (typeof onDownloadBlankTemplate === 'function') {
-                  onDownloadBlankTemplate();
-                } else {
-                  showToast?.('Téléchargement du gabarit vierge déclenché !', 'success');
+                const ok = AutoBackupService.exportFullBackupJSON();
+                if (showToast) {
+                  showToast(
+                    ok
+                      ? 'Snapshot JSON opérationnel téléchargé avec succès.'
+                      : "Erreur lors de l'export du Snapshot JSON.",
+                    ok ? 'success' : 'error'
+                  );
                 }
               }}
-              className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              title="Télécharger un modèle Excel vierge prêt pour la saisie usine avec formules intactes"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Gabarit Vierge (Template .XLSX)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof onExportExcel === 'function') {
-                  onExportExcel();
-                } else {
-                  showToast?.('Export Excel déclenché avec succès !', 'success');
-                }
-              }}
-              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md shadow-emerald-600/20 hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer shrink-0"
+              className={SETTINGS_BUTTON_STYLES.primary}
             >
               <Download className="w-4 h-4" />
-              <span>Exporter Tout le Modèle Excel</span>
+              <span>Exporter Snapshot JSON</span>
+            </button>
+            {onOpenBackupManager && (
+              <button
+                type="button"
+                onClick={onOpenBackupManager}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <Database className="w-4 h-4 text-indigo-600" />
+                <span>Restaurer / Gérer Snapshots</span>
+              </button>
+            )}
+          </div>
+        }
+      >
+        <div className="text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+          <span>
+            Format d&apos;archive standardisé compatible avec la restauration locale et le serveur LAN.
+          </span>
+          <span className="font-mono text-[11px] text-slate-500">
+            Inclut : Stock PDR • Entrepôt • Parc Machines • BT • Préventif
+          </span>
+        </div>
+      </SettingsSectionCard>
+
+      {/* 3. Twin Excel Workbook Exporter */}
+      <SettingsSectionCard
+        title="Générateur de Classeur Miroir Excel (.xlsx)"
+        description="Exportez un classeur Excel structuré (15 feuilles reliées par formules natives) pour l'archivage externe ou l'audit comptable."
+        icon={<FileSpreadsheet className="w-4 h-4" />}
+        headerRight={
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={onDownloadBlankTemplate}
+              className={SETTINGS_BUTTON_STYLES.secondary}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+              <span>Télécharger Modèle Vide</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onExportExcel}
+              className={SETTINGS_BUTTON_STYLES.primary}
+            >
+              <Download className="w-4 h-4" />
+              <span>Exporter Classeur Actuel (.xlsx)</span>
             </button>
           </div>
+        }
+      >
+        <div className="text-xs text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+          Note d&apos;architecture : Le fichier Excel est un miroir d&apos;import/export et de sauvegarde ; la source de vérité (SSOT) demeure la base transactionnelle de l&apos;application.
         </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2 pt-2 border-t border-emerald-100/80 text-center">
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Stock</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{rawStock.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Machines</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{machines.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Mouvements</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{mouvements.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Sorties Ext.</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{sortiesExterne.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Préventif</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{preventiveTasks.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Correctif</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{correctiveInterventions.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Entrepôt</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{warehouseItems.length}</div>
-          </div>
-          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100">
-            <div className="text-[10px] font-bold text-slate-400 uppercase">Zones & Staff</div>
-            <div className="text-sm font-black text-emerald-700 font-mono">{zones.length + technicians.length}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 leading-relaxed max-w-full">
-        <div className="font-bold text-slate-900 mb-1">
-          Mécanique d'unification de stockage :
-        </div>
-        Toutes les opérations s'effectuent directement dans le navigateur pour garantir une
-        exécution fluide et ultra-rapide hors ligne. Les données de votre inventaire, de vos
-        mouvements et de votre parc de machines sont préservées localement même en cas de
-        coupure de réseau.
-      </div>
+      </SettingsSectionCard>
     </div>
   );
 }

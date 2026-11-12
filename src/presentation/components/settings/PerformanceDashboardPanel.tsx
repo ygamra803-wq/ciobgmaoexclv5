@@ -26,6 +26,10 @@ import { FormulaEngineOptimizer } from '../../../utils/formulaEngineOptimizer';
 import { confirmAction } from '../../../utils/confirmAction';
 import { StockCalculationService } from '../../../domain/pdr/services/StockCalculationService';
 import SyncButtons from '../common/SyncButtons';
+import {
+  SettingsSectionCard,
+  SETTINGS_BUTTON_STYLES,
+} from '../../pages/settings/components/settingsUi';
 
 export default function PerformanceDashboardPanel({
   rawStock = [],
@@ -152,47 +156,43 @@ export default function PerformanceDashboardPanel({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner */}
-      <div className="bg-slate-900 text-white p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-cyan-500/20 text-cyan-400 rounded-xl border border-cyan-500/30">
-            <Activity className="w-6 h-6 animate-pulse" />
+      {/* Top Banner (Light Industrial Card) */}
+      <SettingsSectionCard
+        title={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>Supervision des Performances &amp; Cache Multi-Niveaux</span>
+            <span className="text-[10px] bg-indigo-50 text-indigo-700 font-mono px-2 py-0.5 rounded-md border border-indigo-200">
+              Moteur Temps Réel
+            </span>
+          </span>
+        }
+        description="Supervision en temps réel du Caching Multi-Niveaux (L1/L2/L3), de la latence du moteur de formules et de la mémoire vive."
+        icon={<Activity className="w-4 h-4" />}
+        headerRight={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCacheWarming}
+              disabled={isWarming}
+              className={SETTINGS_BUTTON_STYLES.warning}
+            >
+              <Flame className={`w-4 h-4 text-amber-600 ${isWarming ? 'animate-spin' : ''}`} />
+              <span>{isWarming ? 'Warming...' : 'Pré-chauffer Cache'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePurgeMemory}
+              className={SETTINGS_BUTTON_STYLES.dangerSoft}
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Purge Mémoire</span>
+            </button>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              Performance & Monitoring System
-              <span className="text-xs bg-cyan-500/20 text-cyan-300 font-mono px-2 py-0.5 rounded-full border border-cyan-500/30">
-                Real-time Engine
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Supervision en temps réel du Caching Multi-Niveaux, Optimisation du Moteur de Formules & Alertes.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCacheWarming}
-            disabled={isWarming}
-            className="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <Flame className={`w-4 h-4 text-amber-400 ${isWarming ? 'animate-spin' : ''}`} />
-            {isWarming ? 'Warming...' : 'Warming Cache 🔥'}
-          </button>
-
-          <button
-            onClick={handlePurgeMemory}
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-          >
-            <Trash2 className="w-4 h-4 text-rose-400" />
-            Purge Mémoire
-          </button>
-        </div>
-      </div>
-
-      {/* Explicit Server Sync Card (gmao_state.json) */}
-      <SyncButtons showToast={showToast} />
+        }
+      >
+        <SyncButtons showToast={showToast} />
+      </SettingsSectionCard>
 
       {/* Real-time Metric Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

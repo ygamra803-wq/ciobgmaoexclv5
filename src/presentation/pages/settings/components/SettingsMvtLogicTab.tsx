@@ -1,21 +1,16 @@
 import { RotateCcw } from 'lucide-react';
+import { SettingsSectionCard } from './settingsUi';
 
 /**
  * Movement & Stock Business Logic reference panel (3 Categories & 5 Operational Flows).
  */
 export default function SettingsMvtLogicTab() {
   return (
-    <div className="space-y-6">
-      <div className="border-b border-slate-100 pb-4">
-        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <RotateCcw className="w-4 h-4 text-blue-600 shrink-0" />
-          <span>Logique des Mouvements de Stock (Usine Real-World Engine)</span>
-        </h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-          Cartographie des flux d'usine : distinction nette entre flux Interne, Hors-site (Externe), et Commandes d'Achat en attente avec système intelligent de tags #INCONNU.
-        </p>
-      </div>
-
+    <SettingsSectionCard
+      title="Logique des Mouvements de Stock (Référentiel des 5 Flux Usine)"
+      description="Cartographie officielle des flux magasin : distinction entre flux Interne, Externe (Sous-traitance/Achat), et Commandes en Attente avec traçabilité #INCONNU."
+      icon={<RotateCcw className="w-4 h-4" />}
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Card 1: Sortie Interne */}
         <div className="p-4 rounded-2xl border border-rose-200 bg-rose-50/40 space-y-2.5">
@@ -140,6 +135,7 @@ export default function SettingsMvtLogicTab() {
           </div>
         </div>
       </div>
-    </div>
+    </SettingsSectionCard>
   );
 }
+

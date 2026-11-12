@@ -379,10 +379,14 @@ export default function SettingsInjectionTab({
             <input
               type="checkbox"
               checked={isDemoMode}
-              onChange={(e) => setIsDemoMode(e.target.checked)}
-              className="rounded text-cyan-600 border-slate-300 focus:ring-cyan-500"
+              onChange={(e) => {
+                const next = e.target.checked;
+                setIsDemoMode?.(next);
+                onToggleDemoMode?.(next);
+              }}
+              className="rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
             />
-            <span>Afficher les maquettes et fiches d'exemples au démarrage</span>
+            <span>Afficher les maquettes et fiches d&apos;exemples au démarrage</span>
           </label>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto">
@@ -392,24 +396,26 @@ export default function SettingsInjectionTab({
               if (typeof onDownloadBlankTemplate === 'function') {
                 onDownloadBlankTemplate();
               } else {
-                showToast?.("Téléchargement du gabarit vierge déclenché !", "success");
+                showToast?.('Téléchargement du gabarit vierge déclenché !', 'success');
               }
             }}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-100 text-slate-800 border border-slate-300 hover:bg-slate-200 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
             title="Télécharger le modèle Excel vierge pour préparer vos données réelles"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             Gabarit Vierge (.XLSX)
           </button>
           <button
+            type="button"
             onClick={handleSaveSettings}
-            className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl transition cursor-pointer text-center"
+            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer text-center shadow-2xs"
           >
             Enregistrer ma préférence
           </button>
           <button
+            type="button"
             onClick={handleResetToZero}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Effacer tout et démarrer à vide

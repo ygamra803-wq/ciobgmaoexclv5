@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { vaultService } from '../../../../utils/vaultService';
 import { storageService } from '../../../../utils/storageService';
+import { SettingsSectionCard } from './settingsUi';
 
 /**
  * Admin Security, Zero-Knowledge Vault, PIN management, and RBAC matrix.
@@ -155,39 +156,49 @@ export default function SettingsAdminTab({
   return (
     <div className="space-y-6 max-w-full overflow-hidden animate-in fade-in duration-200">
       {/* 1. Header Card - Info & Active User Status */}
-      <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl border border-indigo-500/20 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-600/30 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shadow-inner shrink-0">
-              <ShieldCheck className="w-7 h-7" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold flex items-center gap-2 flex-wrap">
-                <span>Gestion du Compte Administrateur & Sécurité PIN — Vault Chiffré</span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  AES-256 + BCrypt — Aucun mot de passe dans le code
-                </span>
-              </h3>
-              <p className="text-xs text-indigo-200/80 mt-1">
-                Architecture Zero-Knowledge : le Master PIN est la clé cryptographique unique déchiffrant le coffre AES-256-GCM.
-              </p>
-            </div>
-          </div>
-          <div className="bg-white/10 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-xl bg-indigo-500 text-white font-extrabold text-xs flex items-center justify-center font-mono">
+      <SettingsSectionCard
+        title={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>Gestion du Compte Administrateur &amp; Sécurité PIN — Vault Chiffré</span>
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+              AES-256 + BCrypt
+            </span>
+          </span>
+        }
+        description="Architecture Zero-Knowledge : le Master PIN est la clé cryptographique unique déchiffrant le coffre AES-256-GCM."
+        icon={<ShieldCheck className="w-4 h-4" />}
+        headerRight={
+          <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-3 shrink-0 shadow-2xs">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-extrabold text-xs flex items-center justify-center font-mono">
               {currentUser?.avatar || 'AD'}
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">Session Active</div>
-              <div className="text-xs font-bold text-white font-mono">{currentUser?.name || 'Administrateur'}</div>
-              <div className="text-[10px] text-emerald-300 font-mono font-bold">
-                {isVaultUnlocked ? '🟢 Vault Déverrouillé' : '🔒 Vault Verrouillé'}
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                Session Active
+              </div>
+              <div className="text-xs font-bold text-slate-900 font-mono">
+                {currentUser?.name || 'Administrateur'}
+              </div>
+              <div
+                className={`text-[10px] font-mono font-bold ${
+                  isVaultUnlocked ? 'text-emerald-700' : 'text-amber-700'
+                }`}
+              >
+                {isVaultUnlocked ? 'Vault Déverrouillé' : 'Vault Verrouillé'}
               </div>
             </div>
           </div>
+        }
+      >
+        <div className="text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+          <span>
+            Aucun mot de passe en clair n&apos;est stocké dans le code ou la base locale.
+          </span>
+          <span className="font-mono text-[11px] text-slate-500">
+            Chiffrement : AES-256-GCM • Dérivation : PBKDF2 (100 000 itérations)
+          </span>
         </div>
-      </div>
+      </SettingsSectionCard>
 
       {/* 2. Master PIN Setup - Configuration initiale du coffre */}
       {!isVaultExists && (
@@ -283,32 +294,40 @@ export default function SettingsAdminTab({
               />
             </div>
 
-            {/* Live Vault Engine — Sel dynamique et chiffrement AES */}
-            <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 font-mono text-[11px] space-y-2 overflow-hidden shadow-inner">
-              <div className="flex items-center justify-between text-slate-300 border-b border-slate-800 pb-1.5 font-bold">
+            {/* Live Vault Engine — Sel dynamique et chiffrement AES (Light Industrial Box) */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 font-mono text-[11px] space-y-2 overflow-hidden">
+              <div className="flex items-center justify-between text-slate-800 border-b border-slate-200 pb-1.5 font-bold">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
                   VAULT CHIFFRÉ — PIN = KEY
                 </span>
-                <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-emerald-400">
+                <span className="text-[10px] bg-emerald-50 px-2 py-0.5 rounded text-emerald-700 border border-emerald-200">
                   AES-256-GCM + PBKDF2 100k + BCrypt
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-1">
                 <span className="text-slate-500">Sel Aléatoire:</span>
-                <span className="col-span-2 text-indigo-400 truncate select-all">
-                  {localStorage.getItem('gmao_vault_salt_v2')?.substring(0, 24) || 'Généré aléatoirement...'}...
+                <span className="col-span-2 text-indigo-700 font-semibold truncate select-all">
+                  {localStorage.getItem('gmao_vault_salt_v2')?.substring(0, 24) ||
+                    'Généré aléatoirement...'}
+                  ...
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-1">
                 <span className="text-slate-500">Ciphertext:</span>
-                <span className="col-span-2 text-amber-400 truncate select-all">
-                  {localStorage.getItem('gmao_vault_cipher_v2')?.substring(0, 32) || 'Aucun — Vault verrouillé'}...
+                <span className="col-span-2 text-amber-700 font-semibold truncate select-all">
+                  {localStorage.getItem('gmao_vault_cipher_v2')?.substring(0, 32) ||
+                    'Aucun — Vault verrouillé'}
+                  ...
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-800/80">
+              <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-200">
                 <span className="text-slate-500 font-bold">État du Coffre:</span>
-                <span className={`col-span-2 font-bold ${isVaultUnlocked ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span
+                  className={`col-span-2 font-bold ${
+                    isVaultUnlocked ? 'text-emerald-700' : 'text-rose-700'
+                  }`}
+                >
                   {isVaultUnlocked
                     ? 'Déverrouillé — Clé valide — En mémoire vive'
                     : 'Verrouillé — Données chiffrées au repos'}
@@ -609,15 +628,15 @@ export default function SettingsAdminTab({
               className={`px-5 py-4 border-b flex items-center justify-between ${
                 vaultModal.mode === 'reset_vault'
                   ? 'bg-rose-50 border-rose-200'
-                  : 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-slate-50 border-slate-200 text-slate-900'
               }`}
             >
               <div className="flex items-center gap-2.5">
                 <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
                     vaultModal.mode === 'reset_vault'
-                      ? 'bg-rose-100 text-rose-700'
-                      : 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30'
+                      ? 'bg-rose-100 text-rose-700 border-rose-200'
+                      : 'bg-indigo-50 text-indigo-600 border-indigo-200'
                   }`}
                 >
                   <Lock className="w-4 h-4" />
@@ -625,7 +644,7 @@ export default function SettingsAdminTab({
                 <div>
                   <h4
                     className={`text-sm font-bold ${
-                      vaultModal.mode === 'reset_vault' ? 'text-rose-950' : 'text-white'
+                      vaultModal.mode === 'reset_vault' ? 'text-rose-950' : 'text-slate-900'
                     }`}
                   >
                     {vaultModal.mode === 'change_password' &&
@@ -637,7 +656,7 @@ export default function SettingsAdminTab({
                   </h4>
                   <p
                     className={`text-[11px] ${
-                      vaultModal.mode === 'reset_vault' ? 'text-rose-700' : 'text-slate-300'
+                      vaultModal.mode === 'reset_vault' ? 'text-rose-700' : 'text-slate-500'
                     }`}
                   >
                     Validation par clé maîtresse Master PIN (AES-256-GCM)
@@ -650,7 +669,7 @@ export default function SettingsAdminTab({
                 className={`p-1.5 rounded-lg transition cursor-pointer ${
                   vaultModal.mode === 'reset_vault'
                     ? 'text-rose-600 hover:bg-rose-100'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/60'
                 }`}
               >
                 <X className="w-4 h-4" />

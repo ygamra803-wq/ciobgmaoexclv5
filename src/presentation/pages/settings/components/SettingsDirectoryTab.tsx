@@ -1,368 +1,375 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-  FolderOpen,
+  FolderSync,
+  CheckCircle2,
+  Zap,
+  Save,
   Wifi,
   Server,
   Smartphone,
-  Laptop,
   QrCode,
   Copy,
-  Check,
   RefreshCw,
   Radio,
+  Globe,
+  Link2,
 } from 'lucide-react';
 import SyncButtons from '../../../components/common/SyncButtons';
 import {
   networkConfigService,
-  type NetworkHostInfo,
-  type NetworkNodeMode,
+  type HostNetworkInfo,
+  type LanNodeMode,
 } from '../../../../services/networkConfigService';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
- * Shared Folder, Local Network Broadcast (Host vs LAN Client), QR Code Panel, and Polling Synchronization Settings.
+ * Shared Network Folder, Auto-Write Mirroring, LAN Host / Client Mode & Polling Interval Configuration.
  */
 export default function SettingsDirectoryTab({
+  linkedFileName,
   sharedFolderPath,
   setSharedFolderPath,
-  onDirectLink,
   autoWriteExcel,
   setAutoWriteExcel,
   pollingInterval,
   setPollingInterval,
-  linkedFileHandle,
-  linkedFileName,
+  onDirectLink,
   handleSaveSettings,
   showToast,
 }: any) {
-  const [nodeMode, setNodeMode] = useState<NetworkNodeMode>(() => networkConfigService.getNodeMode());
-  const [hostInfo, setHostInfo] = useState<NetworkHostInfo | null>(null);
-  const [loadingHostInfo, setLoadingHostInfo] = useState(false);
-  const [customIpInput, setCustomIpInput] = useState(() => networkConfigService.getCustomHostIp());
-  const [qrTarget, setQrTarget] = useState<'mobile' | 'desktop'>('mobile');
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [nodeMode, setNodeModeState] = useState<LanNodeMode>(() =>
+    networkConfigService.getNodeMode()
+  );
+  const [remoteHostInput, setRemoteHostInput] = useState<string>(() =>
+    networkConfigService.getRemoteHostUrl()
+  );
+  const [customIpInput, setCustomIpInput] = useState<string>(() =>
+    networkConfigService.getCustomHostIp()
+  );
+  const [hostInfo, setHostInfo] = useState<HostNetworkInfo | null>(null);
+  const [loadingNetInfo, setLoadingNetInfo] = useState(false);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [qrTargetMode, setQrTargetMode] = useState<'mobile' | 'desktop'>('mobile');
 
-  const loadNetworkInfo = useCallback(async () => {
-    setLoadingHostInfo(true);
+  const refreshHostInfo = async () => {
+    setLoadingNetInfo(true);
     try {
-      const info = await networkConfigService.fetchNetworkHostInfo();
-      setHostInfo(info);
+      const info = await networkConfigService.fetchHostNetworkInfo();
+      if (info) {
+        setHostInfo(info);
+      }
     } finally {
-      setLoadingHostInfo(false);
+      setLoadingNetInfo(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    loadNetworkInfo();
-    const unsubscribe = networkConfigService.subscribeToRevisionStream((evt) => {
-      setHostInfo((prev) =>
-        prev
-          ? {
-              ...prev,
-              online: true,
-              version: evt.version,
-              updatedAt: evt.updatedAt,
-            }
-          : prev
-      );
+    refreshHostInfo();
+    const unsub = networkConfigService.subscribeToServerEvents({
+      onConnected: () => setSseConnected(true),
+      onStateUpdated: (payload) => {
+        setSseConnected(true);
+        setHostInfo((prev) =>
+          prev
+            ? {
+                ...prev,
+                version: payload.version,
+                updatedAt: payload.updatedAt,
+              }
+            : prev
+        );
+      },
+      onError: () => setSseConnected(false),
     });
-    return () => unsubscribe();
-  }, [loadNetworkInfo]);
+    return () => unsub();
+  }, []);
 
-  const handleModeSwitch = (nextMode: NetworkNodeMode) => {
-    setNodeMode(nextMode);
-    networkConfigService.setNodeMode(nextMode);
+  const effectiveLanIp = useMemo(() => {
+    if (customIpInput.trim()) return customIpInput.trim();
+    if (hostInfo?.primaryIp && hostInfo.primaryIp !== '127.0.0.1') return hostInfo.primaryIp;
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      return window.location.hostname;
+    }
+    return '192.168.1.100';
+  }, [customIpInput, hostInfo]);
+
+  const effectivePort = useMemo(() => {
+    if (hostInfo?.port) return hostInfo.port;
+    if (typeof window !== 'undefined' && window.location?.port) {
+      return Number(window.location.port) || 3000;
+    }
+    return 3000;
+  }, [hostInfo]);
+
+  const desktopLanUrl = `http://${effectiveLanIp}:${effectivePort}`;
+  const mobileLanUrl = `http://${effectiveLanIp}:${effectivePort}/#mobile`;
+  const activeQrUrl = qrTargetMode === 'mobile' ? mobileLanUrl : desktopLanUrl;
+
+  const qrMatrix = useMemo(
+    () => networkConfigService.generateDeterministicQrMatrix(activeQrUrl),
+    [activeQrUrl]
+  );
+
+  const handleSwitchNodeMode = (mode: LanNodeMode) => {
+    networkConfigService.setNodeMode(mode);
+    setNodeModeState(mode);
     showToast?.(
-      nextMode === 'HOST'
-        ? 'Poste configuré en Mode Serveur Hôte Principal (Host Node).'
-        : 'Poste configuré en Mode Terminal Client Atelier (LAN Client).',
+      mode === 'HOST'
+        ? 'Mode Poste Hôte Principal (Serveur Usine) activé'
+        : 'Mode Poste Client LAN (Connexion à un hôte distant) activé',
       'info'
     );
   };
 
-  const handleApplyCustomIp = () => {
-    networkConfigService.setCustomHostIp(customIpInput);
-    loadNetworkInfo();
+  const handleSaveLanClientUrl = () => {
+    const normalized = networkConfigService.setRemoteHostUrl(remoteHostInput);
+    setRemoteHostInput(normalized);
+    refreshHostInfo();
     showToast?.(
-      customIpInput.trim()
-        ? `Adresse IP Hôte personnalisée appliquée : ${customIpInput.trim()}`
-        : 'Détection automatique IPv4 LAN réactivée.',
+      normalized
+        ? `Serveur Hôte LAN configuré sur : ${normalized}`
+        : 'URL Hôte LAN réinitialisée (Serveur local utilisé)',
       'success'
     );
   };
 
-  const activeQrUrl = useMemo(() => {
-    if (!hostInfo) return 'http://127.0.0.1:3000/#mobile';
-    return qrTarget === 'mobile' ? hostInfo.urls.mobile : hostInfo.urls.desktop;
-  }, [hostInfo, qrTarget]);
+  const handleSaveCustomIp = (val: string) => {
+    setCustomIpInput(val);
+    networkConfigService.setCustomHostIp(val);
+  };
 
-  const qrMatrix = useMemo(() => {
-    return networkConfigService.generateQrMatrix(activeQrUrl);
-  }, [activeQrUrl]);
-
-  const handleCopyUrl = (url: string, label: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(url).catch(() => {});
+  const handleCopyUrl = async (url: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast?.(`Lien ${label} copié : ${url}`, 'success');
+    } catch {
+      showToast?.(`Lien ${label} : ${url}`, 'info');
     }
-    setCopiedUrl(url);
-    showToast?.(`Lien ${label} copié : ${url}`, 'success');
-    setTimeout(() => {
-      setCopiedUrl((prev) => (prev === url ? null : prev));
-    }, 2500);
   };
 
   return (
     <div className="space-y-6">
-      {/* 1. Explicit Server Synchronization Card */}
+      {/* 1. Explicit Server Sync Card (gmao_state.json) */}
       <SyncButtons showToast={showToast} />
 
-      {/* 2. LAN Broadcast, Node Mode (Host vs Client) & QR Code Panel (P3.1 & P3.2) */}
-      <div className="rounded-2xl border border-indigo-200/90 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 shadow-md space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-indigo-500/20 pb-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
-              <Wifi className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-bold text-white">
-                  Architecture Réseau Octopus LAN — Hôte & Terminaux Mobiles
-                </h3>
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                    hostInfo?.online
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+      {/* 2. Multi-Station LAN & Mobile Field Architecture (Light Industrial Card) */}
+      <SettingsSectionCard
+        title="Architecture Multi-Postes LAN & Terminaux Mobiles (Wi-Fi Usine)"
+        description="Connectez les tablettes/smartphones des techniciens et les PC secondaires au serveur hôte de l'usine sur le réseau local, sans cloud externe."
+        icon={<Server className="w-4 h-4" />}
+        headerRight={
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+                sseConnected
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+            >
+              <Radio className={`w-3.5 h-3.5 ${sseConnected ? 'text-emerald-600' : 'text-amber-600'}`} />
+              {sseConnected ? 'Flux Temps Réel SSE Actif' : 'Mode Polling Standard'}
+            </span>
+            <button
+              type="button"
+              onClick={refreshHostInfo}
+              disabled={loadingNetInfo}
+              className={SETTINGS_BUTTON_STYLES.secondary}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingNetInfo ? 'animate-spin' : ''}`} />
+              <span>Actualiser Réseau</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: Node Role Switcher & IP Configuration */}
+          <div className="lg:col-span-7 space-y-4">
+            {/* Role Selector: HOST vs LAN_CLIENT */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => handleSwitchNodeMode('HOST')}
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
+                  nodeMode === 'HOST'
+                    ? 'bg-indigo-50/90 border-indigo-600 text-slate-900 ring-1 ring-indigo-600/15'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg shrink-0 ${
+                    nodeMode === 'HOST'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      hostInfo?.online ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'
-                    }`}
+                  <Server className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1.5">
+                    <span>Poste Hôte Principal (Serveur)</span>
+                    {nodeMode === 'HOST' && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    Ce PC héberge la base <code className="font-mono">gmao_state.json</code> et le miroir Excel pour l&apos;usine.
+                  </p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSwitchNodeMode('LAN_CLIENT')}
+                className={`p-3.5 rounded-xl border text-left transition cursor-pointer flex items-start gap-3 ${
+                  nodeMode === 'LAN_CLIENT'
+                    ? 'bg-indigo-50/90 border-indigo-600 text-slate-900 ring-1 ring-indigo-600/15'
+                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <div
+                  className={`p-2 rounded-lg shrink-0 ${
+                    nodeMode === 'LAN_CLIENT'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  <Globe className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-bold flex items-center gap-1.5">
+                    <span>Poste Client / Terminal LAN</span>
+                    {nodeMode === 'LAN_CLIENT' && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    Se connecte à l&apos;adresse IP d&apos;un Poste Hôte distant sur le réseau Wi-Fi/Ethernet.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Detected Network Interfaces & URLs */}
+            {nodeMode === 'HOST' ? (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Wifi className="w-4 h-4 text-emerald-600" />
+                    <span>Interfaces Réseau IPv4 Détectées sur l&apos;Hôte</span>
+                  </div>
+                  {hostInfo?.hostname && (
+                    <span className="text-[11px] font-mono text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      Machine : {hostInfo.hostname} (v{hostInfo.version || 1})
+                    </span>
+                  )}
+                </div>
+
+                {hostInfo?.interfaces && hostInfo.interfaces.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {hostInfo.interfaces.map((iface) => (
+                      <button
+                        key={`${iface.name}-${iface.address}`}
+                        type="button"
+                        onClick={() => handleSaveCustomIp(iface.address)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono border transition cursor-pointer flex items-center gap-1.5 ${
+                          effectiveLanIp === iface.address
+                            ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span>{iface.name}:</span>
+                        <b>{iface.address}</b>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-600">
+                    Saisissez ci-dessous l&apos;adresse IPv4 locale du PC Hôte (ex:{' '}
+                    <code className="font-mono text-indigo-700 font-semibold">192.168.1.50</code> via{' '}
+                    <code className="font-mono">ipconfig</code>) pour générer les liens et le QR Code des techniciens.
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      IP LAN Hôte (Auto ou Manuelle)
+                    </label>
+                    <input
+                      type="text"
+                      value={customIpInput}
+                      onChange={(e) => handleSaveCustomIp(e.target.value)}
+                      placeholder={hostInfo?.primaryIp || 'Ex: 192.168.1.50'}
+                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Lien Direct Mobile Terrain (QR)
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        readOnly
+                        value={mobileLanUrl}
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-mono text-indigo-700 font-semibold select-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCopyUrl(mobileLanUrl, 'Mobile Terrain')}
+                        className="p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 transition cursor-pointer shrink-0"
+                        title="Copier le lien Mobile"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-indigo-600" />
+                  <span>Connexion au Serveur Hôte Distant (LAN)</span>
+                </div>
+                <p className="text-[11px] text-slate-600">
+                  Indiquez l&apos;adresse IP et le port du PC Principal de l&apos;usine (ex:{' '}
+                  <code className="font-mono text-indigo-700 font-semibold">
+                    http://192.168.1.50:3000
+                  </code>
+                  ). Toutes les synchronisations pointeront vers cet hôte.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={remoteHostInput}
+                    onChange={(e) => setRemoteHostInput(e.target.value)}
+                    placeholder="http://192.168.1.50:3000"
+                    className="flex-1 px-3.5 py-2 rounded-lg bg-white border border-slate-300 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
                   />
-                  {hostInfo?.online
-                    ? `Connecté au Moteur Hôte (v${hostInfo.version})`
-                    : 'Mode Autonome Local'}
-                </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveLanClientUrl}
+                    className={SETTINGS_BUTTON_STYLES.primary}
+                  >
+                    Connecter à l&apos;Hôte
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-indigo-200/80 mt-1 max-w-2xl leading-relaxed">
-                Un seul cerveau central sur le réseau Wi-Fi / LAN de l'usine : le poste Hôte héberge{' '}
-                <code className="font-mono text-indigo-200">gmao_state.json</code> et diffuse l'accès
-                instantané aux smartphones des techniciens et aux PC d'atelier.
-              </p>
-            </div>
+            )}
           </div>
 
-          {/* Explicit Operating Mode Switcher (P3.1: Host Node vs LAN Client) */}
-          <div className="flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-indigo-500/30 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleModeSwitch('HOST')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                nodeMode === 'HOST'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Server className="w-3.5 h-3.5" />
-              <span>Poste Hôte (Host)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleModeSwitch('LAN_CLIENT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                nodeMode === 'LAN_CLIENT'
-                  ? 'bg-cyan-600 text-white shadow-xs'
-                  : 'text-slate-300 hover:text-white'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>Client LAN / Mobile</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
-          {/* Left 2 Columns: LAN IP Details + Direct Share Links */}
-          <div className="lg:col-span-2 space-y-4 flex flex-col justify-between">
-            {/* Network Telemetry Badges */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <div className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">
-                  IP LAN Hôte (IPv4)
-                </div>
-                <div className="text-sm font-black font-mono text-emerald-300 mt-0.5 truncate">
-                  {hostInfo?.primaryIp || '127.0.0.1'}
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <div className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">
-                  Nom du Serveur
-                </div>
-                <div className="text-xs font-bold font-mono text-white mt-1 truncate">
-                  {hostInfo?.hostname || 'CIOB-HOST'}
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <div className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">
-                  Port & Flux SSE
-                </div>
-                <div className="text-xs font-bold font-mono text-cyan-300 mt-1 flex items-center gap-1">
-                  <Radio className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>
-                    :{hostInfo?.port || 3000} ({hostInfo?.connectedClients || 0} actifs)
-                  </span>
-                </div>
-              </div>
-              <div className="bg-white/5 border border-white/10 rounded-xl p-3">
-                <div className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">
-                  Révision État
-                </div>
-                <div className="text-xs font-bold font-mono text-amber-300 mt-1">
-                  v{hostInfo?.version || 1}
-                </div>
-              </div>
-            </div>
-
-            {/* Direct URL Cards */}
-            <div className="space-y-2.5">
-              {/* Mobile Field URL */}
-              <div className="bg-white/10 border border-white/15 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
-                    <Smartphone className="w-3.5 h-3.5 shrink-0" />
-                    <span>Lien Direct Téléphone & Tablette (Mode Terrain 3 Actions)</span>
-                  </div>
-                  <div className="text-xs font-mono font-bold text-white truncate mt-0.5 select-all">
-                    {hostInfo?.urls?.mobile || 'http://192.168.1.100:3000/#mobile'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setQrTarget('mobile')}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                      qrTarget === 'mobile'
-                        ? 'bg-cyan-500 text-slate-950'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>QR Mobile</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyUrl(
-                        hostInfo?.urls?.mobile || 'http://192.168.1.100:3000/#mobile',
-                        'Mobile'
-                      )
-                    }
-                    className="px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
-                  >
-                    {copiedUrl === hostInfo?.urls?.mobile ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-300" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                    <span>Copier</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Desktop Full App URL */}
-              <div className="bg-white/10 border border-white/15 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                <div className="min-w-0">
-                  <div className="text-[11px] font-bold text-indigo-300 flex items-center gap-1.5">
-                    <Laptop className="w-3.5 h-3.5 shrink-0" />
-                    <span>Lien Direct PC Atelier & Magasin (Interface Complète)</span>
-                  </div>
-                  <div className="text-xs font-mono font-bold text-white truncate mt-0.5 select-all">
-                    {hostInfo?.urls?.desktop || 'http://192.168.1.100:3000'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setQrTarget('desktop')}
-                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 ${
-                      qrTarget === 'desktop'
-                        ? 'bg-indigo-500 text-white'
-                        : 'bg-white/10 text-white hover:bg-white/20'
-                    }`}
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>QR PC</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleCopyUrl(hostInfo?.urls?.desktop || 'http://192.168.1.100:3000', 'PC')
-                    }
-                    className="px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold transition cursor-pointer flex items-center gap-1"
-                  >
-                    {copiedUrl === hostInfo?.urls?.desktop ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-300" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                    <span>Copier</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom IP Override & Refresh */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-              <input
-                type="text"
-                value={customIpInput}
-                onChange={(e) => setCustomIpInput(e.target.value)}
-                placeholder="Forcer IP Wi-Fi (ex: 192.168.1.50) ou laisser vide (Auto)"
-                className="flex-1 h-9 px-3 rounded-xl bg-slate-950/70 border border-white/15 text-xs font-mono text-white placeholder:text-slate-400 focus:outline-none focus:border-cyan-400"
-              />
-              <button
-                type="button"
-                onClick={handleApplyCustomIp}
-                className="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer shrink-0"
-              >
-                Appliquer IP
-              </button>
-              <button
-                type="button"
-                onClick={loadNetworkInfo}
-                disabled={loadingHostInfo}
-                className="h-9 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingHostInfo ? 'animate-spin' : ''}`} />
-                <span>Actualiser LAN</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Right Column: Interactive QR Code Card */}
-          <div className="bg-white text-slate-900 rounded-2xl p-4 flex flex-col items-center justify-between border border-indigo-100 shadow-lg">
-            <div className="text-center space-y-0.5">
-              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <QrCode className="w-3 h-3" />
-                {qrTarget === 'mobile' ? 'Accès Mobile Terrain' : 'Accès PC Complet'}
-              </span>
-              <div className="text-xs font-bold text-slate-800 pt-1">
-                Scanner sur le Wi-Fi Usine
-              </div>
-            </div>
-
-            <div
-              className="my-3 p-3 bg-white rounded-xl border-2 border-slate-900 shadow-xs"
-              title={activeQrUrl}
-            >
+          {/* Right Column: Offline SVG QR Code Generator for Field Technicians */}
+          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col sm:flex-row items-center gap-4">
+            <div className="bg-white p-3 rounded-xl shadow-2xs border border-slate-200 shrink-0">
               <svg
                 viewBox={`0 0 ${qrMatrix.length} ${qrMatrix.length}`}
-                className="w-36 h-36 sm:w-40 sm:h-40 block"
+                className="w-28 h-28"
                 shapeRendering="crispEdges"
                 role="img"
-                aria-label={`QR Code ${activeQrUrl}`}
+                aria-label={`QR Code LAN ${activeQrUrl}`}
               >
-                <rect width={qrMatrix.length} height={qrMatrix.length} fill="#ffffff" />
                 {qrMatrix.map((row, rIdx) =>
                   row.map((cell, cIdx) =>
                     cell ? (
@@ -380,123 +387,158 @@ export default function SettingsDirectoryTab({
               </svg>
             </div>
 
-            <div className="w-full text-center space-y-1">
-              <div className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 truncate">
+            <div className="space-y-2.5 text-center sm:text-left min-w-0 flex-1">
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-700">
+                <QrCode className="w-4 h-4" />
+                <span>Accès Rapide Techniciens (Wi-Fi Local)</span>
+              </div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">
+                Connectez le smartphone ou la tablette au Wi-Fi de l&apos;usine pour ouvrir directement l&apos;interface terrain <b className="text-slate-900">Mobile GMAO</b>.
+              </p>
+
+              <div className="flex items-center justify-center sm:justify-start gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setQrTargetMode('mobile')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border ${
+                    qrTargetMode === 'mobile'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Smartphone className="w-3 h-3" />
+                  <span>Vue Mobile (#mobile)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQrTargetMode('desktop')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border ${
+                    qrTargetMode === 'desktop'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Server className="w-3 h-3" />
+                  <span>Vue PC Complète</span>
+                </button>
+              </div>
+
+              <div className="text-[11px] font-mono text-indigo-700 font-semibold truncate bg-white px-2.5 py-1.5 rounded-lg border border-slate-200">
                 {activeQrUrl}
               </div>
-              <p className="text-[10px] text-slate-500 leading-tight">
-                {nodeMode === 'HOST'
-                  ? 'Ce poste agit comme Serveur Hôte Principal.'
-                  : 'Ce terminal est synchronisé avec le Serveur Hôte.'}
+            </div>
+          </div>
+        </div>
+      </SettingsSectionCard>
+
+      {/* 3. Shared Folder & Excel Mirror File Binding */}
+      <SettingsSectionCard
+        title="Liaison du Fichier Miroir Excel (.xlsx) & Synchronisation"
+        description="Associez un fichier Excel local via l'API File System du navigateur ou définissez la cadence de rafraîchissement multi-postes."
+        icon={<FolderSync className="w-4 h-4" />}
+        headerRight={
+          linkedFileName ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Fichier lié : <span className="font-mono">{linkedFileName}</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              Aucun fichier local lié en direct
+            </span>
+          )
+        }
+        footer={
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span className="text-[11px] text-slate-500">
+              Note : Pour des raisons de sécurité navigateur (Sandbox), l&apos;écriture directe sur disque utilise le bouton <b>Lier Fichier Local (.xlsx)</b> ou le serveur LAN Hôte.
+            </span>
+            <button
+              type="button"
+              onClick={handleSaveSettings}
+              className={SETTINGS_BUTTON_STYLES.primary}
+            >
+              <Save className="w-4 h-4" />
+              <span>Enregistrer la Configuration</span>
+            </button>
+          </div>
+        }
+      >
+        <div className="max-w-3xl space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Référence du Dossier Partagé Usine (Indicatif / Documentation Équipe)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Ex: \\SERVEUR-USINE\GMAO_Partage\ ou Z:\Maintenance_2026\"
+                value={sharedFolderPath}
+                onChange={(e) => setSharedFolderPath(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-indigo-600 focus:bg-white transition"
+              />
+              {onDirectLink && (
+                <button
+                  type="button"
+                  onClick={onDirectLink}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                >
+                  <Link2 className="w-4 h-4 text-indigo-600" />
+                  <span>
+                    {linkedFileName
+                      ? `Changer (${linkedFileName})`
+                      : 'Lier Fichier Local (.xlsx)'}
+                  </span>
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1.5">
+              Cliquez sur <b>Lier Fichier Local (.xlsx)</b> pour accorder au navigateur l&apos;accès direct en lecture/écriture au classeur Excel sur ce poste.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-bold text-slate-800">
+                  Écriture Miroir Excel Automatique
+                </span>
+                <input
+                  type="checkbox"
+                  checked={autoWriteExcel}
+                  onChange={(e) => setAutoWriteExcel(e.target.checked)}
+                  className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                />
+              </label>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Met à jour automatiquement le fichier Excel lié (<code className="font-mono">.xlsx</code>) et le miroir serveur après chaque mouvement ou intervention.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+                  Fréquence de Synchronisation LAN
+                </span>
+                <select
+                  value={pollingInterval}
+                  onChange={(e) => setPollingInterval(e.target.value)}
+                  className="bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-indigo-600"
+                >
+                  <option value="5s">Temps Réel (5 sec)</option>
+                  <option value="10s">Rapide (10 sec)</option>
+                  <option value="30s">Standard (30 sec)</option>
+                  <option value="off">Manuel uniquement</option>
+                </select>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Vérifie périodiquement si un autre poste a mis à jour l&apos;état partagé sur le serveur LAN.
               </p>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* 3. Shared Folder & Excel Twin Link Configuration */}
-      <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
-        <FolderOpen className="w-4 h-4 text-indigo-600" />
-        Source des données et dossier réseau partagé
-      </h3>
-
-      <p className="text-xs text-slate-500 leading-relaxed max-w-3xl">
-        Pour déployer le système sur plusieurs machines d'ateliers et partager la même source en
-        temps réel, vous pouvez coupler l'application à un répertoire de stockage partagé sur votre
-        serveur local d'usine.
-      </p>
-
-      <div className="space-y-4 w-full bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200">
-        <div className="space-y-2">
-          <label className="block text-xs font-bold text-slate-700">
-            Dossier réseau cible ou lecteur mappé partagé :
-          </label>
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="text"
-              value={sharedFolderPath}
-              onChange={(e) => setSharedFolderPath(e.target.value)}
-              className="w-full h-10 px-3 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-cyan-200 font-mono text-slate-800"
-              placeholder="ex: Z:\Partage\CIOB_GMAO"
-            />
-            <button
-              onClick={onDirectLink}
-              className="h-10 px-4 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shrink-0 cursor-pointer w-full sm:w-auto"
-            >
-              <FolderOpen className="w-4 h-4 text-indigo-600" />
-              Changer de dossier
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">
-              Écriture Excel automatique :
-            </label>
-            <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600">
-              <input
-                type="checkbox"
-                checked={autoWriteExcel}
-                onChange={(e) => setAutoWriteExcel(e.target.checked)}
-                className="rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
-              />
-              <span>Mise à jour auto d'Excel à chaque mouvement</span>
-            </label>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-slate-700">
-              Fréquence de scrutation réseau (Auto-Reload) :
-            </label>
-            <select
-              value={pollingInterval}
-              onChange={(e) => setPollingInterval(e.target.value)}
-              className="h-9 px-3 rounded-lg border border-slate-300 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 text-slate-800 w-full"
-            >
-              <option value="off">Rafraîchissement manuel uniquement</option>
-              <option value="5s">Toutes les 5 secondes (Recommandé)</option>
-              <option value="10s">Toutes les 10 secondes</option>
-              <option value="30s">Toutes les 30 secondes</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="pt-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200">
-          <div className="text-xs text-slate-500 font-medium flex items-center gap-2 flex-wrap">
-            <span>Statut de couplage :</span>
-            {linkedFileHandle ? (
-              <span className="text-emerald-700 font-bold flex items-center gap-1.5 inline-flex">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                Connecté ({linkedFileName || 'Fichier réseau partagé'})
-              </span>
-            ) : hostInfo?.online ? (
-              <span className="text-emerald-700 font-bold flex items-center gap-1.5 inline-flex">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                Miroir Serveur LAN Actif (v{hostInfo.version} • Scrutation : {pollingInterval === 'off' ? 'Manuelle' : pollingInterval})
-              </span>
-            ) : (
-              <span className="text-amber-700 font-bold flex items-center gap-1.5 inline-flex">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                Mode Local Autonome (Aucun fichier externe lié)
-              </span>
-            )}
-          </div>
-          <button
-            onClick={handleSaveSettings}
-            className="w-full sm:w-auto px-4 h-9 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
-          >
-            Enregistrer les paramètres
-          </button>
-        </div>
-      </div>
-
-      <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-600 leading-relaxed max-w-full">
-        <div className="font-bold text-slate-900 mb-1">Architecture réseau multi-postes :</div>
-        En spécifiant le même chemin réseau partagé d'ateliers pour chaque poste d'usine,
-        l'application synchronisera ses écrans automatiquement, garantissant aux opérateurs,
-        techniciens et coordinateurs un état des stocks et un carnet de mouvements unifiés.
-      </div>
+      </SettingsSectionCard>
     </div>
   );
 }
