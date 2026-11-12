@@ -12,10 +12,15 @@ import {
   Calendar,
   Power,
   CheckCircle2,
+  Database,
+  AlertTriangle,
 } from 'lucide-react';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Data Injection Hub: Seed factory baseline data, reset datasets, toggle demo mode.
+ * Wrapped in SettingsSectionCard (tone="warning" for seeding, tone="danger" for factory reset)
+ * with unified SETTINGS_BUTTON_STYLES.
  */
 export default function SettingsInjectionTab({
   handleInjectAll,
@@ -36,10 +41,10 @@ export default function SettingsInjectionTab({
   showToast,
   handleSaveSettings,
   handleResetToZero,
-}) {
+}: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
 
-  const sectionLabels = {
+  const sectionLabels: Record<string, string> = {
     all: 'Toute l’Usine (Tous les Tableaux)',
     stock: 'Stock & Articles PDR',
     parc: 'Parc Machines & Modèles',
@@ -50,12 +55,12 @@ export default function SettingsInjectionTab({
     corrective: 'Interventions Correctives',
   };
 
-  const handleApplyDemoSwitch = (nextActive) => {
+  const handleApplyDemoSwitch = (nextActive: boolean) => {
     if (typeof onToggleDemoMode === 'function') {
       onToggleDemoMode(nextActive, selectedDemoSection);
       return;
     }
-    setIsDemoMode(nextActive);
+    setIsDemoMode?.(nextActive);
     if (nextActive) {
       if (selectedDemoSection === 'all') {
         handleInjectAll?.();
@@ -71,45 +76,93 @@ export default function SettingsInjectionTab({
     }
   };
 
+  const moduleCards = [
+    {
+      key: 'stock',
+      title: `Stock & Articles PDR (${initialStock.length})`,
+      icon: Layers,
+      desc: 'Nomenclature des articles de stock PDR, groupes, types, désignations, seuils et emplacements.',
+      injectLabel: 'Injecter le Stock',
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'parc',
+      title: `Parc Machines (${initialMachines.length})`,
+      icon: Cpu,
+      desc: "Machines enregistrées de l'usine, familles d'équipements, modèles constructeurs et Blueprints.",
+      injectLabel: 'Injecter le Parc',
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'entrepot',
+      title: `Entrepôt & Organes (${warehouseCount})`,
+      icon: Package,
+      desc: "Organes rotatifs (Components) et pièces d'usinage (Parts), groupes, familles et modèles.",
+      injectLabel: "Injecter l'Entrepôt",
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'zones',
+      title: `Zones & Équipes (${initialZones.length + initialTechnicians.length})`,
+      icon: Users,
+      desc: "Zones géographiques d'ateliers, superviseurs d'opérations et techniciens qualifiés.",
+      injectLabel: 'Injecter les Équipes',
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'mouvements',
+      title: `Mouvements Historiques (${initialMouvements.length})`,
+      icon: Activity,
+      desc: 'Écritures de mouvements de stock (Sorties/Entrées internes, externes et commandes).',
+      injectLabel: 'Injecter Mouvements',
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'preventive',
+      title: `Maintenance Préventive (${preventiveCount})`,
+      icon: Calendar,
+      desc: "Planning préventif calendaire et compteur, gammes d'actions et guides d'entretien.",
+      injectLabel: 'Injecter le Préventif',
+      clearLabel: 'Vider',
+    },
+    {
+      key: 'corrective',
+      title: `Interventions Correctives & Catalogue Pannes (${initialCorrectiveInterventions.length})`,
+      icon: Wrench,
+      desc: 'Historique des bons de travail (BT), demandes de dépannage et catalogue des pannes.',
+      injectLabel: 'Injecter le Correctif',
+      clearLabel: 'Vider le Correctif',
+      fullSpan: true,
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Global & Targeted Demo Mode Control Banner */}
-      <div className="p-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/70 via-white to-cyan-50/40 shadow-xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span
-                className={`p-2 rounded-xl shadow-xs ${
-                  isDemoMode ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
-                }`}
-              >
-                <Power className="w-5 h-5" />
-              </span>
-              <div>
-                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-                  <span>Mode Données Démo Usine (Contrôle Global & Par Section)</span>
-                  <span
-                    className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${
-                      isDemoMode
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                        : 'bg-amber-100 text-amber-800 border-amber-300'
-                    }`}
-                  >
-                    {isDemoMode ? 'MODE DÉMO ACTIF' : 'MODE USINE VIERGE'}
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Activez ou désactivez les données de démonstration sur toute l'application ou ciblez uniquement une section précise sans perdre le reste de votre travail.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+      {/* 1. Global & Targeted Demo Mode Control (tone="warning") */}
+      <SettingsSectionCard
+        tone="warning"
+        title={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>Mode Données Démo Usine (Contrôle Global &amp; Par Section)</span>
+            <span
+              className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${
+                isDemoMode
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              {isDemoMode ? 'MODE DÉMO ACTIF' : 'MODE USINE VIERGE'}
+            </span>
+          </span>
+        }
+        description="Activez ou videz les jeux d'essai sur toute l'application ou ciblez uniquement une section précise sans altérer le reste de vos données."
+        icon={<Power className="w-4 h-4" />}
+        headerRight={
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedDemoSection}
               onChange={(e) => setSelectedDemoSection(e.target.value)}
-              className="h-10 px-3 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer"
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 cursor-pointer"
               title="Choisir la section cible"
             >
               {Object.entries(sectionLabels).map(([key, label]) => (
@@ -122,7 +175,7 @@ export default function SettingsInjectionTab({
             <button
               type="button"
               onClick={() => handleApplyDemoSwitch(true)}
-              className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              className={SETTINGS_BUTTON_STYLES.primary}
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Activer / Injecter ({selectedDemoSection === 'all' ? 'Tout' : 'Section'})</span>
@@ -131,297 +184,146 @@ export default function SettingsInjectionTab({
             <button
               type="button"
               onClick={() => handleApplyDemoSwitch(false)}
-              className="px-4 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+              className={SETTINGS_BUTTON_STYLES.dangerSoft}
             >
               <Trash2 className="w-4 h-4" />
               <span>Désactiver / Vider ({selectedDemoSection === 'all' ? 'Tout' : 'Section'})</span>
             </button>
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-emerald-600 shrink-0" />
-            Centre d'injection granulaire par module
-          </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Réinjectez ou videz individuellement chaque module de l'usine (Stock, Parc Machines, Entrepôt, Préventif, Correctif, Mouvements, Équipes).
-          </p>
-        </div>
-        <button
-          onClick={handleInjectAll}
-          className="w-full lg:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
-        >
-          Injecter Toutes les Données Usine (Excel Twin)
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Group 1: Stock */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Layers className="w-3.5 h-3.5 text-cyan-600" />
-              Stock & Articles ({initialStock.length})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte la nomenclature intégrale des articles de stock, types et désignations avec leurs références et emplacements.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('stock')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              Injecter le Stock
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('stock')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement le Stock"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 2: Machines */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Cpu className="w-3.5 h-3.5 text-emerald-600" />
-              Parc Machines ({initialMachines.length})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Initialise l'ensemble des machines enregistrées de l'usine, leurs familles de production, modèles et arborescences (Blueprints).
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('parc')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              Injecter le Parc
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('parc')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement le Parc Machines"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 3: Entrepôt & Référentiels */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Package className="w-3.5 h-3.5 text-teal-600" />
-              Entrepôt & Organes ({warehouseCount})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte les équipements de réserve de l'entrepôt, groupes d'organes, familles, modèles d'organes et types de pièces.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('entrepot')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              Injecter l'Entrepôt
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('entrepot')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement l'Entrepôt"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 4: Teams & Zones */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-indigo-600" />
-              Zones & Équipes ({initialZones.length + initialTechnicians.length})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte les zones d'ateliers, les superviseurs d'opérations et le corps des techniciens qualifiés.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('zones')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              Injecter les Équipes
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('zones')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement Zones & Équipes"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 5: Mouvements */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Activity className="w-3.5 h-3.5 text-amber-600" />
-              Mouvements Historiques ({initialMouvements.length})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte les écritures de mouvements de stock (Sorties, Entrées, Sorties Externes, Bons de Commande).
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('mouvements')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-slate-700 font-bold text-[11px] rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              Injecter Mouvements
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('mouvements')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement les Mouvements"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 6: Maintenance Préventive */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Calendar className="w-3.5 h-3.5 text-purple-600" />
-              Maintenance Préventive ({preventiveCount})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte le planning préventif complet, les gammes d'actions préventives et le référentiel des guides d'entretien.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('preventive')}
-              className="flex-1 py-2 bg-slate-50 border border-slate-200 text-purple-700 font-bold text-[11px] rounded-lg hover:bg-purple-50 transition cursor-pointer"
-            >
-              Injecter le Préventif
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('preventive')}
-                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement le Préventif"
-              >
-                Vider
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Group 7: Interventions Correctives */}
-        <div className="p-5 rounded-2xl border border-slate-200 bg-white flex flex-col justify-between shadow-xs space-y-4 col-span-1 sm:col-span-2 lg:col-span-3">
-          <div>
-            <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Wrench className="w-3.5 h-3.5 text-rose-600" />
-              Interventions Correctives & Catalogue Pannes ({initialCorrectiveInterventions.length})
-            </h4>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Injecte les 800 fiches de dépannage et bons de travail historiques ainsi que le catalogue des pannes, travaux à faire et intervenants.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleInjectGroup('corrective')}
-              className="flex-1 py-2 bg-slate-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-50 transition cursor-pointer"
-            >
-              Injecter le Correctif
-            </button>
-            {handleClearGroup && (
-              <button
-                onClick={() => handleClearGroup('corrective')}
-                className="px-4 py-2 bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] rounded-lg hover:bg-rose-100 transition cursor-pointer"
-                title="Vider uniquement le Correctif"
-              >
-                Vider le Correctif
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-5 border-t border-slate-100 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4 min-w-0">
-          <span className="text-xs font-bold text-slate-700">
-            Paramétrage de démarrage par défaut :
+        }
+      >
+        <div className="text-xs text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Règle SSOT : Aucune donnée de démonstration n&apos;est réinjectée silencieusement au rechargement (F5) lorsque le mode usine vierge est actif.
           </span>
-          <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-600">
-            <input
-              type="checkbox"
-              checked={isDemoMode}
-              onChange={(e) => {
-                const next = e.target.checked;
-                setIsDemoMode?.(next);
-                onToggleDemoMode?.(next);
-              }}
-              className="rounded text-indigo-600 border-slate-300 focus:ring-indigo-500"
-            />
-            <span>Afficher les maquettes et fiches d&apos;exemples au démarrage</span>
-          </label>
+          <span className="font-mono text-[11px] text-slate-500">
+            DataGateway.loadDemoData / clearDemoSection
+          </span>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto">
+      </SettingsSectionCard>
+
+      {/* 2. Granular Per-Module Injection Grid */}
+      <SettingsSectionCard
+        title="Injection ou Purge Granulaire par Module"
+        description="Chargez ou videz individuellement chaque référentiel métier (Stock PDR, Parc Machines, Entrepôt, Préventif, Correctif, Mouvements, Équipes)."
+        icon={<Sliders className="w-4 h-4" />}
+        headerRight={
           <button
             type="button"
-            onClick={() => {
-              if (typeof onDownloadBlankTemplate === 'function') {
-                onDownloadBlankTemplate();
-              } else {
-                showToast?.('Téléchargement du gabarit vierge déclenché !', 'success');
-              }
-            }}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-            title="Télécharger le modèle Excel vierge pour préparer vos données réelles"
+            onClick={handleInjectAll}
+            className={SETTINGS_BUTTON_STYLES.primary}
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            Gabarit Vierge (.XLSX)
+            <Database className="w-4 h-4" />
+            <span>Injecter Toutes les Données Usine</span>
           </button>
-          <button
-            type="button"
-            onClick={handleSaveSettings}
-            className="w-full sm:w-auto px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition cursor-pointer text-center shadow-2xs"
-          >
-            Enregistrer ma préférence
-          </button>
-          <button
-            type="button"
-            onClick={handleResetToZero}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Effacer tout et démarrer à vide
-          </button>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {moduleCards.map((mod) => {
+            const Icon = mod.icon;
+            return (
+              <div
+                key={mod.key}
+                className={`p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between gap-3 ${
+                  mod.fullSpan ? 'col-span-1 sm:col-span-2 lg:col-span-3' : ''
+                }`}
+              >
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <Icon className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span>{mod.title}</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{mod.desc}</p>
+                </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => handleInjectGroup?.(mod.key)}
+                    className={`${SETTINGS_BUTTON_STYLES.secondary} flex-1`}
+                  >
+                    <span>{mod.injectLabel}</span>
+                  </button>
+                  {handleClearGroup && (
+                    <button
+                      type="button"
+                      onClick={() => handleClearGroup(mod.key)}
+                      className={SETTINGS_BUTTON_STYLES.dangerSoft}
+                      title={`Vider uniquement : ${mod.title}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{mod.clearLabel}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </div>
+      </SettingsSectionCard>
+
+      {/* 3. Startup Preference & Full Factory Reset (tone="danger") */}
+      <SettingsSectionCard
+        tone="danger"
+        title="Préférence de Démarrage & Réinitialisation Complète d'Usine"
+        description="Configurez le comportement par défaut au lancement ou effacez l'intégralité des tables pour démarrer l'exploitation réelle à zéro."
+        icon={<AlertTriangle className="w-4 h-4" />}
+        footer={
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <label className="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={Boolean(isDemoMode)}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setIsDemoMode?.(next);
+                  onToggleDemoMode?.(next);
+                }}
+                className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
+              />
+              <span>Afficher les maquettes et fiches d&apos;exemples au démarrage</span>
+            </label>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onDownloadBlankTemplate === 'function') {
+                    onDownloadBlankTemplate();
+                  } else {
+                    showToast?.('Téléchargement du gabarit vierge déclenché !', 'success');
+                  }
+                }}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                title="Télécharger le modèle Excel vierge pour préparer vos données réelles"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Gabarit Vierge (.XLSX)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                className={SETTINGS_BUTTON_STYLES.primary}
+              >
+                <span>Enregistrer ma préférence</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetToZero}
+                className={SETTINGS_BUTTON_STYLES.danger}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Effacer tout et démarrer à vide</span>
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <div className="text-xs text-rose-900 bg-rose-50/60 px-3.5 py-2.5 rounded-xl border border-rose-200/80">
+          <b>Attention :</b> L&apos;action « Effacer tout et démarrer à vide » purge toutes les tables transactionnelles et référentielles (0 enregistrement) et verrouille <code className="font-mono">START_MODE = &apos;empty&apos;</code>. Exportez un Snapshot JSON au préalable si nécessaire.
+        </div>
+      </SettingsSectionCard>
     </div>
   );
 }

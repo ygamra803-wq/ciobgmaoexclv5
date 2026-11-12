@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { vaultService } from '../../../../utils/vaultService';
 import { storageService } from '../../../../utils/storageService';
-import { SettingsSectionCard } from './settingsUi';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Admin Security, Zero-Knowledge Vault, PIN management, and RBAC matrix.
@@ -202,25 +202,19 @@ export default function SettingsAdminTab({
 
       {/* 2. Master PIN Setup - Configuration initiale du coffre */}
       {!isVaultExists && (
-        <div className="bg-amber-50 p-6 rounded-3xl border border-amber-200 shadow-md space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-amber-800">Premier Lancement — Définir Master PIN</h4>
-              <p className="text-xs text-amber-700">
-                Aucun mot de passe dans le code — Définissez votre Master PIN (4 à 8 chiffres) qui servira de clé de chiffrement maîtresse.
-              </p>
-            </div>
-          </div>
+        <SettingsSectionCard
+          title="Premier Lancement — Définir Master PIN"
+          description="Aucun mot de passe dans le code — Définissez votre Master PIN (4 à 8 chiffres) qui servira de clé de chiffrement maîtresse."
+          icon={<ShieldAlert className="w-4 h-4" />}
+          tone="warning"
+        >
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="password"
               value={masterPinSetup}
               onChange={(e) => setMasterPinSetup(e.target.value.replace(/[^0-9]/g, ''))}
               placeholder="Master PIN — 4 à 8 chiffres (ex: 1234)"
-              className="flex-1 px-4 py-2.5 rounded-xl border border-amber-300 bg-white text-xs font-mono font-bold focus:border-amber-500 outline-none"
+              className="flex-1 px-4 py-2 rounded-xl border border-amber-300 bg-white text-xs font-mono font-bold focus:border-amber-500 outline-none"
               maxLength={8}
             />
             <button
@@ -236,28 +230,22 @@ export default function SettingsAdminTab({
                   showToast(err.message, 'error');
                 }
               }}
-              className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs transition cursor-pointer shadow-sm"
+              className={SETTINGS_BUTTON_STYLES.warning}
             >
               Créer Vault Chiffré (AES-256)
             </button>
           </div>
-        </div>
+        </SettingsSectionCard>
       )}
 
       {/* 3. System Accounts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Box A: Change PIN & Role & Cryptographic Engine */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-5">
-          <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <KeyRound className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-slate-800">Master PIN — Clé Maîtresse Cryptographique</h4>
-              <p className="text-xs text-slate-500">Architecture Zero-Knowledge : sans le PIN, les données au repos restent chiffrées et indéchiffrables.</p>
-            </div>
-          </div>
-
+        <SettingsSectionCard
+          title="Master PIN — Clé Maîtresse Cryptographique"
+          description="Architecture Zero-Knowledge : sans le PIN, les données au repos restent chiffrées et indéchiffrables."
+          icon={<KeyRound className="w-4 h-4" />}
+        >
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Master PIN Actuel (pour validation)</label>
@@ -356,187 +344,169 @@ export default function SettingsAdminTab({
                   showToast(err.message, 'error');
                 }
               }}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold text-xs transition shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className={`w-full py-2.5 ${SETTINGS_BUTTON_STYLES.primary}`}
             >
               <Save className="w-4 h-4" />
               <span>Changer Master PIN — Re-chiffrer Vault</span>
             </button>
           </div>
-        </div>
+        </SettingsSectionCard>
 
         {/* Box B: Comptes Portail Système — 2FA */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-5 flex flex-col justify-between">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-slate-800">Comptes Portail Système ({systemAccounts.length})</h4>
-                  <p className="text-xs text-slate-500">
-                    Rôles globaux : Administrateur, Magasinier PDR, Consultateur (Viewer)
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() =>
-                  setVaultModal({
-                    isOpen: true,
-                    mode: 'reset_vault',
-                    targetUsername: '',
-                    targetDisplayName: 'Coffre-Fort Complet',
-                    newPassword: '',
-                    masterPin: '',
-                    submitting: false,
-                  })
-                }
-                className="text-[11px] font-bold text-rose-600 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition border border-rose-200 cursor-pointer"
-              >
-                Reset Vault
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {systemAccounts.map((userAcc: any) => {
-                const accLogin = userAcc.code || userAcc.username;
-                const accLabel = userAcc.libelle || userAcc.name || accLogin;
-                return (
-                  <div
-                    key={userAcc.id || accLogin}
-                    className="p-3.5 rounded-2xl border border-slate-200/80 hover:border-indigo-200 bg-slate-50/50 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-slate-900 text-white font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-xs">
-                        {String(accLogin || 'US').substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
-                          <span className="truncate">{accLabel}</span>
-                          <span className="text-[10px] font-mono text-slate-500">@{accLogin}</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
-                            {userAcc.role}
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
-                          Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
-                        </div>
-                      </div>
+        <SettingsSectionCard
+          title={`Comptes Portail Système (${systemAccounts.length})`}
+          description="Rôles globaux : Administrateur, Magasinier PDR, Consultateur (Viewer)"
+          icon={<Users className="w-4 h-4" />}
+          headerRight={
+            <button
+              type="button"
+              onClick={() =>
+                setVaultModal({
+                  isOpen: true,
+                  mode: 'reset_vault',
+                  targetUsername: '',
+                  targetDisplayName: 'Coffre-Fort Complet',
+                  newPassword: '',
+                  masterPin: '',
+                  submitting: false,
+                })
+              }
+              className={SETTINGS_BUTTON_STYLES.dangerSoft}
+            >
+              Reset Vault
+            </button>
+          }
+          bodyClassName="p-5 flex flex-col justify-between space-y-5"
+        >
+          <div className="space-y-3">
+            {systemAccounts.map((userAcc: any) => {
+              const accLogin = userAcc.code || userAcc.username;
+              const accLabel = userAcc.libelle || userAcc.name || accLogin;
+              return (
+                <div
+                  key={userAcc.id || accLogin}
+                  className="p-3.5 rounded-xl border border-slate-200 hover:border-indigo-200 bg-slate-50/60 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-2xs">
+                      {String(accLogin || 'US').substring(0, 2).toUpperCase()}
                     </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setVaultModal({
-                            isOpen: true,
-                            mode: 'change_password',
-                            targetUsername: accLogin,
-                            targetDisplayName: accLabel,
-                            newPassword: '',
-                            masterPin: '',
-                            submitting: false,
-                          })
-                        }
-                        className="px-2.5 py-1.5 bg-white border border-slate-200 hover:bg-amber-500 hover:text-white text-slate-700 font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                      >
-                        Changer Pass
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setVaultModal({
-                            isOpen: true,
-                            mode: 'switch_session',
-                            targetUsername: accLogin,
-                            targetDisplayName: `${accLabel} (@${accLogin})`,
-                            newPassword: '',
-                            masterPin: '',
-                            submitting: false,
-                          })
-                        }
-                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl transition shadow-2xs cursor-pointer"
-                      >
-                        Basculer (2FA)
-                      </button>
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                        <span className="truncate">{accLabel}</span>
+                        <span className="text-[10px] font-mono text-slate-500">@{accLogin}</span>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700">
+                          {userAcc.role}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
+                        Mot de passe : •••••••• (Hash BCrypt dans le coffre chiffré) — ID : {(userAcc.id || 'ID-001').substring(0, 12)}
+                      </div>
                     </div>
                   </div>
-                );
-              })}
 
-              {systemAccounts.length === 0 && (
-                <div className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                  Coffre-fort verrouillé — Veuillez saisir le Master PIN pour charger les comptes déchiffrés.
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVaultModal({
+                          isOpen: true,
+                          mode: 'change_password',
+                          targetUsername: accLogin,
+                          targetDisplayName: accLabel,
+                          newPassword: '',
+                          masterPin: '',
+                          submitting: false,
+                        })
+                      }
+                      className={SETTINGS_BUTTON_STYLES.secondary}
+                    >
+                      Changer Pass
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setVaultModal({
+                          isOpen: true,
+                          mode: 'switch_session',
+                          targetUsername: accLogin,
+                          targetDisplayName: `${accLabel} (@${accLogin})`,
+                          newPassword: '',
+                          masterPin: '',
+                          submitting: false,
+                        })
+                      }
+                      className={SETTINGS_BUTTON_STYLES.primary}
+                    >
+                      Basculer (2FA)
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+              );
+            })}
+
+            {systemAccounts.length === 0 && (
+              <div className="text-xs text-slate-400 text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                Coffre-fort verrouillé — Veuillez saisir le Master PIN pour charger les comptes déchiffrés.
+              </div>
+            )}
           </div>
 
           {/* Explicit Bridge Callout inside Box B */}
-          <div className="p-3.5 rounded-2xl bg-purple-50/70 border border-purple-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-xs text-purple-950">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="text-xs text-slate-800">
               <span className="font-bold block">Accès Techniciens Individuels ({activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''})</span>
-              <span className="text-[11px] text-purple-700">
-                Les comptes techniciens sont rattachés aux fiches matricules (<code className="font-mono font-bold">TECH-0X</code>).
+              <span className="text-[11px] text-slate-500">
+                Les comptes techniciens sont rattachés aux fiches matricules (<code className="font-mono font-bold text-indigo-700">TECH-0X</code>).
               </span>
             </div>
             {onNavigateToUsers && (
               <button
                 type="button"
                 onClick={onNavigateToUsers}
-                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold flex items-center gap-1.5 shrink-0 cursor-pointer shadow-2xs transition"
+                className={SETTINGS_BUTTON_STYLES.secondary}
               >
-                <span>Équipe & Utilisateurs</span>
+                <span>Équipe &amp; Utilisateurs</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
-        </div>
+        </SettingsSectionCard>
       </div>
 
       {/* 4. Section C — Comptes Techniciens Terrain (Liés au Référentiel Personnel) */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-md space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-purple-50 border border-purple-200/80 flex items-center justify-center text-purple-700 shrink-0">
-              <Wrench className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-sm font-bold text-slate-800">
-                  Comptes Techniciens Terrain — Liés au Personnel (SSOT AuthService)
-                </h4>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  {activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''}
-                </span>
-                {inactiveTechAccountsCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
-                    {inactiveTechAccountsCount} désactivé{inactiveTechAccountsCount > 1 ? 's' : ''}
-                  </span>
-                )}
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                  {Array.isArray(technicians) ? technicians.length : 0} fiche(s) technicien
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                L&apos;activation, la désactivation et la définition du mot de passe d&apos;un technicien s&apos;effectuent depuis sa fiche dans <b>Équipe &amp; Utilisateurs</b> afin de préserver le lien <code className="font-mono">personnelId</code> (périmètre R4 « Mes Tâches »).
-              </p>
-            </div>
-          </div>
-
-          {onNavigateToUsers && (
+      <SettingsSectionCard
+        title={
+          <span className="flex items-center gap-2 flex-wrap">
+            <span>Comptes Techniciens Terrain — Liés au Personnel (SSOT AuthService)</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              {activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''}
+            </span>
+            {inactiveTechAccountsCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                {inactiveTechAccountsCount} désactivé{inactiveTechAccountsCount > 1 ? 's' : ''}
+              </span>
+            )}
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+              {Array.isArray(technicians) ? technicians.length : 0} fiche(s) technicien
+            </span>
+          </span>
+        }
+        description="L'activation, la désactivation et la définition du mot de passe d'un technicien s'effectuent depuis sa fiche dans Équipe & Utilisateurs afin de préserver le lien personnelId (périmètre R4 « Mes Tâches »)."
+        icon={<Wrench className="w-4 h-4" />}
+        headerRight={
+          onNavigateToUsers ? (
             <button
               type="button"
               onClick={onNavigateToUsers}
-              className="px-4 py-2 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold flex items-center gap-2 self-start md:self-auto shrink-0 cursor-pointer shadow-xs transition active:scale-95"
+              className={SETTINGS_BUTTON_STYLES.primary}
             >
               <span>Gérer les accès dans Équipe &amp; Utilisateurs</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          )}
-        </div>
-
+          ) : undefined
+        }
+      >
         {technicianAccounts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {technicianAccounts.map((techAcc: any) => {
@@ -546,9 +516,9 @@ export default function SettingsAdminTab({
               return (
                 <div
                   key={techAcc.id || loginId}
-                  className={`p-3.5 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                  className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 ${
                     isActive
-                      ? 'bg-slate-50/60 border-slate-200/90 hover:border-purple-200'
+                      ? 'bg-slate-50/60 border-slate-200 hover:border-indigo-200'
                       : 'bg-slate-100/60 border-slate-200/60 opacity-70'
                   }`}
                 >
@@ -557,7 +527,7 @@ export default function SettingsAdminTab({
                       <span className="text-xs font-bold text-slate-900 truncate">
                         {techAcc.personnelName || techAcc.name}
                       </span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
                         {code}
                       </span>
                       {isActive ? (
@@ -592,7 +562,7 @@ export default function SettingsAdminTab({
                           submitting: false,
                         })
                       }
-                      className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-600 text-purple-800 hover:text-white border border-purple-200 text-[11px] font-bold transition shrink-0 cursor-pointer"
+                      className={SETTINGS_BUTTON_STYLES.secondary}
                       title="Tester la vue de ce technicien (2FA Master PIN)"
                     >
                       Basculer
@@ -603,7 +573,7 @@ export default function SettingsAdminTab({
             })}
           </div>
         ) : (
-          <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
+          <div className="p-5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-center space-y-2">
             <p className="text-xs font-bold text-slate-700">
               Aucun compte de connexion technicien configuré (Mode Usine Vide ou accès non activés).
             </p>
@@ -612,7 +582,7 @@ export default function SettingsAdminTab({
             </p>
           </div>
         )}
-      </div>
+      </SettingsSectionCard>
 
       {/* Vault Cryptographic Action Modal (Replaces blocked window.prompt) */}
       {vaultModal.isOpen && (
@@ -621,7 +591,7 @@ export default function SettingsAdminTab({
           onClick={closeVaultModal}
         >
           <div
-            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div
@@ -736,18 +706,18 @@ export default function SettingsAdminTab({
                   type="button"
                   onClick={closeVaultModal}
                   disabled={vaultModal.submitting}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                  className={SETTINGS_BUTTON_STYLES.secondary}
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
                   disabled={vaultModal.submitting}
-                  className={`px-4 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition cursor-pointer ${
+                  className={
                     vaultModal.mode === 'reset_vault'
-                      ? 'bg-rose-600 hover:bg-rose-700'
-                      : 'bg-indigo-600 hover:bg-indigo-700'
-                  }`}
+                      ? SETTINGS_BUTTON_STYLES.danger
+                      : SETTINGS_BUTTON_STYLES.primary
+                  }
                 >
                   {vaultModal.submitting ? 'Validation...' : 'Confirmer'}
                 </button>

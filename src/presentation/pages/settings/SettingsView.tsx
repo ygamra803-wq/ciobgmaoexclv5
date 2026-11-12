@@ -2075,22 +2075,22 @@ export default function SettingsView({
           onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
         >
           <div
-            className="bg-white rounded-3xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 text-slate-900 flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-bold">
+                <h4 className="text-sm font-bold text-slate-900">
                   Réassigner en masse ({bulkRelinkModal.entityType === 'preventive' ? 'Tâches Préventives' : 'Interventions Correctives'})
                 </h4>
-                <p className="text-[11px] text-slate-300 mt-0.5">
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   Sélectionnez la machine active cible pour rattacher les éléments orphelins
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 text-xs font-bold px-2 py-1 rounded-lg hover:bg-slate-200/60 cursor-pointer"
               >
                 ✕
               </button>

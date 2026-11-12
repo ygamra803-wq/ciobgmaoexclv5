@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { Users, Package, Link2 } from 'lucide-react';
+import { MapPin, Users, Package, Link2 } from 'lucide-react';
 import { StockCalculationService } from '../../../../domain/pdr/services/StockCalculationService';
+import { SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Modals for Settings Audit: Zone, User, Article, and Relink modals.
+ * Unified light headers, indigo/slate badges, and SETTINGS_BUTTON_STYLES.
  */
 export function AuditZoneModal({
   isOpen,
@@ -13,7 +15,7 @@ export function AuditZoneModal({
   getNextZoneId,
   setZones,
   showToast,
-}) {
+}: any) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -37,9 +39,19 @@ export function AuditZoneModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <h3 className="text-sm font-bold text-slate-900">
-            Fiche d'enregistrement de Zone
-          </h3>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">
+                Fiche d&apos;enregistrement de Zone
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Inscription au Référentiel des Emplacements Usine
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
@@ -49,16 +61,16 @@ export function AuditZoneModal({
         </div>
         <div className="space-y-3">
           <div>
-            <label className="block text-[11px] font-bold text-slate-500 mb-1">
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">
               Nom de la Zone / Atelier
             </label>
             <input
               type="text"
               value={auditZoneForm.libelle}
               onChange={(e) =>
-                setAuditZoneForm((prev) => ({ ...prev, libelle: e.target.value }))
+                setAuditZoneForm((prev: any) => ({ ...prev, libelle: e.target.value }))
               }
-              className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2"
+              className="w-full text-xs font-medium border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-indigo-500"
               placeholder="ex: Atelier Conditionnement"
             />
           </div>
@@ -68,7 +80,7 @@ export function AuditZoneModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-800 font-bold cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.secondary}
           >
             Annuler
           </button>
@@ -87,14 +99,14 @@ export function AuditZoneModal({
                 nom: auditZoneForm.libelle.trim(),
                 description: '',
               };
-              setZones((prev) => [...prev, newZone]);
+              setZones((prev: any[]) => [...prev, newZone]);
               showToast?.(
                 `Zone "${auditZoneForm.libelle.trim()}" enregistrée avec l'ID ${id}.`,
                 'success'
               );
               onClose();
             }}
-            className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-lg shadow-sm transition cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.primary}
           >
             Enregistrer
           </button>
@@ -114,7 +126,7 @@ export function AuditUserModal({
   setTechnicians,
   setOperations,
   showToast,
-}) {
+}: any) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -138,16 +150,16 @@ export function AuditUserModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-cyan-50 border border-cyan-200 text-cyan-700 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
               <Users className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Fiche d'enregistrement d'utilisateur
+                Fiche d&apos;enregistrement d&apos;utilisateur
               </h3>
               <p className="text-[11px] text-slate-500">
-                Audit GMAO & Sécurisation des Identifiants
+                Audit GMAO &amp; Sécurisation des Identifiants
               </p>
             </div>
           </div>
@@ -164,30 +176,30 @@ export function AuditUserModal({
             <span className="text-xs font-semibold text-slate-600">
               ID Sécurisé généré :
             </span>
-            <span className="font-mono font-extrabold text-xs bg-slate-900 text-white px-2.5 py-0.5 rounded-md">
+            <span className="font-mono font-extrabold text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-md">
               {getNextUserId(auditUserForm.type)}
             </span>
           </div>
           <p className="text-[10px] text-slate-500 leading-tight">
-            🔒 L'ID est unique et séquentiel. Il garantit la traçabilité intégrale des mouvements d'ateliers même si le nom est corrigé ultérieurement.
+            L&apos;ID est unique et séquentiel. Il garantit la traçabilité intégrale des mouvements d&apos;ateliers même si le nom est corrigé ultérieurement.
           </p>
         </div>
 
         <div className="space-y-3">
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              Profil / Type d'utilisateur
+              Profil / Type d&apos;utilisateur
             </label>
             <select
               value={auditUserForm.type}
               onChange={(e) =>
-                setAuditUserForm((prev) => ({ ...prev, type: e.target.value }))
+                setAuditUserForm((prev: any) => ({ ...prev, type: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
             >
               <option value="TECHNICIEN">Technicien (Maintenance / GMAO)</option>
               <option value="OPERATEUR">Opérateur (Production)</option>
-              <option value="CHEF">Chef d'équipe / Superviseur</option>
+              <option value="CHEF">Chef d&apos;équipe / Superviseur</option>
             </select>
           </div>
 
@@ -199,9 +211,9 @@ export function AuditUserModal({
               type="text"
               value={auditUserForm.nom}
               onChange={(e) =>
-                setAuditUserForm((prev) => ({ ...prev, nom: e.target.value }))
+                setAuditUserForm((prev: any) => ({ ...prev, nom: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 text-slate-800"
+              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
               placeholder="Nom de l'utilisateur"
             />
           </div>
@@ -215,26 +227,26 @@ export function AuditUserModal({
                 type="text"
                 value={auditUserForm.specialite}
                 onChange={(e) =>
-                  setAuditUserForm((prev) => ({ ...prev, specialite: e.target.value }))
+                  setAuditUserForm((prev: any) => ({ ...prev, specialite: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 text-slate-800"
+                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
                 placeholder="Spécialité du technicien (ex: Mécanique, Électricité)"
               />
             </div>
           ) : (
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Zone d'affectation
+                Zone d&apos;affectation
               </label>
               <select
                 value={auditUserForm.id_zone}
                 onChange={(e) =>
-                  setAuditUserForm((prev) => ({ ...prev, id_zone: e.target.value }))
+                  setAuditUserForm((prev: any) => ({ ...prev, id_zone: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
               >
                 <option value="">Sélectionner une zone</option>
-                {zones.map((z) => (
+                {zones.map((z: any) => (
                   <option key={z.id_zone} value={z.id_zone}>
                     {z.libelle || z.nom}
                   </option>
@@ -248,7 +260,7 @@ export function AuditUserModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-semibold cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.secondary}
           >
             Annuler
           </button>
@@ -273,7 +285,7 @@ export function AuditUserModal({
                     auditUserForm.nom.trim()
                   )}`,
                 };
-                setTechnicians((prev) => [...prev, newTech]);
+                setTechnicians((prev: any[]) => [...prev, newTech]);
               } else {
                 const newOp = {
                   id_operation: id,
@@ -284,7 +296,7 @@ export function AuditUserModal({
                     auditUserForm.nom.trim()
                   )}`,
                 };
-                setOperations((prev) => [...prev, newOp]);
+                setOperations((prev: any[]) => [...prev, newOp]);
               }
 
               showToast?.(
@@ -293,7 +305,7 @@ export function AuditUserModal({
               );
               onClose();
             }}
-            className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.primary}
           >
             Enregistrer
           </button>
@@ -338,13 +350,13 @@ export function AuditArticleModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
               <Package className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Fiche d'enregistrement Pièce PDR
+                Fiche d&apos;enregistrement Pièce PDR
               </h3>
               <p className="text-[11px] text-slate-500">
                 Inscription officielle au Référentiel Stock Articles
@@ -368,9 +380,9 @@ export function AuditArticleModal({
               type="text"
               value={auditArticleForm.ref}
               onChange={(e) =>
-                setAuditArticleForm((p) => ({ ...p, ref: e.target.value }))
+                setAuditArticleForm((p: any) => ({ ...p, ref: e.target.value }))
               }
-              className="w-full text-xs font-mono font-bold border border-slate-300 rounded-lg p-2 text-slate-800 bg-slate-50"
+              className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl p-2.5 text-slate-800 bg-slate-50"
               readOnly
             />
           </div>
@@ -383,9 +395,9 @@ export function AuditArticleModal({
               type="text"
               value={auditArticleForm.designation}
               onChange={(e) =>
-                setAuditArticleForm((p) => ({ ...p, designation: e.target.value }))
+                setAuditArticleForm((p: any) => ({ ...p, designation: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 text-slate-800"
+              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
               placeholder="ex: Roulement à billes 6204-2RS"
             />
           </div>
@@ -398,11 +410,11 @@ export function AuditArticleModal({
               <select
                 value={auditArticleForm.type}
                 onChange={(e) =>
-                  setAuditArticleForm((p) => ({ ...p, type: e.target.value }))
+                  setAuditArticleForm((p: any) => ({ ...p, type: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2 bg-white text-slate-800"
+                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
               >
-                {(types || []).map((t) => (
+                {(types || []).map((t: any) => (
                   <option key={t.id_type || t} value={t.id_type || t}>
                     {t.libelle || t.nom || t.id_type || t}
                   </option>
@@ -418,9 +430,9 @@ export function AuditArticleModal({
                 type="text"
                 value={auditArticleForm.emplacement}
                 onChange={(e) =>
-                  setAuditArticleForm((p) => ({ ...p, emplacement: e.target.value }))
+                  setAuditArticleForm((p: any) => ({ ...p, emplacement: e.target.value }))
                 }
-                className="w-full text-xs font-medium border border-slate-300 rounded-lg p-2 text-slate-800"
+                className="w-full text-xs font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
                 placeholder="ex: Magasin PDR"
               />
             </div>
@@ -436,30 +448,30 @@ export function AuditArticleModal({
                 min="0"
                 value={auditArticleForm.stockInitial}
                 onChange={(e) =>
-                  setAuditArticleForm((p) => ({
+                  setAuditArticleForm((p: any) => ({
                     ...p,
                     stockInitial: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg p-2 text-slate-800"
+                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Seuil d'Alerte
+                Seuil d&apos;Alerte
               </label>
               <input
                 type="number"
                 min="0"
                 value={auditArticleForm.seuil}
                 onChange={(e) =>
-                  setAuditArticleForm((p) => ({
+                  setAuditArticleForm((p: any) => ({
                     ...p,
                     seuil: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-lg p-2 text-slate-800"
+                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
@@ -469,7 +481,7 @@ export function AuditArticleModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-semibold cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.secondary}
           >
             Annuler
           </button>
@@ -508,7 +520,7 @@ export function AuditArticleModal({
               );
               onClose();
             }}
-            className="px-4 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.primary}
           >
             Enregistrer
           </button>
@@ -529,7 +541,7 @@ export function AuditRelinkModal({
   technicians = [],
   operations = [],
   handleExecuteRelink,
-}) {
+}: any) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -553,13 +565,13 @@ export function AuditRelinkModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
               <Link2 className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Rattachement & Correction de Clé
+                Rattachement &amp; Correction de Clé
               </h3>
               <p className="text-[11px] text-slate-500">
                 Correction en cascade de la clé étrangère
@@ -582,36 +594,36 @@ export function AuditRelinkModal({
             </span>
           </div>
           <div className="text-[11px] text-indigo-800 leading-relaxed">
-            Ce code apparaît dans <b>{relinkData.occurrencesCount}</b> écriture(s). Choisissez l'élément officiel ci-dessous pour rediriger et corriger toutes ces références automatiquement.
+            Ce code apparaît dans <b>{relinkData.occurrencesCount}</b> écriture(s). Choisissez l&apos;élément officiel ci-dessous pour rediriger et corriger toutes ces références automatiquement.
           </div>
         </div>
 
         <div className="space-y-2">
           <label className="block text-[11px] font-bold text-slate-700">
-            Rattacher vers l'élément officiel :
+            Rattacher vers l&apos;élément officiel :
           </label>
           <select
             value={relinkData.targetKey}
             onChange={(e) =>
-              setRelinkData((prev) => ({ ...prev, targetKey: e.target.value }))
+              setRelinkData((prev: any) => ({ ...prev, targetKey: e.target.value }))
             }
-            className="w-full text-xs font-semibold border border-slate-300 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+            className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
           >
             <option value="">Sélectionner un élément valide...</option>
             {relinkData.entityType === 'machine' &&
-              machines.map((m) => (
+              machines.map((m: any) => (
                 <option key={m.id_machine_registered} value={m.id_machine_registered}>
                   {m.id_machine_registered} — {m.designation || 'Machine'}
                 </option>
               ))}
             {relinkData.entityType === 'article' &&
-              rawStock.map((s) => (
+              rawStock.map((s: any) => (
                 <option key={s.ref} value={s.ref}>
                   {s.ref} — {s.designation || 'Article'}
                 </option>
               ))}
             {relinkData.entityType === 'zone' &&
-              zones.map((z) => (
+              zones.map((z: any) => (
                 <option key={z.id_zone} value={z.id_zone}>
                   {z.id_zone} — {z.libelle || z.nom || 'Zone'}
                 </option>
@@ -619,14 +631,14 @@ export function AuditRelinkModal({
             {relinkData.entityType === 'user' && (
               <>
                 <optgroup label="Techniciens">
-                  {technicians.map((t) => (
+                  {technicians.map((t: any) => (
                     <option key={t.id_technician || t.nom} value={t.nom}>
                       {t.nom} ({t.id_technician || 'TECH'})
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label="Opérateurs & Chefs">
-                  {operations.map((o) => (
+                  {operations.map((o: any) => (
                     <option key={o.id_operation || o.nom} value={o.nom}>
                       {o.nom} ({o.type_profil || 'OP'})
                     </option>
@@ -641,7 +653,7 @@ export function AuditRelinkModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3.5 py-1.5 text-xs text-slate-600 hover:text-slate-800 font-semibold cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.secondary}
           >
             Annuler
           </button>
@@ -649,7 +661,7 @@ export function AuditRelinkModal({
             type="button"
             onClick={handleExecuteRelink}
             disabled={!relinkData.targetKey}
-            className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs rounded-lg shadow-xs transition cursor-pointer"
+            className={SETTINGS_BUTTON_STYLES.primary}
           >
             Appliquer ({relinkData.occurrencesCount} écritures)
           </button>

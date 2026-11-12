@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Matching & Orphaned entity reconciliation table and actions.
@@ -43,30 +44,24 @@ export default function SettingsMatchingTab({
   rawAuditDisplayedData = [],
   auditTotalPages = 1,
   auditCurrentPage = 1,
-}) {
+}: any) {
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-            Audit & vérification des données (Appairage)
-          </h3>
-          <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-            Détection automatique des éléments (machines, zones, utilisateurs) présents dans l'historique mais manquants dans les fiches officielles.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3">
+    <SettingsSectionCard
+      title="Audit & Vérification des Données (Appairage)"
+      description="Détection automatique des éléments (machines, zones, utilisateurs, articles) présents dans l'historique mais manquants dans les fiches officielles."
+      icon={<ShieldAlert className="w-4 h-4" />}
+      headerRight={
+        <div className="flex flex-col sm:flex-row items-center gap-2.5">
           <div className="relative">
             <select
               value={auditTarget}
               onChange={(e) => setAuditTarget(e.target.value)}
-              className="appearance-none bg-white border border-slate-300 rounded-xl pl-4 pr-10 py-2 text-xs font-bold text-slate-700 shadow-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition cursor-pointer"
+              className="appearance-none bg-white border border-slate-300 rounded-xl pl-3.5 pr-9 py-2 text-xs font-bold text-slate-700 shadow-2xs focus:outline-none focus:border-indigo-500 transition cursor-pointer"
             >
               <option value="machines">Machines (Parc)</option>
-              <option value="articles">Articles & PDR (Stock)</option>
+              <option value="articles">Articles &amp; PDR (Stock)</option>
               <option value="zones">Zones (Emplacements)</option>
-              <option value="utilisateurs">Utilisateurs (Membres & Techs)</option>
+              <option value="utilisateurs">Utilisateurs (Membres &amp; Techs)</option>
               <option value="correctif">Liaisons Correctif (Interventions)</option>
               <option value="preventif">Liaisons Préventif (Tâches)</option>
             </select>
@@ -78,57 +73,59 @@ export default function SettingsMatchingTab({
             discoveredItems.length > 0 && (
               <button
                 onClick={handleRegisterDiscovered}
-                className="w-full lg:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                className={SETTINGS_BUTTON_STYLES.primary}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                Enregistrer les {getAuditLabel()} ({discoveredItems.length})
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>
+                  Enregistrer les {getAuditLabel()} ({discoveredItems.length})
+                </span>
               </button>
             )}
         </div>
-      </div>
-
+      }
+    >
       {discoveredItems.length === 0 ? (
-        <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-100 space-y-2 max-w-full">
-          <Check className="w-8 h-8 text-emerald-500 mx-auto bg-emerald-50 p-1.5 rounded-full" />
+        <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 space-y-2 max-w-full">
+          <Check className="w-8 h-8 text-emerald-600 mx-auto bg-emerald-50 p-1.5 rounded-full border border-emerald-200" />
           <h4 className="text-sm font-bold text-slate-900">
             Tout est parfaitement apparié !
           </h4>
-          <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Aucun identifiant ou nom de {getAuditLabel().toLowerCase()} manquant n'a été détecté dans les historiques. Vos analyses sont pleinement fiables.
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Aucun identifiant ou nom de {getAuditLabel().toLowerCase()} manquant n&apos;a été détecté dans les historiques. Vos analyses sont pleinement fiables.
           </p>
         </div>
       ) : (
         <div className="space-y-4 w-full max-w-full overflow-hidden">
-          <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 text-xs text-amber-800 flex items-start gap-2.5 leading-relaxed">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/50 text-xs text-amber-900 flex items-start gap-2.5 leading-relaxed">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Écart de base détecté :</span> Certains éléments de type "{getAuditLabel()}" apparaissent dans vos mouvements mais ne figurent pas dans la liste officielle.
+              <span className="font-bold">Écart de base détecté :</span> Certains éléments de type &laquo; {getAuditLabel()} &raquo; apparaissent dans vos mouvements mais ne figurent pas dans la liste officielle.
               {auditTarget === 'machines' ||
               auditTarget === 'articles' ||
               auditTarget === 'utilisateurs'
                 ? " Cliquez sur 'Enregistrer les " +
                   getAuditLabel() +
                   "' pour une inscription automatique, ou utilisez 'Rattacher' pour corriger une clé erronée."
-                : " Cliquez sur Rattacher pour relier ces occurrences à un élément officiel existant, ou sur Enregistrer pour créer la fiche."}
+                : ' Cliquez sur Rattacher pour relier ces occurrences à un élément officiel existant, ou sur Enregistrer pour créer la fiche.'}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out overflow-hidden max-w-full">
-            <div className="max-h-[62vh] overflow-y-auto overflow-x-auto">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden max-w-full">
+            <div className="max-h-[60vh] overflow-y-auto overflow-x-auto">
               <table className="min-w-[650px] w-full text-left text-xs whitespace-nowrap border-collapse">
-                <thead className="bg-slate-100/90 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 select-none">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 select-none">
                   <tr>
-                    <th className="py-2.5 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-200/50 border-r border-slate-200 shrink-0">
+                    <th className="py-2.5 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-100/70 border-r border-slate-200 shrink-0">
                       N°
                     </th>
-                    <th className="p-3">Élément / Utilisateur détecté</th>
-                    <th className="p-3">Occurrences & Sources</th>
-                    <th className="p-3">Action / ID proposé</th>
-                    <th className="p-3 text-right">Action manuelle</th>
+                    <th className="px-3.5 py-2.5">Élément / Utilisateur détecté</th>
+                    <th className="px-3.5 py-2.5">Occurrences &amp; Sources</th>
+                    <th className="px-3.5 py-2.5">Action / ID proposé</th>
+                    <th className="px-3.5 py-2.5 text-right">Action manuelle</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {auditDisplayedItems.map((dm, index) => {
+                  {auditDisplayedItems.map((dm: any, index: number) => {
                     const rowIndex = auditStartIndex + index + 1;
                     const proposedId =
                       auditTarget === 'utilisateurs'
@@ -143,37 +140,29 @@ export default function SettingsMatchingTab({
                         <td className="py-2.5 px-3 text-center font-mono text-[10.5px] font-bold text-slate-600 bg-slate-50/50 border-r border-slate-200/60 select-none">
                           {rowIndex}
                         </td>
-                        <td className="p-3">
+                        <td className="px-3.5 py-2.5">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                            <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
                               {dm.code}
                             </span>
                             {auditTarget === 'utilisateurs' && (
-                              <span
-                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                                  dm.inferredRole === 'CHEF'
-                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                    : dm.inferredRole === 'OPERATEUR'
-                                      ? 'bg-indigo-50 text-indigo-800 border-indigo-200'
-                                      : 'bg-cyan-50 text-cyan-800 border-cyan-200'
-                                }`}
-                              >
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-slate-100 text-slate-700 border-slate-200">
                                 {dm.inferredRole}
                               </span>
                             )}
                             {auditTarget === 'articles' && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border bg-teal-50 text-teal-800 border-teal-200">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-slate-100 text-slate-700 border-slate-200">
                                 PDR Stock
                               </span>
                             )}
                             {(auditTarget === 'correctif' || auditTarget === 'preventif') && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border bg-rose-50 text-rose-800 border-rose-200">
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-amber-50 text-amber-800 border-amber-200">
                                 Liaison orpheline
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="p-3 text-slate-600 font-mono">
+                        <td className="px-3.5 py-2.5 text-slate-600 font-mono">
                           <div className="font-bold text-slate-800">
                             {dm.count} apparition{dm.count > 1 ? 's' : ''}
                           </div>
@@ -183,18 +172,18 @@ export default function SettingsMatchingTab({
                             </div>
                           )}
                         </td>
-                        <td className="p-3">
+                        <td className="px-3.5 py-2.5">
                           {auditTarget === 'utilisateurs' ? (
                             <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
                               ➔ {proposedId}
                             </span>
                           ) : (
-                            <span className="text-[10px] bg-cyan-50 text-cyan-800 px-2 py-0.5 rounded-full border border-cyan-200">
+                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
                               Créer la fiche ({getAuditLabel()})
                             </span>
                           )}
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="px-3.5 py-2.5 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => {
@@ -214,7 +203,7 @@ export default function SettingsMatchingTab({
                                 });
                                 setShowRelinkModal(true);
                               }}
-                              className="px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer flex items-center gap-1 shrink-0"
+                              className={SETTINGS_BUTTON_STYLES.secondary}
                               title="Rattacher et corriger les occurrences vers un élément existant"
                             >
                               <Link2 className="w-3 h-3" />
@@ -228,7 +217,7 @@ export default function SettingsMatchingTab({
                                   auditTarget === 'preventif'
                                 ) {
                                   if (setMachines) {
-                                    setMachines((prev) => [
+                                    setMachines((prev: any[]) => [
                                       ...prev,
                                       {
                                         id_machine_registered: dm.code,
@@ -271,7 +260,7 @@ export default function SettingsMatchingTab({
                                   setShowAuditUserModal(true);
                                 }
                               }}
-                              className="px-3 py-1 text-[11px] font-extrabold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 rounded-lg transition cursor-pointer shrink-0"
+                              className={SETTINGS_BUTTON_STYLES.primary}
                             >
                               Enregistrer
                             </button>
@@ -285,7 +274,7 @@ export default function SettingsMatchingTab({
             </div>
 
             {/* Table Footer Card with Page Size Selector & Pagination */}
-            <div className="bg-slate-50/70 p-4 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-slate-50/70 px-4 py-3 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-600">Lignes par page :</span>
                 <div className="flex bg-slate-200/70 rounded-lg p-0.5 border border-slate-300/60">
@@ -299,7 +288,7 @@ export default function SettingsMatchingTab({
                       }}
                       className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         auditPageSize === size
-                          ? 'bg-white text-accent-dark shadow-xs border border-slate-200/50'
+                          ? 'bg-white text-indigo-700 shadow-2xs border border-slate-200'
                           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                       }`}
                     >
@@ -322,12 +311,12 @@ export default function SettingsMatchingTab({
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setAuditCurrentPage((p) => Math.max(1, p - 1))}
+                      onClick={() => setAuditCurrentPage((p: number) => Math.max(1, p - 1))}
                       disabled={auditCurrentPage === 1}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer shadow-2xs"
+                      className={SETTINGS_BUTTON_STYLES.secondary}
                     >
                       <ChevronLeft className="w-3.5 h-3.5" />
-                      Précédent
+                      <span>Précédent</span>
                     </button>
 
                     <span className="px-2 font-mono text-xs font-bold text-slate-600">
@@ -336,11 +325,11 @@ export default function SettingsMatchingTab({
 
                     <button
                       type="button"
-                      onClick={() => setAuditCurrentPage((p) => Math.min(auditTotalPages, p + 1))}
+                      onClick={() => setAuditCurrentPage((p: number) => Math.min(auditTotalPages, p + 1))}
                       disabled={auditCurrentPage === auditTotalPages}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold transition cursor-pointer shadow-2xs"
+                      className={SETTINGS_BUTTON_STYLES.secondary}
                     >
-                      Suivant
+                      <span>Suivant</span>
                       <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -350,6 +339,6 @@ export default function SettingsMatchingTab({
           </div>
         </div>
       )}
-    </div>
+    </SettingsSectionCard>
   );
 }
