@@ -48,7 +48,7 @@
 - **الضمان التصميمي:** عندما تكون أي مجموعة بيانات فارغة (`0` سجل)، تعرض جميع جداول التطبيق حالة الفراغ الموحدة (`Empty State: Aucun enregistrement trouvé`) دون توليد صفوف وهمية (`empty-0..18`) أو نصوص احتياطية مضللة أو أزرار إجراءات لصفوف غير موجودة.
 - **المراجع البرمجية:**
   - **الحارس المركزي (`Central DataGrid Guard`):** يقوم `src/presentation/components/common/GmaoIndustrialDataGrid.tsx` بتصفية أي عنصر يحمل الراية `__isEmptyPlaceholder` تلقائياً قبل حساب حالة الفراغ (`data.length === 0`) وقبل استدعاء دوال رسم الأعمدة (`col.render`).
-  - **تمرير الشرائح الفعلية مباشرة (`Unpadded Pagination Slices`):** تمرر جميع صفحات الصيانة التصحيحية (`DemandesInterventionTab.tsx`, `BonsTravailTab.tsx`, `ClotureRapportsTab.tsx`)، والمستخدمين (`UtilisateursView.tsx`)، والمرجعيات والمخزن (`TypeView.tsx`, `DesignationView.tsx`, `PartTypeView.tsx`, `PartDesignationView.tsx`, `CompGroupView.tsx`, `CompFamilyView.tsx`, `CompTemplateView.tsx`, `ZonesView.tsx`, `EntrepotView.tsx`, `StockView.tsx`, `MouvementsJournalTable.tsx`, `BlueprintMachineView.tsx`, `FamilyView.tsx`, `TemplatesView.tsx`, `SettingsView.tsx`) شريحة البيانات الحقيقية المفلترة دون حشو `empty-${i}`.
+  - **تمرير الشرائح الفعلية مباشرة (`Unpadded Pagination Slices`):** تمرر جميع صفحات الصيانة التصحيحية (`DemandesInterventionTab.tsx`, `BonsTravailTab.tsx`, `ClotureRapportsTab.tsx`)، والمستخدمين (`UtilisateursView.tsx`)، والمرجعيات والمخزن (`PdrGroupView.tsx`, `TypeView.tsx`, `DesignationView.tsx`, `PartGroupView.tsx`, `PartTypeView.tsx`, `PartDesignationView.tsx`, `CompGroupView.tsx`, `CompFamilyView.tsx`, `CompTemplateView.tsx`, `ZonesView.tsx`, `EntrepotView.tsx`, `StockView.tsx`, `MouvementsJournalTable.tsx`, `BlueprintMachineView.tsx`, `FamilyView.tsx`, `TemplatesView.tsx`, `SettingsView.tsx`) شريحة البيانات الحقيقية المفلترة دون حشو `empty-${i}`.
 
 ---
 
@@ -77,11 +77,17 @@
   - `annotatePreventiveOrphans` و `annotateCorrectiveOrphans` (مربوطتان أيضاً داخل `DataGateway.savePreventiveTasks` و `DataGateway.saveCorrectiveInterventions`).
   - `relinkForeignKey` و `bulkRelinkOrphans`: إعادة توجيه كود آلة أو منطقة أو قطعة عبر الحركات والتدخلات والمهام الوقائية دفعةً واحدة.
 
-### د) توحيد تصنيف المستودع وحراس الحذف المرجعي للقوالب والأجزاء (`Warehouse Taxonomy & Referential Delete Guards`)
+### د) توحيد تصنيف المستودع، عزل المجموعات الثلاث (`PDR` / `Components` / `Parts`)، وحراس الحذف المرجعي (`Warehouse Taxonomy & Referential Delete Guards`)
+- **عزل المجموعات المرجعية الثلاث (`PdrGroup` vs `CompGroup` vs `PartGroup`):**
+  - يفصل النظام بشكل قاطع بين مفاتيح وصفحات المجموعات الثلاث:
+    1. **مجموعات قطع الغيار الاستهلاكية (`PdrGroupView.tsx` — `#pdr_groups`):** المفتاح `STORAGE_KEYS.PDR_GROUPS` (`gmao_pdr_groups_v1`).
+    2. **مجموعات الأعضاء الدوارة (`CompGroupView.tsx` — `#comp_groups`):** المفتاح `STORAGE_KEYS.COMP_GROUPS` (`gmao_comp_groups_v2`).
+    3. **مجموعات الأجزاء الميكانيكية (`PartGroupView.tsx` — `#part_groups`):** المفتاح `STORAGE_KEYS.PART_GROUPS` (`gmao_part_groups_v1`).
+  - وتوحد الدالتان `getGroupId(record)` و `getGroupRecordId(group)` في `src/domain/stock/pdrHierarchyService.ts` قراءة روابط المجموعات (`id_group` / `id_groupe`) عبر كافة الشاشات.
 - **توحيد التصنيف القياسي (`isWarehouseComponent` & `isWarehousePart`):**
   - المرجع البرمجي: `src/core/domain/EntrepotItem.ts` يوفّر الدوال المعيارية `isComponentNature`, `isPartNature`, `isWarehouseComponent`, و `isWarehousePart` لضمان التطابق التام بين شاشة المستودع (`EntrepotView.tsx`) وشاشة طلبات التدخل التصحيحي (`DemandesInterventionTab.tsx`) مع دعم الحقول القياسية (`nature: 'COMPONENT' | 'PART'`) والسجلات القديمة (`category: 'COMPOSANT'`, `nature: 'PARTIE'`) والروابط الهيكلية (`id_comp_template`, `id_designation`).
-- **حراس الحذف المرجعي والأرشفة الآمنة (`src/hooks/useAppComplexHandlers.ts`):**
-  - يمنع النظام الحذف الصلب لأي تصنيف أو قالب (`TypeMachine`, `Famille`, `Template`, `CompGroup`, `CompFamily`, `CompTemplate`, `PartType`, `PartDesignation`) إذا كان مرتبطاً بسجلات تابعة (`machines`, `blueprints`, `warehouseItems`).
+- **حراس الحذف المرجعي والأرشفة الآمنة (`src/hooks/useAppComplexHandlers.ts` & `pdrHierarchyService.ts`):**
+  - يمنع النظام الحذف الصلب لأي تصنيف أو قالب (`TypeMachine`, `Famille`, `Template`, `PdrGroup`, `CompGroup`, `CompFamily`, `CompTemplate`, `PartGroup`, `PartType`, `PartDesignation`) إذا كان مرتبطاً بسجلات تابعة (`machines`, `blueprints`, `warehouseItems`, `stockTypes`, `rawStock`)، ويحوله إلى تعطيل آمن (`is_active: false` عبر `safeDeleteOrDeactivatePdrGroup`).
   - عند محاولة حذف عنصر مستودع (`handleDeleteWarehouseItem`)، يمنع النظام الحذف إذا كان العنصر مركّباً حالياً على آلة (`status === 'MONTE'` أو `machine_id` نشط)، ويحوّل العملية تلقائياً إلى **أرشفة آمنة** (`status: 'REFORME'`, `is_active: false`) إذا كان العنصر مرتبطاً بسجل حركات (`mouvements`) أو تدخلات (`correctiveInterventions`) أو إرساليات خارجية (`sortiesExterne`) أو لف محركات (`bobinage`).
 - **الاختبار المُثبت:** `src/tests/unit/DomainEntities.test.ts` (`EntrepotItem Nature & Taxonomy Classification (FIX-2)`).
 
@@ -107,15 +113,16 @@ alerte      = stockActuel <= 0 ? 'RUPTURE' : (stockActuel <= seuil ? 'ALERTE' : 
   - `src/services/reactiveCalculationEngine.ts`: الدالة `recalculateStockReactive(rawStock, mouvements)` و `computeStockKPIs(stockItems)`.
   - `src/domain/pdr/services/StockCalculationService.ts`: خدمة حساب المخزون والمدخلات والمخرجات مع التخزين المؤقت (`MultiLevelCacheManager`).
 
-### ج) ترابط البذور القياسية الموثّق بالاختبارات (`SEED-RESET-P0` & `CATALOG-GROUP-P1`)
-- تحتوي بيانات العرض القياسية لهرم قطع الغيار (`PDR`) على مصنع مصغّر متسق 100% خالٍ من أي يتامى مرجعية:
-  - **`7` مجموعات عليا (`PdrGroup`)** في `src/data/stock/seedPdrGroups.json` (`GRP-PDR-01` إلى `GRP-PDR-07`) مزودة بوسوم السياسة الافتراضية (`default_policy_tags`).
+### ج) ترابط البذور القياسية والحقول الصناعية (`SEED-RESET-P0`, `CATALOG-GROUP-P1` & `P2/P3 Industrial Fields`)
+- تحتوي بيانات العرض القياسية لهرم قطع الغيار (`PDR`) والأجزاء (`Parts`) على مصنع مصغّر متسق 100% خالٍ من أي يتامى مرجعية:
+  - **`7` مجموعات عليا لقطع الغيار (`PdrGroup`)** في `src/data/stock/seedPdrGroups.json` (`GRP-PDR-01` إلى `GRP-PDR-07`) مزودة بـ `domaine_technique` ووسوم السياسة الافتراضية (`default_policy_tags`).
   - **`21` نوعاً تقنياً (`StockType`)** في `src/data/stock/seedStockTypes.json` (`TYP-01` إلى `TYP-21`) مربوطة بالكامل بمجموعاتها عبر `id_group`.
-  - **`28` صنفاً قياسياً (`IStockItem`)** في `src/data/stock/seedStockItems.json`، جميعها متوافقة مع `item.id_group === type.id_group` ومزودة بوسوم `policy_tags`.
+  - **`28` صنفاً قياسياً (`IStockItem`)** في `src/data/stock/seedStockItems.json`، جميعها متوافقة مع `item.id_group === type.id_group` ومزودة بوسوم `policy_tags` وحقول الميدان الصناعية (`unite_mesure`, `criticite`, `ref_constructeur`, `code_equivalents`, `delai_appro_jours`, `domaine_technique`) المحفوظة عبر `SparePartEntity.ts` و`SparePartMapper.ts`.
+  - **`5` مجموعات عليا للأجزاء الميكانيكية (`PartGroup`)** في `src/data/warehouse/seedPartGroups.json` (`GRP-PART-01` إلى `GRP-PART-05`) مربوطة بأنواع الأجزاء (`seedPartTypes.json`) وتسمياتها (`seedPartDesignations.json` المزودة برباعية الورشة `matiere_nuance`, `ref_plan`, `dimensions_brut`, `traitement_thermique`).
   - **`36` حركة مخزون (`IMouvement`)** في `src/data/movements/seedMouvements.json`، جميع مراجعها (`ref`) موجودة ومطابقة بنسبة 100% لأصناف `seedStockItems.json`.
   - **`12` تدخلاً تصحيحياً** في `src/data/corrective/seedCorrectiveInterventions.json`، مرتبطة بآلات مسجلة في `seedMachines.json` وبأصناف مخزون حقيقية عبر `pdr_ref`.
 - **الاختبارات المُثبتة:**
-  - `src/__tests__/pdrHierarchy.test.ts` (17 اختباراً شاملاً لهرم PDR واستيراد/تصدير Excel الثلاثي).
+  - `src/__tests__/pdrHierarchy.test.ts` (**`30` اختباراً شاملاً** لهرم PDR، ومجموعات Parts، ودوال `getGroupId`/`getGroupRecordId`، وحفظ الحقول الصناعية `P0/P2/P3` في `SparePartMapper` واستيراد/تصدير Excel الثلاثي).
   - `src/__tests__/policyTags.test.ts` (اختبارات وسوم السياسة المادية `MaterialPolicyTag`).
   - `src/tests/unit/StockMovementsCorrectiveSeeds.test.ts`
   - `src/tests/unit/ThreeCriticalPaths.test.ts` (المسار الأول)

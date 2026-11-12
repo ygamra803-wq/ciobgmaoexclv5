@@ -1005,12 +1005,17 @@ export function useAppComplexHandlers({
       return;
     }
     const service = new SparePartApplicationService();
-    const saved = await service.createSparePart({
+    const payload = {
       id: crypto.randomUUID(),
       ...newArt,
       type: newArt.id_type || newArt.type || '',
       id_type: newArt.id_type || newArt.type || '',
-    });
+    };
+    const savedFromService = await service.createSparePart(payload);
+    const saved = {
+      ...payload,
+      ...savedFromService,
+    };
     setRawStock((prev) => [saved, ...prev]);
     setDesignations?.((prev) => [
       {

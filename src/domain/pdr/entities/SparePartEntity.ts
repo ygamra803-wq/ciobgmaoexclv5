@@ -14,21 +14,24 @@ export class SparePartEntity {
   emplacement: string;
   [key: string]: any;
 
-  constructor({
-    id,
-    ref,
-    designation,
-    id_type,
-    id_diag,
-    stockInitial,
-    entrees,
-    sorties,
-    stockActuel,
-    seuil,
-    alerte,
-    emplacement,
-    type
-  }: any = {}) {
+  constructor(raw: any = {}) {
+    const {
+      id,
+      ref,
+      designation,
+      id_type,
+      id_diag,
+      stockInitial,
+      entrees,
+      sorties,
+      stockActuel,
+      seuil,
+      alerte,
+      emplacement,
+      type,
+      ...rest
+    } = raw || {};
+    Object.assign(this, rest);
     this.id = id || ref || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `part_${Date.now()}`);
     this.ref = ref || String(this.id);
     this.designation = designation || '';

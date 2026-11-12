@@ -6,41 +6,47 @@
 ---
 
 ## 🏛️ 1. الفلسفة والهدف الوظيفي (Functional Philosophy)
-- **سجل المكونات الكبرى (Equipment Major Components Registry):** تتبع المحركات الكهربائية، المضخات الهيدروليكية، والمخفضات الميكانيكية المركبة على آلات المصنع.
-- **تاريخ اللف وإعادة التأهيل (Bobinage & Refurbishment History):** تتبع عمليات إعادة لف المحركات (Bobinage) أو الصيانة الجسيمة وتحديث حالتها (`Actif`, `En Réparation`, `En Réserve`).
-- **الموقع الميداني والآلة المستضيفة:** ربط المكون مباشرة بالآلة المسجلة (`id_machine_registered`) والمنطقة (`zone`) والموضع الوظيفي (`position`).
+- **سجل الأعضاء الدوارة والأجزاء الميكانيكية (`warehouseItems` — `COMPONENT` & `PART`):** تتبع المحركات الكهربائية، المضخات الهيدروليكية، والمخفضات الميكانيكية (`nature: 'COMPONENT'`) إلى جانب الأجزاء البنيوية والميكانيكية المصنعة أو الاحتياطية (`nature: 'PART'`)، مع فصلها الكامل عن مخزن قطع الغيار الاستهلاكية (`rawStock` / `PDR`).
+- **تغذية مزدوجة من هرمين رباعيين مستقلين:**
+  1. **مسار الأعضاء (`Components`):** `CompGroup (gmao_comp_groups_v2) ➔ CompFamily ➔ CompTemplate ➔ Entrepôt`.
+  2. **مسار الأجزاء (`Parts`):** `PartGroup (gmao_part_groups_v1) ➔ PartType ➔ PartDesignation ➔ Entrepôt`.
+- **تاريخ اللف وإعادة التأهيل (`Bobinage & Refurbishment History`):** تتبع عمليات إعادة لف المحركات (`Bobinage` / `SORT-EXT`) أو الصيانة بالورشة الميكانيكية (`BR / RECT`) وتحديث حالتها (`Actif`, `En Réparation`, `En Réserve`, `Réformé`).
+- **الموقع الميداني والآلة المستضيفة:** ربط المكون أو الجزء مباشرة بالآلة المسجلة (`id_machine_registered`) والمنطقة (`zone`) والموضع الوظيفي (`position`).
 
 ---
 
 ## 💾 2. معمارية البيانات المرجعية المخصصة (Dedicated Clean Seed Standard)
 
 ```
-/src/data/warehouse/seedWarehouseItems.json     (185 مكوناً رئيسياً في المستودع والميدان)
+/src/data/warehouse/seedWarehouseItems.json     (سجل عناصر المستودع: COMPONENT + PART)
 /src/data/warehouse/seedEntrepotComponents.json (سجل المكونات وبطاقات اللف)
+/src/data/warehouse/seedCompGroups.json         (مجموعات الأعضاء الدوارة)
+/src/data/warehouse/seedPartGroups.json         (مجموعات الأجزاء الميكانيكية المستقلة)
                       │
            /src/application/DataGateway.ts & /src/store/useGmaoStore.ts
    (إدارة الكيانات المرجعية والمصدر الحقيقي الوحيد SSOT)
                       │
-           /src/presentation/router/useAppRouterProps.js
+           /src/presentation/router/useAppRouterProps.ts
                       │
                  EntrepotView
-   (استعراض وتصفية المكونات، تاريخ اللف، وتعيين الآلات)
+   (استعراض وتصفية الأعضاء والأجزاء، تاريخ اللف، وتعيين الآلات)
 ```
 
 ---
 
-## 📊 3. بنية عنصر المستودع (Warehouse Component Schema)
+## 📊 3. بنية عنصر المستودع (Warehouse Item Schema)
 
 | الحقل البرمجي | النوع | الوصف |
 | :--- | :---: | :--- |
-| `id_warehouse_item` | `String` | الرمز الداخلي للمكون (مثال: `mot 01`, `mot 02`). |
+| `id_warehouse_item` / `id` | `String` | الرمز الداخلي للمكون أو الجزء (مثال: `mot 01`, `mot 02`). |
+| `nature` | `'COMPONENT' \| 'PART'` | الطبيعة الصناعية (عضو دوار قابل للإصلاح أو جزء ميكانيكي/بنيوي) وتُفحص عبر `isWarehouseComponent` و`isWarehousePart`. |
 | `ref` | `String` | المرجع القياسي (مثال: `REF-10A111-NA`). |
 | `designation` | `String` | الوصف الفني والمواصفات (مثال: `Moteur Asynchrone 10A-11,1A`). |
-| `id_family` | `String` | عائلة المكون (`FAM-MOTEUR-ELEC-001`). |
-| `id_template` | `String` | قالب المكون (`TPL-MOT-ASYNC-001`). |
+| `id_family` / `id_type` | `String` | عائلة المكون (`FAM-MOTEUR-ELEC-001`) أو نوع الجزء (`TYP-PART-XX`). |
+| `id_template` / `id_designation` | `String` | قالب المكون (`TPL-MOT-ASYNC-001`) أو تسمية الجزء (`PartDesignation`). |
 | `id_machine` | `String` | الآلة المثبت عليها حالياً. |
 | `zone` | `String` | المنطقة الصناعية الحالية. |
 | `position` | `String` | موضع التركيب في الآلة. |
-| `etat` | `String` | الحالة التشغيلية للمكون (`Actif`, `En Réserve`, `En Réparation`). |
+| `etat` / `status` | `String` | الحالة التشغيلية (`Actif`, `En Réserve`, `En Réparation`, `Réformé`). |
 | `quantite` | `Number` | الكمية المتوفرة. |
 | `historique_bobinage` | `Array` | سجل وتاريخ عمليات إعادة اللف والتصليح. |

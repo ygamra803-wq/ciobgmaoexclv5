@@ -1105,5 +1105,41 @@ describe('CLEANUP-UI + FIELD-ALIAS + P3-INDUSTRIAL — KPI Prop Discipline, getG
     expect(importedSensor?.code_equivalents).toBe('SICK-IME12; OMRON-E2E-X5ME1');
     expect(importedSensor?.delai_appro_jours).toBe(14);
   });
+
+  it('4. SparePartEntity and SparePartMapper preserve P0/P2/P3 metadata (id_group, unite_mesure, criticite, ref_constructeur, delai_appro_jours, domaine_technique, code_equivalents) when creating a new PDR article', async () => {
+    const { SparePartEntity } = await import('../domain/pdr/entities/SparePartEntity');
+    const { SparePartMapper } = await import('../application/mappers/SparePartMapper');
+
+    const entity = new SparePartEntity({
+      ref: 'RLM-TEST-P3',
+      designation: 'Roulement test P3 complet',
+      id_group: 'GRP-ROUL',
+      id_type: 'TYP-RLM-BILLE',
+      unite_mesure: 'PCS',
+      criticite: 'A',
+      ref_constructeur: 'SKF-6308-2RS',
+      domaine_technique: 'MECANIQUE',
+      code_equivalents: 'FAG-6308; NSK-6308DDU',
+      delai_appro_jours: 10,
+      prix_unitaire: 42.5,
+      policy_tags: ['REPLACING'],
+      stockInitial: 8,
+      seuil: 2,
+      emplacement: 'MAG-A-09',
+    });
+
+    const mapped = new SparePartMapper().toResponse(entity);
+    expect(mapped?.id_group).toBe('GRP-ROUL');
+    expect(mapped?.unite_mesure).toBe('PCS');
+    expect(mapped?.criticite).toBe('A');
+    expect(mapped?.ref_constructeur).toBe('SKF-6308-2RS');
+    expect(mapped?.domaine_technique).toBe('MECANIQUE');
+    expect(mapped?.code_equivalents).toBe('FAG-6308; NSK-6308DDU');
+    expect(mapped?.delai_appro_jours).toBe(10);
+    expect(mapped?.prix_unitaire).toBe(42.5);
+    expect(mapped?.policy_tags).toEqual(['REPLACING']);
+    expect(mapped?.stockActuel).toBe(8);
+  });
 });
+
 

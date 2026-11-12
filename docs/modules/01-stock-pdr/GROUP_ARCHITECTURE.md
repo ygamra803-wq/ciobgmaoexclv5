@@ -9,20 +9,39 @@ summary: Référence d'ingénierie (SSOT, moteur O(1) IncrementalStockIndex, ré
 relatedTabs:
   - stock
   - sortie
+  - pdr_groups
   - types
   - designations
 ---
 
 # Architecture & Logique Métier — Groupe 01 : Stock PDR, Mouvements & Commandes (PO)
 
-## 1. Périmètre & Philosophie du Groupe (`CATALOG-GROUP-P1` & `POLICY-TAGS-P1`)
+## 1. Périmètre & Philosophie du Groupe (`PDR-GROUP-PAGE-P0`, `CATALOG-GROUP-P1` & `POLICY-TAGS-P1`)
 
 Ce groupe constitue le cœur transactionnel et financier des **Pièces de Rechange (PDR)** et consommables industriels de **CIOB GMAO v4**. Il fédère les écrans du magasin autour d'une **hiérarchie canonique à 3 niveaux (`Group ➔ Type ➔ Designation/SKU`)** :
 
-1. **Niveau 1 — `Groupes PDR` (`pdrGroups` / `STORAGE_KEYS.PDR_GROUPS = 'gmao_pdr_groups_v1'`)** : Domaines technologiques supérieurs (`GRP-PDR-01` Roulements & Paliers, `GRP-PDR-02` Transmission & Courroies, `GRP-PDR-03` Étanchéité & Joints, `GRP-PDR-04` Électrotechnique, `GRP-PDR-05` Hydraulique & Pneumatique, `GRP-PDR-06` Lubrifiants & Fluides, `GRP-PDR-07` Visserie & Fixation) portant des `default_policy_tags` et gérés via `PdrGroupsModal.tsx` avec désactivation sécurisée (`is_active: false`).
-2. **Niveau 2 — `Types PDR` (`stockTypes` / `STORAGE_KEYS.STOCK_TYPES = 'gmao_types_v5'`)** : Familles techniques rattachées au groupe parent via le champ canonique `id_group` (`TYP-01`..`TYP-21`).
-3. **Niveau 3 — `Articles & Désignations SKU` (`rawStock` / `STORAGE_KEYS.RAW_STOCK = 'gmao_raw_stock_v8'` & `STORAGE_KEYS.DESIGNATIONS`)** : Articles physiques identifiés par `ref` (`id`), rattachés à `id_type` et `id_group`, avec héritage ou surcharge explicite des tags de politique matérielle (`MaterialPolicyTag` : `PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE` via `pdrHierarchyService.ts` et `policyTagsService.ts`). **Les soldes et mouvements demeurent exclusivement au niveau du SKU (`ref`).**
+1. **Niveau 1 — `Groupes PDR` (`pdrGroups` / `STORAGE_KEYS.PDR_GROUPS = 'gmao_pdr_groups_v1'`)** : Domaines technologiques supérieurs (`GRP-PDR-01` Roulements & Paliers, `GRP-PDR-02` Transmission & Courroies, `GRP-PDR-03` Étanchéité & Joints, `GRP-PDR-04` Électrotechnique, `GRP-PDR-05` Hydraulique & Pneumatique, `GRP-PDR-06` Lubrifiants & Fluides, `GRP-PDR-07` Visserie & Fixation) dotés d'un `domaine_technique` (`MECANIQUE`, `ELECTRIQUE`, `HYDRAULIQUE`, `PNEUMATIQUE`, `FLUIDES_LUBRIFIANTS`, `AUTOMATISME`, `GENERAL`) et de `default_policy_tags`. Ils sont gérés via la **page de référence dédiée `PdrGroupView.tsx` (`#pdr_groups`)** ainsi que via le raccourci modal `PdrGroupsModal.tsx` depuis `StockView`, avec désactivation sécurisée (`is_active: false` via `safeDeleteOrDeactivatePdrGroup`).
+2. **Niveau 2 — `Types PDR` (`stockTypes` / `STORAGE_KEYS.STOCK_TYPES = 'gmao_types_v5'`)** : Familles techniques rattachées au groupe parent via le champ canonique `id_group` (`TYP-01`..`TYP-21`), lues de manière unifiée via `getGroupId(record)` (`src/domain/stock/pdrHierarchyService.ts`) avec prise en charge du filtre `Non classé` (`UNCATEGORIZED_GROUP_FILTER`).
+3. **Niveau 3 — `Articles & Désignations SKU` (`rawStock` / `STORAGE_KEYS.RAW_STOCK = 'gmao_raw_stock_v8'` & `STORAGE_KEYS.DESIGNATIONS`)** : Articles physiques identifiés par `ref` (`id`), rattachés à `id_type` et `id_group`, enrichis des attributs terrain `P2/P3` :
+   - **`unite_mesure`** (`PCS`, `M`, `L`, `KG`, `JEU`, `ROULEAU`, `BOITE`)
+   - **`criticite`** (`A` Vital, `B` Important, `C` Standard)
+   - **`ref_constructeur`** (Part Number OEM / SKF / FAG / Schneider) & **`code_equivalents`** (références croisées multi-fournisseurs)
+   - **`delai_appro_jours`** (Lead-Time d'approvisionnement en jours) & **`domaine_technique`**
+   - **`policy_tags`** (`MaterialPolicyTag` : `REPLACING`, `PDR_MAGASIN`, `FABRICABLE_ATELIER`, `REPARABLE_ATELIER`, `SOUS_TRAITABLE`, `CONSOMMABLE_CRITIQUE` via `pdrHierarchyService.ts` et `policyTagsService.ts`). **Les soldes et mouvements demeurent exclusivement au niveau du SKU (`ref`).**
 4. **Flux Transactionnels — `Sortie & Entrée Rapide` (`sortie` / `STORAGE_KEYS.MOUVEMENTS`, `SORTIE_DEMANDS`, `REPLENISHMENT_ORDERS`, `SORTIE_EXTERNE`)** : Journal immuable des mouvements de magasin, demandes terrain soumises au contrôle Maker-Checker, bons de sortie externes et commandes d'approvisionnement fournisseurs (`PO`).
+
+### 1.2 Philosophie Comparative : Pourquoi `PDR`, `Components` et `Parts` ont 3 Bases de Groupes Séparées
+
+Dans une usine industrielle, fusionner les groupes de **PDR**, d'**Organes (`Components`)** et de **Pièces d'atelier (`Parts`)** dans une table unique détruirait la sémantique métier. Le système maintient volontairement **trois clés SSOT distinctes** :
+
+| Dimension | 1. Magasin `PDR` (`Stock PDR`) | 2. Organes Rotatifs (`Components`) | 3. Pièces Structurelles (`Parts`) |
+| :--- | :--- | :--- | :--- |
+| **Clé SSOT du Groupe (Niv. 1)** | `STORAGE_KEYS.PDR_GROUPS` (`gmao_pdr_groups_v1`) | `STORAGE_KEYS.COMP_GROUPS` (`gmao_comp_groups_v2`) | `STORAGE_KEYS.PART_GROUPS` (`gmao_part_groups_v1`) |
+| **Page Référentielle (Niv. 1)** | `PdrGroupView.tsx` (`#pdr_groups`) | `CompGroupView.tsx` (`#comp_groups`) | `PartGroupView.tsx` (`#part_groups`) |
+| **Hiérarchie Complète** | **3 Niveaux :** `PdrGroup ➔ StockType ➔ StockItem (SKU)` | **4 Niveaux :** `CompGroup ➔ CompFamily ➔ CompTemplate ➔ Entrepôt` | **4 Niveaux :** `PartGroup ➔ PartType ➔ PartDesignation ➔ Entrepôt` |
+| **Nature Physique** | Articles fongibles & consommables achetés sur catalogue (roulements, joints, courroies, filtres, huiles, contacteurs). | Sous-ensembles électromécaniques complets et rotatifs ayant une identité propre (moteurs, pompes, réducteurs, variateurs). | Pièces mécaniques, d'usure ou d'usinage localisées sur la machine (arbres, flasques, engrenages, carters, bagues). |
+| **Mode de Gestion** | **Quantitatif pur ($O(1)$) :** `stockActuel = stockInitial + entrées − sorties` sur `ref`. | **Cycle de vie d'état :** `Actif (Monté)` ➔ `En réparation / Bobinage` ➔ `En réserve` ➔ `Réformé`. | **Localisation & Usinage Atelier :** Suivi par plan (`ref_plan`), nuance matière (`matiere_nuance`), brut et traitement thermique. |
+| **Politique & Canal Maintenance** | `REPLACING` (Remplacement standard par sortie magasin `Sortie Interne` + réapprovisionnement `PO`). | `REPAIRABLE` / `REPLACING` (Échange standard, rebobinage externe `SORT-EXT`, révision). | `REPAIRABLE` / `MODIFYING` / `REPLACING` (Fabrication `BR` ou rectification `RECT` à l'Atelier Mécanique `#corrective_atelier`). |
 
 ---
 
@@ -116,14 +135,15 @@ Toutes les mutations critiques de ce groupe inscrivent un événement horodaté 
 
 | Fichier | Rôle Architectural |
 | :--- | :--- |
-| `src/presentation/pages/stock/StockView.tsx` | Vue principale du magasin PDR, filtres cascadés `Group ➔ Type ➔ SKU` (+ `Non classé`), import/export Excel 3 feuilles, KPIs de valorisation et modales associées. |
-| `src/presentation/pages/stock/components/PdrGroupsModal.tsx` | Gestion du référentiel `Groupes PDR` (`GRP-PDR-XX`), affectation des `default_policy_tags` et désactivation sécurisée sans suppression orpheline. |
-| `src/domain/stock/pdrHierarchyService.ts` | Résolution hiérarchique (`resolvePdrHierarchy`), héritage des `policy_tags` (`getEffectivePdrPolicyTags`) et gardes de suppression/désactivation. |
-| `src/services/pdrHierarchyExcelService.ts` & `src/services/pdr/types/pdrExcelTypes.ts` | Moteur d'import/export Excel 3 feuilles (`PDR_GROUPS`, `PDR_TYPES`, `PDR_ITEMS`) avec modes `MERGE` et `REPLACE_CATALOG` et validation stricte sans perte silencieuse. |
+| `src/presentation/pages/stock/StockView.tsx` | Vue principale du magasin PDR, filtres cascadés `Group ➔ Type ➔ SKU` (+ `Non classé`), colonnes terrain `P2/P3` (`unite_mesure`, `criticite`, `ref_constructeur`, `delai_appro_jours`, `code_equivalents`), import/export Excel 3 feuilles, KPIs de valorisation et modales associées. |
+| `src/presentation/pages/referentiel/PdrGroupView.tsx` | **Page dédiée de Niveau 1 (`#pdr_groups`)** : gestion complète du référentiel `Groupes PDR` (`GRP-PDR-XX`), filtre `domaine_technique`, affectation des `default_policy_tags`, compteurs croisés (`Types`, `Articles`) et désactivation sécurisée via `safeDeleteOrDeactivatePdrGroup`. |
+| `src/presentation/pages/stock/components/PdrGroupsModal.tsx` | Raccourci modal depuis `StockView` partageant la même logique métier (`safeDeleteOrDeactivatePdrGroup`) que `PdrGroupView.tsx`. |
+| `src/domain/stock/pdrHierarchyService.ts` | Résolution hiérarchique (`resolvePdrHierarchy`), lecteurs unifiés `getGroupId` / `getGroupRecordId`, héritage des `policy_tags` (`getEffectivePdrPolicyTags`) et gardes de suppression/désactivation (`safeDeleteOrDeactivatePdrGroup`). |
+| `src/services/pdrHierarchyExcelService.ts` & `src/services/pdr/types/pdrExcelTypes.ts` | Moteur d'import/export Excel 3 feuilles (`PDR_GROUPS`, `PDR_TYPES`, `PDR_ITEMS`) prenant en charge tous les champs `P2/P3` avec modes `MERGE` et `REPLACE_CATALOG` et validation stricte sans perte silencieuse. |
 | `src/presentation/pages/stock/components/StockReplenishmentModal.tsx` | Centre de réapprovisionnement & commandes `PO` (sélection d'alertes, création de PO, réception partielle/totale, impression BC). |
-| `src/presentation/pages/stock/AddArticleModal.tsx` & `EditArticleModal.tsx` | Création et édition d'article avec sélection cascadée `Group ➔ Type`, tags `MaterialPolicyTag`, contrôle de doublon `ref` et `prix_unitaire` (MAD). |
+| `src/presentation/pages/stock/AddArticleModal.tsx` & `EditArticleModal.tsx` | Création et édition d'article avec sélection cascadée `Group ➔ Type`, champs `P2/P3` (`unite_mesure`, `criticite`, `ref_constructeur`, `code_equivalents`, `delai_appro_jours`, `domaine_technique`), tags `MaterialPolicyTag`, contrôle de doublon `ref` et `prix_unitaire` (MAD). |
 | `src/presentation/pages/movements/SortieRapideView.tsx` | Guichet opérationnel des 5 flux magasin, Demandes de Sortie Terrain, Bons de Sortie Externes, Vue Scindée et Assistant Wizard. |
-| `src/presentation/pages/referentiel/TypeView.tsx` | Gestion du référentiel `Types PDR` (`TYP-XX`) rattachés à `id_group` avec compteurs croisés Désignations/Articles. |
+| `src/presentation/pages/referentiel/TypeView.tsx` | Gestion du référentiel `Types PDR` (`TYP-XX`) rattachés à `id_group` (+ filtre `Non classé`) avec compteurs croisés Désignations/Articles. |
 | `src/presentation/pages/referentiel/DesignationView.tsx` | Gestion du référentiel `Désignations PDR` avec filtre par Groupe/Type, préfixes intelligents et raccourcis vers Stock & Mouvements. |
 | `src/application/IncrementalStockIndex.ts` | Moteur de calcul incrémental $O(1)$ des quantités en stock et derniers mouvements par `ref`. |
 | `src/utils/stockReplenishmentUtils.ts` | Calcul pur des réservations Maker-Checker (`computeReservedStockMap`) et des alertes de réapprovisionnement (`computeStockReorderAlerts`). |
