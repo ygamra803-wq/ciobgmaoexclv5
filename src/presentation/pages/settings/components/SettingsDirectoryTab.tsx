@@ -17,8 +17,8 @@ import {
 import SyncButtons from '../../../components/common/SyncButtons';
 import {
   networkConfigService,
-  type HostNetworkInfo,
-  type LanNodeMode,
+  type NetworkHostInfo,
+  type NetworkNodeMode,
 } from '../../../../services/networkConfigService';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
@@ -37,7 +37,7 @@ export default function SettingsDirectoryTab({
   handleSaveSettings,
   showToast,
 }: any) {
-  const [nodeMode, setNodeModeState] = useState<LanNodeMode>(() =>
+  const [nodeMode, setNodeModeState] = useState<NetworkNodeMode>(() =>
     networkConfigService.getNodeMode()
   );
   const [remoteHostInput, setRemoteHostInput] = useState<string>(() =>
@@ -46,7 +46,7 @@ export default function SettingsDirectoryTab({
   const [customIpInput, setCustomIpInput] = useState<string>(() =>
     networkConfigService.getCustomHostIp()
   );
-  const [hostInfo, setHostInfo] = useState<HostNetworkInfo | null>(null);
+  const [hostInfo, setHostInfo] = useState<NetworkHostInfo | null>(null);
   const [loadingNetInfo, setLoadingNetInfo] = useState(false);
   const [sseConnected, setSseConnected] = useState(false);
   const [qrTargetMode, setQrTargetMode] = useState<'mobile' | 'desktop'>('mobile');
@@ -57,6 +57,9 @@ export default function SettingsDirectoryTab({
       const info = await networkConfigService.fetchHostNetworkInfo();
       if (info) {
         setHostInfo(info);
+        if (info.online) {
+          setSseConnected(true);
+        }
       }
     } finally {
       setLoadingNetInfo(false);
@@ -65,10 +68,9 @@ export default function SettingsDirectoryTab({
 
   useEffect(() => {
     refreshHostInfo();
-    const unsub = networkConfigService.subscribeToServerEvents({
-      onConnected: () => setSseConnected(true),
-      onStateUpdated: (payload) => {
-        setSseConnected(true);
+    const unsub = networkConfigService.subscribeToRevisionStream((payload) => {
+      setSseConnected(true);
+      if (payload.type === 'STATE_UPDATED') {
         setHostInfo((prev) =>
           prev
             ? {
@@ -78,8 +80,7 @@ export default function SettingsDirectoryTab({
               }
             : prev
         );
-      },
-      onError: () => setSseConnected(false),
+      }
     });
     return () => unsub();
   }, []);
@@ -110,7 +111,7 @@ export default function SettingsDirectoryTab({
     [activeQrUrl]
   );
 
-  const handleSwitchNodeMode = (mode: LanNodeMode) => {
+  const handleSwitchNodeMode = (mode: NetworkNodeMode) => {
     networkConfigService.setNodeMode(mode);
     setNodeModeState(mode);
     showToast?.(

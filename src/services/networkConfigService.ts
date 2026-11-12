@@ -1,6 +1,7 @@
 import { storageService } from '../utils/storageService';
 
 export type NetworkNodeMode = 'HOST' | 'LAN_CLIENT';
+export type LanNodeMode = NetworkNodeMode;
 
 export interface NetworkInterfaceInfo {
   name: string;
@@ -288,6 +289,20 @@ export const networkConfigService = {
       }
       window.removeEventListener('focus', handleWindowFocus);
     };
+  },
+
+  subscribeToServerEvents(handlers: {
+    onConnected?: () => void;
+    onStateUpdated?: (payload: RevisionEventPayload) => void;
+    onError?: () => void;
+  }): () => void {
+    return this.subscribeToRevisionStream((payload) => {
+      if (payload.type === 'CONNECTED') {
+        handlers?.onConnected?.();
+      } else if (payload.type === 'STATE_UPDATED') {
+        handlers?.onStateUpdated?.(payload);
+      }
+    });
   },
 
   /**
