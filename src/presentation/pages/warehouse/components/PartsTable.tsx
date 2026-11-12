@@ -4,6 +4,7 @@ import {
   Hash,
   Copy,
   Package,
+  Boxes,
   Layers as LayersIcon,
   MapPin,
   Warehouse,
@@ -34,6 +35,7 @@ export default function PartsTable({
   sortOrder: _sortOrder = 'asc',
   handleSort,
   renderSortIcon,
+  partGroups = [],
   types = [],
   diagnostics = [],
   zones = [],
@@ -47,14 +49,25 @@ export default function PartsTable({
   canCreateMovement = true,
   canEditStock = true,
   canDeleteStock = true,
+  onNavigateToPartGroups,
   onNavigateToType,
   onNavigateToPartTypes,
   onNavigateToDiag,
   onNavigateToMachine,
   onNavigateToZone,
   handleOpenAddModal,
-}) {
+}: any) {
   const { t } = useTranslation();
+  const partGroupMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    (partGroups || []).forEach((g: any) => {
+      const gid = String(g.id_group || g.id_groupe || g.code || g.id || '').trim().toUpperCase();
+      const gcode = String(g.code || g.id_group || g.id_groupe || '').trim().toUpperCase();
+      if (gid) map[gid] = g;
+      if (gcode) map[gcode] = g;
+    });
+    return map;
+  }, [partGroups]);
   const columns = useMemo(
     () => [
       {
@@ -156,8 +169,18 @@ export default function PartsTable({
       renderRow={(item, idx) => {
         const realIndex = startIndex + idx;
         const domainItem = new EntrepotItem(item);
-                const typeObj = types.find((t) => t.id_type === item.id_type);
-                const diagObj = diagnostics.find((d) => {
+                const typeObj = types.find((t: any) => t.id_type === item.id_type);
+                const rawGroupKey = String(
+                  item.id_group ||
+                    item.id_groupe ||
+                    typeObj?.id_group ||
+                    typeObj?.id_groupe ||
+                    ''
+                )
+                  .trim()
+                  .toUpperCase();
+                const grpObj = rawGroupKey ? partGroupMap[rawGroupKey] : null;
+                const diagObj = diagnostics.find((d: any) => {
                   const dId = d.id_part || d.ref || d.id_diag || d.id;
                   return (
                     (item.id_diag && dId === item.id_diag) ||
@@ -216,9 +239,22 @@ export default function PartsTable({
                       </div>
                     </td>
 
-                    {/* Col 2: Type de Part & Diagnostic / Diag (D / B) */}
+                    {/* Col 2: Groupe (Niv 1), Type de Part (Niv 2) & Diagnostic / Diag (D / B) */}
                     <td className="py-2.5 px-3 whitespace-nowrap">
                       <div className="space-y-1">
+                        {grpObj && (
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => onNavigateToPartGroups && onNavigateToPartGroups(grpObj.id_group || grpObj.code)}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-teal-50/90 hover:bg-teal-100 text-teal-800 border border-teal-200/80 font-mono font-bold text-[9.5px] transition cursor-pointer max-w-[190px] truncate"
+                              title={`Groupe Part (Niv 1): ${grpObj.code || grpObj.id_group} — ${grpObj.libelle}`}
+                            >
+                              <Boxes className="w-2.5 h-2.5 text-teal-600 shrink-0" />
+                              <span className="truncate">{grpObj.code || grpObj.id_group}</span>
+                            </button>
+                          </div>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -258,7 +294,7 @@ export default function PartsTable({
                             {item.designation}
                           </div>
 
-                          {/* Policy Tags (`POLICY-TAGS-P0`) */}
+                          {/* Policy Tags (`POLICY-TAGS-P0`) & Spécifications Atelier (`P2`) */}
                           <div className="flex items-center gap-1 flex-wrap mt-0.5">
                             {getEffectivePolicyTags(item, 'PART').map((tag) => (
                               <span
@@ -275,6 +311,30 @@ export default function PartsTable({
                                 {tag}
                               </span>
                             ))}
+                            {(item.matiere_nuance || diagObj?.matiere_nuance) && (
+                              <span
+                                className="px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-amber-50/90 text-amber-900 border border-amber-200"
+                                title={`Matière / Nuance: ${item.matiere_nuance || diagObj?.matiere_nuance}`}
+                              >
+                                Matière: {item.matiere_nuance || diagObj?.matiere_nuance}
+                              </span>
+                            )}
+                            {(item.ref_plan || diagObj?.ref_plan) && (
+                              <span
+                                className="px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                                title={`Plan d'usinage: ${item.ref_plan || diagObj?.ref_plan}`}
+                              >
+                                Plan: {item.ref_plan || diagObj?.ref_plan}
+                              </span>
+                            )}
+                            {(item.dimensions_brut || diagObj?.dimensions_brut) && (
+                              <span
+                                className="px-1.5 py-0.2 rounded font-mono text-[9px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
+                                title={`Dimensions Brut: ${item.dimensions_brut || diagObj?.dimensions_brut}`}
+                              >
+                                Brut: {item.dimensions_brut || diagObj?.dimensions_brut}
+                              </span>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-2 mt-0.5 text-[10.5px] text-slate-500 truncate">

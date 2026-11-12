@@ -226,6 +226,7 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
     'comp_groups',
     'comp_families',
     'comp_templates',
+    'part_groups',
     'part_types',
     'part_designations',
     'machines',

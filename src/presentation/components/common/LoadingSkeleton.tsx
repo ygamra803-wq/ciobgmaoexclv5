@@ -88,6 +88,7 @@ export default function LoadingSkeleton({ currentTab = 'dashboard' }: { currentT
     case 'corrective_referentiel':
       return <CatalogueDonneesSkeleton />;
     case 'comp_groups':
+    case 'part_groups':
       return <CompGroupSkeleton />;
     case 'comp_families':
       return <CompFamilySkeletonView />;

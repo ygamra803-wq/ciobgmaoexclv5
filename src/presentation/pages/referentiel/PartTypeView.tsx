@@ -1,9 +1,10 @@
-import {  useState, useRef, useMemo, useEffect  } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import CustomSelect from '../../components/common/CustomSelect';
 import PartInfoIcon from '../../components/common/icons/PartInfoIcon';
 import { LayersIcon } from '../../components/common/icons/LayersIcon';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -25,15 +26,20 @@ import {
   Calculator,
   MoreVertical,
   FileSpreadsheet,
+  Boxes,
 } from 'lucide-react';
 
 export default function PartTypeView({
+  partGroups = [],
   partTypes = [],
   partDesignations = [],
   warehouseItems = [],
+  groupFilter: externalGroupFilter,
+  setGroupFilter: setExternalGroupFilter,
   onAddPartType,
   onUpdatePartType,
   onDeletePartType,
+  onNavigateToPartGroups,
   onNavigateToPartDesignations,
   onNavigateToEntrepotByType,
 }) {
@@ -42,6 +48,10 @@ export default function PartTypeView({
   const canEditStock = usePermission('stock.edit');
   const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
+  const [localGroupFilter, setLocalGroupFilter] = useState('ALL');
+  const activeGroupFilter = externalGroupFilter !== undefined ? externalGroupFilter : localGroupFilter;
+  const setActiveGroupFilter = setExternalGroupFilter || setLocalGroupFilter;
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [toEdit, setToEdit] = useState(null);
@@ -53,6 +63,18 @@ export default function PartTypeView({
   const sortMenuRef = useRef(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+
+  const partGroupMap = useMemo(() => {
+    const map = new Map();
+    (partGroups || []).forEach((g) => {
+      if (!g) return;
+      const gId = String(g.id || g.id_group || g.id_groupe || '').trim();
+      const gCode = String(g.code || '').trim();
+      if (gId) map.set(gId, g);
+      if (gCode) map.set(gCode, g);
+    });
+    return map;
+  }, [partGroups]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -70,16 +92,37 @@ export default function PartTypeView({
   // Form state
   const [form, setForm] = useState({
     id_type: '',
+    id_group: '',
     libelle: '',
   });
 
   // Filter
   const filtered = useMemo(() => {
-    return partTypes.filter((t) => {
+    return partTypes.filter((item) => {
+      const itemGroupKey = String(item.id_group || item.id_groupe || '').trim();
+      const resolvedGrp = itemGroupKey ? partGroupMap.get(itemGroupKey) : null;
+      const resolvedGrpId = resolvedGrp
+        ? String(resolvedGrp.id || resolvedGrp.id_group || resolvedGrp.id_groupe || '')
+        : '';
+
+      if (activeGroupFilter && activeGroupFilter !== 'ALL') {
+        if (activeGroupFilter === 'UNASSIGNED') {
+          if (resolvedGrpId) return false;
+        } else if (resolvedGrpId !== activeGroupFilter && itemGroupKey !== activeGroupFilter) {
+          return false;
+        }
+      }
+
       const q = search.toLowerCase();
-      return t.id_type?.toLowerCase().includes(q) || t.libelle?.toLowerCase().includes(q);
+      if (!q) return true;
+      const grpText = resolvedGrp ? `${resolvedGrp.code || ''} ${resolvedGrp.libelle || ''}`.toLowerCase() : '';
+      return (
+        item.id_type?.toLowerCase().includes(q) ||
+        item.libelle?.toLowerCase().includes(q) ||
+        grpText.includes(q)
+      );
     });
-  }, [partTypes, search]);
+  }, [partTypes, search, activeGroupFilter, partGroupMap]);
 
   // Sort
   const sortedData = useMemo(() => {
@@ -87,13 +130,19 @@ export default function PartTypeView({
     return [...filtered].sort((a, b) => {
       let valA = a[sortField] || '';
       let valB = b[sortField] || '';
+      if (sortField === 'id_group') {
+        const gA = partGroupMap.get(String(a.id_group || a.id_groupe || '').trim());
+        const gB = partGroupMap.get(String(b.id_group || b.id_groupe || '').trim());
+        valA = gA ? `${gA.code || ''} ${gA.libelle || ''}` : 'zzz';
+        valB = gB ? `${gB.code || ''} ${gB.libelle || ''}` : 'zzz';
+      }
       if (typeof valA === 'string') valA = valA.toLowerCase();
       if (typeof valB === 'string') valB = valB.toLowerCase();
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filtered, sortField, sortOrder]);
+  }, [filtered, sortField, sortOrder, partGroupMap]);
 
   const totalItems = sortedData.length;
   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
@@ -128,6 +177,8 @@ export default function PartTypeView({
         return t('part_types.col_id', 'Code Type');
       case 'libelle':
         return t('part_types.col_libelle', 'Libellé');
+      case 'id_group':
+        return 'Groupe Part (Niv 1)';
       case 'designations_count':
         return t('part_types.col_count', 'Désignations');
       case 'warehouse_count':
@@ -138,13 +189,17 @@ export default function PartTypeView({
   };
 
   const handleExportExcel = () => {
-    const headers = ['ID Type Part', 'Libellé Type Part', 'Nb Désignations', 'Nb Articles Entrepôt'];
-    const rows = filtered.map((t) => [
-      t.id_type || '',
-      t.libelle || '',
-      partDesignations.filter((d) => d.id_type === t.id_type).length,
-      warehouseItems.filter((i) => i.id_type === t.id_type).length,
-    ]);
+    const headers = ['ID Type Part', 'Libellé Type Part', 'Groupe Part (Niv 1)', 'Nb Désignations', 'Nb Articles Entrepôt'];
+    const rows = filtered.map((tItem) => {
+      const grp = partGroupMap.get(String(tItem.id_group || tItem.id_groupe || '').trim());
+      return [
+        tItem.id_type || '',
+        tItem.libelle || '',
+        grp ? `${grp.code} - ${grp.libelle}` : 'Non classé',
+        partDesignations.filter((d) => d.id_type === tItem.id_type).length,
+        warehouseItems.filter((i) => i.id_type === tItem.id_type).length,
+      ];
+    });
     const csvContent =
       'data:text/csv;charset=utf-8,\uFEFF' +
       [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
@@ -161,11 +216,14 @@ export default function PartTypeView({
     e.preventDefault();
     if (!canCreateStock) return;
     if (!form.id_type || !form.libelle) return;
+    const cleanGroupId = form.id_group ? String(form.id_group).trim() : null;
     onAddPartType({
       ...form,
       id_type: form.id_type.trim().toUpperCase(),
+      id_group: cleanGroupId,
+      id_groupe: cleanGroupId,
     });
-    setForm({ id_type: '', libelle: '' });
+    setForm({ id_type: '', id_group: '', libelle: '' });
     setShowAddModal(false);
   };
 
@@ -196,9 +254,41 @@ export default function PartTypeView({
         ),
       },
       {
+        key: 'id_group',
+        label: 'GROUPE PART (NIV 1)',
+        colLetter: 'C',
+        icon: Boxes,
+        sortable: true,
+        render: (item) => {
+          const grpKey = String(item.id_group || item.id_groupe || '').trim();
+          const grp = grpKey ? partGroupMap.get(grpKey) : null;
+          if (!grp) {
+            return (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-[11px] font-medium italic">
+                Non classé
+              </span>
+            );
+          }
+          const grpId = String(grp.id || grp.id_group || grp.id_groupe || '');
+          return (
+            <button
+              type="button"
+              onClick={() => setActiveGroupFilter(activeGroupFilter === grpId ? 'ALL' : grpId)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-800 hover:bg-teal-100 border border-teal-200 text-xs font-semibold transition cursor-pointer shadow-2xs"
+              title={`Filtrer sur le groupe ${grp.code} — ${grp.libelle}`}
+            >
+              <Boxes className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              <span className="font-mono font-bold">{grp.code}</span>
+              <span className="text-slate-400">•</span>
+              <span className="truncate max-w-[160px]">{grp.libelle}</span>
+            </button>
+          );
+        },
+      },
+      {
         key: 'part_designations',
         label: t('part_types.col_designations', 'DÉSIGNATIONS DE PARTS'),
-        colLetter: 'C',
+        colLetter: 'D',
         icon: PartInfoIcon,
         render: (item) => {
           const dCount = partDesignations.filter((d) => d.id_type === item.id_type).length;
@@ -221,7 +311,7 @@ export default function PartTypeView({
       {
         key: 'warehouse_parts',
         label: t('part_types.col_warehouse', 'PARTS EN ENTREPÔT'),
-        colLetter: 'D',
+        colLetter: 'E',
         icon: Warehouse,
         render: (item) => {
           const pCount = warehouseItems.filter(
@@ -297,7 +387,10 @@ export default function PartTypeView({
                   <button
                     type="button"
                     onClick={() => {
-                      setToEdit({ ...item });
+                      setToEdit({
+                        ...item,
+                        id_group: item.id_group || item.id_groupe || '',
+                      });
                       setActiveActionMenuId(null);
                     }}
                     className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
@@ -325,7 +418,19 @@ export default function PartTypeView({
         ),
       },
     ],
-    [t, partDesignations, warehouseItems, activeActionMenuId, onNavigateToPartDesignations, onNavigateToEntrepotByType, canEditStock, canDeleteStock]
+    [
+      t,
+      partGroupMap,
+      activeGroupFilter,
+      setActiveGroupFilter,
+      partDesignations,
+      warehouseItems,
+      activeActionMenuId,
+      onNavigateToPartDesignations,
+      onNavigateToEntrepotByType,
+      canEditStock,
+      canDeleteStock,
+    ]
   );
 
   return (
@@ -338,11 +443,23 @@ export default function PartTypeView({
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
           <PageHeaderIcon icon={LayersIcon} colorClass="text-indigo-700" />
           <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
-              {t('part_types.title', 'Types de Parts d’Entrepôt')}
-            </h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                {t('part_types.title', 'Types de Parts d’Entrepôt (Niveau 2)')}
+              </h2>
+              {onNavigateToPartGroups && (
+                <button
+                  type="button"
+                  onClick={onNavigateToPartGroups}
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200 hover:bg-teal-100 transition cursor-pointer"
+                >
+                  <Boxes className="w-3 h-3" />
+                  <span>Gérer Groupes Parts (Niv 1)</span>
+                </button>
+              )}
+            </div>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-              {t('part_types.subtitle', 'Nomenclature des types et catégories de pièces gérées au sein du groupe entrepôt (Distinctes du Stock).')}
+              {t('part_types.subtitle', 'Nomenclature des types et catégories de pièces gérées au sein du groupe entrepôt (Distinctes du Stock PDR).')}
             </p>
           </div>
         </div>
@@ -363,6 +480,7 @@ export default function PartTypeView({
                 const nextIdx = partTypes.length + 1;
                 setForm({
                   id_type: `TYPE-PRT${String(nextIdx).padStart(2, '0')}`,
+                  id_group: activeGroupFilter && activeGroupFilter !== 'ALL' && activeGroupFilter !== 'UNASSIGNED' ? activeGroupFilter : '',
                   libelle: '',
                 });
                 setShowAddModal(true);
@@ -391,7 +509,7 @@ export default function PartTypeView({
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
-                {t('part_types.filters_subtitle', 'Référentiel des Types de Pièces / Composants Entrepôt • Colonnes A → D')}
+                {t('part_types.filters_subtitle', 'Référentiel des Types de Parts Entrepôt • Colonnes A → E')}
               </p>
             </div>
           </div>
@@ -408,10 +526,11 @@ export default function PartTypeView({
             </button>
 
             {/* Circular Reset Button */}
-            {(search || sortField !== 'id_type' || sortOrder !== 'asc') && (
+            {(search || (activeGroupFilter && activeGroupFilter !== 'ALL') || sortField !== 'id_type' || sortOrder !== 'asc') && (
               <button
                 onClick={() => {
                   setSearch('');
+                  setActiveGroupFilter('ALL');
                   setSortField('id_type');
                   setSortOrder('asc');
                 }}
@@ -424,7 +543,7 @@ export default function PartTypeView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
           {/* Search */}
           <div className="relative w-full">
             <div className="flex items-center justify-between mb-1.5">
@@ -432,7 +551,7 @@ export default function PartTypeView({
                 {t('common.filters.search', 'RECHERCHE LIBRE')}
               </label>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
-                Col. A + B
+                Col. A + B + C
               </span>
             </div>
             <div className="relative flex items-center">
@@ -441,7 +560,7 @@ export default function PartTypeView({
               </span>
               <input
                 type="text"
-                placeholder={t('common.filters.search_placeholder', 'Rechercher par ID type de part, libellé...')}
+                placeholder={t('common.filters.search_placeholder', 'Rechercher par ID type, libellé, groupe...')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full h-10 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
@@ -455,6 +574,45 @@ export default function PartTypeView({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Part Group Filter (Niv 1) */}
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                GROUPE DE PARTS (NIVEAU 1)
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-teal-50 text-teal-700 border border-teal-200 shadow-2xs">
+                Col. C
+              </span>
+            </div>
+            <CustomSelect
+              value={activeGroupFilter || 'ALL'}
+              onChange={(val) => {
+                setActiveGroupFilter(val || 'ALL');
+                setCurrentPage(1);
+              }}
+              options={[
+                { value: 'ALL', label: `Tous les groupes (${partTypes.length})` },
+                {
+                  value: 'UNASSIGNED',
+                  label: `Non classés (${
+                    partTypes.filter((pt) => !partGroupMap.has(String(pt.id_group || pt.id_groupe || '').trim())).length
+                  })`,
+                },
+                ...(partGroups || [])
+                  .filter((g) => g.is_active !== false)
+                  .map((g) => {
+                    const gId = String(g.id || g.id_group || g.id_groupe || '');
+                    return {
+                      value: gId,
+                      label: `${g.code} — ${g.libelle}`,
+                    };
+                  }),
+              ]}
+              placeholder="Filtrer par Groupe de Parts..."
+              icon={Boxes}
+            />
           </div>
 
           {/* Sort Dropdown */}
@@ -497,53 +655,36 @@ export default function PartTypeView({
                   </span>
                 </div>
                 <div className="grid grid-cols-1 gap-1 text-xs">
-                  <button
-                    onClick={() => {
-                      if (sortField === 'id_type') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('id_type');
-                        setSortOrder('asc');
-                      }
-                    }}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
-                      sortField === 'id_type'
-                        ? 'bg-amber-50 text-amber-800 font-bold'
-                        : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <span>{t('part_types.col_id', 'ID Type de Part (A)')}</span>
-                    {sortField === 'id_type' &&
-                      (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      ))}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (sortField === 'libelle') {
-                        setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                      } else {
-                        setSortField('libelle');
-                        setSortOrder('asc');
-                      }
-                    }}
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
-                      sortField === 'libelle'
-                        ? 'bg-amber-50 text-amber-800 font-bold'
-                        : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <span>{t('part_types.col_libelle', 'Libellé Type de Part (B)')}</span>
-                    {sortField === 'libelle' &&
-                      (sortOrder === 'asc' ? (
-                        <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      ) : (
-                        <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      ))}
-                  </button>
+                  {[
+                    { field: 'id_type', label: t('part_types.col_id', 'ID Type de Part (A)') },
+                    { field: 'libelle', label: t('part_types.col_libelle', 'Libellé Type de Part (B)') },
+                    { field: 'id_group', label: 'Groupe Part (Niv 1) (C)' },
+                  ].map(({ field, label }) => (
+                    <button
+                      key={field}
+                      onClick={() => {
+                        if (sortField === field) {
+                          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField(field);
+                          setSortOrder('asc');
+                        }
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
+                        sortField === field
+                          ? 'bg-amber-50 text-amber-800 font-bold'
+                          : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <span>{label}</span>
+                      {sortField === field &&
+                        (sortOrder === 'asc' ? (
+                          <ArrowUp className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        ) : (
+                          <ArrowDown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        ))}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -551,19 +692,36 @@ export default function PartTypeView({
         </div>
 
         {/* Active Filter Chips */}
-        {search && (
+        {(search || (activeGroupFilter && activeGroupFilter !== 'ALL')) && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('common.active_filter', 'Filtre actif :')}</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-              <Search className="w-3 h-3 text-amber-600" />
-              {t('common.search_term', 'Recherche:')} &quot;{search}&quot;
-              <button
-                onClick={() => setSearch('')}
-                className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
+            {activeGroupFilter && activeGroupFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold">
+                <Boxes className="w-3 h-3 text-teal-600" />
+                Groupe:{' '}
+                {activeGroupFilter === 'UNASSIGNED'
+                  ? 'Non classés'
+                  : partGroupMap.get(activeGroupFilter)?.code || activeGroupFilter}
+                <button
+                  onClick={() => setActiveGroupFilter('ALL')}
+                  className="hover:bg-teal-200/60 p-0.5 rounded-full transition cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+            {search && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
+                <Search className="w-3 h-3 text-amber-600" />
+                {t('common.search_term', 'Recherche:')} &quot;{search}&quot;
+                <button
+                  onClick={() => setSearch('')}
+                  className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -572,7 +730,7 @@ export default function PartTypeView({
       <GmaoIndustrialDataGrid
         title={t('part_types.grid_title', 'Tableau Types de Parts (Entrepôt)')}
         icon={<LayersIcon className="w-4 h-4 text-teal-600" />}
-        excelMapping="id_type (A) | libelle (B) | part_designations (C) | warehouse_parts (D)"
+        excelMapping="id_type (A) | libelle (B) | id_group (C) | part_designations (D) | warehouse_parts (E)"
         bannerColor="slate"
         columns={partTypeColumns}
         data={displayedData}
@@ -604,9 +762,32 @@ export default function PartTypeView({
               {t('part_types.add_title', 'Nouveau Type de Part')}
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              {t('part_types.add_desc', "Catégorie de pièces détachées (PDR) d'entrepôt.")}
+              {t('part_types.add_desc', "Catégorie de parts d'entrepôt (Niveau 2).")}
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Groupe de Parts Parent (Niveau 1)
+                </label>
+                <select
+                  value={form.id_group || ''}
+                  onChange={(e) => setForm({ ...form, id_group: e.target.value })}
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">— Non classé (Aucun groupe) —</option>
+                  {(partGroups || [])
+                    .filter((g) => g.is_active !== false)
+                    .map((g) => {
+                      const gId = String(g.id || g.id_group || g.id_groupe || '');
+                      return (
+                        <option key={gId} value={gId}>
+                          {g.code} — {g.libelle}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   {t('part_types.code_label', 'ID Type (Clé Unique) *')}
@@ -650,7 +831,6 @@ export default function PartTypeView({
                 >
                   {t('common.save', 'Enregistrer')}
                 </button>
-
               </div>
             </form>
           </div>
@@ -669,11 +849,44 @@ export default function PartTypeView({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!canEditStock) return;
-                onUpdatePartType(toEdit.id_type, toEdit);
+                const cleanGroupId = toEdit.id_group ? String(toEdit.id_group).trim() : null;
+                onUpdatePartType(toEdit.id_type, {
+                  ...toEdit,
+                  id_group: cleanGroupId,
+                  id_groupe: cleanGroupId,
+                });
                 setToEdit(null);
               }}
               className="space-y-3"
             >
+              <div>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  Groupe de Parts Parent (Niveau 1)
+                </label>
+                <select
+                  value={toEdit.id_group || toEdit.id_groupe || ''}
+                  onChange={(e) =>
+                    setToEdit({
+                      ...toEdit,
+                      id_group: e.target.value,
+                      id_groupe: e.target.value,
+                    })
+                  }
+                  className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500"
+                >
+                  <option value="">— Non classé (Aucun groupe) —</option>
+                  {(partGroups || []).map((g) => {
+                    const gId = String(g.id || g.id_group || g.id_groupe || '');
+                    return (
+                      <option key={gId} value={gId}>
+                        {g.code} — {g.libelle}
+                        {g.is_active === false ? ' (Inactif)' : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   {t('part_types.libelle_label', 'Libellé *')}
@@ -702,7 +915,6 @@ export default function PartTypeView({
                 >
                   {t('common.save', 'Mettre à jour')}
                 </button>
-
               </div>
             </form>
           </div>

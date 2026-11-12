@@ -136,6 +136,9 @@ export function buildPdrCatalogRows(state: {
       designation: item.designation || '',
       type_code_or_id: resolved.type?.id_type || item.id_type || item.type || '',
       group_code: resolved.group?.code || item.id_group || '',
+      unite_mesure: String(item.unite_mesure || item.unite || 'PCS').trim().toUpperCase(),
+      criticite: String(item.criticite || 'B').trim().toUpperCase(),
+      ref_constructeur: item.ref_constructeur || '',
       seuil: Number(item.seuil ?? 0),
       emplacement: item.emplacement || '',
       stockInitial: Number(item.stockInitial ?? 0),
@@ -210,6 +213,9 @@ export function buildPdrCatalogWorkbook(state: {
             designation: 'Roulement rigide à billes 6205-2RS',
             type_code_or_id: 'TYP-RLM-BILLE',
             group_code: 'ROUL',
+            unite_mesure: 'PCS',
+            criticite: 'A',
+            ref_constructeur: 'SKF 6205-2RSH/C3',
             seuil: 5,
             emplacement: 'MAG-A-01',
             stockInitial: 10,
@@ -224,6 +230,9 @@ export function buildPdrCatalogWorkbook(state: {
     { wch: 38 },
     { wch: 20 },
     { wch: 14 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 24 },
     { wch: 10 },
     { wch: 16 },
     { wch: 14 },
@@ -713,6 +722,20 @@ export function validateAndReconcilePdrCatalogImport(
       String(row.emplacement ?? existingItem?.emplacement ?? 'Magasin PDR').trim() || 'Magasin PDR';
 
     const policyTags = parsePdrExcelPolicyTags(row.policy_tags ?? row.POLICY_TAGS);
+    const rawUnite = String(
+      row.unite_mesure ?? row.unite ?? row.UNITE_MESURE ?? row.UNITE ?? existingItem?.unite_mesure ?? existingItem?.unite ?? 'PCS'
+    )
+      .trim()
+      .toUpperCase() || 'PCS';
+    const rawCrit = String(
+      row.criticite ?? row.CRITICITE ?? existingItem?.criticite ?? 'B'
+    )
+      .trim()
+      .toUpperCase();
+    const criticiteVal = ['A', 'B', 'C'].includes(rawCrit) ? rawCrit : 'B';
+    const refConstructeurVal = String(
+      row.ref_constructeur ?? row.REF_CONSTRUCTEUR ?? existingItem?.ref_constructeur ?? ''
+    ).trim();
 
     // Note: stockActuel in Excel is strictly informational and NEVER overrides movement math
     const entreesPreserve = Number(existingItem?.entrees ?? 0);
@@ -727,6 +750,10 @@ export function validateAndReconcilePdrCatalogImport(
       id_group: typeGroup.id,
       id_type: matchedType.id_type,
       type: matchedType.libelle || matchedType.id_type,
+      unite: rawUnite,
+      unite_mesure: rawUnite,
+      criticite: criticiteVal,
+      ref_constructeur: refConstructeurVal,
       stockInitial: stockInitialVal,
       entrees: entreesPreserve,
       sorties: sortiesPreserve,
@@ -798,6 +825,9 @@ export function validateAndReconcilePdrCatalogImport(
     id_group: s.id_group || null,
     id_type: s.id_type || s.type,
     type: s.type,
+    unite_mesure: s.unite_mesure || s.unite || 'PCS',
+    criticite: s.criticite || 'B',
+    ref_constructeur: s.ref_constructeur || '',
     stockInitial: s.stockInitial,
     seuil: s.seuil,
     emplacement: s.emplacement,

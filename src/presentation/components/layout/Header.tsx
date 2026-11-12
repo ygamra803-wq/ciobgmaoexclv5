@@ -364,6 +364,12 @@ export default function Header({
           { id: 'comp-templates', label: t('nav.subtabs.comp_templates', 'Templates Composants'), active: true },
         ];
       }
+      if (currentTab === 'part_groups') {
+        return [
+          rootCrumb,
+          { id: 'part-groups', label: t('nav.subtabs.part_groups', 'Groupes Parts'), active: true },
+        ];
+      }
       if (currentTab === 'part_types') {
         return [
           rootCrumb,

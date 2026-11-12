@@ -186,6 +186,8 @@ export default function StockView({
     return Array.from(set).sort();
   }, [stockItems]);
 
+  const [stockCriticiteFilter, setStockCriticiteFilter] = useState('ALL');
+
   const deferredStockSearch = useDeferredValue(stockSearch);
   const filteredStock = useMemo(() => {
     if (!stockItems || stockItems.length === 0) return [];
@@ -205,6 +207,14 @@ export default function StockView({
         }
       }
 
+      // Filter by ABC criticality (P2)
+      if (stockCriticiteFilter !== 'ALL') {
+        const itemCrit = String(item.criticite || 'B').trim().toUpperCase();
+        if (itemCrit !== stockCriticiteFilter) {
+          return false;
+        }
+      }
+
       // Filter by alert status
       const domainItem = new StockItem(item);
       if (stockAlertOnly && domainItem.getCriticite() === 'OK') {
@@ -215,7 +225,17 @@ export default function StockView({
       if (deferredStockSearch) {
         return multiTokenSearch(
           item,
-          ['ref', 'designation', 'emplacement', 'type', 'id_type', 'id_group'],
+          [
+            'ref',
+            'designation',
+            'emplacement',
+            'type',
+            'id_type',
+            'id_group',
+            'ref_constructeur',
+            'unite_mesure',
+            'criticite',
+          ],
           deferredStockSearch
         );
       }
@@ -228,6 +248,7 @@ export default function StockView({
     stockGroupFilter,
     stockTypeFilter,
     stockEmplacementFilter,
+    stockCriticiteFilter,
     stockAlertOnly,
     deferredStockSearch,
   ]);
@@ -393,6 +414,7 @@ export default function StockView({
     stockGroupFilter !== 'ALL' ||
     stockTypeFilter !== 'ALL' ||
     stockEmplacementFilter !== 'ALL' ||
+    stockCriticiteFilter !== 'ALL' ||
     stockAlertOnly ||
     activeKpiFilter !== 'ALL' ||
     localSearch ||
@@ -404,6 +426,7 @@ export default function StockView({
     setStockGroupFilter('ALL');
     setStockTypeFilter('ALL');
     setStockEmplacementFilter('ALL');
+    setStockCriticiteFilter('ALL');
     setStockAlertOnly(false);
     setActiveKpiFilter('ALL');
     setLocalSearch('');
@@ -533,8 +556,15 @@ export default function StockView({
         onRemove: () => setStockEmplacementFilter('ALL'),
       });
     }
+    if (stockCriticiteFilter !== 'ALL') {
+      chips.push({
+        key: 'criticite',
+        label: `Criticité: Classe ${stockCriticiteFilter}`,
+        onRemove: () => setStockCriticiteFilter('ALL'),
+      });
+    }
     return chips;
-  }, [localSearch, stockTypeFilter, activeKpiFilter, stockAlertOnly, stockEmplacementFilter, setStockSearch, setActiveKpiFilter, setStockTypeFilter, setStockAlertOnly, setStockEmplacementFilter, t]);
+  }, [localSearch, stockGroupFilter, effectivePdrGroups, stockTypeFilter, activeKpiFilter, stockAlertOnly, stockEmplacementFilter, stockCriticiteFilter, setStockSearch, setStockGroupFilter, setActiveKpiFilter, setStockTypeFilter, setStockAlertOnly, setStockEmplacementFilter, t]);
 
   const handleExportExcel = () => {
     try {
@@ -542,6 +572,10 @@ export default function StockView({
         'REF (B)',
         'DÉSIGNATION (C)',
         'TYPE (D)',
+        'UNITÉ MESURE',
+        'CRITICITÉ (ABC)',
+        'RÉF CONSTRUCTEUR',
+        'POLICY TAGS',
         'STOCK INITIAL (E)',
         'ENTRÉES (F)',
         'SORTIES (G)',
@@ -554,6 +588,10 @@ export default function StockView({
         item.ref || '',
         item.designation || '',
         item.type || item.id_type || '',
+        item.unite_mesure || item.unite || 'PCS',
+        item.criticite || 'B',
+        item.ref_constructeur || '',
+        (item.policy_tags && item.policy_tags.length > 0 ? item.policy_tags : ['REPLACING']).join('|'),
         item.stockInitial || 0,
         item.entrees || 0,
         item.sorties || 0,
@@ -1172,6 +1210,25 @@ export default function StockView({
             />
           </FilterField>
 
+          {/* 4b. Criticité ABC (P2) */}
+          <FilterField label="Criticité (ABC)" colBadge="ABC" colBadgeColor="rose">
+            <CustomSelect
+              value={stockCriticiteFilter}
+              prefixIcon={
+                <span className="w-5 h-5 rounded-md bg-rose-100 border border-rose-300/80 flex items-center justify-center text-rose-700 shadow-2xs font-mono text-[10px] font-black">
+                  {stockCriticiteFilter === 'ALL' ? 'ABC' : stockCriticiteFilter}
+                </span>
+              }
+              onChange={(val) => setStockCriticiteFilter(val)}
+              options={[
+                { value: 'ALL', label: 'Toutes Criticités (A/B/C)' },
+                { value: 'A', label: '🔴 Classe A — Vital / Critique' },
+                { value: 'B', label: '🟡 Classe B — Majeur / Important' },
+                { value: 'C', label: '🟢 Classe C — Standard / Courant' },
+              ]}
+            />
+          </FilterField>
+
           {/* 5. Sort Menu Button & Popover */}
           <div className="relative" ref={sortMenuRef}>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
@@ -1302,14 +1359,58 @@ export default function StockView({
 
                       {/* Ref */}
                       <td className="py-3 px-3.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                          {item.ref}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                              {item.ref}
+                            </span>
+                            {(() => {
+                              const crit = String(item.criticite || 'B').trim().toUpperCase();
+                              const critStyle =
+                                crit === 'A'
+                                  ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                  : crit === 'C'
+                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200';
+                              return (
+                                <span
+                                  className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black border ${critStyle}`}
+                                  title={`Criticité PDR : Classe ${crit}`}
+                                >
+                                  {crit}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          {item.ref_constructeur && (
+                            <span
+                              className="text-[10px] font-mono font-medium text-slate-500 max-w-[160px] truncate"
+                              title={`Réf. Constructeur / Équivalent : ${item.ref_constructeur}`}
+                            >
+                              OEM: {item.ref_constructeur}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Désignation */}
                       <td className="py-3 px-3.5 font-bold text-slate-900 whitespace-nowrap">
-                        {item.designation}
+                        <div className="flex flex-col items-start gap-1">
+                          <span>{item.designation}</span>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {(item.policy_tags && item.policy_tags.length > 0
+                              ? item.policy_tags
+                              : ['REPLACING']
+                            ).map((tag: string) => (
+                              <span
+                                key={tag}
+                                className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-50 text-sky-800 border border-sky-200"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Type (Badge) & Hierarchical Group */}
@@ -1345,7 +1446,10 @@ export default function StockView({
 
                       {/* Initial (E) */}
                       <td className="py-3 px-2.5 text-right font-mono text-slate-600">
-                        {item.stockInitial}
+                        <span>{item.stockInitial}</span>
+                        <span className="ml-1 text-[9.5px] text-slate-400 font-semibold">
+                          {item.unite_mesure || item.unite || 'PCS'}
+                        </span>
                       </td>
 
                       {/* Entrées (F) */}
@@ -1362,22 +1466,26 @@ export default function StockView({
                       <td className="py-3 px-2.5 text-right font-mono">
                         {(() => {
                           const actuel = domainItem.getActuel();
+                          const uom = String(item.unite_mesure || item.unite || 'PCS').toUpperCase();
                           const resEntry = getReservedEntry(item.ref);
                           const reservedQty = resEntry?.reservedQty || 0;
                           const netDispo = actuel - reservedQty;
                           const isNetCrit = reservedQty > 0 && netDispo <= domainItem.getSeuilAlerte();
                           const tooltipText =
                             reservedQty > 0
-                              ? `Stock Physique : ${actuel}\nRéservé (En attente validation) : ${reservedQty}\nDisponible Net : ${netDispo}\nDétail : ${resEntry?.sources
+                              ? `Stock Physique : ${actuel} ${uom}\nRéservé (En attente validation) : ${reservedQty} ${uom}\nDisponible Net : ${netDispo} ${uom}\nDétail : ${resEntry?.sources
                                   .map((s) => `${s.code} (${s.machineCode || s.claimType}: ${s.qty})`)
                                   .join(', ')}`
-                              : `Stock Physique Actuel : ${actuel}`;
+                              : `Stock Physique Actuel : ${actuel} ${uom}`;
 
                           return (
                             <div className="inline-flex flex-col items-end gap-1" title={tooltipText}>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1">
                                 <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-black text-slate-900 text-sm">
                                   {actuel}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100/80 border border-slate-200/80 text-[9.5px] font-mono font-bold text-slate-600">
+                                  {uom}
                                 </span>
                               </div>
                               {reservedQty > 0 && (
@@ -1395,7 +1503,7 @@ export default function StockView({
                                         : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                     }`}
                                   >
-                                    Dispo net: {netDispo}
+                                    Dispo net: {netDispo} {uom}
                                   </span>
                                 </div>
                               )}
@@ -1406,7 +1514,10 @@ export default function StockView({
 
                       {/* Seuil (I) */}
                       <td className="py-3 px-2.5 text-right font-mono text-slate-500 font-semibold">
-                        {domainItem.getSeuilAlerte()}
+                        <span>{domainItem.getSeuilAlerte()}</span>
+                        <span className="ml-1 text-[9.5px] text-slate-400">
+                          {item.unite_mesure || item.unite || 'PCS'}
+                        </span>
                       </td>
 
                       {/* Alerte Badge (J) */}

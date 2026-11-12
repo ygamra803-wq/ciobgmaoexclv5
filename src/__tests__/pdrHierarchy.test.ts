@@ -785,5 +785,187 @@ describe('PDR-GROUP-PAGE-P0 — Groupes PDR Referentiel CRUD, Safe Deactivation 
   });
 });
 
+describe('PART-GROUP-P1 — Standalone PartGroup Referentiel, PartType.id_group Linkage & Entrepôt Isolation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
+  it('1. Enforces strict SSOT storage key separation between PART_GROUPS, COMP_GROUPS, and PDR_GROUPS', () => {
+    expect(STORAGE_KEYS.PART_GROUPS).toBe('gmao_part_groups_v1');
+    expect(STORAGE_KEYS.PART_GROUPS).not.toBe(STORAGE_KEYS.COMP_GROUPS);
+    expect(STORAGE_KEYS.PART_GROUPS).not.toBe(STORAGE_KEYS.PDR_GROUPS);
+  });
 
+  it('2. Every type.id_group in seedPartTypes.json references a valid group in seedPartGroups.json (0 orphans)', async () => {
+    const seedPartGroups = (await import('../data/warehouse/seedPartGroups.json')).default as any[];
+    const seedPartTypes = (await import('../data/warehouse/seedPartTypes.json')).default as any[];
+
+    expect(seedPartGroups.length).toBeGreaterThanOrEqual(4);
+    expect(seedPartTypes.length).toBeGreaterThanOrEqual(5);
+
+    const groupIds = new Set(
+      seedPartGroups.map((g) => String(g.id_group || g.id_groupe || g.code).trim().toUpperCase())
+    );
+    expect(groupIds.size).toBe(seedPartGroups.length);
+
+    for (const grp of seedPartGroups) {
+      expect(grp.id_group).toBeTruthy();
+      expect(grp.code).toBeTruthy();
+      expect(grp.libelle).toBeTruthy();
+      expect(Array.isArray(grp.default_policy_tags)).toBe(true);
+      expect(grp.default_policy_tags.length).toBeGreaterThan(0);
+    }
+
+    for (const pt of seedPartTypes) {
+      expect(pt.id_type).toBeTruthy();
+      expect(pt.id_group).toBeTruthy();
+      expect(groupIds.has(String(pt.id_group).trim().toUpperCase())).toBe(true);
+    }
+  });
+
+  it('3. DataGateway.loadDemoData populates PART_GROUPS and clearAllForRealFactory wipes it to [] with zero silent reinjection', async () => {
+    const { loadCollection } = await import('../infrastructure/persistence/migrateStorage');
+    let loadedPartGroups: any[] = [];
+
+    DataGateway.loadDemoData({
+      setPartGroups: (groups: any[]) => {
+        loadedPartGroups = groups;
+      },
+    });
+
+    expect(loadedPartGroups.length).toBe(4);
+    const stored = storageService.getItem(STORAGE_KEYS.PART_GROUPS);
+    expect(Array.isArray(stored) && stored.length).toBe(4);
+
+    await DataGateway.clearAllForRealFactory({
+      setPartGroups: (groups: any[]) => {
+        loadedPartGroups = groups;
+      },
+    });
+
+    expect(loadedPartGroups).toEqual([]);
+    expect(storageService.getItem(STORAGE_KEYS.PART_GROUPS)).toEqual([]);
+
+    // Simulate reload when START_MODE === 'empty'
+    expect(
+      loadCollection(STORAGE_KEYS.PART_GROUPS, {
+        allowDemoFallback: true,
+        demoSeed: stored,
+      })
+    ).toEqual([]);
+  });
+
+  it('4. AuthorizationService.canAccessTab grants part_groups to ADMIN, RESPONSABLE_MAINTENANCE, RESPONSABLE_MAGASIN and denies TECHNICIEN/OPERATEUR/VIEWER', async () => {
+    const { AuthorizationService } = await import('../core/security/AuthorizationService');
+    const { ROLES } = await import('../core/security/Roles');
+
+    expect(AuthorizationService.canAccessTab({ role: ROLES.ADMIN }, 'part_groups')).toBe(true);
+    expect(
+      AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAINTENANCE }, 'part_groups')
+    ).toBe(true);
+    expect(
+      AuthorizationService.canAccessTab({ role: ROLES.RESPONSABLE_MAGASIN }, 'part_groups')
+    ).toBe(true);
+
+    expect(AuthorizationService.canAccessTab({ role: ROLES.TECHNICIEN }, 'part_groups')).toBe(false);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.OPERATEUR }, 'part_groups')).toBe(false);
+    expect(AuthorizationService.canAccessTab({ role: ROLES.VIEWER }, 'part_groups')).toBe(false);
+  });
+});
+
+describe('P2-INDUSTRIAL-COLUMNS — PDR (unite_mesure, criticite, ref_constructeur) & Parts (id_group, matiere_nuance, ref_plan, dimensions_brut)', () => {
+  it('1. Preserves PDR P2 fields (unite_mesure, criticite, ref_constructeur) in Excel export/import round-trip and applies safe defaults (PCS, B)', async () => {
+    const {
+      buildPdrCatalogRows,
+      validateAndReconcilePdrCatalogImport,
+    } = await import('../services/pdrHierarchyExcelService');
+
+    const groups: PdrGroup[] = [
+      { id: 'GRP-LUBR', code: 'LUBR', libelle: 'Lubrifiants & Fluides', is_active: true },
+    ];
+    const types: StockType[] = [
+      { id_type: 'TYP-LUB-HUILE', libelle: 'Huile Hydraulique', id_group: 'GRP-LUBR' },
+    ];
+    const stockItems: IStockItem[] = [
+      {
+        ref: 'LUB-HUILE-46',
+        designation: 'Huile Hydraulique ISO VG 46',
+        id_group: 'GRP-LUBR',
+        id_type: 'TYP-LUB-HUILE',
+        unite_mesure: 'L',
+        criticite: 'A',
+        ref_constructeur: 'SHELL-TELLUS-S2-M46',
+        seuil: 50,
+        emplacement: 'MAG-LUB-01',
+        stockInitial: 200,
+        policy_tags: ['REPLACING'],
+      },
+      {
+        ref: 'LUB-LEGACY-GREASE',
+        designation: 'Cartouche Graisse Standard',
+        id_group: 'GRP-LUBR',
+        id_type: 'TYP-LUB-HUILE',
+        seuil: 10,
+        emplacement: 'MAG-LUB-02',
+        stockInitial: 30,
+      },
+    ];
+
+    const rows = buildPdrCatalogRows({
+      pdrGroups: groups,
+      types,
+      rawStock: stockItems,
+    });
+
+    expect(rows.itemRows[0].unite_mesure).toBe('L');
+    expect(rows.itemRows[0].criticite).toBe('A');
+    expect(rows.itemRows[0].ref_constructeur).toBe('SHELL-TELLUS-S2-M46');
+
+    // Legacy item defaults to PCS and B in export
+    expect(rows.itemRows[1].unite_mesure).toBe('PCS');
+    expect(rows.itemRows[1].criticite).toBe('B');
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: rows.groupRows,
+        types: rows.typeRows,
+        items: rows.itemRows,
+      },
+      {
+        mode: 'MERGE',
+        actorRole: 'ADMIN',
+        existingGroups: [],
+        existingTypes: [],
+        existingStock: [],
+      }
+    );
+
+    expect(report.success).toBe(true);
+    const importedOil = report.nextStock.find((s) => s.ref === 'LUB-HUILE-46');
+    expect(importedOil?.unite_mesure).toBe('L');
+    expect(importedOil?.criticite).toBe('A');
+    expect(importedOil?.ref_constructeur).toBe('SHELL-TELLUS-S2-M46');
+
+    const importedLegacy = report.nextStock.find((s) => s.ref === 'LUB-LEGACY-GREASE');
+    expect(importedLegacy?.unite_mesure).toBe('PCS');
+    expect(importedLegacy?.criticite).toBe('B');
+  });
+
+  it('2. Verifies seedPartDesignations.json contains P2 workshop engineering columns (id_group, matiere_nuance, ref_plan, dimensions_brut)', async () => {
+    const seedPartGroups = (await import('../data/warehouse/seedPartGroups.json')).default as any[];
+    const seedPartDesignations = (await import('../data/warehouse/seedPartDesignations.json')).default as any[];
+
+    const groupIds = new Set(seedPartGroups.map((g) => String(g.id_group).trim().toUpperCase()));
+    expect(seedPartDesignations.length).toBeGreaterThanOrEqual(5);
+
+    for (const partDiag of seedPartDesignations) {
+      expect(partDiag.id_group).toBeTruthy();
+      expect(groupIds.has(String(partDiag.id_group).trim().toUpperCase())).toBe(true);
+      expect(partDiag.matiere_nuance).toBeTruthy();
+      expect(partDiag.ref_plan).toBeTruthy();
+      expect(partDiag.dimensions_brut).toBeTruthy();
+      expect(Array.isArray(partDiag.policy_tags)).toBe(true);
+    }
+  });
+});

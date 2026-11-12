@@ -24,6 +24,9 @@ export interface PdrItemExcelRow {
   designation: string;
   type_code_or_id: string;
   group_code: string;
+  unite_mesure?: string;
+  criticite?: string;
+  ref_constructeur?: string;
   seuil: number;
   emplacement: string;
   stockInitial: number;

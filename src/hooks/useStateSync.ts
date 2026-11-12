@@ -105,6 +105,9 @@ export function useStateSync(setters: Record<string, any> = {}, validators: Reco
         if (fresh.compTemplates && typeof currentSetters.setCompTemplates === 'function') {
           currentSetters.setCompTemplates(fresh.compTemplates);
         }
+        if (fresh.partGroups && typeof currentSetters.setPartGroups === 'function') {
+          currentSetters.setPartGroups(fresh.partGroups);
+        }
         if (fresh.partTypes && typeof currentSetters.setPartTypes === 'function') {
           currentSetters.setPartTypes(fresh.partTypes);
         }

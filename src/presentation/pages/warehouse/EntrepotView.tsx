@@ -63,6 +63,7 @@ export default function EntrepotView({
   diagnostics: propDiagnostics = [],
   compFamilies = [],
   compTemplates = [],
+  partGroups: propPartGroups = [],
   partTypes = [],
   partDesignations = [],
   zones = [],
@@ -73,6 +74,8 @@ export default function EntrepotView({
   setWhFamilyFilter,
   whTemplateFilter = 'ALL',
   setWhTemplateFilter,
+  whPartGroupFilter,
+  setWhPartGroupFilter,
   whTypeFilter = 'ALL',
   setWhTypeFilter,
   whNatureFilter = 'ALL',
@@ -90,6 +93,7 @@ export default function EntrepotView({
   onUpdateFamily,
   onNavigateToFamily,
   onNavigateToTemplate,
+  onNavigateToPartGroups,
   onNavigateToType,
   onNavigateToPartTypes,
   onNavigateToDiag,
@@ -98,6 +102,16 @@ export default function EntrepotView({
   showToast,
 }: any) {
   const { t } = useTranslation();
+  const storePartGroups = useGmaoStore((s: any) => s.partGroups);
+  const effectivePartGroups = useMemo(
+    () =>
+      propPartGroups && propPartGroups.length > 0
+        ? propPartGroups
+        : Array.isArray(storePartGroups)
+          ? storePartGroups
+          : [],
+    [propPartGroups, storePartGroups]
+  );
   const families = compFamilies && compFamilies.length > 0 ? compFamilies : propFamilies;
   const templates = compTemplates && compTemplates.length > 0 ? compTemplates : propTemplates;
   const types = partTypes && partTypes.length > 0 ? partTypes : propTypes;
@@ -121,6 +135,7 @@ export default function EntrepotView({
   // Local filter states if not provided via props
   const [internalFamilyFilter, setInternalFamilyFilter] = useState('ALL');
   const [internalTemplateFilter, setInternalTemplateFilter] = useState('ALL');
+  const [internalPartGroupFilter, setInternalPartGroupFilter] = useState('ALL');
   const [internalTypeFilter, setInternalTypeFilter] = useState('ALL');
   const [internalNatureFilter, setInternalNatureFilter] = useState('ALL');
   const [internalRattachementFilter, setInternalRattachementFilter] = useState('ALL');
@@ -133,6 +148,12 @@ export default function EntrepotView({
   const currentTemplateFilter =
     whTemplateFilter !== undefined ? whTemplateFilter : internalTemplateFilter;
   const changeTemplateFilter = setWhTemplateFilter || setInternalTemplateFilter;
+
+  const currentPartGroupFilter =
+    whPartGroupFilter !== undefined && whPartGroupFilter !== ''
+      ? whPartGroupFilter
+      : internalPartGroupFilter;
+  const changePartGroupFilter = setWhPartGroupFilter || setInternalPartGroupFilter;
 
   const currentTypeFilter = whTypeFilter !== undefined ? whTypeFilter : internalTypeFilter;
   const changeTypeFilter = setWhTypeFilter || setInternalTypeFilter;
@@ -391,6 +412,9 @@ export default function EntrepotView({
     id_templates: '',
     id_type: '',
     id_diag: '',
+    matiere_nuance: '',
+    ref_plan: '',
+    dimensions_brut: '',
     rattachement_type: 'ENTREPOT', // 'MACHINE' | 'ZONE' | 'ENTREPOT'
     id_machine_registered: '',
     id_zone: '',
@@ -412,6 +436,9 @@ export default function EntrepotView({
     id_templates: '',
     id_type: '',
     id_diag: '',
+    matiere_nuance: '',
+    ref_plan: '',
+    dimensions_brut: '',
     rattachement_type: 'ENTREPOT',
     id_machine_registered: '',
     id_zone: '',
@@ -445,6 +472,9 @@ export default function EntrepotView({
         id_templates: '',
         id_type: defaultType,
         id_diag: defaultDiag,
+        matiere_nuance: defaultDiagObj?.matiere_nuance || '',
+        ref_plan: defaultDiagObj?.ref_plan || '',
+        dimensions_brut: defaultDiagObj?.dimensions_brut || '',
         rattachement_type: 'ENTREPOT',
         id_machine_registered: '',
         id_zone: zones[0]?.id_zone || '',
@@ -531,6 +561,9 @@ export default function EntrepotView({
   // Open Edit Modal
   const handleOpenEditModal = (item) => {
     if (!canEditStock) return;
+    const linkedDiag = diagnostics.find(
+      (d: any) => (d.id_part || d.ref || d.id_diag || d.id) === item.id_diag
+    );
     setToEdit(item);
     setEditForm({
       id_warehouse_item: item.id_warehouse_item || '',
@@ -540,6 +573,9 @@ export default function EntrepotView({
       id_templates: item.id_templates || '',
       id_type: item.id_type || '',
       id_diag: item.id_diag || '',
+      matiere_nuance: item.matiere_nuance || linkedDiag?.matiere_nuance || '',
+      ref_plan: item.ref_plan || linkedDiag?.ref_plan || '',
+      dimensions_brut: item.dimensions_brut || linkedDiag?.dimensions_brut || '',
       rattachement_type: item.rattachement_type || 'ENTREPOT',
       id_machine_registered: item.id_machine_registered || '',
       id_zone: item.id_zone || '',
@@ -639,6 +675,9 @@ export default function EntrepotView({
       id_diag: newDiag,
       id_warehouse_item: autoCode,
       designation: diagObj ? getDiagLabel(diagObj) : prev.designation,
+      matiere_nuance: diagObj?.matiere_nuance || '',
+      ref_plan: diagObj?.ref_plan || '',
+      dimensions_brut: diagObj?.dimensions_brut || '',
       emplacement: diagObj?.emplacement || prev.emplacement,
       seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
@@ -653,6 +692,9 @@ export default function EntrepotView({
       ...prev,
       id_diag: newDiag,
       designation: diagLabel || prev.designation,
+      matiere_nuance: diagObj?.matiere_nuance || prev.matiere_nuance || '',
+      ref_plan: diagObj?.ref_plan || prev.ref_plan || '',
+      dimensions_brut: diagObj?.dimensions_brut || prev.dimensions_brut || '',
       emplacement: diagObj?.emplacement || prev.emplacement,
       seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
@@ -679,14 +721,25 @@ export default function EntrepotView({
     }
 
     if (onAddWarehouseItem) {
+      const matchedPartType = !isComp
+        ? types.find((tObj: any) => tObj.id_type === addForm.id_type)
+        : null;
+      const inheritedPartGroup = !isComp
+        ? String(matchedPartType?.id_group || matchedPartType?.id_groupe || '').trim() || undefined
+        : undefined;
       onAddWarehouseItem({
         id_warehouse_item: addForm.id_warehouse_item.trim().toUpperCase(),
         designation: addForm.designation.trim(),
         nature: isComp ? 'COMPONENT' : 'PART',
         id_family: isComp ? addForm.id_family : '',
         id_templates: isComp ? addForm.id_templates : '',
+        id_group: inheritedPartGroup,
+        id_groupe: inheritedPartGroup,
         id_type: !isComp ? addForm.id_type : '',
         id_diag: !isComp ? addForm.id_diag : '',
+        matiere_nuance: !isComp ? String(addForm.matiere_nuance || '').trim() : undefined,
+        ref_plan: !isComp ? String(addForm.ref_plan || '').trim() : undefined,
+        dimensions_brut: !isComp ? String(addForm.dimensions_brut || '').trim() : undefined,
         rattachement_type: addForm.rattachement_type,
         id_machine_registered:
           addForm.rattachement_type === 'MACHINE' ? addForm.id_machine_registered : '',
@@ -716,14 +769,25 @@ export default function EntrepotView({
 
     if (onUpdateWarehouseItem) {
       const isComp = isComponentNature(editForm.nature);
+      const matchedPartType = !isComp
+        ? types.find((tObj: any) => tObj.id_type === editForm.id_type)
+        : null;
+      const inheritedPartGroup = !isComp
+        ? String(matchedPartType?.id_group || matchedPartType?.id_groupe || toEdit.id_group || toEdit.id_groupe || '').trim() || undefined
+        : undefined;
       onUpdateWarehouseItem(toEdit.id_warehouse_item, {
         ...toEdit,
         designation: editForm.designation.trim(),
         nature: editForm.nature,
         id_family: isComp ? editForm.id_family : '',
         id_templates: isComp ? editForm.id_templates : '',
+        id_group: inheritedPartGroup,
+        id_groupe: inheritedPartGroup,
         id_type: !isComp ? editForm.id_type : '',
         id_diag: !isComp ? editForm.id_diag : '',
+        matiere_nuance: !isComp ? String(editForm.matiere_nuance || '').trim() : undefined,
+        ref_plan: !isComp ? String(editForm.ref_plan || '').trim() : undefined,
+        dimensions_brut: !isComp ? String(editForm.dimensions_brut || '').trim() : undefined,
         rattachement_type: editForm.rattachement_type,
         id_machine_registered:
           editForm.rattachement_type === 'MACHINE' ? editForm.id_machine_registered : '',
@@ -828,7 +892,27 @@ export default function EntrepotView({
         return false;
       }
 
-      // Type filter (for parts)
+      // Groupe de Parts filter (Niveau 1 — for parts)
+      if (itemIsPart && currentPartGroupFilter !== 'ALL') {
+        const typeObj = types.find((tObj: any) => tObj.id_type === item.id_type);
+        const itemGrp = String(
+          item.id_group ||
+            item.id_groupe ||
+            typeObj?.id_group ||
+            typeObj?.id_groupe ||
+            ''
+        )
+          .trim()
+          .toUpperCase();
+        if (currentPartGroupFilter === 'UNASSIGNED') {
+          if (itemGrp) return false;
+        } else {
+          const targetGrp = String(currentPartGroupFilter).trim().toUpperCase();
+          if (itemGrp !== targetGrp) return false;
+        }
+      }
+
+      // Type filter (Niveau 2 — for parts)
       if (
         itemIsPart &&
         currentTypeFilter !== 'ALL' &&
@@ -863,6 +947,7 @@ export default function EntrepotView({
         const desig = String(item.designation || '').toLowerCase();
         const fam = String(item.id_family || '').toLowerCase();
         const tpl = String(item.id_templates || '').toLowerCase();
+        const grp = String(item.id_group || item.id_groupe || '').toLowerCase();
         const typ = String(item.id_type || '').toLowerCase();
         const diag = String(item.id_diag || '').toLowerCase();
         const tech = String(item.technician || '').toLowerCase();
@@ -881,6 +966,7 @@ export default function EntrepotView({
           desig.includes(q) ||
           fam.includes(q) ||
           tpl.includes(q) ||
+          grp.includes(q) ||
           typ.includes(q) ||
           diag.includes(q) ||
           tech.includes(q) ||
@@ -895,11 +981,13 @@ export default function EntrepotView({
     });
   }, [
     warehouseItems,
+    types,
     activeWarehouseTab,
     currentNatureFilter,
     activeKpiFilter,
     currentFamilyFilter,
     currentTemplateFilter,
+    currentPartGroupFilter,
     currentTypeFilter,
     currentRattachementFilter,
     currentStatusFilter,
@@ -913,6 +1001,7 @@ export default function EntrepotView({
     activeKpiFilter,
     currentFamilyFilter,
     currentTemplateFilter,
+    currentPartGroupFilter,
     currentTypeFilter,
     currentRattachementFilter,
     currentStatusFilter,
@@ -1005,6 +1094,7 @@ export default function EntrepotView({
     activeKpiFilter !== 'ALL' ||
     currentFamilyFilter !== 'ALL' ||
     currentTemplateFilter !== 'ALL' ||
+    currentPartGroupFilter !== 'ALL' ||
     currentTypeFilter !== 'ALL' ||
     currentRattachementFilter !== 'ALL' ||
     currentStatusFilter !== 'ALL' ||
@@ -1017,6 +1107,7 @@ export default function EntrepotView({
     setActiveKpiFilter('ALL');
     changeFamilyFilter('ALL');
     if (changeTemplateFilter) changeTemplateFilter('ALL');
+    changePartGroupFilter('ALL');
     changeTypeFilter('ALL');
     changeRattachementFilter('ALL');
     changeStatusFilter('ALL');
@@ -1101,6 +1192,18 @@ export default function EntrepotView({
         onRemove: () => changeFamilyFilter('ALL'),
       });
     }
+    if (currentPartGroupFilter !== 'ALL') {
+      const grpObj = effectivePartGroups.find(
+        (g: any) =>
+          String(g.id_group || g.id_groupe || g.code || '').trim().toUpperCase() ===
+          String(currentPartGroupFilter).trim().toUpperCase()
+      );
+      chips.push({
+        key: 'part_group',
+        label: `Groupe Part: ${grpObj ? `${grpObj.code || grpObj.id_group} (${grpObj.libelle})` : currentPartGroupFilter}`,
+        onRemove: () => changePartGroupFilter('ALL'),
+      });
+    }
     if (currentTypeFilter !== 'ALL') {
       chips.push({
         key: 'type',
@@ -1127,12 +1230,15 @@ export default function EntrepotView({
     localSearch,
     currentNatureFilter,
     currentFamilyFilter,
+    currentPartGroupFilter,
+    effectivePartGroups,
     currentTypeFilter,
     currentRattachementFilter,
     currentStatusFilter,
     setWhSearch,
     changeNatureFilter,
     changeFamilyFilter,
+    changePartGroupFilter,
     changeTypeFilter,
     changeRattachementFilter,
     changeStatusFilter,
@@ -1364,8 +1470,14 @@ export default function EntrepotView({
         activeFilters={activeEntrepotFilterChips}
         onClearAll={clearAllFilters}
       >
-        {/* 5-Column Multi-Criteria Filter Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
+        {/* Multi-Criteria Filter Grid */}
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${
+            activeWarehouseTab === 'PARTS' || isPartNature(currentNatureFilter)
+              ? 'lg:grid-cols-6'
+              : 'lg:grid-cols-5'
+          } gap-3.5 items-end`}
+        >
           {/* 1. Omni-Text Search */}
           <FilterSearchInput
             value={localSearch}
@@ -1402,13 +1514,53 @@ export default function EntrepotView({
             />
           </FilterField>
 
+          {/* 2b. Groupe de Parts (Niv 1) when in PARTS tab */}
+          {(activeWarehouseTab === 'PARTS' || isPartNature(currentNatureFilter)) && (
+            <FilterField
+              label={t('part_types.filter_group_label', 'Groupe Part (Niv 1)')}
+              colBadge="Niv 1"
+              colBadgeColor="teal"
+            >
+              <CustomSelect
+                value={currentPartGroupFilter}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs">
+                    <Layers className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  changePartGroupFilter(val);
+                  changeTypeFilter('ALL');
+                }}
+                options={[
+                  {
+                    value: 'ALL',
+                    label: `${t('part_types.all_groups', 'Tous les Groupes')} (${effectivePartGroups.length})`,
+                  },
+                  ...effectivePartGroups.map((g: any) => ({
+                    value: String(g.id_group || g.id_groupe || g.code || ''),
+                    label: `${g.code || g.id_group} — ${g.libelle}`,
+                  })),
+                  {
+                    value: 'UNASSIGNED',
+                    label: t('part_types.unassigned_group', 'Non classés'),
+                  },
+                ]}
+              />
+            </FilterField>
+          )}
+
           {/* 3. Classification (Famille or Type) (Col. D / Col. B) */}
           <FilterField
-            label={isPartNature(currentNatureFilter) ? t('entrepot.modal.type') : t('entrepot.filters.family_label')}
-            colBadge={isPartNature(currentNatureFilter) ? 'Col. B' : 'Col. D'}
+            label={
+              activeWarehouseTab === 'PARTS' || isPartNature(currentNatureFilter)
+                ? t('entrepot.modal.type')
+                : t('entrepot.filters.family_label')
+            }
+            colBadge={activeWarehouseTab === 'PARTS' || isPartNature(currentNatureFilter) ? 'Col. B' : 'Col. D'}
             colBadgeColor="amber"
           >
-            {isPartNature(currentNatureFilter) ? (
+            {activeWarehouseTab === 'PARTS' || isPartNature(currentNatureFilter) ? (
               <CustomSelect
                 value={currentTypeFilter}
                 prefixIcon={
@@ -1419,10 +1571,17 @@ export default function EntrepotView({
                 onChange={(val) => changeTypeFilter(val)}
                 options={[
                   { value: 'ALL', label: `${t('entrepot.filters.all_types')} (${types.length})` },
-                  ...types.map((t) => ({
-                    value: t.id_type,
-                    label: `${t.libelle} (${t.id_type})`,
-                  })),
+                  ...types
+                    .filter((tObj: any) => {
+                      if (currentPartGroupFilter === 'ALL') return true;
+                      const gId = String(tObj.id_group || tObj.id_groupe || '').trim().toUpperCase();
+                      if (currentPartGroupFilter === 'UNASSIGNED') return !gId;
+                      return gId === String(currentPartGroupFilter).trim().toUpperCase();
+                    })
+                    .map((tObj: any) => ({
+                      value: tObj.id_type,
+                      label: `${tObj.libelle} (${tObj.id_type})`,
+                    })),
                 ]}
               />
             ) : (
@@ -1595,6 +1754,7 @@ export default function EntrepotView({
               sortOrder={sortOrder}
               handleSort={handleSort}
               renderSortIcon={renderSortIcon}
+              partGroups={effectivePartGroups}
               types={types}
               diagnostics={diagnostics}
               zones={zones}
@@ -1608,6 +1768,7 @@ export default function EntrepotView({
               canCreateMovement={canCreateMovement}
               canEditStock={canEditStock}
               canDeleteStock={canDeleteStock}
+              onNavigateToPartGroups={onNavigateToPartGroups}
               onNavigateToType={onNavigateToType}
               onNavigateToPartTypes={onNavigateToPartTypes}
               onNavigateToDiag={onNavigateToDiag}
@@ -1874,6 +2035,45 @@ export default function EntrepotView({
                           );
                         })}
                       </select>
+                    </div>
+                  </div>
+                  {/* Spécifications Atelier (P2): Matière, Plan, Brut */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-indigo-200/60">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Matière / Nuance
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: 42CrMo4"
+                        value={addForm.matiere_nuance || ''}
+                        onChange={(e) => setAddForm({ ...addForm, matiere_nuance: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Réf. Plan Usinage
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: PLN-MEC-204"
+                        value={addForm.ref_plan || ''}
+                        onChange={(e) => setAddForm({ ...addForm, ref_plan: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Dimensions Brut
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: Ø60 x 240 mm"
+                        value={addForm.dimensions_brut || ''}
+                        onChange={(e) => setAddForm({ ...addForm, dimensions_brut: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
                     </div>
                   </div>
                 </div>
@@ -2274,6 +2474,9 @@ export default function EntrepotView({
                           designation: diagObj
                             ? diagObj.designation || diagObj.libelle || editForm.designation
                             : editForm.designation,
+                          matiere_nuance: diagObj?.matiere_nuance || editForm.matiere_nuance || '',
+                          ref_plan: diagObj?.ref_plan || editForm.ref_plan || '',
+                          dimensions_brut: diagObj?.dimensions_brut || editForm.dimensions_brut || '',
                         });
                       }}
                       className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
@@ -2292,6 +2495,45 @@ export default function EntrepotView({
                         );
                       })}
                     </select>
+                  </div>
+                  {/* Spécifications Atelier (P2) */}
+                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1.5 border-t border-indigo-200/60">
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Matière / Nuance
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: 42CrMo4"
+                        value={editForm.matiere_nuance || ''}
+                        onChange={(e) => setEditForm({ ...editForm, matiere_nuance: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Réf. Plan Usinage
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: PLN-MEC-204"
+                        value={editForm.ref_plan || ''}
+                        onChange={(e) => setEditForm({ ...editForm, ref_plan: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Dimensions Brut
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: Ø60 x 240 mm"
+                        value={editForm.dimensions_brut || ''}
+                        onChange={(e) => setEditForm({ ...editForm, dimensions_brut: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

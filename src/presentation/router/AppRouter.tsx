@@ -19,6 +19,7 @@ const EntrepotView = lazy(() => import('../pages/warehouse/EntrepotView'));
 const CompGroupView = lazy(() => import('../pages/referentiel/CompGroupView'));
 const CompFamilyView = lazy(() => import('../pages/referentiel/CompFamilyView'));
 const CompTemplateView = lazy(() => import('../pages/referentiel/CompTemplateView'));
+const PartGroupView = lazy(() => import('../pages/referentiel/PartGroupView'));
 const PartTypeView = lazy(() => import('../pages/referentiel/PartTypeView'));
 const PartDesignationView = lazy(() => import('../pages/referentiel/PartDesignationView'));
 const FamilyView = lazy(() => import('../pages/machines/FamilyView'));
@@ -207,6 +208,12 @@ export default function AppRouter({
                       {currentTab === 'comp_templates' && (
                         <ErrorBoundary sectionName="Modèles d'Organes">
                           <CompTemplateView {...props.compTemplates} />
+                        </ErrorBoundary>
+                      )}
+
+                      {currentTab === 'part_groups' && (
+                        <ErrorBoundary sectionName="Groupes de Parts d'Entrepôt (Niveau 1)">
+                          <PartGroupView {...props.partGroups} />
                         </ErrorBoundary>
                       )}
 

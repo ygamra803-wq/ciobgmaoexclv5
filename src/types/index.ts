@@ -11,12 +11,14 @@ export type NavigationTab =
   | 'stock'
   | 'sortie'
   | 'entrepot'
+  | 'pdr_groups'
   | 'types'
   | 'designations'
   | 'machines'
   | 'comp_groups'
   | 'comp_families'
   | 'comp_templates'
+  | 'part_groups'
   | 'part_types'
   | 'part_designations'
   | 'families'
@@ -35,6 +37,8 @@ export interface IToast {
 
 export interface ICounts {
   stock?: number;
+  pdr_groups?: number;
+  pdrGroups?: number;
   types?: number;
   designations?: number;
   diagnostics?: number;
@@ -44,9 +48,14 @@ export interface ICounts {
   blueprints?: number;
   warehouse?: number;
   entrepot?: number;
+  comp_groups?: number;
   compGroups?: number;
+  comp_families?: number;
   compFamilies?: number;
+  comp_templates?: number;
   compTemplates?: number;
+  part_groups?: number;
+  partGroups?: number;
   partTypes?: number;
   partDesignations?: number;
   zones?: number;

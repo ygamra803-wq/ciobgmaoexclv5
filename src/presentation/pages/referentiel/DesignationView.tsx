@@ -92,6 +92,9 @@ export default function DesignationView({
     id_type: '',
     ref: '',
     designation: '',
+    unite_mesure: 'PCS',
+    criticite: 'B',
+    ref_constructeur: '',
     stockInitial: 5,
     seuil: 3,
     emplacement: '',
@@ -266,8 +269,11 @@ export default function DesignationView({
     const typeName = item.id_type || item.type || (stockMatch ? stockMatch.type || stockMatch.id_type : 'Standard');
     const refDisplay = item.ref || item.id_designation || item.id_diag || (stockMatch ? stockMatch.ref : 'N/A');
     const desigDisplay = item.designation || item.libelle || item.nom || (stockMatch ? stockMatch.designation : 'Sans désignation');
+    const uniteMesure = item.unite_mesure || item.unite || (stockMatch ? stockMatch.unite_mesure || stockMatch.unite : 'PCS') || 'PCS';
+    const criticite = item.criticite || (stockMatch ? stockMatch.criticite : 'B') || 'B';
+    const refConstructeur = item.ref_constructeur || (stockMatch ? stockMatch.ref_constructeur : '') || '';
 
-    return { stockMatch, currentStock, threshold, alertStatus, location, typeName, refDisplay, desigDisplay };
+    return { stockMatch, currentStock, threshold, alertStatus, location, typeName, refDisplay, desigDisplay, uniteMesure, criticite, refConstructeur };
   };
 
   const handleTableSort = (field) => {
@@ -337,13 +343,16 @@ export default function DesignationView({
   const displayedData = rawDisplayedData;
 
   const handleExportExcel = () => {
-    const headers = ['Référence', 'Désignation PDR', 'Type Parent', 'Stock Actuel', 'Seuil Alerte', 'Emplacement'];
+    const headers = ['Référence', 'Désignation PDR', 'Type Parent', 'Unité Mesure', 'Criticité', 'Réf Constructeur', 'Stock Actuel', 'Seuil Alerte', 'Emplacement'];
     const rows = filtered.map((d) => {
       const data = getItemDerivedData(d);
       return [
         data.refDisplay || '',
         data.desigDisplay || '',
         data.typeName || '',
+        data.uniteMesure || 'PCS',
+        data.criticite || 'B',
+        data.refConstructeur || '',
         data.currentStock != null ? data.currentStock : '',
         data.threshold != null ? data.threshold : '',
         data.location || '',
@@ -379,6 +388,9 @@ export default function DesignationView({
       id_type: '',
       ref: '',
       designation: '',
+      unite_mesure: 'PCS',
+      criticite: 'B',
+      ref_constructeur: '',
       stockInitial: 5,
       seuil: 3,
       emplacement: '',
@@ -398,11 +410,33 @@ export default function DesignationView({
         icon: Tag,
         sortable: true,
         render: (item) => {
-          const refDisplay = item.ref || item.id_designation || item.id_diag || 'N/A';
+          const data = getItemDerivedData(item);
+          const crit = String(data.criticite || 'B').toUpperCase();
           return (
-            <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[11.5px] font-mono font-bold text-slate-900">
-              {refDisplay}
-            </span>
+            <div className="flex flex-col items-start gap-1">
+              <div className="flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[11.5px] font-mono font-bold text-slate-900">
+                  {data.refDisplay}
+                </span>
+                <span
+                  className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black border ${
+                    crit === 'A'
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                      : crit === 'C'
+                      ? 'bg-slate-100 text-slate-600 border-slate-200'
+                      : 'bg-amber-50 text-amber-800 border-amber-200'
+                  }`}
+                  title={`Criticité PDR : Classe ${crit}`}
+                >
+                  {crit}
+                </span>
+              </div>
+              {data.refConstructeur && (
+                <span className="text-[10px] font-mono text-slate-500">
+                  OEM: {data.refConstructeur}
+                </span>
+              )}
+            </div>
           );
         },
       },
@@ -446,17 +480,15 @@ export default function DesignationView({
         sortable: true,
         align: 'right',
         render: (item) => {
-          const itemRefKey = String(item.ref || item.id_designation || item.id_diag || '').trim().toLowerCase();
-          const itemDesigKey = String(item.designation || item.libelle || item.nom || '').trim().toLowerCase();
-          const stockMatch = stockItems.find((s) => {
-            const sRef = String(s.ref || '').trim().toLowerCase();
-            const sDesig = String(s.designation || '').trim().toLowerCase();
-            if (itemRefKey && sRef === itemRefKey) return true;
-            if (itemDesigKey && sDesig === itemDesigKey) return true;
-            return false;
-          });
-          const currentStock = stockMatch ? stockMatch.stockActuel : (item.stockActuel != null ? item.stockActuel : item.stockInitial || 0);
-          return <span className="font-mono font-bold text-slate-800 text-[13px]">{currentStock}</span>;
+          const data = getItemDerivedData(item);
+          return (
+            <div className="inline-flex items-center gap-1 justify-end">
+              <span className="font-mono font-bold text-slate-800 text-[13px]">{data.currentStock}</span>
+              <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[9.5px] font-mono font-bold text-slate-600">
+                {data.uniteMesure}
+              </span>
+            </div>
+          );
         },
       },
       {
@@ -1106,6 +1138,53 @@ export default function DesignationView({
                   className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs"
                   required
                 />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Unité de Mesure
+                  </label>
+                  <select
+                    value={form.unite_mesure}
+                    onChange={(e) => setForm({ ...form, unite_mesure: e.target.value })}
+                    className="mt-1 w-full h-9 px-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold"
+                  >
+                    <option value="PCS">PCS</option>
+                    <option value="L">L</option>
+                    <option value="M">M</option>
+                    <option value="KG">KG</option>
+                    <option value="KIT">KIT</option>
+                    <option value="JEU">JEU</option>
+                    <option value="ROUL">ROUL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Criticité (ABC)
+                  </label>
+                  <select
+                    value={form.criticite}
+                    onChange={(e) => setForm({ ...form, criticite: e.target.value })}
+                    className="mt-1 w-full h-9 px-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold"
+                  >
+                    <option value="A">Classe A (Vital)</option>
+                    <option value="B">Classe B (Majeur)</option>
+                    <option value="C">Classe C (Std)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Réf. Constructeur
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="SKF 6205-2RS"
+                    value={form.ref_constructeur}
+                    onChange={(e) => setForm({ ...form, ref_constructeur: e.target.value })}
+                    className="mt-1 w-full h-9 px-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">

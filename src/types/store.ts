@@ -18,6 +18,7 @@ import type {
   ITechnician,
   IUserRecord,
   IType,
+  IPartGroup,
   IPartType,
   IPartDesignation,
   ICompGroup,
@@ -371,6 +372,7 @@ export interface GmaoStoreState {
   compGroups: ICompGroup[];
   compFamilies: ICompFamily[];
   compTemplates: ICompTemplate[];
+  partGroups: IPartGroup[];
   partTypes: IPartType[];
   partDesignations: IPartDesignation[];
   setWarehouseItems: (items: StateUpdater<IWarehouseItem[]>) => void;
@@ -378,6 +380,7 @@ export interface GmaoStoreState {
   setCompGroups: (groups: StateUpdater<ICompGroup[]>) => void;
   setCompFamilies: (families: StateUpdater<ICompFamily[]>) => void;
   setCompTemplates: (templates: StateUpdater<ICompTemplate[]>) => void;
+  setPartGroups: (groups: StateUpdater<IPartGroup[]>) => void;
   setPartTypes: (types: StateUpdater<IPartType[]>) => void;
   setPartDesignations: (designations: StateUpdater<IPartDesignation[]>) => void;
 
@@ -684,6 +687,7 @@ export interface GmaoStoreSetters {
   setCompGroups?: (groups: StateUpdater<ICompGroup[]>) => void;
   setCompFamilies?: (families: StateUpdater<ICompFamily[]>) => void;
   setCompTemplates?: (templates: StateUpdater<ICompTemplate[]>) => void;
+  setPartGroups?: (groups: StateUpdater<IPartGroup[]>) => void;
   setPartTypes?: (types: StateUpdater<IPartType[]>) => void;
   setPartDesignations?: (designations: StateUpdater<IPartDesignation[]>) => void;
   setUsers?: (users: StateUpdater<IUserRecord[]>) => void;

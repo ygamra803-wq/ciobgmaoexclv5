@@ -35,6 +35,7 @@ import initialCompGroups from '../data/warehouse/seedCompGroups.json';
 import initialCompFamilies from '../data/warehouse/seedCompFamilies.json';
 import initialCompTemplates from '../data/warehouse/seedCompTemplates.json';
 import initialEntrepotComponents from '../data/warehouse/seedEntrepotComponents.json';
+import initialPartGroups from '../data/warehouse/seedPartGroups.json';
 import initialPartTypes from '../data/warehouse/seedPartTypes.json';
 import initialPartDesignations from '../data/warehouse/seedPartDesignations.json';
 import seedUsers from '../data/users/seedUsers.json';
@@ -449,6 +450,10 @@ function getInitialWarehouse() {
     allowDemoFallback: true,
     demoSeed: initialCompTemplates,
   });
+  const partGroups = loadCollection(STORAGE_KEYS.PART_GROUPS, {
+    allowDemoFallback: true,
+    demoSeed: initialPartGroups,
+  });
   const partTypes = loadCollection(STORAGE_KEYS.PART_TYPES, {
     allowDemoFallback: true,
     demoSeed: initialPartTypes,
@@ -463,6 +468,7 @@ function getInitialWarehouse() {
     entrepotComponents,
     compFamilies,
     compTemplates,
+    partGroups,
     partTypes,
     partDesignations,
   };
@@ -897,6 +903,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     compGroups: warehouseInit.compGroups,
     compFamilies: warehouseInit.compFamilies,
     compTemplates: warehouseInit.compTemplates,
+    partGroups: warehouseInit.partGroups,
     partTypes: warehouseInit.partTypes,
     partDesignations: warehouseInit.partDesignations,
 
@@ -930,6 +937,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const next = resolveUpdate(updater, get().compTemplates);
       set({ compTemplates: next });
       DataGateway.saveCompTemplates(next);
+    },
+
+    setPartGroups: (updater) => {
+      const next = resolveUpdate(updater, get().partGroups);
+      set({ partGroups: next });
+      DataGateway.savePartGroups(next);
     },
 
     setPartTypes: (updater) => {
@@ -4584,6 +4597,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCompGroups: get().setCompGroups,
         setCompFamilies: get().setCompFamilies,
         setCompTemplates: get().setCompTemplates,
+        setPartGroups: get().setPartGroups,
         setPartTypes: get().setPartTypes,
         setPartDesignations: get().setPartDesignations,
         setUsers: get().setUsers,
@@ -4626,6 +4640,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCompGroups: get().setCompGroups,
         setCompFamilies: get().setCompFamilies,
         setCompTemplates: get().setCompTemplates,
+        setPartGroups: get().setPartGroups,
         setPartTypes: get().setPartTypes,
         setPartDesignations: get().setPartDesignations,
         setUsers: get().setUsers,
@@ -4668,6 +4683,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCompGroups: get().setCompGroups,
         setCompFamilies: get().setCompFamilies,
         setCompTemplates: get().setCompTemplates,
+        setPartGroups: get().setPartGroups,
         setPartTypes: get().setPartTypes,
         setPartDesignations: get().setPartDesignations,
         setUsers: get().setUsers,
@@ -4708,6 +4724,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCompGroups: get().setCompGroups,
         setCompFamilies: get().setCompFamilies,
         setCompTemplates: get().setCompTemplates,
+        setPartGroups: get().setPartGroups,
         setPartTypes: get().setPartTypes,
         setPartDesignations: get().setPartDesignations,
         setUsers: get().setUsers,
@@ -4752,6 +4769,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       const updates: Record<string, any> = {};
 
       // Stock
+      if (Array.isArray(remoteState.pdrGroups)) updates.pdrGroups = remoteState.pdrGroups;
       if (Array.isArray(remoteState.types)) updates.types = remoteState.types;
       if (Array.isArray(remoteState.rawStock)) updates.rawStock = remoteState.rawStock;
       if (Array.isArray(remoteState.designations)) updates.designations = remoteState.designations;
@@ -4771,6 +4789,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.compGroups)) updates.compGroups = remoteState.compGroups;
       if (Array.isArray(remoteState.compFamilies)) updates.compFamilies = remoteState.compFamilies;
       if (Array.isArray(remoteState.compTemplates)) updates.compTemplates = remoteState.compTemplates;
+      if (Array.isArray(remoteState.partGroups)) updates.partGroups = remoteState.partGroups;
       if (Array.isArray(remoteState.partTypes)) updates.partTypes = remoteState.partTypes;
       if (Array.isArray(remoteState.partDesignations)) updates.partDesignations = remoteState.partDesignations;
 
@@ -4911,6 +4930,8 @@ export const useWarehouseSlice = () =>
     setCompFamilies: state.setCompFamilies,
     compTemplates: state.compTemplates,
     setCompTemplates: state.setCompTemplates,
+    partGroups: state.partGroups,
+    setPartGroups: state.setPartGroups,
     partTypes: state.partTypes,
     setPartTypes: state.setPartTypes,
     partDesignations: state.partDesignations,

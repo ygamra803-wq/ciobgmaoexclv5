@@ -32,6 +32,7 @@ export function useAppComplexHandlers({
   setCompFamilies,
   compTemplates = [],
   setCompTemplates,
+  setPartGroups,
   partTypes: _partTypes = [],
   setPartTypes,
   partDesignations = [],
@@ -695,7 +696,60 @@ export function useAppComplexHandlers({
     showToast?.(`Modèle d'organe "${id}" supprimé.`, 'info');
   };
 
-  // PART TYPES & PART DESIGNATIONS CRUD
+  // PART GROUPS, PART TYPES & PART DESIGNATIONS CRUD
+  const handleUpdatePartGroup = (id, updatedGroup) => {
+    setPartGroups?.((prev) =>
+      (prev || []).map((g) =>
+        g.id === id || g.id_groupe === id || g.id_group === id ? updatedGroup : g
+      )
+    );
+    const newGroupId = updatedGroup.id_group || updatedGroup.id_groupe || updatedGroup.id;
+    if (newGroupId && id !== newGroupId) {
+      setPartTypes?.((prev) =>
+        (prev || []).map((t) =>
+          t.id_group === id || t.id_groupe === id
+            ? { ...t, id_group: newGroupId, id_groupe: newGroupId }
+            : t
+        )
+      );
+      setWarehouseItems?.((prev) =>
+        (prev || []).map((w) =>
+          w.id_group === id || w.id_groupe === id
+            ? { ...w, id_group: newGroupId, id_groupe: newGroupId }
+            : w
+        )
+      );
+    }
+    showToast?.(`Groupe Part "${updatedGroup.libelle || id}" mis à jour avec succès !`);
+  };
+
+  const handleDeletePartGroup = (id) => {
+    const linkedTypesCount = (_partTypes || []).filter(
+      (t) => t.id_group === id || t.id_groupe === id
+    ).length;
+    const linkedWhCount = (warehouseItems || []).filter(
+      (w) => w.id_group === id || w.id_groupe === id
+    ).length;
+    if (linkedTypesCount > 0 || linkedWhCount > 0) {
+      setPartGroups?.((prev) =>
+        (prev || []).map((g) =>
+          g.id === id || g.id_groupe === id || g.id_group === id
+            ? { ...g, is_active: false }
+            : g
+        )
+      );
+      showToast?.(
+        `Groupe Part "${id}" désactivé (non supprimé) car lié à ${linkedTypesCount} type(s) et ${linkedWhCount} part(s) en entrepôt.`,
+        'info'
+      );
+      return;
+    }
+    setPartGroups?.((prev) =>
+      (prev || []).filter((g) => g.id !== id && g.id_groupe !== id && g.id_group !== id)
+    );
+    showToast?.(`Groupe Part "${id}" supprimé avec succès !`, 'info');
+  };
+
   const handleUpdatePartType = (id, updatedType) => {
     setPartTypes((prev) => prev.map((t) => (t.id_type === id ? updatedType : t)));
     if (id !== updatedType.id_type) {
@@ -1219,6 +1273,7 @@ export function useAppComplexHandlers({
     handleUpdateDiagnostic, handleDeleteDiagnostic,
     handleUpdateFamily, handleDeleteFamily,
     handleUpdateCompGroup, handleDeleteCompGroup,
+    handleUpdatePartGroup, handleDeletePartGroup,
     handleUpdateCompFamily, handleDeleteCompFamily,
     handleUpdateCompTemplate, handleDeleteCompTemplate,
     handleUpdatePartType, handleDeletePartType,

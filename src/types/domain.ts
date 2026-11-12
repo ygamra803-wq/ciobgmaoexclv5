@@ -32,6 +32,9 @@ export type ProfileType = 'TECHNICIEN' | 'RESPONSABLE' | 'OPERATEUR' | 'CHEF';
 export type MaterialPolicyTag = 'REPLACING' | 'REPAIRABLE' | 'MODIFYING';
 export type MaintenancePolicyTag = MaterialPolicyTag;
 
+export type PdrUnitOfMeasure = 'PCS' | 'M' | 'L' | 'KG' | 'KIT' | 'JEU' | 'ROUL';
+export type PdrCriticality = 'A' | 'B' | 'C';
+
 export type ValidationWorkflowStatus =
   | 'NONE'
   | 'PENDING_VALIDATION'
@@ -80,6 +83,11 @@ export interface IStockItem {
   prix_unitaire?: number;
   prix?: number;
   unite?: string;
+  unite_mesure?: PdrUnitOfMeasure | string;
+  criticite?: PdrCriticality | string;
+  ref_constructeur?: string;
+  equivalences?: string;
+  delai_appro_jours?: number;
   fournisseur?: string;
   code_barre?: string;
   policy_tags?: MaterialPolicyTag[];
@@ -303,6 +311,9 @@ export interface IDiagnostic {
   ref: string;
   designation: string;
   id_type?: string;
+  unite_mesure?: PdrUnitOfMeasure | string;
+  criticite?: PdrCriticality | string;
+  ref_constructeur?: string;
   description?: string;
   [key: string]: any;
 }
@@ -318,9 +329,26 @@ export interface IType {
   [key: string]: any;
 }
 
+export interface IPartGroup {
+  id?: string | number;
+  id_groupe?: string;
+  id_group?: string;
+  code?: string;
+  libelle: string;
+  ref?: string;
+  description?: string;
+  default_policy_tags?: MaterialPolicyTag[];
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
+  [key: string]: any;
+}
+
 export interface IPartType {
   id_type?: string;
   id?: string;
+  id_group?: string | null;
+  id_groupe?: string | null;
   libelle?: string;
   nom?: string;
   description?: string;
@@ -332,12 +360,17 @@ export interface IPartDesignation {
   id?: string | number;
   ref: string;
   designation: string;
+  id_group?: string | null;
+  id_groupe?: string | null;
   id_type?: string;
   type?: string;
   id_diag?: string;
   seuil?: number;
   stockInitial?: number;
   emplacement?: string;
+  matiere_nuance?: string;
+  ref_plan?: string;
+  dimensions_brut?: string;
   policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }
@@ -465,6 +498,8 @@ export interface IWarehouseItem {
   ref?: string;
   designation: string;
   libelle?: string;
+  id_group?: string | null;
+  id_groupe?: string | null;
   id_family?: string;
   id_template?: string;
   id_templates?: string;

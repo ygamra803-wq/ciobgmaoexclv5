@@ -30,12 +30,14 @@ export function useAppNavigation({ setCurrentTab }) {
   // Groupe Entrepôt Filter States
   const [whFamilyFilter, setWhFamilyFilter] = useState('ALL');
   const [whTemplateFilter, setWhTemplateFilter] = useState('ALL');
+  const [whPartGroupFilter, setWhPartGroupFilter] = useState('ALL');
   const [whTypeFilter, setWhTypeFilter] = useState('ALL');
   const [whNatureFilter, setWhNatureFilter] = useState('ALL');
   const [whSearch, setWhSearch] = useState('');
   const [compFamilyGroupFilter, setCompFamilyGroupFilter] = useState('');
   const [compTemplateGroupFilter, setCompTemplateGroupFilter] = useState('');
   const [compTemplateFamilyFilter, setCompTemplateFamilyFilter] = useState('');
+  const [partTypeGroupFilter, setPartTypeGroupFilter] = useState('ALL');
   const [partDesignationTypeFilter, setPartDesignationTypeFilter] = useState('');
 
   // SMART NAVIGATION HANDLERS
@@ -207,6 +209,22 @@ export function useAppNavigation({ setCurrentTab }) {
     startTransition(() => setCurrentTab('comp_families'));
   };
 
+  const handleNavigateToPartGroups = () => {
+    startTransition(() => setCurrentTab('part_groups'));
+  };
+
+  const handleNavigateToPartTypesByGroup = (groupId) => {
+    setPartTypeGroupFilter(groupId || 'ALL');
+    startTransition(() => setCurrentTab('part_types'));
+  };
+
+  const handleNavigateToEntrepotByPartGroup = (groupId) => {
+    setWhPartGroupFilter(groupId || 'ALL');
+    setWhTypeFilter('ALL');
+    setWhNatureFilter('PART');
+    startTransition(() => setCurrentTab('entrepot'));
+  };
+
   const handleNavigateToPartDesignations = (typeId) => {
     setPartDesignationTypeFilter(typeId || '');
     startTransition(() => setCurrentTab('part_designations'));
@@ -327,6 +345,8 @@ export function useAppNavigation({ setCurrentTab }) {
       setWhFamilyFilter,
       whTemplateFilter,
       setWhTemplateFilter,
+      whPartGroupFilter,
+      setWhPartGroupFilter,
       whTypeFilter,
       setWhTypeFilter,
       whNatureFilter,
@@ -339,6 +359,8 @@ export function useAppNavigation({ setCurrentTab }) {
       setCompTemplateGroupFilter,
       compTemplateFamilyFilter,
       setCompTemplateFamilyFilter,
+      partTypeGroupFilter,
+      setPartTypeGroupFilter,
       partDesignationTypeFilter,
       setPartDesignationTypeFilter,
     },
@@ -370,6 +392,9 @@ export function useAppNavigation({ setCurrentTab }) {
       handleNavigateToCompTemplatesByGroup,
       handleNavigateToCompTemplates,
       handleNavigateToCompFamilies,
+      handleNavigateToPartGroups,
+      handleNavigateToPartTypesByGroup,
+      handleNavigateToEntrepotByPartGroup,
       handleNavigateToPartDesignations,
       handleNavigateToPartTypes,
       handleNavigateToEntrepotByComp,

@@ -68,6 +68,7 @@ export function useGmaoPersistence({
           'compGroups',
           'compFamilies',
           'compTemplates',
+          'partGroups',
           'partTypes',
           'partDesignations',
           'users',

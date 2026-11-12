@@ -50,6 +50,7 @@ import seedEntrepotComponents from '../data/warehouse/seedEntrepotComponents.jso
 import seedCompGroups from '../data/warehouse/seedCompGroups.json';
 import seedCompFamilies from '../data/warehouse/seedCompFamilies.json';
 import seedCompTemplates from '../data/warehouse/seedCompTemplates.json';
+import seedPartGroups from '../data/warehouse/seedPartGroups.json';
 import seedPartTypes from '../data/warehouse/seedPartTypes.json';
 import seedPartDesignations from '../data/warehouse/seedPartDesignations.json';
 
@@ -523,6 +524,17 @@ export const DataGateway = {
     return clean;
   },
 
+  savePartGroups(list = []) {
+    const clean = Array.isArray(list) ? list : [];
+    storageService.setItem(STORAGE_KEYS.PART_GROUPS, clean);
+    return clean;
+  },
+
+  loadPartGroups() {
+    const data = storageService.getItem(STORAGE_KEYS.PART_GROUPS);
+    return Array.isArray(data) ? data : [];
+  },
+
   savePartTypes(list = []) {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.PART_TYPES, clean);
@@ -886,6 +898,7 @@ export const DataGateway = {
     this.saveCompGroups(seedCompGroups);
     this.saveCompFamilies(seedCompFamilies);
     this.saveCompTemplates(formattedCompTemplates);
+    this.savePartGroups(seedPartGroups);
     this.savePartTypes(seedPartTypes);
     this.savePartDesignations(seedPartDesignations);
 
@@ -933,6 +946,7 @@ export const DataGateway = {
     if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
     if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
     if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
+    if (setters.setPartGroups) setters.setPartGroups(seedPartGroups);
     if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
     if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations);
 
@@ -1056,6 +1070,7 @@ export const DataGateway = {
     this.saveCompGroups([]);
     this.saveCompFamilies([]);
     this.saveCompTemplates([]);
+    this.savePartGroups([]);
     this.savePartTypes([]);
     this.savePartDesignations([]);
 
@@ -1103,6 +1118,7 @@ export const DataGateway = {
     if (setters.setCompGroups) setters.setCompGroups([]);
     if (setters.setCompFamilies) setters.setCompFamilies([]);
     if (setters.setCompTemplates) setters.setCompTemplates([]);
+    if (setters.setPartGroups) setters.setPartGroups([]);
     if (setters.setPartTypes) setters.setPartTypes([]);
     if (setters.setPartDesignations) setters.setPartDesignations([]);
 
@@ -1154,6 +1170,7 @@ export const DataGateway = {
       [STORAGE_KEYS.COMP_GROUPS]: [],
       [STORAGE_KEYS.COMP_FAMILIES]: [],
       [STORAGE_KEYS.COMP_TEMPLATES]: [],
+      [STORAGE_KEYS.PART_GROUPS]: [],
       [STORAGE_KEYS.PART_TYPES]: [],
       [STORAGE_KEYS.PART_DESIGNATIONS]: [],
       [STORAGE_KEYS.SORTIE_EXTERNE]: [],
@@ -1232,6 +1249,7 @@ export const DataGateway = {
     const compGroups = Array.isArray(serverData.compGroups) ? serverData.compGroups : [];
     const compFamilies = Array.isArray(serverData.compFamilies) ? serverData.compFamilies : [];
     const compTemplates = Array.isArray(serverData.compTemplates) ? serverData.compTemplates : [];
+    const partGroups = Array.isArray(serverData.partGroups) ? serverData.partGroups : [];
     const partTypes = Array.isArray(serverData.partTypes) ? serverData.partTypes : [];
     const partDesignations = Array.isArray(serverData.partDesignations) ? serverData.partDesignations : [];
     const sortiesExterne = Array.isArray(serverData.sortiesExterne) ? serverData.sortiesExterne : [];
@@ -1303,6 +1321,7 @@ export const DataGateway = {
     this.saveCompGroups(compGroups);
     this.saveCompFamilies(compFamilies);
     this.saveCompTemplates(compTemplates);
+    this.savePartGroups(partGroups);
     this.savePartTypes(partTypes);
     this.savePartDesignations(partDesignations);
     this.saveSortiesExterne(sortiesExterne);
@@ -1345,6 +1364,7 @@ export const DataGateway = {
         compGroups,
         compFamilies,
         compTemplates,
+        partGroups,
         partTypes,
         partDesignations,
         sortiesExterne,
@@ -1384,6 +1404,7 @@ export const DataGateway = {
       if (setters.setCompGroups) setters.setCompGroups(compGroups);
       if (setters.setCompFamilies) setters.setCompFamilies(compFamilies);
       if (setters.setCompTemplates) setters.setCompTemplates(compTemplates);
+      if (setters.setPartGroups) setters.setPartGroups(partGroups);
       if (setters.setPartTypes) setters.setPartTypes(partTypes);
       if (setters.setPartDesignations) setters.setPartDesignations(partDesignations);
       if (setters.setSortiesExterne) setters.setSortiesExterne(sortiesExterne);
@@ -1463,6 +1484,7 @@ export const DataGateway = {
         this.saveCompGroups(seedCompGroups);
         this.saveCompFamilies(seedCompFamilies);
         this.saveCompTemplates(formattedCompTemplates);
+        this.savePartGroups(seedPartGroups);
         this.savePartTypes(seedPartTypes);
         this.savePartDesignations(seedPartDesignations);
         if (setters.setWarehouseItems) setters.setWarehouseItems(seedWarehouseItems);
@@ -1470,6 +1492,7 @@ export const DataGateway = {
         if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
         if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
         if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
+        if (setters.setPartGroups) setters.setPartGroups(seedPartGroups);
         if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
         if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations);
         break;
@@ -1583,6 +1606,7 @@ export const DataGateway = {
         this.saveCompGroups([]);
         this.saveCompFamilies([]);
         this.saveCompTemplates([]);
+        this.savePartGroups([]);
         this.savePartTypes([]);
         this.savePartDesignations([]);
         if (setters.setWarehouseItems) setters.setWarehouseItems([]);
@@ -1590,6 +1614,7 @@ export const DataGateway = {
         if (setters.setCompGroups) setters.setCompGroups([]);
         if (setters.setCompFamilies) setters.setCompFamilies([]);
         if (setters.setCompTemplates) setters.setCompTemplates([]);
+        if (setters.setPartGroups) setters.setPartGroups([]);
         if (setters.setPartTypes) setters.setPartTypes([]);
         if (setters.setPartDesignations) setters.setPartDesignations([]);
         break;

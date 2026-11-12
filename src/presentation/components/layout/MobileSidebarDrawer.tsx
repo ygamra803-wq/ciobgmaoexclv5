@@ -840,7 +840,32 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Parts section sub-items */}
+                {/* Parts section sub-items: Groupes -> Types -> Désignations */}
+                {canAccess('part_groups') && (
+                  <button
+                    onClick={() => navTo('part_groups')}
+                    className={getTabClass('part_groups', true)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Boxes
+                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                          isTabRouteActive('part_groups')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }`}
+                      />
+                      <span>{t('nav.subtabs.part_groups', 'Groupes (Parts)')}</span>
+                    </span>
+                    <span className={getBadgeClass('part_groups')}>
+                      {counts.part_groups ?? counts.partGroups ?? 0}
+                    </span>
+                  </button>
+                )}
+
                 {canAccess('part_types') && (
                   <button
                     onClick={() => navTo('part_types')}

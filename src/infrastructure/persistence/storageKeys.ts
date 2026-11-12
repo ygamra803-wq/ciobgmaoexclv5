@@ -50,6 +50,7 @@ export const STORAGE_KEYS = {
   COMP_GROUPS: 'gmao_comp_groups_v2',
   COMP_FAMILIES: 'gmao_comp_families_v3',
   COMP_TEMPLATES: 'gmao_comp_templates_v3',
+  PART_GROUPS: 'gmao_part_groups_v1',
   PART_TYPES: 'gmao_part_types_v2',
   PART_DESIGNATIONS: 'gmao_part_designations_v2',
 
@@ -165,6 +166,7 @@ export const LEGACY_KEY_MAP = {
   gmao_comp_families_v1: STORAGE_KEYS.COMP_FAMILIES,
   gmao_comp_templates_v2: STORAGE_KEYS.COMP_TEMPLATES,
   gmao_comp_templates_v1: STORAGE_KEYS.COMP_TEMPLATES,
+  gmao_part_groups: STORAGE_KEYS.PART_GROUPS,
   gmao_part_types_v1: STORAGE_KEYS.PART_TYPES,
   gmao_part_types: STORAGE_KEYS.PART_TYPES,
   gmao_part_designations_v1: STORAGE_KEYS.PART_DESIGNATIONS,

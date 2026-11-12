@@ -38,35 +38,49 @@ import {
 export default function PartDesignationView({
   partDesignations = [],
   partTypes = [],
+  partGroups = [],
   warehouseItems = [],
   partDesignationTypeFilter = '',
   setPartDesignationTypeFilter,
   onAddPartDesignation,
   onUpdatePartDesignation,
   onDeletePartDesignation,
+  onNavigateToPartGroups,
   onNavigateToPartTypes,
   onNavigateToEntrepotByPart,
   _onNavigateToQuickSortie,
-}) {
+}: any) {
   const { t } = useI18n();
   const canCreateStock = usePermission('stock.create');
   const canEditStock = usePermission('stock.edit');
   const canDeleteStock = usePermission('stock.delete');
   const [search, setSearch] = useState('');
+  const [partGroupFilter, setPartGroupFilter] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
-  const [toEdit, setToEdit] = useState(null);
-  const [toDelete, setToDelete] = useState(null);
-  const [activeActionMenuId, setActiveActionMenuId] = useState(null);
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [toDelete, setToDelete] = useState<any>(null);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<any>(null);
   const [sortField, setSortField] = useState('ref');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const sortMenuRef = useRef(null);
+  const sortMenuRef = useRef<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const partGroupMap = useMemo(() => {
+    const map: Record<string, any> = {};
+    (partGroups || []).forEach((g: any) => {
+      const k1 = String(g.id_group || g.id_groupe || g.id || '').trim().toUpperCase();
+      const k2 = String(g.code || '').trim().toUpperCase();
+      if (k1) map[k1] = g;
+      if (k2) map[k2] = g;
+    });
+    return map;
+  }, [partGroups]);
+
   useEffect(() => {
-    const handleClickOutside = (event) => {
+    const handleClickOutside = (event: any) => {
       if (!event.target.closest('.action-menu-container')) {
         setActiveActionMenuId(null);
       }
@@ -83,27 +97,49 @@ export default function PartDesignationView({
     id_part: '',
     ref: '',
     designation: '',
+    id_group: '',
     id_type: '',
     seuil: 5,
     emplacement: '',
+    matiere_nuance: '',
+    ref_plan: '',
+    dimensions_brut: '',
     policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
   // Filter
   const filtered = useMemo(() => {
-    return partDesignations.filter((d) => {
+    return partDesignations.filter((d: any) => {
       const q = search.toLowerCase();
+      const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
+      const effectiveGroupId = String(
+        d.id_group || d.id_groupe || typeObj?.id_group || typeObj?.id_groupe || ''
+      )
+        .trim()
+        .toUpperCase();
+
       const matchSearch =
+        !q ||
         d.ref?.toLowerCase().includes(q) ||
         d.id_part?.toLowerCase().includes(q) ||
         d.designation?.toLowerCase().includes(q) ||
         d.id_type?.toLowerCase().includes(q) ||
-        d.emplacement?.toLowerCase().includes(q);
+        d.emplacement?.toLowerCase().includes(q) ||
+        d.matiere_nuance?.toLowerCase().includes(q) ||
+        d.ref_plan?.toLowerCase().includes(q) ||
+        d.dimensions_brut?.toLowerCase().includes(q) ||
+        effectiveGroupId.toLowerCase().includes(q);
+
+      const matchGroup =
+        partGroupFilter === 'ALL' ||
+        (partGroupFilter === 'UNASSIGNED'
+          ? !effectiveGroupId
+          : effectiveGroupId === String(partGroupFilter).trim().toUpperCase());
 
       const matchType = !partDesignationTypeFilter || d.id_type === partDesignationTypeFilter;
-      return matchSearch && matchType;
+      return matchSearch && matchGroup && matchType;
     });
-  }, [partDesignations, search, partDesignationTypeFilter]);
+  }, [partDesignations, partTypes, search, partGroupFilter, partDesignationTypeFilter]);
 
   // Sort
   const sortedData = useMemo(() => {
@@ -164,11 +200,23 @@ export default function PartDesignationView({
   };
 
   const handleExportExcel = () => {
-    const headers = ['Référence', 'Désignation Part', 'Type Parent', 'Stock Actuel', 'Emplacement'];
-    const rows = filtered.map((d) => {
+    const headers = [
+      'Référence',
+      'Désignation Part',
+      'Groupe Part (Niv 1)',
+      'Type Parent (Niv 2)',
+      'Matière / Nuance',
+      'Réf. Plan',
+      'Dimensions Brut',
+      'Stock Actuel',
+      'Emplacement',
+    ];
+    const rows = filtered.map((d: any) => {
       const dKey = d.ref || d.id_part || d.id_diag || d.id;
+      const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
+      const grpId = d.id_group || d.id_groupe || typeObj?.id_group || typeObj?.id_groupe || '';
       const matchingItems = warehouseItems.filter(
-        (w) =>
+        (w: any) =>
           (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
           (w.id_warehouse_item === dKey ||
             w.ref === dKey ||
@@ -177,13 +225,17 @@ export default function PartDesignationView({
             w.designation === d.designation)
       );
       const totalStock = matchingItems.reduce(
-        (sum, w) => sum + (Number(w.stockActuel ?? w.quantite ?? 1) || 0),
+        (sum: number, w: any) => sum + (Number(w.stockActuel ?? w.quantite ?? 1) || 0),
         0
       );
       return [
         d.ref || d.id_part || '',
         d.designation || '',
+        grpId,
         d.id_type || '',
+        d.matiere_nuance || '',
+        d.ref_plan || '',
+        d.dimensions_brut || '',
         totalStock,
         d.emplacement || '',
       ];
@@ -200,16 +252,24 @@ export default function PartDesignationView({
     document.body.removeChild(link);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: any) => {
     e.preventDefault();
     if (!canCreateStock) return;
     if (!form.ref || !form.designation || !form.id_type) return;
     const cleanRef = form.ref.trim().toUpperCase();
+    const matchedTypeObj = partTypes.find((t: any) => t.id_type === form.id_type);
+    const effectiveGroup =
+      form.id_group || matchedTypeObj?.id_group || matchedTypeObj?.id_groupe || undefined;
     onAddPartDesignation({
       ...form,
       id: cleanRef,
       id_part: cleanRef,
       ref: cleanRef,
+      id_group: effectiveGroup,
+      id_groupe: effectiveGroup,
+      matiere_nuance: form.matiere_nuance.trim(),
+      ref_plan: form.ref_plan.trim(),
+      dimensions_brut: form.dimensions_brut.trim(),
       seuil: Number(form.seuil) || 0,
       policy_tags:
         form.policy_tags && form.policy_tags.length > 0
@@ -220,9 +280,13 @@ export default function PartDesignationView({
       id_part: '',
       ref: '',
       designation: '',
+      id_group: '',
       id_type: '',
       seuil: 5,
       emplacement: '',
+      matiere_nuance: '',
+      ref_plan: '',
+      dimensions_brut: '',
       policy_tags: ['REPAIRABLE', 'REPLACING'],
     });
     setShowAddModal(false);
@@ -244,38 +308,89 @@ export default function PartDesignationView({
       },
       {
         key: 'designation',
-        label: t('designations.col_name', 'DÉSIGNATION DE LA PIÈCE'),
+        label: t('designations.col_name', 'DÉSIGNATION & SPÉCIFICATIONS ATELIER'),
         colLetter: 'B',
         icon: PartInfoIcon,
         sortable: true,
-        render: (item) => (
-          <div className="flex items-center gap-2">
-            <PartInfoIcon className="w-4 h-4 text-blue-600 shrink-0 animate-pulse-slow" />
-            <span className="font-semibold text-slate-800 text-[13px]">{item.designation}</span>
+        render: (item: any) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <PartInfoIcon className="w-4 h-4 text-blue-600 shrink-0 animate-pulse-slow" />
+              <span className="font-semibold text-slate-800 text-[13px]">{item.designation}</span>
+            </div>
+            {(item.matiere_nuance || item.ref_plan || item.dimensions_brut) && (
+              <div className="flex items-center gap-1.5 flex-wrap pl-6">
+                {item.matiere_nuance && (
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-mono text-[10px] font-bold"
+                    title={`Matière / Nuance : ${item.matiere_nuance}`}
+                  >
+                    Matière: {item.matiere_nuance}
+                  </span>
+                )}
+                {item.ref_plan && (
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-mono text-[10px] font-bold"
+                    title={`Référence Plan d'usinage : ${item.ref_plan}`}
+                  >
+                    Plan: {item.ref_plan}
+                  </span>
+                )}
+                {item.dimensions_brut && (
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[10px] font-semibold"
+                    title={`Dimensions Brut Atelier : ${item.dimensions_brut}`}
+                  >
+                    Brut: {item.dimensions_brut}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         ),
       },
       {
         key: 'id_type',
-        label: t('designations.col_parent_type', 'TYPE DE PART PARENT'),
+        label: t('designations.col_parent_type', 'GROUPE (NIV 1) & TYPE (NIV 2)'),
         colLetter: 'C',
         icon: LayersIcon,
         sortable: true,
-        render: (item) => {
-          const typeObj = partTypes.find((t) => t.id_type === item.id_type);
+        render: (item: any) => {
+          const typeObj = partTypes.find((t: any) => t.id_type === item.id_type);
+          const rawGroupKey = String(
+            item.id_group || item.id_groupe || typeObj?.id_group || typeObj?.id_groupe || ''
+          )
+            .trim()
+            .toUpperCase();
+          const grpObj = rawGroupKey ? partGroupMap[rawGroupKey] : null;
           return (
-            <button
-              type="button"
-              onClick={() =>
-                onNavigateToPartTypes && onNavigateToPartTypes(item.id_type)
-              }
-              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-semibold transition cursor-pointer"
-              title={t('designations.view_parent_type', 'Voir le type de part parent')}
-            >
-              <LayersIcon className="w-3 h-3 text-emerald-600" />
-              <span className="font-mono">{item.id_type}</span>
-              {typeObj && <span className="text-slate-500 font-normal"> ({typeObj.libelle})</span>}
-            </button>
+            <div className="flex flex-col items-start gap-1">
+              {grpObj && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onNavigateToPartGroups &&
+                    onNavigateToPartGroups(grpObj.id_group || grpObj.code)
+                  }
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-[10px] font-mono font-bold transition cursor-pointer"
+                  title={`Groupe de Parts (Niv 1): ${grpObj.libelle}`}
+                >
+                  <span>{grpObj.code || grpObj.id_group}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  onNavigateToPartTypes && onNavigateToPartTypes(item.id_type)
+                }
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-semibold transition cursor-pointer"
+                title={t('designations.view_parent_type', 'Voir le type de part parent')}
+              >
+                <LayersIcon className="w-3 h-3 text-emerald-600" />
+                <span className="font-mono">{item.id_type}</span>
+                {typeObj && <span className="text-slate-500 font-normal"> ({typeObj.libelle})</span>}
+              </button>
+            </div>
           );
         },
       },
@@ -469,7 +584,7 @@ export default function PartDesignationView({
         },
       },
     ],
-    [t, partTypes, warehouseItems, activeActionMenuId, onNavigateToEntrepotByPart, onNavigateToPartTypes, canEditStock, canDeleteStock]
+    [t, partTypes, partGroupMap, warehouseItems, activeActionMenuId, onNavigateToEntrepotByPart, onNavigateToPartTypes, onNavigateToPartGroups, canEditStock, canDeleteStock]
   );
 
   return (
@@ -557,10 +672,11 @@ export default function PartDesignationView({
             </button>
 
             {/* Circular Reset Button */}
-            {(search || partDesignationTypeFilter || sortField !== 'ref' || sortOrder !== 'asc') && (
+            {(search || partGroupFilter !== 'ALL' || partDesignationTypeFilter || sortField !== 'ref' || sortOrder !== 'asc') && (
               <button
                 onClick={() => {
                   setSearch('');
+                  setPartGroupFilter('ALL');
                   setPartDesignationTypeFilter && setPartDesignationTypeFilter('');
                   setSortField('ref');
                   setSortOrder('asc');
@@ -574,7 +690,7 @@ export default function PartDesignationView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
           {/* Search */}
           <div className="w-full">
             <div className="flex items-center justify-between mb-1.5">
@@ -591,7 +707,7 @@ export default function PartDesignationView({
               </span>
               <input
                 type="text"
-                placeholder={t('common.filters.search_placeholder', 'Rechercher par référence, désignation, emplacement...')}
+                placeholder="Réf, désignation, matière (42CrMo4), plan..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full h-10 pl-9 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
@@ -607,11 +723,49 @@ export default function PartDesignationView({
             </div>
           </div>
 
+          {/* Group Filter CustomSelect (Niv 1) */}
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                GROUPE DE PARTS (NIV 1)
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-teal-50 text-teal-800 border border-teal-200 shadow-2xs">
+                Niv 1
+              </span>
+            </div>
+            <CustomSelect
+              prefixIcon={
+                <span className="w-5 h-5 rounded-md bg-teal-100 border border-teal-300/80 flex items-center justify-center text-teal-700 shadow-2xs shrink-0">
+                  <LayersIcon className="w-3 h-3" />
+                </span>
+              }
+              value={partGroupFilter}
+              onChange={(val) => {
+                setPartGroupFilter(val);
+                if (setPartDesignationTypeFilter) setPartDesignationTypeFilter('');
+              }}
+              options={[
+                {
+                  value: 'ALL',
+                  label: `Tous les Groupes (${partGroups.length})`,
+                },
+                ...partGroups.map((g: any) => ({
+                  value: String(g.id_group || g.id_groupe || g.code || ''),
+                  label: `${g.code || g.id_group} — ${g.libelle}`,
+                })),
+                {
+                  value: 'UNASSIGNED',
+                  label: 'Non classés',
+                },
+              ]}
+            />
+          </div>
+
           {/* Type Filter CustomSelect */}
           <div className="w-full">
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
-                {t('common.type', 'TYPE DE PART')}
+                {t('common.type', 'TYPE DE PART (NIV 2)')}
               </label>
               <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
                 Col. C
@@ -634,15 +788,22 @@ export default function PartDesignationView({
                   badge: `${partDesignations.length}`,
                   badgeColor: 'bg-slate-100 text-slate-700 font-bold',
                 },
-                ...partTypes.map((t) => {
-                  const count = partDesignations.filter((d) => d.id_type === t.id_type).length;
-                  return {
-                    value: t.id_type,
-                    label: `${t.id_type} - ${t.libelle}`,
-                    badge: `${count}`,
-                    badgeColor: 'bg-amber-50 text-amber-800 font-bold',
-                  };
-                }),
+                ...partTypes
+                  .filter((t: any) => {
+                    if (partGroupFilter === 'ALL') return true;
+                    const gId = String(t.id_group || t.id_groupe || '').trim().toUpperCase();
+                    if (partGroupFilter === 'UNASSIGNED') return !gId;
+                    return gId === String(partGroupFilter).trim().toUpperCase();
+                  })
+                  .map((t: any) => {
+                    const count = partDesignations.filter((d: any) => d.id_type === t.id_type).length;
+                    return {
+                      value: t.id_type,
+                      label: `${t.id_type} - ${t.libelle}`,
+                      badge: `${count}`,
+                      badgeColor: 'bg-amber-50 text-amber-800 font-bold',
+                    };
+                  }),
               ]}
             />
           </div>
@@ -957,6 +1118,46 @@ export default function PartDesignationView({
                 </div>
               </div>
 
+              {/* Spécifications Atelier (P2): Matière / Nuance, Réf. Plan, Dimensions Brut */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Matière / Nuance
+                  </label>
+                  <input
+                    type="text"
+                    value={form.matiere_nuance}
+                    onChange={(e) => setForm({ ...form, matiere_nuance: e.target.value })}
+                    placeholder="ex: 42CrMo4, Inox 316L"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Réf. Plan Usinage
+                  </label>
+                  <input
+                    type="text"
+                    value={form.ref_plan}
+                    onChange={(e) => setForm({ ...form, ref_plan: e.target.value })}
+                    placeholder="ex: PLN-MEC-204"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Dimensions Brut
+                  </label>
+                  <input
+                    type="text"
+                    value={form.dimensions_brut}
+                    onChange={(e) => setForm({ ...form, dimensions_brut: e.target.value })}
+                    placeholder="ex: Ø60 x 240 mm"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
                   Politique de Maintenance & Orientation Pièce (`POLICY-TAGS`)
@@ -1026,7 +1227,14 @@ export default function PartDesignationView({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!canEditStock) return;
-                onUpdatePartDesignation(toEdit.id || toEdit.ref || toEdit.id_part, toEdit);
+                const matchedTypeObj = partTypes.find((t: any) => t.id_type === toEdit.id_type);
+                const effectiveGroup =
+                  toEdit.id_group || matchedTypeObj?.id_group || matchedTypeObj?.id_groupe || undefined;
+                onUpdatePartDesignation(toEdit.id || toEdit.ref || toEdit.id_part, {
+                  ...toEdit,
+                  id_group: effectiveGroup,
+                  id_groupe: effectiveGroup,
+                });
                 setToEdit(null);
               }}
               className="space-y-3"
@@ -1054,7 +1262,7 @@ export default function PartDesignationView({
                   onChange={(e) => setToEdit({ ...toEdit, id_type: e.target.value })}
                   className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 cursor-pointer"
                 >
-                  {partTypes.map((t) => (
+                  {partTypes.map((t: any) => (
                     <option key={t.id_type} value={t.id_type}>
                       {t.id_type} - {t.libelle}
                     </option>
@@ -1086,6 +1294,46 @@ export default function PartDesignationView({
                     value={toEdit.emplacement || ''}
                     onChange={(e) => setToEdit({ ...toEdit, emplacement: e.target.value })}
                     className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+
+              {/* Spécifications Atelier (P2) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Matière / Nuance
+                  </label>
+                  <input
+                    type="text"
+                    value={toEdit.matiere_nuance || ''}
+                    onChange={(e) => setToEdit({ ...toEdit, matiere_nuance: e.target.value })}
+                    placeholder="ex: 42CrMo4, Inox 316L"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Réf. Plan Usinage
+                  </label>
+                  <input
+                    type="text"
+                    value={toEdit.ref_plan || ''}
+                    onChange={(e) => setToEdit({ ...toEdit, ref_plan: e.target.value })}
+                    placeholder="ex: PLN-MEC-204"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Dimensions Brut
+                  </label>
+                  <input
+                    type="text"
+                    value={toEdit.dimensions_brut || ''}
+                    onChange={(e) => setToEdit({ ...toEdit, dimensions_brut: e.target.value })}
+                    placeholder="ex: Ø60 x 240 mm"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
                   />
                 </div>
               </div>

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "GRP-PRT-MEC",
+    "id_groupe": "GRP-PRT-MEC",
+    "id_group": "GRP-PRT-MEC",
+    "code": "MEC-TRANS",
+    "libelle": "Organes Mécaniques & Transmission",
+    "description": "Groupe des parts mécaniques d'entrepôt : paliers, accouplements, arbres, poulies, pignons et organes de transmission",
+    "default_policy_tags": ["REPAIRABLE", "REPLACING"],
+    "sort_order": 1,
+    "is_active": true,
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-PRT-FIX",
+    "id_groupe": "GRP-PRT-FIX",
+    "id_group": "GRP-PRT-FIX",
+    "code": "FIX-ASSEM",
+    "libelle": "Fixation, Visserie & Assemblage",
+    "description": "Groupe des éléments de fixation structurelle, boulonnerie haute résistance, goujons, brides et colliers d'assemblage",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 2,
+    "is_active": true,
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-PRT-FLUID",
+    "id_groupe": "GRP-PRT-FLUID",
+    "id_group": "GRP-PRT-FLUID",
+    "code": "HYD-PNEUM",
+    "libelle": "Hydraulique, Pneumatique & Fluides",
+    "description": "Groupe des parts fluidiques d'entrepôt : distributeurs, vérins secondaires, raccords haute pression, vannes et flexibles",
+    "default_policy_tags": ["REPAIRABLE", "REPLACING"],
+    "sort_order": 3,
+    "is_active": true,
+    "created_at": "2024-01-01"
+  },
+  {
+    "id": "GRP-PRT-ELEC",
+    "id_groupe": "GRP-PRT-ELEC",
+    "id_group": "GRP-PRT-ELEC",
+    "code": "ELEC-AUTO",
+    "libelle": "Électrique, Relais & Instrumentation",
+    "description": "Groupe des parts électriques et capteurs d'entrepôt : contacteurs, relais thermiques, cellules optiques et codeurs",
+    "default_policy_tags": ["REPLACING"],
+    "sort_order": 4,
+    "is_active": true,
+    "created_at": "2024-01-01"
+  }
+]

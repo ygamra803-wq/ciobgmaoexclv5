@@ -13,6 +13,9 @@ export default function AddArticleModal({
   const [selectedType, setSelectedType] = useState('');
   const [ref, setRef] = useState('');
   const [designation, setDesignation] = useState('');
+  const [uniteMesure, setUniteMesure] = useState('PCS');
+  const [criticite, setCriticite] = useState('B');
+  const [refConstructeur, setRefConstructeur] = useState('');
   const [stockInitial, setStockInitial] = useState(0);
   const [seuil, setSeuil] = useState(5);
   const [prixUnitaire, setPrixUnitaire] = useState(0);
@@ -47,6 +50,9 @@ export default function AddArticleModal({
       const initialType = types[0]?.id_type || types[0]?.libelle || 'Courroie';
       setSelectedType(initialType);
       setDesignation('');
+      setUniteMesure('PCS');
+      setCriticite('B');
+      setRefConstructeur('');
       setStockInitial(0);
       setSeuil(5);
       setPrixUnitaire(0);
@@ -77,11 +83,20 @@ export default function AddArticleModal({
     if (!cleanRef) return;
 
     const cleanPrice = Math.max(0, Number(prixUnitaire) || 0);
+    const matchedTypeObj = (types || []).find(
+      (t) => (t.id_type || t.libelle) === selectedType
+    );
     onAddArticle({
       ref: cleanRef,
       designation: designation.trim() || cleanRef,
+      id_group: matchedTypeObj?.id_group || null,
       id_type: selectedType,
       type: selectedType,
+      unite: uniteMesure,
+      unite_mesure: uniteMesure,
+      criticite: criticite,
+      ref_constructeur: refConstructeur.trim(),
+      policy_tags: ['REPLACING'],
       stockInitial: Number(stockInitial) || 0,
       seuil: Number(seuil) || 0,
       prix_unitaire: cleanPrice,
@@ -176,6 +191,56 @@ export default function AddArticleModal({
                 onChange={(e) => setDesignation(e.target.value)}
                 className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15 shadow-2xs transition"
                 required
+              />
+            </div>
+          </div>
+
+          {/* High-Priority Shopfloor Fields (P2): Unité de Mesure, Criticité A/B/C, Réf Constructeur */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200/80">
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Unité de Mesure *
+              </label>
+              <select
+                value={uniteMesure}
+                onChange={(e) => setUniteMesure(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold text-slate-900 focus:border-indigo-500 outline-none cursor-pointer"
+              >
+                <option value="PCS">PCS (Pièce)</option>
+                <option value="L">L (Litre - Huile/Fluide)</option>
+                <option value="M">M (Mètre - Câble/Tube)</option>
+                <option value="KG">KG (Kilogramme - Graisse)</option>
+                <option value="KIT">KIT (Pochette/Kit)</option>
+                <option value="JEU">JEU (Jeu complet)</option>
+                <option value="ROUL">ROUL (Rouleau)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Criticité (ABC) *
+              </label>
+              <select
+                value={criticite}
+                onChange={(e) => setCriticite(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:border-indigo-500 outline-none cursor-pointer"
+              >
+                <option value="A">Classe A — Vital / Critique</option>
+                <option value="B">Classe B — Important</option>
+                <option value="C">Classe C — Standard / Courant</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Réf. Constructeur / Équiv.
+              </label>
+              <input
+                type="text"
+                placeholder="ex: SKF 6205-2RS"
+                value={refConstructeur}
+                onChange={(e) => setRefConstructeur(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-indigo-500 outline-none"
               />
             </div>
           </div>

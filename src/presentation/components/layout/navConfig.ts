@@ -104,6 +104,7 @@ export const PARENT_MODULES = [
       { id: 'comp_groups', label: 'Groupes Composants' },
       { id: 'comp_families', label: 'Familles Composants' },
       { id: 'comp_templates', label: 'Templates Composants' },
+      { id: 'part_groups', label: 'Groupes Parts' },
       { id: 'part_types', label: 'Types Parts' },
       { id: 'part_designations', label: 'Désignations Parts' }
     ]

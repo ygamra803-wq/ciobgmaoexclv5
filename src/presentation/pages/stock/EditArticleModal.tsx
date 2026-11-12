@@ -15,6 +15,9 @@ export default function EditArticleModal({
     designation: article?.designation || '',
     id_group: article?.id_group || '',
     id_type: article?.id_type || types[0]?.id_type || '',
+    unite_mesure: article?.unite_mesure || article?.unite || 'PCS',
+    criticite: article?.criticite || 'B',
+    ref_constructeur: article?.ref_constructeur || '',
     stockInitial: article?.stockInitial ?? 0,
     seuil: article?.seuil ?? 5,
     prix_unitaire: article?.prix_unitaire ?? article?.prixUnitaire ?? article?.prix ?? 0,
@@ -28,6 +31,9 @@ export default function EditArticleModal({
         designation: article.designation || '',
         id_group: article.id_group || '',
         id_type: article.id_type || types[0]?.id_type || '',
+        unite_mesure: article.unite_mesure || article.unite || 'PCS',
+        criticite: article.criticite || 'B',
+        ref_constructeur: article.ref_constructeur || '',
         stockInitial: article.stockInitial ?? 0,
         seuil: article.seuil ?? 5,
         prix_unitaire: article.prix_unitaire ?? article.prixUnitaire ?? article.prix ?? 0,
@@ -60,6 +66,10 @@ export default function EditArticleModal({
       id_group: form.id_group || null,
       id_type: form.id_type,
       type: form.id_type,
+      unite: form.unite_mesure || 'PCS',
+      unite_mesure: form.unite_mesure || 'PCS',
+      criticite: form.criticite || 'B',
+      ref_constructeur: form.ref_constructeur.trim(),
       stockInitial: Number(form.stockInitial) || 0,
       seuil: Number(form.seuil) || 0,
       prix_unitaire: cleanPrice,
@@ -172,6 +182,56 @@ export default function EditArticleModal({
                 value={form.emplacement}
                 onChange={(e) => setForm({ ...form, emplacement: e.target.value })}
                 className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500"
+              />
+            </div>
+          </div>
+
+          {/* High-Priority Shopfloor Fields (P2): Unité de Mesure, Criticité A/B/C, Réf Constructeur */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80">
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Unité de Mesure *
+              </label>
+              <select
+                value={form.unite_mesure}
+                onChange={(e) => setForm({ ...form, unite_mesure: e.target.value })}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-slate-900 focus:border-cyan-500 outline-none cursor-pointer"
+              >
+                <option value="PCS">PCS (Pièce)</option>
+                <option value="L">L (Litre - Huile/Fluide)</option>
+                <option value="M">M (Mètre - Câble/Tube)</option>
+                <option value="KG">KG (Kilogramme - Graisse)</option>
+                <option value="KIT">KIT (Pochette/Kit)</option>
+                <option value="JEU">JEU (Jeu complet)</option>
+                <option value="ROUL">ROUL (Rouleau)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Criticité (ABC) *
+              </label>
+              <select
+                value={form.criticite}
+                onChange={(e) => setForm({ ...form, criticite: e.target.value })}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:border-cyan-500 outline-none cursor-pointer"
+              >
+                <option value="A">Classe A — Vital / Critique</option>
+                <option value="B">Classe B — Important</option>
+                <option value="C">Classe C — Standard / Courant</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Réf. Constructeur / Équiv.
+              </label>
+              <input
+                type="text"
+                placeholder="ex: SKF 6205-2RS"
+                value={form.ref_constructeur}
+                onChange={(e) => setForm({ ...form, ref_constructeur: e.target.value })}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-cyan-500 outline-none"
               />
             </div>
           </div>

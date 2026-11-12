@@ -1,22 +1,32 @@
 [
   {
     "id_type": "TYPE-FIX",
+    "id_group": "GRP-PRT-FIX",
+    "id_groupe": "GRP-PRT-FIX",
     "libelle": "Fixation & Visserie Industrielle"
   },
   {
     "id_type": "TYPE-MEC",
+    "id_group": "GRP-PRT-MEC",
+    "id_groupe": "GRP-PRT-MEC",
     "libelle": "Organes Mécaniques & Transmission"
   },
   {
     "id_type": "TYPE-PNE",
+    "id_group": "GRP-PRT-FLUID",
+    "id_groupe": "GRP-PRT-FLUID",
     "libelle": "Pneumatique & Composants Fluides"
   },
   {
     "id_type": "TYPE-ELE",
+    "id_group": "GRP-PRT-ELEC",
+    "id_groupe": "GRP-PRT-ELEC",
     "libelle": "Électrique, Relais & Capteurs"
   },
   {
     "id_type": "TYPE-HYD",
+    "id_group": "GRP-PRT-FLUID",
+    "id_groupe": "GRP-PRT-FLUID",
     "libelle": "Hydraulique, Raccords & Flexibles"
   }
 ]

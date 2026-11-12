@@ -35,6 +35,8 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     setCompFamilies,
     compTemplates,
     setCompTemplates,
+    partGroups,
+    setPartGroups,
     partTypes,
     setPartTypes,
     partDesignations,
@@ -47,6 +49,11 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
   const handleAddCompGroup = (newGrp) => {
     setCompGroups((prev) => [...prev, newGrp]);
     showToast(`Groupe "${newGrp.libelle || newGrp.code}" ajouté avec succès !`);
+  };
+
+  const handleAddPartGroup = (newGrp) => {
+    setPartGroups((prev) => [...(prev || []), newGrp]);
+    showToast(`Groupe Part "${newGrp.libelle || newGrp.code}" ajouté avec succès !`);
   };
 
   const handleAddCompFamily = (newFam) => {
@@ -208,6 +215,8 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     setCompFamilies,
     compTemplates,
     setCompTemplates,
+    partGroups,
+    setPartGroups,
     partTypes,
     setPartTypes,
     partDesignations,
@@ -245,6 +254,7 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
     setPreventiveTasks: gmaoState.setPreventiveTasks,
     setCorrectiveInterventions: gmaoState.setCorrectiveInterventions,
     handleAddCompGroup,
+    handleAddPartGroup,
     handleAddCompFamily,
     handleAddCompTemplate,
     handleAddPartType,
