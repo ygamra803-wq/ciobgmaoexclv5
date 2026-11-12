@@ -36,6 +36,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { IPartGroup, IPartType, IPartDesignation, IWarehouseItem, MaterialPolicyTag } from '../../../types/domain';
+import { getGroupId, getGroupRecordId } from '../../../domain/stock/pdrHierarchyService';
 
 const POLICY_TAG_META: Record<
   MaterialPolicyTag,
@@ -102,6 +103,7 @@ export default function PartGroupView({
     code: string;
     libelle: string;
     description: string;
+    domaine_technique: string;
     default_policy_tags: MaterialPolicyTag[];
     sort_order: number;
     is_active: boolean;
@@ -110,6 +112,7 @@ export default function PartGroupView({
     code: '',
     libelle: '',
     description: '',
+    domaine_technique: '',
     default_policy_tags: ['REPLACING'],
     sort_order: 1,
     is_active: true,
@@ -155,16 +158,16 @@ export default function PartGroupView({
     const safeWh = Array.isArray(warehouseItems) ? warehouseItems : [];
 
     safeGroups.forEach((g) => {
-      const gId = String(g.id || g.id_group || g.id_groupe || '');
+      const gId = getGroupRecordId(g);
       const gCode = String(g.code || '');
       const linkedTypes = safeTypes.filter((pt) => {
-        const ptGrp = String(pt.id_group || pt.id_groupe || '');
+        const ptGrp = getGroupId(pt);
         return Boolean(ptGrp && (ptGrp === gId || (gCode && ptGrp === gCode)));
       });
       const typeIds = new Set(linkedTypes.map((pt) => String(pt.id_type || pt.id || '')));
 
       const linkedDesignations = safeDesignations.filter((pd) => {
-        const pdGrp = String(pd.id_group || pd.id_groupe || '');
+        const pdGrp = getGroupId(pd);
         const pdType = String(pd.id_type || pd.type || '');
         return (
           (pdGrp && (pdGrp === gId || (gCode && pdGrp === gCode))) ||
@@ -176,7 +179,7 @@ export default function PartGroupView({
         const n = String(w.nature || '').toUpperCase();
         const isPart = n === 'PART' || n.includes('PART') || n.includes('PIECE') || n.includes('PIÈCE') || Boolean(w.id_type);
         if (!isPart) return false;
-        const wGrp = String(w.id_group || w.id_groupe || '');
+        const wGrp = getGroupId(w);
         const wType = String(w.id_type || w.id_part_type || '');
         return (
           (wGrp && (wGrp === gId || (gCode && wGrp === gCode))) ||
@@ -198,13 +201,13 @@ export default function PartGroupView({
     const safeGroups = Array.isArray(partGroups) ? partGroups : [];
     const validIds = new Set<string>();
     safeGroups.forEach((g) => {
-      const gId = String(g.id || g.id_group || g.id_groupe || '').trim();
+      const gId = getGroupRecordId(g);
       const gCode = String(g.code || '').trim();
       if (gId) validIds.add(gId);
       if (gCode) validIds.add(gCode);
     });
     const unassignedTypes = (partTypes || []).filter((pt) => {
-      const grp = String(pt.id_group || pt.id_groupe || '').trim();
+      const grp = getGroupId(pt);
       return !grp || !validIds.has(grp);
     }).length;
     return { unassignedTypes };
@@ -318,11 +321,13 @@ export default function PartGroupView({
 
     onAddPartGroup?.({
       id: autoId,
-      id_groupe: autoId,
       id_group: autoId,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
+      id_groupe: autoId,
       code: cleanCode,
       libelle: cleanLibelle,
       description: form.description.trim(),
+      domaine_technique: form.domaine_technique.trim().toUpperCase() || undefined,
       default_policy_tags: form.default_policy_tags,
       sort_order: Number(form.sort_order) || (partGroups || []).length + 1,
       is_active: form.is_active !== false,
@@ -337,7 +342,7 @@ export default function PartGroupView({
     e.preventDefault();
     if (!canEditStock || !editingGroup) return;
     setFormError(null);
-    const targetId = String(editingGroup.id || editingGroup.id_group || editingGroup.id_groupe || '');
+    const targetId = getGroupRecordId(editingGroup);
     const cleanCode = form.code.trim().toUpperCase().replace(/\s+/g, '-');
     const cleanLibelle = form.libelle.trim();
     if (!cleanCode || !cleanLibelle) {
@@ -346,7 +351,7 @@ export default function PartGroupView({
     }
 
     const duplicateCode = (partGroups || []).some((g) => {
-      const gId = String(g.id || g.id_group || g.id_groupe || '');
+      const gId = getGroupRecordId(g);
       return gId !== targetId && String(g.code || '').trim().toUpperCase() === cleanCode;
     });
     if (duplicateCode) {
@@ -357,11 +362,13 @@ export default function PartGroupView({
     onUpdatePartGroup?.(targetId, {
       ...editingGroup,
       id: targetId,
-      id_groupe: targetId,
       id_group: targetId,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
+      id_groupe: targetId,
       code: cleanCode,
       libelle: cleanLibelle,
       description: form.description.trim(),
+      domaine_technique: form.domaine_technique.trim().toUpperCase() || undefined,
       default_policy_tags: form.default_policy_tags,
       sort_order: Number(form.sort_order) || 1,
       is_active: form.is_active !== false,
@@ -486,16 +493,21 @@ export default function PartGroupView({
       },
       {
         key: 'default_policy_tags',
-        label: 'POLITIQUES MATIÈRES PAR DÉFAUT',
+        label: 'DOMAINE & POLITIQUES MATIÈRES',
         colLetter: 'C',
         icon: Wrench,
         render: (group: IPartGroup) => {
           const tags = Array.isArray(group.default_policy_tags) ? group.default_policy_tags : [];
-          if (tags.length === 0) {
+          if (tags.length === 0 && !group.domaine_technique) {
             return <span className="text-slate-400 text-[11px] italic">Aucune</span>;
           }
           return (
             <div className="flex flex-wrap gap-1">
+              {group.domaine_technique && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                  {group.domaine_technique}
+                </span>
+              )}
               {tags.map((tag) => {
                 const meta = POLICY_TAG_META[tag];
                 if (!meta) return null;
@@ -689,6 +701,7 @@ export default function PartGroupView({
                             code: group.code || '',
                             libelle: group.libelle || '',
                             description: group.description || '',
+                            domaine_technique: group.domaine_technique || '',
                             default_policy_tags: Array.isArray(group.default_policy_tags)
                               ? group.default_policy_tags
                               : ['REPLACING'],
@@ -801,6 +814,7 @@ export default function PartGroupView({
                   code: '',
                   libelle: '',
                   description: '',
+                  domaine_technique: '',
                   default_policy_tags: ['REPLACING'],
                   sort_order: nextIdx,
                   is_active: true,
@@ -1125,17 +1139,38 @@ export default function PartGroupView({
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 mb-1 block">
-                  Description & Périmètre Technique
-                </label>
-                <textarea
-                  rows={2}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Ex: Paliers, accouplements, arbres, poulies, pignons et organes de transmission..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 resize-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">
+                    Description & Périmètre Technique
+                  </label>
+                  <input
+                    type="text"
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    placeholder="Ex: Paliers, accouplements, arbres, poulies..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1 block">
+                    Domaine Technique (P3)
+                  </label>
+                  <select
+                    value={form.domaine_technique}
+                    onChange={(e) => setForm({ ...form, domaine_technique: e.target.value })}
+                    className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 cursor-pointer"
+                  >
+                    <option value="">— Multi-domaines —</option>
+                    <option value="MECANIQUE">MÉCANIQUE</option>
+                    <option value="ELECTRIQUE">ÉLECTRIQUE</option>
+                    <option value="HYDRAULIQUE">HYDRAULIQUE</option>
+                    <option value="PNEUMATIQUE">PNEUMATIQUE</option>
+                    <option value="AUTOMATISME">AUTOMATISME</option>
+                    <option value="LUBRIFIANTS">LUBRIFIANTS</option>
+                    <option value="CONSOMMABLES">CONSOMMABLES</option>
+                  </select>
+                </div>
               </div>
 
               <div>

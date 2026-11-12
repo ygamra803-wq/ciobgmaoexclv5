@@ -11,6 +11,7 @@
     "matiere_nuance": "Acier 42CrMo4 (Cl. 10.9)",
     "ref_plan": "PLN-FIX-101-A",
     "dimensions_brut": "Ø16 x 120 mm",
+    "traitement_thermique": "Trempé revenu 38-42 HRC",
     "policy_tags": ["REPLACING", "MODIFYING"]
   },
   {
@@ -25,6 +26,7 @@
     "matiere_nuance": "Polyuréthane Armé Kevlar",
     "ref_plan": "PLN-MEC-204-B",
     "dimensions_brut": "1250 x 50 x 4 mm",
+    "traitement_thermique": "Vulcanisation à chaud 160°C",
     "policy_tags": ["REPLACING", "REPAIRABLE"]
   },
   {
@@ -39,6 +41,7 @@
     "matiere_nuance": "Alu Anodisé / Tige Inox 304",
     "ref_plan": "PLN-PNE-050-C",
     "dimensions_brut": "Ø65 x 180 mm",
+    "traitement_thermique": "Anodisation dure 30 µm",
     "policy_tags": ["REPAIRABLE", "REPLACING"]
   },
   {

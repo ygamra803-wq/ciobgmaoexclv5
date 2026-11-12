@@ -30,12 +30,14 @@ export default function PdrGroupsModal({
     code: string;
     libelle: string;
     description: string;
+    domaine_technique: string;
     default_policy_tags: MaterialPolicyTag[];
     is_active: boolean;
   }>({
     code: '',
     libelle: '',
     description: '',
+    domaine_technique: '',
     default_policy_tags: ['REPLACING'],
     is_active: true,
   });
@@ -49,6 +51,7 @@ export default function PdrGroupsModal({
       code: '',
       libelle: '',
       description: '',
+      domaine_technique: '',
       default_policy_tags: ['REPLACING'],
       is_active: true,
     });
@@ -61,6 +64,7 @@ export default function PdrGroupsModal({
       code: g.code || '',
       libelle: g.libelle || '',
       description: g.description || '',
+      domaine_technique: g.domaine_technique || '',
       default_policy_tags: g.default_policy_tags || ['REPLACING'],
       is_active: g.is_active !== false,
     });
@@ -207,17 +211,38 @@ export default function PdrGroupsModal({
               </div>
             </div>
 
-            <div>
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                Description / Périmètre
-              </label>
-              <input
-                type="text"
-                placeholder="ex: Roulements à billes, rouleaux, rotules et paliers applique"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
+                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                  Description / Périmètre
+                </label>
+                <input
+                  type="text"
+                  placeholder="ex: Roulements à billes, rouleaux, rotules et paliers applique"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  className="w-full h-9 px-3 rounded-xl border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                  Domaine Technique
+                </label>
+                <select
+                  value={form.domaine_technique}
+                  onChange={(e) => setForm({ ...form, domaine_technique: e.target.value })}
+                  className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:border-indigo-500 outline-none cursor-pointer"
+                >
+                  <option value="">— Multi-domaines —</option>
+                  <option value="MECANIQUE">MÉCANIQUE</option>
+                  <option value="ELECTRIQUE">ÉLECTRIQUE</option>
+                  <option value="HYDRAULIQUE">HYDRAULIQUE</option>
+                  <option value="PNEUMATIQUE">PNEUMATIQUE</option>
+                  <option value="AUTOMATISME">AUTOMATISME</option>
+                  <option value="LUBRIFIANTS">LUBRIFIANTS</option>
+                  <option value="CONSOMMABLES">CONSOMMABLES</option>
+                </select>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">

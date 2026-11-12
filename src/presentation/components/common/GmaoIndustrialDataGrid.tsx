@@ -74,6 +74,7 @@ export default function GmaoIndustrialDataGrid({
   overscanCount = 8,
   useReactWindow = false,
   useTanStack = undefined,
+  rowKey: getRowKey = null,
 }: any) {
   const { t } = useI18n();
   const scrollContainerRef = useRef(null);
@@ -272,7 +273,10 @@ export default function GmaoIndustrialDataGrid({
       );
     }
 
-    const rowKey = item.id || item.ref || item.id_warehouse_item || item.code || index;
+    const rowKey =
+      typeof getRowKey === 'function'
+        ? getRowKey(item, index, rowNumber)
+        : item.id || item.code_bon || item.ref || item.id_warehouse_item || item.id_group || item.id_type || item.id_part || item.code || index;
     return (
       <div
         {...ariaAttributes}
@@ -564,7 +568,10 @@ export default function GmaoIndustrialDataGrid({
                         return renderRow(item, index, rowNumber);
                       }
 
-                      const rowKey = item.id || item.ref || item.id_warehouse_item || item.code || index;
+                      const rowKey =
+                        typeof getRowKey === 'function'
+                          ? getRowKey(item, index, rowNumber)
+                          : item.id || item.code_bon || item.ref || item.id_warehouse_item || item.id_group || item.id_type || item.id_part || item.code || index;
 
                       return (
                         <tr

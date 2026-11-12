@@ -424,6 +424,12 @@ export default function EntrepotView({
     stockInitial: 1,
     seuil: 0,
     remarques: '',
+    traitement_thermique: '',
+    mode_reparation_defaut: 'NON_DEFINI',
+    tension_nominale: '',
+    courant_nominal_a: '',
+    indice_protection: '',
+    type_fixation: '',
     policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
@@ -439,6 +445,12 @@ export default function EntrepotView({
     matiere_nuance: '',
     ref_plan: '',
     dimensions_brut: '',
+    traitement_thermique: '',
+    mode_reparation_defaut: 'NON_DEFINI',
+    tension_nominale: '',
+    courant_nominal_a: '',
+    indice_protection: '',
+    type_fixation: '',
     rattachement_type: 'ENTREPOT',
     id_machine_registered: '',
     id_zone: '',
@@ -475,6 +487,12 @@ export default function EntrepotView({
         matiere_nuance: defaultDiagObj?.matiere_nuance || '',
         ref_plan: defaultDiagObj?.ref_plan || '',
         dimensions_brut: defaultDiagObj?.dimensions_brut || '',
+        traitement_thermique: defaultDiagObj?.traitement_thermique || '',
+        mode_reparation_defaut: 'NON_DEFINI',
+        tension_nominale: '',
+        courant_nominal_a: '',
+        indice_protection: '',
+        type_fixation: '',
         rattachement_type: 'ENTREPOT',
         id_machine_registered: '',
         id_zone: zones[0]?.id_zone || '',
@@ -502,6 +520,15 @@ export default function EntrepotView({
         id_templates: defaultTpl,
         id_type: types[0]?.id_type || 'TYPE-MEC',
         id_diag: '',
+        matiere_nuance: '',
+        ref_plan: '',
+        dimensions_brut: '',
+        traitement_thermique: '',
+        mode_reparation_defaut: defaultTplObj?.mode_reparation_defaut || 'NON_DEFINI',
+        tension_nominale: defaultTplObj?.tension_nominale || defaultTplObj?.specs?.V || '',
+        courant_nominal_a: defaultTplObj?.courant_nominal_a || defaultTplObj?.specs?.A || '',
+        indice_protection: defaultTplObj?.indice_protection || '',
+        type_fixation: defaultTplObj?.type_fixation || '',
         rattachement_type: 'ENTREPOT',
         id_machine_registered: '',
         id_zone: zones[0]?.id_zone || '',
@@ -564,6 +591,7 @@ export default function EntrepotView({
     const linkedDiag = diagnostics.find(
       (d: any) => (d.id_part || d.ref || d.id_diag || d.id) === item.id_diag
     );
+    const linkedTpl = templates.find((t: any) => t.id_templates === item.id_templates);
     setToEdit(item);
     setEditForm({
       id_warehouse_item: item.id_warehouse_item || '',
@@ -576,6 +604,12 @@ export default function EntrepotView({
       matiere_nuance: item.matiere_nuance || linkedDiag?.matiere_nuance || '',
       ref_plan: item.ref_plan || linkedDiag?.ref_plan || '',
       dimensions_brut: item.dimensions_brut || linkedDiag?.dimensions_brut || '',
+      traitement_thermique: item.traitement_thermique || linkedDiag?.traitement_thermique || '',
+      mode_reparation_defaut: item.mode_reparation_defaut || linkedTpl?.mode_reparation_defaut || 'NON_DEFINI',
+      tension_nominale: item.tension_nominale || linkedTpl?.tension_nominale || linkedTpl?.specs?.V || '',
+      courant_nominal_a: item.courant_nominal_a != null ? item.courant_nominal_a : (linkedTpl?.courant_nominal_a || linkedTpl?.specs?.A || ''),
+      indice_protection: item.indice_protection || linkedTpl?.indice_protection || '',
+      type_fixation: item.type_fixation || linkedTpl?.type_fixation || '',
       rattachement_type: item.rattachement_type || 'ENTREPOT',
       id_machine_registered: item.id_machine_registered || '',
       id_zone: item.id_zone || '',
@@ -658,6 +692,11 @@ export default function EntrepotView({
       ...prev,
       id_templates: newTpl,
       designation: tplObj ? tplObj.libelle : prev.designation,
+      mode_reparation_defaut: tplObj?.mode_reparation_defaut || prev.mode_reparation_defaut || 'NON_DEFINI',
+      tension_nominale: tplObj?.tension_nominale || tplObj?.specs?.V || prev.tension_nominale || '',
+      courant_nominal_a: tplObj?.courant_nominal_a || tplObj?.specs?.A || prev.courant_nominal_a || '',
+      indice_protection: tplObj?.indice_protection || prev.indice_protection || '',
+      type_fixation: tplObj?.type_fixation || prev.type_fixation || '',
     }));
   };
 
@@ -678,6 +717,7 @@ export default function EntrepotView({
       matiere_nuance: diagObj?.matiere_nuance || '',
       ref_plan: diagObj?.ref_plan || '',
       dimensions_brut: diagObj?.dimensions_brut || '',
+      traitement_thermique: diagObj?.traitement_thermique || '',
       emplacement: diagObj?.emplacement || prev.emplacement,
       seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
@@ -695,6 +735,7 @@ export default function EntrepotView({
       matiere_nuance: diagObj?.matiere_nuance || prev.matiere_nuance || '',
       ref_plan: diagObj?.ref_plan || prev.ref_plan || '',
       dimensions_brut: diagObj?.dimensions_brut || prev.dimensions_brut || '',
+      traitement_thermique: diagObj?.traitement_thermique || prev.traitement_thermique || '',
       emplacement: diagObj?.emplacement || prev.emplacement,
       seuil: diagObj?.seuil != null ? diagObj.seuil : prev.seuil,
     }));
@@ -734,12 +775,19 @@ export default function EntrepotView({
         id_family: isComp ? addForm.id_family : '',
         id_templates: isComp ? addForm.id_templates : '',
         id_group: inheritedPartGroup,
+        // TODO(ALIAS-ID-GROUP): Remove legacy id_groupe write once all consumers use getGroupId()
         id_groupe: inheritedPartGroup,
         id_type: !isComp ? addForm.id_type : '',
         id_diag: !isComp ? addForm.id_diag : '',
         matiere_nuance: !isComp ? String(addForm.matiere_nuance || '').trim() : undefined,
         ref_plan: !isComp ? String(addForm.ref_plan || '').trim() : undefined,
         dimensions_brut: !isComp ? String(addForm.dimensions_brut || '').trim() : undefined,
+        traitement_thermique: !isComp ? String(addForm.traitement_thermique || '').trim() || undefined : undefined,
+        mode_reparation_defaut: isComp ? (addForm.mode_reparation_defaut || 'NON_DEFINI') : undefined,
+        tension_nominale: isComp ? String(addForm.tension_nominale || '').trim() || undefined : undefined,
+        courant_nominal_a: isComp ? String(addForm.courant_nominal_a || '').trim() || undefined : undefined,
+        indice_protection: isComp ? String(addForm.indice_protection || '').trim() || undefined : undefined,
+        type_fixation: isComp ? String(addForm.type_fixation || '').trim() || undefined : undefined,
         rattachement_type: addForm.rattachement_type,
         id_machine_registered:
           addForm.rattachement_type === 'MACHINE' ? addForm.id_machine_registered : '',
@@ -782,12 +830,19 @@ export default function EntrepotView({
         id_family: isComp ? editForm.id_family : '',
         id_templates: isComp ? editForm.id_templates : '',
         id_group: inheritedPartGroup,
+        // TODO(ALIAS-ID-GROUP): Remove legacy id_groupe write once all consumers use getGroupId()
         id_groupe: inheritedPartGroup,
         id_type: !isComp ? editForm.id_type : '',
         id_diag: !isComp ? editForm.id_diag : '',
         matiere_nuance: !isComp ? String(editForm.matiere_nuance || '').trim() : undefined,
         ref_plan: !isComp ? String(editForm.ref_plan || '').trim() : undefined,
         dimensions_brut: !isComp ? String(editForm.dimensions_brut || '').trim() : undefined,
+        traitement_thermique: !isComp ? String(editForm.traitement_thermique || '').trim() || undefined : undefined,
+        mode_reparation_defaut: isComp ? (editForm.mode_reparation_defaut || 'NON_DEFINI') : undefined,
+        tension_nominale: isComp ? String(editForm.tension_nominale || '').trim() || undefined : undefined,
+        courant_nominal_a: isComp ? String(editForm.courant_nominal_a || '').trim() || undefined : undefined,
+        indice_protection: isComp ? String(editForm.indice_protection || '').trim() || undefined : undefined,
+        type_fixation: isComp ? String(editForm.type_fixation || '').trim() || undefined : undefined,
         rattachement_type: editForm.rattachement_type,
         id_machine_registered:
           editForm.rattachement_type === 'MACHINE' ? editForm.id_machine_registered : '',
@@ -1986,6 +2041,74 @@ export default function EntrepotView({
                       </button>
                     )}
                   </div>
+
+                  {/* Spécifications Plaque Signalétique & Mode Réparation (P3) */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1.5 border-t border-blue-200/60">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Mode Réparation
+                      </label>
+                      <select
+                        value={addForm.mode_reparation_defaut || 'NON_DEFINI'}
+                        onChange={(e) => setAddForm({ ...addForm, mode_reparation_defaut: e.target.value })}
+                        className="w-full h-8 px-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold"
+                      >
+                        <option value="NON_DEFINI">Non défini</option>
+                        <option value="REBOBINAGE_EXTERNE">Rebobinage Ext.</option>
+                        <option value="REVISION_ATELIER">Révision Atelier</option>
+                        <option value="ECHANGE_STANDARD">Échange Std.</option>
+                        <option value="GARANTIE">Garantie</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Tension (U)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="230/400V"
+                        value={addForm.tension_nominale || ''}
+                        onChange={(e) => setAddForm({ ...addForm, tension_nominale: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Courant (A)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="8.8A"
+                        value={addForm.courant_nominal_a || ''}
+                        onChange={(e) => setAddForm({ ...addForm, courant_nominal_a: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Protection (IP)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="IP55"
+                        value={addForm.indice_protection || ''}
+                        onChange={(e) => setAddForm({ ...addForm, indice_protection: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Fixation
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="B3, B5..."
+                        value={addForm.type_fixation || ''}
+                        onChange={(e) => setAddForm({ ...addForm, type_fixation: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 space-y-2.5">
@@ -2037,8 +2160,8 @@ export default function EntrepotView({
                       </select>
                     </div>
                   </div>
-                  {/* Spécifications Atelier (P2): Matière, Plan, Brut */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-indigo-200/60">
+                  {/* Spécifications Atelier (P2 + P3): Matière, Plan, Brut, Traitement Thermique */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-indigo-200/60">
                     <div>
                       <label className="text-[10px] font-semibold text-slate-600 block mb-1">
                         Matière / Nuance
@@ -2072,6 +2195,18 @@ export default function EntrepotView({
                         placeholder="ex: Ø60 x 240 mm"
                         value={addForm.dimensions_brut || ''}
                         onChange={(e) => setAddForm({ ...addForm, dimensions_brut: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Traitement Thermique
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: Trempé 58 HRC"
+                        value={addForm.traitement_thermique || ''}
+                        onChange={(e) => setAddForm({ ...addForm, traitement_thermique: e.target.value })}
                         className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
                       />
                     </div>
@@ -2426,6 +2561,73 @@ export default function EntrepotView({
                       ))}
                     </select>
                   </div>
+                  {/* Spécifications Plaque Signalétique & Mode Réparation (P3) */}
+                  <div className="col-span-2 grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1.5 border-t border-blue-200/60">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Mode Réparation
+                      </label>
+                      <select
+                        value={editForm.mode_reparation_defaut || 'NON_DEFINI'}
+                        onChange={(e) => setEditForm({ ...editForm, mode_reparation_defaut: e.target.value })}
+                        className="w-full h-8 px-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold"
+                      >
+                        <option value="NON_DEFINI">Non défini</option>
+                        <option value="REBOBINAGE_EXTERNE">Rebobinage Ext.</option>
+                        <option value="REVISION_ATELIER">Révision Atelier</option>
+                        <option value="ECHANGE_STANDARD">Échange Std.</option>
+                        <option value="GARANTIE">Garantie</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Tension (U)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="230/400V"
+                        value={editForm.tension_nominale || ''}
+                        onChange={(e) => setEditForm({ ...editForm, tension_nominale: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Courant (A)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="8.8A"
+                        value={editForm.courant_nominal_a || ''}
+                        onChange={(e) => setEditForm({ ...editForm, courant_nominal_a: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Protection (IP)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="IP55"
+                        value={editForm.indice_protection || ''}
+                        onChange={(e) => setEditForm({ ...editForm, indice_protection: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Fixation
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="B3, B5..."
+                        value={editForm.type_fixation || ''}
+                        onChange={(e) => setEditForm({ ...editForm, type_fixation: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5 p-2.5 bg-indigo-50/40 rounded-xl border border-indigo-100">
@@ -2477,6 +2679,7 @@ export default function EntrepotView({
                           matiere_nuance: diagObj?.matiere_nuance || editForm.matiere_nuance || '',
                           ref_plan: diagObj?.ref_plan || editForm.ref_plan || '',
                           dimensions_brut: diagObj?.dimensions_brut || editForm.dimensions_brut || '',
+                          traitement_thermique: diagObj?.traitement_thermique || editForm.traitement_thermique || '',
                         });
                       }}
                       className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:border-indigo-500 outline-none"
@@ -2496,8 +2699,8 @@ export default function EntrepotView({
                       })}
                     </select>
                   </div>
-                  {/* Spécifications Atelier (P2) */}
-                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1.5 border-t border-indigo-200/60">
+                  {/* Spécifications Atelier (P2 + P3) */}
+                  <div className="col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t border-indigo-200/60">
                     <div>
                       <label className="text-[10px] font-semibold text-slate-600 block mb-1">
                         Matière / Nuance
@@ -2531,6 +2734,18 @@ export default function EntrepotView({
                         placeholder="ex: Ø60 x 240 mm"
                         value={editForm.dimensions_brut || ''}
                         onChange={(e) => setEditForm({ ...editForm, dimensions_brut: e.target.value })}
+                        className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                        Traitement Thermique
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ex: Trempé 58 HRC"
+                        value={editForm.traitement_thermique || ''}
+                        onChange={(e) => setEditForm({ ...editForm, traitement_thermique: e.target.value })}
                         className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
                       />
                     </div>
@@ -2924,26 +3139,99 @@ export default function EntrepotView({
               </div>
 
               {isWarehouseComponent(selectedDetails) ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
-                    <div className="text-[10px] font-bold text-blue-700 uppercase">{t('entrepot.modal.family')}</div>
-                    <div className="font-bold text-slate-800">{selectedDetails.id_family || '--'}</div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
+                      <div className="text-[10px] font-bold text-blue-700 uppercase">{t('entrepot.modal.family')}</div>
+                      <div className="font-bold text-slate-800">{selectedDetails.id_family || '--'}</div>
+                    </div>
+                    <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
+                      <div className="text-[10px] font-bold text-blue-700 uppercase">{t('entrepot.modal.template')}</div>
+                      <div className="font-bold text-slate-800">{selectedDetails.id_templates || '--'}</div>
+                    </div>
                   </div>
-                  <div className="p-2.5 bg-blue-50/50 rounded-xl border border-blue-100">
-                    <div className="text-[10px] font-bold text-blue-700 uppercase">{t('entrepot.modal.template')}</div>
-                    <div className="font-bold text-slate-800">{selectedDetails.id_templates || '--'}</div>
-                  </div>
+                  {(selectedDetails.mode_reparation_defaut ||
+                    selectedDetails.tension_nominale ||
+                    selectedDetails.courant_nominal_a ||
+                    selectedDetails.indice_protection ||
+                    selectedDetails.type_fixation) && (
+                    <div className="p-2.5 bg-blue-50/30 rounded-xl border border-blue-100 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {selectedDetails.mode_reparation_defaut && selectedDetails.mode_reparation_defaut !== 'NON_DEFINI' && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-blue-700 uppercase block">Mode Répar.</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.mode_reparation_defaut}</span>
+                        </div>
+                      )}
+                      {selectedDetails.tension_nominale && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-blue-700 uppercase block">Tension (U)</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.tension_nominale}</span>
+                        </div>
+                      )}
+                      {selectedDetails.courant_nominal_a && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-blue-700 uppercase block">Courant (A)</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.courant_nominal_a}</span>
+                        </div>
+                      )}
+                      {selectedDetails.indice_protection && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-blue-700 uppercase block">Protection</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.indice_protection}</span>
+                        </div>
+                      )}
+                      {selectedDetails.type_fixation && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-blue-700 uppercase block">Fixation</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.type_fixation}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                    <div className="text-[10px] font-bold text-indigo-700 uppercase">{t('entrepot.modal.type')}</div>
-                    <div className="font-bold text-slate-800">{selectedDetails.id_type || '--'}</div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <div className="text-[10px] font-bold text-indigo-700 uppercase">{t('entrepot.modal.type')}</div>
+                      <div className="font-bold text-slate-800">{selectedDetails.id_type || '--'}</div>
+                    </div>
+                    <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                      <div className="text-[10px] font-bold text-indigo-700 uppercase">{t('entrepot.modal.diag')}</div>
+                      <div className="font-bold text-slate-800">{selectedDetails.id_diag || '--'}</div>
+                    </div>
                   </div>
-                  <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                    <div className="text-[10px] font-bold text-indigo-700 uppercase">{t('entrepot.modal.diag')}</div>
-                    <div className="font-bold text-slate-800">{selectedDetails.id_diag || '--'}</div>
-                  </div>
+                  {(selectedDetails.matiere_nuance ||
+                    selectedDetails.ref_plan ||
+                    selectedDetails.dimensions_brut ||
+                    selectedDetails.traitement_thermique) && (
+                    <div className="p-2.5 bg-indigo-50/30 rounded-xl border border-indigo-100 grid grid-cols-2 gap-2">
+                      {selectedDetails.matiere_nuance && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-indigo-700 uppercase block">Matière / Nuance</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.matiere_nuance}</span>
+                        </div>
+                      )}
+                      {selectedDetails.ref_plan && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-indigo-700 uppercase block">Réf. Plan</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.ref_plan}</span>
+                        </div>
+                      )}
+                      {selectedDetails.dimensions_brut && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-indigo-700 uppercase block">Dimensions Brut</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.dimensions_brut}</span>
+                        </div>
+                      )}
+                      {selectedDetails.traitement_thermique && (
+                        <div>
+                          <span className="text-[9.5px] font-bold text-indigo-700 uppercase block">Traitement Thermique</span>
+                          <span className="font-mono font-bold text-slate-800">{selectedDetails.traitement_thermique}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

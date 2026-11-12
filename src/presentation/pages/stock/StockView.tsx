@@ -187,6 +187,7 @@ export default function StockView({
   }, [stockItems]);
 
   const [stockCriticiteFilter, setStockCriticiteFilter] = useState('ALL');
+  const [stockDomaineFilter, setStockDomaineFilter] = useState('ALL');
 
   const deferredStockSearch = useDeferredValue(stockSearch);
   const filteredStock = useMemo(() => {
@@ -215,6 +216,22 @@ export default function StockView({
         }
       }
 
+      // Filter by Domaine Technique (P3 — inherits from Type or Group if not set on SKU)
+      if (stockDomaineFilter !== 'ALL') {
+        const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
+        const effDomaine = String(
+          item.domaine_technique ||
+            hierarchy.type?.domaine_technique ||
+            hierarchy.group?.domaine_technique ||
+            ''
+        )
+          .trim()
+          .toUpperCase();
+        if (effDomaine !== stockDomaineFilter) {
+          return false;
+        }
+      }
+
       // Filter by alert status
       const domainItem = new StockItem(item);
       if (stockAlertOnly && domainItem.getCriticite() === 'OK') {
@@ -233,6 +250,8 @@ export default function StockView({
             'id_type',
             'id_group',
             'ref_constructeur',
+            'code_equivalents',
+            'domaine_technique',
             'unite_mesure',
             'criticite',
           ],
@@ -245,10 +264,12 @@ export default function StockView({
   }, [
     stockItems,
     types,
+    effectivePdrGroups,
     stockGroupFilter,
     stockTypeFilter,
     stockEmplacementFilter,
     stockCriticiteFilter,
+    stockDomaineFilter,
     stockAlertOnly,
     deferredStockSearch,
   ]);
@@ -415,6 +436,7 @@ export default function StockView({
     stockTypeFilter !== 'ALL' ||
     stockEmplacementFilter !== 'ALL' ||
     stockCriticiteFilter !== 'ALL' ||
+    stockDomaineFilter !== 'ALL' ||
     stockAlertOnly ||
     activeKpiFilter !== 'ALL' ||
     localSearch ||
@@ -427,6 +449,7 @@ export default function StockView({
     setStockTypeFilter('ALL');
     setStockEmplacementFilter('ALL');
     setStockCriticiteFilter('ALL');
+    setStockDomaineFilter('ALL');
     setStockAlertOnly(false);
     setActiveKpiFilter('ALL');
     setLocalSearch('');
@@ -563,8 +586,15 @@ export default function StockView({
         onRemove: () => setStockCriticiteFilter('ALL'),
       });
     }
+    if (stockDomaineFilter !== 'ALL') {
+      chips.push({
+        key: 'domaine',
+        label: `Domaine: ${stockDomaineFilter}`,
+        onRemove: () => setStockDomaineFilter('ALL'),
+      });
+    }
     return chips;
-  }, [localSearch, stockGroupFilter, effectivePdrGroups, stockTypeFilter, activeKpiFilter, stockAlertOnly, stockEmplacementFilter, stockCriticiteFilter, setStockSearch, setStockGroupFilter, setActiveKpiFilter, setStockTypeFilter, setStockAlertOnly, setStockEmplacementFilter, t]);
+  }, [localSearch, stockGroupFilter, effectivePdrGroups, stockTypeFilter, activeKpiFilter, stockAlertOnly, stockEmplacementFilter, stockCriticiteFilter, stockDomaineFilter, setStockSearch, setStockGroupFilter, setActiveKpiFilter, setStockTypeFilter, setStockAlertOnly, setStockEmplacementFilter, t]);
 
   const handleExportExcel = () => {
     try {
@@ -572,9 +602,12 @@ export default function StockView({
         'REF (B)',
         'DÉSIGNATION (C)',
         'TYPE (D)',
+        'DOMAINE TECHNIQUE',
         'UNITÉ MESURE',
         'CRITICITÉ (ABC)',
         'RÉF CONSTRUCTEUR',
+        'CODES ÉQUIVALENTS',
+        'DÉLAI APPRO (J)',
         'POLICY TAGS',
         'STOCK INITIAL (E)',
         'ENTRÉES (F)',
@@ -584,22 +617,33 @@ export default function StockView({
         'ALERTE (J)',
         'EMPLACEMENT (K)',
       ];
-      const rows = effectiveFiltered.map((item) => [
-        item.ref || '',
-        item.designation || '',
-        item.type || item.id_type || '',
-        item.unite_mesure || item.unite || 'PCS',
-        item.criticite || 'B',
-        item.ref_constructeur || '',
-        (item.policy_tags && item.policy_tags.length > 0 ? item.policy_tags : ['REPLACING']).join('|'),
-        item.stockInitial || 0,
-        item.entrees || 0,
-        item.sorties || 0,
-        item.stockActuel || 0,
-        item.seuil || 0,
-        item.alerte || '',
-        item.emplacement || '',
-      ]);
+      const rows = effectiveFiltered.map((item) => {
+        const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
+        const effDomaine =
+          item.domaine_technique ||
+          hierarchy.type?.domaine_technique ||
+          hierarchy.group?.domaine_technique ||
+          '';
+        return [
+          item.ref || '',
+          item.designation || '',
+          item.type || item.id_type || '',
+          effDomaine,
+          item.unite_mesure || item.unite || 'PCS',
+          item.criticite || 'B',
+          item.ref_constructeur || '',
+          item.code_equivalents || '',
+          item.delai_appro_jours ?? '',
+          (item.policy_tags && item.policy_tags.length > 0 ? item.policy_tags : ['REPLACING']).join('|'),
+          item.stockInitial || 0,
+          item.entrees || 0,
+          item.sorties || 0,
+          item.stockActuel || 0,
+          item.seuil || 0,
+          item.alerte || '',
+          item.emplacement || '',
+        ];
+      });
       const csvContent =
         'data:text/csv;charset=utf-8,\uFEFF' +
         [
@@ -1229,6 +1273,29 @@ export default function StockView({
             />
           </FilterField>
 
+          {/* 4c. Domaine Technique (P3) */}
+          <FilterField label="Domaine Technique" colBadge="Métier" colBadgeColor="indigo">
+            <CustomSelect
+              value={stockDomaineFilter}
+              prefixIcon={
+                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs font-mono text-[9px] font-black">
+                  DOM
+                </span>
+              }
+              onChange={(val) => setStockDomaineFilter(val)}
+              options={[
+                { value: 'ALL', label: 'Tous Domaines Techniques' },
+                { value: 'MECANIQUE', label: '⚙️ MÉCANIQUE' },
+                { value: 'ELECTRIQUE', label: '⚡ ÉLECTRIQUE' },
+                { value: 'HYDRAULIQUE', label: '💧 HYDRAULIQUE' },
+                { value: 'PNEUMATIQUE', label: '💨 PNEUMATIQUE' },
+                { value: 'AUTOMATISME', label: '🤖 AUTOMATISME' },
+                { value: 'LUBRIFIANTS', label: '🛢️ LUBRIFIANTS' },
+                { value: 'CONSOMMABLES', label: '🧰 CONSOMMABLES' },
+              ]}
+            />
+          </FilterField>
+
           {/* 5. Sort Menu Button & Popover */}
           <div className="relative" ref={sortMenuRef}>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
@@ -1385,9 +1452,17 @@ export default function StockView({
                           {item.ref_constructeur && (
                             <span
                               className="text-[10px] font-mono font-medium text-slate-500 max-w-[160px] truncate"
-                              title={`Réf. Constructeur / Équivalent : ${item.ref_constructeur}`}
+                              title={`Réf. Constructeur / OEM : ${item.ref_constructeur}`}
                             >
                               OEM: {item.ref_constructeur}
+                            </span>
+                          )}
+                          {item.code_equivalents && (
+                            <span
+                              className="text-[9.5px] font-mono font-semibold text-indigo-600 bg-indigo-50/70 px-1.5 py-0.2 rounded border border-indigo-100 max-w-[165px] truncate"
+                              title={`Codes équivalents : ${item.code_equivalents}`}
+                            >
+                              Éq: {item.code_equivalents}
                             </span>
                           )}
                         </div>
@@ -1417,16 +1492,36 @@ export default function StockView({
                       <td className="py-3 px-3 whitespace-nowrap">
                         {(() => {
                           const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
+                          const effDomaine = String(
+                            item.domaine_technique ||
+                              hierarchy.type?.domaine_technique ||
+                              hierarchy.group?.domaine_technique ||
+                              ''
+                          )
+                            .trim()
+                            .toUpperCase();
                           return (
                             <div className="flex flex-col gap-1 items-start">
-                              {hierarchy.group && (
-                                <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
-                                  title={`Groupe PDR: ${hierarchy.group.libelle} (${hierarchy.group.code})`}
-                                >
-                                  <span>{hierarchy.group.code}</span>
-                                </span>
-                              )}
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {hierarchy.group && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                    title={`Groupe PDR: ${hierarchy.group.libelle} (${hierarchy.group.code})`}
+                                  >
+                                    <span>{hierarchy.group.code}</span>
+                                  </span>
+                                )}
+                                {effDomaine && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setStockDomaineFilter(effDomaine)}
+                                    className="px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer"
+                                    title={`Filtrer sur le Domaine Technique : ${effDomaine}`}
+                                  >
+                                    {effDomaine}
+                                  </button>
+                                )}
+                              </div>
                               <button
                                 onClick={() => {
                                   const filterVal = item.type || item.id_type;
@@ -1512,12 +1607,24 @@ export default function StockView({
                         })()}
                       </td>
 
-                      {/* Seuil (I) */}
+                      {/* Seuil (I) & Délai Appro (P3) */}
                       <td className="py-3 px-2.5 text-right font-mono text-slate-500 font-semibold">
-                        <span>{domainItem.getSeuilAlerte()}</span>
-                        <span className="ml-1 text-[9.5px] text-slate-400">
-                          {item.unite_mesure || item.unite || 'PCS'}
-                        </span>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div>
+                            <span>{domainItem.getSeuilAlerte()}</span>
+                            <span className="ml-1 text-[9.5px] text-slate-400">
+                              {item.unite_mesure || item.unite || 'PCS'}
+                            </span>
+                          </div>
+                          {Number(item.delai_appro_jours) > 0 && (
+                            <span
+                              className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                              title={`Délai d'approvisionnement fournisseur : ${item.delai_appro_jours} jour(s)`}
+                            >
+                              Délai: {item.delai_appro_jours}j
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Alerte Badge (J) */}

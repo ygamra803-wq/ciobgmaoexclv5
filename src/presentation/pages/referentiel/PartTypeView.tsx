@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
   Boxes,
 } from 'lucide-react';
+import { getGroupId, getGroupRecordId } from '../../../domain/stock/pdrHierarchyService';
 
 export default function PartTypeView({
   partGroups = [],
@@ -68,7 +69,7 @@ export default function PartTypeView({
     const map = new Map();
     (partGroups || []).forEach((g) => {
       if (!g) return;
-      const gId = String(g.id || g.id_group || g.id_groupe || '').trim();
+      const gId = getGroupRecordId(g);
       const gCode = String(g.code || '').trim();
       if (gId) map.set(gId, g);
       if (gCode) map.set(gCode, g);
@@ -99,11 +100,9 @@ export default function PartTypeView({
   // Filter
   const filtered = useMemo(() => {
     return partTypes.filter((item) => {
-      const itemGroupKey = String(item.id_group || item.id_groupe || '').trim();
+      const itemGroupKey = getGroupId(item);
       const resolvedGrp = itemGroupKey ? partGroupMap.get(itemGroupKey) : null;
-      const resolvedGrpId = resolvedGrp
-        ? String(resolvedGrp.id || resolvedGrp.id_group || resolvedGrp.id_groupe || '')
-        : '';
+      const resolvedGrpId = resolvedGrp ? getGroupRecordId(resolvedGrp) : '';
 
       if (activeGroupFilter && activeGroupFilter !== 'ALL') {
         if (activeGroupFilter === 'UNASSIGNED') {
@@ -221,6 +220,7 @@ export default function PartTypeView({
       ...form,
       id_type: form.id_type.trim().toUpperCase(),
       id_group: cleanGroupId,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
       id_groupe: cleanGroupId,
     });
     setForm({ id_type: '', id_group: '', libelle: '' });

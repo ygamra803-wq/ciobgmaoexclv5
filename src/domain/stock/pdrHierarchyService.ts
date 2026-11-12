@@ -2,13 +2,33 @@ import { MaterialPolicyTag, PdrGroup, IStockItem, StockType } from '../../types/
 import { normalizePolicyTags } from '../corrective/needRequestService';
 
 /**
+ * Canonical reader for group linkage across PDR, Parts, and Components (`id_group` with legacy `id_groupe` fallback).
+ */
+export function getGroupId(
+  entity?: { id_group?: string | null; id_groupe?: string | null } | null
+): string {
+  if (!entity) return '';
+  return String(entity.id_group || entity.id_groupe || '').trim();
+}
+
+/**
+ * Canonical reader for a Group record's own primary key (`id_group` / `id` / `id_groupe`).
+ */
+export function getGroupRecordId(
+  group?: { id?: string | number | null; id_group?: string | null; id_groupe?: string | null } | null
+): string {
+  if (!group) return '';
+  return String(group.id_group || group.id || group.id_groupe || '').trim();
+}
+
+/**
  * Filter and list PdrGroups, optionally activeOnly, ordered by sort_order / code / libelle.
  */
 export function listPdrGroups(groups?: ReadonlyArray<PdrGroup> | null, activeOnly = false): PdrGroup[] {
   if (!Array.isArray(groups)) return [];
   return groups
     .filter((g) => {
-      if (!g || !g.id) return false;
+      if (!g || !getGroupRecordId(g)) return false;
       if (activeOnly && g.is_active === false) return false;
       return true;
     })
@@ -33,10 +53,10 @@ export function listPdrTypesByGroup(
     return [...types];
   }
   if (groupId === 'UNCLASSIFIED') {
-    return types.filter((t) => !t.id_group);
+    return types.filter((t) => !getGroupId(t));
   }
   const targetGroupUpper = String(groupId).trim().toUpperCase();
-  return types.filter((t) => String(t.id_group || '').trim().toUpperCase() === targetGroupUpper);
+  return types.filter((t) => getGroupId(t).toUpperCase() === targetGroupUpper);
 }
 
 /**
@@ -77,10 +97,10 @@ export function listStockItemsByGroupType(
 
     // 2. Filter by Group if specified
     if (groupId && groupId !== 'ALL') {
-      const directGroup = item.id_group ? String(item.id_group).trim().toUpperCase() : null;
+      const directGroup = getGroupId(item).toUpperCase() || null;
       const itemTypeKey = String(item.id_type || item.type || '').trim().toUpperCase();
       const resolvedType = itemTypeKey ? typeMap.get(itemTypeKey) : null;
-      const inheritedGroup = resolvedType?.id_group ? String(resolvedType.id_group).trim().toUpperCase() : null;
+      const inheritedGroup = getGroupId(resolvedType).toUpperCase() || null;
       const effectiveGroup = directGroup || inheritedGroup;
 
       if (groupId === 'UNCLASSIFIED') {
@@ -120,12 +140,12 @@ export function resolvePdrHierarchy(
       return tId === itemTypeKey || tLib === itemTypeKey;
     }) || null;
 
-  const targetGroupId = item.id_group || matchedType?.id_group || null;
+  const targetGroupId = getGroupId(item) || getGroupId(matchedType) || null;
   const targetGroupUpper = targetGroupId ? String(targetGroupId).trim().toUpperCase() : null;
 
   const matchedGroup = targetGroupUpper
     ? safeGroups.find((g) => {
-        const gId = String(g.id || '').trim().toUpperCase();
+        const gId = getGroupRecordId(g).toUpperCase();
         const gCode = String(g.code || '').trim().toUpperCase();
         return gId === targetGroupUpper || gCode === targetGroupUpper;
       }) || null
@@ -167,7 +187,7 @@ export function computePdrGroupStats(
   types?: ReadonlyArray<StockType | any> | null,
   stockItems?: ReadonlyArray<IStockItem | any> | null
 ): { typesCount: number; itemsCount: number; hasChildren: boolean } {
-  const gIdUpper = String(group?.id || '').trim().toUpperCase();
+  const gIdUpper = getGroupRecordId(group).toUpperCase();
   const gCodeUpper = String(group?.code || '').trim().toUpperCase();
   const safeTypes = Array.isArray(types) ? types : [];
   const safeItems = Array.isArray(stockItems) ? stockItems : [];
@@ -177,7 +197,7 @@ export function computePdrGroupStats(
 
   for (const t of safeTypes) {
     if (!t) continue;
-    const tGroupUpper = String(t.id_group || '').trim().toUpperCase();
+    const tGroupUpper = getGroupId(t).toUpperCase();
     if (tGroupUpper && (tGroupUpper === gIdUpper || (gCodeUpper && tGroupUpper === gCodeUpper))) {
       typesCount += 1;
       if (t.id_type) linkedTypeKeys.add(String(t.id_type).trim().toUpperCase());
@@ -188,7 +208,7 @@ export function computePdrGroupStats(
   let itemsCount = 0;
   for (const item of safeItems) {
     if (!item) continue;
-    const directGroupUpper = String(item.id_group || '').trim().toUpperCase();
+    const directGroupUpper = getGroupId(item).toUpperCase();
     const itemTypeUpper = String(item.id_type || item.type || '').trim().toUpperCase();
     const matchesDirect =
       Boolean(directGroupUpper) &&
@@ -215,6 +235,7 @@ export function validateAndUpsertPdrGroup(
     code: string;
     libelle: string;
     description?: string;
+    domaine_technique?: string;
     default_policy_tags?: MaterialPolicyTag[];
     sort_order?: number;
     is_active?: boolean;
@@ -227,6 +248,7 @@ export function validateAndUpsertPdrGroup(
     .replace(/\s+/g, '_');
   const cleanLibelle = String(payload.libelle || '').trim();
   const cleanDesc = String(payload.description || '').trim();
+  const cleanDomaine = String(payload.domaine_technique || '').trim().toUpperCase() || undefined;
 
   if (!cleanCode || !cleanLibelle) {
     return {
@@ -243,7 +265,7 @@ export function validateAndUpsertPdrGroup(
   const duplicate = pdrGroups.some(
     (g) =>
       String(g.code || '').trim().toUpperCase() === cleanCode &&
-      (!editingGroupId || g.id !== editingGroupId)
+      (!editingGroupId || getGroupRecordId(g) !== editingGroupId)
   );
   if (duplicate) {
     return {
@@ -256,12 +278,14 @@ export function validateAndUpsertPdrGroup(
   if (editingGroupId) {
     let updatedRecord: PdrGroup | undefined;
     const nextGroups = pdrGroups.map((g) => {
-      if (g.id !== editingGroupId) return g;
+      if (getGroupRecordId(g) !== editingGroupId && g.id !== editingGroupId) return g;
       updatedRecord = {
         ...g,
+        id_group: g.id_group || g.id,
         code: cleanCode,
         libelle: cleanLibelle,
         description: cleanDesc,
+        domaine_technique: cleanDomaine ?? g.domaine_technique,
         default_policy_tags: effectiveTags,
         sort_order:
           payload.sort_order !== undefined && Number.isFinite(Number(payload.sort_order))
@@ -275,14 +299,16 @@ export function validateAndUpsertPdrGroup(
   }
 
   const newId = `GRP-${cleanCode}`;
-  const idCollision = pdrGroups.some((g) => String(g.id || '').toUpperCase() === newId);
+  const idCollision = pdrGroups.some((g) => getGroupRecordId(g).toUpperCase() === newId);
   const finalId = idCollision ? `${newId}-${pdrGroups.length + 1}` : newId;
 
   const newGroup: PdrGroup = {
     id: finalId,
+    id_group: finalId,
     code: cleanCode,
     libelle: cleanLibelle,
     description: cleanDesc,
+    domaine_technique: cleanDomaine,
     default_policy_tags: effectiveTags,
     sort_order:
       payload.sort_order !== undefined && Number.isFinite(Number(payload.sort_order))
@@ -314,7 +340,7 @@ export function safeDeleteOrDeactivatePdrGroup(
   typesCount: number;
   itemsCount: number;
 } {
-  const target = pdrGroups.find((g) => g.id === groupId);
+  const target = pdrGroups.find((g) => g.id === groupId || getGroupRecordId(g) === groupId);
   if (!target) {
     return { mode: 'NOT_FOUND', groups: [...pdrGroups], typesCount: 0, itemsCount: 0 };
   }
@@ -322,7 +348,7 @@ export function safeDeleteOrDeactivatePdrGroup(
   const stats = computePdrGroupStats(target, types, stockItems);
   if (stats.hasChildren) {
     const nextGroups = pdrGroups.map((g) =>
-      g.id === groupId ? { ...g, is_active: false } : g
+      g.id === groupId || getGroupRecordId(g) === groupId ? { ...g, is_active: false } : g
     );
     return {
       mode: 'DEACTIVATED',
@@ -334,9 +360,10 @@ export function safeDeleteOrDeactivatePdrGroup(
 
   return {
     mode: 'DELETED',
-    groups: pdrGroups.filter((g) => g.id !== groupId),
+    groups: pdrGroups.filter((g) => g.id !== groupId && getGroupRecordId(g) !== groupId),
     typesCount: 0,
     itemsCount: 0,
   };
 }
+
 

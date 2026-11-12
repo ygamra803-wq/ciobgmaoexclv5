@@ -259,7 +259,7 @@ export default function ComponentsTable({
                             {item.designation}
                           </div>
 
-                          {/* Policy Tags (`POLICY-TAGS-P0`) */}
+                          {/* Policy Tags (`POLICY-TAGS-P0`) & P3 Nameplate Badges */}
                           <div className="flex items-center gap-1 flex-wrap mt-0.5">
                             {getEffectivePolicyTags(item, 'COMPONENT').map((tag) => (
                               <span
@@ -276,6 +276,72 @@ export default function ComponentsTable({
                                 {tag}
                               </span>
                             ))}
+                            {(() => {
+                              const effMode =
+                                (item.mode_reparation_defaut && item.mode_reparation_defaut !== 'NON_DEFINI'
+                                  ? item.mode_reparation_defaut
+                                  : tplObj?.mode_reparation_defaut && tplObj.mode_reparation_defaut !== 'NON_DEFINI'
+                                  ? tplObj.mode_reparation_defaut
+                                  : '') || '';
+                              const effTension =
+                                item.tension_nominale ||
+                                tplObj?.tension_nominale ||
+                                tplObj?.specs?.V ||
+                                tplObj?.specs?.alimentation ||
+                                '';
+                              const effCourant =
+                                item.courant_nominal_a ||
+                                tplObj?.courant_nominal_a ||
+                                tplObj?.specs?.A ||
+                                tplObj?.specs?.courant ||
+                                '';
+                              const effIp = item.indice_protection || tplObj?.indice_protection || '';
+                              const effFix = item.type_fixation || tplObj?.type_fixation || '';
+                              return (
+                                <>
+                                  {effMode && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 font-mono font-bold text-[9px]"
+                                      title={`Mode de réparation par défaut: ${effMode}`}
+                                    >
+                                      {effMode}
+                                    </span>
+                                  )}
+                                  {effTension && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[9px]"
+                                      title={`Tension nominale: ${effTension}`}
+                                    >
+                                      U:{effTension}
+                                    </span>
+                                  )}
+                                  {effCourant && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[9px]"
+                                      title={`Courant nominal: ${effCourant}`}
+                                    >
+                                      I:{String(effCourant).endsWith('A') ? effCourant : `${effCourant}A`}
+                                    </span>
+                                  )}
+                                  {effIp && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[9px]"
+                                      title={`Indice de protection: ${effIp}`}
+                                    >
+                                      {effIp}
+                                    </span>
+                                  )}
+                                  {effFix && (
+                                    <span
+                                      className="px-1.5 py-0.2 rounded bg-purple-50 text-purple-800 border border-purple-200 font-mono text-[9px]"
+                                      title={`Type de fixation: ${effFix}`}
+                                    >
+                                      Fix:{effFix}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
 
                           {/* Historique Bobinage & Score d'Usure BER */}

@@ -99,6 +99,7 @@ export default function PdrGroupView({
     code: string;
     libelle: string;
     description: string;
+    domaine_technique: string;
     default_policy_tags: MaterialPolicyTag[];
     sort_order: number;
     is_active: boolean;
@@ -106,6 +107,7 @@ export default function PdrGroupView({
     code: '',
     libelle: '',
     description: '',
+    domaine_technique: '',
     default_policy_tags: ['REPLACING'],
     sort_order: 1,
     is_active: true,
@@ -232,6 +234,7 @@ export default function PdrGroupView({
       code: '',
       libelle: '',
       description: '',
+      domaine_technique: '',
       default_policy_tags: ['REPLACING'],
       sort_order: (pdrGroups?.length || 0) + 1,
       is_active: true,
@@ -246,6 +249,7 @@ export default function PdrGroupView({
       code: group.code || '',
       libelle: group.libelle || '',
       description: group.description || '',
+      domaine_technique: group.domaine_technique || '',
       default_policy_tags:
         Array.isArray(group.default_policy_tags) && group.default_policy_tags.length > 0
           ? group.default_policy_tags
@@ -407,7 +411,7 @@ export default function PdrGroupView({
       },
       {
         key: 'default_policy_tags',
-        label: 'POLITIQUE PAR DÉFAUT',
+        label: 'DOMAINE & POLITIQUE',
         colLetter: 'D',
         icon: Tag,
         render: (group: PdrGroup) => {
@@ -417,6 +421,11 @@ export default function PdrGroupView({
               : ['REPLACING'];
           return (
             <div className="flex flex-wrap gap-1">
+              {group.domaine_technique && (
+                <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200 text-[10px] font-mono font-bold">
+                  {group.domaine_technique}
+                </span>
+              )}
               {tags.map((tag) => (
                 <span
                   key={tag}
@@ -990,7 +999,26 @@ export default function PdrGroupView({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                    Domaine Technique (P3)
+                  </label>
+                  <select
+                    value={form.domaine_technique}
+                    onChange={(e) => setForm({ ...form, domaine_technique: e.target.value })}
+                    className="w-full h-10 px-2.5 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white text-xs font-bold outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    <option value="">— Multi-domaines —</option>
+                    <option value="MECANIQUE">MÉCANIQUE</option>
+                    <option value="ELECTRIQUE">ÉLECTRIQUE</option>
+                    <option value="HYDRAULIQUE">HYDRAULIQUE</option>
+                    <option value="PNEUMATIQUE">PNEUMATIQUE</option>
+                    <option value="AUTOMATISME">AUTOMATISME</option>
+                    <option value="LUBRIFIANTS">LUBRIFIANTS</option>
+                    <option value="CONSOMMABLES">CONSOMMABLES</option>
+                  </select>
+                </div>
                 <div>
                   <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1">
                     Ordre d’affichage
@@ -1013,7 +1041,7 @@ export default function PdrGroupView({
                       onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
                       className="rounded text-indigo-600 focus:ring-indigo-500"
                     />
-                    <span>Groupe Actif (visible dans les sélecteurs)</span>
+                    <span>Groupe Actif</span>
                   </label>
                 </div>
               </div>

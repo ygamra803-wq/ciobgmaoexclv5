@@ -35,6 +35,22 @@ export type MaintenancePolicyTag = MaterialPolicyTag;
 export type PdrUnitOfMeasure = 'PCS' | 'M' | 'L' | 'KG' | 'KIT' | 'JEU' | 'ROUL';
 export type PdrCriticality = 'A' | 'B' | 'C';
 
+export type TechnicalDomain =
+  | 'MECANIQUE'
+  | 'ELECTRIQUE'
+  | 'HYDRAULIQUE'
+  | 'PNEUMATIQUE'
+  | 'AUTOMATISME'
+  | 'LUBRIFIANTS'
+  | 'CONSOMMABLES';
+
+export type ComponentDefaultRepairMode =
+  | 'REBOBINAGE_EXTERNE'
+  | 'REVISION_ATELIER'
+  | 'ECHANGE_STANDARD'
+  | 'GARANTIE'
+  | 'NON_DEFINI';
+
 export type ValidationWorkflowStatus =
   | 'NONE'
   | 'PENDING_VALIDATION'
@@ -48,9 +64,11 @@ export type ValidationWorkflowStatus =
  */
 export interface PdrGroup {
   id: string;              // e.g. 'GRP-ROUL'
+  id_group?: string;       // Canonical alias
   code: string;            // 'ROUL' — unique short code
   libelle: string;         // 'Roulements & paliers'
   description?: string;
+  domaine_technique?: TechnicalDomain | string;
   default_policy_tags?: MaterialPolicyTag[];  // default ['REPLACING'] for standard PDR
   sort_order?: number;
   is_active?: boolean;
@@ -61,6 +79,8 @@ export interface StockType {
   id_type: string;
   libelle: string;
   id_group?: string | null;
+  id_groupe?: string | null;
+  domaine_technique?: TechnicalDomain | string;
   is_active?: boolean;
   [key: string]: any;
 }
@@ -70,6 +90,7 @@ export interface IStockItem {
   ref: string;
   designation: string;
   id_group?: string | null;
+  id_groupe?: string | null;
   id_type?: string;
   type?: string;
   stockInitial: number;
@@ -86,8 +107,10 @@ export interface IStockItem {
   unite_mesure?: PdrUnitOfMeasure | string;
   criticite?: PdrCriticality | string;
   ref_constructeur?: string;
+  code_equivalents?: string;
   equivalences?: string;
   delai_appro_jours?: number;
+  domaine_technique?: TechnicalDomain | string;
   fournisseur?: string;
   code_barre?: string;
   policy_tags?: MaterialPolicyTag[];
@@ -314,6 +337,9 @@ export interface IDiagnostic {
   unite_mesure?: PdrUnitOfMeasure | string;
   criticite?: PdrCriticality | string;
   ref_constructeur?: string;
+  code_equivalents?: string;
+  delai_appro_jours?: number;
+  domaine_technique?: TechnicalDomain | string;
   description?: string;
   [key: string]: any;
 }
@@ -337,6 +363,7 @@ export interface IPartGroup {
   libelle: string;
   ref?: string;
   description?: string;
+  domaine_technique?: TechnicalDomain | string;
   default_policy_tags?: MaterialPolicyTag[];
   sort_order?: number;
   is_active?: boolean;
@@ -352,6 +379,7 @@ export interface IPartType {
   libelle?: string;
   nom?: string;
   description?: string;
+  domaine_technique?: TechnicalDomain | string;
   [key: string]: any;
 }
 
@@ -371,17 +399,20 @@ export interface IPartDesignation {
   matiere_nuance?: string;
   ref_plan?: string;
   dimensions_brut?: string;
+  traitement_thermique?: string;
   policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }
 
 export interface ICompGroup {
   id?: string | number;
+  id_group?: string;
   id_groupe?: string;
   code?: string;
   libelle: string;
   ref?: string;
   description?: string;
+  domaine_technique?: TechnicalDomain | string;
   created_at?: string;
   [key: string]: any;
 }
@@ -390,6 +421,7 @@ export interface ICompFamily {
   id?: string | number;
   id_comp_family?: string;
   id_family?: string;
+  id_group?: string;
   id_groupe?: string;
   libelle: string;
   code?: string;
@@ -407,8 +439,14 @@ export interface ICompTemplate {
   ref?: string;
   libelle: string;
   id_family?: string;
+  id_group?: string;
   id_groupe?: string;
   type?: string;
+  mode_reparation_defaut?: ComponentDefaultRepairMode | string;
+  tension_nominale?: string;
+  courant_nominal_a?: number | string;
+  indice_protection?: string;
+  type_fixation?: string;
   specs?: Record<string, any>;
   description?: string;
   [key: string]: any;
@@ -524,6 +562,15 @@ export interface IWarehouseItem {
   etat?: string;
   technician?: string;
   remarques?: string;
+  matiere_nuance?: string;
+  ref_plan?: string;
+  dimensions_brut?: string;
+  traitement_thermique?: string;
+  mode_reparation_defaut?: ComponentDefaultRepairMode | string;
+  tension_nominale?: string;
+  courant_nominal_a?: number | string;
+  indice_protection?: string;
+  type_fixation?: string;
   historique_bobinage?: Array<Record<string, any>>;
   policy_tags?: MaterialPolicyTag[];
   [key: string]: any;

@@ -4,6 +4,7 @@
     "code": "ROUL",
     "libelle": "Roulements & paliers",
     "description": "Roulements à billes, à rouleaux, butées et paliers auto-aligneurs",
+    "domaine_technique": "MECANIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 10,
     "is_active": true
@@ -13,6 +14,7 @@
     "code": "ETAN",
     "libelle": "Étanchéité & joints",
     "description": "Joints toriques NBR/Viton, bagues SPI et rubans PTFE",
+    "domaine_technique": "MECANIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 20,
     "is_active": true
@@ -22,6 +24,7 @@
     "code": "TRAN",
     "libelle": "Transmission (courroies, chaînes)",
     "description": "Courroies trapézoïdales, chaînes à rouleaux et accouplements élastiques",
+    "domaine_technique": "MECANIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 30,
     "is_active": true
@@ -31,6 +34,7 @@
     "code": "HYDR",
     "libelle": "Hydraulique & lubrification",
     "description": "Distributeurs, raccords rapides, ventouses et filtration hydraulique",
+    "domaine_technique": "HYDRAULIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 40,
     "is_active": true
@@ -40,6 +44,7 @@
     "code": "ELEC",
     "libelle": "Électrique & automatisme",
     "description": "Capteurs inductifs, fins de course, alimentations 24V et ventilation armoire",
+    "domaine_technique": "ELECTRIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 50,
     "is_active": true
@@ -49,6 +54,7 @@
     "code": "FIXA",
     "libelle": "Fixation & quincaillerie",
     "description": "Visserie industrielle CHC/TH, boulonnerie et chevilles d'ancrage",
+    "domaine_technique": "MECANIQUE",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 60,
     "is_active": true
@@ -58,6 +64,7 @@
     "code": "DIV",
     "libelle": "Divers consommables",
     "description": "Pastilles carbure d'usinage, forets HSS et consommables d'atelier",
+    "domaine_technique": "CONSOMMABLES",
     "default_policy_tags": ["REPLACING"],
     "sort_order": 70,
     "is_active": true

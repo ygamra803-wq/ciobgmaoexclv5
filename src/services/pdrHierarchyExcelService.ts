@@ -110,6 +110,7 @@ export function buildPdrCatalogRows(state: {
       code: g.code || String(g.id).replace(/^GRP-/i, ''),
       libelle: g.libelle || g.code || g.id,
       description: g.description || '',
+      domaine_technique: g.domaine_technique || '',
       default_policy_tags: (g.default_policy_tags && g.default_policy_tags.length > 0
         ? g.default_policy_tags
         : ['REPLACING']
@@ -124,6 +125,7 @@ export function buildPdrCatalogRows(state: {
       code_type: t.id_type,
       libelle: t.libelle || t.id_type,
       group_code: matchedGrp ? matchedGrp.code : t.id_group || '',
+      domaine_technique: t.domaine_technique || matchedGrp?.domaine_technique || '',
       is_active: t.is_active !== false,
     };
   });
@@ -139,6 +141,13 @@ export function buildPdrCatalogRows(state: {
       unite_mesure: String(item.unite_mesure || item.unite || 'PCS').trim().toUpperCase(),
       criticite: String(item.criticite || 'B').trim().toUpperCase(),
       ref_constructeur: item.ref_constructeur || '',
+      code_equivalents: item.code_equivalents || item.equivalences || '',
+      delai_appro_jours: Number(item.delai_appro_jours ?? 0),
+      domaine_technique:
+        item.domaine_technique ||
+        resolved.type?.domaine_technique ||
+        resolved.group?.domaine_technique ||
+        '',
       seuil: Number(item.seuil ?? 0),
       emplacement: item.emplacement || '',
       stockInitial: Number(item.stockInitial ?? 0),
@@ -443,11 +452,18 @@ export function validateAndReconcilePdrCatalogImport(
 
     const canonicalId = existingMatch ? existingMatch.id : derivedId;
     const sortOrderNum = Number(row.sort_order ?? row.SORT_ORDER);
+    const rawGroupDomaine = String(
+      row.domaine_technique ?? row.DOMAINE_TECHNIQUE ?? existingMatch?.domaine_technique ?? ''
+    )
+      .trim()
+      .toUpperCase();
     const groupRecord: PdrGroup = {
       id: canonicalId,
+      id_group: canonicalId,
       code: rawCode,
       libelle: rawLibelle,
       description: String(row.description ?? row.DESCRIPTION ?? existingMatch?.description ?? '').trim(),
+      domaine_technique: rawGroupDomaine || undefined,
       default_policy_tags: parsePdrExcelPolicyTags(
         row.default_policy_tags ?? row.DEFAULT_POLICY_TAGS ?? existingMatch?.default_policy_tags
       ),
@@ -558,10 +574,17 @@ export function validateAndReconcilePdrCatalogImport(
     }
 
     const existingType = workingTypesById.get(normTypeCode) || null;
+    const rawTypeDomaine = String(
+      row.domaine_technique ?? row.DOMAINE_TECHNIQUE ?? existingType?.domaine_technique ?? targetGroup.domaine_technique ?? ''
+    )
+      .trim()
+      .toUpperCase();
     const typeRecord: StockType = {
       id_type: existingType ? existingType.id_type : rawCodeType,
       libelle: rawLibelle || existingType?.libelle || rawCodeType,
       id_group: targetGroup.id,
+      id_groupe: targetGroup.id, // TODO(ALIAS-CLEANUP): legacy alias for transition
+      domaine_technique: rawTypeDomaine || undefined,
       is_active: parseExcelBoolean(row.is_active ?? row.IS_ACTIVE, true),
     };
 
@@ -736,6 +759,29 @@ export function validateAndReconcilePdrCatalogImport(
     const refConstructeurVal = String(
       row.ref_constructeur ?? row.REF_CONSTRUCTEUR ?? existingItem?.ref_constructeur ?? ''
     ).trim();
+    const codeEquivalentsVal = String(
+      row.code_equivalents ??
+        row.equivalences ??
+        row.CODE_EQUIVALENTS ??
+        row.EQUIVALENCES ??
+        existingItem?.code_equivalents ??
+        existingItem?.equivalences ??
+        ''
+    ).trim();
+    const delaiApproVal = Math.max(
+      0,
+      Number(row.delai_appro_jours ?? row.DELAI_APPRO_JOURS ?? existingItem?.delai_appro_jours ?? 0) || 0
+    );
+    const rawItemDomaine = String(
+      row.domaine_technique ??
+        row.DOMAINE_TECHNIQUE ??
+        existingItem?.domaine_technique ??
+        matchedType.domaine_technique ??
+        typeGroup.domaine_technique ??
+        ''
+    )
+      .trim()
+      .toUpperCase();
 
     // Note: stockActuel in Excel is strictly informational and NEVER overrides movement math
     const entreesPreserve = Number(existingItem?.entrees ?? 0);
@@ -748,12 +794,17 @@ export function validateAndReconcilePdrCatalogImport(
       ref: existingItem ? existingItem.ref : rawRef,
       designation: rawDesignation,
       id_group: typeGroup.id,
+      id_groupe: typeGroup.id, // TODO(ALIAS-CLEANUP): legacy alias for transition
       id_type: matchedType.id_type,
       type: matchedType.libelle || matchedType.id_type,
       unite: rawUnite,
       unite_mesure: rawUnite,
       criticite: criticiteVal,
       ref_constructeur: refConstructeurVal,
+      code_equivalents: codeEquivalentsVal || undefined,
+      equivalences: codeEquivalentsVal || undefined,
+      delai_appro_jours: delaiApproVal,
+      domaine_technique: rawItemDomaine || undefined,
       stockInitial: stockInitialVal,
       entrees: entreesPreserve,
       sorties: sortiesPreserve,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Package, Plus, X, Sparkles } from 'lucide-react';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getGroupId } from '../../../domain/stock/pdrHierarchyService';
 
 export default function AddArticleModal({
   isOpen,
@@ -16,6 +17,9 @@ export default function AddArticleModal({
   const [uniteMesure, setUniteMesure] = useState('PCS');
   const [criticite, setCriticite] = useState('B');
   const [refConstructeur, setRefConstructeur] = useState('');
+  const [delaiApproJours, setDelaiApproJours] = useState<number | string>(0);
+  const [domaineTechnique, setDomaineTechnique] = useState('');
+  const [codeEquivalents, setCodeEquivalents] = useState('');
   const [stockInitial, setStockInitial] = useState(0);
   const [seuil, setSeuil] = useState(5);
   const [prixUnitaire, setPrixUnitaire] = useState(0);
@@ -53,6 +57,9 @@ export default function AddArticleModal({
       setUniteMesure('PCS');
       setCriticite('B');
       setRefConstructeur('');
+      setDelaiApproJours(0);
+      setDomaineTechnique('');
+      setCodeEquivalents('');
       setStockInitial(0);
       setSeuil(5);
       setPrixUnitaire(0);
@@ -86,16 +93,23 @@ export default function AddArticleModal({
     const matchedTypeObj = (types || []).find(
       (t) => (t.id_type || t.libelle) === selectedType
     );
+    const canonicalGroupId = getGroupId(matchedTypeObj) || null;
+    const cleanLeadTime = Math.max(0, Number(delaiApproJours) || 0);
     onAddArticle({
       ref: cleanRef,
       designation: designation.trim() || cleanRef,
-      id_group: matchedTypeObj?.id_group || null,
+      id_group: canonicalGroupId,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
+      id_groupe: canonicalGroupId,
       id_type: selectedType,
       type: selectedType,
       unite: uniteMesure,
       unite_mesure: uniteMesure,
       criticite: criticite,
       ref_constructeur: refConstructeur.trim(),
+      delai_appro_jours: cleanLeadTime > 0 ? cleanLeadTime : undefined,
+      domaine_technique: domaineTechnique.trim().toUpperCase() || undefined,
+      code_equivalents: codeEquivalents.trim() || undefined,
       policy_tags: ['REPLACING'],
       stockInitial: Number(stockInitial) || 0,
       seuil: Number(seuil) || 0,
@@ -233,13 +247,63 @@ export default function AddArticleModal({
 
             <div>
               <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                Réf. Constructeur / Équiv.
+                Réf. Constructeur / OEM
               </label>
               <input
                 type="text"
                 placeholder="ex: SKF 6205-2RS"
                 value={refConstructeur}
                 onChange={(e) => setRefConstructeur(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-indigo-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Medium-Priority Shopfloor Fields (P3): Domaine Technique, Délai Appro, Codes Équivalents */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-indigo-50/40 p-3 rounded-xl border border-indigo-100">
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Domaine Technique
+              </label>
+              <select
+                value={domaineTechnique}
+                onChange={(e) => setDomaineTechnique(e.target.value)}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:border-indigo-500 outline-none cursor-pointer"
+              >
+                <option value="">— Hérité du Groupe/Type —</option>
+                <option value="MECANIQUE">MÉCANIQUE</option>
+                <option value="ELECTRIQUE">ÉLECTRIQUE</option>
+                <option value="HYDRAULIQUE">HYDRAULIQUE</option>
+                <option value="PNEUMATIQUE">PNEUMATIQUE</option>
+                <option value="AUTOMATISME">AUTOMATISME</option>
+                <option value="LUBRIFIANTS">LUBRIFIANTS</option>
+                <option value="CONSOMMABLES">CONSOMMABLES</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Délai Appro. (Jours)
+              </label>
+              <input
+                type="number"
+                min="0"
+                placeholder="ex: 7"
+                value={delaiApproJours}
+                onChange={(e) => setDelaiApproJours(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-mono font-bold text-slate-800 focus:border-indigo-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Codes Équivalents (;)
+              </label>
+              <input
+                type="text"
+                placeholder="ex: FAG 6205-2RSR; NSK 6205DDU"
+                value={codeEquivalents}
+                onChange={(e) => setCodeEquivalents(e.target.value)}
                 className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-indigo-500 outline-none"
               />
             </div>

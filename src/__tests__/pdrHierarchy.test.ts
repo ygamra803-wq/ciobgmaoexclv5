@@ -969,3 +969,141 @@ describe('P2-INDUSTRIAL-COLUMNS — PDR (unite_mesure, criticite, ref_constructe
     }
   });
 });
+
+describe('CLEANUP-UI + FIELD-ALIAS + P3-INDUSTRIAL — KPI Prop Discipline, getGroupId Unified Alias & P3 Fields', () => {
+  it('1. BesoinsMainCouranteTab and AtelierFabricationTab enforce clean UI props (isActive on GmaoKpiCard, rowKey ord.id || ord.code_bon on Workshop Orders)', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+
+    const besoinsPath = path.resolve(
+      process.cwd(),
+      'src/presentation/pages/corrective/BesoinsMainCouranteTab.tsx'
+    );
+    const besoinsSource = fs.readFileSync(besoinsPath, 'utf-8');
+    // Must use isActive={...} on GmaoKpiCard and never pass raw active={...}
+    expect(besoinsSource).toContain('isActive={');
+    expect(besoinsSource).not.toMatch(/\bactive=\{/);
+
+    const atelierPath = path.resolve(
+      process.cwd(),
+      'src/presentation/pages/corrective/AtelierFabricationTab.tsx'
+    );
+    const atelierSource = fs.readFileSync(atelierPath, 'utf-8');
+    expect(atelierSource).toContain('ord.id || ord.code_bon || rowNumber');
+  });
+
+  it('2. getGroupId and getGroupRecordId read canonical id_group first and fall back to legacy id_groupe without mutating storage', async () => {
+    const { getGroupId, getGroupRecordId } = await import('../domain/stock/pdrHierarchyService');
+
+    expect(getGroupId(null)).toBe('');
+    expect(getGroupId(undefined)).toBe('');
+    expect(getGroupId({})).toBe('');
+
+    // Canonical id_group takes precedence
+    expect(getGroupId({ id_group: 'GRP-ROUL', id_groupe: 'LEGACY-ROUL' })).toBe('GRP-ROUL');
+    // Legacy id_groupe fallback when id_group is absent
+    expect(getGroupId({ id_groupe: 'GRP-PRT-MEC' })).toBe('GRP-PRT-MEC');
+
+    // Group record ID resolution
+    expect(getGroupRecordId({ id: 'GRP-ETAN', code: 'ETAN' })).toBe('GRP-ETAN');
+    expect(getGroupRecordId({ id_group: 'GRP-PRT-FIX', id_groupe: 'OLD' })).toBe('GRP-PRT-FIX');
+    expect(getGroupRecordId({ id_groupe: 'GRP-CMP-MOT' })).toBe('GRP-CMP-MOT');
+  });
+
+  it('3. Preserves P3 PDR fields (delai_appro_jours, domaine_technique, code_equivalents) and group domaine_technique in Excel export/import round-trip', async () => {
+    const {
+      buildPdrCatalogRows,
+      validateAndReconcilePdrCatalogImport,
+    } = await import('../services/pdrHierarchyExcelService');
+
+    const groups: PdrGroup[] = [
+      {
+        id: 'GRP-ELEC',
+        id_group: 'GRP-ELEC',
+        code: 'ELEC',
+        libelle: 'Électrique & Automatisme',
+        domaine_technique: 'ELECTRIQUE',
+        is_active: true,
+      },
+    ];
+    const types: StockType[] = [
+      {
+        id_type: 'TYP-CAPT-IND',
+        libelle: 'Capteur Inductif',
+        id_group: 'GRP-ELEC',
+        domaine_technique: 'AUTOMATISME',
+      },
+    ];
+    const stockItems: IStockItem[] = [
+      {
+        ref: 'CAPT-M12-PNP',
+        designation: 'Capteur inductif M12 PNP NO',
+        id_group: 'GRP-ELEC',
+        id_type: 'TYP-CAPT-IND',
+        unite_mesure: 'PCS',
+        criticite: 'A',
+        domaine_technique: 'AUTOMATISME',
+        ref_constructeur: 'IFM-IGS204',
+        code_equivalents: 'SICK-IME12; OMRON-E2E-X5ME1',
+        delai_appro_jours: 14,
+        seuil: 4,
+        emplacement: 'MAG-E-01',
+        stockInitial: 10,
+        policy_tags: ['REPLACING'],
+      },
+      {
+        // Legacy item without P3 fields -> inherits domaine_technique from type/group on export, delai_appro_jours defaults to 0
+        ref: 'CAPT-LEGACY-01',
+        designation: 'Capteur standard hérité',
+        id_group: 'GRP-ELEC',
+        id_type: 'TYP-CAPT-IND',
+        seuil: 2,
+        emplacement: 'MAG-E-02',
+        stockInitial: 5,
+      },
+    ];
+
+    const rows = buildPdrCatalogRows({
+      pdrGroups: groups,
+      types,
+      rawStock: stockItems,
+    });
+
+    expect(rows.groupRows[0].domaine_technique).toBe('ELECTRIQUE');
+    expect(rows.typeRows[0].domaine_technique).toBe('AUTOMATISME');
+    expect(rows.itemRows[0].domaine_technique).toBe('AUTOMATISME');
+    expect(rows.itemRows[0].code_equivalents).toBe('SICK-IME12; OMRON-E2E-X5ME1');
+    expect(rows.itemRows[0].delai_appro_jours).toBe(14);
+
+    // Legacy item inherits domaine_technique from type ('AUTOMATISME') and defaults delai_appro_jours to 0
+    expect(rows.itemRows[1].domaine_technique).toBe('AUTOMATISME');
+    expect(rows.itemRows[1].code_equivalents).toBe('');
+    expect(rows.itemRows[1].delai_appro_jours).toBe(0);
+
+    const report = validateAndReconcilePdrCatalogImport(
+      {
+        groups: rows.groupRows,
+        types: rows.typeRows,
+        items: rows.itemRows,
+      },
+      {
+        mode: 'MERGE',
+        actorRole: 'ADMIN',
+        existingGroups: [],
+        existingTypes: [],
+        existingStock: [],
+      }
+    );
+
+    expect(report.success).toBe(true);
+    expect(report.nextGroups[0].domaine_technique).toBe('ELECTRIQUE');
+    expect(report.nextGroups[0].id_group).toBe('GRP-ELEC');
+    expect(report.nextTypes[0].domaine_technique).toBe('AUTOMATISME');
+
+    const importedSensor = report.nextStock.find((s) => s.ref === 'CAPT-M12-PNP');
+    expect(importedSensor?.domaine_technique).toBe('AUTOMATISME');
+    expect(importedSensor?.code_equivalents).toBe('SICK-IME12; OMRON-E2E-X5ME1');
+    expect(importedSensor?.delai_appro_jours).toBe(14);
+  });
+});
+

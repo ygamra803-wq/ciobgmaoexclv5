@@ -34,6 +34,7 @@ import {
   POLICY_TAG_LABELS,
   type MaterialPolicyTag,
 } from '../../../domain/corrective/needRequestService';
+import { getGroupId, getGroupRecordId } from '../../../domain/stock/pdrHierarchyService';
 
 export default function PartDesignationView({
   partDesignations = [],
@@ -71,7 +72,7 @@ export default function PartDesignationView({
   const partGroupMap = useMemo(() => {
     const map: Record<string, any> = {};
     (partGroups || []).forEach((g: any) => {
-      const k1 = String(g.id_group || g.id_groupe || g.id || '').trim().toUpperCase();
+      const k1 = getGroupRecordId(g).toUpperCase();
       const k2 = String(g.code || '').trim().toUpperCase();
       if (k1) map[k1] = g;
       if (k2) map[k2] = g;
@@ -104,6 +105,7 @@ export default function PartDesignationView({
     matiere_nuance: '',
     ref_plan: '',
     dimensions_brut: '',
+    traitement_thermique: '',
     policy_tags: ['REPAIRABLE', 'REPLACING'] as MaterialPolicyTag[],
   });
 
@@ -112,11 +114,7 @@ export default function PartDesignationView({
     return partDesignations.filter((d: any) => {
       const q = search.toLowerCase();
       const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
-      const effectiveGroupId = String(
-        d.id_group || d.id_groupe || typeObj?.id_group || typeObj?.id_groupe || ''
-      )
-        .trim()
-        .toUpperCase();
+      const effectiveGroupId = (getGroupId(d) || getGroupId(typeObj)).toUpperCase();
 
       const matchSearch =
         !q ||
@@ -128,6 +126,7 @@ export default function PartDesignationView({
         d.matiere_nuance?.toLowerCase().includes(q) ||
         d.ref_plan?.toLowerCase().includes(q) ||
         d.dimensions_brut?.toLowerCase().includes(q) ||
+        d.traitement_thermique?.toLowerCase().includes(q) ||
         effectiveGroupId.toLowerCase().includes(q);
 
       const matchGroup =
@@ -208,13 +207,14 @@ export default function PartDesignationView({
       'Matière / Nuance',
       'Réf. Plan',
       'Dimensions Brut',
+      'Traitement Thermique',
       'Stock Actuel',
       'Emplacement',
     ];
     const rows = filtered.map((d: any) => {
       const dKey = d.ref || d.id_part || d.id_diag || d.id;
       const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
-      const grpId = d.id_group || d.id_groupe || typeObj?.id_group || typeObj?.id_groupe || '';
+      const grpId = getGroupId(d) || getGroupId(typeObj);
       const matchingItems = warehouseItems.filter(
         (w: any) =>
           (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
@@ -236,6 +236,7 @@ export default function PartDesignationView({
         d.matiere_nuance || '',
         d.ref_plan || '',
         d.dimensions_brut || '',
+        d.traitement_thermique || '',
         totalStock,
         d.emplacement || '',
       ];
@@ -258,18 +259,19 @@ export default function PartDesignationView({
     if (!form.ref || !form.designation || !form.id_type) return;
     const cleanRef = form.ref.trim().toUpperCase();
     const matchedTypeObj = partTypes.find((t: any) => t.id_type === form.id_type);
-    const effectiveGroup =
-      form.id_group || matchedTypeObj?.id_group || matchedTypeObj?.id_groupe || undefined;
+    const effectiveGroup = form.id_group || getGroupId(matchedTypeObj) || undefined;
     onAddPartDesignation({
       ...form,
       id: cleanRef,
       id_part: cleanRef,
       ref: cleanRef,
       id_group: effectiveGroup,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
       id_groupe: effectiveGroup,
       matiere_nuance: form.matiere_nuance.trim(),
       ref_plan: form.ref_plan.trim(),
       dimensions_brut: form.dimensions_brut.trim(),
+      traitement_thermique: form.traitement_thermique.trim() || undefined,
       seuil: Number(form.seuil) || 0,
       policy_tags:
         form.policy_tags && form.policy_tags.length > 0
@@ -287,6 +289,7 @@ export default function PartDesignationView({
       matiere_nuance: '',
       ref_plan: '',
       dimensions_brut: '',
+      traitement_thermique: '',
       policy_tags: ['REPAIRABLE', 'REPLACING'],
     });
     setShowAddModal(false);
@@ -318,7 +321,7 @@ export default function PartDesignationView({
               <PartInfoIcon className="w-4 h-4 text-blue-600 shrink-0 animate-pulse-slow" />
               <span className="font-semibold text-slate-800 text-[13px]">{item.designation}</span>
             </div>
-            {(item.matiere_nuance || item.ref_plan || item.dimensions_brut) && (
+            {(item.matiere_nuance || item.ref_plan || item.dimensions_brut || item.traitement_thermique) && (
               <div className="flex items-center gap-1.5 flex-wrap pl-6">
                 {item.matiere_nuance && (
                   <span
@@ -342,6 +345,14 @@ export default function PartDesignationView({
                     title={`Dimensions Brut Atelier : ${item.dimensions_brut}`}
                   >
                     Brut: {item.dimensions_brut}
+                  </span>
+                )}
+                {item.traitement_thermique && (
+                  <span
+                    className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-mono text-[10px] font-bold"
+                    title={`Traitement thermique / Dureté : ${item.traitement_thermique}`}
+                  >
+                    TT: {item.traitement_thermique}
                   </span>
                 )}
               </div>
@@ -1118,8 +1129,8 @@ export default function PartDesignationView({
                 </div>
               </div>
 
-              {/* Spécifications Atelier (P2): Matière / Nuance, Réf. Plan, Dimensions Brut */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              {/* Spécifications Atelier (P2 + P3): Matière / Nuance, Réf. Plan, Dimensions Brut, Traitement Thermique */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
                     Matière / Nuance
@@ -1153,6 +1164,18 @@ export default function PartDesignationView({
                     value={form.dimensions_brut}
                     onChange={(e) => setForm({ ...form, dimensions_brut: e.target.value })}
                     placeholder="ex: Ø60 x 240 mm"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Traitement Thermique (P3)
+                  </label>
+                  <input
+                    type="text"
+                    value={form.traitement_thermique || ''}
+                    onChange={(e) => setForm({ ...form, traitement_thermique: e.target.value })}
+                    placeholder="ex: Trempé revenu 58 HRC"
                     className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
                   />
                 </div>
@@ -1298,8 +1321,8 @@ export default function PartDesignationView({
                 </div>
               </div>
 
-              {/* Spécifications Atelier (P2) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              {/* Spécifications Atelier (P2 + P3) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
                     Matière / Nuance
@@ -1333,6 +1356,18 @@ export default function PartDesignationView({
                     value={toEdit.dimensions_brut || ''}
                     onChange={(e) => setToEdit({ ...toEdit, dimensions_brut: e.target.value })}
                     placeholder="ex: Ø60 x 240 mm"
+                    className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
+                    Traitement Thermique (P3)
+                  </label>
+                  <input
+                    type="text"
+                    value={toEdit.traitement_thermique || ''}
+                    onChange={(e) => setToEdit({ ...toEdit, traitement_thermique: e.target.value })}
+                    placeholder="ex: Trempé revenu 58 HRC"
                     className="w-full mt-1 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-900"
                   />
                 </div>

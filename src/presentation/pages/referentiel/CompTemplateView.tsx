@@ -97,6 +97,11 @@ export default function CompTemplateView({
     id_templates: '',
     libelle: '',
     id_family: '',
+    mode_reparation_defaut: 'NON_DEFINI',
+    tension_nominale: '',
+    courant_nominal_a: '',
+    indice_protection: '',
+    type_fixation: '',
   });
 
   const handleFamilySelect = useCallback(
@@ -251,17 +256,46 @@ export default function CompTemplateView({
     onAddCompTemplate({
       ...form,
       id_templates: form.id_templates.trim().toUpperCase(),
+      mode_reparation_defaut: form.mode_reparation_defaut || 'NON_DEFINI',
+      tension_nominale: String(form.tension_nominale || '').trim() || undefined,
+      courant_nominal_a: String(form.courant_nominal_a || '').trim() || undefined,
+      indice_protection: String(form.indice_protection || '').trim() || undefined,
+      type_fixation: String(form.type_fixation || '').trim() || undefined,
     });
-    setForm({ id_templates: '', libelle: '', id_family: '' });
+    setForm({
+      id_templates: '',
+      libelle: '',
+      id_family: '',
+      mode_reparation_defaut: 'NON_DEFINI',
+      tension_nominale: '',
+      courant_nominal_a: '',
+      indice_protection: '',
+      type_fixation: '',
+    });
     setShowAddModal(false);
   };
 
   const handleExportExcel = () => {
-    const headers = ['ID Désignation', 'Libellé Désignation', 'Type Parent', 'Nb Articles Entrepôt'];
+    const headers = [
+      'ID Désignation',
+      'Libellé Désignation',
+      'Type Parent',
+      'Mode Réparation Défaut',
+      'Tension Nominale',
+      'Courant Nominal (A)',
+      'Indice Protection (IP)',
+      'Type Fixation',
+      'Nb Articles Entrepôt',
+    ];
     const rows = filtered.map((t) => [
       t.id_templates || '',
       t.libelle || '',
       t.id_family || '',
+      t.mode_reparation_defaut || 'NON_DEFINI',
+      t.tension_nominale || t.specs?.V || t.specs?.alimentation || '',
+      t.courant_nominal_a || t.specs?.A || t.specs?.courant || '',
+      t.indice_protection || '',
+      t.type_fixation || '',
       warehouseItems.filter((i) => i.id_templates === t.id_templates).length,
     ]);
     const csvContent =
@@ -323,11 +357,49 @@ export default function CompTemplateView({
         colLetter: 'B',
         icon: CubeIcon,
         sortable: true,
-        render: (item) => (
-          <span className="font-semibold text-slate-800 text-[13px]">
-            {item.libelle}
-          </span>
-        ),
+        render: (item) => {
+          const effTension = item.tension_nominale || item.specs?.V || item.specs?.alimentation || '';
+          const effCourant = item.courant_nominal_a || item.specs?.A || item.specs?.courant || '';
+          const effIp = item.indice_protection || '';
+          const effFix = item.type_fixation || '';
+          const effMode = item.mode_reparation_defaut && item.mode_reparation_defaut !== 'NON_DEFINI' ? item.mode_reparation_defaut : '';
+          return (
+            <div className="space-y-1">
+              <span className="font-semibold text-slate-800 text-[13px] block">
+                {item.libelle}
+              </span>
+              {(effMode || effTension || effCourant || effIp || effFix) && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {effMode && (
+                    <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-mono font-bold text-[10px]" title="Mode de réparation par défaut">
+                      {effMode}
+                    </span>
+                  )}
+                  {effTension && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono text-[10px]" title="Tension nominale">
+                      U: {effTension}
+                    </span>
+                  )}
+                  {effCourant && (
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[10px]" title="Courant nominal">
+                      I: {String(effCourant).endsWith('A') ? effCourant : `${effCourant}A`}
+                    </span>
+                  )}
+                  {effIp && (
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[10px]" title="Indice de protection">
+                      {effIp}
+                    </span>
+                  )}
+                  {effFix && (
+                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-mono text-[10px]" title="Type de fixation">
+                      Fix: {effFix}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        },
       },
       {
         key: 'id_family',
@@ -517,6 +589,11 @@ export default function CompTemplateView({
                   id_templates: `TPL-CMP${String(nextIdx).padStart(2, '0')}`,
                   libelle: '',
                   id_family: compFamilies[0]?.id_family || '',
+                  mode_reparation_defaut: 'NON_DEFINI',
+                  tension_nominale: '',
+                  courant_nominal_a: '',
+                  indice_protection: '',
+                  type_fixation: '',
                 });
                 setShowAddModal(true);
               }}
@@ -991,6 +1068,79 @@ export default function CompTemplateView({
                 </select>
               </div>
 
+              {/* Spécifications Plaque Signalétique & Mode de Réparation (P3) */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Plaque Signalétique & Mode Réparation (Optionnel)
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                    Mode de Réparation par Défaut
+                  </label>
+                  <select
+                    value={form.mode_reparation_defaut || 'NON_DEFINI'}
+                    onChange={(e) => setForm({ ...form, mode_reparation_defaut: e.target.value })}
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-800"
+                  >
+                    <option value="NON_DEFINI">NON_DEFINI — Non spécifié</option>
+                    <option value="REBOBINAGE_EXTERNE">REBOBINAGE_EXTERNE — Rebobinage Externe</option>
+                    <option value="REVISION_ATELIER">REVISION_ATELIER — Révision Atelier Interne</option>
+                    <option value="ECHANGE_STANDARD">ECHANGE_STANDARD — Échange Standard</option>
+                    <option value="GARANTIE">GARANTIE — Sous Garantie Constructeur</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Tension Nominale
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: 230/400V"
+                      value={form.tension_nominale || ''}
+                      onChange={(e) => setForm({ ...form, tension_nominale: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Courant Nominal (A)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: 8.8A"
+                      value={form.courant_nominal_a || ''}
+                      onChange={(e) => setForm({ ...form, courant_nominal_a: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Indice Protection (IP)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: IP55"
+                      value={form.indice_protection || ''}
+                      onChange={(e) => setForm({ ...form, indice_protection: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Type de Fixation
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: B3, B5, B14"
+                      value={form.type_fixation || ''}
+                      onChange={(e) => setForm({ ...form, type_fixation: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
@@ -1057,6 +1207,79 @@ export default function CompTemplateView({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Spécifications Plaque Signalétique & Mode de Réparation (P3) */}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Plaque Signalétique & Mode Réparation (Optionnel)
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                    Mode de Réparation par Défaut
+                  </label>
+                  <select
+                    value={toEdit.mode_reparation_defaut || 'NON_DEFINI'}
+                    onChange={(e) => setToEdit({ ...toEdit, mode_reparation_defaut: e.target.value })}
+                    className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-800"
+                  >
+                    <option value="NON_DEFINI">NON_DEFINI — Non spécifié</option>
+                    <option value="REBOBINAGE_EXTERNE">REBOBINAGE_EXTERNE — Rebobinage Externe</option>
+                    <option value="REVISION_ATELIER">REVISION_ATELIER — Révision Atelier Interne</option>
+                    <option value="ECHANGE_STANDARD">ECHANGE_STANDARD — Échange Standard</option>
+                    <option value="GARANTIE">GARANTIE — Sous Garantie Constructeur</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Tension Nominale
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: 230/400V"
+                      value={toEdit.tension_nominale || ''}
+                      onChange={(e) => setToEdit({ ...toEdit, tension_nominale: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Courant Nominal (A)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: 8.8A"
+                      value={toEdit.courant_nominal_a || ''}
+                      onChange={(e) => setToEdit({ ...toEdit, courant_nominal_a: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Indice Protection (IP)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: IP55"
+                      value={toEdit.indice_protection || ''}
+                      onChange={(e) => setToEdit({ ...toEdit, indice_protection: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-600 block mb-1">
+                      Type de Fixation
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="ex: B3, B5, B14"
+                      value={toEdit.type_fixation || ''}
+                      onChange={(e) => setToEdit({ ...toEdit, type_fixation: e.target.value })}
+                      className="w-full h-8 px-2 rounded-lg border border-slate-200 bg-white text-xs font-mono"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-3">

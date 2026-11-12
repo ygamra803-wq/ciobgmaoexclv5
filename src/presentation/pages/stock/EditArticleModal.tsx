@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Package, CheckCircle2, X, MapPin, Boxes } from 'lucide-react';
 import CustomSelect from '../../components/common/CustomSelect';
+import { getGroupId } from '../../../domain/stock/pdrHierarchyService';
 
 export default function EditArticleModal({
   isOpen,
@@ -13,11 +14,14 @@ export default function EditArticleModal({
   const [form, setForm] = useState({
     ref: article?.ref || '',
     designation: article?.designation || '',
-    id_group: article?.id_group || '',
+    id_group: getGroupId(article),
     id_type: article?.id_type || types[0]?.id_type || '',
     unite_mesure: article?.unite_mesure || article?.unite || 'PCS',
     criticite: article?.criticite || 'B',
     ref_constructeur: article?.ref_constructeur || '',
+    delai_appro_jours: article?.delai_appro_jours ?? 0,
+    domaine_technique: article?.domaine_technique || '',
+    code_equivalents: article?.code_equivalents || '',
     stockInitial: article?.stockInitial ?? 0,
     seuil: article?.seuil ?? 5,
     prix_unitaire: article?.prix_unitaire ?? article?.prixUnitaire ?? article?.prix ?? 0,
@@ -29,11 +33,14 @@ export default function EditArticleModal({
       setForm({
         ref: article.ref || '',
         designation: article.designation || '',
-        id_group: article.id_group || '',
+        id_group: getGroupId(article),
         id_type: article.id_type || types[0]?.id_type || '',
         unite_mesure: article.unite_mesure || article.unite || 'PCS',
         criticite: article.criticite || 'B',
         ref_constructeur: article.ref_constructeur || '',
+        delai_appro_jours: article.delai_appro_jours ?? 0,
+        domaine_technique: article.domaine_technique || '',
+        code_equivalents: article.code_equivalents || '',
         stockInitial: article.stockInitial ?? 0,
         seuil: article.seuil ?? 5,
         prix_unitaire: article.prix_unitaire ?? article.prixUnitaire ?? article.prix ?? 0,
@@ -59,17 +66,24 @@ export default function EditArticleModal({
 
     const targetId = article.id || article.ref;
     const cleanPrice = Math.max(0, Number(form.prix_unitaire) || 0);
+    const canonicalGroupId = form.id_group ? String(form.id_group).trim() : null;
+    const cleanLeadTime = Math.max(0, Number(form.delai_appro_jours) || 0);
     onUpdateArticle(targetId, {
       ...article,
       id: targetId,
       designation: form.designation.trim(),
-      id_group: form.id_group || null,
+      id_group: canonicalGroupId,
+      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
+      id_groupe: canonicalGroupId,
       id_type: form.id_type,
       type: form.id_type,
       unite: form.unite_mesure || 'PCS',
       unite_mesure: form.unite_mesure || 'PCS',
       criticite: form.criticite || 'B',
       ref_constructeur: form.ref_constructeur.trim(),
+      delai_appro_jours: cleanLeadTime > 0 ? cleanLeadTime : undefined,
+      domaine_technique: form.domaine_technique.trim().toUpperCase() || undefined,
+      code_equivalents: form.code_equivalents.trim() || undefined,
       stockInitial: Number(form.stockInitial) || 0,
       seuil: Number(form.seuil) || 0,
       prix_unitaire: cleanPrice,
@@ -224,13 +238,68 @@ export default function EditArticleModal({
 
             <div>
               <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
-                Réf. Constructeur / Équiv.
+                Réf. Constructeur / OEM
               </label>
               <input
                 type="text"
                 placeholder="ex: SKF 6205-2RS"
                 value={form.ref_constructeur}
                 onChange={(e) => setForm({ ...form, ref_constructeur: e.target.value })}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-cyan-500 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Medium-Priority Shopfloor Fields (P3): Domaine Technique, Délai Appro, Codes Équivalents */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-cyan-50/40 p-3 rounded-2xl border border-cyan-100">
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Domaine Technique
+              </label>
+              <select
+                value={form.domaine_technique}
+                onChange={(e) => setForm({ ...form, domaine_technique: e.target.value })}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-900 focus:border-cyan-500 outline-none cursor-pointer"
+              >
+                <option value="">— Hérité du Groupe/Type —</option>
+                <option value="MECANIQUE">MÉCANIQUE</option>
+                <option value="ELECTRIQUE">ÉLECTRIQUE</option>
+                <option value="HYDRAULIQUE">HYDRAULIQUE</option>
+                <option value="PNEUMATIQUE">PNEUMATIQUE</option>
+                <option value="AUTOMATISME">AUTOMATISME</option>
+                <option value="LUBRIFIANTS">LUBRIFIANTS</option>
+                <option value="CONSOMMABLES">CONSOMMABLES</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Délai Appro. (Jours)
+              </label>
+              <input
+                type="number"
+                min="0"
+                placeholder="ex: 7"
+                value={form.delai_appro_jours}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    delai_appro_jours: Math.max(0, parseInt(e.target.value, 10) || 0),
+                  })
+                }
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-bold text-slate-800 focus:border-cyan-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10.5px] font-bold text-slate-600 uppercase tracking-wider block mb-1">
+                Codes Équivalents (;)
+              </label>
+              <input
+                type="text"
+                placeholder="ex: FAG 6205-2RSR; NSK 6205DDU"
+                value={form.code_equivalents}
+                onChange={(e) => setForm({ ...form, code_equivalents: e.target.value })}
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-800 focus:border-cyan-500 outline-none"
               />
             </div>

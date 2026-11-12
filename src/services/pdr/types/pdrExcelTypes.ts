@@ -7,6 +7,7 @@ export interface PdrGroupExcelRow {
   code: string;
   libelle: string;
   description: string;
+  domaine_technique?: string;
   default_policy_tags: string;
   sort_order: number;
   is_active: boolean;
@@ -16,6 +17,7 @@ export interface PdrTypeExcelRow {
   code_type: string;
   libelle: string;
   group_code: string;
+  domaine_technique?: string;
   is_active: boolean;
 }
 
@@ -27,6 +29,9 @@ export interface PdrItemExcelRow {
   unite_mesure?: string;
   criticite?: string;
   ref_constructeur?: string;
+  code_equivalents?: string;
+  delai_appro_jours?: number;
+  domaine_technique?: string;
   seuil: number;
   emplacement: string;
   stockInitial: number;

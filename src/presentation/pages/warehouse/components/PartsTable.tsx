@@ -25,6 +25,7 @@ import GmaoIndustrialDataGrid from '../../../components/common/GmaoIndustrialDat
 import { EntrepotItem } from '../../../../core/domain';
 import { useTranslation } from '../../../../i18n/I18nContext';
 import { getEffectivePolicyTags } from '../../../../domain/corrective/needRequestService';
+import { getGroupId, getGroupRecordId } from '../../../../domain/stock/pdrHierarchyService';
 
 export default function PartsTable({
   displayedData = [],
@@ -61,8 +62,8 @@ export default function PartsTable({
   const partGroupMap = useMemo(() => {
     const map: Record<string, any> = {};
     (partGroups || []).forEach((g: any) => {
-      const gid = String(g.id_group || g.id_groupe || g.code || g.id || '').trim().toUpperCase();
-      const gcode = String(g.code || g.id_group || g.id_groupe || '').trim().toUpperCase();
+      const gid = getGroupRecordId(g).toUpperCase();
+      const gcode = String(g.code || getGroupRecordId(g)).trim().toUpperCase();
       if (gid) map[gid] = g;
       if (gcode) map[gcode] = g;
     });
@@ -170,15 +171,7 @@ export default function PartsTable({
         const realIndex = startIndex + idx;
         const domainItem = new EntrepotItem(item);
                 const typeObj = types.find((t: any) => t.id_type === item.id_type);
-                const rawGroupKey = String(
-                  item.id_group ||
-                    item.id_groupe ||
-                    typeObj?.id_group ||
-                    typeObj?.id_groupe ||
-                    ''
-                )
-                  .trim()
-                  .toUpperCase();
+                const rawGroupKey = (getGroupId(item) || getGroupId(typeObj)).toUpperCase();
                 const grpObj = rawGroupKey ? partGroupMap[rawGroupKey] : null;
                 const diagObj = diagnostics.find((d: any) => {
                   const dId = d.id_part || d.ref || d.id_diag || d.id;
@@ -333,6 +326,14 @@ export default function PartsTable({
                                 title={`Dimensions Brut: ${item.dimensions_brut || diagObj?.dimensions_brut}`}
                               >
                                 Brut: {item.dimensions_brut || diagObj?.dimensions_brut}
+                              </span>
+                            )}
+                            {(item.traitement_thermique || diagObj?.traitement_thermique) && (
+                              <span
+                                className="px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-purple-50 text-purple-800 border border-purple-200"
+                                title={`Traitement Thermique: ${item.traitement_thermique || diagObj?.traitement_thermique}`}
+                              >
+                                TT: {item.traitement_thermique || diagObj?.traitement_thermique}
                               </span>
                             )}
                           </div>

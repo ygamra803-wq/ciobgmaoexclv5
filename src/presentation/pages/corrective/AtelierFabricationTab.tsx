@@ -1411,6 +1411,9 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         renderSortIcon={renderSortIcon}
         startIndex={startIndex}
         showRowNumber={true}
+        rowKey={(ord: IWorkshopOrder, _idx: number, rowNumber: number) =>
+          ord.id || ord.code_bon || rowNumber
+        }
         cardGridClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
         renderCard={(ord: IWorkshopOrder, _idx: number, rowNumber: number) => {
           const isRect = ord.type_demande === 'RECTIFICATION';
