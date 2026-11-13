@@ -10,6 +10,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getMaxConcurrentSessionsForRole } from './serverSession';
+import { Logger } from '../logger/LoggerService';
 
 export interface ActiveSessionEntry {
   sid: string;
@@ -155,7 +156,7 @@ export function createServerSessionStore(options: {
       fs.writeFileSync(tmpFile, serialized, 'utf-8');
       fs.renameSync(tmpFile, storeFile);
     } catch (err) {
-      console.error('[Server][SEC-LAN-P2] Failed to persist session revocation store:', err);
+      Logger.error('[Server][SEC-LAN-P2] Failed to persist session revocation store:', err, 'serverSessionStore');
     }
   };
 
@@ -171,7 +172,7 @@ export function createServerSessionStore(options: {
         await fs.promises.rename(tmpFile, storeFile);
       })
       .catch((err) => {
-        console.error('[Server][SEC-LAN-P2] Async persist error in revocation store:', err);
+        Logger.error('[Server][SEC-LAN-P2] Async persist error in revocation store:', err, 'serverSessionStore');
       });
     return writeChain;
   };
@@ -217,7 +218,7 @@ export function createServerSessionStore(options: {
         }
       }
     } catch (err) {
-      console.error('[Server][SEC-LAN-P2] Failed to load revocation store from disk:', err);
+      Logger.error('[Server][SEC-LAN-P2] Failed to load revocation store from disk:', err, 'serverSessionStore');
     }
   };
 

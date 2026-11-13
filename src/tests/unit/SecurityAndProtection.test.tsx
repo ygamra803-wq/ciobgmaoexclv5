@@ -328,6 +328,34 @@ describe('4. Security & Hardening Tests', () => {
       const decryptedAfter = await vaultService.decryptVault(newPin);
       expect(decryptedAfter.secretToken).toBe('GMAO-SECURE-KEY-2026');
       expect(decryptedAfter.accounts).toHaveLength(1);
+
+      // 5. Vault artifacts in localStorage must be protected via SecurityService (NC2: envelope)
+      expect(localStorage.getItem('gmao_vault_cipher_v2')?.startsWith('NC2:')).toBe(true);
+      expect(localStorage.getItem('gmao_vault_salt_v2')?.startsWith('NC2:')).toBe(true);
+      expect(typeof SecurityService.getSecure('gmao_vault_cipher_v2')).toBe('string');
+      expect(typeof SecurityService.getSecure('gmao_vault_salt_v2')).toBe('string');
+    });
+
+    it('should enforce SecurityService.getSecure in SettingsAdminTab and Logger.error in serverSessionStore', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+
+      const adminTabContent = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/presentation/pages/settings/components/SettingsAdminTab.tsx'),
+        'utf-8'
+      );
+      expect(adminTabContent).toContain("SecurityService.getSecure('gmao_vault_salt_v2')");
+      expect(adminTabContent).toContain("SecurityService.getSecure('gmao_vault_cipher_v2')");
+      expect(adminTabContent).not.toContain("localStorage.getItem('gmao_vault_salt_v2')");
+      expect(adminTabContent).not.toContain("localStorage.getItem('gmao_vault_cipher_v2')");
+
+      const sessionStoreContent = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/core/security/serverSessionStore.ts'),
+        'utf-8'
+      );
+      expect(sessionStoreContent).toContain('Logger.error(');
+      expect(sessionStoreContent).not.toContain('console.error(');
     });
   });
 });
+

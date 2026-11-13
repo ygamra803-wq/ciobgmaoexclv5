@@ -28,11 +28,224 @@ export interface BlueprintCommonFailureItem {
 
 export interface BlueprintPdrItem {
   id_pdr: string;
+  ref?: string;
+  code?: string;
   libelle?: string;
+  designation?: string;
   qte?: number;
   criticite?: string;
+  emplacement?: string;
   parent_component_key?: string;
   parent_component_code?: string;
+}
+
+export interface BlueprintTheoreticalElement {
+  id_component?: string;
+  id_part?: string;
+  ref?: string;
+  code?: string;
+  id?: string | number;
+  libelle?: string;
+  designation?: string;
+  nom?: string;
+  qte?: number;
+  criticite?: string;
+  emplacement?: string;
+}
+
+export interface BlueprintLinkedComponent {
+  code_type?: string;
+  id_comp_type?: string;
+  nom_composant?: string;
+  designation?: string;
+}
+
+export interface BlueprintEntityInput {
+  id_blueprint?: string;
+  id?: string | number;
+  libelle?: string;
+  id_family?: string;
+  id_templates?: string;
+  ref_plan?: string;
+  revision?: string;
+  statut?: string;
+  type_schema?: string;
+  description?: string;
+  specs?: object;
+  components_theoriques?: BlueprintTheoreticalElement[];
+  components_reels?: BlueprintTheoreticalElement[];
+  parts_theoriques?: BlueprintTheoreticalElement[];
+  parts_reels?: BlueprintTheoreticalElement[];
+  pdr_theoriques?: BlueprintPdrItem[];
+  pdr_historique?: BlueprintPdrItem[];
+  composants_lies?: BlueprintLinkedComponent[];
+  preventivePlanItems?: BlueprintPreventivePlanItem[];
+  commonFailures?: BlueprintCommonFailureItem[];
+}
+
+export interface BlueprintMachineInput {
+  id_machine_registered?: string;
+  code_machine?: string;
+  code?: string;
+  id?: string | number;
+  id_machine?: string;
+  nom?: string;
+  designation?: string;
+  id_blueprint?: string;
+  id_templates?: string;
+  id_machine_template?: string;
+  template?: string;
+  id_zone_default?: string;
+  id_zone?: string;
+  zone?: string;
+  technician?: string;
+  technicien_responsable?: string;
+  technicien?: string;
+  status?: string;
+  statut?: string;
+  is_active?: boolean;
+  actif?: boolean;
+  pdr_theoriques?: BlueprintPdrItem[];
+  pdr_historique?: BlueprintPdrItem[];
+  components_reels?: BlueprintTheoreticalElement[];
+}
+
+export interface BlueprintWarehouseItemInput {
+  id_warehouse_item?: string;
+  id?: string | number;
+  ref?: string;
+  code?: string;
+  id_machine_registered?: string;
+  id_machine?: string;
+  code_machine?: string;
+  machine?: string;
+  designation?: string;
+  designation_part?: string;
+  nom_composant?: string;
+  nom?: string;
+  id_templates?: string;
+  id_comp_template?: string;
+  nature?: string;
+  category?: string;
+  type?: string;
+  part_type?: string;
+  id_part?: string;
+  id_part_designation?: string;
+  rattachement_type?: string;
+  status?: string;
+  statut?: string;
+  etat?: string;
+  qte?: number;
+  quantite?: number;
+  stockActuel?: number;
+  stockInitial?: number;
+  unite?: string;
+  criticalite?: string;
+  duree_vie_estimee_heures?: number;
+  heures_actuelles?: number;
+  date_installation?: string;
+  date_montage?: string;
+  emplacement?: string;
+  emplacement_machine?: string;
+  technician?: string;
+  technicien?: string;
+  remarques?: string;
+}
+
+export interface BlueprintPreventiveTaskInput {
+  id: string | number;
+  id_plan?: string;
+  id_blueprint?: string;
+  blueprint_item_id?: string;
+  code?: string;
+  ref?: string;
+  id_machine?: string;
+  code_machine?: string;
+  nom_machine?: string;
+  id_zone?: string;
+  section?: string;
+  composant?: string;
+  id_composant?: string;
+  nom_composant?: string;
+  id_part?: string;
+  nom_part?: string;
+  pdr_requises?: Array<{ ref: string; reference?: string; nom?: string; designation?: string; quantite: number }>;
+  pdr_ref?: string;
+  type_intervention?: string;
+  action_code?: string;
+  frequence?: string;
+  planning?: Record<string, string>;
+  is_global_machine?: boolean;
+  duree_estimee?: string;
+  duree_min?: number;
+  description?: string;
+  consigne?: string;
+  responsable?: string;
+  etat?: string;
+  priorite?: string;
+  prochaine_echeance?: string;
+  derniere_realisation?: string | null;
+  id_corrective?: string | null;
+  created_at?: string;
+}
+
+export interface BlueprintLedgerElement {
+  id: string;
+  id_machine_registered?: string;
+  id_machine?: string;
+  code_machine?: string;
+  machine?: string;
+  element_type?: string;
+  ref_element?: string;
+  ref?: string;
+  id_pdr?: string;
+  designation?: string;
+  qte_montee?: number;
+  unite?: string;
+  criticalite?: string;
+  duree_vie_estimee_heures?: number;
+  heures_actuelles?: number;
+  date_installation?: string;
+  emplacement_machine?: string;
+  parent_component_key?: string;
+  id_composant?: string;
+  composant?: string;
+  id_part?: string;
+  technicien?: string;
+  statut?: string;
+  remarques?: string;
+  _source?: string;
+  _warehouseItemId?: string | number;
+  _warehouseStatus?: string;
+}
+
+export interface BlueprintStockItemInput {
+  id?: string | number;
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  id_article?: string;
+  code?: string;
+  designation?: string;
+  nom?: string;
+  stockActuel?: number;
+  stock_actuel?: number;
+  stockInitial?: number;
+  quantite?: number;
+  qte?: number;
+  seuil?: number;
+  unite?: string;
+  prixUnitaire?: number;
+  prix_unitaire?: number;
+  emplacement?: string;
+  categorie?: string;
+  famille?: string;
+}
+
+export interface BlueprintMovementInput {
+  id_machine_registered?: string;
+  ref?: string;
+  id_article?: string;
 }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -62,7 +275,7 @@ function buildWeeklyPlanning(frequency: string, actionCode = 'C'): Record<string
   return planning;
 }
 
-function normalizeToken(val: any): string {
+function normalizeToken(val: unknown): string {
   return String(val || '')
     .trim()
     .toLowerCase()
@@ -70,12 +283,13 @@ function normalizeToken(val: any): string {
 }
 
 export function applyBlueprintPlanToActiveMachines(
-  blueprintData: any,
-  machines: any[] = [],
-  existingTasks: any[] = [],
-  warehouseItems: any[] = []
+  blueprintData: BlueprintEntityInput | null | undefined,
+  machines: BlueprintMachineInput[] = [],
+  existingTasks: BlueprintPreventiveTaskInput[] = [],
+  warehouseItems: BlueprintWarehouseItemInput[] = []
 ) {
-  const bpId = blueprintData?.id_blueprint || blueprintData?.id;
+  const rawBpId = blueprintData?.id_blueprint || blueprintData?.id;
+  const bpId = rawBpId !== undefined && rawBpId !== null ? String(rawBpId) : undefined;
   const planItems: BlueprintPreventivePlanItem[] = Array.isArray(blueprintData?.preventivePlanItems)
     ? blueprintData.preventivePlanItems
     : [];
@@ -89,14 +303,14 @@ export function applyBlueprintPlanToActiveMachines(
 
   if (!bpId || planItems.length === 0 || activeLinkedMachines.length === 0) {
     return {
-      addedTasks: [],
+      addedTasks: [] as BlueprintPreventiveTaskInput[],
       updatedTasks: Array.isArray(existingTasks) ? existingTasks : [],
       targetMachinesCount: activeLinkedMachines.length,
     };
   }
 
   const currentTasks = Array.isArray(existingTasks) ? existingTasks : [];
-  const addedTasks: any[] = [];
+  const addedTasks: BlueprintPreventiveTaskInput[] = [];
   const nowIso = new Date().toISOString();
   const today = nowIso.split('T')[0];
 
@@ -269,14 +483,17 @@ export function applyBlueprintPlanToActiveMachines(
  * or Nexus As-Built Ledger (`machineElementsLedger`) appear first (`isBomRecommended: true`, `bomPriority: 1 | 2`),
  * while keeping the rest of the warehouse `stockItems` available right below (`isBomRecommended: false`, `bomPriority: 3`).
  */
-export function rankStockItemsByMachineBom<T extends Record<string, any>>(
+export function rankStockItemsByMachineBom<T extends BlueprintStockItemInput>(
   firstArg: string | T[] = '',
   secondArg: T[] | string = [],
-  machines: any[] = [],
-  blueprints: any[] = [],
+  machines: BlueprintMachineInput[] = [],
+  blueprints: BlueprintEntityInput[] = [],
   componentRefOrName: string = '',
-  taskOrExplicitPdrs?: any,
-  machineElementsLedger: any[] = []
+  taskOrExplicitPdrs?:
+    | Array<{ reference?: string; ref?: string } | string>
+    | { pdr_ref?: string; pdr_requises?: Array<{ reference?: string; ref?: string }> }
+    | null,
+  machineElementsLedger: BlueprintLedgerElement[] = []
 ): Array<
   T & {
     isBomRecommended: boolean;
@@ -308,8 +525,11 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
   // 1. Explicit task-level PDRs (highest priority)
   if (Array.isArray(taskOrExplicitPdrs)) {
-    taskOrExplicitPdrs.forEach((p: any) => {
-      const r = String(p?.reference || p?.ref || p || '').trim().toUpperCase();
+    taskOrExplicitPdrs.forEach((p) => {
+      const r =
+        typeof p === 'string'
+          ? p.trim().toUpperCase()
+          : String(p?.reference || p?.ref || '').trim().toUpperCase();
       if (r) componentPdrRefs.add(r);
     });
   } else if (taskOrExplicitPdrs && typeof taskOrExplicitPdrs === 'object') {
@@ -318,7 +538,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
       if (r) componentPdrRefs.add(r);
     }
     if (Array.isArray(taskOrExplicitPdrs.pdr_requises)) {
-      taskOrExplicitPdrs.pdr_requises.forEach((p: any) => {
+      taskOrExplicitPdrs.pdr_requises.forEach((p) => {
         const r = String(p?.reference || p?.ref || '').trim().toUpperCase();
         if (r) componentPdrRefs.add(r);
       });
@@ -357,7 +577,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
     // Machine-level historical/theoretical PDRs if present
     const machPdrs = matchedMachine?.pdr_theoriques || matchedMachine?.pdr_historique || [];
     if (Array.isArray(machPdrs)) {
-      machPdrs.forEach((p: any) => {
+      machPdrs.forEach((p) => {
         const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
         if (r) blueprintPdrRefs.add(r);
       });
@@ -365,7 +585,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
     // N1: Read consumable PDR elements mounted on this machine in Nexus (machineElementsLedger)
     if (Array.isArray(machineElementsLedger) && machineElementsLedger.length > 0) {
-      machineElementsLedger.forEach((entry: any) => {
+      machineElementsLedger.forEach((entry) => {
         if (!entry) return;
         const entryMachNorm = normalizeToken(
           entry.id_machine_registered || entry.id_machine || entry.code_machine || entry.machine
@@ -425,7 +645,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
       if (targetCompNorm) {
         bpCompAliases.add(targetCompNorm);
         if (Array.isArray(bp.composants_lies)) {
-          bp.composants_lies.forEach((c: any) => {
+          bp.composants_lies.forEach((c) => {
             const cCode = normalizeToken(c?.code_type || c?.id_comp_type);
             const cName = normalizeToken(c?.nom_composant || c?.designation);
             if (cCode === targetCompNorm || cName === targetCompNorm) {
@@ -452,7 +672,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
       // Blueprint pdr_theoriques (with optional parent_component_key / parent_component_code)
       if (Array.isArray(bp.pdr_theoriques)) {
-        bp.pdr_theoriques.forEach((p: any) => {
+        bp.pdr_theoriques.forEach((p) => {
           const r = String(p?.id_pdr || p?.ref || '').trim().toUpperCase();
           if (!r) return;
           const parentNorm = normalizeToken(p?.parent_component_key || p?.parent_component_code);
@@ -466,10 +686,10 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
       // Blueprint preventivePlanItems pdr_refs
       if (Array.isArray(bp.preventivePlanItems)) {
-        bp.preventivePlanItems.forEach((pi: any) => {
+        bp.preventivePlanItems.forEach((pi) => {
           const refs = Array.isArray(pi?.pdr_refs) ? pi.pdr_refs : [];
           const piCompNorm = normalizeToken(pi?.composant || pi?.component_ref);
-          refs.forEach((rawRef: any) => {
+          refs.forEach((rawRef) => {
             const r = String(rawRef || '').trim().toUpperCase();
             if (!r) return;
             if (matchesTargetComp(piCompNorm)) {
@@ -483,7 +703,7 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
 
       // Blueprint commonFailures pdr_ref
       if (Array.isArray(bp.commonFailures)) {
-        bp.commonFailures.forEach((cf: any) => {
+        bp.commonFailures.forEach((cf) => {
           const r = String(cf?.pdr_ref || '').trim().toUpperCase();
           if (!r) return;
           const cfCompNorm = normalizeToken(cf?.component_ref);
@@ -540,14 +760,14 @@ export function rankStockItemsByMachineBom<T extends Record<string, any>>(
  */
 export function buildUnifiedMachineNexusElements(
   machineId: string,
-  machineElementsLedger: any[] = [],
-  warehouseItems: any[] = []
-): any[] {
+  machineElementsLedger: BlueprintLedgerElement[] = [],
+  warehouseItems: BlueprintWarehouseItemInput[] = []
+): BlueprintLedgerElement[] {
   const targetMachNorm = normalizeToken(machineId);
   if (!targetMachNorm) return [];
 
   const seenRefs = new Set<string>();
-  const unified: any[] = [];
+  const unified: BlueprintLedgerElement[] = [];
 
   // 1. Explicit As-Built ledger entries for this machine
   if (Array.isArray(machineElementsLedger)) {
@@ -654,12 +874,12 @@ export function buildUnifiedMachineNexusElements(
  * into new `machineElementsLedger` records without duplicating existing machine+ref entries and without touching `warehouseItems`.
  */
 export function buildLedgerEntriesFromBlueprint(
-  machine: any,
-  blueprintOrBlueprints: any,
-  existingLedger: any[] = [],
-  stockItems: any[] = []
+  machine: BlueprintMachineInput | null | undefined,
+  blueprintOrBlueprints: BlueprintEntityInput | BlueprintEntityInput[] | null | undefined,
+  existingLedger: BlueprintLedgerElement[] = [],
+  stockItems: BlueprintStockItemInput[] = []
 ): {
-  addedEntries: any[];
+  addedEntries: BlueprintLedgerElement[];
   skippedCount: number;
   blueprintId: string | null;
 } {
@@ -676,7 +896,7 @@ export function buildLedgerEntriesFromBlueprint(
   }
 
   // Resolve target blueprint from either a single blueprint object or a blueprints array
-  let matchedBlueprint: any = null;
+  let matchedBlueprint: BlueprintEntityInput | null | undefined = null;
   if (Array.isArray(blueprintOrBlueprints)) {
     const bpId = String(machine.id_blueprint || '').trim();
     const tplId = String(
@@ -729,7 +949,7 @@ export function buildLedgerEntriesFromBlueprint(
     return 'MAJEURE';
   };
 
-  const addedEntries: any[] = [];
+  const addedEntries: BlueprintLedgerElement[] = [];
   let skippedCount = 0;
 
   const tryAddEntry = (candidate: {
@@ -776,7 +996,7 @@ export function buildLedgerEntriesFromBlueprint(
 
   // 1. Theoretical PDRs from Blueprint
   if (Array.isArray(matchedBlueprint.pdr_theoriques)) {
-    matchedBlueprint.pdr_theoriques.forEach((p: any) => {
+    matchedBlueprint.pdr_theoriques.forEach((p) => {
       if (!p) return;
       const ref = String(p.id_pdr || p.ref || p.code || '').trim();
       if (!ref) return;
@@ -802,7 +1022,7 @@ export function buildLedgerEntriesFromBlueprint(
 
   // 2. Theoretical Components from Blueprint (recorded as COMPONENT entries in ledger — zero warehouse stock mutation)
   if (Array.isArray(matchedBlueprint.components_theoriques)) {
-    matchedBlueprint.components_theoriques.forEach((c: any) => {
+    matchedBlueprint.components_theoriques.forEach((c) => {
       if (!c) return;
       const ref = String(c.id_component || c.ref || c.code || c.id || '').trim();
       if (!ref) return;
@@ -819,7 +1039,7 @@ export function buildLedgerEntriesFromBlueprint(
 
   // 3. Theoretical Structural Parts from Blueprint (if defined)
   if (Array.isArray(matchedBlueprint.parts_theoriques)) {
-    matchedBlueprint.parts_theoriques.forEach((pt: any) => {
+    matchedBlueprint.parts_theoriques.forEach((pt) => {
       if (!pt) return;
       const ref = String(pt.id_part || pt.ref || pt.code || pt.id || '').trim();
       if (!ref) return;
@@ -847,7 +1067,7 @@ export function buildLedgerEntriesFromBlueprint(
  * (or explicit `ledgerElementId`) and resets its wear counter (`heures_actuelles = 0`), `date_installation`, and `statut = 'OPERATIONNEL'`.
  */
 export function applyReplacementMovementToLedger(
-  machineElementsLedger: any[] = [],
+  machineElementsLedger: BlueprintLedgerElement[] = [],
   movementPayload: {
     id_machine_registered?: string;
     ref?: string;
@@ -856,8 +1076,8 @@ export function applyReplacementMovementToLedger(
     ledgerElementId?: string;
   } = {}
 ): {
-  updatedLedger: any[];
-  updatedElement: any | null;
+  updatedLedger: BlueprintLedgerElement[];
+  updatedElement: BlueprintLedgerElement | null;
 } {
   if (!Array.isArray(machineElementsLedger) || machineElementsLedger.length === 0) {
     return { updatedLedger: [], updatedElement: null };
@@ -872,7 +1092,7 @@ export function applyReplacementMovementToLedger(
   }
 
   const installDate = movementPayload.date || new Date().toISOString().slice(0, 10);
-  let updatedElement: any | null = null;
+  let updatedElement: BlueprintLedgerElement | null = null;
 
   const updatedLedger = machineElementsLedger.map((item) => {
     if (!item || updatedElement) return item;
@@ -904,9 +1124,9 @@ export function applyReplacementMovementToLedger(
 }
 
 export function doesTaskMatchBlueprint(
-  task: any,
+  task: { id_blueprint?: string; id_machine?: string; code_machine?: string } | null | undefined,
   blueprintId: string,
-  machines: any[] = []
+  machines: BlueprintMachineInput[] = []
 ): boolean {
   if (!blueprintId || blueprintId === 'ALL') return true;
   if (!task) return false;
@@ -921,7 +1141,7 @@ export function doesTaskMatchBlueprint(
     .toUpperCase();
   if (!taskMachId || !Array.isArray(machines)) return false;
 
-  const norm = (s: any) =>
+  const norm = (s: unknown) =>
     String(s || '')
       .trim()
       .toUpperCase()
@@ -937,20 +1157,20 @@ export function doesTaskMatchBlueprint(
   return Boolean(matchedMachine && String(matchedMachine.id_blueprint || '').trim() === targetBp);
 }
 
-export function filterTasksByBlueprint(
-  tasks: any[] = [],
+export function filterTasksByBlueprint<T extends { id_blueprint?: string; id_machine?: string; code_machine?: string }>(
+  tasks: T[] = [],
   blueprintId: string,
-  machines: any[] = []
-): any[] {
+  machines: BlueprintMachineInput[] = []
+): T[] {
   if (!Array.isArray(tasks)) return [];
   if (!blueprintId || blueprintId === 'ALL') return tasks;
   return tasks.filter((t) => doesTaskMatchBlueprint(t, blueprintId, machines));
 }
 
 export function getBlueprintCommonFailuresForMachine(
-  machineCodeOrObj: any,
-  machines: any[] = [],
-  blueprints: any[] = []
+  machineCodeOrObj: BlueprintMachineInput | string | null | undefined,
+  machines: BlueprintMachineInput[] = [],
+  blueprints: BlueprintEntityInput[] = []
 ): BlueprintCommonFailureItem[] {
   if (!machineCodeOrObj || !Array.isArray(blueprints) || blueprints.length === 0) {
     return [];
@@ -971,7 +1191,7 @@ export function getBlueprintCommonFailuresForMachine(
       .toUpperCase();
     if (!targetCode) return [];
 
-    const norm = (s: any) =>
+    const norm = (s: unknown) =>
       String(s || '')
         .trim()
         .toUpperCase()
@@ -1000,16 +1220,16 @@ export function getBlueprintCommonFailuresForMachine(
 }
 
 export class Blueprint {
-  id: any;
-  specs: any;
-  components_theoriques: any[];
-  parts_theoriques: any[];
-  pdr_theoriques: any[];
+  id: string | undefined;
+  specs: object;
+  components_theoriques: BlueprintTheoreticalElement[];
+  parts_theoriques: BlueprintTheoreticalElement[];
+  pdr_theoriques: BlueprintPdrItem[];
   preventivePlanItems: BlueprintPreventivePlanItem[];
   commonFailures: BlueprintCommonFailureItem[];
 
-  constructor(data: any = {}) {
-    this.id = data.id_blueprint || data.id;
+  constructor(data: BlueprintEntityInput = {}) {
+    this.id = data.id_blueprint || (data.id !== undefined ? String(data.id) : undefined);
     this.specs = data.specs || {};
     this.components_theoriques = data.components_theoriques || [];
     this.parts_theoriques = data.parts_theoriques || [];
@@ -1020,16 +1240,16 @@ export class Blueprint {
     this.commonFailures = Array.isArray(data.commonFailures) ? data.commonFailures : [];
   }
 
-  isSameSpecs(other: any) {
-    const clean = (s: any) =>
+  isSameSpecs(other: BlueprintEntityInput) {
+    const clean = (s: object | undefined) =>
       Object.fromEntries(
         Object.entries(s || {}).filter(([_, v]) => v != null && String(v).trim() !== '')
       );
     return JSON.stringify(clean(this.specs)) === JSON.stringify(clean(other.specs));
   }
 
-  isTwin(other: any) {
-    const key = (arr: any[], field: string) =>
+  isTwin(other: BlueprintEntityInput) {
+    const key = <K extends string>(arr: Array<Partial<Record<K, unknown>> & { qte?: number }> | undefined, field: K) =>
       JSON.stringify(
         [...(arr || [])]
           .map((x) => ({ id: String(x[field] || '').trim(), q: Number(x.qte || 1) }))
@@ -1046,27 +1266,27 @@ export class Blueprint {
     );
   }
 
-  extractFromNexus(machine: any, mouvements: any[]) {
+  extractFromNexus(machine: BlueprintMachineInput, mouvements: BlueprintMovementInput[]) {
     const related = mouvements.filter(
       (m) => m.id_machine_registered === machine.id_machine_registered
     );
     this.components_theoriques = machine.components_reels || [];
     this.pdr_theoriques = related.map((m) => ({
-      id_pdr: m.ref || m.id_article,
+      id_pdr: String(m.ref || m.id_article || ''),
       qte: 1,
       criticite: 'Moyenne',
     }));
   }
 
-  getMachinesLiees(machines: any[] = []) {
+  getMachinesLiees(machines: BlueprintMachineInput[] = []) {
     return (machines || []).filter((m) => m.id_blueprint === this.id);
   }
 
-  getActiveMachinesLiees(machines: any[] = []) {
+  getActiveMachinesLiees(machines: BlueprintMachineInput[] = []) {
     return filterActiveMachines(machines).filter((m) => m.id_blueprint === this.id);
   }
 
-  getMachinesLieesCount(machines: any[] = []) {
+  getMachinesLieesCount(machines: BlueprintMachineInput[] = []) {
     return this.getMachinesLiees(machines).length;
   }
 

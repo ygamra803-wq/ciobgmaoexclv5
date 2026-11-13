@@ -88,6 +88,8 @@ export function randomBytesHex(byteLength = 16): string {
   return bytesToHex(randomBytes(byteLength));
 }
 
+const SHARED_W = new Uint32Array(64);
+
 /**
  * FIPS 180-4 SHA-256 implementation returning 32-byte Uint8Array
  */
@@ -115,7 +117,7 @@ export function sha256Bytes(input: Uint8Array | string): Uint8Array {
   let H6 = 0x1f83d9ab;
   let H7 = 0x5be0cd19;
 
-  const W = new Uint32Array(64);
+  const W = SHARED_W;
 
   for (let offset = 0; offset < totalWords; offset += 16) {
     for (let t = 0; t < 16; t++) {
@@ -165,14 +167,14 @@ export function sha256Bytes(input: Uint8Array | string): Uint8Array {
   }
 
   const out = new Uint8Array(32);
-  const words = [H0, H1, H2, H3, H4, H5, H6, H7];
-  for (let i = 0; i < 8; i++) {
-    const w = words[i];
-    out[i * 4] = (w >>> 24) & 0xff;
-    out[i * 4 + 1] = (w >>> 16) & 0xff;
-    out[i * 4 + 2] = (w >>> 8) & 0xff;
-    out[i * 4 + 3] = w & 0xff;
-  }
+  out[0] = (H0 >>> 24) & 0xff; out[1] = (H0 >>> 16) & 0xff; out[2] = (H0 >>> 8) & 0xff; out[3] = H0 & 0xff;
+  out[4] = (H1 >>> 24) & 0xff; out[5] = (H1 >>> 16) & 0xff; out[6] = (H1 >>> 8) & 0xff; out[7] = H1 & 0xff;
+  out[8] = (H2 >>> 24) & 0xff; out[9] = (H2 >>> 16) & 0xff; out[10] = (H2 >>> 8) & 0xff; out[11] = H2 & 0xff;
+  out[12] = (H3 >>> 24) & 0xff; out[13] = (H3 >>> 16) & 0xff; out[14] = (H3 >>> 8) & 0xff; out[15] = H3 & 0xff;
+  out[16] = (H4 >>> 24) & 0xff; out[17] = (H4 >>> 16) & 0xff; out[18] = (H4 >>> 8) & 0xff; out[19] = H4 & 0xff;
+  out[20] = (H5 >>> 24) & 0xff; out[21] = (H5 >>> 16) & 0xff; out[22] = (H5 >>> 8) & 0xff; out[23] = H5 & 0xff;
+  out[24] = (H6 >>> 24) & 0xff; out[25] = (H6 >>> 16) & 0xff; out[26] = (H6 >>> 8) & 0xff; out[27] = H6 & 0xff;
+  out[28] = (H7 >>> 24) & 0xff; out[29] = (H7 >>> 16) & 0xff; out[30] = (H7 >>> 8) & 0xff; out[31] = H7 & 0xff;
   return out;
 }
 
@@ -238,15 +240,25 @@ export function pbkdf2Sha256Bytes(
     opad[i] = k ^ 0x5c;
   }
 
-  const prf = (data: Uint8Array): Uint8Array => {
+  const inner32 = new Uint8Array(96);
+  inner32.set(ipad, 0);
+  const outer32 = new Uint8Array(96);
+  outer32.set(opad, 0);
+
+  const prfVar = (data: Uint8Array): Uint8Array => {
     const inner = new Uint8Array(64 + data.length);
     inner.set(ipad, 0);
     inner.set(data, 64);
     const innerDigest = sha256Bytes(inner);
-    const outer = new Uint8Array(64 + 32);
-    outer.set(opad, 0);
-    outer.set(innerDigest, 64);
-    return sha256Bytes(outer);
+    outer32.set(innerDigest, 64);
+    return sha256Bytes(outer32);
+  };
+
+  const prf32 = (data32: Uint8Array): Uint8Array => {
+    inner32.set(data32, 64);
+    const innerDigest = sha256Bytes(inner32);
+    outer32.set(innerDigest, 64);
+    return sha256Bytes(outer32);
   };
 
   const blocks = Math.ceil(dkLen / 32);
@@ -260,11 +272,11 @@ export function pbkdf2Sha256Bytes(
     saltAndBlock[saltBytes.length + 2] = (b >>> 8) & 0xff;
     saltAndBlock[saltBytes.length + 3] = b & 0xff;
 
-    let U = prf(saltAndBlock);
+    let U = prfVar(saltAndBlock);
     const T = new Uint8Array(U);
 
     for (let i = 1; i < iterations; i++) {
-      U = prf(U);
+      U = prf32(U);
       for (let j = 0; j < 32; j++) {
         T[j] ^= U[j];
       }
@@ -285,12 +297,27 @@ export function pbkdf2Sha256Hex(
 }
 
 const NC2_PBKDF2_ITERATIONS = 10000;
+const NC2_KEY_CACHE_MAX = 64;
+const nc2KeyCache = new Map<string, { encKey: Uint8Array; macKey: Uint8Array }>();
 
 function deriveNc2Keys(passphrase: string, salt: Uint8Array): { encKey: Uint8Array; macKey: Uint8Array } {
+  const cacheKey = `${passphrase}:${bytesToHex(salt)}`;
+  const cached = nc2KeyCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   const masterPrk = pbkdf2Sha256Bytes(passphrase, salt, NC2_PBKDF2_ITERATIONS, 32);
   const encKey = hmacSha256Bytes('gmao-nc2-enc-key', masterPrk);
   const macKey = hmacSha256Bytes('gmao-nc2-mac-key', masterPrk);
-  return { encKey, macKey };
+  const entry = { encKey, macKey };
+  if (nc2KeyCache.size >= NC2_KEY_CACHE_MAX) {
+    const oldestKey = nc2KeyCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      nc2KeyCache.delete(oldestKey);
+    }
+  }
+  nc2KeyCache.set(cacheKey, entry);
+  return entry;
 }
 
 /**

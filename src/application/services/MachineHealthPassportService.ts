@@ -7,6 +7,216 @@
  *    Downtime hours, and Recurrent Component/Organ Failure BER Alerts).
  */
 
+export interface PreventiveAnomalyExecutionInput {
+  roundStatus?: string;
+  etat_ronde?: string;
+  hasAnomaly?: boolean;
+  anomalie_detectee?: boolean;
+  notes?: string;
+  observations?: string;
+  status?: string;
+}
+
+export interface PassportUsedSpareInput {
+  ref?: string;
+  code_article?: string;
+  designation?: string;
+  quantite?: number | string;
+  qte?: number | string;
+  qty?: number | string;
+  quantity?: number | string;
+  prix_unitaire?: number | string;
+  prix?: number | string;
+  unitPrice?: number | string;
+}
+
+export interface PassportCorrectiveInterventionInput {
+  id?: string | number;
+  num_bt?: string;
+  code_machine?: string;
+  id_machine_registered?: string;
+  id_machine?: string;
+  validation_status?: string;
+  statut?: string;
+  cout_pdr?: number | string;
+  pdr_cost?: number | string;
+  cout_total?: number | string;
+  pieces_utilisees?: PassportUsedSpareInput[];
+  pdr_ref?: string;
+  pdr?: string;
+  pdr_quantite?: number | string;
+  quantite?: number | string;
+  pdr_prix?: number | string;
+  prix_unitaire?: number | string;
+  date_cloture?: string | null;
+  date_fin?: string | null;
+  date_demande?: string | null;
+  demande_date?: string | null;
+  validated_at?: string | null;
+  submitted_at?: string | null;
+  created_at?: string | null;
+  temps_arret_minutes?: number | string;
+  temps_intervention_mins?: number | string;
+  duree_arret_heures?: number | string;
+  nom_composant?: string;
+  id_composant?: string;
+  organe?: string;
+  type_panne?: string;
+  anomalie?: string;
+  travail_a_faire?: string;
+  action_realisee?: string;
+  validated_by_name?: string;
+  intervenant?: string;
+  technicien?: string;
+  demandeur?: string;
+}
+
+export interface PassportPreventiveExecutionInput {
+  id?: string | number;
+  taskId?: string | number;
+  taskName?: string;
+  designation?: string;
+  machineCode?: string;
+  id_machine?: string;
+  code_machine?: string;
+  validation_status?: string;
+  status?: string;
+  executedAt?: string | null;
+  date_realisation?: string | null;
+  validated_at?: string | null;
+  created_at?: string | null;
+  scheduledDueDate?: string | null;
+  totalCost?: number | string;
+  sparesCost?: number | string;
+  durationMinutes?: number | string;
+  sparesUsed?: PassportUsedSpareInput[];
+  notes?: string;
+  observations?: string;
+  validated_by_name?: string;
+  executorName?: string;
+  technicien?: string;
+}
+
+export interface PassportExternalSortieInput {
+  id?: string | number;
+  code?: string;
+  ref?: string;
+  id_machine?: string;
+  code_machine?: string;
+  machineCode?: string;
+  validation_status?: string;
+  statut?: string;
+  etat?: string;
+  status?: string;
+  date_montage?: string | null;
+  date_arrivee_reelle?: string | null;
+  date_retour?: string | null;
+  date_expedition?: string | null;
+  date_sortie?: string | null;
+  date_demontage?: string | null;
+  date?: string | null;
+  created_at?: string | null;
+  cout_bobinage?: number | string;
+  cout_reparation?: number | string;
+  cout?: number | string;
+  montant?: number | string;
+  code_moteur_reel?: string;
+  designation_moteur?: string;
+  fournisseur?: string;
+  nature_travaux?: string;
+  technicien_demontage?: string;
+}
+
+export interface PassportStockItemInput {
+  id?: string | number;
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  code?: string;
+  prix_unitaire?: number | string;
+  prixUnitaire?: number | string;
+  prix_achat_ht?: number | string;
+  prix?: number | string;
+  unitPrice?: number | string;
+  price?: number | string;
+}
+
+export interface PassportBomElementInput {
+  id?: string | number;
+  id_element?: string;
+  id_element_instance?: string;
+  id_machine_registered?: string;
+  id_machine?: string;
+  ref_element?: string;
+  code_element?: string;
+  designation?: string;
+  designation_element?: string;
+  qte_montee?: number | string;
+  unite?: string;
+  emplacement_machine?: string;
+  statut?: string;
+  technicien?: string;
+  date_installation?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface PassportWarehouseItemInput {
+  id?: string | number;
+  id_warehouse_item?: string;
+  code?: string;
+  id_machine_registered?: string;
+  id_machine?: string;
+  designation?: string;
+  status?: string;
+  statut?: string;
+  derniere_intervention_date?: string | null;
+  date_installation?: string | null;
+  updated_at?: string | null;
+  derniere_intervention_bt?: string;
+}
+
+export interface PassportLifecycleEventInput {
+  id?: string | number;
+  timestamp?: string;
+  date?: string;
+  event_type?: string;
+  to_status?: string;
+  from_status?: string;
+  suspended_tasks_count?: number | string;
+  restored_tasks_count?: number | string;
+  reason?: string;
+  actor?: string;
+}
+
+export interface PassportMachineInput {
+  id_machine_registered?: string;
+  id?: string | number;
+  code?: string;
+  code_machine?: string;
+  designation?: string;
+  nom?: string;
+  id_zone_default?: string;
+  id_zone?: string;
+  zone?: string;
+  id_family?: string;
+  status?: string;
+  statut?: string;
+  is_active?: boolean;
+  actif?: boolean;
+  archived?: boolean;
+  isArchived?: boolean;
+  lifecycle_state?: string;
+  date_archivage?: string | null;
+  archived_at?: string | null;
+  archivedAt?: string | null;
+  status_changed_at?: string | null;
+  updated_at?: string | null;
+  archived_by?: string;
+  updated_by?: string;
+  lifecycle_events?: PassportLifecycleEventInput[];
+}
+
 const UNAPPROVED_STATUSES = new Set([
   'PENDING_VALIDATION',
   'NEEDS_CLARIFICATION',
@@ -34,7 +244,9 @@ const ANOMALY_KEYWORDS = [
  * Determines whether a PreventiveExecution record signals a field anomaly
  * that warrants a follow-up Corrective Demande d'Intervention (Auto-DI).
  */
-export function hasPreventiveExecutionAnomaly(exec: any): boolean {
+export function hasPreventiveExecutionAnomaly(
+  exec: PreventiveAnomalyExecutionInput | null | undefined
+): boolean {
   if (!exec) return false;
   if (String(exec.roundStatus || exec.etat_ronde || '').toUpperCase() === 'ANOMALIE') {
     return true;
@@ -75,7 +287,7 @@ export interface MachineHealthPassport {
   healthStatus: 'SAIN' | 'SURVEILLANCE' | 'CRITIQUE_BER';
 }
 
-function parseDateSafe(raw: any): Date | null {
+function parseDateSafe(raw: unknown): Date | null {
   if (!raw) return null;
   const str = String(raw).trim();
   if (!str) return null;
@@ -84,7 +296,7 @@ function parseDateSafe(raw: any): Date | null {
 }
 
 export function computeOfficialCorrectiveBtCost(
-  ci: any,
+  ci: PassportCorrectiveInterventionInput | null | undefined,
   stockPriceMap?: Map<string, number>
 ): number {
   if (!ci) return 0;
@@ -132,11 +344,11 @@ export function computeOfficialCorrectiveBtCost(
 }
 
 export function computeMachineHealthPassport(params: {
-  machine: any;
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortiesExterne?: any[];
-  stockItems?: any[];
+  machine: PassportMachineInput | null | undefined;
+  correctiveInterventions?: PassportCorrectiveInterventionInput[];
+  preventiveExecutions?: PassportPreventiveExecutionInput[];
+  sortiesExterne?: PassportExternalSortieInput[];
+  stockItems?: PassportStockItemInput[];
   referenceDate?: string | Date;
   windowMonths?: number;
   recurrenceWindowDays?: number;
@@ -373,6 +585,12 @@ export type MachineActivityEventType =
   | 'BOM_COMPONENT'
   | 'MACHINE_LIFECYCLE';
 
+export type MachineValidationStatus =
+  | 'APPROVED'
+  | 'PENDING_VALIDATION'
+  | 'NEEDS_CLARIFICATION'
+  | 'REJECTED';
+
 export interface MachineActivityLedgerEvent {
   id: string;
   machineCode: string;
@@ -386,14 +604,25 @@ export interface MachineActivityLedgerEvent {
   cost?: number;
   downtimeMinutes?: number;
   referenceCode?: string;
-  validationStatus: 'APPROVED' | 'PENDING_VALIDATION' | 'NEEDS_CLARIFICATION' | 'REJECTED';
+  validationStatus: MachineValidationStatus;
   isOfficial: boolean;
 }
 
-function toYMD(raw: any): string {
+function toYMD(raw: unknown): string {
   const d = parseDateSafe(raw);
   if (!d) return '';
   return d.toISOString().slice(0, 10);
+}
+
+function resolveValidationStatus(valSt: string): MachineValidationStatus {
+  if (
+    valSt === 'PENDING_VALIDATION' ||
+    valSt === 'NEEDS_CLARIFICATION' ||
+    valSt === 'REJECTED'
+  ) {
+    return valSt;
+  }
+  return 'APPROVED';
 }
 
 /**
@@ -409,16 +638,16 @@ function toYMD(raw: any): string {
  * `NEEDS_CLARIFICATION`, `REJECTED`) are strictly excluded from the official ledger.
  */
 export function buildMachineActivityLedger(params: {
-  machineOrId?: any;
-  machine?: any;
+  machineOrId?: PassportMachineInput | string | null;
+  machine?: PassportMachineInput | string | null;
   machineId?: string;
-  machines?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortiesExterne?: any[];
-  stockItems?: any[];
-  machineElementsLedger?: any[];
-  warehouseItems?: any[];
+  machines?: PassportMachineInput[];
+  correctiveInterventions?: PassportCorrectiveInterventionInput[];
+  preventiveExecutions?: PassportPreventiveExecutionInput[];
+  sortiesExterne?: PassportExternalSortieInput[];
+  stockItems?: PassportStockItemInput[];
+  machineElementsLedger?: PassportBomElementInput[];
+  warehouseItems?: PassportWarehouseItemInput[];
   includePendingClaims?: boolean;
 }): MachineActivityLedgerEvent[] {
   const {
@@ -456,11 +685,11 @@ export function buildMachineActivityLedger(params: {
     if (ref && price > 0) stockPriceMap.set(ref, price);
   }
 
-  const resolvedMachine =
+  const resolvedMachine: PassportMachineInput | null =
     typeof machineOrId === 'object' && machineOrId !== null
       ? machineOrId
       : (machines || []).find(
-          (m: any) =>
+          (m) =>
             String(m?.id_machine_registered || m?.id || m?.code || m?.code_machine || '')
               .trim()
               .toUpperCase() === machineCode
@@ -511,7 +740,7 @@ export function buildMachineActivityLedger(params: {
     const organ = String(ci.nom_composant || ci.id_composant || '').trim();
     const pdrList = Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0
       ? ci.pieces_utilisees
-          .map((p: any) => `${p.ref || p.designation} (×${p.quantite || 1})`)
+          .map((p) => `${p.ref || p.designation} (×${p.quantite || 1})`)
           .join(', ')
       : ci.pdr_ref
       ? `${ci.pdr_ref} (×${ci.pdr_quantite || 1})`
@@ -538,7 +767,7 @@ export function buildMachineActivityLedger(params: {
       cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
       downtimeMinutes: downtimeMinutes > 0 ? downtimeMinutes : undefined,
       referenceCode: btRef,
-      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      validationStatus: resolveValidationStatus(valSt),
       isOfficial,
     });
   }
@@ -568,7 +797,7 @@ export function buildMachineActivityLedger(params: {
     const durationMinutes = Number(ex.durationMinutes || 0) || 0;
     const sparesSummary =
       Array.isArray(ex.sparesUsed) && ex.sparesUsed.length > 0
-        ? ex.sparesUsed.map((s: any) => `${s.ref || s.designation} (×${s.quantity || s.quantite || 1})`).join(', ')
+        ? ex.sparesUsed.map((s) => `${s.ref || s.designation} (×${s.quantity || s.quantite || 1})`).join(', ')
         : '';
 
     const detailParts: string[] = [];
@@ -589,7 +818,7 @@ export function buildMachineActivityLedger(params: {
       cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
       downtimeMinutes: durationMinutes > 0 ? durationMinutes : undefined,
       referenceCode: String(ex.taskId || ex.id || 'PM').trim(),
-      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      validationStatus: resolveValidationStatus(valSt),
       isOfficial,
     });
   }
@@ -638,7 +867,7 @@ export function buildMachineActivityLedger(params: {
       actor: se.fournisseur || se.technicien_demontage || undefined,
       cost: isOfficial && cost > 0 ? Number(cost.toFixed(2)) : undefined,
       referenceCode: refCode,
-      validationStatus: (UNAPPROVED_STATUSES.has(valSt) ? valSt : 'APPROVED') as any,
+      validationStatus: resolveValidationStatus(valSt),
       isOfficial,
     });
   }
@@ -857,18 +1086,18 @@ export interface MachineOfficialCostSummary {
  * 3) External Bobinage / Subcontracting (`EXTERNAL_BOBINAGE`)
  */
 export function computeMachineOfficialCostSummary(params: {
-  machineOrId?: any;
-  machine?: any;
+  machineOrId?: PassportMachineInput | string | null;
+  machine?: PassportMachineInput | string | null;
   machineId?: string;
-  machines?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortiesExterne?: any[];
-  stockItems?: any[];
+  machines?: PassportMachineInput[];
+  correctiveInterventions?: PassportCorrectiveInterventionInput[];
+  preventiveExecutions?: PassportPreventiveExecutionInput[];
+  sortiesExterne?: PassportExternalSortieInput[];
+  stockItems?: PassportStockItemInput[];
   fromYMD?: string;
   toYMD?: string;
 }): MachineOfficialCostSummary {
-  const { fromYMD, toYMD, ...ledgerParams } = params || ({} as any);
+  const { fromYMD, toYMD, ...ledgerParams } = params || {};
   const targetMachine = params?.machineOrId ?? params?.machine ?? params?.machineId;
   const rawCode =
     typeof targetMachine === 'string'
@@ -929,5 +1158,3 @@ export function computeMachineOfficialCostSummary(params: {
     officialEventsCount: correctiveCount + preventiveCount + externalBobinageCount,
   };
 }
-
-

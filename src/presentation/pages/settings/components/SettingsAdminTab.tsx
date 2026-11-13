@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { vaultService } from '../../../../utils/vaultService';
 import { storageService } from '../../../../utils/storageService';
+import { SecurityService } from '../../../../core/security/SecurityService';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
@@ -296,7 +297,7 @@ export default function SettingsAdminTab({
               <div className="grid grid-cols-3 gap-1">
                 <span className="text-slate-500">Sel Aléatoire:</span>
                 <span className="col-span-2 text-sky-800 font-semibold truncate select-all">
-                  {localStorage.getItem('gmao_vault_salt_v2')?.substring(0, 24) ||
+                  {SecurityService.getSecure('gmao_vault_salt_v2')?.substring(0, 24) ||
                     'Généré aléatoirement...'}
                   ...
                 </span>
@@ -304,7 +305,7 @@ export default function SettingsAdminTab({
               <div className="grid grid-cols-3 gap-1">
                 <span className="text-slate-500">Ciphertext:</span>
                 <span className="col-span-2 text-amber-700 font-semibold truncate select-all">
-                  {localStorage.getItem('gmao_vault_cipher_v2')?.substring(0, 32) ||
+                  {SecurityService.getSecure('gmao_vault_cipher_v2')?.substring(0, 32) ||
                     'Aucun — Vault verrouillé'}
                   ...
                 </span>

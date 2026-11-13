@@ -1,7 +1,134 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { MapPin, Users, Package, Link2 } from 'lucide-react';
 import { StockCalculationService } from '../../../../domain/pdr/services/StockCalculationService';
 import { SETTINGS_BUTTON_STYLES } from './settingsUi';
+
+export interface AuditZoneFormState {
+  libelle: string;
+}
+
+export interface AuditZoneRecord {
+  id_zone: string;
+  libelle?: string;
+  nom?: string;
+  description?: string;
+}
+
+export interface AuditZoneModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  auditZoneForm: AuditZoneFormState;
+  setAuditZoneForm: React.Dispatch<React.SetStateAction<AuditZoneFormState>>;
+  getNextZoneId: () => string;
+  setZones: React.Dispatch<React.SetStateAction<AuditZoneRecord[]>>;
+  showToast?: (message: string, type?: string) => void;
+}
+
+export interface AuditUserFormState {
+  type: string;
+  nom: string;
+  specialite: string;
+  id_zone: string;
+}
+
+export interface AuditTechnicianRecord {
+  id_technician?: string;
+  nom: string;
+  specialite?: string;
+  contact?: string;
+  avatar?: string;
+}
+
+export interface AuditOperationRecord {
+  id_operation?: string;
+  nom: string;
+  id_zone?: string;
+  type_profil?: string;
+  avatar?: string;
+}
+
+export interface AuditUserModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  auditUserForm: AuditUserFormState;
+  setAuditUserForm: React.Dispatch<React.SetStateAction<AuditUserFormState>>;
+  getNextUserId: (type: string) => string;
+  zones?: AuditZoneRecord[];
+  setTechnicians: React.Dispatch<React.SetStateAction<AuditTechnicianRecord[]>>;
+  setOperations: React.Dispatch<React.SetStateAction<AuditOperationRecord[]>>;
+  showToast?: (message: string, type?: string) => void;
+}
+
+export interface AuditArticleFormState {
+  ref: string;
+  designation: string;
+  type: string;
+  emplacement: string;
+  stockInitial: number;
+  seuil: number;
+}
+
+export interface AuditArticleTypeOption {
+  id_type?: string;
+  libelle?: string;
+  nom?: string;
+}
+
+export interface AuditStockRecord {
+  ref: string;
+  designation?: string;
+  type?: string;
+  emplacement?: string;
+  stockInitial?: number;
+  seuil?: number;
+  entrees?: number;
+  sorties?: number;
+  stockActuel?: number;
+  alerte?: string;
+  [key: string]: unknown;
+}
+
+export interface AuditStorageServiceAdapter {
+  saveArticles: (articles: AuditStockRecord[]) => void;
+}
+
+export interface AuditArticleModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  auditArticleForm: AuditArticleFormState;
+  setAuditArticleForm: React.Dispatch<React.SetStateAction<AuditArticleFormState>>;
+  types?: Array<AuditArticleTypeOption | string>;
+  setRawStock?: React.Dispatch<React.SetStateAction<AuditStockRecord[]>>;
+  rawStock?: AuditStockRecord[];
+  mouvements?: Array<Record<string, unknown>>;
+  storageService?: AuditStorageServiceAdapter;
+  showToast?: (message: string, type?: string) => void;
+}
+
+export interface AuditRelinkDataState {
+  oldKey: string;
+  targetKey: string;
+  occurrencesCount: number;
+  entityType: 'machine' | 'article' | 'zone' | 'user' | string;
+}
+
+export interface AuditMachineRecord {
+  id_machine_registered: string;
+  designation?: string;
+}
+
+export interface AuditRelinkModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  relinkData: AuditRelinkDataState;
+  setRelinkData: React.Dispatch<React.SetStateAction<AuditRelinkDataState>>;
+  machines?: AuditMachineRecord[];
+  rawStock?: AuditStockRecord[];
+  zones?: AuditZoneRecord[];
+  technicians?: AuditTechnicianRecord[];
+  operations?: AuditOperationRecord[];
+  handleExecuteRelink: () => void;
+}
 
 /**
  * Modals for Settings Audit: Zone, User, Article, and Relink modals.
@@ -15,7 +142,7 @@ export function AuditZoneModal({
   getNextZoneId,
   setZones,
   showToast,
-}: any) {
+}: AuditZoneModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -68,7 +195,7 @@ export function AuditZoneModal({
               type="text"
               value={auditZoneForm.libelle}
               onChange={(e) =>
-                setAuditZoneForm((prev: any) => ({ ...prev, libelle: e.target.value }))
+                setAuditZoneForm((prev) => ({ ...prev, libelle: e.target.value }))
               }
               className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 focus:outline-none focus:border-sky-600"
               placeholder="ex: Atelier Conditionnement"
@@ -93,13 +220,13 @@ export function AuditZoneModal({
               }
 
               const id = getNextZoneId();
-              const newZone = {
+              const newZone: AuditZoneRecord = {
                 id_zone: id,
                 libelle: auditZoneForm.libelle.trim(),
                 nom: auditZoneForm.libelle.trim(),
                 description: '',
               };
-              setZones((prev: any[]) => [...prev, newZone]);
+              setZones((prev) => [...prev, newZone]);
               showToast?.(
                 `Zone "${auditZoneForm.libelle.trim()}" enregistrée avec l'ID ${id}.`,
                 'success'
@@ -126,7 +253,7 @@ export function AuditUserModal({
   setTechnicians,
   setOperations,
   showToast,
-}: any) {
+}: AuditUserModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -193,7 +320,7 @@ export function AuditUserModal({
             <select
               value={auditUserForm.type}
               onChange={(e) =>
-                setAuditUserForm((prev: any) => ({ ...prev, type: e.target.value }))
+                setAuditUserForm((prev) => ({ ...prev, type: e.target.value }))
               }
               className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
             >
@@ -211,7 +338,7 @@ export function AuditUserModal({
               type="text"
               value={auditUserForm.nom}
               onChange={(e) =>
-                setAuditUserForm((prev: any) => ({ ...prev, nom: e.target.value }))
+                setAuditUserForm((prev) => ({ ...prev, nom: e.target.value }))
               }
               className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               placeholder="Nom de l'utilisateur"
@@ -227,7 +354,7 @@ export function AuditUserModal({
                 type="text"
                 value={auditUserForm.specialite}
                 onChange={(e) =>
-                  setAuditUserForm((prev: any) => ({ ...prev, specialite: e.target.value }))
+                  setAuditUserForm((prev) => ({ ...prev, specialite: e.target.value }))
                 }
                 className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
                 placeholder="Spécialité du technicien (ex: Mécanique, Électricité)"
@@ -241,12 +368,12 @@ export function AuditUserModal({
               <select
                 value={auditUserForm.id_zone}
                 onChange={(e) =>
-                  setAuditUserForm((prev: any) => ({ ...prev, id_zone: e.target.value }))
+                  setAuditUserForm((prev) => ({ ...prev, id_zone: e.target.value }))
                 }
                 className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
               >
                 <option value="">Sélectionner une zone</option>
-                {zones.map((z: any) => (
+                {zones.map((z) => (
                   <option key={z.id_zone} value={z.id_zone}>
                     {z.libelle || z.nom}
                   </option>
@@ -276,7 +403,7 @@ export function AuditUserModal({
               const id = getNextUserId(type);
 
               if (type === 'TECHNICIEN') {
-                const newTech = {
+                const newTech: AuditTechnicianRecord = {
                   id_technician: id,
                   nom: auditUserForm.nom.trim(),
                   specialite: auditUserForm.specialite.trim() || 'Générale',
@@ -285,9 +412,9 @@ export function AuditUserModal({
                     auditUserForm.nom.trim()
                   )}`,
                 };
-                setTechnicians((prev: any[]) => [...prev, newTech]);
+                setTechnicians((prev) => [...prev, newTech]);
               } else {
-                const newOp = {
+                const newOp: AuditOperationRecord = {
                   id_operation: id,
                   nom: auditUserForm.nom.trim(),
                   id_zone: auditUserForm.id_zone || zones[0]?.id_zone || 'ZONE-DET',
@@ -296,7 +423,7 @@ export function AuditUserModal({
                     auditUserForm.nom.trim()
                   )}`,
                 };
-                setOperations((prev: any[]) => [...prev, newOp]);
+                setOperations((prev) => [...prev, newOp]);
               }
 
               showToast?.(
@@ -326,7 +453,7 @@ export function AuditArticleModal({
   mouvements = [],
   storageService,
   showToast,
-}: any) {
+}: AuditArticleModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -337,6 +464,12 @@ export function AuditArticleModal({
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const firstTypeOption = types[0];
+  const defaultTypeValue =
+    typeof firstTypeOption === 'string'
+      ? firstTypeOption
+      : firstTypeOption?.id_type || 'MECANIQUE';
 
   return (
     <div
@@ -380,7 +513,7 @@ export function AuditArticleModal({
               type="text"
               value={auditArticleForm.ref}
               onChange={(e) =>
-                setAuditArticleForm((p: any) => ({ ...p, ref: e.target.value }))
+                setAuditArticleForm((p) => ({ ...p, ref: e.target.value }))
               }
               className="w-full text-xs font-mono font-bold border border-slate-400 rounded-lg p-2.5 text-slate-800 bg-slate-50"
               readOnly
@@ -395,7 +528,7 @@ export function AuditArticleModal({
               type="text"
               value={auditArticleForm.designation}
               onChange={(e) =>
-                setAuditArticleForm((p: any) => ({ ...p, designation: e.target.value }))
+                setAuditArticleForm((p) => ({ ...p, designation: e.target.value }))
               }
               className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               placeholder="ex: Roulement à billes 6204-2RS"
@@ -410,15 +543,20 @@ export function AuditArticleModal({
               <select
                 value={auditArticleForm.type}
                 onChange={(e) =>
-                  setAuditArticleForm((p: any) => ({ ...p, type: e.target.value }))
+                  setAuditArticleForm((p) => ({ ...p, type: e.target.value }))
                 }
                 className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
               >
-                {(types || []).map((t: any) => (
-                  <option key={t.id_type || t} value={t.id_type || t}>
-                    {t.libelle || t.nom || t.id_type || t}
-                  </option>
-                ))}
+                {(types || []).map((t, idx) => {
+                  const val = typeof t === 'string' ? t : t.id_type || String(idx);
+                  const label =
+                    typeof t === 'string' ? t : t.libelle || t.nom || t.id_type || val;
+                  return (
+                    <option key={val} value={val}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -430,7 +568,7 @@ export function AuditArticleModal({
                 type="text"
                 value={auditArticleForm.emplacement}
                 onChange={(e) =>
-                  setAuditArticleForm((p: any) => ({ ...p, emplacement: e.target.value }))
+                  setAuditArticleForm((p) => ({ ...p, emplacement: e.target.value }))
                 }
                 className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
                 placeholder="ex: Magasin PDR"
@@ -448,7 +586,7 @@ export function AuditArticleModal({
                 min="0"
                 value={auditArticleForm.stockInitial}
                 onChange={(e) =>
-                  setAuditArticleForm((p: any) => ({
+                  setAuditArticleForm((p) => ({
                     ...p,
                     stockInitial: Number(e.target.value) || 0,
                   }))
@@ -466,7 +604,7 @@ export function AuditArticleModal({
                 min="0"
                 value={auditArticleForm.seuil}
                 onChange={(e) =>
-                  setAuditArticleForm((p: any) => ({
+                  setAuditArticleForm((p) => ({
                     ...p,
                     seuil: Number(e.target.value) || 0,
                   }))
@@ -495,13 +633,13 @@ export function AuditArticleModal({
               const baseArticle = {
                 ref: auditArticleForm.ref.trim(),
                 designation: auditArticleForm.designation.trim(),
-                type: auditArticleForm.type || types[0]?.id_type || 'MECANIQUE',
+                type: auditArticleForm.type || defaultTypeValue,
                 emplacement: auditArticleForm.emplacement || 'Magasin PDR',
                 stockInitial: Number(auditArticleForm.stockInitial) || 0,
                 seuil: Number(auditArticleForm.seuil) || 5,
               };
               const calc = StockCalculationService.calculateStockByRef(baseArticle, mouvements);
-              const newArticle = {
+              const newArticle: AuditStockRecord = {
                 ...baseArticle,
                 entrees: calc?.entrees ?? 0,
                 sorties: calc?.sorties ?? 0,
@@ -509,7 +647,7 @@ export function AuditArticleModal({
                 alerte: calc?.alerte ?? 'OK',
               };
               if (setRawStock) {
-                setRawStock((prev: any[]) => [...prev, newArticle]);
+                setRawStock((prev) => [...prev, newArticle]);
               }
               if (storageService) {
                 storageService.saveArticles([...rawStock, newArticle]);
@@ -541,7 +679,7 @@ export function AuditRelinkModal({
   technicians = [],
   operations = [],
   handleExecuteRelink,
-}: any) {
+}: AuditRelinkModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -605,25 +743,25 @@ export function AuditRelinkModal({
           <select
             value={relinkData.targetKey}
             onChange={(e) =>
-              setRelinkData((prev: any) => ({ ...prev, targetKey: e.target.value }))
+              setRelinkData((prev) => ({ ...prev, targetKey: e.target.value }))
             }
             className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
           >
             <option value="">Sélectionner un élément valide...</option>
             {relinkData.entityType === 'machine' &&
-              machines.map((m: any) => (
+              machines.map((m) => (
                 <option key={m.id_machine_registered} value={m.id_machine_registered}>
                   {m.id_machine_registered} — {m.designation || 'Machine'}
                 </option>
               ))}
             {relinkData.entityType === 'article' &&
-              rawStock.map((s: any) => (
+              rawStock.map((s) => (
                 <option key={s.ref} value={s.ref}>
                   {s.ref} — {s.designation || 'Article'}
                 </option>
               ))}
             {relinkData.entityType === 'zone' &&
-              zones.map((z: any) => (
+              zones.map((z) => (
                 <option key={z.id_zone} value={z.id_zone}>
                   {z.id_zone} — {z.libelle || z.nom || 'Zone'}
                 </option>
@@ -631,14 +769,14 @@ export function AuditRelinkModal({
             {relinkData.entityType === 'user' && (
               <>
                 <optgroup label="Techniciens">
-                  {technicians.map((t: any) => (
+                  {technicians.map((t) => (
                     <option key={t.id_technician || t.nom} value={t.nom}>
                       {t.nom} ({t.id_technician || 'TECH'})
                     </option>
                   ))}
                 </optgroup>
                 <optgroup label="Opérateurs & Chefs">
-                  {operations.map((o: any) => (
+                  {operations.map((o) => (
                     <option key={o.id_operation || o.nom} value={o.nom}>
                       {o.nom} ({o.type_profil || 'OP'})
                     </option>

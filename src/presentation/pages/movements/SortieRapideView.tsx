@@ -70,207 +70,19 @@ import {
   type WizardProfile,
 } from '../../components/common/wizard';
 
-// Custom Select Component with BDR Light styling and optional onAddNew
-function CustomSelect({
-  value,
-  onChange,
-  options = [],
-  placeholder = 'Sélectionner...',
-  disabled = false,
-  onAddNew = null,
-  addNewLabel = 'Ajouter...',
-  className = '',
-  icon = null,
-}: any) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
-
-  const filteredOptions = useMemo(() => {
-    if (!search) return options;
-    const q = String(search).toLowerCase();
-    return options.filter((opt) => {
-      const label = String(opt.label ?? opt.value ?? '');
-      const badge = String(opt.badge ?? '');
-      const sublabel = String(opt.sublabel ?? '');
-      return (
-        label.toLowerCase().includes(q) ||
-        badge.toLowerCase().includes(q) ||
-        sublabel.toLowerCase().includes(q)
-      );
-    });
-  }, [options, search]);
-
-  const selectedOpt = options.find((o) => o.value === value);
-
-  return (
-    <div className={`relative ${className}`}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-8 px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-between text-left transition cursor-pointer ${
-          disabled
-            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-            : 'bg-white text-slate-800 border-slate-200 hover:border-indigo-400 focus:ring-2 focus:ring-indigo-500/15'
-        }`}
-      >
-        <span className="truncate flex items-center gap-1.5">
-          {icon && <span className="shrink-0">{icon}</span>}
-          {selectedOpt ? (
-            <span className="flex items-center gap-1.5 truncate">
-              {selectedOpt.icon && <span className="shrink-0">{selectedOpt.icon}</span>}
-              <span className="truncate">{selectedOpt.label}</span>
-              {selectedOpt.badge && (
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 shrink-0">
-                  {selectedOpt.badge}
-                </span>
-              )}
-            </span>
-          ) : (
-            <span className="text-slate-400 font-normal">{placeholder}</span>
-          )}
-        </span>
-        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 ml-1 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 w-full min-w-[220px] max-w-sm bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1.5 space-y-1 max-h-60 overflow-y-auto">
-            {options.length > 5 && (
-              <div className="p-1 border-b border-slate-100 sticky top-0 bg-white">
-                <input
-                  type="text"
-                  placeholder="Filtrer..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full h-7 px-2 text-xs rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
-                  autoFocus
-                />
-              </div>
-            )}
-            <div className="space-y-0.5">
-              {filteredOptions.length === 0 ? (
-                <div className="p-2 text-center text-xs text-slate-400">Aucun résultat</div>
-              ) : (
-                filteredOptions.map((opt, idx) => (
-                  <button
-                    key={`${opt.value}-${idx}`}
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                      setSearch('');
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition cursor-pointer ${
-                      opt.value === value
-                        ? 'bg-indigo-50 text-indigo-950 font-bold'
-                        : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="truncate flex items-center gap-2">
-                      {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                      <div className="truncate">
-                        <div className="truncate">{opt.label}</div>
-                        {opt.sublabel && <div className="text-[10px] text-slate-400 font-normal truncate">{opt.sublabel}</div>}
-                      </div>
-                    </div>
-                    {opt.badge && (
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 shrink-0 ml-1">
-                        {opt.badge}
-                      </span>
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-            {onAddNew && (
-              <div className="pt-1 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsOpen(false);
-                    onAddNew();
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold text-indigo-600 hover:bg-indigo-50 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>{addNewLabel}</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// Floating Form Container with frosted glass backdrop and elevated card
-function FormContainerWrapper({ isFloating, isWizardMode = false, onClose, children }: any) {
-  if (isFloating) {
-    return (
-      <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 z-50 overflow-y-auto animate-in fade-in duration-200"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            onClose();
-          }
-        }}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.94, y: 16 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.94, y: 16 }}
-          transition={{ duration: 0.22, ease: 'easeOut' }}
-          className={`relative w-full ${
-            isWizardMode ? 'max-w-5xl' : 'max-w-4xl'
-          } max-h-[90vh] bg-white rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.35)] border border-slate-200/90 overflow-hidden my-auto flex flex-col`}
-        >
-          {/* Header of Floating Card */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center shadow-xs">
-                <Receipt className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 tracking-tight">
-                  Émission de Bon de Mouvement
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Formulaire Flottant • Saisie rapide et enregistrement des flux
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition cursor-pointer"
-              title="Fermer le formulaire flottant (Échap)"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Scrollable Form Content */}
-          <div className="p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-            <div className="space-y-4">
-              {children}
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="lg:col-span-5 lg:sticky lg:top-4 max-h-[calc(100vh-100px)] overflow-y-auto pr-1">
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        {children}
-      </div>
-    </div>
-  );
-}
+import { CustomSelect, FormContainerWrapper } from './components/MovementSelect';
+import {
+  SortieSuccessAlertModal,
+  SortieValidationAlertModal,
+  SortieDemandReviewModal,
+  UnifiedArticleSearchModal,
+  MovementFormulasPreviewModal,
+} from './components/SortieModals';
+import {
+  PendingOrdersSubTab,
+  ValidationTerrainQueueSubTab,
+  TechSortieDemandsPanel,
+} from './components/SortieSubTabs';
 
 export default function SortieRapideView({
   mouvements = [],
@@ -1638,48 +1450,12 @@ export default function SortieRapideView({
   return (
     <AnimatedPage>
       {/* Alert Modals */}
-      {showSuccessAlert && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in zoom-in duration-200">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-emerald-200 flex flex-col items-center text-center space-y-4">
-            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-              <Check className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-lg">Opération réussie !</h3>
-              <p className="text-slate-500 text-sm mt-1">Le bon a été enregistré avec succès et le formulaire a été réinitialisé.</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showValidationAlert && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-in fade-in zoom-in duration-200">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-rose-200 flex flex-col space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 text-lg">Formulaire incomplet</h3>
-                <p className="text-slate-500 text-sm mt-1">Veuillez corriger les erreurs suivantes avant de valider :</p>
-              </div>
-            </div>
-            <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 max-h-[40vh] overflow-y-auto">
-              <ul className="space-y-1.5 text-sm text-rose-800 list-disc list-inside">
-                {validationErrors.map((err, i) => (
-                  <li key={i}>{err}</li>
-                ))}
-              </ul>
-            </div>
-            <button
-              onClick={() => setShowValidationAlert(false)}
-              className="w-full h-10 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold transition-colors cursor-pointer"
-            >
-              Compris, je vais corriger
-            </button>
-          </div>
-        </div>
-      )}
+      <SortieSuccessAlertModal open={showSuccessAlert} />
+      <SortieValidationAlertModal
+        open={showValidationAlert}
+        errors={validationErrors}
+        onClose={() => setShowValidationAlert(false)}
+      />
 
       {/* Top Banner (BDR Light GMAO Header Card with 3D Tactile Elevation) */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 relative overflow-hidden group/header">
@@ -1893,70 +1669,10 @@ export default function SortieRapideView({
       <AnimatePresence mode="wait">
         {/* SUB-VIEW 1: PENDING ORDERS / COMMANDES BACKLOG */}
         {effectiveSubTab === 'COMMANDES' && (
-          <motion.div
-            key="subtab-commandes"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="bg-white p-5 rounded-2xl border border-amber-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4"
-          >
-            <div className="flex items-center justify-between border-b border-amber-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
-                  <ShoppingCart className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Demandes d'Achat & Commandes en Attente</h3>
-                  <p className="text-xs text-slate-500">
-                    Commandes de pièces ou composants en attente de livraison fournisseur. Cliquez sur "Réceptionner" pour les entrer en stock.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {pendingOrders.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
-                <p className="text-xs font-medium">Aucune commande en attente de livraison.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {pendingOrders.map((ord, idx) => (
-                  <div
-                    key={`pending-ord-${ord.id ?? ''}-${ord.code_bon ?? ''}-${idx}`}
-                    className="p-4 rounded-xl border border-amber-200 bg-amber-50/30 space-y-2.5 hover:shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out transition"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-amber-950 bg-amber-100 px-2 py-0.5 rounded-md border border-amber-300">
-                        {ord.num_commande || ord.code_bon}
-                      </span>
-                      <span className="text-[11px] text-slate-500 font-mono">{ord.date}</span>
-                    </div>
-
-                    <div>
-                      <div className="font-bold text-xs text-slate-800">{ord.ref}</div>
-                      <div className="text-xs text-slate-500">{ord.designation || 'Article / Pièce'}</div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pt-2 border-t border-amber-100">
-                      <div className="text-slate-600 font-medium">
-                        Qté : <b className="font-mono text-amber-900">{ord.quantite} {ord.unit || 'pcs'}</b>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleFulfillOrder(ord)}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                      >
-                        <Inbox className="w-3 h-3" />
-                        <span>📥 Réceptionner</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </motion.div>
+          <PendingOrdersSubTab
+            pendingOrders={pendingOrders}
+            onFulfillOrder={handleFulfillOrder}
+          />
         )}
 
         {/* SUB-VIEW 2: SORTIE EXTERNE BOBINAGE & RÉPARATION FLUX COMPLET */}
@@ -1988,159 +1704,14 @@ export default function SortieRapideView({
 
         {/* SUB-VIEW 0: VALIDATION TERRAIN (V3 + V4 SortieDemands Queue for Admin / Magasinier) */}
         {effectiveSubTab === 'VALIDATION_TERRAIN' && (
-          <motion.div
-            key="subtab-validation-terrain"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="bg-white p-5 rounded-2xl border border-purple-200 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] space-y-4 mt-4"
-          >
-            <div className="flex items-center justify-between border-b border-purple-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200 text-purple-700 flex items-center justify-center font-bold">
-                  <ShieldCheck className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">
-                    File d&apos;Attente des Demandes de Sortie Terrain (V3 + V4 Réconciliation Bon Tech × Bon Magasin)
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Chaque demande ci-dessous a été saisie par un technicien sans déduction de stock. Approuvez ou fusionnez avec un bon magasin existant.
-                  </p>
-                </div>
-              </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                {storeSortieDemands.length} demande(s) totale(s)
-              </span>
-            </div>
-
-            {storeSortieDemands.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 space-y-2">
-                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
-                <p className="text-xs font-medium">Aucune demande de sortie terrain enregistrée.</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5">
-                {storeSortieDemands.map((dem: any) => {
-                  const isPending = dem.validation_status === 'PENDING_VALIDATION';
-                  const isClarif = dem.validation_status === 'NEEDS_CLARIFICATION';
-                  const isApproved = dem.validation_status === 'APPROVED';
-                  const recon = reconcileFieldClaim({
-                    claimType: 'SORTIE',
-                    claimId: String(dem.id),
-                    numBonSaisi: dem.code_bon_tech,
-                    machineCode: dem.id_machine_registered,
-                    proposedSpares: dem.items || [],
-                    stockItems,
-                    mouvements,
-                    correctiveInterventions: storeCorrectiveInterventions,
-                    preventiveExecutions: storePreventiveExecutions,
-                    sortieDemands: storeSortieDemands,
-                  });
-
-                  return (
-                    <div
-                      key={dem.id}
-                      className={`p-4 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs ${
-                        isPending
-                          ? 'bg-purple-50/40 border-purple-200'
-                          : isClarif
-                          ? 'bg-rose-50/40 border-rose-200'
-                          : isApproved
-                          ? 'bg-emerald-50/30 border-emerald-200'
-                          : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <div className="space-y-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono font-black text-purple-950 bg-white px-2 py-0.5 rounded border border-purple-200">
-                            Bon Tech: {dem.code_bon_tech}
-                          </span>
-                          {dem.code_bon_magasin && (
-                            <span className="font-mono font-bold text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                              Bon Magasin: {dem.code_bon_magasin}
-                            </span>
-                          )}
-                          <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
-                            {dem.id_machine_registered || dem.id_zone || 'ATELIER'}
-                          </span>
-                          <span className="font-semibold text-slate-700">
-                            Technicien: <b>{dem.technicien}</b>
-                          </span>
-                          <span className="text-[11px] font-mono text-slate-400">
-                            {dem.date} • {dem.heure}
-                          </span>
-                          {isPending && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-purple-100 text-purple-900 border border-purple-300">
-                              À VALIDER
-                            </span>
-                          )}
-                          {isClarif && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-rose-100 text-rose-900 border border-rose-300">
-                              ÉCART / À CLARIFIER
-                            </span>
-                          )}
-                          {isApproved && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                              {dem.discrepancy_status === 'BON_MISMATCH_MERGED'
-                                ? 'APPROUVÉ & RÉCONCILIÉ'
-                                : 'APPROUVÉ & DÉDUIT'}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {(dem.items || []).map((it: any, idx: number) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-0.5 rounded bg-white border border-slate-200 font-mono font-bold text-[11px] text-slate-800"
-                            >
-                              {it.ref} — {it.designation} (x{it.quantite} {it.unit || 'pcs'})
-                            </span>
-                          ))}
-                        </div>
-
-                        {!isApproved && recon.alerts.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {recon.alerts.map((al, i) => (
-                              <span
-                                key={i}
-                                className={`px-2 py-0.5 rounded text-[10.5px] font-bold flex items-center gap-1 ${
-                                  al.severity === 'critical'
-                                    ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                                    : 'bg-amber-100 text-amber-900 border border-amber-300'
-                                }`}
-                              >
-                                <AlertTriangle className="w-3 h-3 shrink-0" />
-                                {al.title}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        {dem.validation_note && (
-                          <div className="text-[11px] font-semibold text-rose-800 pt-0.5">
-                            Note Magasin / Resp. : « {dem.validation_note} »
-                          </div>
-                        )}
-                      </div>
-
-                      {(isPending || isClarif) && (
-                        <button
-                          type="button"
-                          onClick={() => handleOpenReviewDemandModal(dem)}
-                          className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer transition shadow-2xs"
-                        >
-                          Contrôler & Réconcilier
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </motion.div>
+          <ValidationTerrainQueueSubTab
+            storeSortieDemands={storeSortieDemands}
+            stockItems={stockItems}
+            mouvements={mouvements}
+            correctiveInterventions={storeCorrectiveInterventions}
+            preventiveExecutions={storePreventiveExecutions}
+            onOpenReviewModal={handleOpenReviewDemandModal}
+          />
         )}
 
         {/* MAIN VIEW: FORM & JOURNAL TABLE ACCORDING TO VIEW MODE */}
@@ -4933,7 +4504,11 @@ export default function SortieRapideView({
                     onChange={(val) => setForm({ ...form, prestataire_externe: val })}
                     options={supplierOptions.map((s) => ({ value: s, label: s }))}
                     placeholder="-- Sélectionner Prestataire Externe --"
-                    onAddNew={(val) => setForm({ ...form, prestataire_externe: val })}
+                    onAddNew={(val) => {
+                      if (val) {
+                        setForm({ ...form, prestataire_externe: val });
+                      }
+                    }}
                   />
                 </div>
 
@@ -5478,103 +5053,11 @@ export default function SortieRapideView({
               {/* Right Table: Movements History & Excel Twin */}
               <div className={viewMode === 'SPLIT' ? 'lg:col-span-7 space-y-4' : 'w-full space-y-4'}>
                 {/* V3/V4 Technician Sortie Demands Status Panel */}
-                {isTechUser && mySortieDemands.length > 0 && (
-                  <div
-                    data-testid="tech-sortie-demands-list"
-                    className="bg-white rounded-2xl border border-indigo-200/90 shadow-xs p-4 space-y-3"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                        <h3 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                          Mes Demandes de Sortie Terrain ({mySortieDemands.length})
-                        </h3>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-500">
-                        Aucune déduction stock avant approbation magasin
-                      </span>
-                    </div>
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {mySortieDemands.slice(0, 8).map((dem) => {
-                        const isClarif = dem.validation_status === 'NEEDS_CLARIFICATION';
-                        const isPending = dem.validation_status === 'PENDING_VALIDATION';
-                        const isApproved = dem.validation_status === 'APPROVED';
-                        return (
-                          <div
-                            key={dem.id}
-                            className={`p-3 rounded-xl border text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
-                              isClarif
-                                ? 'bg-rose-50/60 border-rose-300'
-                                : isPending
-                                ? 'bg-purple-50/40 border-purple-200'
-                                : isApproved
-                                ? 'bg-emerald-50/40 border-emerald-200'
-                                : 'bg-slate-50 border-slate-200'
-                            }`}
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono font-black text-slate-900">
-                                  {dem.code_bon_tech || dem.id}
-                                </span>
-                                {dem.code_bon_magasin && dem.code_bon_magasin !== dem.code_bon_tech && (
-                                  <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 font-mono text-[10px] font-bold">
-                                    → Bon Magasin: {dem.code_bon_magasin}
-                                  </span>
-                                )}
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
-                                    isClarif
-                                      ? 'bg-rose-100 text-rose-900 border border-rose-300 animate-pulse'
-                                      : isPending
-                                      ? 'bg-purple-100 text-purple-900 border border-purple-300'
-                                      : isApproved
-                                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
-                                      : 'bg-slate-200 text-slate-700'
-                                  }`}
-                                >
-                                  {isClarif
-                                    ? 'À CLARIFIER (DISCREPANCY)'
-                                    : isPending
-                                    ? 'EN ATTENTE VALIDATION'
-                                    : isApproved
-                                    ? dem.discrepancy_status === 'BON_MISMATCH_MERGED'
-                                      ? 'VALIDÉ & FUSIONNÉ'
-                                      : 'APPROUVÉ & DÉDUIT'
-                                    : 'REJETÉ'}
-                                </span>
-                                {dem.id_machine_registered && (
-                                  <span className="text-[10.5px] font-mono text-slate-600">
-                                    • {dem.id_machine_registered}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-[11px] text-slate-600 truncate">
-                                {(dem.items || [])
-                                  .map((it) => `${it.ref} (×${it.quantite})`)
-                                  .join(', ')}
-                              </div>
-                              {dem.validation_note && (
-                                <div className="text-[11px] font-bold text-rose-800">
-                                  Note Magasin/Admin : « {dem.validation_note} »
-                                </div>
-                              )}
-                            </div>
-
-                            {isClarif && (
-                              <button
-                                type="button"
-                                onClick={() => handleReloadClarificationDemand(dem)}
-                                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
-                              >
-                                Corriger & Resoumettre
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {isTechUser && (
+                  <TechSortieDemandsPanel
+                    mySortieDemands={mySortieDemands}
+                    onReloadClarificationDemand={handleReloadClarificationDemand}
+                  />
                 )}
 
                 <MouvementsJournalTable
@@ -5595,480 +5078,42 @@ export default function SortieRapideView({
       </AnimatePresence>
 
       {/* V3+V4 MODAL: MAGASINIER / ADMIN SORTIE DEMAND REVIEW & BON RECONCILIATION */}
-      {reviewDemand && (
-        <div
-          data-testid="sortie-demand-review-modal"
-          className="fixed inset-0 bg-slate-900/55 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in"
-        >
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold shadow-xs">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-900">
-                    Contrôle & Réconciliation Demande Sortie Terrain (V3+V4)
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-mono">
-                    Bon Tech: {reviewDemand.code_bon_tech} • Technicien: {reviewDemand.technicien} •{' '}
-                    {reviewDemand.date}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setReviewDemand(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 overflow-y-auto space-y-4 text-xs">
-              {/* V4 Reconciliation Alerts */}
-              {reviewDemandReconciliation && reviewDemandReconciliation.alerts.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 space-y-2">
-                  <div className="font-black text-amber-950 flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                    <span>Diagnostic de Réconciliation V4 (Bon & Stock)</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {reviewDemandReconciliation.alerts.map((al: any, i: number) => (
-                      <div
-                        key={i}
-                        className={`p-2 rounded-lg border text-[11px] ${
-                          String(al.severity || '').toUpperCase() === 'CRITICAL'
-                            ? 'bg-rose-50 border-rose-200 text-rose-900'
-                            : 'bg-white border-amber-200 text-amber-900'
-                        }`}
-                      >
-                        <div className="font-bold">{al.title}</div>
-                        <div className="text-[10.5px] opacity-90">{al.detail}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* V4 Interactive Merge Option: BS-Tech × BS-Magasin */}
-              {reviewDemandReconciliation?.candidateStoreMovements?.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-indigo-50/80 border border-indigo-200 space-y-2">
-                  <label className="font-black text-indigo-950 block">
-                    Appairage / Fusion V4 avec un Bon Magasin existant (sans double déduction) :
-                  </label>
-                  <p className="text-[11px] text-indigo-800">
-                    Si le magasinier a déjà saisi cette sortie sous un autre numéro de bon (ex:{' '}
-                    <span className="font-mono font-bold">BS-109</span> au lieu de{' '}
-                    <span className="font-mono font-bold">{reviewDemand.code_bon_tech}</span>),
-                    sélectionnez-le pour fusionner les deux enregistrements sans re-déduire le stock :
-                  </p>
-                  <select
-                    value={reviewMergeMovementId}
-                    onChange={(e) => setReviewMergeMovementId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-indigo-300 font-mono text-xs font-bold text-slate-900"
-                  >
-                    <option value="">
-                      — Ne pas fusionner (Créer un nouveau mouvement et déduire le stock) —
-                    </option>
-                    {reviewDemandReconciliation.candidateStoreMovements.map((cand: any) => {
-                      const candId = cand.movementId || cand.id || cand.code_bon;
-                      return (
-                        <option key={candId} value={candId}>
-                          Fusionner avec Bon Magasin {cand.code_bon} ({cand.ref} ×{cand.quantite} •{' '}
-                          {cand.date} • {cand.technicien}) — Zéro double déduction
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              )}
-
-              {/* Official Store Bon Number */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    N° Bon Saisi par le Technicien (Terrain)
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value={reviewDemand.code_bon_tech || ''}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 font-mono text-xs text-slate-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    N° Bon Officiel Magasin (Registre)
-                  </label>
-                  <input
-                    type="text"
-                    value={reviewCodeBonMagasin}
-                    onChange={(e) => setReviewCodeBonMagasin(e.target.value)}
-                    placeholder="Ex: BS-109"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 font-mono text-xs font-bold text-slate-900"
-                  />
-                </div>
-              </div>
-
-              {/* Editable Approved Quantities */}
-              <div className="space-y-2">
-                <div className="font-bold text-slate-800">
-                  Articles & Quantités à valider :
-                </div>
-                {reviewDemandItems.map((it: any, idx: number) => (
-                  <div
-                    key={`${it.ref}-${idx}`}
-                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3"
-                  >
-                    <div>
-                      <div className="font-mono font-bold text-slate-900">{it.ref}</div>
-                      <div className="text-[11px] text-slate-600">{it.designation}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-500">Qté retenue :</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={it.quantite}
-                        onChange={(e) => {
-                          const val = Math.max(0, Number(e.target.value) || 0);
-                          setReviewDemandItems((prev) =>
-                            prev.map((row, rIdx) => (rIdx === idx ? { ...row, quantite: val } : row))
-                          );
-                        }}
-                        className="w-20 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 font-mono font-bold text-right"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Validation / Discrepancy Note */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Note de validation ou motif d&apos;écart (obligatoire si À clarifier / Rejeté)
-                </label>
-                <textarea
-                  rows={2}
-                  value={reviewDemandNote}
-                  onChange={(e) => setReviewDemandNote(e.target.value)}
-                  placeholder="Ex: Bon BS-104 fusionné avec BS-109 du carnet magasin, ou préciser pourquoi la quantité diffère..."
-                  className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleReviewDemandDecision('NEEDS_CLARIFICATION')}
-                  className="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 font-bold text-xs cursor-pointer transition"
-                >
-                  À Clarifier (Écart Bon/Qté)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleReviewDemandDecision('REJECTED')}
-                  className="px-3 py-2 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-bold text-xs cursor-pointer transition"
-                >
-                  Rejeter sans déduction
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleReviewDemandDecision('APPROVED')}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer transition flex items-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>
-                  {reviewMergeMovementId
-                    ? 'Approuver & Fusionner (Sans Double Déduction)'
-                    : 'Approuver & Déduire du Stock'}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SortieDemandReviewModal
+        reviewDemand={reviewDemand}
+        reconciliation={reviewDemandReconciliation}
+        reviewCodeBonMagasin={reviewCodeBonMagasin}
+        setReviewCodeBonMagasin={setReviewCodeBonMagasin}
+        reviewMergeMovementId={reviewMergeMovementId}
+        setReviewMergeMovementId={setReviewMergeMovementId}
+        reviewDemandItems={reviewDemandItems}
+        setReviewDemandItems={setReviewDemandItems}
+        reviewDemandNote={reviewDemandNote}
+        setReviewDemandNote={setReviewDemandNote}
+        onClose={() => setReviewDemand(null)}
+        onDecision={handleReviewDemandDecision}
+      />
 
       {/* UNIFIED ARTICLE & WAREHOUSE ITEM SEARCH MODAL */}
-      {isArticleSearchOpen && (
-        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
-            {/* Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700">
-                  <Search className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900">Catalogue Unifié des Pièces & Équipements</h3>
-                  <p className="text-xs text-slate-500">Recherche instantanée dans le Stock PDR et le Registre de l'Entrepôt</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsArticleSearchOpen(false)}
-                className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Search Input & Source Filters */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Tapez un mot-clé (ex: 6204, Moteur, POMPE, Courroie, R1...)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                  className="w-full h-10 pl-9 pr-3 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              {/* Selected Source & Quick Add */}
-              <div className="flex items-center justify-between mt-2">
-                <div className="flex items-center gap-1.5 overflow-x-auto text-xs">
-                  <span className="text-slate-400 font-bold text-[10.5px] uppercase shrink-0">Source Sélectionnée :</span>
-                  {searchActiveTab === 'STOCK_PDR' && (
-                    <span className="bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1.5">
-                      <Package className="w-3.5 h-3.5 text-emerald-700" />
-                      Catalogue PDR ({stockItems.length})
-                    </span>
-                  )}
-                  {searchActiveTab === 'WAREHOUSE_PARTIE' && (
-                    <span className="bg-purple-100 text-purple-800 border border-purple-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1.5">
-                      <Layers className="w-3.5 h-3.5 text-purple-700" />
-                      Entrepôt: PARTIES ({warehouseItems.filter((w) => w.category === 'PARTIE' || w.nature === 'PARTIE').length})
-                    </span>
-                  )}
-                  {searchActiveTab === 'WAREHOUSE_COMPOSANT' && (
-                    <span className="bg-indigo-100 text-indigo-800 border border-indigo-200 px-2.5 py-1 rounded-lg font-bold inline-flex items-center gap-1.5">
-                      <Puzzle className="w-3.5 h-3.5 text-indigo-700" />
-                      Entrepôt: COMPOSANTS ({warehouseItems.filter((w) => w.category === 'COMPOSANT' || w.nature === 'COMPOSANT').length})
-                    </span>
-                  )}
-                </div>
-                {searchActiveTab === 'STOCK_PDR' && onOpenAddArticle && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsArticleSearchOpen(false);
-                      onOpenAddArticle();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold transition cursor-pointer text-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Créer Nouvelle PDR</span>
-                  </button>
-                )}
-                {searchActiveTab === 'WAREHOUSE_PARTIE' && onOpenAddMachine && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsArticleSearchOpen(false);
-                      onOpenAddMachine();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-bold transition cursor-pointer text-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Créer Nouvelle Machine</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Results */}
-            <div className="p-4 flex-1 overflow-y-auto max-h-[50vh] space-y-2">
-              {filteredCatalogResults.length === 0 ? (
-                <div className="py-12 text-center text-slate-400">
-                  <Package className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-                  <p className="text-xs">Aucun article trouvé pour "{searchQuery}"</p>
-                </div>
-              ) : (
-                filteredCatalogResults.map((art, idx) => (
-                  <div
-                    key={`cat-item-${art.id ?? ''}-${art.ref ?? ''}-${idx}`}
-                    onClick={() => handleSelectCatalogItem(art)}
-                    className="p-3 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 transition cursor-pointer flex items-center justify-between gap-3 shadow-2xs"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-xs text-indigo-950">
-                          {highlightMatch(art.ref, searchQuery)}
-                        </span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${art.badgeColor}`}>
-                          {art.badge}
-                        </span>
-                        {art.stockActuel <= 0 && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 font-bold border border-rose-200">
-                            Rupture
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-700 font-medium">
-                        {highlightMatch(art.designation, searchQuery)}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        Emplacement : <b className="font-mono text-slate-600">{art.emplacement}</b> • Type :{' '}
-                        <b className="font-mono text-slate-600">{art.type}</b>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="text-[10px] text-slate-400">Disponible</div>
-                      <div className={`font-mono font-bold text-sm ${art.stockActuel <= 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                        {art.stockActuel} {art.unit}
-                      </div>
-                      <button
-                        type="button"
-                        className="mt-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded cursor-pointer"
-                      >
-                        Sélectionner
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <UnifiedArticleSearchModal
+        open={isArticleSearchOpen}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        searchActiveTab={searchActiveTab}
+        stockCount={stockItems.length}
+        warehouseItems={warehouseItems}
+        filteredCatalogResults={filteredCatalogResults}
+        highlightMatch={highlightMatch}
+        onSelectCatalogItem={handleSelectCatalogItem}
+        onClose={() => setIsArticleSearchOpen(false)}
+        onOpenAddArticle={onOpenAddArticle}
+        onOpenAddMachine={onOpenAddMachine}
+      />
 
       {/* Excel Formulas Preview Modal */}
-      {showFormulasModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-2xl w-full p-5 space-y-4 animate-in zoom-in-95 duration-150">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 shrink-0">
-                  <Calculator className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900 tracking-tight flex items-center gap-2">
-                    <span>Formules Excel Miroir — Journal des Mouvements</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      Feuille Mouvements
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Calculs de solde, numérotation séquentielle des bons et agrégations SUMIFS
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowFormulasModal(false)}
-                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer shrink-0"
-                title="Fermer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Modal Content: 4 Formula Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-              {/* Formule Code Bon */}
-              <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/90 flex flex-col justify-between gap-2 hover:border-blue-300 transition">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                    <Tag className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span className="truncate">Séquence Code Bon (Col. B)</span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-blue-100/80 text-blue-800 border border-blue-200 shrink-0">
-                    Bon-xxx
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-blue-800 font-bold bg-white p-2 rounded-lg border border-blue-100">
-                  ="Bon-" & TEXT(COUNTIF(Mvt[Code],"*")+1, "003")
-                </div>
-                <p className="text-[10.5px] text-slate-500 leading-tight">
-                  Incrémentation automatique du numéro d'ordre pour chaque bon de sortie, entrée ou réception.
-                </p>
-              </div>
-
-              {/* Formule Solde Instantané */}
-              <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/90 flex flex-col justify-between gap-2 hover:border-emerald-300 transition">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="truncate">Impact Sur Solde (Stock)</span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100/80 text-emerald-800 border border-emerald-200 shrink-0">
-                    Apres = Avant ± Qte
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-emerald-800 font-bold bg-white p-2 rounded-lg border border-emerald-100">
-                  =IF(Type="Entrée", Stock_Avant+Qté, Stock_Avant-Qté)
-                </div>
-                <p className="text-[10.5px] text-slate-500 leading-tight">
-                  Calcul du stock théorique après mouvement de manière synchrone avant enregistrement.
-                </p>
-              </div>
-
-              {/* Formule SUMIFS Consolidation */}
-              <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/90 flex flex-col justify-between gap-2 hover:border-purple-300 transition">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                    <span className="truncate">Agrégation Totale SUMIFS</span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-100/80 text-purple-800 border border-purple-200 shrink-0">
-                    Stock_Actuel
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-purple-800 font-bold bg-white p-2 rounded-lg border border-purple-100">
-                  =SUMIFS(Mvt[Qté], Mvt[Ref], [@Ref], Mvt[Type], "Sortie")
-                </div>
-                <p className="text-[10.5px] text-slate-500 leading-tight">
-                  Formule miroir injectée dans le tableau général de stock pour cumuler les sorties et entrées.
-                </p>
-              </div>
-
-              {/* Formule Actions & Destination */}
-              <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/90 flex flex-col justify-between gap-2 hover:border-amber-300 transition">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 truncate">
-                    <Activity className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span className="truncate">Typologie Interventions</span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-100/80 text-amber-800 border border-amber-200 shrink-0">
-                    action_id
-                  </span>
-                </div>
-                <div className="font-mono text-xs text-amber-800 font-bold bg-white p-2 rounded-lg border border-amber-100">
-                  CORRECTIVE | PREVENTIVE | USAGE | REAPPRO
-                </div>
-                <p className="text-[10.5px] text-slate-500 leading-tight">
-                  Qualification du type de travail et pré-filtrage dynamique des machines et responsables.
-                </p>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400 font-medium">
-                Conforme à 100% avec le fichier Excel modèle <span className="font-mono text-slate-600">GMAO_Light_Template_V2</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowFormulasModal(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out cursor-pointer"
-              >
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <MovementFormulasPreviewModal
+        open={showFormulasModal}
+        onClose={() => setShowFormulasModal(false)}
+      />
     </AnimatedPage>
   );
 }

@@ -73,11 +73,26 @@ export function generateRandomSalt() {
   return bufToBase64(salt);
 }
 
+function readVaultStorageString(key: string): string | null {
+  const decrypted = SecurityService.getSecure(key);
+  if (typeof decrypted === 'string' && decrypted.trim().length > 0) {
+    return decrypted;
+  }
+  if (typeof localStorage !== 'undefined') {
+    const raw = localStorage.getItem(key);
+    if (raw && !raw.startsWith('NC2:') && !raw.startsWith('NC1:')) {
+      SecurityService.saveSecure(key, raw);
+      return raw;
+    }
+  }
+  return null;
+}
+
 export function getOrCreateSalt() {
-  let saltB64 = localStorage.getItem(VAULT_SALT_KEY);
+  let saltB64 = readVaultStorageString(VAULT_SALT_KEY);
   if (!saltB64) {
     saltB64 = generateRandomSalt();
-    localStorage.setItem(VAULT_SALT_KEY, saltB64);
+    SecurityService.saveSecure(VAULT_SALT_KEY, saltB64);
   }
   return saltB64;
 }
@@ -122,8 +137,8 @@ export async function encryptVault(vaultObject, pin) {
   );
   const cipherB64 = bufToBase64(cipherBuf);
   const ivB64 = bufToBase64(iv);
-  localStorage.setItem(VAULT_CIPHER_KEY, cipherB64);
-  localStorage.setItem(VAULT_IV_KEY, ivB64);
+  SecurityService.saveSecure(VAULT_CIPHER_KEY, cipherB64);
+  SecurityService.saveSecure(VAULT_IV_KEY, ivB64);
   SecurityService.removeSecure('gmao_admin_pin');
 
   // Persistance sécurisée de l'enveloppe chiffrée dans IndexedDB
@@ -140,9 +155,9 @@ export async function encryptVault(vaultObject, pin) {
 // Déchiffrement du coffre-fort : échec si Master PIN invalide
 export async function decryptVault(pin) {
   const cleanPin = String(pin || '').trim();
-  let cipherB64 = localStorage.getItem(VAULT_CIPHER_KEY);
-  let ivB64 = localStorage.getItem(VAULT_IV_KEY);
-  let saltB64 = localStorage.getItem(VAULT_SALT_KEY);
+  let cipherB64 = readVaultStorageString(VAULT_CIPHER_KEY);
+  let ivB64 = readVaultStorageString(VAULT_IV_KEY);
+  let saltB64 = readVaultStorageString(VAULT_SALT_KEY);
 
   // Fallback sur IndexedDB si localStorage a été nettoyé
   if (!cipherB64 || !ivB64 || !saltB64) {
@@ -151,9 +166,9 @@ export async function decryptVault(pin) {
       cipherB64 = idbRecord.cipherB64;
       ivB64 = idbRecord.ivB64;
       saltB64 = idbRecord.saltB64;
-      localStorage.setItem(VAULT_CIPHER_KEY, cipherB64);
-      localStorage.setItem(VAULT_IV_KEY, ivB64);
-      localStorage.setItem(VAULT_SALT_KEY, saltB64);
+      SecurityService.saveSecure(VAULT_CIPHER_KEY, cipherB64);
+      SecurityService.saveSecure(VAULT_IV_KEY, ivB64);
+      SecurityService.saveSecure(VAULT_SALT_KEY, saltB64);
     }
   }
 
@@ -257,7 +272,7 @@ export async function changeMasterPin(currentPin, newPin) {
   }
   // 2. Générer un nouveau sel dynamique
   const newSaltB64 = generateRandomSalt();
-  localStorage.setItem(VAULT_SALT_KEY, newSaltB64);
+  SecurityService.saveSecure(VAULT_SALT_KEY, newSaltB64);
 
   // 3. Dériver la nouvelle clé AES-256-GCM
   const newKey = await deriveKeyFromPin(cleanNewPin, newSaltB64);
@@ -270,8 +285,8 @@ export async function changeMasterPin(currentPin, newPin) {
   );
   const cipherB64 = bufToBase64(cipherBuf);
   const ivB64 = bufToBase64(iv);
-  localStorage.setItem(VAULT_CIPHER_KEY, cipherB64);
-  localStorage.setItem(VAULT_IV_KEY, ivB64);
+  SecurityService.saveSecure(VAULT_CIPHER_KEY, cipherB64);
+  SecurityService.saveSecure(VAULT_IV_KEY, ivB64);
   SecurityService.removeSecure('gmao_admin_pin');
 
   await indexedDBService.setItem(IDB_VAULT_KEY, {
@@ -289,7 +304,7 @@ export async function changeMasterPin(currentPin, newPin) {
 }
 
 export function isVaultExists() {
-  return !!localStorage.getItem(VAULT_CIPHER_KEY);
+  return Boolean(readVaultStorageString(VAULT_CIPHER_KEY));
 }
 
 // Hachage SHA-256 du PIN pour validation rapide
