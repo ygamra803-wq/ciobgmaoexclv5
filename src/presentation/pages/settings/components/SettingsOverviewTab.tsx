@@ -139,21 +139,21 @@ export default function SettingsOverviewTab({
                 </span>
                 <span
                   className={`font-mono ${
-                    effectivePercent > 80 ? 'text-rose-600' : 'text-indigo-600'
+                    effectivePercent > 80 ? 'text-rose-600' : 'text-sky-700'
                   }`}
                 >
                   {effectivePercent}% sur{' '}
                   {ceilingMB >= 1024 ? `${ceilingMB / 1024} Go` : `${ceilingMB} Mo`}
                 </span>
               </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/80">
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-300">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     effectivePercent > 80
                       ? 'bg-rose-500'
                       : effectivePercent > 50
                         ? 'bg-amber-500'
-                        : 'bg-indigo-600'
+                        : 'bg-sky-600'
                   }`}
                   style={{ width: `${Math.max(2, Math.min(100, effectivePercent))}%` }}
                 />
@@ -161,13 +161,13 @@ export default function SettingsOverviewTab({
             </div>
 
             {/* Tier Selector */}
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/80 space-y-2">
+            <div className="bg-slate-50 rounded-lg p-3 border border-slate-300 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   Plafond d&apos;Allocation Stockage (IndexedDB L2)
                 </span>
                 {idbInfo.isPersisted ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
                     <Lock className="w-2.5 h-2.5" /> Stockage Persistant Verrouillé
                   </span>
                 ) : (
@@ -189,10 +189,10 @@ export default function SettingsOverviewTab({
                     type="button"
                     disabled={requestingPersist}
                     onClick={() => handleCeilingChange(tier.val)}
-                    className={`py-1.5 px-2 rounded-lg text-xs font-bold transition border cursor-pointer ${
+                    className={`py-1.5 px-2 rounded-md text-xs font-bold transition border cursor-pointer ${
                       ceilingMB === tier.val
-                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40'
+                        ? 'bg-sky-600 text-white border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
+                        : 'bg-white text-slate-700 border-slate-300 hover:border-slate-700 hover:bg-sky-50/50'
                     }`}
                   >
                     {tier.label}
@@ -202,17 +202,17 @@ export default function SettingsOverviewTab({
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-300">
                 <div className="text-[11px] text-slate-500 font-medium">L1 Cache Rapide</div>
                 <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>localStorage ({effectiveStorageKb} KB)</span>
                 </div>
               </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+              <div className="bg-slate-50 p-3 rounded-lg border border-slate-300">
                 <div className="text-[11px] text-slate-500 font-medium">L2 Base Massive</div>
                 <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
-                  <Database className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <Database className="w-4 h-4 text-sky-700 shrink-0" />
                   <span>IndexedDB ({idbInfo.activeTier})</span>
                 </div>
               </div>
@@ -226,9 +226,9 @@ export default function SettingsOverviewTab({
           icon={<Layers className="w-4 h-4" />}
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <Database className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <Database className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -238,9 +238,9 @@ export default function SettingsOverviewTab({
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <Layers className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <Layers className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -250,9 +250,9 @@ export default function SettingsOverviewTab({
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <Wrench className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <Wrench className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -262,9 +262,9 @@ export default function SettingsOverviewTab({
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <MapPin className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <MapPin className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -274,9 +274,9 @@ export default function SettingsOverviewTab({
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <Users className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <Users className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -286,9 +286,9 @@ export default function SettingsOverviewTab({
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200/60">
-                <Calendar className="w-4 h-4" />
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
+              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
+                <Calendar className="w-4 h-4 text-sky-700" />
               </div>
               <div>
                 <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
@@ -333,7 +333,7 @@ export default function SettingsOverviewTab({
                 onClick={onOpenBackupManager}
                 className={SETTINGS_BUTTON_STYLES.secondary}
               >
-                <Database className="w-4 h-4 text-indigo-600" />
+                <Database className="w-4 h-4 text-sky-700" />
                 <span>Restaurer / Gérer Snapshots</span>
               </button>
             )}

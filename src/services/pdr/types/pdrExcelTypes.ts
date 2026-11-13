@@ -1,4 +1,10 @@
-import type { IStockItem, PdrGroup, StockType } from '../../../types/domain';
+import type {
+  IPartDesignation,
+  IStockItem,
+  MaterialPolicyTag,
+  PdrGroup,
+  StockType,
+} from '../../../types/domain';
 
 export type PdrCatalogImportMode = 'MERGE' | 'REPLACE_CATALOG';
 
@@ -8,9 +14,10 @@ export interface PdrGroupExcelRow {
   libelle: string;
   description: string;
   domaine_technique?: string;
-  default_policy_tags: string;
+  default_policy_tags: string | MaterialPolicyTag[];
   sort_order: number;
   is_active: boolean;
+  [key: string]: unknown;
 }
 
 export interface PdrTypeExcelRow {
@@ -19,6 +26,7 @@ export interface PdrTypeExcelRow {
   group_code: string;
   domaine_technique?: string;
   is_active: boolean;
+  [key: string]: unknown;
 }
 
 export interface PdrItemExcelRow {
@@ -36,8 +44,9 @@ export interface PdrItemExcelRow {
   emplacement: string;
   stockInitial: number;
   prix_unitaire: number;
-  policy_tags: string;
+  policy_tags: string | MaterialPolicyTag[];
   stockActuel_info?: number;
+  [key: string]: unknown;
 }
 
 export interface PdrCatalogImportError {
@@ -64,13 +73,13 @@ export interface PdrCatalogImportReport {
   nextGroups: PdrGroup[];
   nextTypes: StockType[];
   nextStock: IStockItem[];
-  nextDesignations: Array<Record<string, unknown>>;
+  nextDesignations: IPartDesignation[];
 }
 
 export interface PdrCatalogRawSheets {
-  groups?: Record<string, unknown>[];
-  types?: Record<string, unknown>[];
-  items?: Record<string, unknown>[];
+  groups?: Array<PdrGroupExcelRow | Record<string, unknown>>;
+  types?: Array<PdrTypeExcelRow | Record<string, unknown>>;
+  items?: Array<PdrItemExcelRow | Record<string, unknown>>;
 }
 
 export interface PdrCatalogValidationOptions {

@@ -28,11 +28,11 @@
  */
 
 import { isWorkshopOrderActive, type IWorkshopOrder } from './workshopOrderService';
+import type { MaterialPolicyTag, MaintenancePolicyTag } from '../../types/domain';
 
 export type NeedMaterialClass = 'PDR' | 'PART' | 'COMPONENT' | 'OTHER';
 
-export type MaterialPolicyTag = 'REPLACING' | 'REPAIRABLE' | 'MODIFYING';
-export type MaintenancePolicyTag = MaterialPolicyTag;
+export type { MaterialPolicyTag, MaintenancePolicyTag };
 
 export const VALID_POLICY_TAGS: ReadonlyArray<MaterialPolicyTag> = [
   'REPLACING',

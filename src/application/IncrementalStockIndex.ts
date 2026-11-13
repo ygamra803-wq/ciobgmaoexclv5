@@ -1,3 +1,5 @@
+import { Logger } from '../core/logger/LoggerService';
+
 export type MovementType = 'ENTREE' | 'SORTIE' | 'COMMANDE';
 
 const TYPE_ALIASES: Record<string, MovementType> = {
@@ -250,7 +252,7 @@ export class IncrementalStockIndex {
 
     const type = normalizeType(m.type);
     if (!type) {
-      console.warn(`[StockIndex] Unknown type "${m.type}" for ref ${key} — SKIPPED`);
+      Logger.warn(`[StockIndex] Unknown type "${m.type}" for ref ${key} — SKIPPED`);
       return;
     }
 
@@ -268,7 +270,7 @@ export class IncrementalStockIndex {
 
     // Do NOT clamp raw running totals. Signal inconsistencies if negative.
     if (entry.entrees < 0 || entry.sorties < 0) {
-      console.warn('[StockIndex] Negative running total (data inconsistency):', key, entry);
+      Logger.warn('[StockIndex] Negative running total (data inconsistency):', key, entry);
     }
   }
 }

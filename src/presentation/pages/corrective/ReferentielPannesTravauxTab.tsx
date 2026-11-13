@@ -20,6 +20,7 @@ import TravauxStandardTab from './referentiel/TravauxStandardTab';
 import MatricesActionsTab from './referentiel/MatricesActionsTab';
 import EquipeIntervenantsTab from './referentiel/EquipeIntervenantsTab';
 import { useI18n } from '../../../i18n/I18nContext';
+import { Logger } from '../../../core/logger/LoggerService';
 
 const CATEGORY_META = {
   E: { label: 'Électrique', color: 'bg-amber-100 text-amber-900 border-amber-300', dot: 'bg-amber-500' },
@@ -228,7 +229,7 @@ export default function ReferentielPannesTravauxTab({
         showToast?.(t('corrective.catalogue.toast_sync_success', 'Synchronisation effectuée avec succès !'), 'success');
       }
     } catch (e) {
-      console.error(e);
+      Logger.error(e);
       showToast?.(t('corrective.catalogue.toast_sync_error', 'Erreur lors de la synchronisation'), 'error');
     } finally {
       setTimeout(() => setIsSyncing(false), 500);
@@ -286,7 +287,7 @@ export default function ReferentielPannesTravauxTab({
       XLSX.writeFile(wb, `GMAO_Referentiel_Pannes_Travaux_${new Date().toISOString().split('T')[0]}.xlsx`);
       showToast?.(t('corrective.catalogue.toast_export_success', 'Export Excel du catalogue complet généré avec succès (.xlsx)'), 'success');
     } catch (e) {
-      console.error(e);
+      Logger.error(e);
       showToast?.(t('corrective.catalogue.toast_export_error', 'Erreur lors de l\'export Excel'), 'error');
     }
   };

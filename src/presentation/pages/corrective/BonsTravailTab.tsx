@@ -24,6 +24,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { Logger } from '../../../core/logger/LoggerService';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
@@ -596,7 +597,7 @@ export default function BonsTravailTab({
 
       showToast?.('Export Excel des Bons de Travail généré avec succès (.xlsx)', 'success');
     } catch (err) {
-      console.error(err);
+      Logger.error(err);
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };

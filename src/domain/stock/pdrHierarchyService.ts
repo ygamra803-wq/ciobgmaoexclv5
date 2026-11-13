@@ -5,7 +5,7 @@ import { normalizePolicyTags } from '../corrective/needRequestService';
  * Canonical reader for group linkage across PDR, Parts, and Components (`id_group` with legacy `id_groupe` fallback).
  */
 export function getGroupId(
-  entity?: { id_group?: string | null; id_groupe?: string | null } | null
+  entity?: { id_group?: string | null; id_groupe?: string | null; [key: string]: unknown } | null
 ): string {
   if (!entity) return '';
   return String(entity.id_group || entity.id_groupe || '').trim();
@@ -15,7 +15,13 @@ export function getGroupId(
  * Canonical reader for a Group record's own primary key (`id_group` / `id` / `id_groupe`).
  */
 export function getGroupRecordId(
-  group?: { id?: string | number | null; id_group?: string | null; id_groupe?: string | null } | null
+  group?: {
+    id?: string | number | null;
+    id_group?: string | null;
+    id_groupe?: string | null;
+    code?: string | null;
+    [key: string]: unknown;
+  } | null
 ): string {
   if (!group) return '';
   return String(group.id_group || group.id || group.id_groupe || '').trim();

@@ -251,19 +251,23 @@ export default defineConfig(({ command }) => ({
             return 'app-i18n';
           }
 
-          // 4. Self-Contained Non-UI GMAO Engine Layer (Store, Application, Domain, Services, Core, Utils)
+          // 4. Granular Non-UI GMAO Engine Chunks (Store, Domain/Application, Services/Infra, Core/Utils)
+          if (id.includes('src/store/')) {
+            return 'app-store';
+          }
+          if (id.includes('src/application/') || id.includes('src/domain/')) {
+            return 'app-domain-application';
+          }
+          if (id.includes('src/services/') || id.includes('src/infrastructure/')) {
+            return 'app-services-infra';
+          }
           if (
-            id.includes('src/store/') ||
-            id.includes('src/application/') ||
-            id.includes('src/domain/') ||
-            id.includes('src/infrastructure/') ||
-            id.includes('src/services/') ||
             id.includes('src/core/') ||
             id.includes('src/utils/') ||
             id.includes('src/config/') ||
             id.includes('src/types/')
           ) {
-            return 'app-engine';
+            return 'app-core-utils';
           }
         }
       },

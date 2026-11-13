@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { STORAGE_KEYS } from '../../../../infrastructure/persistence/storageKeys';
+import { Logger } from '../../../../core/logger/LoggerService';
 import type { WizardFeatureFlagsState, WizardModuleKey } from './wizard.types';
 
 /**
@@ -44,7 +45,7 @@ export function writeWizardFeatureFlags(nextFlags: WizardFeatureFlagsState): voi
     );
     window.dispatchEvent(new CustomEvent(WIZARD_FLAGS_EVENT, { detail: nextFlags }));
   } catch (err) {
-    console.error('[GMAO WizardFeatureFlags] Failed to persist flags:', err);
+    Logger.error('[GMAO WizardFeatureFlags] Failed to persist flags:', err);
   }
 }
 

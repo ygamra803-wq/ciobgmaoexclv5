@@ -168,8 +168,8 @@ export default function SettingsAdminTab({
         description="Architecture Zero-Knowledge : le Master PIN est la clé cryptographique unique déchiffrant le coffre AES-256-GCM."
         icon={<ShieldCheck className="w-4 h-4" />}
         headerRight={
-          <div className="bg-white px-3.5 py-2 rounded-xl border border-slate-200 flex items-center gap-3 shrink-0 shadow-2xs">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white font-extrabold text-xs flex items-center justify-center font-mono">
+          <div className="bg-white px-3.5 py-2 rounded-lg border border-slate-400 flex items-center gap-3 shrink-0 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.12)]">
+            <div className="w-8 h-8 rounded-lg bg-slate-800 text-white border border-slate-950 font-extrabold text-xs flex items-center justify-center font-mono">
               {currentUser?.avatar || 'AD'}
             </div>
             <div>
@@ -249,12 +249,12 @@ export default function SettingsAdminTab({
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Master PIN Actuel (pour validation)</label>
-              <input
+                <input
                 type="password"
                 value={currentMasterPin}
                 onChange={(e) => setCurrentMasterPin(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="Master PIN actuel — requis pour déchiffrer"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-indigo-500 outline-none transition"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-400 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-sky-600 outline-none transition"
                 maxLength={8}
               />
             </div>
@@ -266,7 +266,7 @@ export default function SettingsAdminTab({
                 value={tempPin}
                 onChange={(e) => setTempPin(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="Nouveau Master PIN (ex: 5678)"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-indigo-500 outline-none transition"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-400 bg-slate-50 text-xs font-mono font-bold focus:bg-white focus:border-sky-600 outline-none transition"
                 maxLength={8}
               />
             </div>
@@ -278,12 +278,12 @@ export default function SettingsAdminTab({
                 value={tempRole}
                 onChange={(e) => setTempRole(e.target.value)}
                 placeholder="Ex: Gestionnaire Principal du Stock"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold focus:bg-white focus:border-indigo-500 outline-none transition"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-400 bg-slate-50 text-xs font-semibold focus:bg-white focus:border-sky-600 outline-none transition"
               />
             </div>
 
             {/* Live Vault Engine — Sel dynamique et chiffrement AES (Light Industrial Box) */}
-            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 font-mono text-[11px] space-y-2 overflow-hidden">
+            <div className="p-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-600 font-mono text-[11px] space-y-2 overflow-hidden">
               <div className="flex items-center justify-between text-slate-800 border-b border-slate-200 pb-1.5 font-bold">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -295,7 +295,7 @@ export default function SettingsAdminTab({
               </div>
               <div className="grid grid-cols-3 gap-1">
                 <span className="text-slate-500">Sel Aléatoire:</span>
-                <span className="col-span-2 text-indigo-700 font-semibold truncate select-all">
+                <span className="col-span-2 text-sky-800 font-semibold truncate select-all">
                   {localStorage.getItem('gmao_vault_salt_v2')?.substring(0, 24) ||
                     'Généré aléatoirement...'}
                   ...
@@ -385,10 +385,10 @@ export default function SettingsAdminTab({
               return (
                 <div
                   key={userAcc.id || accLogin}
-                  className="p-3.5 rounded-xl border border-slate-200 hover:border-indigo-200 bg-slate-50/60 hover:bg-indigo-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  className="p-3.5 rounded-xl border border-slate-300 hover:border-slate-500 bg-slate-50/70 hover:bg-sky-50/30 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-2xs">
+                    <div className="w-10 h-10 rounded-lg bg-slate-100 text-slate-800 border border-slate-400 font-extrabold text-xs flex items-center justify-center font-mono shrink-0 shadow-2xs">
                       {String(accLogin || 'US').substring(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0">
@@ -453,11 +453,11 @@ export default function SettingsAdminTab({
           </div>
 
           {/* Explicit Bridge Callout inside Box B */}
-          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-xs text-slate-800">
               <span className="font-bold block">Accès Techniciens Individuels ({activeTechAccountsCount} actif{activeTechAccountsCount > 1 ? 's' : ''})</span>
               <span className="text-[11px] text-slate-500">
-                Les comptes techniciens sont rattachés aux fiches matricules (<code className="font-mono font-bold text-indigo-700">TECH-0X</code>).
+                Les comptes techniciens sont rattachés aux fiches matricules (<code className="font-mono font-bold text-sky-800">TECH-0X</code>).
               </span>
             </div>
             {onNavigateToUsers && (
@@ -487,7 +487,7 @@ export default function SettingsAdminTab({
                 {inactiveTechAccountsCount} désactivé{inactiveTechAccountsCount > 1 ? 's' : ''}
               </span>
             )}
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-50 text-sky-800 border border-sky-300">
               {Array.isArray(technicians) ? technicians.length : 0} fiche(s) technicien
             </span>
           </span>
@@ -518,7 +518,7 @@ export default function SettingsAdminTab({
                   key={techAcc.id || loginId}
                   className={`p-3.5 rounded-xl border transition flex items-center justify-between gap-3 ${
                     isActive
-                      ? 'bg-slate-50/60 border-slate-200 hover:border-indigo-200'
+                      ? 'bg-slate-50/70 border-slate-300 hover:border-slate-500'
                       : 'bg-slate-100/60 border-slate-200/60 opacity-70'
                   }`}
                 >
@@ -527,7 +527,7 @@ export default function SettingsAdminTab({
                       <span className="text-xs font-bold text-slate-900 truncate">
                         {techAcc.personnelName || techAcc.name}
                       </span>
-                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                      <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-sky-50 text-sky-800 border border-sky-300">
                         {code}
                       </span>
                       {isActive ? (
@@ -591,22 +591,22 @@ export default function SettingsAdminTab({
           onClick={closeVaultModal}
         >
           <div
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
+            className="bg-white rounded-xl border border-slate-800 shadow-2xl w-full max-w-md overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div
               className={`px-5 py-4 border-b flex items-center justify-between ${
                 vaultModal.mode === 'reset_vault'
                   ? 'bg-rose-50 border-rose-200'
-                  : 'bg-slate-50 border-slate-200 text-slate-900'
+                  : 'bg-slate-100 border-slate-300 text-slate-900'
               }`}
             >
               <div className="flex items-center gap-2.5">
                 <div
-                  className={`w-9 h-9 rounded-xl flex items-center justify-center border ${
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
                     vaultModal.mode === 'reset_vault'
                       ? 'bg-rose-100 text-rose-700 border-rose-200'
-                      : 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                      : 'bg-white text-sky-700 border-slate-400'
                   }`}
                 >
                   <Lock className="w-4 h-4" />
@@ -648,9 +648,9 @@ export default function SettingsAdminTab({
 
             <form onSubmit={handleConfirmVaultModal} className="p-5 space-y-4">
               {vaultModal.mode === 'switch_session' && (
-                <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-950">
+                <div className="p-3 rounded-xl bg-sky-50 border border-sky-300 text-xs text-slate-900">
                   Vous allez basculer votre session active vers{' '}
-                  <b className="font-mono">{vaultModal.targetDisplayName}</b>.
+                  <b className="font-mono text-sky-900">{vaultModal.targetDisplayName}</b>.
                 </div>
               )}
 
@@ -675,7 +675,7 @@ export default function SettingsAdminTab({
                       setVaultModal((prev) => ({ ...prev, newPassword: e.target.value }))
                     }
                     placeholder="Saisir le nouveau mot de passe..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-400 text-xs font-mono font-bold focus:border-sky-600 focus:ring-2 focus:ring-sky-100 outline-none"
                   />
                 </div>
               )}
@@ -697,7 +697,7 @@ export default function SettingsAdminTab({
                     }))
                   }
                   placeholder="Master PIN (4 à 8 chiffres)"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono font-bold focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 outline-none"
+                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-400 text-xs font-mono font-bold focus:border-sky-600 focus:ring-2 focus:ring-sky-100 outline-none"
                 />
               </div>
 

@@ -57,10 +57,10 @@ import type {
   ITechnician,
   IWarehouseItem,
   IZone,
-  MachineElement,
 } from '../../../types/domain';
 import type {
   CorrectiveInterventionItem,
+  MachineElement,
   PreventiveTaskItem,
 } from '../../../types/store';
 
@@ -86,8 +86,8 @@ export interface NexusViewProps {
   onDuplicateBOMToTwins?: (sourceMachineId: string, targetMachineIds: string[]) => number | void;
   onNavigateToQuickSortie?: (preset?: Record<string, unknown>) => void;
   setQuickSortiePreset?: (preset: Record<string, unknown> | null) => void;
-  onCreateCorrectiveFromNexus?: (payload: Record<string, unknown>) => void;
-  onCreatePreventiveFromNexus?: (payload: Record<string, unknown>) => void;
+  onCreateCorrectiveFromNexus?: (machine: any, item?: any) => any;
+  onCreatePreventiveFromNexus?: (machine: any, item?: any) => any;
   onNavigate?: (tab: string) => void;
   showToast?: (message: string, type?: string) => void;
 }

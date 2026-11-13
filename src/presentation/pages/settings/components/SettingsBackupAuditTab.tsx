@@ -108,8 +108,8 @@ export default function SettingsBackupAuditTab({
   const getSubTabClass = (isActive: boolean) =>
     `px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
       isActive
-        ? 'bg-white text-indigo-700 shadow-2xs border border-indigo-200'
-        : 'text-slate-600 hover:text-slate-900 border border-transparent'
+        ? 'bg-sky-50 text-slate-950 border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
+        : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-300'
     }`;
 
   return (
@@ -120,26 +120,26 @@ export default function SettingsBackupAuditTab({
         description="Surveillance en temps réel des sessions de connexion, adresses IP des postes, points de restauration et intégrité relationnelle."
         icon={<Shield className="w-4 h-4" />}
       >
-        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+        <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-slate-100 rounded-xl border border-slate-300">
           <button
             onClick={() => setAuditSubTab('access')}
             className={getSubTabClass(auditSubTab === 'access')}
           >
-            <Laptop className="w-3.5 h-3.5 text-indigo-600" />
+            <Laptop className="w-3.5 h-3.5 text-sky-700" />
             <span>Connexions &amp; Postes ({accessLogs.length})</span>
           </button>
           <button
             onClick={() => setAuditSubTab('events')}
             className={getSubTabClass(auditSubTab === 'events')}
           >
-            <Activity className="w-3.5 h-3.5 text-indigo-600" />
+            <Activity className="w-3.5 h-3.5 text-sky-700" />
             <span>Actions &amp; Données ({(storeAuditEvents?.length || 0) + (auditLogs?.length || 0)})</span>
           </button>
           <button
             onClick={() => setAuditSubTab('backups')}
             className={getSubTabClass(auditSubTab === 'backups')}
           >
-            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <Clock className="w-3.5 h-3.5 text-sky-700" />
             <span>Points de Restauration ({backupsList.length})</span>
           </button>
           <button
@@ -149,7 +149,7 @@ export default function SettingsBackupAuditTab({
             }}
             className={getSubTabClass(auditSubTab === 'integrity')}
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+            <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
             <span>Intégrité des Données</span>
           </button>
           <button
@@ -159,7 +159,7 @@ export default function SettingsBackupAuditTab({
             }}
             className={getSubTabClass(auditSubTab === 'performance')}
           >
-            <Gauge className="w-3.5 h-3.5 text-indigo-600" />
+            <Gauge className="w-3.5 h-3.5 text-sky-700" />
             <span>Performance &amp; Sync</span>
           </button>
           <button
@@ -169,7 +169,7 @@ export default function SettingsBackupAuditTab({
             }}
             className={getSubTabClass(auditSubTab === 'telemetry')}
           >
-            <Bug className="w-3.5 h-3.5 text-indigo-600" />
+            <Bug className="w-3.5 h-3.5 text-sky-700" />
             <span>Erreurs &amp; Analytics ({errorReports.length})</span>
           </button>
         </div>
@@ -258,7 +258,7 @@ export default function SettingsBackupAuditTab({
                       <div className="text-[10px] text-slate-400 font-mono">ID: {log.deviceId}</div>
                     </td>
                     <td className="px-3.5 py-2.5 whitespace-nowrap">
-                      <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded font-bold text-[11px]">
+                      <span className="font-mono text-sky-800 bg-sky-50 border border-sky-300 px-2 py-0.5 rounded font-bold text-[11px]">
                         {log.ip}
                       </span>
                     </td>
@@ -362,7 +362,7 @@ export default function SettingsBackupAuditTab({
                         {new Date(log.ts).toLocaleString('fr-FR')}
                       </td>
                       <td className="px-3.5 py-2.5 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold font-mono">
+                        <span className="px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-300 text-[10px] font-bold font-mono">
                           {log.actionType}
                         </span>
                       </td>
@@ -456,7 +456,7 @@ export default function SettingsBackupAuditTab({
                         <td className="px-3.5 py-2.5 text-right flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleExportBackup(backupId)}
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-1.5 text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
                             title="Exporter en JSON"
                           >
                             <Download className="w-3.5 h-3.5" />
@@ -804,9 +804,9 @@ export default function SettingsBackupAuditTab({
                   <div className="text-[10px] text-slate-400 mt-1">Estimée via performance.memory</div>
                 </div>
 
-                <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
+                <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-300">
                   <div className="text-[11px] font-mono text-slate-500">Recalcul Twin (Moyenne)</div>
-                  <div className="text-lg font-black text-indigo-600 mt-1 font-mono">
+                  <div className="text-lg font-black text-sky-700 mt-1 font-mono">
                     {perfStats?.recalcStats?.avg ? `${perfStats.recalcStats.avg} ms` : 'À tester'}
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">

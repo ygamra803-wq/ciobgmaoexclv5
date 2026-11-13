@@ -829,8 +829,8 @@ describe('PART-GROUP-P1 — Standalone PartGroup Referentiel, PartType.id_group 
     let loadedPartGroups: any[] = [];
 
     DataGateway.loadDemoData({
-      setPartGroups: (groups: any[]) => {
-        loadedPartGroups = groups;
+      setPartGroups: (groups: any) => {
+        loadedPartGroups = typeof groups === 'function' ? groups(loadedPartGroups) : groups;
       },
     });
 
@@ -839,8 +839,8 @@ describe('PART-GROUP-P1 — Standalone PartGroup Referentiel, PartType.id_group 
     expect(Array.isArray(stored) && stored.length).toBe(4);
 
     await DataGateway.clearAllForRealFactory({
-      setPartGroups: (groups: any[]) => {
-        loadedPartGroups = groups;
+      setPartGroups: (groups: any) => {
+        loadedPartGroups = typeof groups === 'function' ? groups(loadedPartGroups) : groups;
       },
     });
 

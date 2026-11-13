@@ -155,9 +155,9 @@ export default function SettingsCurrencyTab({
         icon={<Coins className="w-4 h-4" />}
         headerRight={
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200/80 text-xs font-bold text-indigo-950">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-slate-400 text-xs font-bold text-slate-900 shadow-2xs">
               <span className="text-slate-500">Devise Active :</span>
-              <span className="font-mono text-indigo-700">
+              <span className="font-mono text-sky-800">
                 {currencyCode} ({currencySymbol})
               </span>
             </span>
@@ -167,7 +167,7 @@ export default function SettingsCurrencyTab({
               disabled={!canManageSettings}
               className={SETTINGS_BUTTON_STYLES.secondary}
             >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
               <span>Par défaut</span>
             </button>
           </div>
@@ -186,22 +186,22 @@ export default function SettingsCurrencyTab({
                   type="button"
                   data-testid={`currency-card-${code}`}
                   onClick={() => handleSelectCurrency(code)}
-                  className={`text-left p-4 rounded-xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                  className={`text-left p-4 rounded-lg border transition-all cursor-pointer flex items-start justify-between gap-3 ${
                     isSelected
-                      ? 'border-indigo-600 bg-indigo-50/80 shadow-2xs ring-1 ring-indigo-600/15'
-                      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      ? 'border-slate-900 bg-sky-50/90 shadow-[2px_2px_0px_0px_rgba(15,23,42,0.85)]'
+                      : 'border-slate-300 bg-white hover:border-slate-600 hover:bg-slate-50'
                   }`}
                 >
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200">
+                      <span className="font-mono text-xs font-extrabold px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-300">
                         {item.code}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-400">
+                      <span className="text-[10px] font-mono text-slate-500">
                         ISO #{item.numericIsoCode}
                       </span>
                       {isSelected && (
-                        <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                        <CheckCircle2 className="w-4 h-4 text-sky-700 shrink-0" />
                       )}
                     </div>
                     <div className="font-bold text-xs text-slate-900 pt-0.5 truncate">
@@ -220,10 +220,10 @@ export default function SettingsCurrencyTab({
                   </div>
 
                   <div
-                    className={`px-2.5 py-1.5 rounded-lg font-mono text-xs font-extrabold shrink-0 border ${
+                    className={`px-2.5 py-1.5 rounded-md font-mono text-xs font-extrabold shrink-0 border ${
                       isSelected
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-sky-600 text-white border-slate-900'
+                        : 'bg-slate-50 text-slate-700 border-slate-300'
                     }`}
                   >
                     {displaySym}
@@ -235,7 +235,7 @@ export default function SettingsCurrencyTab({
 
           {/* Moroccan Dirham Symbol Variant Selector */}
           {currencyCode === 'MAD' && (
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+            <div className="p-4 rounded-lg bg-slate-50 border border-slate-300 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h4 className="text-xs font-bold text-slate-900">
@@ -245,7 +245,7 @@ export default function SettingsCurrencyTab({
                     Choisissez comment représenter le Dirham dans les tableaux, KPIs et bons de commande.
                   </p>
                 </div>
-                <span className="text-[11px] font-mono font-bold text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 self-start sm:self-auto">
+                <span className="text-[11px] font-mono font-bold text-sky-800 bg-white px-2.5 py-1 rounded-md border border-slate-300 self-start sm:self-auto">
                   ISO 4217: MAD (504)
                 </span>
               </div>
@@ -259,10 +259,10 @@ export default function SettingsCurrencyTab({
                       type="button"
                       data-testid={`mad-symbol-${v.id}`}
                       onClick={() => handleSelectMadVariant(v.id)}
-                      className={`px-3.5 py-2.5 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                      className={`px-3.5 py-2.5 rounded-lg border text-left transition cursor-pointer flex items-center justify-between ${
                         active
-                          ? 'bg-indigo-600 text-white border-indigo-600 font-bold shadow-2xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300'
+                          ? 'bg-sky-600 text-white border-slate-900 font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
+                          : 'bg-white text-slate-700 border-slate-300 hover:border-slate-600'
                       }`}
                     >
                       <span className="text-xs">
@@ -270,7 +270,7 @@ export default function SettingsCurrencyTab({
                       </span>
                       <span
                         className={`font-mono text-xs px-2 py-0.5 rounded ${
-                          active ? 'bg-indigo-700 text-white' : 'bg-slate-100 text-slate-800'
+                          active ? 'bg-sky-800 text-white' : 'bg-slate-100 text-slate-800'
                         }`}
                       >
                         {v.example}
@@ -321,7 +321,7 @@ export default function SettingsCurrencyTab({
                     max={2099}
                     value={fiscalYearInput}
                     onChange={(e) => setFiscalYearInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-indigo-600 outline-none"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-400 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-sky-600 outline-none"
                   />
                 </div>
               </div>
@@ -339,13 +339,13 @@ export default function SettingsCurrencyTab({
                     step={0.5}
                     value={vatInput}
                     onChange={(e) => setVatInput(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-indigo-600 outline-none"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-400 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-sky-600 outline-none"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-slate-200">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Taux 1 MAD ➔ USD ($)
@@ -356,7 +356,7 @@ export default function SettingsCurrencyTab({
                   min="0.0001"
                   value={usdRateInput}
                   onChange={(e) => setUsdRateInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-indigo-600 outline-none"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-400 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-sky-600 outline-none"
                 />
               </div>
 
@@ -370,12 +370,12 @@ export default function SettingsCurrencyTab({
                   min="0.0001"
                   value={eurRateInput}
                   onChange={(e) => setEurRateInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-indigo-600 outline-none"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-400 bg-slate-50 focus:bg-white text-xs font-mono font-bold text-slate-900 focus:border-sky-600 outline-none"
                 />
               </div>
             </div>
 
-            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3">
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center justify-between gap-3">
               <div>
                 <span className="text-xs font-bold text-slate-800 block">
                   Conversion mathématique automatique à l&apos;affichage
@@ -391,7 +391,7 @@ export default function SettingsCurrencyTab({
                   if (!canManageSettings) return;
                   updateConfig({ applyExchangeRateConversion: e.target.checked });
                 }}
-                className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shrink-0"
+                className="w-4 h-4 rounded border-slate-400 text-sky-600 focus:ring-sky-500 cursor-pointer shrink-0"
               />
             </div>
           </div>
@@ -405,12 +405,12 @@ export default function SettingsCurrencyTab({
           icon={<Info className="w-4 h-4" />}
         >
           <div className="space-y-4">
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-2.5">
-              <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-200/80">
+            <div className="bg-slate-50 rounded-lg p-4 border border-slate-300 space-y-2.5">
+              <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-300">
                 <span className="font-bold text-slate-700">
                   Simulation Bon de Commande ({config.fiscalYear})
                 </span>
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-white border border-slate-200 text-indigo-700 font-bold">
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-white border border-slate-300 text-sky-800 font-bold">
                   ISO: {spec.code} ({spec.numericIsoCode})
                 </span>
               </div>
@@ -429,9 +429,9 @@ export default function SettingsCurrencyTab({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-200/80">
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-300">
                 <span className="font-bold text-slate-800">Total TTC Facturé</span>
-                <span className="font-mono font-extrabold text-indigo-700 text-sm">
+                <span className="font-mono font-extrabold text-sky-800 text-sm">
                   {formatCurrency(sampleTtcAmount, { decimals: 2 })}
                 </span>
               </div>

@@ -135,7 +135,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   // Modals state
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showEquipmentModal, setShowEquipmentModal] = useState(false);
-  const [editingEquipment, setEditingEquipment] = useState<any | null>(null);
+  const [editingEquipment, setEditingEquipment] = useState<IMachine | null>(null);
   const [equipForm, setEquipForm] = useState({
     id_machine_registered: '',
     designation: '',
@@ -152,7 +152,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
 
   // System Type Create / Edit Modal state
   const [showTypeModal, setShowTypeModal] = useState(false);
-  const [editingType, setEditingType] = useState<any | null>(null);
+  const [editingType, setEditingType] = useState<IGeneralSystemType | null>(null);
   const [typeForm, setTypeForm] = useState({
     code: '',
     name: '',
@@ -160,7 +160,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   const [typeFormError, setTypeFormError] = useState('');
 
   // Archive / Delete Confirmation Modal state
-  const [archiveTarget, setArchiveTarget] = useState<any | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<IMachine | null>(null);
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -205,7 +205,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
 
   // Normalized Lookup Maps (supporting both id/name and id_zone/libelle or id_technician/nom)
   const systemTypeMap = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, IGeneralSystemType>();
     (generalSystemTypes || []).forEach((t) => {
       if (t && t.id) map.set(String(t.id), t);
     });
@@ -221,7 +221,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   }, [zones]);
 
   const zoneMap = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; raw: any }>();
+    const map = new Map<string, { id: string; name: string; raw: IZone }>();
     normalizedZones.forEach((z) => {
       if (z.id) map.set(z.id, z);
     });
@@ -507,7 +507,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   };
 
   // Open Edit Equipment Modal
-  const openEditEquipmentModal = (equip: any) => {
+  const openEditEquipmentModal = (equip: IMachine) => {
     setEditingEquipment(equip);
     setEquipForm({
       id_machine_registered: equip.id_machine_registered || '',
@@ -519,7 +519,8 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
       date_mise_en_service:
         equip.date_mise_en_service || new Date().toISOString().split('T')[0],
       compteur_heures: Number(equip.compteur_heures ?? equip.compteur_actuel ?? 0) || 0,
-      compteur_unite_defaut: equip.compteur_unite_defaut || 'HEURES',
+      compteur_unite_defaut:
+        (equip.compteur_unite_defaut as 'HEURES' | 'CYCLES' | 'TONNES' | 'KM') || 'HEURES',
       status: equip.status || 'En Service',
     });
     setEquipFormError('');
@@ -615,7 +616,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   };
 
   // Reactivate archived equipment
-  const handleReactivateEquipment = (equip: any) => {
+  const handleReactivateEquipment = (equip: IMachine) => {
     const { updatedMachine } = transitionMachineLifecycle({
       machine: equip,
       targetStatus: 'En Service',
@@ -636,7 +637,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     setShowTypeModal(true);
   };
 
-  const openEditTypeModal = (sysType: any) => {
+  const openEditTypeModal = (sysType: IGeneralSystemType) => {
     setEditingType(sysType);
     setTypeForm({
       code: sysType.code || '',
@@ -687,7 +688,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         return;
       }
       if (setGeneralSystemTypes) {
-        setGeneralSystemTypes((prev: any[]) =>
+        setGeneralSystemTypes((prev: IGeneralSystemType[]) =>
           (prev || []).map((t) =>
             t.id === editingType.id ? { ...t, code: cleanCode, name: cleanName } : t
           )
@@ -730,7 +731,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   };
 
   // Canonical DataGrid Columns for Equipments (matching UtilisateursView 100%)
-  const equipmentColumns = useMemo<GmaoColumn<any>[]>(() => {
+  const equipmentColumns = useMemo<GmaoColumn<IMachine>[]>(() => {
     return [
       {
         key: 'id_machine_registered',
@@ -1036,7 +1037,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   ]);
 
   // Canonical DataGrid Columns for System Types
-  const systemTypeColumns = useMemo<GmaoColumn<any>[]>(() => {
+  const systemTypeColumns = useMemo<GmaoColumn<IGeneralSystemType>[]>(() => {
     return [
       {
         key: 'code',

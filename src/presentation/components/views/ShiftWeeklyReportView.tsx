@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Logger } from '../../../core/logger/LoggerService';
 import {
   Calendar,
   Clock,
@@ -263,7 +264,7 @@ export default function ShiftWeeklyReportView({
       const fileName = MonthlyReportExportService.exportShiftWeeklyReportToExcel(report);
       showToast?.(`Rapport d'exploitation multi-feuilles exporté : ${fileName}`, 'success');
     } catch (err) {
-      console.error('Failed to export shift/weekly Excel:', err);
+      Logger.error('Failed to export shift/weekly Excel:', err);
       showToast?.("Erreur lors de l'export Excel (.xlsx)", 'error');
     }
   };
@@ -283,7 +284,7 @@ export default function ShiftWeeklyReportView({
       URL.revokeObjectURL(url);
       showToast?.('Rapport (KPIs + Coûts Machines + Mouvements validés) exporté en CSV', 'success');
     } catch (err) {
-      console.error('Failed to export shift/weekly CSV:', err);
+      Logger.error('Failed to export shift/weekly CSV:', err);
       showToast?.("Erreur lors de l'export CSV", 'error');
     }
   };
@@ -303,7 +304,7 @@ export default function ShiftWeeklyReportView({
       URL.revokeObjectURL(url);
       showToast?.('Synthèse des coûts officiels & mouvements validés exportée en JSON', 'success');
     } catch (err) {
-      console.error('Failed to export shift/weekly JSON:', err);
+      Logger.error('Failed to export shift/weekly JSON:', err);
       showToast?.("Erreur lors de l'export JSON", 'error');
     }
   };

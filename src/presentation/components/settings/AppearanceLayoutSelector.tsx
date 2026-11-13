@@ -264,9 +264,9 @@ export function AppearanceLayoutSelector({
   };
 
   const activeOptionCardClass =
-    'border-accent-main bg-accent-subtle/50 ring-2 ring-accent/20 shadow-xs';
+    'border-slate-900 bg-sky-50/70 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]';
   const inactiveOptionCardClass =
-    'border-slate-200 bg-white hover:border-slate-300';
+    'border-slate-300 bg-white hover:border-slate-600';
 
   return (
     <div className={`w-full space-y-6 text-slate-800 ${className}`}>
@@ -358,7 +358,7 @@ export function AppearanceLayoutSelector({
                 )}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Smartphone className="w-4 h-4 text-purple-600" />
+                    <Smartphone className="w-4 h-4 text-sky-700" />
                     <span className="font-bold text-xs text-slate-900">
                       Compagnon
                     </span>
@@ -741,7 +741,7 @@ export function AppearanceLayoutSelector({
               {/* Option Animations */}
               <div className="py-2.5 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <Sparkles className="w-4 h-4 text-purple-500 mt-0.5 shrink-0" />
+                  <Sparkles className="w-4 h-4 text-sky-700 mt-0.5 shrink-0" />
                   <div>
                     <span className="text-xs font-bold text-slate-900 block">
                       Transitions et animations fluides (60fps)

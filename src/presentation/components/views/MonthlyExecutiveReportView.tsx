@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Logger } from '../../../core/logger/LoggerService';
 import {
   FileBarChart2,
   Printer,
@@ -215,7 +216,7 @@ export default function MonthlyExecutiveReportView({
       });
       showToast?.(`Rapport mensuel exporté vers Excel (${file})`, 'success');
     } catch (err) {
-      console.error('Failed to export monthly executive report:', err);
+      Logger.error('Failed to export monthly executive report:', err);
       showToast?.("Erreur lors de l'export Excel du rapport mensuel", 'error');
     }
   };

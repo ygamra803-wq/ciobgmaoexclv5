@@ -691,7 +691,7 @@ export default function TypeView({
               options={[
                 { value: 'ALL', label: `Tous les groupes PDR (${types.length})` },
                 { value: 'UNASSIGNED', label: 'Non classés (Sans Groupe)' },
-                ...activeGroups.map((g) => ({
+                ...activePdrGroups.map((g) => ({
                   value: g.id,
                   label: `${g.code} — ${g.libelle}`,
                 })),

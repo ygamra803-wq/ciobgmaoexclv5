@@ -48,7 +48,7 @@ export default function SettingsJsonEditorTab({
               <select
                 value={jsonTarget}
                 onChange={(e) => setJsonTarget(e.target.value)}
-                className="appearance-none bg-white border border-slate-300 rounded-xl pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition cursor-pointer"
+                className="appearance-none bg-white border border-slate-400 rounded-lg pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 transition cursor-pointer"
               >
                 <optgroup label="1. Stock PDR & Mouvements">
                   <option value="rawStock">Articles &amp; Stock PDR (rawStock)</option>
@@ -135,8 +135,8 @@ export default function SettingsJsonEditorTab({
           )}
 
           {jsonTarget === 'users' && (
-            <div className="p-3.5 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-900 text-xs font-bold flex items-center gap-2">
-              <Lock className="w-4 h-4 text-indigo-600 shrink-0" />
+            <div className="p-3.5 bg-sky-50 border border-sky-300 rounded-lg text-slate-900 text-xs font-bold flex items-center gap-2">
+              <Lock className="w-4 h-4 text-sky-700 shrink-0" />
               <span>
                 Sécurité : Les comptes et mots de passe sont chiffrés dans le coffre-fort AES-256 (onglet{' '}
                 <b>Sécurité &amp; Comptes</b>). Cet aperçu est en lecture seule.
@@ -144,11 +144,11 @@ export default function SettingsJsonEditorTab({
             </div>
           )}
 
-          <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-2xs">
-            <div className="bg-slate-100/90 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+          <div className="rounded-lg border border-slate-400 overflow-hidden bg-white shadow-2xs">
+            <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-300 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-700">Collection Active :</span>
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-xs font-mono font-bold text-indigo-700">
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-400 text-xs font-mono font-bold text-sky-800">
                   {jsonTarget}.json
                 </span>
                 {isJsonModified && (

@@ -1,3 +1,5 @@
+import { Logger } from '../core/logger/LoggerService';
+
 /**
  * خدمة المراقبة والتحليلات - GMAO Nexus Monitoring & Analytics Service
  */
@@ -81,7 +83,7 @@ class MonitoringService {
       this.events.shift();
     }
 
-    console.log('📊 حدث مسجل:', event);
+    Logger.info('📊 حدث مسجل:', event);
   }
 
   /**
@@ -120,7 +122,7 @@ class MonitoringService {
     }
 
     if (severity !== 'normal') {
-      console.warn(message);
+      Logger.warn(message);
       this.recordEvent('performance_threshold_exceeded', {
         operationName,
         duration,
@@ -202,10 +204,8 @@ class MonitoringService {
    */
   printReport() {
     const report = this.getPerformanceReport();
-    console.group('📊 تقرير الأداء');
-    console.table(report.operations);
-    console.log('💾 الذاكرة:', report.memory);
-    console.groupEnd();
+    Logger.info('📊 تقرير الأداء', report.operations);
+    Logger.info('💾 الذاكرة:', report.memory);
   }
 
   /**

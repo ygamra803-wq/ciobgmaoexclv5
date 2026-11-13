@@ -41,9 +41,8 @@ import {
 
 const AVAILABLE_POLICY_TAGS: { value: MaterialPolicyTag; label: string }[] = [
   { value: 'REPLACING', label: 'REPLACING (Remplacement Standard PDR)' },
-  { value: 'CONSUMABLE', label: 'CONSUMABLE (Consommable Courant)' },
-  { value: 'REPAIRABLE', label: 'REPAIRABLE (Réparable)' },
-  { value: 'FABRICABLE', label: 'FABRICABLE (Usinable Atelier)' },
+  { value: 'REPAIRABLE', label: 'REPAIRABLE (Réparable / Révision)' },
+  { value: 'MODIFYING', label: 'MODIFYING (Modification / Adaptation)' },
 ];
 
 interface PdrGroupViewProps {

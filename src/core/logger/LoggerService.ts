@@ -17,33 +17,54 @@ export class Logger {
     this.currentLevel = this.LOG_LEVELS[level] || this.LOG_LEVELS.INFO;
   }
 
-  static debug(message: string, data: any = {}, context = '') {
+  private static resolveArgs(data: unknown = {}, context: unknown = ''): { resolvedData: unknown; resolvedContext: string } {
+    if (typeof data === 'string' && context !== '' && typeof context !== 'string') {
+      return { resolvedData: context, resolvedContext: data };
+    }
+    return {
+      resolvedData: data,
+      resolvedContext: typeof context === 'string' ? context : '',
+    };
+  }
+
+  private static formatMessage(message: string | unknown): string {
+    if (typeof message === 'string') return message;
+    if (message instanceof Error) return message.message;
+    return String(message ?? '');
+  }
+
+  static debug(message: string | unknown, data: unknown = {}, context: unknown = '') {
     if (this.currentLevel <= this.LOG_LEVELS.DEBUG) {
-      console.log(`🔵 [DEBUG] ${context ? `[${context}] ` : ''}${message}`, data);
+      const { resolvedData, resolvedContext } = this.resolveArgs(data, context);
+      console.log(`🔵 [DEBUG] ${resolvedContext ? `[${resolvedContext}] ` : ''}${this.formatMessage(message)}`, resolvedData);
     }
   }
 
-  static info(message: string, data: any = {}, context = '') {
+  static info(message: string | unknown, data: unknown = {}, context: unknown = '') {
     if (this.currentLevel <= this.LOG_LEVELS.INFO) {
-      console.log(`🟢 [INFO] ${context ? `[${context}] ` : ''}${message}`, data);
+      const { resolvedData, resolvedContext } = this.resolveArgs(data, context);
+      console.log(`🟢 [INFO] ${resolvedContext ? `[${resolvedContext}] ` : ''}${this.formatMessage(message)}`, resolvedData);
     }
   }
 
-  static warn(message: string, data: any = {}, context = '') {
+  static warn(message: string | unknown, data: unknown = {}, context: unknown = '') {
     if (this.currentLevel <= this.LOG_LEVELS.WARN) {
-      console.warn(`🟡 [WARN] ${context ? `[${context}] ` : ''}${message}`, data);
+      const { resolvedData, resolvedContext } = this.resolveArgs(data, context);
+      console.warn(`🟡 [WARN] ${resolvedContext ? `[${resolvedContext}] ` : ''}${this.formatMessage(message)}`, resolvedData);
     }
   }
 
-  static error(message: string, error: any = {}, context = '') {
+  static error(message: string | unknown, error: unknown = {}, context: unknown = '') {
     if (this.currentLevel <= this.LOG_LEVELS.ERROR) {
-      console.error(`🔴 [ERROR] ${context ? `[${context}] ` : ''}${message}`, error);
+      const { resolvedData, resolvedContext } = this.resolveArgs(error, context);
+      console.error(`🔴 [ERROR] ${resolvedContext ? `[${resolvedContext}] ` : ''}${this.formatMessage(message)}`, resolvedData);
     }
   }
 
-  static fatal(message: string, error: any = {}, context = '') {
+  static fatal(message: string | unknown, error: unknown = {}, context: unknown = '') {
     if (this.currentLevel <= this.LOG_LEVELS.FATAL) {
-      console.error(`⛔ [FATAL] ${context ? `[${context}] ` : ''}${message}`, error);
+      const { resolvedData, resolvedContext } = this.resolveArgs(error, context);
+      console.error(`⛔ [FATAL] ${resolvedContext ? `[${resolvedContext}] ` : ''}${this.formatMessage(message)}`, resolvedData);
     }
   }
 

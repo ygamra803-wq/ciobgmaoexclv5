@@ -21,6 +21,7 @@ import { filterActiveMachines, getMachineAssetClass } from '../../../utils/activ
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { Logger } from '../../../core/logger/LoggerService';
 
 export default function AnalyseCorrectiveTab({
   interventions = [],
@@ -393,7 +394,7 @@ export default function AnalyseCorrectiveTab({
 
       showToast?.('Export Excel de l\'analyse de Pareto généré avec succès (.xlsx)', 'success');
     } catch (err) {
-      console.error(err);
+      Logger.error(err);
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };

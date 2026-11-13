@@ -1,4 +1,5 @@
 import { indexedDBService } from '../utils/indexedDBService';
+import { Logger } from '../core/logger/LoggerService';
 
 /**
  * Production Logger Service & Alert System
@@ -89,21 +90,16 @@ class ProductionLoggerService {
   }
 
   printToConsole(entry: any) {
-    const styles: Record<string, string> = {
-      ERROR: 'color: #ef4444; font-weight: bold;',
-      WARN: 'color: #f59e0b; font-weight: bold;',
-      INFO: 'color: #3b82f6;',
-      DEBUG: 'color: #6b7280;',
-    };
-    const style = styles[entry.level] || '';
     const prefix = `[${entry.timestamp}] [${entry.namespace}] [${entry.level}]: ${entry.message}`;
 
     if (entry.level === 'ERROR') {
-      console.error(prefix, entry.data || '');
+      Logger.error(prefix, entry.data || '');
     } else if (entry.level === 'WARN') {
-      console.warn(prefix, entry.data || '');
+      Logger.warn(prefix, entry.data || '');
+    } else if (entry.level === 'DEBUG') {
+      Logger.debug(prefix, entry.data || '');
     } else {
-      console.log(`%c${prefix}`, style, entry.data || '');
+      Logger.info(prefix, entry.data || '');
     }
   }
 

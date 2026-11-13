@@ -5,7 +5,7 @@ import { SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Modals for Settings Audit: Zone, User, Article, and Relink modals.
- * Unified light headers, indigo/slate badges, and SETTINGS_BUTTON_STYLES.
+ * Unified light headers, slate/sky badges, and SETTINGS_BUTTON_STYLES.
  */
 export function AuditZoneModal({
   isOpen,
@@ -35,12 +35,12 @@ export function AuditZoneModal({
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
               <MapPin className="w-4 h-4" />
             </div>
             <div>
@@ -70,7 +70,7 @@ export function AuditZoneModal({
               onChange={(e) =>
                 setAuditZoneForm((prev: any) => ({ ...prev, libelle: e.target.value }))
               }
-              className="w-full text-xs font-medium border border-slate-300 rounded-xl p-2.5 focus:outline-none focus:border-indigo-500"
+              className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 focus:outline-none focus:border-sky-600"
               placeholder="ex: Atelier Conditionnement"
             />
           </div>
@@ -146,12 +146,12 @@ export function AuditUserModal({
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
               <Users className="w-4 h-4" />
             </div>
             <div>
@@ -171,12 +171,12 @@ export function AuditUserModal({
           </button>
         </div>
 
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-300 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-600">
               ID Sécurisé généré :
             </span>
-            <span className="font-mono font-extrabold text-xs bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 rounded-md">
+            <span className="font-mono font-extrabold text-xs bg-sky-50 text-sky-900 border border-slate-800 px-2.5 py-0.5 rounded-md">
               {getNextUserId(auditUserForm.type)}
             </span>
           </div>
@@ -195,7 +195,7 @@ export function AuditUserModal({
               onChange={(e) =>
                 setAuditUserForm((prev: any) => ({ ...prev, type: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
             >
               <option value="TECHNICIEN">Technicien (Maintenance / GMAO)</option>
               <option value="OPERATEUR">Opérateur (Production)</option>
@@ -213,7 +213,7 @@ export function AuditUserModal({
               onChange={(e) =>
                 setAuditUserForm((prev: any) => ({ ...prev, nom: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               placeholder="Nom de l'utilisateur"
             />
           </div>
@@ -229,7 +229,7 @@ export function AuditUserModal({
                 onChange={(e) =>
                   setAuditUserForm((prev: any) => ({ ...prev, specialite: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
                 placeholder="Spécialité du technicien (ex: Mécanique, Électricité)"
               />
             </div>
@@ -243,7 +243,7 @@ export function AuditUserModal({
                 onChange={(e) =>
                   setAuditUserForm((prev: any) => ({ ...prev, id_zone: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
               >
                 <option value="">Sélectionner une zone</option>
                 {zones.map((z: any) => (
@@ -346,12 +346,12 @@ export function AuditArticleModal({
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
               <Package className="w-4 h-4" />
             </div>
             <div>
@@ -382,7 +382,7 @@ export function AuditArticleModal({
               onChange={(e) =>
                 setAuditArticleForm((p: any) => ({ ...p, ref: e.target.value }))
               }
-              className="w-full text-xs font-mono font-bold border border-slate-300 rounded-xl p-2.5 text-slate-800 bg-slate-50"
+              className="w-full text-xs font-mono font-bold border border-slate-400 rounded-lg p-2.5 text-slate-800 bg-slate-50"
               readOnly
             />
           </div>
@@ -397,7 +397,7 @@ export function AuditArticleModal({
               onChange={(e) =>
                 setAuditArticleForm((p: any) => ({ ...p, designation: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               placeholder="ex: Roulement à billes 6204-2RS"
             />
           </div>
@@ -412,7 +412,7 @@ export function AuditArticleModal({
                 onChange={(e) =>
                   setAuditArticleForm((p: any) => ({ ...p, type: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
               >
                 {(types || []).map((t: any) => (
                   <option key={t.id_type || t} value={t.id_type || t}>
@@ -432,7 +432,7 @@ export function AuditArticleModal({
                 onChange={(e) =>
                   setAuditArticleForm((p: any) => ({ ...p, emplacement: e.target.value }))
                 }
-                className="w-full text-xs font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
                 placeholder="ex: Magasin PDR"
               />
             </div>
@@ -453,7 +453,7 @@ export function AuditArticleModal({
                     stockInitial: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-mono font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               />
             </div>
 
@@ -471,7 +471,7 @@ export function AuditArticleModal({
                     seuil: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-300 rounded-xl p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500"
+                className="w-full text-xs font-mono font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
               />
             </div>
           </div>
@@ -561,12 +561,12 @@ export function AuditRelinkModal({
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center font-bold">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
               <Link2 className="w-4 h-4" />
             </div>
             <div>
@@ -586,14 +586,14 @@ export function AuditRelinkModal({
           </button>
         </div>
 
-        <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-100 space-y-1.5 text-xs text-indigo-950">
+        <div className="p-3 bg-sky-50/70 rounded-xl border border-sky-300 space-y-1.5 text-xs text-slate-900">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-600">Élément à corriger :</span>
-            <span className="font-mono font-bold px-2 py-0.5 bg-white text-indigo-900 rounded border border-indigo-200">
+            <span className="font-mono font-bold px-2 py-0.5 bg-white text-sky-900 rounded border border-slate-800">
               {relinkData.oldKey}
             </span>
           </div>
-          <div className="text-[11px] text-indigo-800 leading-relaxed">
+          <div className="text-[11px] text-slate-700 leading-relaxed">
             Ce code apparaît dans <b>{relinkData.occurrencesCount}</b> écriture(s). Choisissez l&apos;élément officiel ci-dessous pour rediriger et corriger toutes ces références automatiquement.
           </div>
         </div>
@@ -607,7 +607,7 @@ export function AuditRelinkModal({
             onChange={(e) =>
               setRelinkData((prev: any) => ({ ...prev, targetKey: e.target.value }))
             }
-            className="w-full text-xs font-semibold border border-slate-300 rounded-xl p-2.5 bg-white text-slate-800 focus:outline-none focus:border-indigo-500"
+            className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
           >
             <option value="">Sélectionner un élément valide...</option>
             {relinkData.entityType === 'machine' &&

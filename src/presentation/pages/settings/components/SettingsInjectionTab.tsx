@@ -162,7 +162,7 @@ export default function SettingsInjectionTab({
             <select
               value={selectedDemoSection}
               onChange={(e) => setSelectedDemoSection(e.target.value)}
-              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-600 cursor-pointer"
+              className="px-3 py-2 rounded-lg border border-slate-400 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-sky-600 cursor-pointer"
               title="Choisir la section cible"
             >
               {Object.entries(sectionLabels).map(([key, label]) => (
@@ -224,13 +224,13 @@ export default function SettingsInjectionTab({
             return (
               <div
                 key={mod.key}
-                className={`p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col justify-between gap-3 ${
+                className={`p-4 rounded-xl border border-slate-300 bg-slate-50/70 flex flex-col justify-between gap-3 ${
                   mod.fullSpan ? 'col-span-1 sm:col-span-2 lg:col-span-3' : ''
                 }`}
               >
                 <div>
                   <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                    <Icon className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <Icon className="w-3.5 h-3.5 text-sky-700 shrink-0" />
                     <span>{mod.title}</span>
                   </h4>
                   <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{mod.desc}</p>
@@ -278,7 +278,7 @@ export default function SettingsInjectionTab({
                   setIsDemoMode?.(next);
                   onToggleDemoMode?.(next);
                 }}
-                className="w-4 h-4 rounded text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                className="w-4 h-4 rounded text-sky-600 border-slate-400 focus:ring-sky-500 cursor-pointer"
               />
               <span>Afficher les maquettes et fiches d&apos;exemples au démarrage</span>
             </label>

@@ -56,7 +56,7 @@ export default function SettingsMatchingTab({
             <select
               value={auditTarget}
               onChange={(e) => setAuditTarget(e.target.value)}
-              className="appearance-none bg-white border border-slate-300 rounded-xl pl-3.5 pr-9 py-2 text-xs font-bold text-slate-700 shadow-2xs focus:outline-none focus:border-indigo-500 transition cursor-pointer"
+              className="appearance-none bg-white border border-slate-400 rounded-lg pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 transition cursor-pointer"
             >
               <option value="machines">Machines (Parc)</option>
               <option value="articles">Articles &amp; PDR (Stock)</option>
@@ -110,12 +110,12 @@ export default function SettingsMatchingTab({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden max-w-full">
+          <div className="bg-white rounded-xl border border-slate-400 shadow-2xs overflow-hidden max-w-full">
             <div className="max-h-[60vh] overflow-y-auto overflow-x-auto">
               <table className="min-w-[650px] w-full text-left text-xs whitespace-nowrap border-collapse">
-                <thead className="bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 select-none">
+                <thead className="bg-slate-100 text-[11px] font-bold text-slate-800 uppercase tracking-wider border-b border-slate-400 select-none">
                   <tr>
-                    <th className="py-2.5 px-3 text-center w-12 text-slate-500 font-mono text-[10px] bg-slate-100/70 border-r border-slate-200 shrink-0">
+                    <th className="py-2.5 px-3 text-center w-12 text-slate-600 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0">
                       N°
                     </th>
                     <th className="px-3.5 py-2.5">Élément / Utilisateur détecté</th>
@@ -288,8 +288,8 @@ export default function SettingsMatchingTab({
                       }}
                       className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                         auditPageSize === size
-                          ? 'bg-white text-indigo-700 shadow-2xs border border-slate-200'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                          ? 'bg-sky-50 text-slate-950 shadow-2xs border border-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
                       }`}
                     >
                       {size === 0 ? 'Tout' : size}

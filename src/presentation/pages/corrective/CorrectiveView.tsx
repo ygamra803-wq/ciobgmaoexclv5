@@ -23,6 +23,7 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
+import { Logger } from '../../../core/logger/LoggerService';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import {
   isTechnicianRole,
@@ -180,7 +181,7 @@ export default function CorrectiveView({
 
       showToast?.('Export Excel du rapport correctif généré avec succès (.xlsx)', 'success');
     } catch (err) {
-      console.error('Error exporting corrective data:', err);
+      Logger.error('Error exporting corrective data:', err);
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };

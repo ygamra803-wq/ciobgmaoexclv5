@@ -4,8 +4,7 @@ import ErrorBoundary from '../components/common/ErrorBoundary';
 import LoadingSkeleton from '../components/common/LoadingSkeleton';
 import usePageOrchestrator from '../components/common/usePageOrchestrator';
 
-import DashboardView from '../pages/dashboard/DashboardView';
-
+const DashboardView = lazy(() => import('../pages/dashboard/DashboardView'));
 const ValidationCenterView = lazy(() => import('../pages/validation/ValidationCenterView'));
 const FinanceView = lazy(() => import('../pages/finance/FinanceView'));
 const ShiftWeeklyReportView = lazy(() => import('../components/views/ShiftWeeklyReportView'));

@@ -635,9 +635,14 @@ export default function PartDesignationView({
                   id_part: `PRT-${String(nextIdx).padStart(2, '0')}`,
                   ref: `PRT-${String(nextIdx).padStart(2, '0')}`,
                   designation: '',
+                  id_group: '',
                   id_type: partTypes[0]?.id_type || '',
                   seuil: 5,
                   emplacement: '',
+                  matiere_nuance: '',
+                  ref_plan: '',
+                  dimensions_brut: '',
+                  traitement_thermique: '',
                   policy_tags: ['REPAIRABLE', 'REPLACING'],
                 });
                 setShowAddModal(true);

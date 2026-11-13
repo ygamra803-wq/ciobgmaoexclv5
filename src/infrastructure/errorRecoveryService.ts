@@ -1,3 +1,5 @@
+import { Logger } from '../core/logger/LoggerService';
+
 /**
  * خدمة استرجاع الأخطاء الشاملة - GMAO Nexus Error Recovery Service
  */
@@ -19,22 +21,22 @@ class ErrorRecoveryService {
   setupDefaultStrategies() {
     // استراتيجية IndexedDB
     this.registerStrategy('IndexedDBError', async (error: any, context: any) => {
-      console.warn('🔄 محاولة استرجاع IndexedDB...', error?.message);
+      Logger.warn('🔄 محاولة استرجاع IndexedDB...', error?.message);
       
       try {
         if (context.db && typeof context.db.close === 'function' && typeof context.db.open === 'function') {
           // إغلاق وإعادة فتح قاعدة البيانات
           await context.db.close();
           await context.db.open();
-          console.log('✅ تم استرجاع IndexedDB');
+          Logger.info('✅ تم استرجاع IndexedDB');
           return true;
         }
         return false;
       } catch (recoveryError) {
-        console.error('❌ فشل استرجاع IndexedDB:', recoveryError);
+        Logger.error('❌ فشل استرجاع IndexedDB:', recoveryError);
         
         // الرجوع إلى LocalStorage
-        console.warn('⚠️ الرجوع إلى LocalStorage');
+        Logger.warn('⚠️ الرجوع إلى LocalStorage');
         context.fallbackToLocalStorage = true;
         return false;
       }
@@ -42,24 +44,24 @@ class ErrorRecoveryService {
 
     // استراتيجية Network
     this.registerStrategy('NetworkError', async (error: any, context: any) => {
-      console.warn('🔄 محاولة استرجاع الاتصال...', error?.message);
+      Logger.warn('🔄 محاولة استرجاع الاتصال...', error?.message);
       
       // انتظر قبل المحاولة التالية
       await this.sleep(context.retryDelay || 3000);
       
       // تحقق من الاتصال
       if (typeof navigator !== 'undefined' && navigator.onLine) {
-        console.log('✅ تم استرجاع الاتصال');
+        Logger.info('✅ تم استرجاع الاتصال');
         return true;
       }
       
-      console.warn('⚠️ لا يزال لا يوجد اتصال');
+      Logger.warn('⚠️ لا يزال لا يوجد اتصال');
       return false;
     });
 
     // استراتيجية Memory
     this.registerStrategy('MemoryError', async (error: any, context: any) => {
-      console.warn('🔄 محاولة تحرير الذاكرة...', error?.message);
+      Logger.warn('🔄 محاولة تحرير الذاكرة...', error?.message);
       
       // مسح الـ Cache
       if (context.cache && typeof context.cache.clear === 'function') {
@@ -71,20 +73,20 @@ class ErrorRecoveryService {
         (window as any).gc();
       }
       
-      console.log('✅ تم تحرير الذاكرة');
+      Logger.info('✅ تم تحرير الذاكرة');
       return true;
     });
 
     // استراتيجية Quota
     this.registerStrategy('QuotaExceededError', async (error: any, context: any) => {
-      console.warn('🔄 محاولة تحرير المساحة...', error?.message);
+      Logger.warn('🔄 محاولة تحرير المساحة...', error?.message);
       
       // حذف البيانات القديمة
       if (context.db && typeof context.db.cleanOldData === 'function') {
         await context.db.cleanOldData(90); // احذف البيانات القديمة أكثر من 90 يوم
       }
       
-      console.log('✅ تم تحرير المساحة');
+      Logger.info('✅ تم تحرير المساحة');
       return true;
     });
   }
@@ -110,7 +112,7 @@ class ErrorRecoveryService {
     const strategy = this.recoveryStrategies.get(errorType);
 
     if (!strategy) {
-      console.error('❌ لا توجد استراتيجية استرجاع لـ:', errorType);
+      Logger.error('❌ لا توجد استراتيجية استرجاع لـ:', errorType);
       return false;
     }
 
@@ -119,12 +121,12 @@ class ErrorRecoveryService {
       const recovered = await strategy(error, context);
       
       if (recovered) {
-        console.log('✅ تم الاسترجاع بنجاح لـ:', errorType);
+        Logger.info('✅ تم الاسترجاع بنجاح لـ:', errorType);
       }
       
       return recovered;
     } catch (recoveryError) {
-      console.error('❌ خطأ في الاسترجاع:', recoveryError);
+      Logger.error('❌ خطأ في الاسترجاع:', recoveryError);
       return false;
     }
   }
@@ -173,7 +175,7 @@ class ErrorRecoveryService {
       this.errorLog.shift();
     }
 
-    console.error('📋 خطأ مسجل:', entry);
+    Logger.error('📋 خطأ مسجل:', entry);
   }
 
   /**

@@ -14,6 +14,7 @@ import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { Logger } from '../../../core/logger/LoggerService';
 import * as XLSX from 'xlsx';
 
 export default function CatalogueDonneesView({
@@ -114,7 +115,7 @@ export default function CatalogueDonneesView({
         showToast?.('Synchronisation effectuée avec succès !', 'success');
       }
     } catch (e) {
-      console.error(e);
+      Logger.error(e);
       showToast?.('Erreur lors de la synchronisation', 'error');
     } finally {
       setTimeout(() => setIsSyncing(false), 500);
@@ -164,7 +165,7 @@ export default function CatalogueDonneesView({
       XLSX.writeFile(wb, `GMAO_Catalogue_Donnees_${new Date().toISOString().split('T')[0]}.xlsx`);
       showToast?.('Export Excel du catalogue généré avec succès (.xlsx)', 'success');
     } catch (e) {
-      console.error(e);
+      Logger.error(e);
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };

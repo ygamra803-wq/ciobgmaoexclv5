@@ -26,6 +26,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
+import { Logger } from '../../../core/logger/LoggerService';
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
@@ -445,7 +446,7 @@ export default function ClotureRapportsTab({
 
       showToast?.('Export Excel du rapport filtré généré avec succès (.xlsx)', 'success');
     } catch (err) {
-      console.error(err);
+      Logger.error(err);
       showToast?.('Erreur lors de l\'export Excel', 'error');
     }
   };

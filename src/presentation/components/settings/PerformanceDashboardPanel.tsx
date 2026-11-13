@@ -161,7 +161,7 @@ export default function PerformanceDashboardPanel({
         title={
           <span className="flex items-center gap-2 flex-wrap">
             <span>Supervision des Performances &amp; Cache Multi-Niveaux</span>
-            <span className="text-[10px] bg-indigo-50 text-indigo-700 font-mono px-2 py-0.5 rounded-md border border-indigo-200">
+            <span className="text-[10px] bg-sky-50 text-sky-800 font-mono px-2 py-0.5 rounded-md border border-sky-300">
               Moteur Temps Réel
             </span>
           </span>
@@ -223,10 +223,10 @@ export default function PerformanceDashboardPanel({
         </div>
 
         {/* Metric 2: Event Loop Lag */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-indigo-600" /> Lag Thread Principal
+              <Clock className="w-4 h-4 text-sky-700" /> Lag Thread Principal
             </span>
             <span
               className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
@@ -346,10 +346,10 @@ export default function PerformanceDashboardPanel({
           </div>
 
           {/* L2 Persistent Storage Cache Card */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-300">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">L2 - Storage Persistent</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-sky-50 text-sky-800 border border-sky-300 rounded-md font-bold">
                 IndexedDB
               </span>
             </div>
@@ -360,7 +360,7 @@ export default function PerformanceDashboardPanel({
               </div>
               <div className="flex justify-between">
                 <span>Succès (Hits):</span>
-                <span className="font-bold text-indigo-600">{cacheMetrics.l2Hits}</span>
+                <span className="font-bold text-sky-700">{cacheMetrics.l2Hits}</span>
               </div>
             </div>
           </div>
@@ -492,7 +492,7 @@ export default function PerformanceDashboardPanel({
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
             <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <LineChart className="w-4 h-4 text-indigo-600" />
+              <LineChart className="w-4 h-4 text-sky-700" />
               Analyse des Tendances Temporelles (Trend Analysis)
             </h4>
             <p className="text-xs text-slate-500 mt-0.5">

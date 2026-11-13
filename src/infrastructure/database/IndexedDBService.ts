@@ -77,17 +77,39 @@ class IndexedDBService {
   /**
    * Requests browser persistent storage protection so OS/browser never auto-evicts GMAO IndexedDB data.
    */
-  async requestPersistentStorage() {
+  async requestPersistentStorage(): Promise<boolean> {
     try {
       if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
         const isPersisted = await navigator.storage.persisted();
         if (!isPersisted) {
-          await navigator.storage.persist();
+          return await navigator.storage.persist();
         }
+        return isPersisted;
       }
     } catch {
       // Ignore in unsupported environments
     }
+    return false;
+  }
+
+  /**
+   * Returns normalized storage info for SettingsOverviewTab.
+   */
+  async getStorageInfo(allocatedCeilingMB = 1024): Promise<{
+    activeTier: string;
+    usageMB: number;
+    quotaMB: number;
+    usagePercent: number;
+    isPersisted: boolean;
+  }> {
+    const quotaInfo = await this.getStorageQuotaInfo(allocatedCeilingMB);
+    return {
+      activeTier: this.isSupported() ? 'IndexedDB' : 'LocalStorage (Fallback)',
+      usageMB: Number(quotaInfo.usageMB) || 0,
+      quotaMB: Number(quotaInfo.allocatedCeilingMB) || allocatedCeilingMB,
+      usagePercent: Number(quotaInfo.percentage) || 0,
+      isPersisted: Boolean(quotaInfo.isPersisted),
+    };
   }
 
   /**

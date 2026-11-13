@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Loader2, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useWizard } from './WizardContext';
 import { StepHeader } from './StepHeader';
+import { Logger } from '../../../../core/logger/LoggerService';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -32,7 +33,7 @@ class StepErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[GMAO Wizard StepErrorBoundary]', error, errorInfo);
+    Logger.error('[GMAO Wizard StepErrorBoundary]', error, errorInfo);
   }
 
   public render() {

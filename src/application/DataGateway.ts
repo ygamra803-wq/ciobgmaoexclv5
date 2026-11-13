@@ -16,6 +16,7 @@ import {
   type BudgetAuditEntry,
 } from '../domain/finance/entities/FinancialBudget';
 import type { GmaoStoreSetters } from '../types/store';
+import type { IPartGroup, IPartDesignation } from '../types/domain';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
@@ -946,9 +947,9 @@ export const DataGateway = {
     if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
     if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
     if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
-    if (setters.setPartGroups) setters.setPartGroups(seedPartGroups);
+    if (setters.setPartGroups) setters.setPartGroups(seedPartGroups as IPartGroup[]);
     if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
-    if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations);
+    if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations as IPartDesignation[]);
 
     if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
     this.saveAuditEvents([]);
@@ -1492,9 +1493,9 @@ export const DataGateway = {
         if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
         if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
         if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
-        if (setters.setPartGroups) setters.setPartGroups(seedPartGroups);
+        if (setters.setPartGroups) setters.setPartGroups(seedPartGroups as IPartGroup[]);
         if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
-        if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations);
+        if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations as IPartDesignation[]);
         break;
 
       case 'zones':

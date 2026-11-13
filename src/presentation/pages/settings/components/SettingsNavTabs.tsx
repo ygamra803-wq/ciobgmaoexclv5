@@ -194,7 +194,8 @@ const SETTINGS_TABS_LIST: SettingsTabItem[] = [
 
 /**
  * Top navigation tab bar for SettingsView.
- * Uses a unified industrial light design: single active color, uniform height, and sans-serif subtitles.
+ * Styled in mature Light Excel UI: Industrial Slate surfaces, crisp dark borders on active cell,
+ * and subtle sky-blue active wash.
  */
 export default function SettingsNavTabs({
   activeTab,
@@ -226,17 +227,17 @@ export default function SettingsNavTabs({
         key={tab.id}
         type="button"
         onClick={() => setActiveTab(tab.id)}
-        className={`group relative flex items-center gap-2.5 px-3 py-2.5 min-h-[48px] rounded-xl border text-left transition-all cursor-pointer select-none ${
+        className={`group relative flex items-center gap-2.5 px-3 py-2.5 min-h-[48px] rounded-lg border text-left transition-all cursor-pointer select-none ${
           isActive
-            ? 'bg-indigo-50/90 border-indigo-600 text-slate-900 shadow-2xs ring-1 ring-indigo-600/15'
-            : 'bg-white border-slate-200/90 text-slate-700 hover:bg-slate-50 hover:border-slate-300'
+            ? 'bg-sky-50/90 border-slate-900 text-slate-950 shadow-[2px_2px_0px_0px_rgba(15,23,42,0.85)]'
+            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-600'
         }`}
       >
         <div
-          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+          className={`w-8 h-8 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
             isActive
-              ? 'bg-indigo-600 text-white shadow-2xs'
-              : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200/80 group-hover:text-slate-800'
+              ? 'bg-sky-100 text-sky-900 border-slate-800 shadow-2xs'
+              : 'bg-slate-100 text-slate-700 border-slate-300 group-hover:bg-slate-200/80 group-hover:border-slate-500 group-hover:text-slate-900'
           }`}
         >
           <Icon className="w-4 h-4" />
@@ -246,20 +247,20 @@ export default function SettingsNavTabs({
           <div className="flex items-center justify-between gap-1.5">
             <span
               className={`text-xs font-bold truncate ${
-                isActive ? 'text-indigo-950' : 'text-slate-800'
+                isActive ? 'text-slate-950' : 'text-slate-800'
               }`}
             >
               {tab.title[langKey]}
             </span>
             {tab.id === 'matching' && discoveredItemsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-400 shrink-0">
                 {discoveredItemsCount}
               </span>
             )}
           </div>
           <div
             className={`text-[11px] truncate mt-0.5 ${
-              isActive ? 'text-indigo-700/90 font-medium' : 'text-slate-500'
+              isActive ? 'text-sky-900 font-semibold' : 'text-slate-500'
             }`}
           >
             {tab.sub[langKey]}
@@ -270,11 +271,14 @@ export default function SettingsNavTabs({
   };
 
   return (
-    <div className="space-y-3" data-testid="settings-nav-tabs">
+    <div
+      className="space-y-3 bg-slate-100/80 p-3 rounded-xl border border-slate-300"
+      data-testid="settings-nav-tabs"
+    >
       {factoryTabs.length > 0 && (
         <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            <Sliders className="w-3.5 h-3.5 text-sky-700" />
             <span>
               {language === 'ar'
                 ? 'إعدادات تشغيل المصنع اليومية'
@@ -290,9 +294,9 @@ export default function SettingsNavTabs({
       )}
 
       {advancedTabs.length > 0 && (
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">
-            <Wrench className="w-3.5 h-3.5 text-slate-500" />
+        <div className="space-y-1.5 pt-2 border-t border-slate-300/80">
+          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
+            <Wrench className="w-3.5 h-3.5 text-slate-700" />
             <span>
               {language === 'ar'
                 ? 'أدوات الصيانة المتقدمة والنظام'

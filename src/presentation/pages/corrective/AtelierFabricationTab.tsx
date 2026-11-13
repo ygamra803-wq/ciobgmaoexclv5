@@ -4,14 +4,11 @@ import {
   Plus,
   Search,
   CheckCircle2,
-  Clock,
   Hammer,
-  PackageCheck,
   XCircle,
   FileText,
   ArrowRight,
   AlertTriangle,
-  Cog,
   SlidersHorizontal,
   RotateCcw,
   FileSpreadsheet,
@@ -30,7 +27,6 @@ import {
 import * as XLSX from 'xlsx';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
-import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import PeriodFilterBar from '../../components/common/PeriodFilterBar';
 import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePeriodUtils';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -38,6 +34,9 @@ import { useGmaoStore } from '../../../store/useGmaoStore';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { Logger } from '../../../core/logger/LoggerService';
+import type { IMachine } from '../../../types/domain';
+import type { CorrectiveInterventionItem } from '../../../types/store';
 import {
   getAllowedNextWorkshopStatuses,
   isWorkshopOrderActive,
@@ -47,42 +46,18 @@ import {
   type WorkshopOrderStatus,
   type WorkshopOrderType,
 } from '../../../domain/corrective/workshopOrderService';
+import { AtelierKpiGrid } from './components/AtelierKpiGrid';
+import { AtelierCreateOrderForm } from './components/AtelierCreateOrderForm';
+import {
+  ACTION_BUTTON_LABELS,
+  AtelierOrderCard,
+  STATUS_BADGE_STYLES,
+} from './components/AtelierOrderCard';
 
 interface AtelierFabricationTabProps {
   onNavigateToBt?: (btKey: string) => void;
   showToast?: (message: string, type?: string) => void;
 }
-
-const STATUS_BADGE_STYLES: Record<WorkshopOrderStatus, string> = {
-  EMIS: 'bg-amber-100 text-amber-900 border-amber-300',
-  EN_COURS_FABRICATION: 'bg-blue-100 text-blue-900 border-blue-300',
-  PRET_LIVRAISON: 'bg-indigo-100 text-indigo-900 border-indigo-300',
-  RECEPTIONNE_MONTAGE: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-  ANNULE: 'bg-slate-100 text-slate-600 border-slate-300 line-through',
-};
-
-const ACTION_BUTTON_LABELS: Record<WorkshopOrderStatus, { label: string; style: string }> = {
-  EMIS: {
-    label: 'Émettre',
-    style: 'bg-amber-600 hover:bg-amber-700 text-white shadow-2xs',
-  },
-  EN_COURS_FABRICATION: {
-    label: 'Lancer Fabrication',
-    style: 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs',
-  },
-  PRET_LIVRAISON: {
-    label: 'Prêt Livraison',
-    style: 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs',
-  },
-  RECEPTIONNE_MONTAGE: {
-    label: 'Réceptionner & Monter',
-    style: 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs',
-  },
-  ANNULE: {
-    label: 'Annuler',
-    style: 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200',
-  },
-};
 
 export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   onNavigateToBt,
@@ -110,7 +85,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
   const machineLookup = useMemo(() => {
     const map = new Map<string, string>();
-    (machines || []).forEach((m: any) => {
+    (machines || []).forEach((m: IMachine) => {
       const code = String(m.id_machine_registered || m.id_machine || m.code || m.id || '').trim();
       const nom = String(m.nom || m.designation || m.name || '').trim();
       if (code) map.set(code.toUpperCase(), nom);
@@ -119,7 +94,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   }, [machines]);
 
   const openBts = useMemo(() => {
-    return (correctiveInterventions || []).filter((item: any) => {
+    return (correctiveInterventions || []).filter((item: CorrectiveInterventionItem) => {
       const st = String(item.statut || '').trim().toUpperCase();
       const closed = String(item.action_fermee || '').trim().toUpperCase() === 'OUI';
       return !closed && st !== 'CLOTURE' && st !== 'ANNULE';
@@ -130,7 +105,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [machineFilter, setMachineFilter] = useState<string>('ALL');
-  const [btLinkFilter, setBtLinkFilter] = useState<string>('ALL'); // 'ALL' | 'WITH_BT' | 'AUTONOME'
+  const [btLinkFilter, setBtLinkFilter] = useState<string>('ALL');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterState>({ preset: 'ALL' });
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -192,7 +167,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   // Available machines for filter dropdown
   const availableMachines = useMemo(() => {
     const set = new Set<string>();
-    activeMachines.forEach((m: any) => {
+    activeMachines.forEach((m: IMachine) => {
       const code = String(m.id_machine_registered || m.id_machine || m.code || m.id || '').trim();
       if (code) set.add(code);
     });
@@ -202,7 +177,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [activeMachines, workshopOrders]);
 
-  // Available dates for PeriodFilterBar
   const availableOrderDates = useMemo(() => {
     return workshopOrders.map((o) => o.date_emission || o.date_statut);
   }, [workshopOrders]);
@@ -229,7 +203,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
       if (btLinkFilter === 'WITH_BT' && !ord.id_bt) return false;
       if (btLinkFilter === 'AUTONOME' && Boolean(ord.id_bt)) return false;
 
-      // Period filter
       const ordDate = ord.date_emission || ord.date_statut;
       if (!isDateInPeriod(ordDate, periodFilter)) return false;
 
@@ -263,12 +236,14 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
   // Sorted Orders
   const sortedOrders = useMemo(() => {
     const list = [...filteredOrders];
-    list.sort((a: any, b: any) => {
-      let valA = a[sortField] ?? '';
-      let valB = b[sortField] ?? '';
+    list.sort((a: IWorkshopOrder, b: IWorkshopOrder) => {
+      const recordA = a as unknown as Record<string, unknown>;
+      const recordB = b as unknown as Record<string, unknown>;
+      let valA: string | number = String(recordA[sortField] ?? '');
+      let valB: string | number = String(recordB[sortField] ?? '');
 
-      if (typeof valA === 'string') valA = valA.toLowerCase();
-      if (typeof valB === 'string') valB = valB.toLowerCase();
+      valA = valA.toLowerCase();
+      valB = valB.toLowerCase();
 
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
@@ -366,7 +341,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         'success'
       );
     } catch (err) {
-      console.error(err);
+      Logger.error(err);
       showToast?.("Erreur lors de l'export Excel", 'error');
     }
   };
@@ -375,7 +350,8 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
     setFormBtId(btKey);
     if (btKey) {
       const found = openBts.find(
-        (b: any) => String(b.num_bt || b.id) === btKey || String(b.id) === btKey
+        (b: CorrectiveInterventionItem) =>
+          String(b.num_bt || b.id) === btKey || String(b.id) === btKey
       );
       if (found) {
         const mCode = String(found.code_machine || found.machine || '').trim();
@@ -590,7 +566,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         label: 'Statut Atelier',
         colLetter: 'Col G',
         icon: Radio,
-        align: 'center',
+        align: 'center' as const,
         sortable: true,
         render: (ord: IWorkshopOrder) => (
           <div className="flex flex-col items-center gap-1 whitespace-nowrap">
@@ -616,7 +592,7 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         label: 'Progression Cycle',
         colLetter: 'Col H',
         icon: Play,
-        align: 'center',
+        align: 'center' as const,
         headerClassName: 'w-56 text-center whitespace-nowrap',
         render: (ord: IWorkshopOrder) => {
           const nextStatuses = getAllowedNextWorkshopStatuses(ord.statut);
@@ -676,93 +652,17 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 1. Top 5 Primary KPI Metrics Bar (Unified GmaoKpiGrid + GmaoKpiCard) */}
-      <GmaoKpiGrid columns={5}>
-        <GmaoKpiCard
-          title="Total Bons Atelier"
-          value={kpis.total}
-          unit="bons"
-          icon={Hammer}
-          color="blue"
-          valueColored={false}
-          isActive={statusFilter === 'ALL'}
-          onClick={() => {
-            setStatusFilter('ALL');
-            setCurrentPage(1);
-          }}
-          badgeText="Registre BR & RECT"
-          footerLabel="En cours actifs :"
-          footerValue={`${kpis.activeCount} actif(s)`}
-        />
+      {/* 1. Top 5 Primary KPI Metrics Bar */}
+      <AtelierKpiGrid
+        kpis={kpis}
+        statusFilter={statusFilter}
+        onSelectStatusFilter={(nextStatus) => {
+          setStatusFilter(nextStatus);
+          setCurrentPage(1);
+        }}
+      />
 
-        <GmaoKpiCard
-          title="Émis (Attente Atelier)"
-          value={kpis.emis}
-          unit="en attente"
-          icon={Clock}
-          color="amber"
-          isActive={statusFilter === 'EMIS'}
-          onClick={() => {
-            setStatusFilter('EMIS');
-            setCurrentPage(1);
-          }}
-          badgeText="Prise en charge requise"
-          pulseBadge={kpis.emis > 0}
-          footerLabel="Origine :"
-          footerValue="Section Maint. (SM)"
-        />
-
-        <GmaoKpiCard
-          title="En Cours Fabrication"
-          value={kpis.enCours}
-          unit="en usinage"
-          icon={Cog}
-          color="cyan"
-          isActive={statusFilter === 'EN_COURS_FABRICATION'}
-          onClick={() => {
-            setStatusFilter('EN_COURS_FABRICATION');
-            setCurrentPage(1);
-          }}
-          badgeText="Tournage / Rectification"
-          pulseBadge={kpis.enCours > 0}
-          footerLabel="Répartition :"
-          footerValue={`${kpis.brCount} BR · ${kpis.rectCount} RECT`}
-        />
-
-        <GmaoKpiCard
-          title="Prêts Livraison SM"
-          value={kpis.pret}
-          unit="disponibles"
-          icon={PackageCheck}
-          color="indigo"
-          isActive={statusFilter === 'PRET_LIVRAISON'}
-          onClick={() => {
-            setStatusFilter('PRET_LIVRAISON');
-            setCurrentPage(1);
-          }}
-          badgeText="Usinage terminé"
-          footerLabel="Action SM :"
-          footerValue="Réception & Montage"
-        />
-
-        <GmaoKpiCard
-          title="Réceptionnés & Montés"
-          value={kpis.receptionne}
-          unit="montés OK"
-          icon={CheckCircle2}
-          color="emerald"
-          isActive={statusFilter === 'RECEPTIONNE_MONTAGE'}
-          onClick={() => {
-            setStatusFilter('RECEPTIONNE_MONTAGE');
-            setCurrentPage(1);
-          }}
-          badgeText="Clôture BT débloquée"
-          footerLabel="Taux achèvement :"
-          footerValue={`${kpis.total ? Math.round((kpis.receptionne / kpis.total) * 100) : 0}%`}
-        />
-      </GmaoKpiGrid>
-
-      {/* 1.5. Period Filter Bar (P1 Factory Memory) */}
+      {/* 1.5. Period Filter Bar */}
       <PeriodFilterBar
         value={periodFilter}
         onChange={(next) => {
@@ -774,9 +674,8 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         totalCount={workshopOrders.length}
       />
 
-      {/* 2. Filter & Search Card (Unified Mature Light UI Design System — Matched with Bons de Travail) */}
+      {/* 2. Filter & Search Card */}
       <div className="relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs">
@@ -931,7 +830,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
 
         {/* 5-Column Multi-Criteria Filter Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end pt-2 border-t border-slate-100">
-          {/* 1. Omni-Text Search */}
           <div className="w-full sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Recherche</span>
@@ -969,7 +867,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
             </div>
           </div>
 
-          {/* 2. Nature de la demande (BR / RECT) */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Nature Demande</span>
@@ -996,7 +893,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
             />
           </div>
 
-          {/* 3. Machine Filter */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Machine</span>
@@ -1026,7 +922,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
             />
           </div>
 
-          {/* 4. Liaison BT Filter */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Liaison BT</span>
@@ -1056,7 +951,6 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
             />
           </div>
 
-          {/* 5. Sort Menu Button & Popover */}
           <div className="relative" ref={sortMenuRef}>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>Tri & Ordre</span>
@@ -1232,172 +1126,32 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         )}
       </div>
 
-      {/* 2.5. Creation Form Card (Unified Mature Light Card Archetype) */}
+      {/* 2.5. Creation Form Card */}
       {showCreateForm && (
-        <form
+        <AtelierCreateOrderForm
+          formType={formType}
+          setFormType={setFormType}
+          formMachine={formMachine}
+          setFormMachine={setFormMachine}
+          formBtId={formBtId}
+          onSelectBtInForm={handleSelectBtInForm}
+          formQuantite={formQuantite}
+          setFormQuantite={setFormQuantite}
+          formDescription={formDescription}
+          setFormDescription={setFormDescription}
+          formObservation={formObservation}
+          setFormObservation={setFormObservation}
+          formSection={formSection}
+          formDestinataire={formDestinataire}
+          currentUserName={currentUser?.name}
+          activeMachines={activeMachines}
+          openBts={openBts}
+          onClose={() => setShowCreateForm(false)}
           onSubmit={handleSubmitCreate}
-          className="bg-white border-2 border-amber-300 rounded-2xl p-5 space-y-4 shadow-[0_12px_32px_-6px_rgba(245,158,11,0.14),0_4px_12px_-2px_rgba(0,0,0,0.06)] animate-in fade-in slide-in-from-top-2 duration-200"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-200 flex items-center justify-center text-amber-700 shadow-2xs">
-                <Hammer className="w-4 h-4 text-amber-700" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                  Émission d&apos;un Bon de Réalisation / Rectification (Atelier Mécanique)
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  Section Maintenance (SM) ➔ Atelier Fabrication Mécanique • Hors stockActuel PDR • Ne clôture pas le BT automatiquement
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowCreateForm(false)}
-              className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition cursor-pointer self-end sm:self-auto"
-              title="Fermer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Nature de la demande *
-              </label>
-              <select
-                value={formType}
-                onChange={(e) => setFormType(e.target.value as WorkshopOrderType)}
-                className="w-full h-9 px-3 text-xs font-bold bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="REALISATION">
-                  REALISATION — Confection / Usinage pièce neuve (BR)
-                </option>
-                <option value="RECTIFICATION">
-                  RECTIFICATION — Réparation / Tournage / Ajustage (RECT)
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Machine concernée (Active) *
-              </label>
-              <select
-                value={formMachine}
-                onChange={(e) => setFormMachine(e.target.value)}
-                required
-                className="w-full h-9 px-3 text-xs font-bold bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="">-- Sélectionner une machine --</option>
-                {activeMachines.map((m: any) => {
-                  const code = String(m.id_machine_registered || m.id_machine || m.code || m.id || '');
-                  const nom = String(m.nom || m.designation || '');
-                  return (
-                    <option key={code} value={code}>
-                      {code} {nom ? `— ${nom}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Lier à un BT ouvert (Optionnel)
-              </label>
-              <select
-                value={formBtId}
-                onChange={(e) => handleSelectBtInForm(e.target.value)}
-                className="w-full h-9 px-3 text-xs font-semibold bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              >
-                <option value="">Bon autonome (Sans BT)</option>
-                {openBts.map((bt: any) => {
-                  const key = String(bt.num_bt || bt.id || '');
-                  const mCode = String(bt.code_machine || bt.machine || '');
-                  return (
-                    <option key={String(bt.id)} value={key}>
-                      {key} — {mCode} ({bt.anomalie || bt.panne || 'Correctif'})
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Quantité à usiner / rectifier *
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={formQuantite}
-                onChange={(e) => setFormQuantite(Math.max(1, Number(e.target.value) || 1))}
-                className="w-full h-9 px-3 text-xs font-bold font-mono bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-            <div className="md:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Description technique des travaux (Cotes, matière, usinage demandé) *
-              </label>
-              <input
-                type="text"
-                required
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Ex: Rectification portée d'arbre Ø45mm + confection bague bronze..."
-                className="w-full h-9 px-3 text-xs font-semibold bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Observation / Croquis / Tolérance
-              </label>
-              <input
-                type="text"
-                value={formObservation}
-                onChange={(e) => setFormObservation(e.target.value)}
-                placeholder="Ex: Urgence arrêt ligne, tolérance H7/g6..."
-                className="w-full h-9 px-3 text-xs font-semibold bg-slate-50/70 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
-            <div className="flex items-center gap-3 text-[11px] text-slate-600 flex-wrap">
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 font-semibold">
-                <strong>Émetteur:</strong> {formSection} ({currentUser?.name || 'Section Maintenance'})
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-semibold">
-                <strong>Destinataire:</strong> {formDestinataire}
-              </span>
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(false)}
-                className="h-9 px-3.5 text-xs font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                className="h-9 px-4 text-xs font-black uppercase text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm shadow-amber-600/20 cursor-pointer active:scale-95 transition"
-              >
-                Émettre le Bon Atelier
-              </button>
-            </div>
-          </div>
-        </form>
+        />
       )}
 
-      {/* 3. Unified Dual-Mode Industrial Data Grid + Built-in TablePaginationCard Footer */}
+      {/* 3. Unified Dual-Mode Industrial Data Grid */}
       <GmaoIndustrialDataGrid
         title="Tableau Atelier_Fabrication_Mecanique • Bons de Réalisation (BR) & Rectification (RECT)"
         icon={<FileSpreadsheet className="w-4 h-4 text-amber-600" />}
@@ -1415,145 +1169,17 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
           ord.id || ord.code_bon || rowNumber
         }
         cardGridClassName="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-        renderCard={(ord: IWorkshopOrder, _idx: number, rowNumber: number) => {
-          const isRect = ord.type_demande === 'RECTIFICATION';
-          const machineName = machineLookup.get(String(ord.id_machine || '').toUpperCase());
-          const nextStatuses = getAllowedNextWorkshopStatuses(ord.statut);
-          const dateEmissionShort = ord.date_emission ? ord.date_emission.slice(0, 10) : '—';
-
-          return (
-            <div
-              key={ord.id || ord.code_bon || rowNumber}
-              className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group"
-            >
-              <div className="space-y-3">
-                {/* Card Header: Code Bon + Type Badge + Machine */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-[10px] border shadow-2xs font-mono shrink-0 ${
-                        isRect
-                          ? 'bg-purple-500/10 text-purple-700 border-purple-200/70'
-                          : 'bg-amber-500/10 text-amber-700 border-amber-200/70'
-                      }`}
-                    >
-                      {isRect ? 'RECT' : 'BR'}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-black text-slate-900 font-mono text-xs truncate">
-                        {ord.code_bon}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-400">
-                        N° {rowNumber} • Émis le {dateEmissionShort}
-                      </div>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border shadow-2xs shrink-0 ${
-                      STATUS_BADGE_STYLES[ord.statut] ||
-                      'bg-slate-100 text-slate-700 border-slate-300'
-                    }`}
-                  >
-                    {WORKSHOP_STATUS_LABELS[ord.statut] || ord.statut}
-                  </span>
-                </div>
-
-                {/* Machine & Linked BT Row */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 text-xs font-mono font-bold">
-                      {ord.id_machine}
-                    </span>
-                    {machineName && (
-                      <span className="text-[10.5px] text-slate-500 truncate max-w-[140px]">
-                        {machineName}
-                      </span>
-                    )}
-                  </div>
-
-                  {ord.id_bt ? (
-                    <button
-                      type="button"
-                      onClick={() => onNavigateToBt && onNavigateToBt(String(ord.id_bt))}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-mono text-[11px] font-bold transition cursor-pointer"
-                    >
-                      <FileText className="w-3 h-3 text-blue-600 shrink-0" />
-                      <span>{ord.id_bt}</span>
-                    </button>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded bg-slate-50 text-slate-400 border border-slate-200/70 font-mono text-[10px]">
-                      Autonome
-                    </span>
-                  )}
-                </div>
-
-                {/* Work Description & Qty */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center px-1.5 py-0.5 bg-amber-50 text-amber-900 border border-amber-200 rounded font-mono text-[10px] font-black">
-                      Qté: {ord.quantite}
-                    </span>
-                    <span className="text-[10px] font-semibold text-slate-500 truncate">
-                      {ord.emetteur_section || 'SM'}
-                      {ord.emetteur_name ? ` · ${ord.emetteur_name}` : ''}
-                    </span>
-                  </div>
-                  <div className="font-bold text-slate-900 text-xs leading-snug line-clamp-2" title={ord.description_travaux}>
-                    {ord.description_travaux}
-                  </div>
-                  {ord.observation && (
-                    <div className="text-[10.5px] text-slate-500 line-clamp-1">
-                      Obs: {ord.observation}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Card Footer: Cycle Progression Actions */}
-              <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                {ord.id_bt && isWorkshopOrderActive(ord.statut) ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/80">
-                    <AlertTriangle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                    Bloque clôture BT
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {WORKSHOP_TYPE_LABELS[ord.type_demande] || ord.type_demande}
-                  </span>
-                )}
-
-                <div className="flex items-center gap-1.5 ml-auto">
-                  {canManage && nextStatuses.length > 0 ? (
-                    nextStatuses.map((targetSt) => {
-                      const btnCfg = ACTION_BUTTON_LABELS[targetSt];
-                      return (
-                        <button
-                          key={targetSt}
-                          type="button"
-                          onClick={() => handleTransition(ord, targetSt)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10.5px] font-bold transition cursor-pointer active:scale-95 ${btnCfg.style}`}
-                        >
-                          {targetSt !== 'ANNULE' ? (
-                            <ArrowRight className="w-3 h-3 shrink-0" />
-                          ) : (
-                            <XCircle className="w-3 h-3 shrink-0" />
-                          )}
-                          <span>{btnCfg.label}</span>
-                        </button>
-                      );
-                    })
-                  ) : ord.statut === 'RECEPTIONNE_MONTAGE' ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono font-bold text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      Monté & Clôturé
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          );
-        }}
+        renderCard={(ord: IWorkshopOrder, _idx: number, rowNumber: number) => (
+          <AtelierOrderCard
+            key={ord.id || ord.code_bon || rowNumber}
+            order={ord}
+            rowNumber={rowNumber}
+            machineName={machineLookup.get(String(ord.id_machine || '').toUpperCase())}
+            canManage={canManage}
+            onNavigateToBt={onNavigateToBt}
+            onTransition={handleTransition}
+          />
+        )}
         emptyIcon={<Hammer className="w-8 h-8 text-slate-300" />}
         emptyMessage="Aucun Bon de Réalisation / Rectification trouvé pour les filtres sélectionnés."
         pagination={{
