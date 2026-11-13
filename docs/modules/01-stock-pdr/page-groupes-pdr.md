@@ -20,7 +20,7 @@ relatedTabs:
 
 L'écran **Groupes PDR** (`PdrGroupView.tsx`) constitue le **premier niveau de classement** du magasin des **Pièces de Rechange consommables (`PDR`)** (`STORAGE_KEYS.PDR_GROUPS = 'gmao_pdr_groups_v1'`).
 
-Dans la philosophie de **CIOB GMAO v4**, les trois familles de groupes sont **strictement indépendantes** (trois bases de données distinctes) car elles gouvernent trois réalités physiques différentes sur le terrain :
+Dans la philosophie de **CIOB GMAO Nexus v5.0.2**, les trois familles de groupes sont **strictement indépendantes** (trois bases de données distinctes) car elles gouvernent trois réalités physiques différentes sur le terrain :
 
 | Référentiel de Groupe | Clé SSOT | Ce qu'il classe | Politique & Flux Naturels |
 | :--- | :--- | :--- | :--- |

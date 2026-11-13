@@ -89,7 +89,7 @@ $$\text{Ratio BER} = \frac{\sum_{\text{Année N}} \text{Coûts de Maintenance Ma
 
 ---
 
-## 5. Architecture UI/UX Conforme au Design System v4.1.0
+## 5. Architecture UI/UX Conforme au Design System v5.0.2
 
 Conformément à la constitution `DESIGN_SYSTEM_UI_UX.md` (§3.1, §4.2, §7.2) :
 

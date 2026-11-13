@@ -26,7 +26,7 @@ relatedTabs:
 
 ## 1. Philosophie Industrielle : Les 4 Issues d'une Défaillance Corrective
 
-Dans une usine industrielle, une intervention corrective ne se résume pas toujours à « sortir une pièce de rechange (PDR) du magasin et clôturer le BT ». **CIOB GMAO v4** distingue strictement **4 issues opérationnelles** :
+Dans une usine industrielle, une intervention corrective ne se résume pas toujours à « sortir une pièce de rechange (PDR) du magasin et clôturer le BT ». **CIOB GMAO Nexus v5.0.2** distingue strictement **4 issues opérationnelles** :
 
 1. **Issue A — Dépannage direct / Remplacement PDR magasin :** Sortie d'une pièce standard du magasin (`IncrementalStockIndex`) et clôture du `BT` après validation `Maker-Checker`.
 2. **Issue B — Réparation externe d'un organe (`Sortie Externe`) :** Envoi d'un moteur en bobinage ou d'un variateur chez un sous-traitant externe (`SORT-EXT-xxx` dans `SortieExterneService`).

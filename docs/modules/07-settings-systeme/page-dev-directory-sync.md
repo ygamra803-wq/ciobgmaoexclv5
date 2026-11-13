@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Topologie de Synchronisation Réseau Local
 
-En atelier de fabrication, les techniciens équipés de tablettes WiFi et les chefs de poste sur PC communiquent avec une instance centrale de **CIOB GMAO v4** hébergée sur un PC serveur de l'usine :
+En atelier de fabrication, les techniciens équipés de tablettes WiFi et les chefs de poste sur PC communiquent avec une instance centrale de **CIOB GMAO Nexus v5.0.2** hébergée sur un PC serveur de l'usine :
 
 ```text
 [ Client Web Tablette ] ──┐

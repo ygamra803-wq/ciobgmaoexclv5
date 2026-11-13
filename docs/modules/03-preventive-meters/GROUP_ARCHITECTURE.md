@@ -15,7 +15,7 @@ relatedTabs:
 
 ## 1. Philosophie du Moteur Préventif Hybride (Temps + Usage)
 
-Dans **CIOB GMAO v4**, la maintenance préventive dépasse la simple grille statique. Elle combine deux dimensions complémentaires au sein d'un moteur unifié :
+Dans **CIOB GMAO Nexus v5.0.2**, la maintenance préventive dépasse la simple grille statique. Elle combine deux dimensions complémentaires au sein d'un moteur unifié :
 
 1. **Maintenance Systématique Calendaire (`CALENDRIER`)** : Cadencée sur une matrice annuelle de **52 semaines (`S1` à `S52`)** et **12 mois**, avec fréquences normalisées (`Hebdomadaire`, `Mensuel`, `Trimestriel`, `Semestriel`, `Annuel`) et mode de récurrence `FIXE` ou `GLISSANT`.
 2. **Maintenance Conditionnelle par Compteurs (`COMPTEUR` / `HYBRIDE`)** : Pilotée par l'usage réel de l'équipement (`Heures` d'horomètre, `Cycles` de presse/moule, ou `Km` d'engins) via `src/application/services/meter/MeterService.ts` et `STORAGE_KEYS.METER_READINGS`.

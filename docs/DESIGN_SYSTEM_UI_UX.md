@@ -1,8 +1,8 @@
 # 🎨 الدستور البصري ونظام التصميم لتجربة وواجهة المستخدم
-## `CIOB GMAO v4 — Design System & UI/UX Constitution Guide`
+## `CIOB GMAO Nexus v5.0.2 — Design System & UI/UX Constitution Guide`
 
 > **الغرض من هذه الوثيقة:**  
-> هذه الوثيقة هي **المرجع الهندسي والتصميمي الملزم والنهائي** لكل ما يتعلق بعناصر وواجهات المستخدم (`UI/UX`) في تطبيق **CIOB GMAO v4**.  
+> هذه الوثيقة هي **المرجع الهندسي والتصميمي الملزم والنهائي** لكل ما يتعلق بعناصر وواجهات المستخدم (`UI/UX`) في تطبيق **CIOB GMAO Nexus v5.0.2**.  
 > تم استخراج وتوثيق هذه القواعد **مباشرة وحصرياً مما هو موجود ومطبق فعلياً في كود المشروع الإنتاجي** (`src/index.css`، ومجلد `src/presentation/components/common/`، وتخطيطات الصفحات المختلفة).  
 > **الهدف المستقبلي:** القضاء التام على الارتباك أو تشتت الأنماط عند تطوير أو إضافة شاشات جديدة، وضمان تجانس بصري وتفاعلي فائق الدقة، وتسهيل الدخول السلس لمرحلة الوضع الداكن والوضع الفاتح (`Light & Dark Mode`).
 
@@ -454,6 +454,6 @@ const columns = [
 
 ---
 **تاريخ اعتماد الوثيقة:** نوفمبر 2026  
-**الإصدار:** v4.1.0 (Production Master — Calibrated on `UtilisateursView` & `EquipmentView`)  
-**المرجعية:** `CIOB GMAO v4 Constitution & Design System`
+**الإصدار:** v5.0.2 (Production Master — Calibrated on `UtilisateursView` & `EquipmentView`)  
+**المرجعية:** `CIOB GMAO Nexus v5.0.2 Constitution & Design System`
 

@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Registre d'Audit Append-Only (`AUDIT_EVENTS`)
 
-Le registre d'audit institutionnel de **CIOB GMAO v4** garantit la traçabilité absolue de toute mutation sensible de l'appareil de production :
+Le registre d'audit institutionnel de **CIOB GMAO Nexus v5.0.2** garantit la traçabilité absolue de toute mutation sensible de l'appareil de production :
 
 ```typescript
 export interface AuditEvent {

@@ -25,7 +25,7 @@ relatedTabs:
 
 ## 1. Philosophie & Rôle Stratégique au Sein du Pilotage
 
-Dans **CIOB GMAO v4**, `NexusView` est la **tour de contrôle de l'anatomie physique As-Built** des machines de production.
+Dans **CIOB GMAO Nexus v5.0.2**, `NexusView` est la **tour de contrôle de l'anatomie physique As-Built** des machines de production.
 
 Il matérialise le pont temps réel entre la théorie d'ingénierie (`Blueprint`), le stock magasin (`warehouseItems`), et l'exploitation atelier (`machineElementsLedger`) :
 

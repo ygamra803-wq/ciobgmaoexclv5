@@ -26,7 +26,7 @@ relatedTabs:
 
 ## 1. Philosophie Architecturale : SSOT Unique & Séparation Stricte d'Interface
 
-Dans **CIOB GMAO v4**, les utilités industrielles et équipements d'infrastructure (compresseurs d'air, groupes électrogènes, centrales incendie, refroidisseurs, postes HT/BT) appartiennent à la classe **`asset_class: 'SYSTEM_GENERAL'`**.
+Dans **CIOB GMAO Nexus v5.0.2**, les utilités industrielles et équipements d'infrastructure (compresseurs d'air, groupes électrogènes, centrales incendie, refroidisseurs, postes HT/BT) appartiennent à la classe **`asset_class: 'SYSTEM_GENERAL'`**.
 
 ### Pourquoi partager `STORAGE_KEYS.MACHINES` tout en isolant l'écran `#equipment` ?
 1. **Unicité du Référentiel Actifs (Zéro Table Dupliquée) :**

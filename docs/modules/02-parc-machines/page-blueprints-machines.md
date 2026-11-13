@@ -17,7 +17,7 @@ relatedTabs:
 
 # Blueprints Machines — Le Jumeau Cognitif d'Ingénierie (`Tier 3`)
 
-## 1. Qu'est-ce qu'un `Blueprint` dans CIOB GMAO v4 ?
+## 1. Qu'est-ce qu'un `Blueprint` dans CIOB GMAO Nexus v5.0.2 ?
 
 Le **Blueprint (`BPT-XX`)** est la **fiche d'ingénierie théorique et évolutive** associée à un modèle de machine (**Template**).
 

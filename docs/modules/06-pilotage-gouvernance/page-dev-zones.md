@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Séparation Stricte : Géographie vs Arborescence Technique
 
-Une erreur classique en GMAO consiste à mélanger la localisation spatiale de l'atelier avec la hiérarchie technique de la ligne de production. **CIOB GMAO v4** applique une séparation d'intérêts absolue :
+Une erreur classique en GMAO consiste à mélanger la localisation spatiale de l'atelier avec la hiérarchie technique de la ligne de production. **CIOB GMAO Nexus v5.0.2** applique une séparation d'intérêts absolue :
 
 ```text
 1. VECTEUR GÉOGRAPHIQUE (Spatial Location)

@@ -25,7 +25,7 @@ relatedTabs:
 
 ## 1. Pourquoi un Référentiel `Groupes Parts` Indépendant ?
 
-Dans l'**Entrepôt Technique** de **CIOB GMAO v4**, les équipements stockés se divisent en deux grandes familles physiques qui possèdent chacune leur propre hiérarchie à 4 niveaux :
+Dans l'**Entrepôt Technique** de **CIOB GMAO Nexus v5.0.2**, les équipements stockés se divisent en deux grandes familles physiques qui possèdent chacune leur propre hiérarchie à 4 niveaux :
 
 1. **Branche A — `Components` (Organes complets rotatifs : `#comp_groups ➔ #comp_families ➔ #comp_templates ➔ #entrepot`)** :
    - Moteurs électriques, réducteurs, pompes, variateurs.

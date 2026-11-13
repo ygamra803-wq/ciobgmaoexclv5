@@ -14,7 +14,7 @@
    - Empty collections (`0` records) are valid factory states. Never auto-inject demo seeds when storage is empty or short.
    - Demo data loads **exclusively** via explicit user action (`DataGateway.loadDemoData` / `loadDemoSection`). When `START_MODE === 'empty'`, all counters and tables remain `0` across reloads (`F5`).
 3. **Stock Math Invariant:**
-   - `stockActuel = stockInitial + entrées − sorties` computed exclusively via `src/application/IncrementalStockIndex.ts` and `src/application/services/StockCalculationService.ts`.
+   - `stockActuel = stockInitial + entrées − sorties` computed exclusively via `src/application/IncrementalStockIndex.ts` and `src/domain/pdr/services/StockCalculationService.ts` (re-exported via `src/core/domain/services/StockCalculationService.ts`).
    - Do **not** modify `IncrementalStockIndex` or `StockCalculationService` unless a numeric bug is proven with a failing test case. Never combine direct stock mutation with a `Sortie` movement (prevents double deduction).
 4. **3-Tier Asset, Blueprint & BOM Nexus Philosophy (Strict Separation of Concerns):**
    - **Tier 1 (`Family` & `Template`):** Standard industrial classification and technical catalog specifications (`puissance`, `vitesse`, manufacturer model).
@@ -23,10 +23,10 @@
    - **Operational Line Grouping (`MACHINE | LINE` only):** Optional `parent_id` and `asset_level` (`'MACHINE' | 'LINE'`) on `machines` are strictly for operational line/parent-machine KPI rollup (`src/utils/assetHierarchy.ts`). Never conflate `Zone` (geography) or internal `Components/Parts` (`Entrepôt/Nexus`) with `parent_id`, and never inherit `Zone`, `Family`, or `Blueprint` from a parent line.
 5. **Temporal Memory, Explicit Lifecycles & Maker-Checker Governance:**
    - **Preventive Maintenance (Calendar + Meter):** Completing a task records an immutable dated `PreventiveExecution` (`src/application/services/preventive/ExecutionService.ts` → `STORAGE_KEYS.PREVENTIVE_EXECUTIONS`) with `periodMonth (YYYY-MM)` and advances meter thresholds (`MeterService.ts`) when applicable.
-   - **Corrective Maintenance:** Work orders enforce guarded transitions via `src/domain/maintenance/WorkOrderStateMachine.ts` (`DEMANDE ➔ EN_COURS / EN_ATTENTE_PDR ➔ CLOTURE`).
+   - **Corrective Maintenance:** Work orders enforce guarded transitions via `src/domain/corrective/services/WorkOrderStateMachine.ts` (`DEMANDE ➔ BT_PLANIFIE / EN_COURS / EN_ATTENTE_PDR ➔ CLOTURE`).
    - **Maker-Checker Validation (`VAL-1..VAL-5`):** Field technician executions (`BT`, preventive executions, `sortieDemands`) enter `PENDING_VALIDATION` without deducting `rawStock` until approved by a supervisor/manager (`validationReconciliation.ts`).
 6. **Institutional Append-Only Audit Ledger (`AUDIT_EVENTS`):**
-   - Critical state mutations (initial stock/price adjustments, machine archive/restore, maker-checker approvals/rejections, replenishment `PO` lifecycle, and financial budget updates) record immutable before/after events via `AuditService.recordEvent` (`STORAGE_KEYS.AUDIT_EVENTS`).
+   - Critical state mutations (initial stock/price adjustments, machine archive/restore, maker-checker approvals/rejections, replenishment `PO` lifecycle, and financial budget updates) record immutable before/after events via `DataGateway.appendAuditEvent` (`store.appendAuditEvent` → `STORAGE_KEYS.AUDIT_EVENTS`).
 7. **Referential Discipline & Safe Archive:**
    - Dropdowns for new PM tasks, WOs, and movements must use `filterActiveMachines(machines)` (`src/utils/activeMachines.ts`) from registered `machines` — never hardcoded fallback machine lists.
    - Machines or personnel with historical movements/interventions must be soft-archived (`status: 'ARCHIVEE'` / `is_active: false`), never hard-deleted into orphans. Archiving a parent line detaches its children cleanly (`detachChildrenOnParentArchive`).

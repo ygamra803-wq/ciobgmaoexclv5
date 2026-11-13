@@ -77,7 +77,7 @@ function buildInitialStockMap(rawStock: any[] = []): Map<string, number> {
 /**
  * @namespace DataGateway
  * @description
- * Canonical Single Source of Truth (SSOT) Write & Lifecycle Gateway for CIOB GMAO v4.
+ * Canonical Single Source of Truth (SSOT) Write & Lifecycle Gateway for CIOB GMAO Nexus v5.0.2.
  *
  * ### Architectural Invariants (`AGENTS.md` §1.1, §1.2, §1.6, §1.7):
  * 1. **Single Write Path:** Every entity mutation persists exclusively through `STORAGE_KEYS`

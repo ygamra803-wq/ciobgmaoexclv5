@@ -36,6 +36,9 @@ import {
 } from './src/core/security/serverSession';
 import { createServerSessionStore } from './src/core/security/serverSessionStore';
 import { constantTimeEqual, randomBytesHex } from './src/core/security/nativeCrypto';
+import { serverLogger } from './src/server/serverLogger';
+import { readRecentAuditEntries } from './src/server/auditLogReader';
+import { validateProjectedStockInvariant } from './src/server/stockInvariantGuard';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,14 +49,14 @@ process.on('uncaughtException', (err: any) => {
     return;
   }
   if (process.env.NODE_ENV === 'production' && !process.env.VITEST) {
-    console.error('[Server] Fatal Uncaught Exception in production, shutting down:', err);
+    serverLogger.error('[Server] Fatal Uncaught Exception in production, shutting down:', err);
     process.exit(1);
   }
-  console.error('[Server] Uncaught Exception (dev process kept alive):', err);
+  serverLogger.error('[Server] Uncaught Exception (dev process kept alive):', err);
 });
 
 process.on('unhandledRejection', (reason: any) => {
-  console.error('[Server] Unhandled Rejection:', reason);
+  serverLogger.error('[Server] Unhandled Rejection:', reason);
 });
 
 const MAX_STATE_PAYLOAD_LIMIT = '10mb';
@@ -173,11 +176,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   // In DEV mode, logs a warning without breaking local development workflow.
   if (isWeakOrEmptyApiToken(process.env.GMAO_API_TOKEN)) {
     if (isProduction) {
-      console.error(
+      serverLogger.error(
         '[Server][SEC-HARDENING-P1] CRITIQUE : GMAO_API_TOKEN est absent ou faible (ex: empty, change-me, secret, gmao, 1234). Vous devez définir un GMAO_API_TOKEN fort (>= 8 caractères) dans les variables d’environnement. Les requêtes d’écriture API seront refusées.'
       );
-    } else if (!process.env.VITEST) {
-      console.warn(
+    } else {
+      serverLogger.warn(
         '[Server][SEC-HARDENING-P1] AVERTISSEMENT DEV : GMAO_API_TOKEN absent ou faible. Autorisé uniquement en développement local ; définissez un GMAO_API_TOKEN robuste en production.'
       );
     }
@@ -209,7 +212,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     });
 
   if (isProduction && getSessionSecretInfo().missingInProduction) {
-    console.error(
+    serverLogger.error(
       '[Server][SEC-LAN-P2] CRITIQUE : GMAO_SESSION_SECRET est absent ou faible (< 16 caractères) en production. Générez une clé avec `openssl rand -hex 32`. Émission et validation des sessions refusées.'
     );
   }
@@ -473,7 +476,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
 
       if (!verifiedSession.valid || !verifiedSession.payload) {
-        console.warn(
+        serverLogger.warn(
           `[Server][SEC-LAN-P1] Rejected ${verifiedSession.reason || 'INVALID'} server session on ${req.method} ${req.originalUrl} (ip="${remoteAddress || 'unknown'}")`
         );
         return res.status(403).json({
@@ -547,7 +550,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         ip: typeof remoteAddress === 'string' ? remoteAddress : undefined,
         detail: `claimed=${resolvedActor.claimedRole}, resolved=${resolvedActor.effectiveRole}`,
       });
-      console.warn(
+      serverLogger.warn(
         `[Server][SEC-LAN-P1] Role spoof or unverified privilege/actor claim detected: actorId="${resolvedActor.actorId || 'none'}", actor="${resolvedActor.actorName}", claimed="${resolvedActor.claimedRole}", resolved="${resolvedActor.effectiveRole}", status="${resolvedActor.identityStatus}", sessionVerified=${Boolean(resolvedActor.sessionVerified)}, ip="${remoteAddress || 'unknown'}"`
       );
     }
@@ -664,7 +667,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           });
 
           if (!bootstrapCheck.allowed) {
-            console.warn(
+            serverLogger.warn(
               `[Server][SEC-LAN-P0] Blocked unverified ${req.method} ${req.originalUrl}: status=${resolvedActor.identityStatus}, actorId="${resolvedActor.actorId || 'none'}", reason="${bootstrapCheck.reason}"`
             );
             return res.status(403).json({
@@ -677,7 +680,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           }
 
           (req as any).isBootstrapAuthorized = true;
-          console.warn(
+          serverLogger.warn(
             `[Server][SEC-LAN-P0][BOOTSTRAP] Permitted initial ${req.method} on '${targetEntity}' while user/technician registries are empty (ip="${remoteAddress || 'unknown'}").`
           );
           return next();
@@ -699,7 +702,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           detail: `${req.method} ${req.path} without session token`,
         });
 
-        console.warn(
+        serverLogger.warn(
           `[Server][SEC-LAN-P1] Blocked header-only ${req.method} ${req.originalUrl} without server session token (actorId="${resolvedActor.actorId || 'none'}", status=${resolvedActor.identityStatus}, ip="${remoteAddress || 'unknown'}")`
         );
         return res.status(403).json({
@@ -788,8 +791,8 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     return next();
   };
 
-  if (swaggerEnabled && !isProduction && !process.env.VITEST) {
-    console.warn(
+  if (swaggerEnabled && !isProduction) {
+    serverLogger.warn(
       '[Server][SEC-LAN-P0] Swagger /api/docs active in DEV mode (restricted to localhost).'
     );
   }
@@ -857,7 +860,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         }
       }
     } catch (err) {
-      console.error('[Backend] Failed to load state file:', err);
+      serverLogger.error('[Backend] Failed to load state file:', err);
     }
   }
 
@@ -875,19 +878,24 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
   };
 
-  // Non-blocking serialized write queue with atomic .tmp -> rename (P3.3)
+  // Non-blocking serialized write queue with atomic .tmp -> rename and failure propagation (P3.3)
   let writeQueue: Promise<void> = Promise.resolve();
 
-  const persistState = (auditContext?: {
-    actor?: string;
-    action: string;
-    entity: string;
-    summary?: string;
-  }): Promise<void> => {
-    dbState.version = (typeof dbState.version === 'number' ? dbState.version : 1) + 1;
-    dbState.updatedAt = new Date().toISOString();
-    const currentVersion = dbState.version;
-    const currentUpdatedAt = dbState.updatedAt;
+  const persistState = (
+    auditContext?: {
+      actor?: string;
+      action: string;
+      entity: string;
+      summary?: string;
+    },
+    rollbackState?: () => void
+  ): Promise<void> => {
+    const prevVersion = typeof dbState.version === 'number' ? dbState.version : 1;
+    const prevUpdatedAt = dbState.updatedAt;
+    const currentVersion = prevVersion + 1;
+    const currentUpdatedAt = new Date().toISOString();
+    dbState.version = currentVersion;
+    dbState.updatedAt = currentUpdatedAt;
     const serializedState = JSON.stringify(dbState, null, 2);
 
     const auditEntry = auditContext
@@ -902,8 +910,8 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         }) + '\n'
       : null;
 
-    writeQueue = writeQueue
-      .then(async () => {
+    const writeTask = writeQueue.then(async () => {
+      try {
         await fs.promises.writeFile(STATE_TMP_FILE, serializedState, 'utf-8');
         await fs.promises.rename(STATE_TMP_FILE, STATE_FILE);
         if (auditEntry) {
@@ -917,12 +925,26 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           action: auditContext?.action || 'SYNC_STATE',
           entity: auditContext?.entity || 'state',
         });
-      })
-      .catch((err) => {
-        console.error('[Backend] Failed to persist state or audit file:', err);
-      });
+      } catch (err) {
+        if (dbState.version === currentVersion) {
+          dbState.version = prevVersion;
+          dbState.updatedAt = prevUpdatedAt;
+        }
+        if (rollbackState) {
+          try {
+            rollbackState();
+          } catch {
+            // ignore rollback error
+          }
+        }
+        serverLogger.error('[Backend] Failed to persist state or audit file:', err);
+        throw err;
+      }
+    });
 
-    return writeQueue;
+    // Never poison subsequent queued writes if this write fails
+    writeQueue = writeTask.catch(() => undefined);
+    return writeTask;
   };
 
   const resolveActor = (req: express.Request): string => {
@@ -1469,30 +1491,12 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     });
   });
 
-  // Get recent server-side audit trail entries
+  // Get recent server-side audit trail entries (O(1) bounded tail read)
   app.get('/api/gmao/audit', async (req, res) => {
     try {
       const limitParam = Number(req.query.limit) || 100;
       const limit = Math.min(Math.max(1, limitParam), 500);
-      if (!fs.existsSync(AUDIT_FILE)) {
-        return res.json({ success: true, data: [] });
-      }
-      const raw = await fs.promises.readFile(AUDIT_FILE, 'utf-8');
-      const lines = raw
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-      const recent = lines
-        .slice(-limit)
-        .reverse()
-        .map((line) => {
-          try {
-            return JSON.parse(line);
-          } catch {
-            return null;
-          }
-        })
-        .filter(Boolean);
+      const recent = await readRecentAuditEntries(AUDIT_FILE, limit);
       return res.json({ success: true, data: recent });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: err?.message || 'Failed to read audit log' });
@@ -1626,6 +1630,21 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           ? true
           : !baseVersionMatches;
 
+      const prevSnapshot: Record<string, any> = {};
+      for (const k of ALLOWED_ENTITIES) {
+        if (Object.prototype.hasOwnProperty.call(effectiveIncomingState, k)) {
+          prevSnapshot[k] = Array.isArray(dbState[k]) ? [...dbState[k]] : { ...(dbState[k] || {}) };
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(prevSnapshot, 'rawStock') && !Object.prototype.hasOwnProperty.call(prevSnapshot, 'stock')) {
+        prevSnapshot.stock = Array.isArray(dbState.stock) ? [...dbState.stock] : [];
+      } else if (Object.prototype.hasOwnProperty.call(prevSnapshot, 'stock') && !Object.prototype.hasOwnProperty.call(prevSnapshot, 'rawStock')) {
+        prevSnapshot.rawStock = Array.isArray(dbState.rawStock) ? [...dbState.rawStock] : [];
+      }
+
+      const prevRawStockForGuard = Array.isArray(dbState.rawStock) ? dbState.rawStock : [];
+      const prevMouvementsForGuard = Array.isArray(dbState.mouvements) ? dbState.mouvements : [];
+
       const { acceptedKeys } = mergeGmaoStateSnapshot(
         dbState,
         effectiveIncomingState,
@@ -1638,12 +1657,49 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         }
       );
 
-      await persistState({
-        actor: resolveActor(req),
-        action: isSmartMergeRequest ? 'MERGE_STATE' : 'SYNC_STATE',
-        entity: 'state',
-        summary: `${isSmartMergeRequest ? 'Merged' : 'Updated'} ${acceptedKeys.length} collections (${acceptedKeys.slice(0, 6).join(', ')})`,
-      });
+      const rollbackSnapshot = () => {
+        for (const [k, v] of Object.entries(prevSnapshot)) {
+          dbState[k] = v;
+        }
+      };
+
+      if (
+        acceptedKeys.includes('mouvements') ||
+        acceptedKeys.includes('rawStock') ||
+        acceptedKeys.includes('stock')
+      ) {
+        const stockGuard = validateProjectedStockInvariant({
+          previousRawStock: prevRawStockForGuard,
+          previousMouvements: prevMouvementsForGuard,
+          nextRawStock: Array.isArray(dbState.rawStock) ? dbState.rawStock : [],
+          nextMouvements: Array.isArray(dbState.mouvements) ? dbState.mouvements : [],
+          bypassForAdminForce:
+            effectiveIncomingState.replaceAll === true ||
+            (effectiveIncomingState.force === true && canForceOverwrite),
+        });
+
+        if (!stockGuard.valid) {
+          rollbackSnapshot();
+          return res.status(409).json({
+            success: false,
+            error: 'Conflict',
+            code: 'STOCK_NEGATIVE_PREVENTED',
+            message: `Stock négatif interdit pour ${stockGuard.violations.map((v) => v.ref).join(', ')}.`,
+            violations: stockGuard.violations,
+            version: dbState.version,
+          });
+        }
+      }
+
+      await persistState(
+        {
+          actor: resolveActor(req),
+          action: isSmartMergeRequest ? 'MERGE_STATE' : 'SYNC_STATE',
+          entity: 'state',
+          summary: `${isSmartMergeRequest ? 'Merged' : 'Updated'} ${acceptedKeys.length} collections (${acceptedKeys.slice(0, 6).join(', ')})`,
+        },
+        rollbackSnapshot
+      );
 
       res.setHeader('ETag', `W/"v${dbState.version}"`);
       return res.json({
@@ -1661,7 +1717,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
             : undefined,
       });
     } catch (error: any) {
-      return res.status(500).json({ success: false, message: error.message });
+      return res.status(500).json({
+        success: false,
+        code: 'PERSISTENCE_FAILED',
+        message: error?.message || 'Failed to synchronize state',
+      });
     }
   });
 
@@ -1753,39 +1813,89 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         message: 'Item payload must be a JSON object.',
       });
     }
-    if (OBJECT_ENTITY_SET.has(entity)) {
-      dbState[entity] = { ...(dbState[entity] || {}), ...rawItem };
-      await persistState({
-        actor: resolveActor(req),
-        action: 'UPSERT_DICTIONARY',
-        entity,
-        summary: `Updated dictionary keys in ${entity}`,
-      });
-      res.setHeader('ETag', `W/"v${dbState.version}"`);
-      return res.status(201).json({ success: true, version: dbState.version, data: dbState[entity] });
-    }
-    if (!Array.isArray(dbState[entity])) {
-      dbState[entity] = [];
-    }
-    const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
-    const newItem =
-      (req as any).isBootstrapAuthorized === true
-        ? rawItem
-        : clampMakerCheckerRecordForRole(actorRole, entity, rawItem, null);
+    try {
+      if (OBJECT_ENTITY_SET.has(entity)) {
+        const prevDict = dbState[entity] ? { ...dbState[entity] } : {};
+        dbState[entity] = { ...prevDict, ...rawItem };
+        await persistState(
+          {
+            actor: resolveActor(req),
+            action: 'UPSERT_DICTIONARY',
+            entity,
+            summary: `Updated dictionary keys in ${entity}`,
+          },
+          () => {
+            dbState[entity] = prevDict;
+          }
+        );
+        res.setHeader('ETag', `W/"v${dbState.version}"`);
+        return res.status(201).json({ success: true, version: dbState.version, data: dbState[entity] });
+      }
+      if (!Array.isArray(dbState[entity])) {
+        dbState[entity] = [];
+      }
+      const prevRawStock = Array.isArray(dbState.rawStock) ? [...dbState.rawStock] : [];
+      const prevStock = Array.isArray(dbState.stock) ? [...dbState.stock] : [];
+      const prevList = [...dbState[entity]];
 
-    dbState[entity].push(newItem);
-    if (entity === 'rawStock') dbState.stock = dbState.rawStock;
-    if (entity === 'stock') dbState.rawStock = dbState.stock;
-    const itemId = newItem.id || newItem.code || newItem.ref || 'new';
-    await persistState({
-      actor: resolveActor(req),
-      action: 'CREATE_ITEM',
-      entity,
-      summary: `Created item '${itemId}' in ${entity}`,
-    });
-    res.setHeader('ETag', `W/"v${dbState.version}"`);
-    const safeReturned = stripSensitiveAccountFields(entity, [newItem])[0];
-    return res.status(201).json({ success: true, version: dbState.version, data: safeReturned });
+      const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+      const newItem =
+        (req as any).isBootstrapAuthorized === true
+          ? rawItem
+          : clampMakerCheckerRecordForRole(actorRole, entity, rawItem, null);
+
+      const rollbackEntity = () => {
+        dbState[entity] = prevList;
+        if (entity === 'rawStock' || entity === 'stock') {
+          dbState.rawStock = prevRawStock;
+          dbState.stock = prevStock;
+        }
+      };
+
+      dbState[entity].push(newItem);
+      if (entity === 'rawStock') dbState.stock = dbState.rawStock;
+      if (entity === 'stock') dbState.rawStock = dbState.stock;
+
+      if (entity === 'mouvements' || entity === 'rawStock' || entity === 'stock') {
+        const stockGuard = validateProjectedStockInvariant({
+          previousRawStock: prevRawStock,
+          previousMouvements: entity === 'mouvements' ? prevList : dbState.mouvements,
+          nextRawStock: Array.isArray(dbState.rawStock) ? dbState.rawStock : [],
+          nextMouvements: Array.isArray(dbState.mouvements) ? dbState.mouvements : [],
+        });
+        if (!stockGuard.valid) {
+          rollbackEntity();
+          return res.status(409).json({
+            success: false,
+            error: 'Conflict',
+            code: 'STOCK_NEGATIVE_PREVENTED',
+            message: `Stock insuffisant : solde négatif interdit pour ${stockGuard.violations.map((v) => v.ref).join(', ')}.`,
+            violations: stockGuard.violations,
+            version: dbState.version,
+          });
+        }
+      }
+
+      const itemId = newItem.id || newItem.code || newItem.ref || 'new';
+      await persistState(
+        {
+          actor: resolveActor(req),
+          action: 'CREATE_ITEM',
+          entity,
+          summary: `Created item '${itemId}' in ${entity}`,
+        },
+        rollbackEntity
+      );
+      res.setHeader('ETag', `W/"v${dbState.version}"`);
+      const safeReturned = stripSensitiveAccountFields(entity, [newItem])[0];
+      return res.status(201).json({ success: true, version: dbState.version, data: safeReturned });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        code: 'PERSISTENCE_FAILED',
+        message: error?.message || `Failed to create item in '${entity}'`,
+      });
+    }
   });
 
   app.put('/api/gmao/:entity', requireAllowedEntity, async (req, res) => {
@@ -1811,56 +1921,104 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
 
-    if (OBJECT_ENTITY_SET.has(entity)) {
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    try {
+      if (OBJECT_ENTITY_SET.has(entity)) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Bad Request',
+            message: `Entity '${entity}' requires a JSON object payload.`,
+          });
+        }
+        const prevDict = dbState[entity] ? { ...dbState[entity] } : {};
+        dbState[entity] = payload;
+        await persistState(
+          {
+            actor: resolveActor(req),
+            action: 'REPLACE_DICTIONARY',
+            entity,
+            summary: `Replaced dictionary ${entity}`,
+          },
+          () => {
+            dbState[entity] = prevDict;
+          }
+        );
+        res.setHeader('ETag', `W/"v${dbState.version}"`);
+        return res.json({ success: true, version: dbState.version, data: dbState[entity] });
+      }
+      if (!Array.isArray(payload)) {
         return res.status(400).json({
           success: false,
           error: 'Bad Request',
-          message: `Entity '${entity}' requires a JSON object payload.`,
+          message: `PUT /api/gmao/${entity} requires an array payload or use /api/gmao/${entity}/:id.`,
         });
       }
-      dbState[entity] = payload;
-      await persistState({
-        actor: resolveActor(req),
-        action: 'REPLACE_DICTIONARY',
-        entity,
-        summary: `Replaced dictionary ${entity}`,
-      });
+
+      const currentList = Array.isArray(dbState[entity]) ? [...dbState[entity]] : [];
+      const prevRawStock = Array.isArray(dbState.rawStock) ? [...dbState.rawStock] : [];
+      const prevStock = Array.isArray(dbState.stock) ? [...dbState.stock] : [];
+      const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+      const effectivePayload =
+        (req as any).isBootstrapAuthorized === true
+          ? payload
+          : clampMakerCheckerCollectionForRole(actorRole, entity, payload, currentList);
+
+      const rollbackEntity = () => {
+        dbState[entity] = currentList;
+        if (entity === 'rawStock' || entity === 'stock') {
+          dbState.rawStock = prevRawStock;
+          dbState.stock = prevStock;
+        }
+      };
+
+      dbState[entity] = shouldMergeEntity
+        ? mergeEntityCollection(entity, currentList, effectivePayload, { preserveServerOnlyItems: true })
+        : effectivePayload;
+      if (entity === 'rawStock') dbState.stock = dbState.rawStock;
+      if (entity === 'stock') dbState.rawStock = dbState.stock;
+
+      if (entity === 'mouvements' || entity === 'rawStock' || entity === 'stock') {
+        const stockGuard = validateProjectedStockInvariant({
+          previousRawStock: prevRawStock,
+          previousMouvements: entity === 'mouvements' ? currentList : dbState.mouvements,
+          nextRawStock: Array.isArray(dbState.rawStock) ? dbState.rawStock : [],
+          nextMouvements: Array.isArray(dbState.mouvements) ? dbState.mouvements : [],
+        });
+        if (!stockGuard.valid) {
+          rollbackEntity();
+          return res.status(409).json({
+            success: false,
+            error: 'Conflict',
+            code: 'STOCK_NEGATIVE_PREVENTED',
+            message: `Stock insuffisant : solde négatif interdit pour ${stockGuard.violations.map((v) => v.ref).join(', ')}.`,
+            violations: stockGuard.violations,
+            version: dbState.version,
+          });
+        }
+      }
+
+      await persistState(
+        {
+          actor: resolveActor(req),
+          action: shouldMergeEntity ? 'MERGE_COLLECTION' : 'REPLACE_COLLECTION',
+          entity,
+          summary: `${shouldMergeEntity ? 'Merged' : 'Replaced'} collection ${entity} (${dbState[entity].length} items)`,
+        },
+        rollbackEntity
+      );
       res.setHeader('ETag', `W/"v${dbState.version}"`);
-      return res.json({ success: true, version: dbState.version, data: dbState[entity] });
-    }
-    if (!Array.isArray(payload)) {
-      return res.status(400).json({
+      return res.json({
+        success: true,
+        version: dbState.version,
+        data: stripSensitiveAccountFields(entity, dbState[entity]),
+      });
+    } catch (error: any) {
+      return res.status(500).json({
         success: false,
-        error: 'Bad Request',
-        message: `PUT /api/gmao/${entity} requires an array payload or use /api/gmao/${entity}/:id.`,
+        code: 'PERSISTENCE_FAILED',
+        message: error?.message || `Failed to update collection '${entity}'`,
       });
     }
-
-    const currentList = Array.isArray(dbState[entity]) ? dbState[entity] : [];
-    const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
-    const effectivePayload =
-      (req as any).isBootstrapAuthorized === true
-        ? payload
-        : clampMakerCheckerCollectionForRole(actorRole, entity, payload, currentList);
-
-    dbState[entity] = shouldMergeEntity
-      ? mergeEntityCollection(entity, currentList, effectivePayload, { preserveServerOnlyItems: true })
-      : effectivePayload;
-    if (entity === 'rawStock') dbState.stock = dbState.rawStock;
-    if (entity === 'stock') dbState.rawStock = dbState.stock;
-    await persistState({
-      actor: resolveActor(req),
-      action: shouldMergeEntity ? 'MERGE_COLLECTION' : 'REPLACE_COLLECTION',
-      entity,
-      summary: `${shouldMergeEntity ? 'Merged' : 'Replaced'} collection ${entity} (${dbState[entity].length} items)`,
-    });
-    res.setHeader('ETag', `W/"v${dbState.version}"`);
-    return res.json({
-      success: true,
-      version: dbState.version,
-      data: stripSensitiveAccountFields(entity, dbState[entity]),
-    });
   });
 
   app.put('/api/gmao/:entity/:id', requireAllowedEntity, async (req, res) => {
@@ -1890,24 +2048,67 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       (item: any) => item && (String(item.id) === id || String(item.code) === id || String(item.ref) === id)
     );
     if (index !== -1) {
-      const existingRecord = dbState[entity][index];
-      const mergedRecord = { ...existingRecord, ...updatedData };
-      const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
-      dbState[entity][index] =
-        (req as any).isBootstrapAuthorized === true
-          ? mergedRecord
-          : clampMakerCheckerRecordForRole(actorRole, entity, mergedRecord, existingRecord);
-      if (entity === 'rawStock') dbState.stock = dbState.rawStock;
-      if (entity === 'stock') dbState.rawStock = dbState.stock;
-      await persistState({
-        actor: resolveActor(req),
-        action: 'UPDATE_ITEM',
-        entity,
-        summary: `Updated item '${id}' in ${entity}`,
-      });
-      res.setHeader('ETag', `W/"v${dbState.version}"`);
-      const safeReturned = stripSensitiveAccountFields(entity, [dbState[entity][index]])[0];
-      return res.json({ success: true, version: dbState.version, data: safeReturned });
+      try {
+        const prevList = [...dbState[entity]];
+        const prevRawStock = Array.isArray(dbState.rawStock) ? [...dbState.rawStock] : [];
+        const prevStock = Array.isArray(dbState.stock) ? [...dbState.stock] : [];
+        const existingRecord = dbState[entity][index];
+        const mergedRecord = { ...existingRecord, ...updatedData };
+        const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+        const rollbackEntity = () => {
+          dbState[entity] = prevList;
+          if (entity === 'rawStock' || entity === 'stock') {
+            dbState.rawStock = prevRawStock;
+            dbState.stock = prevStock;
+          }
+        };
+
+        dbState[entity][index] =
+          (req as any).isBootstrapAuthorized === true
+            ? mergedRecord
+            : clampMakerCheckerRecordForRole(actorRole, entity, mergedRecord, existingRecord);
+        if (entity === 'rawStock') dbState.stock = dbState.rawStock;
+        if (entity === 'stock') dbState.rawStock = dbState.stock;
+
+        if (entity === 'mouvements' || entity === 'rawStock' || entity === 'stock') {
+          const stockGuard = validateProjectedStockInvariant({
+            previousRawStock: prevRawStock,
+            previousMouvements: entity === 'mouvements' ? prevList : dbState.mouvements,
+            nextRawStock: Array.isArray(dbState.rawStock) ? dbState.rawStock : [],
+            nextMouvements: Array.isArray(dbState.mouvements) ? dbState.mouvements : [],
+          });
+          if (!stockGuard.valid) {
+            rollbackEntity();
+            return res.status(409).json({
+              success: false,
+              error: 'Conflict',
+              code: 'STOCK_NEGATIVE_PREVENTED',
+              message: `Stock insuffisant : solde négatif interdit pour ${stockGuard.violations.map((v) => v.ref).join(', ')}.`,
+              violations: stockGuard.violations,
+              version: dbState.version,
+            });
+          }
+        }
+
+        await persistState(
+          {
+            actor: resolveActor(req),
+            action: 'UPDATE_ITEM',
+            entity,
+            summary: `Updated item '${id}' in ${entity}`,
+          },
+          rollbackEntity
+        );
+        res.setHeader('ETag', `W/"v${dbState.version}"`);
+        const safeReturned = stripSensitiveAccountFields(entity, [dbState[entity][index]])[0];
+        return res.json({ success: true, version: dbState.version, data: safeReturned });
+      } catch (error: any) {
+        return res.status(500).json({
+          success: false,
+          code: 'PERSISTENCE_FAILED',
+          message: error?.message || `Failed to update item '${id}' in '${entity}'`,
+        });
+      }
     }
     return res.status(404).json({ success: false, message: `Item with id/code '${id}' not found in '${entity}'` });
   });
@@ -1935,21 +2136,42 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     if (!Array.isArray(dbState[entity])) {
       return res.status(404).json({ success: false, message: `Entity '${entity}' is not an array collection` });
     }
-    const initialLen = dbState[entity].length;
-    dbState[entity] = dbState[entity].filter(
+    const prevList = [...dbState[entity]];
+    const prevRawStock = Array.isArray(dbState.rawStock) ? [...dbState.rawStock] : [];
+    const prevStock = Array.isArray(dbState.stock) ? [...dbState.stock] : [];
+    const filteredList = prevList.filter(
       (item: any) => !item || (String(item.id) !== id && String(item.code) !== id && String(item.ref) !== id)
     );
-    if (dbState[entity].length < initialLen) {
-      if (entity === 'rawStock') dbState.stock = dbState.rawStock;
-      if (entity === 'stock') dbState.rawStock = dbState.stock;
-      await persistState({
-        actor: resolveActor(req),
-        action: 'DELETE_ITEM',
-        entity,
-        summary: `Deleted item '${id}' from ${entity}`,
-      });
-      res.setHeader('ETag', `W/"v${dbState.version}"`);
-      return res.json({ success: true, version: dbState.version, message: `Deleted item '${id}' from '${entity}'` });
+    if (filteredList.length < prevList.length) {
+      try {
+        const rollbackEntity = () => {
+          dbState[entity] = prevList;
+          if (entity === 'rawStock' || entity === 'stock') {
+            dbState.rawStock = prevRawStock;
+            dbState.stock = prevStock;
+          }
+        };
+        dbState[entity] = filteredList;
+        if (entity === 'rawStock') dbState.stock = dbState.rawStock;
+        if (entity === 'stock') dbState.rawStock = dbState.stock;
+        await persistState(
+          {
+            actor: resolveActor(req),
+            action: 'DELETE_ITEM',
+            entity,
+            summary: `Deleted item '${id}' from ${entity}`,
+          },
+          rollbackEntity
+        );
+        res.setHeader('ETag', `W/"v${dbState.version}"`);
+        return res.json({ success: true, version: dbState.version, message: `Deleted item '${id}' from '${entity}'` });
+      } catch (error: any) {
+        return res.status(500).json({
+          success: false,
+          code: 'PERSISTENCE_FAILED',
+          message: error?.message || `Failed to delete item '${id}' from '${entity}'`,
+        });
+      }
     }
     return res.status(404).json({ success: false, message: `Item with id/code '${id}' not found in '${entity}'` });
   });
@@ -2035,11 +2257,11 @@ export async function startServer() {
       )
       .then((vite) => {
         viteInstance = vite;
-        console.log('[Server] Vite development middleware enabled');
+        serverLogger.info('[Server] Vite development middleware enabled');
         return vite;
       })
       .catch((err) => {
-        console.error('[Server] Vite development middleware initialization failed:', err);
+        serverLogger.error('[Server] Vite development middleware initialization failed:', err);
         return null;
       });
 
@@ -2057,7 +2279,7 @@ export async function startServer() {
     });
   } else {
     mountProductionStaticWithCspNonce(path.join(__dirname, 'dist'));
-    console.log('[Server] Production static serving enabled from dist/ with nonced CSP');
+    serverLogger.info('[Server] Production static serving enabled from dist/ with nonced CSP');
   }
 
   let activeHttpServer: any = null;
@@ -2081,12 +2303,12 @@ export async function startServer() {
   const listenWithRetry = (port: number, retriesLeft = 25) => {
     const httpServer = app.listen(port, '0.0.0.0', () => {
       activeHttpServer = httpServer;
-      console.log(`🚀 GMAO Enterprise Server running on http://localhost:${port}`);
+      serverLogger.info(`🚀 GMAO Enterprise Server running on http://localhost:${port}`);
     });
 
     httpServer.on('error', (err: any) => {
       if (err?.code === 'EADDRINUSE' && retriesLeft > 0) {
-        console.warn(`[Server] Port ${port} busy, retrying in 300ms (${retriesLeft} attempts left)...`);
+        serverLogger.warn(`[Server] Port ${port} busy, retrying in 300ms (${retriesLeft} attempts left)...`);
         setTimeout(() => {
           try {
             httpServer.close();
@@ -2097,7 +2319,7 @@ export async function startServer() {
         }, 300);
         return;
       }
-      console.error('[Server] HTTP server error:', err);
+      serverLogger.error('[Server] HTTP server error:', err);
     });
   };
 
@@ -2110,7 +2332,7 @@ const isMainModule =
 
 if (isMainModule && !process.env.VITEST) {
   startServer().catch((err) => {
-    console.error('[Server] Fatal startup error:', err);
+    serverLogger.error('[Server] Fatal startup error:', err);
     process.exit(1);
   });
 }

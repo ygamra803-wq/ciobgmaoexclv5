@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Vue d'Ensemble & Philosophie Industrielle
 
-La maintenance corrective dans **CIOB GMAO v4** n'est pas un simple registre de tickets « Helpdesk », mais un **moteur transactionnel déterministe** modélisé pour l'atelier industriel :
+La maintenance corrective dans **CIOB GMAO Nexus v5.0.2** n'est pas un simple registre de tickets « Helpdesk », mais un **moteur transactionnel déterministe** modélisé pour l'atelier industriel :
 
 1. **Cycle de Vie Verrouillé (Strict FSM) :** Aucune intervention ne peut passer d'un statut arbitraire à un autre sans validation de préconditions explicites (`src/domain/corrective/services/WorkOrderStateMachine.ts`).
 2. **Vérité Industrielle des Délais d'Atelier (`CORRECTIVE-ATELIER-P0`) :**

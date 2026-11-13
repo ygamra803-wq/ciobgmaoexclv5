@@ -1,6 +1,6 @@
 # 🏛️ Single Source of Truth (SSOT) — Architecture & Persistence Registry
 
-Ce document définit la table canonique de persistance (`src/infrastructure/persistence/storageKeys.ts`) et les règles relationnelles strictes de **CIOB GMAO v4**.
+Ce document définit la table canonique de persistance (`src/infrastructure/persistence/storageKeys.ts`) et les règles relationnelles strictes de **CIOB GMAO Nexus v5.0.2**.
 Toute clé absente de ce registre est considérée comme **legacy** (`LEGACY_KEY_MAP`), migrée une seule fois au démarrage via `migrateStorage.ts` (uniquement hors mode `START_MODE === 'empty'`), puis supprimée.
 
 ---

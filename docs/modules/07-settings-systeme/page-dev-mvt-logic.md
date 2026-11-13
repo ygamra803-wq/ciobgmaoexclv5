@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. L'Invariant Mathématique Absolu du Stock
 
-Dans **CIOB GMAO v4**, le stock actuel n'est jamais un nombre saisi manuellement par un utilisateur. C'est le résultat d'une **équation déterministe non négociable** :
+Dans **CIOB GMAO Nexus v5.0.2**, le stock actuel n'est jamais un nombre saisi manuellement par un utilisateur. C'est le résultat d'une **équation déterministe non négociable** :
 
 $$\text{stockActuel} = \text{stockInitial} + \sum \text{Entrées} - \sum \text{Sorties}$$
 

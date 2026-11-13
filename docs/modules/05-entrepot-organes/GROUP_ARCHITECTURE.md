@@ -26,7 +26,7 @@ relatedTabs:
 
 ## 1. Vue d'Ensemble & Distinction Fondamentale des 3 Familles (`PDR` vs `Components` vs `Parts`)
 
-Dans **CIOB GMAO v4**, la philosophie industrielle distingue strictement **trois univers matériels** qui ne partagent jamais la même table de groupes :
+Dans **CIOB GMAO Nexus v5.0.2**, la philosophie industrielle distingue strictement **trois univers matériels** qui ne partagent jamais la même table de groupes :
 
 1. **Magasin PDR classique (`rawStock` / `gmao_pdr_groups_v1` — `#pdr_groups`) :**
    - Articles fongibles et consommables achetés sur catalogue : roulements, filtres, fusibles, joints toriques, courroies, huiles.

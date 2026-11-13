@@ -25,7 +25,7 @@ relatedTabs:
 
 ## 1. Standardisation Monétaire Internationale (ISO 4217)
 
-Pour accompagner les usines internationales ou les sites industriels important des pièces de rechange d'Europe ou d'Asie, **CIOB GMAO v4** intègre un moteur de conversion conforme à la norme **ISO 4217** :
+Pour accompagner les usines internationales ou les sites industriels important des pièces de rechange d'Europe ou d'Asie, **CIOB GMAO Nexus v5.0.2** intègre un moteur de conversion conforme à la norme **ISO 4217** :
 
 ```typescript
 export type SupportedCurrency = 'DA' | 'DZD' | 'MAD' | 'EUR' | 'USD';

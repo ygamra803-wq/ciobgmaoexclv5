@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Modèle d'Autorisation Fail-Closed (RBAC Architecture)
 
-Le contrôle d'accès dans **CIOB GMAO v4** applique le principe de moindre privilège absolu (**Least Privilege & Fail-Closed**) :
+Le contrôle d'accès dans **CIOB GMAO Nexus v5.0.2** applique le principe de moindre privilège absolu (**Least Privilege & Fail-Closed**) :
 
 ```text
                ┌──────────────────────────────┐

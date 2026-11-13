@@ -24,7 +24,7 @@ relatedTabs:
 
 ## 1. Architecture du Coffre-Fort Chiffré (`vaultService.ts`)
 
-Pour protéger les données sensibles et les jetons d'accès API en environnement d'atelier non supervisé, **CIOB GMAO v4** intègre un coffre-fort numérique local :
+Pour protéger les données sensibles et les jetons d'accès API en environnement d'atelier non supervisé, **CIOB GMAO Nexus v5.0.2** intègre un coffre-fort numérique local :
 
 ```text
 [ Saisie du Master PIN par l'Administrateur ]

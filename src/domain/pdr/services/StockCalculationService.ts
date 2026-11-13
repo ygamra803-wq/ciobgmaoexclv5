@@ -1,7 +1,7 @@
 /**
  * @module StockCalculationService
  * @description
- * Canonical Spare Parts (`PDR`) Stock Calculation Engine for CIOB GMAO v4.
+ * Canonical Spare Parts (`PDR`) Stock Calculation Engine for CIOB GMAO Nexus v5.0.2.
  *
  * ### Core Mathematical Invariant (`AGENTS.md` §1.3):
  * - `stockActuel = Math.max(0, stockInitial + entrées − sorties)`
@@ -31,7 +31,7 @@ export interface StockCalculationResult {
 }
 
 /**
- * Canonical Stock Calculation Service for CIOB GMAO v4.
+ * Canonical Stock Calculation Service for CIOB GMAO Nexus v5.0.2.
  *
  * ### Capabilities & Performance Guarantees:
  * - **Multi-Level Caching:** L1 in-memory TTL map (`5000ms`) synchronized with `multiLevelCacheManager` (`stock` & `formula` tags).

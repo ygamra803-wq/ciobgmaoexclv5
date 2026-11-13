@@ -1,4 +1,4 @@
-# 🧭 CIOB GMAO v4 — Profile-Driven Wizard Engine (`Mature Light Excel`)
+# 🧭 CIOB GMAO Nexus v5.0.2 — Profile-Driven Wizard Engine (`Mature Light Excel`)
 
 > **Emplacement du package :** `src/presentation/components/common/wizard/`  
 > **Clé de persistance Feature Flag :** `STORAGE_KEYS.WIZARD_FEATURE_FLAGS` (`gmao_wizard_feature_flags_v1`)  
@@ -8,7 +8,7 @@
 
 ## 1. Philosophie & Architecture
 
-Le moteur **Wizard Engine** de CIOB GMAO v4 est conçu selon le paradigme **Profile-Driven UI** (Interface pilotée par profil déclaratif) et adapté à l'identité visuelle **Mature Light Excel** :
+Le moteur **Wizard Engine** de CIOB GMAO Nexus v5.0.2 est conçu selon le paradigme **Profile-Driven UI** (Interface pilotée par profil déclaratif) et adapté à l'identité visuelle **Mature Light Excel** :
 
 1. **Séparation stricte Conteneur / Contenu :**
    - `WizardShell` et `WizardModal` gèrent la navigation, la barre latérale chronologique (`WizardSidebar`), les transitions fluides (`motion/react`), l'isolation des erreurs (`StepErrorBoundary`) et la barre d'actions inférieure (`WizardFooter`).

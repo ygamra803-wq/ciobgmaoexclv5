@@ -18,7 +18,7 @@ relatedTabs:
 
 ## 1. Philosophie Fondamentale des 3 Tiers (Séparation Stricte des Préoccupations)
 
-Dans **CIOB GMAO v4**, un équipement industriel n'est jamais réduit à une simple ligne plate. L'architecture sépare rigoureusement **ce qu'est l'équipement par catalogue** (Tier 1), **où et comment il opère physiquement dans l'usine** (Tier 2), et **son patrimoine de connaissances d'ingénierie** (Tier 3) :
+Dans **CIOB GMAO Nexus v5.0.2**, un équipement industriel n'est jamais réduit à une simple ligne plate. L'architecture sépare rigoureusement **ce qu'est l'équipement par catalogue** (Tier 1), **où et comment il opère physiquement dans l'usine** (Tier 2), et **son patrimoine de connaissances d'ingénierie** (Tier 3) :
 
 ```text
 ┌───────────────────────────────────────────────────────────────────────────┐

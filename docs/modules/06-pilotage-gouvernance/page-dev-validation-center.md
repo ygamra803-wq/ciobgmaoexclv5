@@ -25,7 +25,7 @@ relatedTabs:
 
 ## 1. Philosophie & Isolation Transactionnelle
 
-Le principe fondamental de la gouvernance industrielle dans **CIOB GMAO v4** est la **séparation stricte entre la déclaration opérationnelle terrain (Maker) et la validation d'inventaire (Checker)** :
+Le principe fondamental de la gouvernance industrielle dans **CIOB GMAO Nexus v5.0.2** est la **séparation stricte entre la déclaration opérationnelle terrain (Maker) et la validation d'inventaire (Checker)** :
 
 ```text
 [ TECHNICIEN / MAKER ]

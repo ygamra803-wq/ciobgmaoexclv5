@@ -28,7 +28,7 @@ relatedTabs:
 
 ## 1. Vue d'Ensemble & Rôle Architectural Fondamental
 
-L'écran des **Paramètres Système (`SettingsView`)** n'est pas une simple page de préférences graphiques ; c'est le **centre névralgique de commande et d'intégrité de CIOB GMAO v4** :
+L'écran des **Paramètres Système (`SettingsView`)** n'est pas une simple page de préférences graphiques ; c'est le **centre névralgique de commande et d'intégrité de CIOB GMAO Nexus v5.0.2** :
 
 1. **Garant du Single Source of Truth (SSOT) :**
    - Toutes les entités de l'usine transitent exclusivement par `src/application/DataGateway.ts`, `src/store/useGmaoStore.ts`, et les 36+ clés canoniques `STORAGE_KEYS`.
