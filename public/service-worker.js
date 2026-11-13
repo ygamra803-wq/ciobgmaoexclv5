@@ -1,5 +1,5 @@
 /**
- * Service Worker Enterprise Optimisé pour PWA - CIOB GMAO v4
+ * Service Worker Enterprise Optimisé pour PWA - CIOB GMAO Nexus v5.0.2 (ciobGMAO-nexusV5.0.2)
  * Supporte :
  * - Stratégies multi-niveaux (Cache-First pour assets, Network-First pour API & Navigation)
  * - Background Sync ('sync-gmao-data')
@@ -7,9 +7,9 @@
  * - Nettoyage automatique de la taille du cache (LRU / Max Entries)
  * - Isolation des requêtes de développement Vite
  */
-const CACHE_NAME = 'gmao-v4';
-const DATA_CACHE_NAME = 'gmao-data-v4';
-const ASSET_CACHE_NAME = 'gmao-assets-v4';
+const CACHE_NAME = 'gmao-nexus-v5.0.2';
+const DATA_CACHE_NAME = 'gmao-nexus-data-v5.0.2';
+const ASSET_CACHE_NAME = 'gmao-nexus-assets-v5.0.2';
 
 const PRECACHE_ASSETS = [
   '/',

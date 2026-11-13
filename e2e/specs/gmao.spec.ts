@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('CIOB GMAO v4 - Core E2E & SSOT Verification', () => {
+test.describe('CIOB GMAO Nexus v5.0.2 - Core E2E & SSOT Verification', () => {
   test('Loads application shell and verifies API health & Swagger docs endpoint', async ({ page, request }) => {
     const healthRes = await request.get('/api/health');
     expect(healthRes.ok()).toBeTruthy();

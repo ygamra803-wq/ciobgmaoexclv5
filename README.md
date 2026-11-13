@@ -1,24 +1,35 @@
-# 🏭 CIOB GMAO v4 — Industrial Maintenance, Asset & Inventory Platform
+# 🏭 CIOB GMAO Nexus v5.0.2 (`ciobGMAO-nexusV5.0.2`) — Industrial Maintenance, Asset & Inventory Platform
+
+[![Version](https://img.shields.io/badge/version-5.0.2-047857.svg)](./CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-ciobGMAO--nexusV5.0.2-0f766e.svg)](./CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](./CODE_OF_CONDUCT.md)
+[![Security Policy](https://img.shields.io/badge/Security-LAN%20Fail--Closed-b91c1c.svg)](./SECURITY.md)
 
 منظومة صناعية متكاملة لإدارة الصيانة (الوقائية بالزمن والعدادات، والتصحيحية)، الأصول الصناعية ومخططاتها المعرفية (`Blueprints`)، مخزون قطع الغيار (`PDR`)، أوامر الشراء والتموين (`PO`)، مستودع المكونات الدوارة (`Entrepôt / Bobinage`)، الرقابة المالية، وحوكمة الاعتماد والتدقيق المؤسسي، مصممة للعمل الفوري بدون إنترنت (**Offline-First PWA**) أو عبر شبكة المصنع المحلية (**LAN Multi-Postes Host**).
 
 ---
 
-## 🧭 البوابة السريعة للتوثيق الهندسي
+## 🧭 البوابة السريعة للتوثيق الهندسي والحوكمة
 
 | الوثيقة | الغرض |
 | :--- | :--- |
 | **[`AGENTS.md`](./AGENTS.md)** | **البوابة الإلزامية الأولى** للمطورين ووكلاء الذكاء الاصطناعي (القواعد التسع غير القابلة للتفاوض). |
-| **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** | الملخص المعماري التنفيذي، الفلسفة الثلاثية للأصول والـ `Blueprint`، وسجل القرارات (`ADR-01` إلى `ADR-10`). |
+| **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** | الملخص المعماري التنفيذي، الفلسفة الثلاثية للأصول والـ `Blueprint`، وسجل القرارات (`ADR-01` إلى `ADR-12`). |
 | **[`CAPABILITIES_AND_STRENGTHS.md`](./CAPABILITIES_AND_STRENGTHS.md)** | سجل القدرات الهندسية الـ 17 المنفذة بالكود والاختبارات الآلية (`Vitest`). |
 | **[`docs/DATA_SSOT.md`](./docs/DATA_SSOT.md)** | جدول مفاتيح التخزين القياسية (`STORAGE_KEYS` — 36+ كياناً) والعلاقات المرجعية (`FK`). |
 | **[`DOCS_INDEX.md`](./DOCS_INDEX.md)** | الفهرس الكامل لوثائق المشروع ومواصفات الشاشات (`docs/*_VIEW.md`). |
+| **[`CHANGELOG.md`](./CHANGELOG.md)** | سجل الإصدارات والترقيات (`5.0.2` / `ciobGMAO-nexusV5.0.2` ← `4.2.0` ← `4.0.0`). |
+| **[`CONTRIBUTING.md`](./CONTRIBUTING.md)** | دليل المساهمة القياسي، نظام الوسوم (`Git Tags/Releases`)، ومعايير الدمج والاختبار. |
+| **[`SECURITY.md`](./SECURITY.md)** | سياسة الأمان، الإبلاغ المسؤول عن الثغرات، وضوابط خادم `LAN` والمصادقة. |
+| **[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)** | ميثاق السلوك المهني للمساهمين (`Contributor Covenant v2.1`). |
+| **[`LICENSE`](./LICENSE)** | الترخيص القانوني المعتمد للمشروع (**MIT License**). |
 
 ---
 
 ## 🏛️ الفلسفة الصناعية الثلاثية للأصول والمخطط المعرفي (`3-Tier Asset & Cognitive Blueprint Philosophy`)
 
-ينفرِد **CIOB GMAO v4** بفصل هندسي صارم يمنع الخلط بين التصنيف النظري، الواقع الفيزيائي في الورشة، والذاكرة المعرفية المتراكمة:
+ينفرِد **CIOB GMAO Nexus (v5.0.2)** بفصل هندسي صارم يمنع الخلط بين التصنيف النظري، الواقع الفيزيائي في الورشة، والذاكرة المعرفية المتراكمة:
 
 1. **المستوى الأول — العائلة والقالب (`Family & Template`):**
    - التصنيف الهندسي العام (`Family`) وبطاقة المواصفات القياسية للطراز (`Template`: القدرة، السرعة، الصانع، الموديل).
@@ -67,6 +78,17 @@ npm run dev
 npx vitest run
 
 # 4. فحص سلامة الكود والبناء الإنتاجي
+npm run typecheck
 npm run lint
 npm run build
 ```
+
+---
+
+## 🏷️ توحيد الإصدار وإصدارات Git (`Versioning & Release Tagging`)
+
+- **الإصدار المعتمد:** `5.0.2` (وفق معيار **SemVer 2.0.0**)
+- **معرّف الإصدار الرسمي:** `ciobGMAO-nexusV5.0.2`
+- **اسم الحزمة في `package.json`:** `ciobgmao-nexus`
+- **أتمتة الإطلاق:** دفع أي وسم يطابق `ciobGMAO-nexusV*` أو `v*.*.*` يشغّل تلقائياً خط أنابيب [`.github/workflows/release.yml`](./.github/workflows/release.yml) للتحقق من المطابقة والاختبارات وإنشاء GitHub Release وحزم البناء.
+

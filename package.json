@@ -1,7 +1,7 @@
 {
-  "name": "gmao-app",
+  "name": "ciobgmao-nexus",
   "private": true,
-  "version": "4.0.0",
+  "version": "5.0.2",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",

@@ -335,7 +335,7 @@ export default function MachineQrFieldModal({
               <div className="flex items-center justify-between pb-3 border-b-2 border-slate-900">
                 <div>
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block">
-                    CIOB GMAO v4 • IDENTIFICATION ACTIF
+                    CIOB GMAO Nexus v5.0.2 • IDENTIFICATION ACTIF
                   </span>
                   <span className="text-xl font-black font-mono text-slate-950 tracking-tight">
                     {machineCode}

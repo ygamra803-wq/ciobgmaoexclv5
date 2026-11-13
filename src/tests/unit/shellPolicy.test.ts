@@ -1612,7 +1612,7 @@ describe('ShellPolicy Engine (Single Source of Truth for Desktop vs Mobile Shell
 
       // 1. Build full operational snapshot
       const snapshotPayload = AutoBackupService.buildOperationalSnapshotPayload('full');
-      expect(snapshotPayload.version).toBe('4.0.0');
+      expect(snapshotPayload.version).toBe('5.0.2');
       expect(snapshotPayload.counts.machines).toBe(1);
       expect(snapshotPayload.counts.spare_parts).toBe(1);
       expect(snapshotPayload.counts.movements).toBe(1);

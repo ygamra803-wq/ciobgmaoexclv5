@@ -1,12 +1,13 @@
 import { SwaggerOptions } from 'swagger-ui-express';
+import { APP_VERSION, APP_RELEASE_TAG } from './appVersion';
 
 export const swaggerSpec = {
   openapi: '3.0.0',
   info: {
       title: 'CIOB GMAO API',
-      version: '4.0.0',
+      version: APP_VERSION,
       description: `
-# CIOB GMAO Industrial Enterprise Engine API
+# CIOB GMAO Nexus API (${APP_RELEASE_TAG})
 
 **GMAO (Gestion de Maintenance Assistée par Ordinateur)** — محرك إدارة الصيانة الصناعية والمخزون (Offline-First & Relational SSOT).
 

@@ -7,12 +7,12 @@ import { loadCollection } from '../../infrastructure/persistence/migrateStorage'
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { PreventiveService } from '../../application/services/PreventiveService';
 
-describe('CIOB GMAO v4 — 4-Pillar Enhancements & SSOT Integration Suite', () => {
+describe('CIOB GMAO Nexus v5.0.2 — 4-Pillar Enhancements & SSOT Integration Suite', () => {
   it('Pillar 4 (OpenAPI / Swagger): generates a valid OpenAPI 3.0 specification with core GMAO paths and security', () => {
     const spec = swaggerSpec as any;
     expect(spec.openapi).toBe('3.0.0');
     expect(spec.info.title).toBe('CIOB GMAO API');
-    expect(spec.info.version).toBe('4.0.0');
+    expect(spec.info.version).toBe('5.0.2');
     expect(spec.paths['/health']).toBeDefined();
     expect(spec.paths['/gmao/state']).toBeDefined();
     expect(spec.paths['/gmao/{entity}']).toBeDefined();

@@ -1,4 +1,4 @@
-# 🏛️ AGENTS.md — CIOB GMAO v4 Engineering Constitution & Agent Gateway
+# 🏛️ AGENTS.md — CIOB GMAO Nexus (v5.0.2) Engineering Constitution & Agent Gateway
 
 > **STOP — READ THIS FIRST (Token & Context Discipline):**
 > Do **NOT** crawl `/docs` or read all markdown files automatically. This file is the authoritative gateway. Open secondary files **only** when your specific task requires them.

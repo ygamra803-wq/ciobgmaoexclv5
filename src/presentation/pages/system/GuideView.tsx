@@ -668,7 +668,7 @@ export default function GuideView({ onNavigateToTab }: GuideViewProps) {
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-3">
               <BookOpen className="w-7 h-7 text-amber-300 shrink-0" />
-              <span>Guide d’Utilisation & Architecture Métier CIOB GMAO v4</span>
+              <span>Guide d’Utilisation & Architecture Métier CIOB GMAO Nexus v5.0.2</span>
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
               Documentation officielle synchronisée avec le code source (`docs/modules/*`). Chaque groupe combine un{' '}

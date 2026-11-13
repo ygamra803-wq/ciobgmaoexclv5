@@ -4,6 +4,7 @@ import { storageService } from '../../utils/storageService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { DataGateway } from '../../application/DataGateway';
 import { useGmaoStore } from '../../store/useGmaoStore';
+import { APP_NAME, APP_VERSION } from '../../config/appVersion';
 
 export const BACKUP_STORAGE_KEY = 'gmao_snapshots_history';
 export const MAX_SNAPSHOTS = 12;
@@ -478,7 +479,7 @@ export class AutoBackupService {
         isManual,
         counts,
         data,
-        version: '4.0.0',
+        version: APP_VERSION,
       };
 
       snapshotDataCache.set(snapshotId, fullSnapshot);
@@ -496,7 +497,7 @@ export class AutoBackupService {
         reason,
         isManual,
         counts,
-        version: '4.0.0',
+        version: APP_VERSION,
       };
 
       const history = this.listSnapshots();
@@ -667,10 +668,10 @@ export class AutoBackupService {
     const counts = this.summarizeCounts(data);
 
     return {
-      app: 'CIOB GMAO Enterprise',
+      app: APP_NAME,
       partition: partitionType,
       exportDate: new Date().toISOString(),
-      version: '4.0.0',
+      version: APP_VERSION,
       counts,
       data,
     };

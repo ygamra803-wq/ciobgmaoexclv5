@@ -49,7 +49,7 @@ export class MonthlyReportExportService {
 
     // 1. Sheet: Synthese_Direction
     const syntheseRows = [
-      ['RAPPORT MENSUEL EXÉCUTIF DIRECTION — CIOB GMAO v4'],
+      ['RAPPORT MENSUEL EXÉCUTIF DIRECTION — CIOB GMAO Nexus v5.0.2'],
       [
         'Période du Rapport',
         currentMonth,
@@ -362,7 +362,7 @@ export class MonthlyReportExportService {
 
     // 1. Sheet: Synthese_Exploitation
     const syntheseRows = [
-      ['RAPPORT OPÉRATIONNEL DE VACATION & HEBDOMADAIRE — CIOB GMAO v4'],
+      ['RAPPORT OPÉRATIONNEL DE VACATION & HEBDOMADAIRE — CIOB GMAO Nexus v5.0.2'],
       ['Période Début', report.fromYMD, 'Période Fin', report.toYMD, `${report.daysCount} jour(s) • Devise ISO: ${isoCode}`],
       ['Périmètre Actifs', report.assetClassFilter, 'Machines Production Actives', report.productionMachinesCount, ''],
       [],
