@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { serverSyncService } from '../../../services/serverSyncService';
 import { networkConfigService } from '../../../services/networkConfigService';
-import { SERVER_SESSION_STORAGE_KEY } from '../serverSession';
+import { SERVER_SESSION_STORAGE_KEY, signServerSession } from '../serverSession';
+import { ensureFreshServerSession, refreshServerSession } from '../serverSessionClient';
 
-describe('SEC-LAN-P1 — Client Server Session Token Lifecycle & Fail-Closed Handling', () => {
+describe('SEC-LAN-P1 + SEC-LAN-P2 — Client Server Session Token Lifecycle & Silent Refresh', () => {
   const originalFetch = global.fetch;
 
   beforeEach(() => {
@@ -142,6 +143,70 @@ describe('SEC-LAN-P1 — Client Server Session Token Lifecycle & Fail-Closed Han
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     window.removeEventListener('gmao:server_session_rejected', rejectedSpy);
+    window.removeEventListener('gmao:server_session_expired', expiredSpy);
+  });
+
+  it('silently refreshes token within expiry margin and clears session without header fallback if /auth/refresh rejects (403)', async () => {
+    const secret = 'test-client-refresh-secret-0123456789abcdef';
+    const nowSec = Math.floor(Date.now() / 1000);
+    // Token expiring in 10 minutes (within 25 min refresh threshold)
+    const expiringSoon = signServerSession(
+      { sub: 'admin', role: 'ADMIN', name: 'Admin', ttlSeconds: 600 },
+      secret,
+      nowSec
+    );
+    const rotated = signServerSession(
+      { sub: 'admin', role: 'ADMIN', name: 'Admin', ttlSeconds: 36000 },
+      secret,
+      nowSec + 5
+    );
+
+    serverSyncService.setServerSessionToken(expiringSoon.token);
+
+    const expiredSpy = vi.fn();
+    window.addEventListener('gmao:server_session_expired', expiredSpy);
+
+    const mockFetch = vi
+      .fn()
+      // 1. Successful silent refresh
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          token: rotated.token,
+          expiresAt: new Date(rotated.payload.exp * 1000).toISOString(),
+          actor: { sub: 'admin', role: 'ADMIN', name: 'Admin' },
+        }),
+      })
+      // 2. Subsequent failed refresh (revoked/role changed -> 403)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        json: async () => ({
+          success: false,
+          code: 'SERVER_SESSION_ROLE_CHANGED',
+          message: 'User registry role changed.',
+        }),
+      });
+    global.fetch = mockFetch as any;
+
+    const refreshOk = await ensureFreshServerSession(25 * 60, nowSec);
+    expect(refreshOk?.success).toBe(true);
+    expect(serverSyncService.getServerSessionToken()).toBe(rotated.token);
+
+    // Since rotated token has 10h remaining, ensureFreshServerSession does NOT call fetch unnecessarily
+    const noOpCheck = await ensureFreshServerSession(25 * 60, nowSec);
+    expect(noOpCheck?.success).toBe(true);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+
+    // Explicit refresh rejection -> clears token and emits gmao:server_session_expired
+    const refreshFail = await refreshServerSession();
+    expect(refreshFail.success).toBe(false);
+    expect(refreshFail.status).toBe(403);
+    expect(serverSyncService.getServerSessionToken()).toBe('');
+    expect(expiredSpy).toHaveBeenCalledTimes(1);
+
     window.removeEventListener('gmao:server_session_expired', expiredSpy);
   });
 

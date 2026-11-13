@@ -6,6 +6,7 @@ import {
   pbkdf2Sha256Hex,
   symmetricEncrypt,
   symmetricDecrypt,
+  constantTimeEqual,
 } from './nativeCrypto';
 import { Logger } from '../logger/LoggerService';
 
@@ -149,7 +150,10 @@ export class SecurityService {
           const iterations = parseInt(iterStr, 10) || 100000;
           const calculated = await this.hashPassword(password, saltHex, iterations);
           const calculatedHashHex = calculated.split(':')[4];
-          return calculatedHashHex === expectedHashHex;
+          return constantTimeEqual(
+            String(calculatedHashHex || '').toLowerCase(),
+            expectedHashHex.toLowerCase()
+          );
         }
       }
 
@@ -158,12 +162,12 @@ export class SecurityService {
         return false;
       }
 
-      // 3. Fallback for plain SHA-256 or unhashed legacy development passwords
+      // 3. Fallback for legacy SHA-256 hex digest (constant-time; plaintext passwords are strictly rejected)
       if (storedHash.length === 64 && /^[0-9a-f]+$/i.test(storedHash)) {
-        return sha256Hex(password) === storedHash;
+        return constantTimeEqual(sha256Hex(password).toLowerCase(), storedHash.toLowerCase());
       }
 
-      return password === storedHash;
+      return false;
     } catch (error) {
       Logger.error('Password comparison failed', error);
       return false;
@@ -287,8 +291,8 @@ export class SecurityService {
 
     const [encoded, signature] = parts;
     const expectedSignature = hmacSha256Hex(encoded, this.SECRET_KEY);
-    
-    if (signature !== expectedSignature) {
+
+    if (!constantTimeEqual(String(signature || '').toLowerCase(), expectedSignature.toLowerCase())) {
       Logger.warn('[SecurityService] Invalid token signature detected');
       throw new Error('Invalid token signature');
     }
@@ -323,8 +327,7 @@ export class SecurityService {
    * @returns {string} المعرف العشوائي المولد
    */
   static generateId() {
-    return Math.random().toString(36).substring(2, 15) +
-           Math.random().toString(36).substring(2, 15);
+    return this.generateRandomHex(12);
   }
 
   /**
@@ -399,6 +402,10 @@ export class SecurityService {
       const trimmed = raw.trim();
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         const parsed = JSON.parse(trimmed);
+        if (parsed && typeof parsed === 'object' && typeof parsed.token === 'string') {
+          const verifiedPayload = this.verifyToken(parsed.token);
+          return { ...parsed, payload: verifiedPayload };
+        }
         return parsed;
       }
       return this.decrypt(raw);
@@ -422,14 +429,13 @@ export class SecurityService {
    */
   static verifyPIN(enteredPIN, storedPIN) {
     if (!enteredPIN || !storedPIN) return false;
-    if (enteredPIN === storedPIN) return true;
     if (typeof storedPIN === 'string' && storedPIN.startsWith('pbkdf2:v1:')) {
       const parts = storedPIN.split(':');
       if (parts.length === 5) {
         const [, , saltHex, iterStr, expectedHashHex] = parts;
         const iterations = parseInt(iterStr, 10) || 10000;
         const keyHex = pbkdf2Sha256Hex(enteredPIN, saltHex, iterations, 32);
-        return keyHex === expectedHashHex;
+        return constantTimeEqual(keyHex.toLowerCase(), expectedHashHex.toLowerCase());
       }
     }
     return false;

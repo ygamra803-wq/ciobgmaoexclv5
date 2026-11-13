@@ -11,6 +11,7 @@ import {
 } from '../core/security/serverSession';
 import {
   authenticateServerSession,
+  ensureFreshServerSession,
   revokeServerSession,
 } from '../core/security/serverSessionClient';
 
@@ -137,6 +138,25 @@ export const AuthProvider = ({ children }) => {
       };
     }
   }, [authService, refreshAccountsState]);
+
+  // Proactive silent server session refresh (SEC-LAN-P2: refreshes within 25 min of exp)
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+
+    const runProactiveRefresh = () => {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      if (!getClientServerSessionToken()) return;
+      void ensureFreshServerSession();
+    };
+
+    runProactiveRefresh();
+    const intervalId = window.setInterval(runProactiveRefresh, 60 * 1000);
+    window.addEventListener('focus', runProactiveRefresh);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', runProactiveRefresh);
+    };
+  }, [user]);
 
   // Initialisation du Master PIN pour la première fois - synchronise avec la source unique AuthService
   const setupMasterPin = useCallback(

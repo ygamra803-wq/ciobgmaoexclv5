@@ -1,4 +1,4 @@
-import { sha256Hex, symmetricDecrypt } from '../core/security/nativeCrypto';
+import { constantTimeEqual, sha256Hex, symmetricDecrypt } from '../core/security/nativeCrypto';
 import { Logger } from '../core/logger/LoggerService';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { STORAGE_KEYS, ALL_LEGACY_KEYS } from '../infrastructure/persistence/storageKeys';
@@ -153,7 +153,7 @@ try {
       const k = localStorage.key(i);
       if (k && k.startsWith('gmao_')) {
         const item = localStorage.getItem(k);
-        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1') && !item.startsWith('NC1:')) {
+        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1') && !item.startsWith('NC1:') && !item.startsWith('NC2:')) {
           try {
             const parsed = JSON.parse(item);
             memoryCache.set(k, { data: parsed, _lastAccessed: Date.now() });
@@ -399,7 +399,7 @@ export const storageService = {
       if (item === null || item === undefined) return fallback;
 
       // If it's a legacy or SecurityService encrypted token, return fallback safely
-      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:'))) {
+      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:') || item.startsWith('NC2:'))) {
         return fallback;
       }
 
@@ -648,11 +648,11 @@ export const storageService = {
    * Verify input PIN against stored sha256 hash without writing to localStorage
    */
   verifyPin(inputPin, storedValue) {
-    if (!storedValue) return false;
+    if (!storedValue || typeof storedValue !== 'string') return false;
     const cleanInput = String(inputPin || '').trim();
     if (storedValue.length === 64 && /^[0-9a-f]+$/i.test(storedValue)) {
-      return sha256Hex(cleanInput) === storedValue;
+      return constantTimeEqual(sha256Hex(cleanInput).toLowerCase(), storedValue.toLowerCase());
     }
-    return cleanInput === String(storedValue).trim();
+    return false;
   },
 };

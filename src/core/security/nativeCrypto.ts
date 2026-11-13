@@ -60,15 +60,28 @@ export function base64ToBytes(b64: string): Uint8Array {
   return bytes;
 }
 
+/**
+ * Constant-time string comparison over UTF-8 bytes.
+ */
+export function constantTimeEqual(a: string, b: string): boolean {
+  const bytesA = enc.encode(String(a ?? ''));
+  const bytesB = enc.encode(String(b ?? ''));
+  const maxLen = Math.max(bytesA.length, bytesB.length);
+  let diff = bytesA.length ^ bytesB.length;
+  for (let i = 0; i < maxLen; i++) {
+    const ba = i < bytesA.length ? bytesA[i] : 0;
+    const bb = i < bytesB.length ? bytesB[i] : 0;
+    diff |= ba ^ bb;
+  }
+  return diff === 0;
+}
+
 export function randomBytes(byteLength = 16): Uint8Array {
   const buf = new Uint8Array(byteLength);
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     return crypto.getRandomValues(buf);
   }
-  for (let i = 0; i < byteLength; i++) {
-    buf[i] = Math.floor(Math.random() * 256);
-  }
-  return buf;
+  throw new Error('CSPRNG unavailable: crypto.getRandomValues is required.');
 }
 
 export function randomBytesHex(byteLength = 16): string {
@@ -271,18 +284,26 @@ export function pbkdf2Sha256Hex(
   return bytesToHex(pbkdf2Sha256Bytes(password, hexToBytes(saltHex), iterations, dkLen));
 }
 
+const NC2_PBKDF2_ITERATIONS = 10000;
+
+function deriveNc2Keys(passphrase: string, salt: Uint8Array): { encKey: Uint8Array; macKey: Uint8Array } {
+  const masterPrk = pbkdf2Sha256Bytes(passphrase, salt, NC2_PBKDF2_ITERATIONS, 32);
+  const encKey = hmacSha256Bytes('gmao-nc2-enc-key', masterPrk);
+  const macKey = hmacSha256Bytes('gmao-nc2-mac-key', masterPrk);
+  return { encKey, macKey };
+}
+
 /**
- * Authenticated symmetric encryption (CTR-HMAC-SHA256 with random 128-bit salt).
- * Format: `NC1:<saltB64>:<cipherB64>:<macHex>`
+ * Authenticated symmetric encryption (CTR-HMAC-SHA256 with random 128-bit salt,
+ * 10,000 PBKDF2-HMAC-SHA256 iterations, and domain-separated subkeys).
+ * Format: `NC2:<saltB64>:<cipherB64>:<macHex>`
  */
 export function symmetricEncrypt(plaintext: string, passphrase: string): string {
   if (!passphrase) {
     throw new Error('Symmetric key is required for encryption.');
   }
   const salt = randomBytes(16);
-  const keyMaterial = pbkdf2Sha256Bytes(passphrase, salt, 1000, 64);
-  const encKey = keyMaterial.subarray(0, 32);
-  const macKey = keyMaterial.subarray(32, 64);
+  const { encKey, macKey } = deriveNc2Keys(passphrase, salt);
 
   const plainBytes = enc.encode(plaintext);
   const cipherBytes = new Uint8Array(plainBytes.length);
@@ -305,12 +326,12 @@ export function symmetricEncrypt(plaintext: string, passphrase: string): string 
 
   const saltB64 = bytesToBase64(salt);
   const cipherB64 = bytesToBase64(cipherBytes);
-  const macHex = hmacSha256Hex(`${saltB64}:${cipherB64}`, macKey);
-  return `NC1:${saltB64}:${cipherB64}:${macHex}`;
+  const macHex = hmacSha256Hex(`NC2:${saltB64}:${cipherB64}`, macKey);
+  return `NC2:${saltB64}:${cipherB64}:${macHex}`;
 }
 
 /**
- * Authenticated symmetric decryption supporting `NC1:` payloads.
+ * Authenticated symmetric decryption supporting `NC2:` and legacy `NC1:` payloads.
  * Returns empty string if authentication or decryption fails.
  */
 export function symmetricDecrypt(ciphertext: string, passphrase: string): string {
@@ -318,19 +339,40 @@ export function symmetricDecrypt(ciphertext: string, passphrase: string): string
     return '';
   }
 
-  if (ciphertext.startsWith('NC1:')) {
+  const isNc2 = ciphertext.startsWith('NC2:');
+  const isNc1 = ciphertext.startsWith('NC1:');
+  if (!isNc2 && !isNc1) {
+    return '';
+  }
+
+  try {
     const parts = ciphertext.split(':');
     if (parts.length !== 4) {
       return '';
     }
     const [, saltB64, cipherB64, macHex] = parts;
+    if (!saltB64 || !cipherB64 || !macHex) {
+      return '';
+    }
     const salt = base64ToBytes(saltB64);
-    const keyMaterial = pbkdf2Sha256Bytes(passphrase, salt, 1000, 64);
-    const encKey = keyMaterial.subarray(0, 32);
-    const macKey = keyMaterial.subarray(32, 64);
+    let encKey: Uint8Array;
+    let macKey: Uint8Array;
+    let macInput: string;
 
-    const expectedMac = hmacSha256Hex(`${saltB64}:${cipherB64}`, macKey);
-    if (expectedMac !== macHex) {
+    if (isNc2) {
+      const derived = deriveNc2Keys(passphrase, salt);
+      encKey = derived.encKey;
+      macKey = derived.macKey;
+      macInput = `NC2:${saltB64}:${cipherB64}`;
+    } else {
+      const keyMaterial = pbkdf2Sha256Bytes(passphrase, salt, 1000, 64);
+      encKey = keyMaterial.subarray(0, 32);
+      macKey = keyMaterial.subarray(32, 64);
+      macInput = `${saltB64}:${cipherB64}`;
+    }
+
+    const expectedMac = hmacSha256Hex(macInput, macKey);
+    if (!constantTimeEqual(expectedMac.toLowerCase(), String(macHex || '').toLowerCase())) {
       return '';
     }
 
@@ -353,7 +395,7 @@ export function symmetricDecrypt(ciphertext: string, passphrase: string): string
     }
 
     return dec.decode(plainBytes);
+  } catch {
+    return '';
   }
-
-  return '';
 }

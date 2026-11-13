@@ -9,14 +9,27 @@
 import {
   bytesToBase64,
   base64ToBytes,
+  constantTimeEqual,
   hmacSha256Hex,
   pbkdf2Sha256Hex,
   randomBytesHex,
   sha256Hex,
 } from './nativeCrypto';
 
+export { constantTimeEqual };
+
 export const SERVER_SESSION_STORAGE_KEY = 'gmao_server_session_v1';
 export const DEFAULT_SERVER_SESSION_TTL_SECONDS = 10 * 60 * 60; // 10 hours
+export const SENSITIVE_ROLES_SET = new Set<string>(['ADMIN', 'RESPONSABLE_MAINTENANCE']);
+export const DEFAULT_MAX_SESSIONS_SENSITIVE = 1;
+export const DEFAULT_MAX_SESSIONS_STANDARD = 3;
+
+export function getMaxConcurrentSessionsForRole(role: string): number {
+  const normalized = String(role || 'VIEWER').trim().toUpperCase();
+  return SENSITIVE_ROLES_SET.has(normalized)
+    ? DEFAULT_MAX_SESSIONS_SENSITIVE
+    : DEFAULT_MAX_SESSIONS_STANDARD;
+}
 
 export const PROHIBITED_DEFAULT_PASSWORDS = new Set<string>([
   'admin',
@@ -67,21 +80,7 @@ export interface ServerSessionVerifyResult {
   payload?: ServerSessionPayload;
 }
 
-/**
- * Constant-time string comparison over UTF-8 bytes.
- */
-export function constantTimeEqual(a: string, b: string): boolean {
-  const bytesA = utf8Encoder.encode(String(a ?? ''));
-  const bytesB = utf8Encoder.encode(String(b ?? ''));
-  const maxLen = Math.max(bytesA.length, bytesB.length);
-  let diff = bytesA.length ^ bytesB.length;
-  for (let i = 0; i < maxLen; i++) {
-    const ba = i < bytesA.length ? bytesA[i] : 0;
-    const bb = i < bytesB.length ? bytesB[i] : 0;
-    diff |= ba ^ bb;
-  }
-  return diff === 0;
-}
+
 
 function toBase64Url(input: string): string {
   const bytes = utf8Encoder.encode(input);
@@ -106,22 +105,62 @@ export function isWeakOrEmptySessionSecret(secret: unknown): boolean {
 }
 
 /**
+ * Safely decodes the unverified payload of a `GMAO1.` token on the client solely
+ * to inspect `exp`/`iat` for proactive refresh scheduling (never used for trust decisions).
+ */
+export function parseServerSessionPayloadUnsafe(token: string): ServerSessionPayload | null {
+  try {
+    const clean = typeof token === 'string' ? token.trim() : '';
+    const parts = clean.split('.');
+    if (parts.length !== 3 || parts[0] !== 'GMAO1' || !parts[1]) return null;
+    const parsed = JSON.parse(fromBase64Url(parts[1]));
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof parsed.sub !== 'string' ||
+      typeof parsed.exp !== 'number' ||
+      typeof parsed.iat !== 'number'
+    ) {
+      return null;
+    }
+    return parsed as ServerSessionPayload;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolves the server HMAC signing key with zero hardcoded fallback secrets:
  *  1. Explicit `GMAO_SESSION_SECRET` (if >= 16 chars and not weak).
- *  2. Domain-separated HMAC derivation from strong `GMAO_API_TOKEN`.
- *  3. Per-process/per-app CSPRNG ephemeral key.
+ *  2. In `isProduction === true`, silent derivation / ephemeral keys are disabled:
+ *     returns `MISSING_PRODUCTION_SECRET` so session issuance fails closed.
+ *  3. In development: HMAC derivation from strong `GMAO_API_TOKEN`, then per-process CSPRNG key.
  */
 export function resolveServerSessionSecret(params: {
   explicitSecret?: string;
   apiToken?: string;
   fallbackInstanceSecret?: string;
+  isProduction?: boolean;
 } = {}): {
   secret: string;
-  source: 'ENV_SESSION_SECRET' | 'DERIVED_FROM_API_TOKEN' | 'EPHEMERAL_INSTANCE';
+  source:
+    | 'ENV_SESSION_SECRET'
+    | 'DERIVED_FROM_API_TOKEN'
+    | 'EPHEMERAL_INSTANCE'
+    | 'MISSING_PRODUCTION_SECRET';
+  missingInProduction?: boolean;
 } {
   const explicit = typeof params.explicitSecret === 'string' ? params.explicitSecret.trim() : '';
   if (!isWeakOrEmptySessionSecret(explicit)) {
     return { secret: explicit, source: 'ENV_SESSION_SECRET' };
+  }
+
+  if (params.isProduction) {
+    return {
+      secret: '',
+      source: 'MISSING_PRODUCTION_SECRET',
+      missingInProduction: true,
+    };
   }
 
   const apiToken = typeof params.apiToken === 'string' ? params.apiToken.trim() : '';
@@ -360,7 +399,8 @@ export function verifyAccountCredentials(
 const ACCOUNT_SENSITIVE_ENTITIES = new Set<string>(['users', 'technicians', 'authAccounts']);
 
 /**
- * Strips credential secrets (`passwordHash`, `defaultPass`, `pinHash`) before returning
+ * Strips credential secrets (`passwordHash`, `defaultPass`, `pinHash`, `pin`,
+ * `resetToken`, `securityAnswer`, `secret`, `apiKey`) before returning
  * account or personnel records over HTTP GET responses.
  */
 export function stripSensitiveAccountFields(entityKey: string, data: any): any {
@@ -369,7 +409,17 @@ export function stripSensitiveAccountFields(entityKey: string, data: any): any {
   }
   return data.map((item) => {
     if (!item || typeof item !== 'object') return item;
-    const { passwordHash: _ph, defaultPass: _dp, pinHash: _pin, ...safe } = item;
+    const {
+      passwordHash: _ph,
+      defaultPass: _dp,
+      pinHash: _pinHash,
+      pin: _pin,
+      resetToken: _rt,
+      securityAnswer: _sa,
+      secret: _sec,
+      apiKey: _ak,
+      ...safe
+    } = item;
     return safe;
   });
 }

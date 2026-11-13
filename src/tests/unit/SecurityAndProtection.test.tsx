@@ -18,6 +18,8 @@ describe('4. Security & Hardening Tests', () => {
       expect(hashed).not.toBe(pin); // Should not store as plain text
       expect(SecurityService.verifyPIN(pin, hashed)).toBe(true);
       expect(SecurityService.verifyPIN('000000', hashed)).toBe(false);
+      // Plaintext stored PINs must strictly fail verification
+      expect(SecurityService.verifyPIN('567890', '567890')).toBe(false);
     });
 
     it('should prevent brute force attacks by rate-limiting attempts', () => {
@@ -50,10 +52,13 @@ describe('4. Security & Hardening Tests', () => {
       const ciphertext = SecurityService.encrypt(sensitiveData);
       expect(ciphertext).toBeDefined();
       expect(typeof ciphertext).toBe('string');
+      expect(ciphertext.startsWith('NC2:')).toBe(true);
       expect(ciphertext).not.toContain('Achraf Gamra'); // Check payload is actually obfuscated
 
       const decrypted = SecurityService.decrypt(ciphertext);
       expect(decrypted).toEqual(sensitiveData);
+      // Malformed base64/NC2 payload must return null without throwing
+      expect(SecurityService.decrypt('NC2:!!!bad:!!!bad:deadbeef')).toBeNull();
     });
 
     it('should save and load encrypted items securely from localStorage', () => {
@@ -74,6 +79,43 @@ describe('4. Security & Hardening Tests', () => {
     it('should handle corrupt or invalid ciphertexts gracefully without throwing', () => {
       const badData = SecurityService.decrypt('invalid-ciphertext-payload-123!!!');
       expect(badData).toBeNull();
+    });
+
+    it('should remain backward-compatible with legacy NC1 ciphertexts and keep storageService isolated from NC2', async () => {
+      const {
+        pbkdf2Sha256Bytes,
+        hmacSha256Bytes,
+        hmacSha256Hex,
+        bytesToBase64,
+        symmetricDecrypt,
+      } = await import('../../core/security/nativeCrypto');
+      const { storageService } = await import('../../utils/storageService');
+
+      // Construct a genuine legacy NC1:<saltB64>:<cipherB64>:<macHex> payload (1000 PBKDF2 iterations)
+      const passphrase = 'legacy-test-passphrase';
+      const plaintext = '{"legacy":true,"count":42}';
+      const salt = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+      const keyMaterial = pbkdf2Sha256Bytes(passphrase, salt, 1000, 64);
+      const encKey = keyMaterial.subarray(0, 32);
+      const macKey = keyMaterial.subarray(32, 64);
+      const plainBytes = new TextEncoder().encode(plaintext);
+      const cipherBytes = new Uint8Array(plainBytes.length);
+      const counterBlock = new Uint8Array(20);
+      counterBlock.set(salt, 0);
+      const keystream = hmacSha256Bytes(counterBlock, encKey);
+      for (let i = 0; i < plainBytes.length; i++) {
+        cipherBytes[i] = plainBytes[i] ^ keystream[i];
+      }
+      const saltB64 = bytesToBase64(salt);
+      const cipherB64 = bytesToBase64(cipherBytes);
+      const macHex = hmacSha256Hex(`${saltB64}:${cipherB64}`, macKey);
+      const nc1Payload = `NC1:${saltB64}:${cipherB64}:${macHex}`;
+
+      expect(symmetricDecrypt(nc1Payload, passphrase)).toBe(plaintext);
+
+      // Ensure storageService does not expose raw NC2 ciphertext strings
+      SecurityService.saveSecure('gmao_auth_accounts_v2', [{ id: 'admin' }]);
+      expect(storageService.getItem('gmao_auth_accounts_v2', null)).toBeNull();
     });
   });
 

@@ -442,14 +442,26 @@ describe('SEC-LAN-P0 + SEC-LAN-P1 — Fail-Closed Server RBAC & Server-Issued HM
       isProduction?: boolean;
       initialState?: Record<string, any>;
       sessionSecret?: string;
+      omitSessionSecret?: boolean;
+      dataDir?: string;
+      distDir?: string;
+      maxSensitiveSessions?: number;
+      maxStandardSessions?: number;
     } = {}) => {
-      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-sec-p1-'));
+      if (!opts.dataDir) {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-sec-p1-'));
+      } else {
+        tempDir = opts.dataDir;
+      }
       const instance = createGmaoApiApp({
         dataDir: tempDir,
         port: 0,
         isProduction: opts.isProduction ?? false,
         initialState: opts.initialState,
-        sessionSecret: opts.sessionSecret ?? TEST_SESSION_SECRET,
+        sessionSecret: opts.omitSessionSecret ? undefined : (opts.sessionSecret ?? TEST_SESSION_SECRET),
+        distDir: opts.distDir,
+        maxSensitiveSessions: opts.maxSensitiveSessions,
+        maxStandardSessions: opts.maxStandardSessions,
       });
       cleanupApp = instance.cleanup;
       await new Promise<void>((resolve) => {
@@ -460,6 +472,26 @@ describe('SEC-LAN-P0 + SEC-LAN-P1 — Fail-Closed Server RBAC & Server-Issued HM
         });
       });
       return instance;
+    };
+
+    const restartTestServer = async (opts: {
+      isProduction?: boolean;
+      initialState?: Record<string, any>;
+      sessionSecret?: string;
+      omitSessionSecret?: boolean;
+      distDir?: string;
+      maxSensitiveSessions?: number;
+      maxStandardSessions?: number;
+    } = {}) => {
+      if (cleanupApp) {
+        cleanupApp();
+        cleanupApp = null;
+      }
+      if (server) {
+        await new Promise<void>((resolve) => server!.close(() => resolve()));
+        server = null;
+      }
+      return startTestServer({ ...opts, dataDir: tempDir });
     };
 
     const loginOnServer = async (
@@ -903,6 +935,712 @@ describe('SEC-LAN-P0 + SEC-LAN-P1 — Fail-Closed Server RBAC & Server-Issued HM
         body: { id: 'M-1', code: 'DET-01' },
       });
       expect(authedWrite.status).toBe(201);
+    });
+  });
+
+  describe('4. SEC-LAN-P2 & SEC-LAN-P3 — Durable Revocation, Rotation, Prod Secret, Nonce CSP & Concurrent Limits', () => {
+    let tempDir = '';
+    let distDir = '';
+    let server: http.Server | null = null;
+    let cleanupApp: (() => void) | null = null;
+    let port = 0;
+    const TEST_SESSION_SECRET = 'ciob-gmao-test-session-secret-0123456789abcdef';
+
+    const startInstance = async (opts: {
+      isProduction?: boolean;
+      initialState?: Record<string, any>;
+      sessionSecret?: string;
+      omitSessionSecret?: boolean;
+      reuseDir?: boolean;
+      distDir?: string;
+      maxSensitiveSessions?: number;
+      maxStandardSessions?: number;
+    } = {}) => {
+      if (!opts.reuseDir || !tempDir) {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-sec-p2-'));
+      }
+      const instance = createGmaoApiApp({
+        dataDir: tempDir,
+        port: 0,
+        isProduction: opts.isProduction ?? false,
+        initialState: opts.initialState,
+        sessionSecret: opts.omitSessionSecret ? undefined : (opts.sessionSecret ?? TEST_SESSION_SECRET),
+        distDir: opts.distDir,
+        maxSensitiveSessions: opts.maxSensitiveSessions,
+        maxStandardSessions: opts.maxStandardSessions,
+      });
+      cleanupApp = instance.cleanup;
+      await new Promise<void>((resolve) => {
+        server = instance.app.listen(0, '127.0.0.1', () => {
+          const addr = server?.address();
+          port = typeof addr === 'object' && addr ? addr.port : 0;
+          resolve();
+        });
+      });
+      return instance;
+    };
+
+    const stopInstance = async () => {
+      if (cleanupApp) {
+        cleanupApp();
+        cleanupApp = null;
+      }
+      if (server) {
+        await new Promise<void>((resolve) => server!.close(() => resolve()));
+        server = null;
+      }
+    };
+
+    beforeEach(() => {
+      delete process.env.GMAO_API_TOKEN;
+      delete process.env.GMAO_SESSION_SECRET;
+      delete process.env.GMAO_ENABLE_SWAGGER;
+    });
+
+    afterEach(async () => {
+      await stopInstance();
+      if (tempDir && fs.existsSync(tempDir)) {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+        tempDir = '';
+      }
+      if (distDir && fs.existsSync(distDir)) {
+        fs.rmSync(distDir, { recursive: true, force: true });
+        distDir = '';
+      }
+    });
+
+    it('R1: logout persists revocation to disk and rejects the same token with 403 REVOKED even after full server restart', async () => {
+      await startInstance({
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          machines: [],
+        },
+      });
+
+      const login = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(login.status).toBe(200);
+      const token = login.json.token;
+
+      const logout = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/logout',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(logout.status).toBe(200);
+
+      // Immediate post-logout use -> 403 REVOKED
+      const blockedImmediate = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { id: 'M-1', code: 'DET-01' },
+      });
+      expect(blockedImmediate.status).toBe(403);
+      expect(blockedImmediate.json?.reason).toBe('REVOKED');
+
+      // Verify durable file exists on disk
+      const revokedFile = path.join(tempDir, 'gmao_revoked_sessions.json');
+      expect(fs.existsSync(revokedFile)).toBe(true);
+
+      // Simulate full server process restart (fresh createGmaoApiApp pointing at same dataDir)
+      await stopInstance();
+      await startInstance({
+        reuseDir: true,
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          machines: [],
+        },
+      });
+
+      const blockedAfterRestart = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { id: 'M-2', code: 'DET-02' },
+      });
+      expect(blockedAfterRestart.status).toBe(403);
+      expect(blockedAfterRestart.json?.code).toBe('SERVER_SESSION_INVALID');
+      expect(blockedAfterRestart.json?.reason).toBe('REVOKED');
+    });
+
+    it('R2 & R3: /auth/refresh issues a rotated token with new sid, permanently revokes the old token (even across restart), and rejects role changes or archived users', async () => {
+      const { dbState } = await startInstance({
+        initialState: {
+          users: SAMPLE_DB_USERS.map((u) => ({ ...u })),
+          technicians: SAMPLE_DB_TECHS.map((t) => ({ ...t })),
+          machines: [],
+        },
+      });
+
+      const login = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(login.status).toBe(200);
+      const oldToken = login.json.token;
+
+      const refreshRes = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/refresh',
+        headers: { Authorization: `Bearer ${oldToken}` },
+      });
+      expect(refreshRes.status).toBe(200);
+      const newToken = refreshRes.json.token;
+      expect(newToken).toMatch(/^GMAO1\./);
+      expect(newToken).not.toBe(oldToken);
+
+      // R3: Old token immediately rejected (403 REVOKED)
+      const oldWrite = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: { Authorization: `Bearer ${oldToken}` },
+        body: { id: 'M-OLD', code: 'OLD-01' },
+      });
+      expect(oldWrite.status).toBe(403);
+      expect(oldWrite.json?.reason).toBe('REVOKED');
+
+      // New token works for writes
+      const newWrite = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: { Authorization: `Bearer ${newToken}` },
+        body: { id: 'M-NEW', code: 'NEW-01' },
+      });
+      expect(newWrite.status).toBe(201);
+
+      // Restart server -> old token STILL revoked, new token STILL accepted!
+      await stopInstance();
+      await startInstance({
+        reuseDir: true,
+        initialState: {
+          users: SAMPLE_DB_USERS.map((u) => ({ ...u })),
+          technicians: SAMPLE_DB_TECHS.map((t) => ({ ...t })),
+          machines: dbState.machines,
+        },
+      });
+
+      const oldAfterRestart = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: { Authorization: `Bearer ${oldToken}` },
+        body: { id: 'M-OLD2', code: 'OLD-02' },
+      });
+      expect(oldAfterRestart.status).toBe(403);
+      expect(oldAfterRestart.json?.reason).toBe('REVOKED');
+
+      // Simulate registry role downgrade before refresh -> refresh must refuse with SERVER_SESSION_ROLE_CHANGED and revoke token
+      const restartApp = await stopInstance();
+      void restartApp;
+      const downgradedUsers = SAMPLE_DB_USERS.map((u) =>
+        u.id === 'USR-ADMIN-1' ? { ...u, role: 'VIEWER' } : { ...u }
+      );
+      await startInstance({
+        reuseDir: true,
+        initialState: {
+          users: downgradedUsers,
+          technicians: SAMPLE_DB_TECHS.map((t) => ({ ...t })),
+          machines: [],
+        },
+      });
+
+      const roleChangedRefresh = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/refresh',
+        headers: { Authorization: `Bearer ${newToken}` },
+      });
+      expect(roleChangedRefresh.status).toBe(403);
+      expect(roleChangedRefresh.json?.code).toBe('SERVER_SESSION_ROLE_CHANGED');
+    });
+
+    it('R4 & Prod Secret: rejects missing/weak GMAO_SESSION_SECRET in production (503) and keeps U1/ghost-99 blocked (403)', async () => {
+      process.env.GMAO_API_TOKEN = 'Strong_Prod_LAN_Secret_2026!';
+      await startInstance({
+        isProduction: true,
+        omitSessionSecret: true,
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          machines: [],
+        },
+      });
+
+      // Production without explicit GMAO_SESSION_SECRET must refuse issuing sessions
+      const prodLoginNoSecret = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(prodLoginNoSecret.status).toBe(503);
+      expect(prodLoginNoSecret.json?.code).toBe('SERVER_SESSION_SECRET_REQUIRED');
+
+      // Now restart with strong GMAO_SESSION_SECRET in production -> U1 & ghost-99 remain strictly blocked (403)
+      await stopInstance();
+      process.env.GMAO_SESSION_SECRET = TEST_SESSION_SECRET;
+      await startInstance({
+        reuseDir: true,
+        isProduction: true,
+        omitSessionSecret: true,
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          machines: [],
+        },
+      });
+
+      const u1HeaderWrite = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          'x-gmao-actor-id': 'USR-ADMIN-1',
+          'x-gmao-role': 'ADMIN',
+        },
+        body: { id: 'M-U1', code: 'U1-01' },
+      });
+      expect(u1HeaderWrite.status).toBe(403);
+      expect(u1HeaderWrite.json?.code).toBe('SERVER_SESSION_REQUIRED');
+
+      const ghostRead = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/state',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          'x-gmao-actor-id': 'ghost-99',
+          'x-gmao-role': 'ADMIN',
+        },
+      });
+      expect(ghostRead.status).toBe(403);
+    });
+
+    it('SEC-LAN-P3: enforces concurrent session limits (ADMIN=1, TECH=3), production nonced CSP without unsafe-eval/unsafe-inline, and admin-only telemetry', async () => {
+      process.env.GMAO_API_TOKEN = 'Strong_Prod_LAN_Secret_2026!';
+      process.env.GMAO_SESSION_SECRET = TEST_SESSION_SECRET;
+      distDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-dist-p3-'));
+      fs.writeFileSync(
+        path.join(distDir, 'index.html'),
+        '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src \'self\'; script-src \'self\' \'unsafe-inline\';"><script>window.__BOOT=1;</script></head><body><div id="root"></div><script type="module" src="/assets/main.js"></script></body></html>',
+        'utf-8'
+      );
+
+      await startInstance({
+        isProduction: true,
+        distDir,
+        omitSessionSecret: true,
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          machines: [],
+        },
+      });
+
+      // 1. Production HTML CSP uses per-request nonce without unsafe-eval or unsafe-inline in script-src
+      const htmlRes = await sendHttpRequest({ port, method: 'GET', path: '/' });
+      expect(htmlRes.status).toBe(200);
+      const cspHeader = String(htmlRes.headers['content-security-policy'] || '');
+      expect(cspHeader).toContain("script-src 'self' 'nonce-");
+      expect(cspHeader).not.toContain('unsafe-eval');
+      expect(cspHeader).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+      const nonceMatch = /'nonce-([0-9a-f]+)'/i.exec(cspHeader);
+      expect(nonceMatch).not.toBeNull();
+      expect(htmlRes.raw).toContain(`<script nonce="${nonceMatch![1]}">window.__BOOT=1;</script>`);
+      expect(htmlRes.raw).not.toMatch(/script-src[^;]*'unsafe-inline'/);
+
+      // 2. Concurrent session limit for ADMIN = 1 (2nd login evicts 1st session)
+      const admin1 = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      const admin2 = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(admin1.status).toBe(200);
+      expect(admin2.status).toBe(200);
+
+      const evictedAdmin1 = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${admin1.json.token}`,
+        },
+        body: { id: 'M-EVICT', code: 'EV-01' },
+      });
+      expect(evictedAdmin1.status).toBe(403);
+      expect(evictedAdmin1.json?.reason).toBe('REVOKED');
+
+      // 3. Concurrent session limit for TECHNICIEN = 3 (4th login evicts 1st tech session, 2nd stays valid)
+      const techTokens: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        const res = await sendHttpRequest({
+          port,
+          method: 'POST',
+          path: '/api/gmao/auth/login',
+          headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+          body: { identifier: 'TECH-01', password: TECH_PASS },
+        });
+        expect(res.status).toBe(200);
+        techTokens.push(res.json.token);
+      }
+      const tech1Blocked = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/machines',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techTokens[0]}`,
+        },
+        body: { id: 'M-T1', code: 'T1' },
+      });
+      expect(tech1Blocked.status).toBe(403);
+      expect(tech1Blocked.json?.reason).toBe('REVOKED');
+
+      // 4. Security telemetry is ADMIN-only and never exposes passwords or tokens
+      const techTelemetry = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/security/telemetry',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techTokens[3]}`,
+        },
+      });
+      expect(techTelemetry.status).toBe(403);
+
+      const adminTelemetry = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/security/telemetry',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${admin2.json.token}`,
+        },
+      });
+      expect(adminTelemetry.status).toBe(200);
+      expect(adminTelemetry.json?.data?.counters?.SESSION_LIMIT_EVICTED).toBeGreaterThanOrEqual(2);
+      expect(adminTelemetry.json?.data?.counters?.LOGIN_SUCCESS).toBeGreaterThanOrEqual(6);
+      expect(adminTelemetry.raw).not.toContain(ADMIN_PASS);
+      expect(adminTelemetry.raw).not.toContain('GMAO1.');
+    });
+
+    it('Phase 1 Hardening: enforces SSE single-use tickets, blocks non-admin force overwrite & audit reads, strips extended secrets, and emits rate-limit headers', async () => {
+      process.env.GMAO_API_TOKEN = 'Strong_Prod_LAN_Secret_2026!';
+      process.env.GMAO_SESSION_SECRET = TEST_SESSION_SECRET;
+
+      await startInstance({
+        isProduction: true,
+        omitSessionSecret: true,
+        initialState: {
+          users: [
+            ...SAMPLE_DB_USERS,
+            {
+              id: 'USR-EXTRA',
+              nom: 'Extra',
+              role: 'TECHNICIEN',
+              passwordHash: makePbkdf2Hash(TECH_PASS),
+              pin: '9988',
+              resetToken: 'rst_secret_123',
+              securityAnswer: 'secret_answer',
+              is_active: true,
+            },
+          ],
+          technicians: SAMPLE_DB_TECHS,
+          authAccounts: SAMPLE_AUTH_ACCOUNTS,
+          machines: [{ id: 'M-1', code: 'DET-01' }],
+        },
+      });
+
+      const techLogin = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'TECH-01', password: TECH_PASS },
+      });
+      const adminLogin = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(techLogin.status).toBe(200);
+      expect(adminLogin.status).toBe(200);
+
+      // 1. Rate-limit headers emitted
+      expect(techLogin.headers['x-ratelimit-limit']).toBeDefined();
+      expect(techLogin.headers['x-ratelimit-remaining']).toBeDefined();
+
+      // 2. Unauthenticated raw SSE /api/gmao/events without ticket is rejected with 401
+      const rawSse = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/events',
+      });
+      expect(rawSse.status).toBe(401);
+
+      // 3. Authenticated SSE ticket flow: POST /api/gmao/events/ticket -> GET /api/gmao/events?ticket=... -> reuse rejected
+      const ticketRes = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/events/ticket',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techLogin.json.token}`,
+        },
+        body: {},
+      });
+      expect(ticketRes.status).toBe(200);
+      expect(typeof ticketRes.json?.ticket).toBe('string');
+
+      const sseFirstChunk = await new Promise<{ status: number; chunk: string }>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path: `/api/gmao/events?ticket=${encodeURIComponent(ticketRes.json.ticket)}`,
+            method: 'GET',
+          },
+          (res) => {
+            res.once('data', (d) => {
+              const chunk = Buffer.from(d).toString('utf-8');
+              req.destroy();
+              resolve({ status: res.statusCode || 0, chunk });
+            });
+          }
+        );
+        req.on('error', reject);
+        req.end();
+      });
+      expect(sseFirstChunk.status).toBe(200);
+      expect(sseFirstChunk.chunk).toContain('"type":"CONNECTED"');
+
+      // Reusing same single-use ticket must be rejected (401)
+      const reuseTicket = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: `/api/gmao/events?ticket=${encodeURIComponent(ticketRes.json.ticket)}`,
+      });
+      expect(reuseTicket.status).toBe(401);
+
+      // 4. Non-admin TECHNICIEN cannot pass force: true on POST /api/gmao/state (403)
+      const techForcePush = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/state',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techLogin.json.token}`,
+        },
+        body: { force: true, expectedVersion: 1, correctiveInterventions: [] },
+      });
+      expect(techForcePush.status).toBe(403);
+
+      // 5. TECHNICIEN cannot read /api/gmao/audit, /api/gmao/auditEvents, /api/gmao/authAccounts (403)
+      for (const pathItem of ['/api/gmao/audit', '/api/gmao/auditEvents', '/api/gmao/authAccounts']) {
+        const techSensitive = await sendHttpRequest({
+          port,
+          method: 'GET',
+          path: pathItem,
+          headers: {
+            'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+            Authorization: `Bearer ${techLogin.json.token}`,
+          },
+        });
+        expect(techSensitive.status).toBe(403);
+      }
+
+      // 6. ADMIN CAN read /api/gmao/users and sensitive fields (pin, resetToken, securityAnswer) are stripped
+      const adminUsers = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/users',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminLogin.json.token}`,
+        },
+      });
+      expect(adminUsers.status).toBe(200);
+      expect(adminUsers.raw).not.toContain('9988');
+      expect(adminUsers.raw).not.toContain('rst_secret_123');
+      expect(adminUsers.raw).not.toContain('secret_answer');
+    });
+
+    it('Phase 2 Hardening: enforces Maker-Checker on entity POST/PUT, blocks non-admin wholesale PUT replace, strips secrets on writes, enforces If-Match 409, and supports opt-in pagination', async () => {
+      process.env.GMAO_API_TOKEN = 'Strong_Prod_LAN_Secret_2026!';
+      process.env.GMAO_SESSION_SECRET = TEST_SESSION_SECRET;
+
+      const { dbState } = await startInstance({
+        isProduction: true,
+        omitSessionSecret: true,
+        initialState: {
+          users: SAMPLE_DB_USERS,
+          technicians: SAMPLE_DB_TECHS,
+          authAccounts: SAMPLE_AUTH_ACCOUNTS,
+          machines: [
+            { id: 'M-1', code: 'DET-01' },
+            { id: 'M-2', code: 'DET-02' },
+            { id: 'M-3', code: 'DET-03' },
+            { id: 'M-4', code: 'DET-04' },
+          ],
+          correctiveInterventions: [
+            { id: 'BT-10', code_bon: 'BT-10', statut: 'EN_COURS', validation_status: 'PENDING_VALIDATION' },
+          ],
+        },
+      });
+
+      const techLogin = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'TECH-01', password: TECH_PASS },
+      });
+      const adminLogin = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(techLogin.status).toBe(200);
+      expect(adminLogin.status).toBe(200);
+
+      // 1. Direct POST /api/gmao/correctiveInterventions from TECHNICIEN cannot self-approve
+      const techSelfApprovePost = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/correctiveInterventions',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techLogin.json.token}`,
+        },
+        body: {
+          id: 'BT-99',
+          code_bon: 'BT-99',
+          statut: 'CLOTURE',
+          validation_status: 'APPROVED',
+          stock_deducted: true,
+        },
+      });
+      expect(techSelfApprovePost.status).toBe(201);
+      expect(techSelfApprovePost.json?.data?.validation_status).toBe('PENDING_VALIDATION');
+      expect(techSelfApprovePost.json?.data?.stock_deducted).toBe(false);
+      expect(techSelfApprovePost.json?.data?.statut).toBe('EN_COURS');
+
+      // 2. Direct PUT /api/gmao/correctiveInterventions/BT-10 from TECHNICIEN cannot self-approve
+      const techSelfApprovePut = await sendHttpRequest({
+        port,
+        method: 'PUT',
+        path: '/api/gmao/correctiveInterventions/BT-10',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techLogin.json.token}`,
+        },
+        body: { statut: 'CLOTURE', validation_status: 'APPROVED', stock_deducted: true },
+      });
+      expect(techSelfApprovePut.status).toBe(200);
+      expect(techSelfApprovePut.json?.data?.validation_status).toBe('PENDING_VALIDATION');
+      expect(techSelfApprovePut.json?.data?.stock_deducted).toBe(false);
+
+      // 3. Non-admin TECHNICIEN cannot replace full collection via PUT without ?merge=true (403)
+      const techWholesalePut = await sendHttpRequest({
+        port,
+        method: 'PUT',
+        path: '/api/gmao/correctiveInterventions',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${techLogin.json.token}`,
+        },
+        body: [],
+      });
+      expect(techWholesalePut.status).toBe(403);
+      expect(dbState.correctiveInterventions.length).toBe(2);
+
+      // 4. Write response on /api/gmao/users strips passwordHash / pin / resetToken
+      const adminCreateUser = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/users',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminLogin.json.token}`,
+        },
+        body: {
+          id: 'USR-NEW-2',
+          nom: 'Nouveau User',
+          role: 'TECHNICIEN',
+          passwordHash: makePbkdf2Hash(TECH_PASS),
+          pin: '7744',
+          resetToken: 'tok_leak_check',
+        },
+      });
+      expect(adminCreateUser.status).toBe(201);
+      expect(adminCreateUser.raw).not.toContain('7744');
+      expect(adminCreateUser.raw).not.toContain('tok_leak_check');
+      expect(adminCreateUser.json?.data?.passwordHash).toBeUndefined();
+
+      // 5. Stale If-Match on PUT /api/gmao/:entity/:id returns 409 Conflict
+      const stalePut = await sendHttpRequest({
+        port,
+        method: 'PUT',
+        path: '/api/gmao/machines/M-1',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminLogin.json.token}`,
+          'If-Match': 'W/"v1"',
+        },
+        body: { designation: 'Updated stale' },
+      });
+      expect(stalePut.status).toBe(409);
+
+      // 6. Opt-in pagination on GET /api/gmao/machines?limit=2&offset=1
+      const pagedMachines = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: '/api/gmao/machines?limit=2&offset=1',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminLogin.json.token}`,
+        },
+      });
+      expect(pagedMachines.status).toBe(200);
+      expect(pagedMachines.json?.data).toHaveLength(2);
+      expect(pagedMachines.json?.data[0]?.id).toBe('M-2');
+      expect(pagedMachines.json?.pagination).toEqual({
+        total: 4,
+        limit: 2,
+        offset: 1,
+        hasMore: true,
+      });
     });
   });
 });

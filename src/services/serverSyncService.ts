@@ -12,6 +12,8 @@ import {
 } from '../core/security/serverSession';
 import {
   authenticateServerSession as clientAuthenticateServerSession,
+  refreshServerSession as clientRefreshServerSession,
+  ensureFreshServerSession as clientEnsureFreshServerSession,
   revokeServerSession as clientRevokeServerSession,
 } from '../core/security/serverSessionClient';
 
@@ -153,6 +155,20 @@ export const serverSyncService = {
    */
   authenticateServerSession(identifier: string, password: string) {
     return clientAuthenticateServerSession(identifier, password);
+  },
+
+  /**
+   * Rotates and refreshes the active server session token before expiry via /api/gmao/auth/refresh.
+   */
+  refreshServerSession() {
+    return clientRefreshServerSession();
+  },
+
+  /**
+   * Silently refreshes the session token if within `marginSeconds` of `exp`.
+   */
+  ensureFreshServerSession(marginSeconds?: number) {
+    return clientEnsureFreshServerSession(marginSeconds);
   },
 
   /**
@@ -513,6 +529,7 @@ export const serverSyncService = {
    */
   async fetchServerState(): Promise<{ online: boolean; state: Record<string, any> | null; summary: ServerStateSummary }> {
     try {
+      await clientEnsureFreshServerSession();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'GET',
         headers: buildClientAuthHeaders({ Accept: 'application/json' }),
@@ -705,6 +722,8 @@ export const serverSyncService = {
           error: roleErr,
         };
       }
+
+      await clientEnsureFreshServerSession();
 
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'POST',

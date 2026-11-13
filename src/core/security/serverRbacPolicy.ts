@@ -11,6 +11,7 @@
  *     unapproved field claims from self-approving (`validation_status: 'APPROVED'` + `stock_deducted: true`)
  *     when pushed from a `TECHNICIEN` or `OPERATEUR` device.
  */
+import { constantTimeEqual } from './nativeCrypto';
 
 export const ADMIN_ONLY_ENTITIES = new Set<string>([
   'users',
@@ -462,7 +463,7 @@ export function evaluateBootstrapWriteAllowance(params: {
   const rawExpected = typeof params.expectedToken === 'string' ? params.expectedToken.trim() : '';
   const rawProvided = typeof params.providedToken === 'string' ? params.providedToken.trim() : '';
   const hasValidStrongToken =
-    !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
+    !isWeakOrEmptyApiToken(rawExpected) && constantTimeEqual(rawProvided, rawExpected);
 
   if (hasValidStrongToken) {
     return { allowed: true };
@@ -585,6 +586,96 @@ export function canRoleMutateEntity(
   return { allowed: true };
 }
 
+export const MAKER_CHECKER_ENTITIES = new Set<string>([
+  'correctiveInterventions',
+  'preventiveExecutions',
+  'sortieDemands',
+]);
+
+function isRecordApprovedOnServer(item: any): boolean {
+  return Boolean(
+    item &&
+      typeof item === 'object' &&
+      (item.validation_status === 'APPROVED' ||
+        item.statut === 'CLOTURE' ||
+        item.stock_deducted === true)
+  );
+}
+
+/**
+ * Enforces Maker-Checker clamp on a single record when pushed by `TECHNICIEN` / `OPERATEUR`,
+ * preventing self-approval (`validation_status: 'APPROVED'`, `stock_deducted: true`, or `CLOTURE`).
+ */
+export function clampMakerCheckerRecordForRole(
+  effectiveRole: string,
+  entityKey: string,
+  record: any,
+  existingServerRecord: any = null
+): any {
+  const role = normalizeServerRole(effectiveRole);
+  if ((role !== 'TECHNICIEN' && role !== 'OPERATEUR') || !MAKER_CHECKER_ENTITIES.has(entityKey)) {
+    return record;
+  }
+  if (!record || typeof record !== 'object') {
+    return record;
+  }
+  const wasAlreadyApproved = isRecordApprovedOnServer(existingServerRecord);
+  if (
+    !wasAlreadyApproved &&
+    (record.validation_status === 'APPROVED' ||
+      record.stock_deducted === true ||
+      (entityKey === 'correctiveInterventions' && record.statut === 'CLOTURE'))
+  ) {
+    return {
+      ...record,
+      validation_status: 'PENDING_VALIDATION',
+      stock_deducted: false,
+      ...(entityKey === 'correctiveInterventions' && record.statut === 'CLOTURE'
+        ? { statut: 'EN_COURS', action_fermee: 'NON' }
+        : {}),
+    };
+  }
+  return record;
+}
+
+/**
+ * Enforces Maker-Checker clamp across an entity array pushed by `TECHNICIEN` / `OPERATEUR`.
+ */
+export function clampMakerCheckerCollectionForRole(
+  effectiveRole: string,
+  entityKey: string,
+  items: any[],
+  currentServerList: any[] = []
+): any[] {
+  const role = normalizeServerRole(effectiveRole);
+  if (
+    !Array.isArray(items) ||
+    (role !== 'TECHNICIEN' && role !== 'OPERATEUR') ||
+    !MAKER_CHECKER_ENTITIES.has(entityKey)
+  ) {
+    return items;
+  }
+
+  const approvedOnServerIds = new Set(
+    (Array.isArray(currentServerList) ? currentServerList : [])
+      .filter((item: any) => isRecordApprovedOnServer(item))
+      .map((item: any) => String(item.id || item.num_bt || item.code || ''))
+      .filter(Boolean)
+  );
+
+  return items.map((item: any) => {
+    if (!item || typeof item !== 'object') return item;
+    const itemId = String(item.id || item.num_bt || item.code || '');
+    const wasAlreadyApproved = Boolean(itemId && approvedOnServerIds.has(itemId));
+    return clampMakerCheckerRecordForRole(
+      role,
+      entityKey,
+      item,
+      wasAlreadyApproved ? { validation_status: 'APPROVED' } : null
+    );
+  });
+}
+
 /**
  * Sanitizes a bulk `/api/gmao/state` payload according to the caller's `effectiveRole`:
  *  - Blocks `replaceAll: true` for non-admin/non-supervisor roles.
@@ -659,47 +750,16 @@ export function sanitizeBulkStateForRole(
 
   // Enforce Maker-Checker server-side clamp for TECHNICIEN / OPERATEUR
   if (role === 'TECHNICIEN' || role === 'OPERATEUR') {
-    const clampMakerCheckerCollection = (entityKey: string) => {
-      if (!Array.isArray(sanitizedState[entityKey])) return;
-      const serverList = Array.isArray(currentServerState[entityKey])
-        ? currentServerState[entityKey]
-        : [];
-      const approvedOnServerIds = new Set(
-        serverList
-          .filter(
-            (item: any) =>
-              item &&
-              (item.validation_status === 'APPROVED' ||
-                item.statut === 'CLOTURE' ||
-                item.stock_deducted === true)
-          )
-          .map((item: any) => String(item.id || item.num_bt || item.code || ''))
-      );
-
-      sanitizedState[entityKey] = sanitizedState[entityKey].map((item: any) => {
-        if (!item || typeof item !== 'object') return item;
-        const itemId = String(item.id || item.num_bt || item.code || '');
-        const wasAlreadyApproved = itemId && approvedOnServerIds.has(itemId);
-        if (
-          !wasAlreadyApproved &&
-          (item.validation_status === 'APPROVED' || item.stock_deducted === true)
-        ) {
-          return {
-            ...item,
-            validation_status: 'PENDING_VALIDATION',
-            stock_deducted: false,
-            ...(entityKey === 'correctiveInterventions' && item.statut === 'CLOTURE'
-              ? { statut: 'EN_COURS', action_fermee: 'NON' }
-              : {}),
-          };
-        }
-        return item;
-      });
-    };
-
-    clampMakerCheckerCollection('correctiveInterventions');
-    clampMakerCheckerCollection('preventiveExecutions');
-    clampMakerCheckerCollection('sortieDemands');
+    for (const entityKey of MAKER_CHECKER_ENTITIES) {
+      if (Array.isArray(sanitizedState[entityKey])) {
+        sanitizedState[entityKey] = clampMakerCheckerCollectionForRole(
+          role,
+          entityKey,
+          sanitizedState[entityKey],
+          currentServerState[entityKey]
+        );
+      }
+    }
   }
 
   return {
@@ -779,7 +839,8 @@ export function evaluateServerApiTokenGuard(params: {
   }
 
   // 2. If an expected token is configured and client explicitly sent a mismatched token header, reject immediately
-  if (rawExpected && rawProvided !== undefined && rawProvided !== rawExpected) {
+  const tokenMatches = Boolean(rawExpected) && rawProvided !== undefined && constantTimeEqual(rawProvided, rawExpected);
+  if (rawExpected && rawProvided !== undefined && !tokenMatches) {
     return {
       allowed: false,
       statusCode: 401,
@@ -791,7 +852,7 @@ export function evaluateServerApiTokenGuard(params: {
   const strictToken = params.isProduction || params.strictTokenEnv !== 'false';
   const tokenValid =
     (!params.isProduction && !rawExpected) ||
-    (Boolean(rawExpected) && rawProvided === rawExpected && (!params.isProduction || !isExpectedWeak)) ||
+    (tokenMatches && (!params.isProduction || !isExpectedWeak)) ||
     (!strictToken && params.clientOrigin === 'gmao-web-client');
 
   if (!tokenValid) {

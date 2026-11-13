@@ -22,6 +22,8 @@ import {
   isRegistryInitialized,
   getRolePrivilegeRank,
   resolveRecordCanonicalRole,
+  clampMakerCheckerRecordForRole,
+  clampMakerCheckerCollectionForRole,
 } from './src/core/security/serverRbacPolicy';
 import {
   resolveServerSessionSecret,
@@ -32,7 +34,8 @@ import {
   stripSensitiveAccountFields,
   sanitizeStateSnapshotForTransport,
 } from './src/core/security/serverSession';
-import { randomBytesHex } from './src/core/security/nativeCrypto';
+import { createServerSessionStore } from './src/core/security/serverSessionStore';
+import { constantTimeEqual, randomBytesHex } from './src/core/security/nativeCrypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,11 +45,15 @@ process.on('uncaughtException', (err: any) => {
   if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.message?.includes('aborted')) {
     return;
   }
-  console.error('[Server] Uncaught Exception (process kept alive):', err);
+  if (process.env.NODE_ENV === 'production' && !process.env.VITEST) {
+    console.error('[Server] Fatal Uncaught Exception in production, shutting down:', err);
+    process.exit(1);
+  }
+  console.error('[Server] Uncaught Exception (dev process kept alive):', err);
 });
 
 process.on('unhandledRejection', (reason: any) => {
-  console.error('[Server] Unhandled Rejection (process kept alive):', reason);
+  console.error('[Server] Unhandled Rejection:', reason);
 });
 
 const MAX_STATE_PAYLOAD_LIMIT = '10mb';
@@ -107,6 +114,32 @@ export interface CreateGmaoApiAppOptions {
   isProduction?: boolean;
   initialState?: Record<string, any>;
   sessionSecret?: string;
+  maxSensitiveSessions?: number;
+  maxStandardSessions?: number;
+  distDir?: string;
+}
+
+export function buildCspHeaderValue(params: {
+  isProduction: boolean;
+  nonce?: string;
+  isHtml?: boolean;
+}): string {
+  const scriptSrc = params.isProduction
+    ? params.isHtml && params.nonce
+      ? `'self' 'nonce-${params.nonce}'`
+      : `'self'`
+    : `'self' 'unsafe-inline'`;
+  return `default-src 'self' blob: data:; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';`;
+}
+
+export function renderHtmlWithCspNonce(html: string, nonce: string): string {
+  const cspLine = buildCspHeaderValue({ isProduction: true, nonce, isHtml: true });
+  let out = html.replace(/<script\b(?![^>]*\bnonce=)/gi, `<script nonce="${nonce}"`);
+  out = out.replace(
+    /<meta\b[^>]*http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*>/i,
+    `<meta http-equiv="Content-Security-Policy" content="${cspLine.replace(/"/g, '&quot;')}">`
+  );
+  return out;
 }
 
 function collectHostIpv4Addresses(): Set<string> {
@@ -150,17 +183,34 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
   }
 
+  // Data persistence file path (initialized early for durable session revocation & audit trail)
+  const DATA_DIR = options.dataDir ? path.resolve(options.dataDir) : path.join(__dirname, 'data');
+  const STATE_FILE = path.join(DATA_DIR, 'gmao_state.json');
+  const STATE_TMP_FILE = path.join(DATA_DIR, 'gmao_state.json.tmp');
+  const AUDIT_FILE = path.join(DATA_DIR, 'gmao_audit.jsonl');
+
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  const sessionStore = createServerSessionStore({
+    dataDir: DATA_DIR,
+    maxSensitiveSessions: options.maxSensitiveSessions,
+    maxStandardSessions: options.maxStandardSessions,
+  });
+
   const ephemeralInstanceSecret = randomBytesHex(32);
   const getSessionSecretInfo = () =>
     resolveServerSessionSecret({
       explicitSecret: options.sessionSecret ?? process.env.GMAO_SESSION_SECRET,
       apiToken: process.env.GMAO_API_TOKEN,
       fallbackInstanceSecret: ephemeralInstanceSecret,
+      isProduction,
     });
 
-  if (isProduction && getSessionSecretInfo().source === 'EPHEMERAL_INSTANCE' && !process.env.VITEST) {
-    console.warn(
-      '[Server][SEC-LAN-P1] AVERTISSEMENT : GMAO_SESSION_SECRET absent en production ; clé éphémère générée en mémoire (les sessions expireraient au redémarrage). Définissez GMAO_SESSION_SECRET dans .env.local.'
+  if (isProduction && getSessionSecretInfo().missingInProduction) {
+    console.error(
+      '[Server][SEC-LAN-P2] CRITIQUE : GMAO_SESSION_SECRET est absent ou faible (< 16 caractères) en production. Générez une clé avec `openssl rand -hex 32`. Émission et validation des sessions refusées.'
     );
   }
 
@@ -203,7 +253,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       maxAge: 600,
     })
   );
-  app.use(express.json({ limit: MAX_STATE_PAYLOAD_LIMIT, strict: false }));
+  app.use(express.json({ limit: MAX_STATE_PAYLOAD_LIMIT, strict: true }));
 
   // Handle JSON parse errors and payload size limit errors cleanly
   app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -224,15 +274,19 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     next(err);
   });
 
-  // Security Headers Middleware (CSP, Anti-Sniffing, Frame Protection)
+  // Security Headers Middleware (Progressive CSP: strict nonced script-src in prod, no unsafe-eval)
   app.use((req, res, next) => {
+    const nonce = isProduction ? randomBytesHex(16) : '';
+    (res as any).locals = (res as any).locals || {};
+    (res as any).locals.cspNonce = nonce;
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';"
+      buildCspHeaderValue({ isProduction, nonce, isHtml: false })
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-XSS-Protection', '1; mode=block');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
 
@@ -242,11 +296,12 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
   const MAX_REQUESTS_PER_WINDOW = 300; // 300 req/min for general API
 
-  const revokedSessionIds = new Map<string, number>();
   const loginThrottleMap = new Map<
     string,
     { failures: number; lockUntil: number; resetAt: number }
   >();
+  const sseTickets = new Map<string, { sub: string; role: string; ip: string; exp: number }>();
+  const SSE_TICKET_TTL_MS = 30 * 1000;
 
   const pruneSecurityCaches = (nowMs: number) => {
     const nowSec = Math.floor(nowMs / 1000);
@@ -255,14 +310,17 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         rateLimitMap.delete(key);
       }
     }
-    for (const [sid, expSec] of revokedSessionIds.entries()) {
-      if (nowSec >= expSec) {
-        revokedSessionIds.delete(sid);
-      }
+    if (sessionStore.pruneExpired(nowSec)) {
+      void sessionStore.persistAsync();
     }
     for (const [key, entry] of loginThrottleMap.entries()) {
       if (nowMs > entry.resetAt && nowMs > entry.lockUntil) {
         loginThrottleMap.delete(key);
+      }
+    }
+    for (const [ticket, entry] of sseTickets.entries()) {
+      if (nowMs > entry.exp) {
+        sseTickets.delete(ticket);
       }
     }
   };
@@ -288,13 +346,19 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       pruneSecurityCaches(now);
     }
 
-    const clientData = rateLimitMap.get(clientIp);
+    let clientData = rateLimitMap.get(clientIp);
     if (!clientData || now > clientData.resetTime) {
-      rateLimitMap.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-      return next();
+      clientData = { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS };
+      rateLimitMap.set(clientIp, clientData);
+    } else {
+      clientData.count += 1;
     }
 
-    clientData.count += 1;
+    const remaining = Math.max(0, MAX_REQUESTS_PER_WINDOW - clientData.count);
+    res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS_PER_WINDOW));
+    res.setHeader('X-RateLimit-Remaining', String(remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(clientData.resetTime / 1000)));
+
     if (clientData.count > MAX_REQUESTS_PER_WINDOW) {
       res.setHeader('Retry-After', '60');
       return res.status(429).json({
@@ -319,6 +383,32 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     const expectedToken = process.env.GMAO_API_TOKEN;
     const remoteAddress = req.socket?.remoteAddress;
 
+    const normalizedPath = String(req.path || '').toLowerCase();
+
+    // SSE stream (EventSource cannot attach custom headers): validate & consume single-use ticket issued via POST /api/gmao/events/ticket
+    if (req.baseUrl === '/api/gmao' && req.method === 'GET' && normalizedPath === '/events') {
+      const rawTicket = typeof req.query?.ticket === 'string' ? req.query.ticket.trim() : '';
+      if (rawTicket) {
+        const ticketEntry = sseTickets.get(rawTicket);
+        sseTickets.delete(rawTicket);
+        const remoteIpStr = String(remoteAddress || 'unknown');
+        const ipMatches =
+          ticketEntry &&
+          (ticketEntry.ip === remoteIpStr ||
+            (isLoopbackRemoteAddress(ticketEntry.ip) && isLoopbackRemoteAddress(remoteIpStr)));
+        if (!ticketEntry || Date.now() > ticketEntry.exp || !ipMatches) {
+          return res.status(401).json({
+            success: false,
+            error: 'Unauthorized',
+            code: 'SSE_TICKET_INVALID',
+            message: 'SSE connection ticket is invalid or expired.',
+          });
+        }
+        (req as any).sseTicketActor = ticketEntry;
+        return next();
+      }
+    }
+
     // Guard: expectedToken && token !== undefined && token !== expectedToken
     const tokenGuard = evaluateServerApiTokenGuard({
       method: req.method,
@@ -337,12 +427,13 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
 
-    // Auth login/logout endpoints bypass write-session proof (they issue/revoke the session)
-    const normalizedPath = String(req.path || '').toLowerCase();
+    // Auth login/logout/refresh endpoints handle their own session issuance/revocation/rotation
     if (
       req.baseUrl === '/api/gmao' &&
       req.method === 'POST' &&
-      (normalizedPath === '/auth/login' || normalizedPath === '/auth/logout')
+      (normalizedPath === '/auth/login' ||
+        normalizedPath === '/auth/logout' ||
+        normalizedPath === '/auth/refresh')
     ) {
       return next();
     }
@@ -350,7 +441,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     const rawExpected = typeof expectedToken === 'string' ? expectedToken.trim() : '';
     const rawProvided = typeof token === 'string' ? token.trim() : '';
     const hasValidStrongToken =
-      !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
+      !isWeakOrEmptyApiToken(rawExpected) && constantTimeEqual(rawProvided, rawExpected);
 
     const registryInitialized = isRegistryInitialized(
       dbStateRef.users,
@@ -367,9 +458,18 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     );
 
     if (serverSessionToken) {
-      const { secret } = getSessionSecretInfo();
-      const verifiedSession = verifyServerSession(serverSessionToken, secret, {
-        revokedSessionIds,
+      const secretInfo = getSessionSecretInfo();
+      if (secretInfo.missingInProduction) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service Unavailable',
+          code: 'SERVER_SESSION_SECRET_REQUIRED',
+          message:
+            'Sécurité Production : GMAO_SESSION_SECRET fort (>= 16 caractères) est requis pour valider les sessions.',
+        });
+      }
+      const verifiedSession = verifyServerSession(serverSessionToken, secretInfo.secret, {
+        revokedSessionIds: sessionStore.revokedSessionIds,
       });
 
       if (!verifiedSession.valid || !verifiedSession.payload) {
@@ -442,6 +542,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     (req as any).resolvedServerActor = resolvedActor;
 
     if (resolvedActor.roleSpoofDetected) {
+      sessionStore.recordSecurityEvent('SPOOF_DETECTED', {
+        actorId: resolvedActor.actorId,
+        ip: typeof remoteAddress === 'string' ? remoteAddress : undefined,
+        detail: `claimed=${resolvedActor.claimedRole}, resolved=${resolvedActor.effectiveRole}`,
+      });
       console.warn(
         `[Server][SEC-LAN-P1] Role spoof or unverified privilege/actor claim detected: actorId="${resolvedActor.actorId || 'none'}", actor="${resolvedActor.actorName}", claimed="${resolvedActor.claimedRole}", resolved="${resolvedActor.effectiveRole}", status="${resolvedActor.identityStatus}", sessionVerified=${Boolean(resolvedActor.sessionVerified)}, ip="${remoteAddress || 'unknown'}"`
       );
@@ -455,6 +560,22 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
 
+    // Single-use SSE ticket issuance (any verified session role including VIEWER, or bootstrap host)
+    if (req.baseUrl === '/api/gmao' && req.method === 'POST' && normalizedPath === '/events/ticket') {
+      const canIssueTicket =
+        Boolean(resolvedActor.sessionVerified) ||
+        (!registryInitialized && (hasValidStrongToken || (!isProduction && isLoopbackRemoteAddress(remoteAddress))));
+      if (!canIssueTicket) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'SERVER_SESSION_REQUIRED',
+          message: 'Authenticated server session required to subscribe to live SSE events.',
+        });
+      }
+      return next();
+    }
+
     if (req.method === 'GET') {
       const hasClientContext =
         Boolean(resolvedActor.sessionVerified) ||
@@ -462,7 +583,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         Boolean(req.headers['x-gmao-actor-id']) ||
         Boolean(req.headers['x-gmao-actor']) ||
         Boolean(req.headers['x-gmao-role']) ||
-        Boolean(expectedToken && token === expectedToken);
+        Boolean(rawExpected && constantTimeEqual(rawProvided, rawExpected));
       if (!hasClientContext) {
         return res.status(401).json({
           success: false,
@@ -475,8 +596,10 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       const isSensitiveRead =
         fullPath === '/api/network/info' ||
         fullPath === '/api/gmao/audit' ||
+        fullPath === '/api/gmao/auditevents' ||
         fullPath === '/api/gmao/users' ||
-        fullPath === '/api/gmao/authaccounts';
+        fullPath === '/api/gmao/authaccounts' ||
+        fullPath === '/api/gmao/security/telemetry';
 
       // Unrecognized actorId (e.g. ghost-99) is strictly rejected even with API token once registry exists
       if (resolvedActor.identityStatus === 'UNKNOWN' && registryInitialized) {
@@ -490,6 +613,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       if (isSensitiveRead && !resolvedActor.sessionVerified) {
         const allowBootstrapRead =
           !registryInitialized &&
+          fullPath !== '/api/gmao/security/telemetry' &&
           (hasValidStrongToken || (!isProduction && isLoopbackRemoteAddress(remoteAddress)));
         if (!allowBootstrapRead) {
           return res.status(403).json({
@@ -497,6 +621,22 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
             error: 'Forbidden',
             code: 'SERVER_SESSION_REQUIRED',
             message: `Verified server session required for '${fullPath}'.`,
+          });
+        }
+      }
+
+      if (
+        resolvedActor.sessionVerified &&
+        (fullPath === '/api/gmao/audit' ||
+          fullPath === '/api/gmao/auditevents' ||
+          fullPath === '/api/gmao/authaccounts')
+      ) {
+        const readRole = normalizeServerRole(resolvedActor.effectiveRole);
+        if (readRole !== 'ADMIN' && readRole !== 'RESPONSABLE_MAINTENANCE') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Role '${readRole}' is not authorized to read sensitive endpoint '${fullPath}'.`,
           });
         }
       }
@@ -542,6 +682,22 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           );
           return next();
         }
+
+        if (getSessionSecretInfo().missingInProduction) {
+          return res.status(503).json({
+            success: false,
+            error: 'Service Unavailable',
+            code: 'SERVER_SESSION_SECRET_REQUIRED',
+            message:
+              'Sécurité Production : GMAO_SESSION_SECRET fort (>= 16 caractères) est requis pour les opérations d’écriture.',
+          });
+        }
+
+        sessionStore.recordSecurityEvent('UNAUTHORIZED_WRITE_BLOCKED', {
+          actorId: resolvedActor.actorId,
+          ip: typeof remoteAddress === 'string' ? remoteAddress : undefined,
+          detail: `${req.method} ${req.path} without session token`,
+        });
 
         console.warn(
           `[Server][SEC-LAN-P1] Blocked header-only ${req.method} ${req.originalUrl} without server session token (actorId="${resolvedActor.actorId || 'none'}", status=${resolvedActor.identityStatus}, ip="${remoteAddress || 'unknown'}")`
@@ -610,7 +766,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     if (isProduction) {
       const expected = String(process.env.GMAO_API_TOKEN || '').trim();
       const provided = String(req.headers['x-gmao-api-token'] || '').trim();
-      if (isWeakOrEmptyApiToken(expected) || provided !== expected) {
+      if (isWeakOrEmptyApiToken(expected) || !constantTimeEqual(provided, expected)) {
         return res.status(403).json({
           success: false,
           error: 'Forbidden',
@@ -644,15 +800,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   });
   app.use('/api/docs', guardSwaggerAccess, swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
-  // Data persistence file path
-  const DATA_DIR = options.dataDir ? path.resolve(options.dataDir) : path.join(__dirname, 'data');
-  const STATE_FILE = path.join(DATA_DIR, 'gmao_state.json');
-  const STATE_TMP_FILE = path.join(DATA_DIR, 'gmao_state.json.tmp');
-  const AUDIT_FILE = path.join(DATA_DIR, 'gmao_audit.jsonl');
-
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+  // State & Audit file paths already resolved at top of createGmaoApiApp (DATA_DIR)
 
   const createDefaultState = (): Record<string, any> => {
     const initial: Record<string, any> = {};
@@ -866,6 +1014,31 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     });
   });
 
+  // Issue short-lived, single-use ticket for browser EventSource (/api/gmao/events?ticket=...)
+  app.post('/api/gmao/events/ticket', (req, res) => {
+    const now = Date.now();
+    if (sseTickets.size >= 1000) {
+      pruneSecurityCaches(now);
+      if (sseTickets.size >= 1000) {
+        const oldestKey = sseTickets.keys().next().value;
+        if (oldestKey) sseTickets.delete(oldestKey);
+      }
+    }
+    const ticket = randomBytesHex(24);
+    const resolvedActor = (req as any).resolvedServerActor;
+    sseTickets.set(ticket, {
+      sub: String(resolvedActor?.actorId || 'bootstrap'),
+      role: String(resolvedActor?.effectiveRole || 'VIEWER'),
+      ip: String(req.socket?.remoteAddress || req.ip || 'unknown'),
+      exp: now + SSE_TICKET_TTL_MS,
+    });
+    return res.json({
+      success: true,
+      ticket,
+      expiresIn: Math.floor(SSE_TICKET_TTL_MS / 1000),
+    });
+  });
+
   // Server-Sent Events (SSE) Stream for Real-Time LAN Synchronization (P3.4)
   app.get('/api/gmao/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -966,6 +1139,17 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   };
 
   app.post('/api/gmao/auth/login', (req, res) => {
+    const secretInfo = getSessionSecretInfo();
+    if (secretInfo.missingInProduction) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        code: 'SERVER_SESSION_SECRET_REQUIRED',
+        message:
+          'Configuration sécurité production invalide : GMAO_SESSION_SECRET fort (>= 16 caractères) est requis.',
+      });
+    }
+
     const rawIdentifier = String(
       req.body?.identifier || req.body?.actorId || req.body?.username || ''
     ).trim();
@@ -984,6 +1168,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     const nowMs = Date.now();
     const throttleEntry = loginThrottleMap.get(throttleKey);
     if (throttleEntry && throttleEntry.lockUntil > nowMs) {
+      sessionStore.recordSecurityEvent('LOGIN_THROTTLED', {
+        actorId: rawIdentifier,
+        ip: String(clientIp),
+        detail: 'Rate limit lock active on /auth/login',
+      });
       res.setHeader('Retry-After', '900');
       return res.status(429).json({
         success: false,
@@ -1000,6 +1189,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         lockUntil: nextFailures >= 10 ? nowMs + 15 * 60 * 1000 : 0,
         resetAt: nowMs + 15 * 60 * 1000,
       });
+      sessionStore.recordSecurityEvent('LOGIN_FAIL', {
+        actorId: rawIdentifier,
+        ip: String(clientIp),
+        detail: 'Unknown account identifier',
+      });
       return res.status(401).json({
         success: false,
         error: 'Unauthorized',
@@ -1009,6 +1203,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
 
     if (isAccountOrLinkedProfileArchived(found.record)) {
+      sessionStore.recordSecurityEvent('LOGIN_FAIL', {
+        actorId: rawIdentifier,
+        ip: String(clientIp),
+        detail: 'Archived account blocked',
+      });
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
@@ -1020,6 +1219,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     const credCheck = verifyAccountCredentials(found.record, rawPassword, isProduction);
     if (!credCheck.valid) {
       if (credCheck.reason === 'PROHIBITED_DEFAULT_PASSWORD_IN_PROD') {
+        sessionStore.recordSecurityEvent('LOGIN_FAIL', {
+          actorId: rawIdentifier,
+          ip: String(clientIp),
+          detail: 'Default bootstrap password rejected in production',
+        });
         return res.status(403).json({
           success: false,
           error: 'Forbidden',
@@ -1032,6 +1236,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         failures: nextFailures,
         lockUntil: nextFailures >= 10 ? nowMs + 15 * 60 * 1000 : 0,
         resetAt: nowMs + 15 * 60 * 1000,
+      });
+      sessionStore.recordSecurityEvent('LOGIN_FAIL', {
+        actorId: rawIdentifier,
+        ip: String(clientIp),
+        detail: 'Invalid password',
       });
       return res.status(401).json({
         success: false,
@@ -1059,15 +1268,28 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       found.record.name || found.record.nom || found.record.username || canonicalSub
     ).trim();
 
-    const { secret } = getSessionSecretInfo();
     const issued = signServerSession(
       {
         sub: canonicalSub,
         role: canonicalRole,
         name: displayName,
       },
-      secret
+      secretInfo.secret
     );
+
+    sessionStore.registerIssuedSession({
+      sub: issued.payload.sub,
+      role: issued.payload.role,
+      sid: issued.payload.sid,
+      iat: issued.payload.iat,
+      exp: issued.payload.exp,
+      ip: String(clientIp),
+    });
+    sessionStore.recordSecurityEvent('LOGIN_SUCCESS', {
+      actorId: issued.payload.sub,
+      ip: String(clientIp),
+      detail: `role=${issued.payload.role}`,
+    });
 
     return res.json({
       success: true,
@@ -1083,18 +1305,168 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     });
   });
 
+  app.post('/api/gmao/auth/refresh', (req, res) => {
+    const secretInfo = getSessionSecretInfo();
+    if (secretInfo.missingInProduction) {
+      return res.status(503).json({
+        success: false,
+        error: 'Service Unavailable',
+        code: 'SERVER_SESSION_SECRET_REQUIRED',
+        message:
+          'Configuration sécurité production invalide : GMAO_SESSION_SECRET fort (>= 16 caractères) est requis.',
+      });
+    }
+
+    const token =
+      extractServerSessionToken(req.headers as Record<string, unknown>) ||
+      String(req.body?.token || '').trim();
+    if (!token) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'SERVER_SESSION_REQUIRED',
+        message: 'Server session token is required for refresh.',
+      });
+    }
+
+    const clientIp = req.socket?.remoteAddress || req.ip || 'unknown';
+    const verified = verifyServerSession(token, secretInfo.secret, {
+      revokedSessionIds: sessionStore.revokedSessionIds,
+    });
+
+    if (!verified.valid || !verified.payload) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'SERVER_SESSION_INVALID',
+        reason: verified.reason || 'INVALID_SIGNATURE',
+        message: 'Server session token is invalid, expired, or revoked.',
+      });
+    }
+
+    const currentPayload = verified.payload;
+    const liveActor = resolveEffectiveServerRole(
+      {
+        'x-gmao-actor-id': currentPayload.sub,
+        'x-gmao-actor': currentPayload.name,
+      },
+      dbState.users,
+      dbState.technicians,
+      dbState.authAccounts
+    );
+
+    if (liveActor.isArchivedActor || liveActor.identityStatus === 'ARCHIVED') {
+      sessionStore.revokeSession(currentPayload.sid, currentPayload.exp, {
+        sub: currentPayload.sub,
+        ip: String(clientIp),
+        detail: 'Revoked on refresh: actor archived',
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'ACTOR_ARCHIVED',
+        message: 'Actor profile is archived/inactive and cannot refresh session.',
+      });
+    }
+
+    if (liveActor.identityStatus !== 'VERIFIED') {
+      sessionStore.revokeSession(currentPayload.sid, currentPayload.exp, {
+        sub: currentPayload.sub,
+        ip: String(clientIp),
+        detail: 'Revoked on refresh: actor unregistered',
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'SERVER_SESSION_ACTOR_UNREGISTERED',
+        message: 'Authenticated session actor is no longer active in server registry.',
+      });
+    }
+
+    const liveRole = normalizeServerRole(liveActor.effectiveRole);
+    const tokenRole = normalizeServerRole(currentPayload.role);
+    if (liveRole !== tokenRole) {
+      sessionStore.revokeSession(currentPayload.sid, currentPayload.exp, {
+        sub: currentPayload.sub,
+        ip: String(clientIp),
+        detail: `Revoked on refresh: role changed (${tokenRole} -> ${liveRole})`,
+      });
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'SERVER_SESSION_ROLE_CHANGED',
+        message: 'User registry role changed; re-authentication required.',
+      });
+    }
+
+    const issued = signServerSession(
+      {
+        sub: currentPayload.sub,
+        role: liveRole,
+        name: liveActor.actorName || currentPayload.name,
+      },
+      secretInfo.secret
+    );
+
+    sessionStore.rotateSession({
+      oldSid: currentPayload.sid,
+      oldExp: currentPayload.exp,
+      sub: issued.payload.sub,
+      role: issued.payload.role,
+      newSid: issued.payload.sid,
+      newIat: issued.payload.iat,
+      newExp: issued.payload.exp,
+      ip: String(clientIp),
+    });
+
+    return res.json({
+      success: true,
+      token: issued.token,
+      expiresAt: new Date(issued.payload.exp * 1000).toISOString(),
+      expiresIn: issued.payload.exp - issued.payload.iat,
+      actor: {
+        sub: issued.payload.sub,
+        role: issued.payload.role,
+        name: issued.payload.name,
+      },
+    });
+  });
+
   app.post('/api/gmao/auth/logout', (req, res) => {
     const token =
       extractServerSessionToken(req.headers as Record<string, unknown>) ||
       String(req.body?.token || '').trim();
     if (token) {
-      const { secret } = getSessionSecretInfo();
-      const verified = verifyServerSession(token, secret);
-      if (verified.payload?.sid) {
-        revokedSessionIds.set(verified.payload.sid, verified.payload.exp);
+      const secretInfo = getSessionSecretInfo();
+      if (secretInfo.secret) {
+        const verified = verifyServerSession(token, secretInfo.secret);
+        if (verified.payload?.sid) {
+          sessionStore.revokeSession(verified.payload.sid, verified.payload.exp, {
+            sub: verified.payload.sub,
+            ip: String(req.socket?.remoteAddress || req.ip || 'unknown'),
+            detail: 'Explicit user logout',
+          });
+        }
       }
     }
     return res.json({ success: true });
+  });
+
+  // Admin-only lightweight security telemetry endpoint (SEC-LAN-P3, never exposes secrets/tokens)
+  app.get('/api/gmao/security/telemetry', (req, res) => {
+    const resolvedActor = (req as any).resolvedServerActor;
+    const role = normalizeServerRole(resolvedActor?.effectiveRole);
+    if (!resolvedActor?.sessionVerified || role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'ADMIN verified server session required for security telemetry.',
+      });
+    }
+    return res.json({
+      success: true,
+      data: sessionStore.getTelemetrySnapshot(),
+    });
   });
 
   // Get recent server-side audit trail entries
@@ -1158,7 +1530,37 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         });
       }
 
-      // Optional Optimistic Concurrency Check when expectedVersion is explicitly provided and force !== true
+      const isBootstrapAuthorized = (req as any).isBootstrapAuthorized === true;
+      const resolvedActor =
+        (req as any).resolvedServerActor ||
+        resolveEffectiveServerRole(
+          req.headers as Record<string, unknown>,
+          dbState.users,
+          dbState.technicians,
+          dbState.authAccounts
+        );
+
+      if (!isBootstrapAuthorized && resolvedActor.identityStatus !== 'VERIFIED') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Unverified or inactive actor cannot modify server state.',
+        });
+      }
+
+      const callerRole = normalizeServerRole(resolvedActor.effectiveRole);
+      const canForceOverwrite =
+        isBootstrapAuthorized || callerRole === 'ADMIN' || callerRole === 'RESPONSABLE_MAINTENANCE';
+
+      if (incomingState.force === true && !canForceOverwrite) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: `Role '${callerRole}' is not authorized to force-overwrite server state conflicts.`,
+        });
+      }
+
+      // Optimistic Concurrency Check when expectedVersion is explicitly provided and authorized force !== true
       const expectedVersion =
         typeof incomingState.expectedVersion === 'number'
           ? incomingState.expectedVersion
@@ -1186,29 +1588,14 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           message: `Server state version (${dbState.version}) is newer than client expectedVersion (${expectedVersion}).`,
           version: dbState.version,
           updatedAt: dbState.updatedAt,
-          data: sanitizeStateSnapshotForTransport(dbState, { includeProtectedCollections: true }),
+          data: sanitizeStateSnapshotForTransport(dbState, {
+            includeProtectedCollections: canForceOverwrite,
+          }),
         });
       }
 
-      const isBootstrapAuthorized = (req as any).isBootstrapAuthorized === true;
-      const resolvedActor =
-        (req as any).resolvedServerActor ||
-        resolveEffectiveServerRole(
-          req.headers as Record<string, unknown>,
-          dbState.users,
-          dbState.technicians,
-          dbState.authAccounts
-        );
-
       let effectiveIncomingState = incomingState;
       if (!isBootstrapAuthorized) {
-        if (resolvedActor.identityStatus !== 'VERIFIED') {
-          return res.status(403).json({
-            success: false,
-            error: 'Forbidden',
-            message: 'Unverified or inactive actor cannot modify server state.',
-          });
-        }
         const bulkCheck = sanitizeBulkStateForRole(
           resolvedActor.effectiveRole,
           incomingState,
@@ -1268,7 +1655,9 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         acceptedKeys,
         data:
           isSmartMergeRequest || preserveServerOnlyItems
-            ? sanitizeStateSnapshotForTransport(dbState, { includeProtectedCollections: true })
+            ? sanitizeStateSnapshotForTransport(dbState, {
+                includeProtectedCollections: canForceOverwrite,
+              })
             : undefined,
       });
     } catch (error: any) {
@@ -1289,23 +1678,75 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     next();
   };
 
+  const parseOptionalExpectedVersion = (req: express.Request): number | undefined => {
+    const rawIfMatch = req.headers['if-match'];
+    const rawQuery = req.query?.expectedVersion;
+    const candidate =
+      typeof rawIfMatch === 'string' && rawIfMatch.trim()
+        ? rawIfMatch
+        : typeof rawQuery === 'string' && rawQuery.trim()
+        ? rawQuery
+        : '';
+    if (!candidate) return undefined;
+    const num = Number(candidate.replace(/[^\d]/g, ''));
+    return Number.isFinite(num) && num >= 1 ? num : undefined;
+  };
+
+  const canRoleForceReplaceEntity = (req: express.Request): boolean => {
+    if ((req as any).isBootstrapAuthorized === true) return true;
+    const role = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+    return role === 'ADMIN' || role === 'RESPONSABLE_MAINTENANCE';
+  };
+
   // Generic Entity CRUD Endpoints for allowed GMAO entities only
   app.get('/api/gmao/:entity', requireAllowedEntity, (req, res) => {
     const entity = String(req.params.entity);
     if (dbState[entity] === undefined) {
       dbState[entity] = OBJECT_ENTITY_SET.has(entity) ? {} : [];
     }
+    res.setHeader('ETag', `W/"v${dbState.version}"`);
+
+    const sanitized = stripSensitiveAccountFields(entity, dbState[entity]);
+    const hasPaginationQuery =
+      req.query.limit !== undefined || req.query.offset !== undefined || req.query.page !== undefined;
+
+    if (hasPaginationQuery && Array.isArray(sanitized)) {
+      const total = sanitized.length;
+      const rawLimit = Number(req.query.limit);
+      const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(Math.floor(rawLimit), 1000) : 100;
+      const rawPage = Number(req.query.page);
+      const rawOffset = Number(req.query.offset);
+      const offset =
+        Number.isFinite(rawOffset) && rawOffset >= 0
+          ? Math.floor(rawOffset)
+          : Number.isFinite(rawPage) && rawPage >= 1
+          ? (Math.floor(rawPage) - 1) * limit
+          : 0;
+      const sliced = sanitized.slice(offset, offset + limit);
+      return res.json({
+        success: true,
+        version: dbState.version,
+        data: sliced,
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasMore: offset + sliced.length < total,
+        },
+      });
+    }
+
     return res.json({
       success: true,
       version: dbState.version,
-      data: stripSensitiveAccountFields(entity, dbState[entity]),
+      data: sanitized,
     });
   });
 
   app.post('/api/gmao/:entity', requireAllowedEntity, async (req, res) => {
     const entity = String(req.params.entity);
-    const newItem = req.body;
-    if (!newItem || typeof newItem !== 'object' || Array.isArray(newItem)) {
+    const rawItem = req.body;
+    if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
       return res.status(400).json({
         success: false,
         error: 'Bad Request',
@@ -1313,18 +1754,25 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
     if (OBJECT_ENTITY_SET.has(entity)) {
-      dbState[entity] = { ...(dbState[entity] || {}), ...newItem };
+      dbState[entity] = { ...(dbState[entity] || {}), ...rawItem };
       await persistState({
         actor: resolveActor(req),
         action: 'UPSERT_DICTIONARY',
         entity,
         summary: `Updated dictionary keys in ${entity}`,
       });
+      res.setHeader('ETag', `W/"v${dbState.version}"`);
       return res.status(201).json({ success: true, version: dbState.version, data: dbState[entity] });
     }
     if (!Array.isArray(dbState[entity])) {
       dbState[entity] = [];
     }
+    const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+    const newItem =
+      (req as any).isBootstrapAuthorized === true
+        ? rawItem
+        : clampMakerCheckerRecordForRole(actorRole, entity, rawItem, null);
+
     dbState[entity].push(newItem);
     if (entity === 'rawStock') dbState.stock = dbState.rawStock;
     if (entity === 'stock') dbState.rawStock = dbState.stock;
@@ -1335,12 +1783,34 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       entity,
       summary: `Created item '${itemId}' in ${entity}`,
     });
-    return res.status(201).json({ success: true, version: dbState.version, data: newItem });
+    res.setHeader('ETag', `W/"v${dbState.version}"`);
+    const safeReturned = stripSensitiveAccountFields(entity, [newItem])[0];
+    return res.status(201).json({ success: true, version: dbState.version, data: safeReturned });
   });
 
   app.put('/api/gmao/:entity', requireAllowedEntity, async (req, res) => {
     const entity = String(req.params.entity);
     const payload = req.body;
+    const shouldMergeEntity = req.query.merge === 'true';
+
+    if (!shouldMergeEntity && !canRoleForceReplaceEntity(req)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: `Role '${normalizeServerRole((req as any).resolvedServerActor?.effectiveRole)}' cannot replace entire collection '${entity}' without ?merge=true.`,
+      });
+    }
+
+    const expectedVersion = parseOptionalExpectedVersion(req);
+    if (expectedVersion !== undefined && expectedVersion < dbState.version && !shouldMergeEntity) {
+      return res.status(409).json({
+        success: false,
+        error: 'Conflict',
+        message: `Server state version (${dbState.version}) is newer than If-Match (${expectedVersion}).`,
+        version: dbState.version,
+      });
+    }
+
     if (OBJECT_ENTITY_SET.has(entity)) {
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
         return res.status(400).json({
@@ -1356,6 +1826,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         entity,
         summary: `Replaced dictionary ${entity}`,
       });
+      res.setHeader('ETag', `W/"v${dbState.version}"`);
       return res.json({ success: true, version: dbState.version, data: dbState[entity] });
     }
     if (!Array.isArray(payload)) {
@@ -1365,11 +1836,17 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         message: `PUT /api/gmao/${entity} requires an array payload or use /api/gmao/${entity}/:id.`,
       });
     }
-    const shouldMergeEntity = req.query.merge === 'true';
+
     const currentList = Array.isArray(dbState[entity]) ? dbState[entity] : [];
+    const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+    const effectivePayload =
+      (req as any).isBootstrapAuthorized === true
+        ? payload
+        : clampMakerCheckerCollectionForRole(actorRole, entity, payload, currentList);
+
     dbState[entity] = shouldMergeEntity
-      ? mergeEntityCollection(entity, currentList, payload, { preserveServerOnlyItems: true })
-      : payload;
+      ? mergeEntityCollection(entity, currentList, effectivePayload, { preserveServerOnlyItems: true })
+      : effectivePayload;
     if (entity === 'rawStock') dbState.stock = dbState.rawStock;
     if (entity === 'stock') dbState.rawStock = dbState.stock;
     await persistState({
@@ -1378,7 +1855,12 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       entity,
       summary: `${shouldMergeEntity ? 'Merged' : 'Replaced'} collection ${entity} (${dbState[entity].length} items)`,
     });
-    return res.json({ success: true, version: dbState.version, data: dbState[entity] });
+    res.setHeader('ETag', `W/"v${dbState.version}"`);
+    return res.json({
+      success: true,
+      version: dbState.version,
+      data: stripSensitiveAccountFields(entity, dbState[entity]),
+    });
   });
 
   app.put('/api/gmao/:entity/:id', requireAllowedEntity, async (req, res) => {
@@ -1392,6 +1874,15 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         message: 'Update payload must be a JSON object.',
       });
     }
+    const expectedVersion = parseOptionalExpectedVersion(req);
+    if (expectedVersion !== undefined && expectedVersion < dbState.version) {
+      return res.status(409).json({
+        success: false,
+        error: 'Conflict',
+        message: `Server state version (${dbState.version}) is newer than If-Match (${expectedVersion}).`,
+        version: dbState.version,
+      });
+    }
     if (!Array.isArray(dbState[entity])) {
       return res.status(404).json({ success: false, message: `Entity '${entity}' is not an array collection` });
     }
@@ -1399,7 +1890,13 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       (item: any) => item && (String(item.id) === id || String(item.code) === id || String(item.ref) === id)
     );
     if (index !== -1) {
-      dbState[entity][index] = { ...dbState[entity][index], ...updatedData };
+      const existingRecord = dbState[entity][index];
+      const mergedRecord = { ...existingRecord, ...updatedData };
+      const actorRole = normalizeServerRole((req as any).resolvedServerActor?.effectiveRole);
+      dbState[entity][index] =
+        (req as any).isBootstrapAuthorized === true
+          ? mergedRecord
+          : clampMakerCheckerRecordForRole(actorRole, entity, mergedRecord, existingRecord);
       if (entity === 'rawStock') dbState.stock = dbState.rawStock;
       if (entity === 'stock') dbState.rawStock = dbState.stock;
       await persistState({
@@ -1408,7 +1905,9 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         entity,
         summary: `Updated item '${id}' in ${entity}`,
       });
-      return res.json({ success: true, version: dbState.version, data: dbState[entity][index] });
+      res.setHeader('ETag', `W/"v${dbState.version}"`);
+      const safeReturned = stripSensitiveAccountFields(entity, [dbState[entity][index]])[0];
+      return res.json({ success: true, version: dbState.version, data: safeReturned });
     }
     return res.status(404).json({ success: false, message: `Item with id/code '${id}' not found in '${entity}'` });
   });
@@ -1424,6 +1923,15 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   app.delete('/api/gmao/:entity/:id', requireAllowedEntity, async (req, res) => {
     const entity = String(req.params.entity);
     const id = String(req.params.id);
+    const expectedVersion = parseOptionalExpectedVersion(req);
+    if (expectedVersion !== undefined && expectedVersion < dbState.version) {
+      return res.status(409).json({
+        success: false,
+        error: 'Conflict',
+        message: `Server state version (${dbState.version}) is newer than If-Match (${expectedVersion}).`,
+        version: dbState.version,
+      });
+    }
     if (!Array.isArray(dbState[entity])) {
       return res.status(404).json({ success: false, message: `Entity '${entity}' is not an array collection` });
     }
@@ -1440,15 +1948,50 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         entity,
         summary: `Deleted item '${id}' from ${entity}`,
       });
+      res.setHeader('ETag', `W/"v${dbState.version}"`);
       return res.json({ success: true, version: dbState.version, message: `Deleted item '${id}' from '${entity}'` });
     }
     return res.status(404).json({ success: false, message: `Item with id/code '${id}' not found in '${entity}'` });
   });
 
+  const mountProductionStaticWithCspNonce = (distDirectory: string) => {
+    const resolvedDist = path.resolve(distDirectory);
+    if (!fs.existsSync(resolvedDist)) return;
+
+    app.use(express.static(resolvedDist, { index: false }));
+    app.get('/{*splat}', (req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
+      const indexFile = path.join(resolvedDist, 'index.html');
+      if (!fs.existsSync(indexFile)) {
+        return res.status(404).send('Not Found');
+      }
+      try {
+        const rawHtml = fs.readFileSync(indexFile, 'utf-8');
+        const nonce = String((res as any).locals?.cspNonce || randomBytesHex(16));
+        res.setHeader(
+          'Content-Security-Policy',
+          buildCspHeaderValue({ isProduction: true, nonce, isHtml: true })
+        );
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(renderHtmlWithCspNonce(rawHtml, nonce));
+      } catch (err) {
+        return next(err);
+      }
+    });
+  };
+
+  if (options.distDir) {
+    mountProductionStaticWithCspNonce(options.distDir);
+  }
+
   const cleanup = () => {
     clearInterval(rateLimitCleanupTimer);
-    revokedSessionIds.clear();
+    sessionStore.clearMemoryOnly();
     loginThrottleMap.clear();
+    sseTickets.clear();
     for (const client of sseClients) {
       try {
         client.end();
@@ -1464,12 +2007,15 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     dbState,
     port: PORT,
     isProduction,
+    sessionStore,
+    mountProductionStaticWithCspNonce,
     cleanup,
   };
 }
 
 export async function startServer() {
-  const { app, port: PORT, isProduction, cleanup } = createGmaoApiApp();
+  const { app, port: PORT, isProduction, mountProductionStaticWithCspNonce, cleanup } =
+    createGmaoApiApp();
 
   // Setup Vite or static serving
   let viteInstance: any = null;
@@ -1510,12 +2056,8 @@ export async function startServer() {
       }
     });
   } else {
-    const DIST_DIR = path.join(__dirname, 'dist');
-    app.use(express.static(DIST_DIR));
-    app.get('/{*splat}', (req, res) => {
-      res.sendFile(path.join(DIST_DIR, 'index.html'));
-    });
-    console.log('[Server] Production static serving enabled from dist/');
+    mountProductionStaticWithCspNonce(path.join(__dirname, 'dist'));
+    console.log('[Server] Production static serving enabled from dist/ with nonced CSP');
   }
 
   let activeHttpServer: any = null;

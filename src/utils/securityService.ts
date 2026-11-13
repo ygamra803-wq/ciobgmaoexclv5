@@ -1,4 +1,9 @@
-import { pbkdf2Sha256Hex, symmetricEncrypt, symmetricDecrypt } from '../core/security/nativeCrypto';
+import {
+  pbkdf2Sha256Hex,
+  symmetricEncrypt,
+  symmetricDecrypt,
+  constantTimeEqual,
+} from '../core/security/nativeCrypto';
 import { Logger } from '../core/logger/LoggerService';
 import { SecurityService as CoreSecurityService } from '../core/security/SecurityService';
 
@@ -48,21 +53,8 @@ export class SecurityService {
       }
       return symmetricEncrypt(JSON.stringify(data), key);
     } catch (e) {
-      const isProd = Boolean(
-        import.meta.env.PROD ||
-        (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
-      );
-      if (isProd) {
-        Logger.error('Encryption failed in production:', e, 'SecurityService');
-        throw e;
-      }
-      // Dev-only fallback to safe base64 encoding if symmetric encryption fails
-      try {
-        return btoa(JSON.stringify(data));
-      } catch {
-        Logger.error('Encryption error:', e, 'SecurityService');
-        return '';
-      }
+      Logger.error('Encryption failed:', e, 'SecurityService');
+      throw e;
     }
   }
 
@@ -82,20 +74,8 @@ export class SecurityService {
           return JSON.parse(decryptedData);
         }
       }
-    } catch {
-      // Fall through to dev-only fallback
-    }
-    const isProd = Boolean(
-      import.meta.env.PROD ||
-      (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production')
-    );
-    if (!isProd) {
-      try {
-        return JSON.parse(atob(encrypted));
-      } catch (err) {
-        Logger.error('Failed to decrypt data:', err, 'SecurityService');
-        return null;
-      }
+    } catch (err) {
+      Logger.error('Failed to decrypt data:', err, 'SecurityService');
     }
     return null;
   }
@@ -150,14 +130,13 @@ export class SecurityService {
    */
   static verifyPIN(enteredPIN, storedPIN) {
     if (!enteredPIN || !storedPIN) return false;
-    if (enteredPIN === storedPIN) return true;
     if (typeof storedPIN === 'string' && storedPIN.startsWith('pbkdf2:v1:')) {
       const parts = storedPIN.split(':');
       if (parts.length === 5) {
         const [, , saltHex, iterStr, expectedHashHex] = parts;
         const iterations = parseInt(iterStr, 10) || 10000;
         const keyHex = pbkdf2Sha256Hex(enteredPIN, saltHex, iterations, 32);
-        return keyHex === expectedHashHex;
+        return constantTimeEqual(keyHex.toLowerCase(), expectedHashHex.toLowerCase());
       }
     }
     return false;

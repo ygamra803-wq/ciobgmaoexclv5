@@ -297,21 +297,78 @@ export const networkConfigService = {
   },
 
   /**
-   * Subscribes to real-time revision updates from the Host via SSE (`/api/gmao/events`)
-   * and window focus checks (`P3.4`). Returns an unsubscribe function.
+   * Subscribes to real-time revision updates from the Host via authenticated SSE ticket
+   * (`/api/gmao/events/ticket` -> `/api/gmao/events?ticket=...`) and window focus checks (`P3.4`).
    */
   subscribeToRevisionStream(
-    onRevisionUpdate: (event: RevisionEventPayload) => void
+    onRevisionUpdate: (event: RevisionEventPayload) => void,
+    onError?: () => void
   ): () => void {
     if (typeof window === 'undefined') {
       return () => {};
     }
 
+    let isDisposed = false;
     let eventSource: EventSource | null = null;
-    if (typeof EventSource !== 'undefined') {
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryCount = 0;
+
+    const closeEventSource = () => {
+      if (eventSource) {
+        try {
+          eventSource.close();
+        } catch {
+          // ignore
+        }
+        eventSource = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (isDisposed || retryCount >= 5) return;
+      const delayMs = Math.min(30_000, 1500 * Math.pow(2, retryCount));
+      retryCount += 1;
+      reconnectTimer = setTimeout(() => {
+        if (!isDisposed) {
+          void connectWithTicket();
+        }
+      }, delayMs);
+    };
+
+    const connectWithTicket = async () => {
+      if (isDisposed || typeof EventSource === 'undefined') return;
       try {
-        eventSource = new EventSource('/api/gmao/events');
-        eventSource.onmessage = (evt) => {
+        const res = await fetch(this.resolveApiUrl('/api/gmao/events/ticket'), {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'x-gmao-client-origin': 'gmao-web-client',
+            ...getSessionActorHeaders(),
+          },
+          body: '{}',
+        });
+        if (!res.ok) {
+          onError?.();
+          if (res.status !== 401 && res.status !== 403) {
+            scheduleReconnect();
+          }
+          return;
+        }
+        const json = await res.json();
+        const ticket = typeof json?.ticket === 'string' ? json.ticket.trim() : '';
+        if (!ticket || isDisposed) return;
+
+        closeEventSource();
+        const streamUrl = this.resolveApiUrl(`/api/gmao/events?ticket=${encodeURIComponent(ticket)}`);
+        const es = new EventSource(streamUrl);
+        eventSource = es;
+
+        es.onopen = () => {
+          retryCount = 0;
+        };
+
+        es.onmessage = (evt) => {
           try {
             const parsed = JSON.parse(evt.data);
             if (parsed && typeof parsed.version === 'number') {
@@ -321,10 +378,19 @@ export const networkConfigService = {
             // ignore malformed frame
           }
         };
+
+        es.onerror = () => {
+          closeEventSource();
+          onError?.();
+          scheduleReconnect();
+        };
       } catch {
-        eventSource = null;
+        onError?.();
+        scheduleReconnect();
       }
-    }
+    };
+
+    void connectWithTicket();
 
     const handleWindowFocus = async () => {
       const rev = await this.fetchServerRevision();
@@ -340,13 +406,12 @@ export const networkConfigService = {
     window.addEventListener('focus', handleWindowFocus);
 
     return () => {
-      if (eventSource) {
-        try {
-          eventSource.close();
-        } catch {
-          // ignore
-        }
+      isDisposed = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
+      closeEventSource();
       window.removeEventListener('focus', handleWindowFocus);
     };
   },
@@ -356,13 +421,16 @@ export const networkConfigService = {
     onStateUpdated?: (payload: RevisionEventPayload) => void;
     onError?: () => void;
   }): () => void {
-    return this.subscribeToRevisionStream((payload) => {
-      if (payload.type === 'CONNECTED') {
-        handlers?.onConnected?.();
-      } else if (payload.type === 'STATE_UPDATED') {
-        handlers?.onStateUpdated?.(payload);
-      }
-    });
+    return this.subscribeToRevisionStream(
+      (payload) => {
+        if (payload.type === 'CONNECTED') {
+          handlers?.onConnected?.();
+        } else if (payload.type === 'STATE_UPDATED') {
+          handlers?.onStateUpdated?.(payload);
+        }
+      },
+      handlers?.onError
+    );
   },
 
   /**
