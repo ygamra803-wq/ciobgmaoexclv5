@@ -78,6 +78,12 @@ const resolveSessionUser = (): Record<string, any> | null => {
   return null;
 };
 
+export const getActiveActorId = (): string => {
+  const user = resolveSessionUser();
+  if (!user) return '';
+  return String(user.personnelId || user.code || user.id || user.username || '').trim();
+};
+
 export const getActiveActorName = (): string => {
   const user = resolveSessionUser();
   if (user) {
@@ -436,6 +442,7 @@ export const serverSyncService = {
    */
   async fetchServerState(): Promise<{ online: boolean; state: Record<string, any> | null; summary: ServerStateSummary }> {
     try {
+      const actorId = getActiveActorId();
       const actorName = getActiveActorName();
       const actorRole = getActiveActorRole();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
@@ -443,6 +450,7 @@ export const serverSyncService = {
         headers: {
           Accept: 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
+          ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
           ...(actorName ? { 'x-gmao-actor': actorName } : {}),
           ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
         },
@@ -474,6 +482,7 @@ export const serverSyncService = {
    */
   async fetchAuditLogs(limit = 100): Promise<ServerAuditEntry[]> {
     try {
+      const actorId = getActiveActorId();
       const actorName = getActiveActorName();
       const actorRole = getActiveActorRole();
       const response = await fetch(
@@ -483,6 +492,7 @@ export const serverSyncService = {
           headers: {
             Accept: 'application/json',
             'x-gmao-client-origin': 'gmao-web-client',
+            ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
             ...(actorName ? { 'x-gmao-actor': actorName } : {}),
             ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
           },
@@ -630,12 +640,15 @@ export const serverSyncService = {
         };
       }
 
+      const actorId = getActiveActorId();
+      const actorName = getActiveActorName();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
-          'x-gmao-actor': getActiveActorName(),
+          ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
+          ...(actorName ? { 'x-gmao-actor': actorName } : {}),
           'x-gmao-role': actorRole,
         },
         body: JSON.stringify(localPayload),

@@ -102,9 +102,12 @@ export function normalizeServerRole(rawRole: unknown): string {
   return 'VIEWER';
 }
 
+export type ServerIdentityStatus = 'VERIFIED' | 'ARCHIVED' | 'UNKNOWN' | 'ANONYMOUS';
+
 export interface ResolvedServerActor {
   claimedRole: string;
   effectiveRole: string;
+  identityStatus: ServerIdentityStatus;
   actorName: string;
   actorId: string;
   roleSpoofDetected: boolean;
@@ -118,103 +121,309 @@ const UNTRUSTED_GENERIC_ACTORS = new Set<string>([
   'GUEST',
 ]);
 
+function readHeaderValue(headers: Record<string, unknown> | undefined, targetKey: string): string {
+  if (!headers || typeof headers !== 'object') return '';
+  const lowerTarget = targetKey.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== lowerTarget) continue;
+    const raw = Array.isArray(value) ? value[0] : value;
+    return typeof raw === 'string' ? raw.trim() : raw != null ? String(raw).trim() : '';
+  }
+  return '';
+}
+
+function isRecordArchived(record: any): boolean {
+  if (!record || typeof record !== 'object') return false;
+  const statut = String(record.statut || '').trim().toUpperCase();
+  const status = String(record.status || '').trim().toUpperCase();
+  return (
+    record.is_active === false ||
+    record.actif === false ||
+    record.isActive === false ||
+    statut === 'ARCHIVE' ||
+    statut === 'ARCHIVEE' ||
+    status === 'ARCHIVE' ||
+    status === 'ARCHIVEE'
+  );
+}
+
 /**
- * Resolves the effective server role by cross-checking the claimed `x-gmao-role`
- * against registered users and technicians in `dbState`.
- * Missing role or missing/untrusted actor identity always resolves to `VIEWER`.
+ * Resolves the effective server role strictly (Fail-Closed) by verifying `x-gmao-actor-id`
+ * and `x-gmao-actor` against registered `dbUsers` and `dbTechnicians`.
+ *
+ * Security invariants (SEC-LAN-P0):
+ *  - Missing or generic actor headers -> `VIEWER`, `identityStatus: 'ANONYMOUS'`.
+ *  - Non-empty `actorId` is authoritative: if it fails to match any registered ID, we do NOT
+ *    fall back to matching by display name (`actorName`), preventing impersonation.
+ *  - Any unrecognized identity (including `ghost-99` or empty DB) -> ALWAYS downgraded to
+ *    `VIEWER` with `identityStatus: 'UNKNOWN'` and `roleSpoofDetected: claimedRole !== 'VIEWER'`.
+ *  - Archived/inactive users/technicians -> `VIEWER`, `identityStatus: 'ARCHIVED'`.
+ *  - Active registered users/technicians -> clamped to `min(claimedRole, registeredRole)`
+ *    (or `registeredRole` when valid) so claimed privilege can never exceed registry privilege.
  */
 export function resolveEffectiveServerRole(
   headers: Record<string, unknown>,
   dbUsers: any[] = [],
   dbTechnicians: any[] = []
 ): ResolvedServerActor {
-  const rawRole = headers?.['x-gmao-role'];
+  const rawRole = readHeaderValue(headers, 'x-gmao-role');
   const claimedRole = normalizeServerRole(rawRole);
-  const actorId = String(headers?.['x-gmao-actor-id'] || '').trim();
-  const actorName = String(headers?.['x-gmao-actor'] || '').trim();
+  const actorId = readHeaderValue(headers, 'x-gmao-actor-id');
+  const actorName = readHeaderValue(headers, 'x-gmao-actor');
 
   const normId = actorId.toUpperCase();
   const normName = actorName.toUpperCase();
 
-  const hasTrustedActorIdentity =
-    (normId.length > 0 && !UNTRUSTED_GENERIC_ACTORS.has(normId)) ||
-    (normName.length > 0 && !UNTRUSTED_GENERIC_ACTORS.has(normName));
+  const isIdGenericOrEmpty = normId.length === 0 || UNTRUSTED_GENERIC_ACTORS.has(normId);
+  const isNameGenericOrEmpty = normName.length === 0 || UNTRUSTED_GENERIC_ACTORS.has(normName);
 
-  let effectiveRole = hasTrustedActorIdentity ? claimedRole : 'VIEWER';
-  let roleSpoofDetected = !hasTrustedActorIdentity && claimedRole !== 'VIEWER';
-  let isArchivedActor = false;
-
-  // 1. Check against registered users in dbState.users
-  if ((normId || normName) && Array.isArray(dbUsers) && dbUsers.length > 0) {
-    const matchedUser = dbUsers.find((u: any) => {
-      if (!u) return false;
-      const uId = String(u.id || u.code || '').trim().toUpperCase();
-      const uUsername = String(u.username || '').trim().toUpperCase();
-      const uName = String(u.nom || u.name || '').trim().toUpperCase();
-      if (normId && (uId === normId || uUsername === normId)) return true;
-      if (normName && (uName === normName || uUsername === normName)) return true;
-      return false;
-    });
-
-    if (matchedUser) {
-      if (
-        matchedUser.is_active === false ||
-        matchedUser.actif === false ||
-        String(matchedUser.statut || '').toUpperCase() === 'ARCHIVE'
-      ) {
-        isArchivedActor = true;
-        effectiveRole = 'VIEWER';
-      } else if (matchedUser.role) {
-        const registeredRole = normalizeServerRole(matchedUser.role);
-        const claimedRank = ROLE_PRIVILEGE_RANK[claimedRole] ?? 0;
-        const registeredRank = ROLE_PRIVILEGE_RANK[registeredRole] ?? 0;
-        if (claimedRank > registeredRank) {
-          roleSpoofDetected = true;
-          effectiveRole = registeredRole;
-        }
-      }
-    }
+  // 1. Missing or purely generic identity -> ANONYMOUS / VIEWER (fail-closed)
+  if (isIdGenericOrEmpty && isNameGenericOrEmpty) {
+    return {
+      claimedRole,
+      effectiveRole: 'VIEWER',
+      identityStatus: 'ANONYMOUS',
+      actorName: actorName || 'web-operator',
+      actorId,
+      roleSpoofDetected: claimedRole !== 'VIEWER',
+      isArchivedActor: false,
+    };
   }
 
-  // 2. Check against registered technicians in dbState.technicians
-  if (!isArchivedActor && (normId || normName) && Array.isArray(dbTechnicians) && dbTechnicians.length > 0) {
-    const matchedTech = dbTechnicians.find((t: any) => {
-      if (!t) return false;
-      const tId = String(t.id_technician || t.id || t.code || '').trim().toUpperCase();
-      const tName = String(t.nom || t.name || '').trim().toUpperCase();
-      if (normId && tId === normId) return true;
-      if (normName && tName === normName) return true;
-      return false;
-    });
+  const usersList = Array.isArray(dbUsers) ? dbUsers : [];
+  const techList = Array.isArray(dbTechnicians) ? dbTechnicians : [];
+  const matchByIdOnly = !isIdGenericOrEmpty;
 
-    if (matchedTech) {
-      if (
-        matchedTech.is_active === false ||
-        matchedTech.actif === false ||
-        String(matchedTech.statut || '').toUpperCase() === 'ARCHIVE'
-      ) {
-        isArchivedActor = true;
-        effectiveRole = 'VIEWER';
-      } else if (matchedTech.role) {
-        const techRole = normalizeServerRole(matchedTech.role);
-        const claimedRank = ROLE_PRIVILEGE_RANK[effectiveRole] ?? 0;
-        const techRank = ROLE_PRIVILEGE_RANK[techRole] ?? 2;
-        if (claimedRank > techRank) {
-          roleSpoofDetected = true;
-          effectiveRole = techRole;
-        }
-      }
+  // 2. Lookup in registered users (ID match is authoritative if actorId was provided)
+  const matchedUser = usersList.find((u: any) => {
+    if (!u || typeof u !== 'object') return false;
+    const candidateIds = [u.id, u.code, u.username, u.personnelId, u.id_operation, u.id_technician]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+
+    if (matchByIdOnly) {
+      return candidateIds.includes(normId);
     }
+    const candidateNames = [u.nom, u.name, u.username, u.personnelName]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    return candidateNames.includes(normName);
+  });
+
+  if (matchedUser) {
+    const resolvedDisplayName =
+      actorName || String(matchedUser.nom || matchedUser.name || matchedUser.username || 'web-operator').trim();
+    if (isRecordArchived(matchedUser)) {
+      return {
+        claimedRole,
+        effectiveRole: 'VIEWER',
+        identityStatus: 'ARCHIVED',
+        actorName: resolvedDisplayName,
+        actorId,
+        roleSpoofDetected: claimedRole !== 'VIEWER',
+        isArchivedActor: true,
+      };
+    }
+
+    const registeredRole = normalizeServerRole(matchedUser.role);
+    const claimedRank = ROLE_PRIVILEGE_RANK[claimedRole] ?? 0;
+    const registeredRank = ROLE_PRIVILEGE_RANK[registeredRole] ?? 0;
+    const roleSpoofDetected = claimedRank > registeredRank;
+    const effectiveRole = roleSpoofDetected
+      ? registeredRole
+      : rawRole
+      ? claimedRole
+      : registeredRole;
+
+    return {
+      claimedRole,
+      effectiveRole,
+      identityStatus: 'VERIFIED',
+      actorName: resolvedDisplayName,
+      actorId,
+      roleSpoofDetected,
+      isArchivedActor: false,
+    };
+  }
+
+  // 3. Lookup in registered technicians (defaults role to TECHNICIEN when record omits .role)
+  const matchedTech = techList.find((t: any) => {
+    if (!t || typeof t !== 'object') return false;
+    const candidateIds = [t.id_technician, t.id, t.code, t.username]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+
+    if (matchByIdOnly) {
+      return candidateIds.includes(normId);
+    }
+    const candidateNames = [t.nom, t.name]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    return candidateNames.includes(normName);
+  });
+
+  if (matchedTech) {
+    const resolvedDisplayName =
+      actorName || String(matchedTech.nom || matchedTech.name || 'web-operator').trim();
+    if (isRecordArchived(matchedTech)) {
+      return {
+        claimedRole,
+        effectiveRole: 'VIEWER',
+        identityStatus: 'ARCHIVED',
+        actorName: resolvedDisplayName,
+        actorId,
+        roleSpoofDetected: claimedRole !== 'VIEWER',
+        isArchivedActor: true,
+      };
+    }
+
+    const techRole = matchedTech.role ? normalizeServerRole(matchedTech.role) : 'TECHNICIEN';
+    const claimedRank = ROLE_PRIVILEGE_RANK[claimedRole] ?? 0;
+    const techRank = ROLE_PRIVILEGE_RANK[techRole] ?? 2;
+    const roleSpoofDetected = claimedRank > techRank;
+    const effectiveRole = roleSpoofDetected
+      ? techRole
+      : rawRole
+      ? claimedRole
+      : techRole;
+
+    return {
+      claimedRole,
+      effectiveRole,
+      identityStatus: 'VERIFIED',
+      actorName: resolvedDisplayName,
+      actorId,
+      roleSpoofDetected,
+      isArchivedActor: false,
+    };
+  }
+
+  // 4. Unmatched / unregistered identity -> strictly fail-closed to VIEWER + UNKNOWN
+  return {
+    claimedRole,
+    effectiveRole: 'VIEWER',
+    identityStatus: 'UNKNOWN',
+    actorName: actorName || 'web-operator',
+    actorId,
+    roleSpoofDetected: claimedRole !== 'VIEWER',
+    isArchivedActor: false,
+  };
+}
+
+export const BOOTSTRAP_ALLOWED_ENTITIES = new Set<string>(['users', 'state']);
+
+/**
+ * Checks whether a socket remoteAddress belongs strictly to local loopback (localhost).
+ */
+export function isLoopbackRemoteAddress(remoteAddress: unknown): boolean {
+  if (typeof remoteAddress !== 'string') return false;
+  const clean = remoteAddress.trim().toLowerCase();
+  return (
+    clean === '127.0.0.1' ||
+    clean === '::1' ||
+    clean === '::ffff:127.0.0.1' ||
+    clean === 'localhost'
+  );
+}
+
+/**
+ * Explicit Bootstrap Policy when BOTH `dbUsers` and `dbTechnicians` are empty (initial setup).
+ *
+ * Security rule:
+ *  - Permanently disabled as soon as any user OR technician exists in server state.
+ *  - Only permits `POST` to `/api/gmao/users` or `/api/gmao/state`.
+ *  - Requires EITHER a valid strong `GMAO_API_TOKEN` OR a local loopback request
+ *    (local host machine only — remote LAN clients without a strong token are rejected with 403).
+ */
+export function evaluateBootstrapWriteAllowance(params: {
+  method: string;
+  targetEntity: string;
+  dbUsers: any[] | undefined;
+  dbTechnicians: any[] | undefined;
+  remoteAddress: unknown;
+  providedToken: unknown;
+  expectedToken: unknown;
+  isProduction: boolean;
+}): { allowed: boolean; reason?: string } {
+  const usersCount = Array.isArray(params.dbUsers) ? params.dbUsers.length : 0;
+  const techCount = Array.isArray(params.dbTechnicians) ? params.dbTechnicians.length : 0;
+
+  if (usersCount > 0 || techCount > 0) {
+    return {
+      allowed: false,
+      reason: 'Bootstrap disabled: user/technician registry is already initialized.',
+    };
+  }
+
+  const httpMethod = String(params.method || 'GET').toUpperCase();
+  if (httpMethod !== 'POST' || !BOOTSTRAP_ALLOWED_ENTITIES.has(params.targetEntity)) {
+    return {
+      allowed: false,
+      reason: `Bootstrap mode only allows POST on 'users' or 'state' (blocked ${httpMethod} on '${params.targetEntity || 'unknown'}').`,
+    };
+  }
+
+  const rawExpected = typeof params.expectedToken === 'string' ? params.expectedToken.trim() : '';
+  const rawProvided = typeof params.providedToken === 'string' ? params.providedToken.trim() : '';
+  const hasValidStrongToken =
+    !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
+
+  if (hasValidStrongToken) {
+    return { allowed: true };
+  }
+
+  if (!params.isProduction && isLoopbackRemoteAddress(params.remoteAddress)) {
+    return { allowed: true };
   }
 
   return {
-    claimedRole,
-    effectiveRole,
-    actorName: actorName || 'web-operator',
-    actorId,
-    roleSpoofDetected,
-    isArchivedActor,
+    allowed: false,
+    reason:
+      'Bootstrap rejected: initial setup requires either local loopback access (dev) or a valid strong GMAO_API_TOKEN.',
   };
+}
+
+/**
+ * Validates incoming `Origin` header against explicit allowlist, loopback origins,
+ * and the host server's own LAN IPv4 addresses on allowed ports.
+ */
+export function isAllowedCorsOrigin(
+  origin: string | undefined,
+  extraAllowedOrigins: Set<string>,
+  serverHostIps: Set<string>,
+  serverPort: number
+): boolean {
+  if (!origin) return true; // Same-origin or non-browser client without Origin header
+  const cleanOrigin = origin.trim();
+  if (!cleanOrigin || cleanOrigin === 'null') return false;
+
+  if (extraAllowedOrigins.has(cleanOrigin)) return true;
+
+  try {
+    const parsed = new URL(cleanOrigin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const portNum = parsed.port
+      ? Number(parsed.port)
+      : parsed.protocol === 'https:'
+      ? 443
+      : 80;
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return true;
+    }
+
+    const allowedPorts = new Set<number>([serverPort, 3000, 5173, 80, 443]);
+    if (serverHostIps.has(hostname) && allowedPorts.has(portNum)) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -16,6 +16,9 @@ import {
   sanitizeBulkStateForRole,
   isWeakOrEmptyApiToken,
   evaluateServerApiTokenGuard,
+  evaluateBootstrapWriteAllowance,
+  isLoopbackRemoteAddress,
+  isAllowedCorsOrigin,
 } from './src/core/security/serverRbacPolicy';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,12 +87,38 @@ const OBJECT_ENTITY_SET = new Set<string>([
   'correctivePanneCategories',
 ]);
 
-async function startServer() {
+export interface CreateGmaoApiAppOptions {
+  dataDir?: string;
+  port?: number;
+  isProduction?: boolean;
+  initialState?: Record<string, any>;
+}
+
+function collectHostIpv4Addresses(): Set<string> {
+  const ips = new Set<string>(['127.0.0.1', 'localhost', '::1']);
+  try {
+    const nets = os.networkInterfaces();
+    for (const netList of Object.values(nets)) {
+      if (!Array.isArray(netList)) continue;
+      for (const net of netList) {
+        const isIPv4 = net.family === 'IPv4' || (net as any).family === 4;
+        if (isIPv4 && net.address) {
+          ips.add(net.address.toLowerCase());
+        }
+      }
+    }
+  } catch {
+    // ignore interface enumeration error
+  }
+  return ips;
+}
+
+export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   const app = express();
   const portArgIdx = process.argv.indexOf('--port');
   const cliPort = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? Number(process.argv[portArgIdx + 1]) : null;
-  const PORT = cliPort || Number(process.env.GMAO_PORT) || 3000;
-  const isProduction = process.env.NODE_ENV === 'production';
+  const PORT = options.port ?? (cliPort || Number(process.env.GMAO_PORT) || 3000);
+  const isProduction = options.isProduction ?? (process.env.NODE_ENV === 'production');
 
   // SEC-HARDENING-P1 (Batch B): Startup verification of GMAO_API_TOKEN
   // In production/host mode, an empty or weak token blocks all write operations and logs a critical alert.
@@ -99,14 +128,48 @@ async function startServer() {
       console.error(
         '[Server][SEC-HARDENING-P1] CRITIQUE : GMAO_API_TOKEN est absent ou faible (ex: empty, change-me, secret, gmao, 1234). Vous devez définir un GMAO_API_TOKEN fort (>= 8 caractères) dans les variables d’environnement. Les requêtes d’écriture API seront refusées.'
       );
-    } else {
+    } else if (!process.env.VITEST) {
       console.warn(
         '[Server][SEC-HARDENING-P1] AVERTISSEMENT DEV : GMAO_API_TOKEN absent ou faible. Autorisé uniquement en développement local ; définissez un GMAO_API_TOKEN robuste en production.'
       );
     }
   }
 
-  app.use(cors());
+  // SEC-LAN-P0: Restricted CORS allowlist (localhost, host LAN IPs, and optional GMAO_CORS_ORIGINS)
+  const serverHostIps = collectHostIpv4Addresses();
+  const extraAllowedOrigins = new Set<string>(
+    String(process.env.GMAO_CORS_ORIGINS || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        const allowed = isAllowedCorsOrigin(
+          origin,
+          extraAllowedOrigins,
+          serverHostIps,
+          Number(PORT) || 3000
+        );
+        callback(null, allowed);
+      },
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type',
+        'Accept',
+        'If-Match',
+        'X-GMAO-API-TOKEN',
+        'x-gmao-api-token',
+        'x-gmao-client-origin',
+        'x-gmao-actor',
+        'x-gmao-actor-id',
+        'x-gmao-role',
+      ],
+      maxAge: 600,
+    })
+  );
   app.use(express.json({ limit: MAX_STATE_PAYLOAD_LIMIT, strict: false }));
 
   // Handle JSON parse errors and payload size limit errors cleanly
@@ -140,14 +203,71 @@ async function startServer() {
     next();
   });
 
+  // Enterprise In-Memory Rate Limiting (Token Bucket / Sliding Window)
+  // Uses socket.remoteAddress by default so attackers cannot bypass limits via spoofed X-Forwarded-For.
+  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+  const MAX_REQUESTS_PER_WINDOW = 300; // 300 req/min for general API
+
+  const pruneExpiredRateLimits = (now: number) => {
+    for (const [key, entry] of rateLimitMap.entries()) {
+      if (now > entry.resetTime) {
+        rateLimitMap.delete(key);
+      }
+    }
+  };
+
+  const rateLimitCleanupTimer = setInterval(() => {
+    pruneExpiredRateLimits(Date.now());
+  }, RATE_LIMIT_WINDOW_MS);
+  if (typeof rateLimitCleanupTimer.unref === 'function') {
+    rateLimitCleanupTimer.unref();
+  }
+
+  const apiRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const trustProxy = process.env.GMAO_TRUST_PROXY === 'true';
+    const forwardedFor = trustProxy ? req.headers['x-forwarded-for'] : undefined;
+    const clientIp =
+      (typeof forwardedFor === 'string' && forwardedFor.split(',')[0].trim()) ||
+      req.socket?.remoteAddress ||
+      req.ip ||
+      'unknown';
+
+    const now = Date.now();
+    if (rateLimitMap.size > 1000) {
+      pruneExpiredRateLimits(now);
+    }
+
+    const clientData = rateLimitMap.get(clientIp);
+    if (!clientData || now > clientData.resetTime) {
+      rateLimitMap.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+
+    clientData.count += 1;
+    if (clientData.count > MAX_REQUESTS_PER_WINDOW) {
+      res.setHeader('Retry-After', '60');
+      return res.status(429).json({
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Taux de requêtes dépassé. Veuillez patienter 60 secondes.',
+      });
+    }
+
+    next();
+  };
+
+  app.use('/api', apiRateLimiter);
+
   // Reference to dbState for RBAC cross-checks before dbState is populated below
   let dbStateRef: Record<string, any> = {};
 
-  // API Authentication & RBAC Middleware
+  // API Authentication & Fail-Closed RBAC Middleware (SEC-LAN-P0)
   const authenticateApi = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const token = req.headers['x-gmao-api-token'];
     const clientOrigin = req.headers['x-gmao-client-origin'];
     const expectedToken = process.env.GMAO_API_TOKEN;
+    const remoteAddress = req.socket?.remoteAddress;
 
     // Guard: expectedToken && token !== undefined && token !== expectedToken
     const tokenGuard = evaluateServerApiTokenGuard({
@@ -174,7 +294,13 @@ async function startServer() {
     );
     (req as any).resolvedServerActor = resolvedActor;
 
-    if (resolvedActor.isArchivedActor) {
+    if (resolvedActor.roleSpoofDetected) {
+      console.warn(
+        `[Server][SEC-LAN-P0] Role spoof or unverified privilege claim detected: actorId="${resolvedActor.actorId || 'none'}", actor="${resolvedActor.actorName}", claimed="${resolvedActor.claimedRole}", resolved="${resolvedActor.effectiveRole}", status="${resolvedActor.identityStatus}", ip="${remoteAddress || 'unknown'}"`
+      );
+    }
+
+    if (resolvedActor.isArchivedActor || resolvedActor.identityStatus === 'ARCHIVED') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
@@ -182,9 +308,18 @@ async function startServer() {
       });
     }
 
+    const rawExpected = typeof expectedToken === 'string' ? expectedToken.trim() : '';
+    const rawProvided = typeof token === 'string' ? token.trim() : '';
+    const hasValidStrongToken =
+      !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
+    const isRegistryEmpty =
+      (!Array.isArray(dbStateRef.users) || dbStateRef.users.length === 0) &&
+      (!Array.isArray(dbStateRef.technicians) || dbStateRef.technicians.length === 0);
+
     if (req.method === 'GET') {
       const hasClientContext =
         clientOrigin === 'gmao-web-client' ||
+        Boolean(req.headers['x-gmao-actor-id']) ||
         Boolean(req.headers['x-gmao-actor']) ||
         Boolean(req.headers['x-gmao-role']) ||
         Boolean(expectedToken && token === expectedToken);
@@ -195,10 +330,75 @@ async function startServer() {
           message: 'Client non identifié pour la lecture LAN (/api/gmao/*).',
         });
       }
+
+      const fullPath = `${req.baseUrl || ''}${req.path || ''}`.toLowerCase();
+      const isSensitiveRead =
+        fullPath === '/api/network/info' ||
+        fullPath === '/api/gmao/audit' ||
+        fullPath === '/api/gmao/users';
+
+      // Unrecognized actorId (e.g. ghost-99) is strictly rejected even with API token once registry exists
+      if (resolvedActor.identityStatus === 'UNKNOWN' && !isRegistryEmpty) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Unrecognized actor identity is not authorized for API reads.',
+        });
+      }
+
+      if (isSensitiveRead && resolvedActor.identityStatus !== 'VERIFIED') {
+        const allowBootstrapRead =
+          isRegistryEmpty &&
+          (hasValidStrongToken || (!isProduction && isLoopbackRemoteAddress(remoteAddress)));
+        if (!allowBootstrapRead) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Verified active actor identity required for '${fullPath}'.`,
+          });
+        }
+      }
+
       return next();
     }
 
-    if (['POST', 'PUT', 'DELETE'].includes(req.method)) {
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+      const pathParts = req.path.split('/').filter(Boolean);
+      const targetEntity = pathParts[0] || '';
+
+      // Fail-closed identity verification before touching dbState or disk
+      if (resolvedActor.identityStatus !== 'VERIFIED') {
+        const bootstrapCheck = evaluateBootstrapWriteAllowance({
+          method: req.method,
+          targetEntity,
+          dbUsers: dbStateRef.users,
+          dbTechnicians: dbStateRef.technicians,
+          remoteAddress,
+          providedToken: token,
+          expectedToken,
+          isProduction,
+        });
+
+        if (!bootstrapCheck.allowed) {
+          console.warn(
+            `[Server][SEC-LAN-P0] Blocked unverified ${req.method} ${req.originalUrl}: status=${resolvedActor.identityStatus}, actorId="${resolvedActor.actorId || 'none'}", reason="${bootstrapCheck.reason}"`
+          );
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message:
+              bootstrapCheck.reason ||
+              'Unverified or anonymous actor cannot modify server state.',
+          });
+        }
+
+        (req as any).isBootstrapAuthorized = true;
+        console.warn(
+          `[Server][SEC-LAN-P0][BOOTSTRAP] Permitted initial ${req.method} on '${targetEntity}' while user/technician registries are empty (ip="${remoteAddress || 'unknown'}").`
+        );
+        return next();
+      }
+
       const role = normalizeServerRole(resolvedActor.effectiveRole);
 
       if (role === 'VIEWER') {
@@ -209,8 +409,6 @@ async function startServer() {
         });
       }
 
-      const pathParts = req.path.split('/').filter(Boolean);
-      const targetEntity = pathParts[0] || '';
       if (targetEntity && targetEntity !== 'state' && targetEntity !== 'audit') {
         if (ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {
           return res.status(403).json({
@@ -244,45 +442,55 @@ async function startServer() {
   };
   app.use('/api/gmao', authenticateApi);
 
-  // Enterprise In-Memory Rate Limiting (Token Bucket / Sliding Window)
-  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-  const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-  const MAX_REQUESTS_PER_WINDOW = 300; // 300 req/min for general API
-
-  const apiRateLimiter = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
-    const now = Date.now();
-    const clientData = rateLimitMap.get(clientIp);
-
-    if (!clientData || now > clientData.resetTime) {
-      rateLimitMap.set(clientIp, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-      return next();
-    }
-
-    clientData.count += 1;
-    if (clientData.count > MAX_REQUESTS_PER_WINDOW) {
-      res.setHeader('Retry-After', '60');
-      return res.status(429).json({
+  // OpenAPI 3.0 / Swagger Interactive Documentation (disabled in production unless explicitly opted-in with auth; loopback-only in dev)
+  const swaggerEnabled = !isProduction || process.env.GMAO_ENABLE_SWAGGER === 'true';
+  const guardSwaggerAccess = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!swaggerEnabled) {
+      return res.status(404).json({
         success: false,
-        error: 'Too Many Requests',
-        message: 'Taux de requêtes dépassé. Veuillez patienter 60 secondes.',
+        error: 'Not Found',
+        message: 'API documentation is disabled in production mode.',
       });
     }
-
-    next();
+    if (isProduction) {
+      const expected = String(process.env.GMAO_API_TOKEN || '').trim();
+      const provided = String(req.headers['x-gmao-api-token'] || '').trim();
+      if (isWeakOrEmptyApiToken(expected) || provided !== expected) {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Valid strong GMAO_API_TOKEN required for API docs.',
+        });
+      }
+      return next();
+    }
+    if (
+      process.env.GMAO_ALLOW_LAN_SWAGGER !== 'true' &&
+      !isLoopbackRemoteAddress(req.socket?.remoteAddress)
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Swagger documentation is restricted to localhost in development.',
+      });
+    }
+    return next();
   };
 
-  app.use('/api', apiRateLimiter);
+  if (swaggerEnabled && !isProduction && !process.env.VITEST) {
+    console.warn(
+      '[Server][SEC-LAN-P0] Swagger /api/docs active in DEV mode (restricted to localhost).'
+    );
+  }
 
-  // OpenAPI 3.0 / Swagger Interactive Documentation
-  app.get('/api/docs.json', (req, res) => {
+  app.get('/api/docs.json', guardSwaggerAccess, (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
-  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+  app.use('/api/docs', guardSwaggerAccess, swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
 
   // Data persistence file path
-  const DATA_DIR = path.join(__dirname, 'data');
+  const DATA_DIR = options.dataDir ? path.resolve(options.dataDir) : path.join(__dirname, 'data');
   const STATE_FILE = path.join(DATA_DIR, 'gmao_state.json');
   const STATE_TMP_FILE = path.join(DATA_DIR, 'gmao_state.json.tmp');
   const AUDIT_FILE = path.join(DATA_DIR, 'gmao_audit.jsonl');
@@ -305,34 +513,49 @@ async function startServer() {
   const dbState: Record<string, any> = createDefaultState();
   dbStateRef = dbState;
 
-  // Load initial state once at startup if exists (filtering only allowed keys)
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const raw = fs.readFileSync(STATE_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        for (const key of ALLOWED_ENTITIES) {
-          if (Object.prototype.hasOwnProperty.call(parsed, key)) {
-            const val = parsed[key];
-            if (OBJECT_ENTITY_SET.has(key)) {
-              if (val && typeof val === 'object' && !Array.isArray(val)) {
-                dbState[key] = val;
-              }
-            } else if (Array.isArray(val)) {
-              dbState[key] = val;
-            }
+  if (options.initialState && typeof options.initialState === 'object') {
+    for (const key of ALLOWED_ENTITIES) {
+      if (Object.prototype.hasOwnProperty.call(options.initialState, key)) {
+        const val = options.initialState[key];
+        if (OBJECT_ENTITY_SET.has(key)) {
+          if (val && typeof val === 'object' && !Array.isArray(val)) {
+            dbState[key] = val;
           }
-        }
-        if (typeof parsed.version === 'number' && Number.isFinite(parsed.version) && parsed.version >= 1) {
-          dbState.version = Math.floor(parsed.version);
-        }
-        if (typeof parsed.updatedAt === 'string') {
-          dbState.updatedAt = parsed.updatedAt;
+        } else if (Array.isArray(val)) {
+          dbState[key] = val;
         }
       }
     }
-  } catch (err) {
-    console.error('[Backend] Failed to load state file:', err);
+  } else {
+    // Load initial state once at startup if exists (filtering only allowed keys)
+    try {
+      if (fs.existsSync(STATE_FILE)) {
+        const raw = fs.readFileSync(STATE_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          for (const key of ALLOWED_ENTITIES) {
+            if (Object.prototype.hasOwnProperty.call(parsed, key)) {
+              const val = parsed[key];
+              if (OBJECT_ENTITY_SET.has(key)) {
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                  dbState[key] = val;
+                }
+              } else if (Array.isArray(val)) {
+                dbState[key] = val;
+              }
+            }
+          }
+          if (typeof parsed.version === 'number' && Number.isFinite(parsed.version) && parsed.version >= 1) {
+            dbState.version = Math.floor(parsed.version);
+          }
+          if (typeof parsed.updatedAt === 'string') {
+            dbState.updatedAt = parsed.updatedAt;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Backend] Failed to load state file:', err);
+    }
   }
 
   // Active Server-Sent Events (SSE) clients for real-time LAN revision broadcast (P3.4)
@@ -400,6 +623,10 @@ async function startServer() {
   };
 
   const resolveActor = (req: express.Request): string => {
+    const resolved = (req as any).resolvedServerActor;
+    if (resolved?.identityStatus === 'VERIFIED' && resolved.actorName) {
+      return (resolved.actorId ? `${resolved.actorName} (${resolved.actorId})` : resolved.actorName).slice(0, 120);
+    }
     const headerActor = req.headers['x-gmao-actor'];
     if (typeof headerActor === 'string' && headerActor.trim().length > 0) {
       return headerActor.trim().slice(0, 120);
@@ -420,8 +647,8 @@ async function startServer() {
   app.get('/api/health', healthHandler);
   app.get('/api/gmao/health', healthHandler);
 
-  // LAN Host Network Discovery Endpoint (P3.1 & P3.2)
-  app.get('/api/network/info', (req, res) => {
+  // LAN Host Network Discovery Endpoint (P3.1 & P3.2) — Protected by authenticateApi (SEC-LAN-P0)
+  app.get('/api/network/info', authenticateApi, (req, res) => {
     try {
       const nets = os.networkInterfaces();
       const interfaces: Array<{ name: string; address: string; netmask: string; family: string }> = [];
@@ -455,7 +682,6 @@ async function startServer() {
       return res.json({
         success: true,
         hostname: os.hostname(),
-        platform: os.platform(),
         port: hostPort,
         primaryIp,
         interfaces,
@@ -602,6 +828,7 @@ async function startServer() {
         });
       }
 
+      const isBootstrapAuthorized = (req as any).isBootstrapAuthorized === true;
       const resolvedActor =
         (req as any).resolvedServerActor ||
         resolveEffectiveServerRole(
@@ -609,20 +836,30 @@ async function startServer() {
           dbState.users,
           dbState.technicians
         );
-      const bulkCheck = sanitizeBulkStateForRole(
-        resolvedActor.effectiveRole,
-        incomingState,
-        dbState
-      );
-      if (!bulkCheck.allowed) {
-        return res.status(403).json({
-          success: false,
-          error: 'Forbidden',
-          message: bulkCheck.reason || 'Role not authorized for this state operation.',
-        });
-      }
 
-      const effectiveIncomingState = bulkCheck.sanitizedState;
+      let effectiveIncomingState = incomingState;
+      if (!isBootstrapAuthorized) {
+        if (resolvedActor.identityStatus !== 'VERIFIED') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: 'Unverified or inactive actor cannot modify server state.',
+          });
+        }
+        const bulkCheck = sanitizeBulkStateForRole(
+          resolvedActor.effectiveRole,
+          incomingState,
+          dbState
+        );
+        if (!bulkCheck.allowed) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: bulkCheck.reason || 'Role not authorized for this state operation.',
+          });
+        }
+        effectiveIncomingState = bulkCheck.sanitizedState;
+      }
 
       // If client was synced with exact current server version (and not requesting union merge),
       // intentional item deletions from this client are respected. Otherwise (cross-version force/merge),
@@ -838,6 +1075,30 @@ async function startServer() {
     return res.status(404).json({ success: false, message: `Item with id/code '${id}' not found in '${entity}'` });
   });
 
+  const cleanup = () => {
+    clearInterval(rateLimitCleanupTimer);
+    for (const client of sseClients) {
+      try {
+        client.end();
+      } catch {
+        // ignore
+      }
+    }
+    sseClients.clear();
+  };
+
+  return {
+    app,
+    dbState,
+    port: PORT,
+    isProduction,
+    cleanup,
+  };
+}
+
+export async function startServer() {
+  const { app, port: PORT, isProduction, cleanup } = createGmaoApiApp();
+
   // Setup Vite or static serving
   let viteInstance: any = null;
   if (!isProduction) {
@@ -888,6 +1149,7 @@ async function startServer() {
   let activeHttpServer: any = null;
   const shutdown = () => {
     try {
+      cleanup();
       if (activeHttpServer) {
         activeHttpServer.close(() => {
           process.exit(0);
@@ -928,8 +1190,14 @@ async function startServer() {
   listenWithRetry(Number(PORT));
 }
 
-startServer().catch((err) => {
-  console.error('[Server] Fatal startup error:', err);
-  process.exit(1);
-});
+const isMainModule =
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (isMainModule && !process.env.VITEST) {
+  startServer().catch((err) => {
+    console.error('[Server] Fatal startup error:', err);
+    process.exit(1);
+  });
+}
 

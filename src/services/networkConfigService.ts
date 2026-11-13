@@ -1,4 +1,31 @@
 import { storageService } from '../utils/storageService';
+import { SecurityService } from '../core/security/SecurityService';
+
+function getSessionActorHeaders(): Record<string, string> {
+  try {
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    const user =
+      parsed && typeof parsed === 'object'
+        ? parsed.payload && typeof parsed.payload === 'object'
+          ? parsed.payload
+          : parsed
+        : storageService.getItem('gmao_active_user');
+
+    if (!user || typeof user !== 'object') return {};
+
+    const actorId = String(user.personnelId || user.code || user.id || user.username || '').trim();
+    const actorName = String(user.nom || user.name || user.username || user.role || '').trim();
+    const actorRole = typeof user.role === 'string' && user.role.trim() ? user.role.trim().toUpperCase() : '';
+
+    return {
+      ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
+      ...(actorName ? { 'x-gmao-actor': actorName } : {}),
+      ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
 
 export type NetworkNodeMode = 'HOST' | 'LAN_CLIENT';
 export type LanNodeMode = NetworkNodeMode;
@@ -152,6 +179,7 @@ export const networkConfigService = {
         headers: {
           Accept: 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
+          ...getSessionActorHeaders(),
         },
       });
       if (!response.ok) {
@@ -218,6 +246,7 @@ export const networkConfigService = {
         headers: {
           Accept: 'application/json',
           'x-gmao-client-origin': 'gmao-web-client',
+          ...getSessionActorHeaders(),
         },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
