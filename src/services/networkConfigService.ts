@@ -1,8 +1,13 @@
 import { storageService } from '../utils/storageService';
 import { SecurityService } from '../core/security/SecurityService';
+import {
+  getClientServerSessionToken,
+  clearClientServerSessionToken,
+} from '../core/security/serverSession';
 
 function getSessionActorHeaders(): Record<string, string> {
   try {
+    const serverToken = getClientServerSessionToken();
     const parsed = SecurityService.getSessionSecure('gmao_session_v2');
     const user =
       parsed && typeof parsed === 'object'
@@ -11,7 +16,14 @@ function getSessionActorHeaders(): Record<string, string> {
           : parsed
         : storageService.getItem('gmao_active_user');
 
-    if (!user || typeof user !== 'object') return {};
+    if (!user || typeof user !== 'object') {
+      return serverToken
+        ? {
+            Authorization: `Bearer ${serverToken}`,
+            'X-GMAO-SESSION': serverToken,
+          }
+        : {};
+    }
 
     const actorId = String(user.personnelId || user.code || user.id || user.username || '').trim();
     const actorName = String(user.nom || user.name || user.username || user.role || '').trim();
@@ -21,6 +33,12 @@ function getSessionActorHeaders(): Record<string, string> {
       ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
       ...(actorName ? { 'x-gmao-actor': actorName } : {}),
       ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
+      ...(serverToken
+        ? {
+            Authorization: `Bearer ${serverToken}`,
+            'X-GMAO-SESSION': serverToken,
+          }
+        : {}),
     };
   } catch {
     return {};
@@ -183,6 +201,19 @@ export const networkConfigService = {
         },
       });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          const errJson = await response.json().catch(() => ({}));
+          if (errJson?.code === 'SERVER_SESSION_INVALID') {
+            clearClientServerSessionToken();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('gmao:server_session_expired', {
+                  detail: { status: response.status, message: errJson?.message },
+                })
+              );
+            }
+          }
+        }
         throw new Error(`HTTP ${response.status}`);
       }
       const data = await response.json();

@@ -12,7 +12,13 @@
  *     when pushed from a `TECHNICIEN` or `OPERATEUR` device.
  */
 
-export const ADMIN_ONLY_ENTITIES = new Set<string>(['users', 'technicians', 'operations', 'zones']);
+export const ADMIN_ONLY_ENTITIES = new Set<string>([
+  'users',
+  'technicians',
+  'operations',
+  'zones',
+  'authAccounts',
+]);
 
 export const STOCK_LEDGER_ENTITIES = new Set<string>([
   'rawStock',
@@ -102,6 +108,27 @@ export function normalizeServerRole(rawRole: unknown): string {
   return 'VIEWER';
 }
 
+export function getRolePrivilegeRank(role: string): number {
+  return ROLE_PRIVILEGE_RANK[normalizeServerRole(role)] ?? 0;
+}
+
+export function resolveRecordCanonicalRole(record: any, fallbackRole = 'VIEWER'): string {
+  if (!record || typeof record !== 'object') return fallbackRole;
+  const rawRole = String(record.role || '').trim().toUpperCase();
+  if (
+    rawRole === 'RESPONSABLE' &&
+    Array.isArray(record.template_ids) &&
+    record.template_ids.includes('RMG') &&
+    !record.template_ids.includes('RMT')
+  ) {
+    return 'RESPONSABLE_MAGASIN';
+  }
+  if (record.role) {
+    return normalizeServerRole(record.role);
+  }
+  return fallbackRole;
+}
+
 export type ServerIdentityStatus = 'VERIFIED' | 'ARCHIVED' | 'UNKNOWN' | 'ANONYMOUS';
 
 export interface ResolvedServerActor {
@@ -112,6 +139,7 @@ export interface ResolvedServerActor {
   actorId: string;
   roleSpoofDetected: boolean;
   isArchivedActor: boolean;
+  sessionVerified?: boolean;
 }
 
 const UNTRUSTED_GENERIC_ACTORS = new Set<string>([
@@ -161,10 +189,23 @@ function isRecordArchived(record: any): boolean {
  *  - Active registered users/technicians -> clamped to `min(claimedRole, registeredRole)`
  *    (or `registeredRole` when valid) so claimed privilege can never exceed registry privilege.
  */
+export function isRegistryInitialized(
+  dbUsers: any[] = [],
+  dbTechnicians: any[] = [],
+  dbAuthAccounts: any[] = []
+): boolean {
+  return (
+    (Array.isArray(dbUsers) && dbUsers.length > 0) ||
+    (Array.isArray(dbTechnicians) && dbTechnicians.length > 0) ||
+    (Array.isArray(dbAuthAccounts) && dbAuthAccounts.length > 0)
+  );
+}
+
 export function resolveEffectiveServerRole(
   headers: Record<string, unknown>,
   dbUsers: any[] = [],
-  dbTechnicians: any[] = []
+  dbTechnicians: any[] = [],
+  dbAuthAccounts: any[] = []
 ): ResolvedServerActor {
   const rawRole = readHeaderValue(headers, 'x-gmao-role');
   const claimedRole = normalizeServerRole(rawRole);
@@ -192,6 +233,7 @@ export function resolveEffectiveServerRole(
 
   const usersList = Array.isArray(dbUsers) ? dbUsers : [];
   const techList = Array.isArray(dbTechnicians) ? dbTechnicians : [];
+  const authAccountsList = Array.isArray(dbAuthAccounts) ? dbAuthAccounts : [];
   const matchByIdOnly = !isIdGenericOrEmpty;
 
   // 2. Lookup in registered users (ID match is authoritative if actorId was provided)
@@ -225,7 +267,7 @@ export function resolveEffectiveServerRole(
       };
     }
 
-    const registeredRole = normalizeServerRole(matchedUser.role);
+    const registeredRole = resolveRecordCanonicalRole(matchedUser, 'VIEWER');
     const claimedRank = ROLE_PRIVILEGE_RANK[claimedRole] ?? 0;
     const registeredRank = ROLE_PRIVILEGE_RANK[registeredRole] ?? 0;
     const roleSpoofDetected = claimedRank > registeredRank;
@@ -298,6 +340,58 @@ export function resolveEffectiveServerRole(
     };
   }
 
+  // 3b. Lookup in registered gateway/auth accounts (e.g. admin, magasinier/RESP-04, viewer)
+  const matchedAuth = authAccountsList.find((a: any) => {
+    if (!a || typeof a !== 'object') return false;
+    const candidateIds = [a.id, a.code, a.username, a.personnelId]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+
+    if (matchByIdOnly) {
+      return candidateIds.includes(normId);
+    }
+    const candidateNames = [a.name, a.username, a.personnelName]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    return candidateNames.includes(normName);
+  });
+
+  if (matchedAuth) {
+    const resolvedDisplayName =
+      actorName || String(matchedAuth.name || matchedAuth.username || 'web-operator').trim();
+    if (isRecordArchived(matchedAuth)) {
+      return {
+        claimedRole,
+        effectiveRole: 'VIEWER',
+        identityStatus: 'ARCHIVED',
+        actorName: resolvedDisplayName,
+        actorId,
+        roleSpoofDetected: claimedRole !== 'VIEWER',
+        isArchivedActor: true,
+      };
+    }
+
+    const registeredRole = resolveRecordCanonicalRole(matchedAuth, 'VIEWER');
+    const claimedRank = ROLE_PRIVILEGE_RANK[claimedRole] ?? 0;
+    const registeredRank = ROLE_PRIVILEGE_RANK[registeredRole] ?? 0;
+    const roleSpoofDetected = claimedRank > registeredRank;
+    const effectiveRole = roleSpoofDetected
+      ? registeredRole
+      : rawRole
+      ? claimedRole
+      : registeredRole;
+
+    return {
+      claimedRole,
+      effectiveRole,
+      identityStatus: 'VERIFIED',
+      actorName: resolvedDisplayName,
+      actorId,
+      roleSpoofDetected,
+      isArchivedActor: false,
+    };
+  }
+
   // 4. Unmatched / unregistered identity -> strictly fail-closed to VIEWER + UNKNOWN
   return {
     claimedRole,
@@ -310,7 +404,7 @@ export function resolveEffectiveServerRole(
   };
 }
 
-export const BOOTSTRAP_ALLOWED_ENTITIES = new Set<string>(['users', 'state']);
+export const BOOTSTRAP_ALLOWED_ENTITIES = new Set<string>(['users', 'state', 'authAccounts']);
 
 /**
  * Checks whether a socket remoteAddress belongs strictly to local loopback (localhost).
@@ -340,6 +434,7 @@ export function evaluateBootstrapWriteAllowance(params: {
   targetEntity: string;
   dbUsers: any[] | undefined;
   dbTechnicians: any[] | undefined;
+  dbAuthAccounts?: any[] | undefined;
   remoteAddress: unknown;
   providedToken: unknown;
   expectedToken: unknown;
@@ -347,11 +442,12 @@ export function evaluateBootstrapWriteAllowance(params: {
 }): { allowed: boolean; reason?: string } {
   const usersCount = Array.isArray(params.dbUsers) ? params.dbUsers.length : 0;
   const techCount = Array.isArray(params.dbTechnicians) ? params.dbTechnicians.length : 0;
+  const authCount = Array.isArray(params.dbAuthAccounts) ? params.dbAuthAccounts.length : 0;
 
-  if (usersCount > 0 || techCount > 0) {
+  if (usersCount > 0 || techCount > 0 || authCount > 0) {
     return {
       allowed: false,
-      reason: 'Bootstrap disabled: user/technician registry is already initialized.',
+      reason: 'Bootstrap disabled: user/technician/account registry is already initialized.',
     };
   }
 

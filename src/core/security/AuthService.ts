@@ -1,4 +1,5 @@
 import { SecurityService } from './SecurityService';
+import { clearClientServerSessionToken } from './serverSession';
 import { Logger } from '../logger/LoggerService';
 import { indexedDBService } from '../../infrastructure/database/IndexedDBService';
 import { vaultService } from '../../utils/vaultService';
@@ -245,6 +246,55 @@ export class AuthService {
     };
   }
 
+  /**
+   * Build an AuthAccount object from an operations/supervisor reference record (e.g. RESP-01, RESP-02).
+   */
+  buildOperationAccount(
+    op: any,
+    existingAccount: any = null,
+    options: { isActive?: boolean; activateByDefault?: boolean } = {}
+  ) {
+    const opId = String(op?.id_operation || op?.id || '').trim();
+    const nom = String(op?.nom || opId).trim();
+    const zone = String(op?.id_zone || 'ALL').trim() || 'ALL';
+    const templateIds: string[] = Array.isArray(op?.template_ids)
+      ? op.template_ids.map((v: any) => String(v).trim().toUpperCase())
+      : Array.isArray(op?.templates)
+      ? op.templates.map((v: any) => String(v).trim().toUpperCase())
+      : [];
+    const inferredRole =
+      existingAccount?.role ||
+      (templateIds.includes('RMG') && !templateIds.includes('RMT')
+        ? 'RESPONSABLE_MAGASIN'
+        : 'RESPONSABLE_MAINTENANCE');
+    const specialite = String(
+      op?.template_label || op?.specialite || (inferredRole === 'RESPONSABLE_MAGASIN' ? 'Gestion Magasin' : 'Responsable Maintenance')
+    ).trim();
+
+    return {
+      id: existingAccount?.id || `acct-${opId}`,
+      code: opId,
+      username: existingAccount?.username || opId.toLowerCase(),
+      passwordHash: existingAccount?.passwordHash || TECH_DEFAULT_HASH,
+      role: inferredRole,
+      name: nom,
+      titleFr: specialite,
+      avatar: buildAvatar(nom),
+      badgeColor: inferredRole === 'RESPONSABLE_MAGASIN' ? 'amber' : 'indigo',
+      description: zone && zone !== 'ALL' ? `${specialite} • Zone ${zone}` : specialite,
+      personnelId: opId,
+      personnelName: nom,
+      id_zone: zone,
+      specialite,
+      isActive:
+        options.isActive !== undefined
+          ? Boolean(options.isActive)
+          : existingAccount?.isActive !== undefined
+            ? Boolean(existingAccount.isActive)
+            : Boolean(options.activateByDefault ?? true),
+    };
+  }
+
   initDefaultUsers() {
     let users = null;
     try {
@@ -296,7 +346,7 @@ export class AuthService {
       });
     }
 
-    // If not in empty factory start mode and stored technicians exist in localStorage, ensure their accounts are synced
+    // If not in empty factory start mode and stored technicians/operations exist in localStorage, ensure their accounts are synced
     try {
       if (typeof localStorage !== 'undefined') {
         const startModeRaw = localStorage.getItem(STORAGE_KEYS.START_MODE);
@@ -314,6 +364,23 @@ export class AuthService {
                 );
                 if (existingIdx === -1) {
                   users.push(this.buildTechnicianAccount(tech, null, { activateByDefault: true }));
+                  updated = true;
+                }
+              });
+            }
+          }
+          const rawOps = localStorage.getItem(STORAGE_KEYS.OPERATIONS);
+          if (rawOps) {
+            const parsedOps = JSON.parse(rawOps);
+            if (Array.isArray(parsedOps) && parsedOps.length > 0) {
+              parsedOps.forEach((op) => {
+                const opId = String(op?.id_operation || op?.id || '').trim();
+                if (!opId) return;
+                const existingIdx = users.findIndex(
+                  (u) => u.personnelId === opId || u.code === opId || u.id === `acct-${opId}`
+                );
+                if (existingIdx === -1) {
+                  users.push(this.buildOperationAccount(op, null, { activateByDefault: true }));
                   updated = true;
                 }
               });
@@ -361,6 +428,59 @@ export class AuthService {
     }
 
     return this.saveStoredUsersList(users, emitEvent);
+  }
+
+  /**
+   * Synchronize operation/supervisor login accounts (e.g. RESP-01, RESP-02) from personnel records.
+   */
+  syncOperationAccountsFromPersonnel(
+    operations: any[] = [],
+    options: { activateByDefault?: boolean; emitEvent?: boolean } = {}
+  ) {
+    const { activateByDefault = true, emitEvent = true } = options;
+    const users = this.getStoredUsersList().filter(
+      (u) => !(u.id === 'tech' && u.username === 'tech' && !u.personnelId)
+    );
+
+    if (Array.isArray(operations)) {
+      operations.forEach((op) => {
+        const opId = String(op?.id_operation || op?.id || '').trim();
+        if (!opId) return;
+        const idx = users.findIndex(
+          (u) => u.personnelId === opId || u.code === opId || u.id === `acct-${opId}`
+        );
+        if (idx === -1) {
+          users.push(this.buildOperationAccount(op, null, { activateByDefault }));
+        } else {
+          users[idx] = this.buildOperationAccount(op, users[idx], {
+            isActive: users[idx].isActive !== undefined ? users[idx].isActive : activateByDefault,
+          });
+        }
+      });
+    }
+
+    return this.saveStoredUsersList(users, emitEvent);
+  }
+
+  /**
+   * Returns auth accounts formatted for synchronization with server `dbState.authAccounts`.
+   */
+  getServerSyncAuthAccounts() {
+    return this.getStoredUsersList()
+      .filter((u) => !(u.id === 'tech' && u.username === 'tech' && !u.personnelId))
+      .map((u) => ({
+        id: u.id,
+        code: u.code || u.personnelId || u.username,
+        username: u.username,
+        passwordHash: u.passwordHash,
+        role: u.role,
+        name: u.name,
+        personnelId: u.personnelId || null,
+        personnelName: u.personnelName || u.name || null,
+        id_zone: u.id_zone || null,
+        specialite: u.specialite || null,
+        isActive: u.isActive !== false,
+      }));
   }
 
   /**
@@ -891,6 +1011,7 @@ export class AuthService {
   }
 
   logout() {
+    clearClientServerSessionToken();
     SecurityService.removeSecure(SESSION_KEY);
     indexedDBService.removeItem(SESSION_KEY).catch(() => {});
   }

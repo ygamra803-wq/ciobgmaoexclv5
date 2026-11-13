@@ -4318,11 +4318,12 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       if (Array.isArray(remoteState.partTypes)) updates.partTypes = remoteState.partTypes;
       if (Array.isArray(remoteState.partDesignations)) updates.partDesignations = remoteState.partDesignations;
 
-      // Users
+      // Users (strictly filter out gateway/auth-only accounts from HR personnel state)
       if (Array.isArray(remoteState.users)) {
-        updates.users = remoteState.users;
-        updates.technicians = deriveTechnicians(remoteState.users);
-        updates.operations = deriveOperations(remoteState.users);
+        const cleanPersonnelUsers = remoteState.users.filter(isRealPersonnelUser);
+        updates.users = cleanPersonnelUsers;
+        updates.technicians = deriveTechnicians(cleanPersonnelUsers);
+        updates.operations = deriveOperations(cleanPersonnelUsers);
       }
       if (Array.isArray(remoteState.technicians)) updates.technicians = remoteState.technicians;
       if (Array.isArray(remoteState.operations)) updates.operations = remoteState.operations;

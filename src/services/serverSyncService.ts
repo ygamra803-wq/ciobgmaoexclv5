@@ -4,6 +4,16 @@ import { DataGateway } from '../application/DataGateway';
 import { useGmaoStore } from '../store/useGmaoStore';
 import { networkConfigService } from './networkConfigService';
 import { SecurityService } from '../core/security/SecurityService';
+import { AuthService } from '../core/security/AuthService';
+import {
+  getClientServerSessionToken,
+  setClientServerSessionToken,
+  clearClientServerSessionToken,
+} from '../core/security/serverSession';
+import {
+  authenticateServerSession as clientAuthenticateServerSession,
+  revokeServerSession as clientRevokeServerSession,
+} from '../core/security/serverSessionClient';
 
 export interface ServerStateSummary {
   version?: number;
@@ -101,7 +111,56 @@ export const getActiveActorRole = (): string => {
 };
 
 
+const buildClientAuthHeaders = (
+  extra: Record<string, string> = {},
+  roleOverride?: string
+): Record<string, string> => {
+  const actorId = getActiveActorId();
+  const actorName = getActiveActorName();
+  const actorRole = roleOverride || getActiveActorRole();
+  const serverToken = getClientServerSessionToken();
+  return {
+    'x-gmao-client-origin': 'gmao-web-client',
+    ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
+    ...(actorName ? { 'x-gmao-actor': actorName } : {}),
+    ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
+    ...(serverToken
+      ? {
+          Authorization: `Bearer ${serverToken}`,
+          'X-GMAO-SESSION': serverToken,
+        }
+      : {}),
+    ...extra,
+  };
+};
+
 export const serverSyncService = {
+  getServerSessionToken(): string {
+    return getClientServerSessionToken();
+  },
+
+  setServerSessionToken(token: string): void {
+    setClientServerSessionToken(token);
+  },
+
+  clearServerSessionToken(): void {
+    clearClientServerSessionToken();
+  },
+
+  /**
+   * Authenticates against POST /api/gmao/auth/login to obtain a server-signed HMAC session token.
+   * Never falls back to header-only ADMIN privileges if the server returns 401/403.
+   */
+  authenticateServerSession(identifier: string, password: string) {
+    return clientAuthenticateServerSession(identifier, password);
+  },
+
+  /**
+   * Revokes the active server session token on logout and clears local token storage.
+   */
+  revokeServerSession(): Promise<void> {
+    return clientRevokeServerSession();
+  },
   getLastSyncAt(): string | null {
     return storageService.getItem(LAST_SYNC_AT_KEY) || null;
   },
@@ -351,6 +410,17 @@ export const serverSyncService = {
       ? store.auditEvents
       : storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS) || [];
 
+    let authAccounts: any[] | undefined = Array.isArray(customState?.authAccounts)
+      ? customState.authAccounts
+      : undefined;
+    if (!authAccounts && (!customState || Array.isArray(customState.machines))) {
+      try {
+        authAccounts = new AuthService().getServerSyncAuthAccounts();
+      } catch {
+        authAccounts = undefined;
+      }
+    }
+
     const pendingDeletedIds =
       customState?.deletedIdsByEntity && typeof customState.deletedIdsByEntity === 'object'
         ? customState.deletedIdsByEntity
@@ -387,6 +457,7 @@ export const serverSyncService = {
       users,
       technicians,
       operations,
+      ...(authAccounts ? { authAccounts } : {}),
       warehouseItems,
       entrepotComponents,
       compGroups,
@@ -442,20 +513,24 @@ export const serverSyncService = {
    */
   async fetchServerState(): Promise<{ online: boolean; state: Record<string, any> | null; summary: ServerStateSummary }> {
     try {
-      const actorId = getActiveActorId();
-      const actorName = getActiveActorName();
-      const actorRole = getActiveActorRole();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          'x-gmao-client-origin': 'gmao-web-client',
-          ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
-          ...(actorName ? { 'x-gmao-actor': actorName } : {}),
-          ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
-        },
+        headers: buildClientAuthHeaders({ Accept: 'application/json' }),
       });
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          const errJson = await response.json().catch(() => ({}));
+          if (errJson?.code === 'SERVER_SESSION_INVALID') {
+            clearClientServerSessionToken();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('gmao:server_session_expired', {
+                  detail: { status: response.status, message: errJson?.message },
+                })
+              );
+            }
+          }
+        }
         throw new Error(`HTTP ${response.status}`);
       }
       const json = await response.json();
@@ -482,20 +557,11 @@ export const serverSyncService = {
    */
   async fetchAuditLogs(limit = 100): Promise<ServerAuditEntry[]> {
     try {
-      const actorId = getActiveActorId();
-      const actorName = getActiveActorName();
-      const actorRole = getActiveActorRole();
       const response = await fetch(
         networkConfigService.resolveApiUrl(`/api/gmao/audit?limit=${encodeURIComponent(String(limit))}`),
         {
           method: 'GET',
-          headers: {
-            Accept: 'application/json',
-            'x-gmao-client-origin': 'gmao-web-client',
-            ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
-            ...(actorName ? { 'x-gmao-actor': actorName } : {}),
-            ...(actorRole ? { 'x-gmao-role': actorRole } : {}),
-          },
+          headers: buildClientAuthHeaders({ Accept: 'application/json' }),
         }
       );
       if (!response.ok) return [];
@@ -640,23 +706,31 @@ export const serverSyncService = {
         };
       }
 
-      const actorId = getActiveActorId();
-      const actorName = getActiveActorName();
       const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/state'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-gmao-client-origin': 'gmao-web-client',
-          ...(actorId ? { 'x-gmao-actor-id': actorId } : {}),
-          ...(actorName ? { 'x-gmao-actor': actorName } : {}),
-          'x-gmao-role': actorRole,
-        },
+        headers: buildClientAuthHeaders({ 'Content-Type': 'application/json' }, actorRole),
         body: JSON.stringify(localPayload),
       });
 
-      if (response.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         const forbiddenJson = await response.json().catch(() => ({}));
-        const forbiddenMsg = forbiddenJson?.message || 'Action non autorisée pour votre rôle (403 Forbidden).';
+        const code = forbiddenJson?.code;
+        if (code === 'SERVER_SESSION_INVALID') {
+          clearClientServerSessionToken();
+        }
+        if (
+          (code === 'SERVER_SESSION_INVALID' || code === 'SERVER_SESSION_REQUIRED') &&
+          typeof window !== 'undefined'
+        ) {
+          window.dispatchEvent(
+            new CustomEvent('gmao:server_session_expired', {
+              detail: { status: response.status, code, message: forbiddenJson?.message },
+            })
+          );
+        }
+        const forbiddenMsg =
+          forbiddenJson?.message ||
+          `Action non autorisée pour votre rôle (${response.status} ${response.status === 401 ? 'Unauthorized' : 'Forbidden'}).`;
         this.recordSyncError(forbiddenMsg);
         return {
           success: false,

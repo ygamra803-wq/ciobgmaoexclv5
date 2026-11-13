@@ -5,6 +5,14 @@ import { accessLogService } from '../utils/AccessLogService';
 import { vaultService } from '../utils/vaultService';
 import { SecurityService } from '../core/security/SecurityService';
 import { validatePasswordPolicy } from '../core/security/AuthService';
+import {
+  clearClientServerSessionToken,
+  getClientServerSessionToken,
+} from '../core/security/serverSession';
+import {
+  authenticateServerSession,
+  revokeServerSession,
+} from '../core/security/serverSessionClient';
 
 const AuthContext = createContext(null);
 
@@ -88,6 +96,7 @@ export const AuthProvider = ({ children }) => {
   const [isVaultExists, setIsVaultExists] = useState(() => vaultService.isVaultExists());
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
   const [accounts, setAccounts] = useState(() => authService?.getAvailableAccounts(true) || []);
+  const [serverSessionError, setServerSessionError] = useState<string | null>(null);
 
   const refreshAccountsState = useCallback(() => {
     if (authService?.getAvailableAccounts) {
@@ -110,12 +119,21 @@ export const AuthProvider = ({ children }) => {
       setUser(latestSession || null);
     };
 
+    const handleServerSessionRejected = (e: any) => {
+      const msg = e?.detail?.error || e?.detail?.message || 'Session serveur LAN expirée ou refusée.';
+      setServerSessionError(msg);
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('gmao_auth_accounts_updated', handleAccountsChange);
       window.addEventListener('storage', handleAccountsChange);
+      window.addEventListener('gmao:server_session_expired', handleServerSessionRejected);
+      window.addEventListener('gmao:server_session_rejected', handleServerSessionRejected);
       return () => {
         window.removeEventListener('gmao_auth_accounts_updated', handleAccountsChange);
         window.removeEventListener('storage', handleAccountsChange);
+        window.removeEventListener('gmao:server_session_expired', handleServerSessionRejected);
+        window.removeEventListener('gmao:server_session_rejected', handleServerSessionRejected);
       };
     }
   }, [authService, refreshAccountsState]);
@@ -184,6 +202,8 @@ export const AuthProvider = ({ children }) => {
   const lockVault = useCallback(() => {
     vaultService.clearMasterPin?.();
     setIsVaultUnlocked(false);
+    void revokeServerSession();
+    setServerSessionError(null);
     authService?.logout();
     setUser(null);
   }, [authService]);
@@ -269,6 +289,25 @@ export const AuthProvider = ({ children }) => {
         setUser(loggedInUser);
         refreshAccountsState();
         await accessLogService.recordLogin(loggedInUser);
+
+        // Obtain server-issued HMAC session token (never falls back to header-only ADMIN on 401/403)
+        const actorIdentifier = String(
+          loggedInUser?.personnelId ||
+            loggedInUser?.code ||
+            loggedInUser?.id ||
+            loggedInUser?.username ||
+            username
+        ).trim();
+        const serverAuth = await authenticateServerSession(
+          actorIdentifier,
+          password
+        );
+        if (serverAuth?.success) {
+          setServerSessionError(null);
+        } else if (serverAuth && serverAuth.offline === false) {
+          setServerSessionError(serverAuth.error || 'Session serveur LAN refusée.');
+        }
+
         return loggedInUser;
       } catch (err) {
         recordFailedAttempt(username);
@@ -305,6 +344,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(() => {
     accessLogService.recordLogout();
+    void revokeServerSession();
+    setServerSessionError(null);
     authService?.logout();
     setUser(null);
   }, [authService]);
@@ -323,6 +364,11 @@ export const AuthProvider = ({ children }) => {
         setUser(latestSession);
       }
       refreshAccountsState();
+      if (getClientServerSessionToken()) {
+        import('../services/serverSyncService')
+          .then(({ serverSyncService }) => serverSyncService.scheduleAutoPush(undefined, 250))
+          .catch(() => {});
+      }
       return updated;
     },
     [authService, refreshAccountsState]
@@ -333,6 +379,9 @@ export const AuthProvider = ({ children }) => {
       if (vaultService.isVaultExists() && masterPin) {
         await vaultService.decryptVault(masterPin);
       }
+      // Clear any higher-privilege server session token when switching profiles locally
+      clearClientServerSessionToken();
+      setServerSessionError(null);
       const newSession = authService?.switchSessionToUser(username);
       setUser(newSession);
       return newSession;
@@ -405,6 +454,8 @@ export const AuthProvider = ({ children }) => {
         accounts,
         isVaultExists,
         isVaultUnlocked,
+        serverSessionError,
+        isServerSessionActive: Boolean(getClientServerSessionToken()),
         setupMasterPin,
         unlockVault,
         lockVault,

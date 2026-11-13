@@ -19,7 +19,20 @@ import {
   evaluateBootstrapWriteAllowance,
   isLoopbackRemoteAddress,
   isAllowedCorsOrigin,
+  isRegistryInitialized,
+  getRolePrivilegeRank,
+  resolveRecordCanonicalRole,
 } from './src/core/security/serverRbacPolicy';
+import {
+  resolveServerSessionSecret,
+  signServerSession,
+  verifyServerSession,
+  extractServerSessionToken,
+  verifyAccountCredentials,
+  stripSensitiveAccountFields,
+  sanitizeStateSnapshotForTransport,
+} from './src/core/security/serverSession';
+import { randomBytesHex } from './src/core/security/nativeCrypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +78,7 @@ export const ALLOWED_ENTITIES = [
   'users',
   'technicians',
   'operations',
+  'authAccounts',
   'warehouseItems',
   'entrepotComponents',
   'compGroups',
@@ -92,6 +106,7 @@ export interface CreateGmaoApiAppOptions {
   port?: number;
   isProduction?: boolean;
   initialState?: Record<string, any>;
+  sessionSecret?: string;
 }
 
 function collectHostIpv4Addresses(): Set<string> {
@@ -135,6 +150,20 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
   }
 
+  const ephemeralInstanceSecret = randomBytesHex(32);
+  const getSessionSecretInfo = () =>
+    resolveServerSessionSecret({
+      explicitSecret: options.sessionSecret ?? process.env.GMAO_SESSION_SECRET,
+      apiToken: process.env.GMAO_API_TOKEN,
+      fallbackInstanceSecret: ephemeralInstanceSecret,
+    });
+
+  if (isProduction && getSessionSecretInfo().source === 'EPHEMERAL_INSTANCE' && !process.env.VITEST) {
+    console.warn(
+      '[Server][SEC-LAN-P1] AVERTISSEMENT : GMAO_SESSION_SECRET absent en production ; clé éphémère générée en mémoire (les sessions expireraient au redémarrage). Définissez GMAO_SESSION_SECRET dans .env.local.'
+    );
+  }
+
   // SEC-LAN-P0: Restricted CORS allowlist (localhost, host LAN IPs, and optional GMAO_CORS_ORIGINS)
   const serverHostIps = collectHostIpv4Addresses();
   const extraAllowedOrigins = new Set<string>(
@@ -160,6 +189,10 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         'Content-Type',
         'Accept',
         'If-Match',
+        'Authorization',
+        'authorization',
+        'X-GMAO-SESSION',
+        'x-gmao-session',
         'X-GMAO-API-TOKEN',
         'x-gmao-api-token',
         'x-gmao-client-origin',
@@ -209,16 +242,33 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
   const MAX_REQUESTS_PER_WINDOW = 300; // 300 req/min for general API
 
-  const pruneExpiredRateLimits = (now: number) => {
+  const revokedSessionIds = new Map<string, number>();
+  const loginThrottleMap = new Map<
+    string,
+    { failures: number; lockUntil: number; resetAt: number }
+  >();
+
+  const pruneSecurityCaches = (nowMs: number) => {
+    const nowSec = Math.floor(nowMs / 1000);
     for (const [key, entry] of rateLimitMap.entries()) {
-      if (now > entry.resetTime) {
+      if (nowMs > entry.resetTime) {
         rateLimitMap.delete(key);
+      }
+    }
+    for (const [sid, expSec] of revokedSessionIds.entries()) {
+      if (nowSec >= expSec) {
+        revokedSessionIds.delete(sid);
+      }
+    }
+    for (const [key, entry] of loginThrottleMap.entries()) {
+      if (nowMs > entry.resetAt && nowMs > entry.lockUntil) {
+        loginThrottleMap.delete(key);
       }
     }
   };
 
   const rateLimitCleanupTimer = setInterval(() => {
-    pruneExpiredRateLimits(Date.now());
+    pruneSecurityCaches(Date.now());
   }, RATE_LIMIT_WINDOW_MS);
   if (typeof rateLimitCleanupTimer.unref === 'function') {
     rateLimitCleanupTimer.unref();
@@ -235,7 +285,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
 
     const now = Date.now();
     if (rateLimitMap.size > 1000) {
-      pruneExpiredRateLimits(now);
+      pruneSecurityCaches(now);
     }
 
     const clientData = rateLimitMap.get(clientIp);
@@ -262,7 +312,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   // Reference to dbState for RBAC cross-checks before dbState is populated below
   let dbStateRef: Record<string, any> = {};
 
-  // API Authentication & Fail-Closed RBAC Middleware (SEC-LAN-P0)
+  // API Authentication & Fail-Closed RBAC Middleware (SEC-LAN-P0 + SEC-LAN-P1)
   const authenticateApi = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const token = req.headers['x-gmao-api-token'];
     const clientOrigin = req.headers['x-gmao-client-origin'];
@@ -287,16 +337,113 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
 
-    const resolvedActor = resolveEffectiveServerRole(
+    // Auth login/logout endpoints bypass write-session proof (they issue/revoke the session)
+    const normalizedPath = String(req.path || '').toLowerCase();
+    if (
+      req.baseUrl === '/api/gmao' &&
+      req.method === 'POST' &&
+      (normalizedPath === '/auth/login' || normalizedPath === '/auth/logout')
+    ) {
+      return next();
+    }
+
+    const rawExpected = typeof expectedToken === 'string' ? expectedToken.trim() : '';
+    const rawProvided = typeof token === 'string' ? token.trim() : '';
+    const hasValidStrongToken =
+      !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
+
+    const registryInitialized = isRegistryInitialized(
+      dbStateRef.users,
+      dbStateRef.technicians,
+      dbStateRef.authAccounts
+    );
+    const serverSessionToken = extractServerSessionToken(req.headers as Record<string, unknown>);
+
+    let resolvedActor = resolveEffectiveServerRole(
       req.headers as Record<string, unknown>,
       dbStateRef.users,
-      dbStateRef.technicians
+      dbStateRef.technicians,
+      dbStateRef.authAccounts
     );
+
+    if (serverSessionToken) {
+      const { secret } = getSessionSecretInfo();
+      const verifiedSession = verifyServerSession(serverSessionToken, secret, {
+        revokedSessionIds,
+      });
+
+      if (!verifiedSession.valid || !verifiedSession.payload) {
+        console.warn(
+          `[Server][SEC-LAN-P1] Rejected ${verifiedSession.reason || 'INVALID'} server session on ${req.method} ${req.originalUrl} (ip="${remoteAddress || 'unknown'}")`
+        );
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'SERVER_SESSION_INVALID',
+          reason: verifiedSession.reason || 'INVALID_SIGNATURE',
+          message: 'Server session token is invalid, expired, or revoked.',
+        });
+      }
+
+      const sessionPayload = verifiedSession.payload;
+      const claimedActorIdHeader = String(req.headers['x-gmao-actor-id'] || '').trim();
+      const actorIdMismatch =
+        Boolean(claimedActorIdHeader) &&
+        claimedActorIdHeader.toUpperCase() !== sessionPayload.sub.toUpperCase();
+
+      // Re-resolve authoritative identity strictly from verified token subject (`sub`), ignoring forged x-gmao-actor-id
+      const liveActor = resolveEffectiveServerRole(
+        {
+          'x-gmao-actor-id': sessionPayload.sub,
+          'x-gmao-actor': sessionPayload.name,
+          'x-gmao-role': req.headers['x-gmao-role'] || sessionPayload.role,
+        },
+        dbStateRef.users,
+        dbStateRef.technicians,
+        dbStateRef.authAccounts
+      );
+
+      // Clamp role to min(liveRegistryRole, tokenIssuedRole, claimedRole)
+      if (
+        getRolePrivilegeRank(liveActor.effectiveRole) >
+        getRolePrivilegeRank(sessionPayload.role)
+      ) {
+        liveActor.effectiveRole = normalizeServerRole(sessionPayload.role);
+        liveActor.roleSpoofDetected = true;
+      }
+      if (actorIdMismatch) {
+        liveActor.roleSpoofDetected = true;
+      }
+      liveActor.sessionVerified = true;
+      resolvedActor = liveActor;
+      (req as any).serverSessionPayload = sessionPayload;
+
+      if (resolvedActor.isArchivedActor || resolvedActor.identityStatus === 'ARCHIVED') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'ACTOR_ARCHIVED',
+          message: 'Actor profile is archived/inactive and cannot access server state.',
+        });
+      }
+
+      if (resolvedActor.identityStatus !== 'VERIFIED') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'SERVER_SESSION_ACTOR_UNREGISTERED',
+          message: 'Authenticated session actor is not active in the server registry.',
+        });
+      }
+    } else {
+      resolvedActor.sessionVerified = false;
+    }
+
     (req as any).resolvedServerActor = resolvedActor;
 
     if (resolvedActor.roleSpoofDetected) {
       console.warn(
-        `[Server][SEC-LAN-P0] Role spoof or unverified privilege claim detected: actorId="${resolvedActor.actorId || 'none'}", actor="${resolvedActor.actorName}", claimed="${resolvedActor.claimedRole}", resolved="${resolvedActor.effectiveRole}", status="${resolvedActor.identityStatus}", ip="${remoteAddress || 'unknown'}"`
+        `[Server][SEC-LAN-P1] Role spoof or unverified privilege/actor claim detected: actorId="${resolvedActor.actorId || 'none'}", actor="${resolvedActor.actorName}", claimed="${resolvedActor.claimedRole}", resolved="${resolvedActor.effectiveRole}", status="${resolvedActor.identityStatus}", sessionVerified=${Boolean(resolvedActor.sessionVerified)}, ip="${remoteAddress || 'unknown'}"`
       );
     }
 
@@ -308,16 +455,9 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       });
     }
 
-    const rawExpected = typeof expectedToken === 'string' ? expectedToken.trim() : '';
-    const rawProvided = typeof token === 'string' ? token.trim() : '';
-    const hasValidStrongToken =
-      !isWeakOrEmptyApiToken(rawExpected) && rawProvided === rawExpected;
-    const isRegistryEmpty =
-      (!Array.isArray(dbStateRef.users) || dbStateRef.users.length === 0) &&
-      (!Array.isArray(dbStateRef.technicians) || dbStateRef.technicians.length === 0);
-
     if (req.method === 'GET') {
       const hasClientContext =
+        Boolean(resolvedActor.sessionVerified) ||
         clientOrigin === 'gmao-web-client' ||
         Boolean(req.headers['x-gmao-actor-id']) ||
         Boolean(req.headers['x-gmao-actor']) ||
@@ -335,10 +475,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       const isSensitiveRead =
         fullPath === '/api/network/info' ||
         fullPath === '/api/gmao/audit' ||
-        fullPath === '/api/gmao/users';
+        fullPath === '/api/gmao/users' ||
+        fullPath === '/api/gmao/authaccounts';
 
       // Unrecognized actorId (e.g. ghost-99) is strictly rejected even with API token once registry exists
-      if (resolvedActor.identityStatus === 'UNKNOWN' && !isRegistryEmpty) {
+      if (resolvedActor.identityStatus === 'UNKNOWN' && registryInitialized) {
         return res.status(403).json({
           success: false,
           error: 'Forbidden',
@@ -346,15 +487,16 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         });
       }
 
-      if (isSensitiveRead && resolvedActor.identityStatus !== 'VERIFIED') {
+      if (isSensitiveRead && !resolvedActor.sessionVerified) {
         const allowBootstrapRead =
-          isRegistryEmpty &&
+          !registryInitialized &&
           (hasValidStrongToken || (!isProduction && isLoopbackRemoteAddress(remoteAddress)));
         if (!allowBootstrapRead) {
           return res.status(403).json({
             success: false,
             error: 'Forbidden',
-            message: `Verified active actor identity required for '${fullPath}'.`,
+            code: 'SERVER_SESSION_REQUIRED',
+            message: `Verified server session required for '${fullPath}'.`,
           });
         }
       }
@@ -366,37 +508,50 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
       const pathParts = req.path.split('/').filter(Boolean);
       const targetEntity = pathParts[0] || '';
 
-      // Fail-closed identity verification before touching dbState or disk
-      if (resolvedActor.identityStatus !== 'VERIFIED') {
-        const bootstrapCheck = evaluateBootstrapWriteAllowance({
-          method: req.method,
-          targetEntity,
-          dbUsers: dbStateRef.users,
-          dbTechnicians: dbStateRef.technicians,
-          remoteAddress,
-          providedToken: token,
-          expectedToken,
-          isProduction,
-        });
-
-        if (!bootstrapCheck.allowed) {
-          console.warn(
-            `[Server][SEC-LAN-P0] Blocked unverified ${req.method} ${req.originalUrl}: status=${resolvedActor.identityStatus}, actorId="${resolvedActor.actorId || 'none'}", reason="${bootstrapCheck.reason}"`
-          );
-          return res.status(403).json({
-            success: false,
-            error: 'Forbidden',
-            message:
-              bootstrapCheck.reason ||
-              'Unverified or anonymous actor cannot modify server state.',
+      // SEC-LAN-P1: On initialized registries, every write requires a verified server session token
+      if (!resolvedActor.sessionVerified) {
+        if (!registryInitialized) {
+          const bootstrapCheck = evaluateBootstrapWriteAllowance({
+            method: req.method,
+            targetEntity,
+            dbUsers: dbStateRef.users,
+            dbTechnicians: dbStateRef.technicians,
+            dbAuthAccounts: dbStateRef.authAccounts,
+            remoteAddress,
+            providedToken: token,
+            expectedToken,
+            isProduction,
           });
+
+          if (!bootstrapCheck.allowed) {
+            console.warn(
+              `[Server][SEC-LAN-P0] Blocked unverified ${req.method} ${req.originalUrl}: status=${resolvedActor.identityStatus}, actorId="${resolvedActor.actorId || 'none'}", reason="${bootstrapCheck.reason}"`
+            );
+            return res.status(403).json({
+              success: false,
+              error: 'Forbidden',
+              message:
+                bootstrapCheck.reason ||
+                'Unverified or anonymous actor cannot modify server state.',
+            });
+          }
+
+          (req as any).isBootstrapAuthorized = true;
+          console.warn(
+            `[Server][SEC-LAN-P0][BOOTSTRAP] Permitted initial ${req.method} on '${targetEntity}' while user/technician registries are empty (ip="${remoteAddress || 'unknown'}").`
+          );
+          return next();
         }
 
-        (req as any).isBootstrapAuthorized = true;
         console.warn(
-          `[Server][SEC-LAN-P0][BOOTSTRAP] Permitted initial ${req.method} on '${targetEntity}' while user/technician registries are empty (ip="${remoteAddress || 'unknown'}").`
+          `[Server][SEC-LAN-P1] Blocked header-only ${req.method} ${req.originalUrl} without server session token (actorId="${resolvedActor.actorId || 'none'}", status=${resolvedActor.identityStatus}, ip="${remoteAddress || 'unknown'}")`
         );
-        return next();
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'SERVER_SESSION_REQUIRED',
+          message: 'Authenticated server session token required for write operations.',
+        });
       }
 
       const role = normalizeServerRole(resolvedActor.effectiveRole);
@@ -743,6 +898,205 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     });
   });
 
+  // Server-Issued Session Login & Logout (SEC-LAN-P1)
+  const findLoginAccountRecord = (rawIdentifier: string): { record: any; source: 'authAccounts' | 'users' | 'technicians' } | null => {
+    const clean = String(rawIdentifier || '').trim().toLowerCase();
+    if (!clean) return null;
+
+    const matchRecord = (item: any, allowMagasinAlias: boolean): boolean => {
+      if (!item || typeof item !== 'object') return false;
+      const candidates = [
+        item.id,
+        item.code,
+        item.username,
+        item.personnelId,
+        item.id_technician,
+        item.id_operation,
+      ]
+        .map((v) => String(v || '').trim().toLowerCase())
+        .filter(Boolean);
+      if (candidates.includes(clean)) return true;
+      if (allowMagasinAlias && (clean === 'rmg' || clean === 'magasin')) {
+        return candidates.includes('magasinier') || candidates.includes('resp-04');
+      }
+      return false;
+    };
+
+    const authAccounts = Array.isArray(dbState.authAccounts) ? dbState.authAccounts : [];
+    const matchedAuth = authAccounts.find((a: any) => matchRecord(a, true));
+    if (matchedAuth) return { record: matchedAuth, source: 'authAccounts' };
+
+    const users = Array.isArray(dbState.users) ? dbState.users : [];
+    const matchedUser = users.find((u: any) => matchRecord(u, true));
+    if (matchedUser) return { record: matchedUser, source: 'users' };
+
+    const techs = Array.isArray(dbState.technicians) ? dbState.technicians : [];
+    const matchedTech = techs.find((t: any) => matchRecord(t, false));
+    if (matchedTech) return { record: matchedTech, source: 'technicians' };
+
+    return null;
+  };
+
+  const isAccountOrLinkedProfileArchived = (record: any): boolean => {
+    const checkArchived = (item: any) => {
+      if (!item || typeof item !== 'object') return false;
+      const statut = String(item.statut || '').trim().toUpperCase();
+      const status = String(item.status || '').trim().toUpperCase();
+      return (
+        item.is_active === false ||
+        item.actif === false ||
+        item.isActive === false ||
+        statut === 'ARCHIVE' ||
+        statut === 'ARCHIVEE' ||
+        status === 'ARCHIVE' ||
+        status === 'ARCHIVEE'
+      );
+    };
+    if (checkArchived(record)) return true;
+    const pid = String(record?.personnelId || '').trim().toUpperCase();
+    if (!pid) return false;
+    const linkedUsers = Array.isArray(dbState.users) ? dbState.users : [];
+    const linkedTechs = Array.isArray(dbState.technicians) ? dbState.technicians : [];
+    const linked = [...linkedUsers, ...linkedTechs].find((entry: any) =>
+      [entry?.id, entry?.id_technician, entry?.id_operation, entry?.code]
+        .map((v) => String(v || '').trim().toUpperCase())
+        .includes(pid)
+    );
+    return linked ? checkArchived(linked) : false;
+  };
+
+  app.post('/api/gmao/auth/login', (req, res) => {
+    const rawIdentifier = String(
+      req.body?.identifier || req.body?.actorId || req.body?.username || ''
+    ).trim();
+    const rawPassword = String(req.body?.password || '').trim();
+
+    if (!rawIdentifier || !rawPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Bad Request',
+        message: 'Identifier and password are required.',
+      });
+    }
+
+    const clientIp = req.socket?.remoteAddress || req.ip || 'unknown';
+    const throttleKey = `${clientIp}::${rawIdentifier.toLowerCase()}`;
+    const nowMs = Date.now();
+    const throttleEntry = loginThrottleMap.get(throttleKey);
+    if (throttleEntry && throttleEntry.lockUntil > nowMs) {
+      res.setHeader('Retry-After', '900');
+      return res.status(429).json({
+        success: false,
+        error: 'Too Many Requests',
+        message: 'Trop de tentatives de connexion échouées. Réessayez plus tard.',
+      });
+    }
+
+    const found = findLoginAccountRecord(rawIdentifier);
+    if (!found) {
+      const nextFailures = (throttleEntry?.failures || 0) + 1;
+      loginThrottleMap.set(throttleKey, {
+        failures: nextFailures,
+        lockUntil: nextFailures >= 10 ? nowMs + 15 * 60 * 1000 : 0,
+        resetAt: nowMs + 15 * 60 * 1000,
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        code: 'INVALID_CREDENTIALS',
+        message: 'Identifiant ou mot de passe incorrect.',
+      });
+    }
+
+    if (isAccountOrLinkedProfileArchived(found.record)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        code: 'ACTOR_ARCHIVED',
+        message: 'Ce compte ou profil est désactivé/archivé.',
+      });
+    }
+
+    const credCheck = verifyAccountCredentials(found.record, rawPassword, isProduction);
+    if (!credCheck.valid) {
+      if (credCheck.reason === 'PROHIBITED_DEFAULT_PASSWORD_IN_PROD') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          code: 'PROHIBITED_DEFAULT_PASSWORD_IN_PROD',
+          message: 'Default bootstrap passwords are disabled in production.',
+        });
+      }
+      const nextFailures = (throttleEntry?.failures || 0) + 1;
+      loginThrottleMap.set(throttleKey, {
+        failures: nextFailures,
+        lockUntil: nextFailures >= 10 ? nowMs + 15 * 60 * 1000 : 0,
+        resetAt: nowMs + 15 * 60 * 1000,
+      });
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        code: 'INVALID_CREDENTIALS',
+        message: 'Identifiant ou mot de passe incorrect.',
+      });
+    }
+
+    loginThrottleMap.delete(throttleKey);
+
+    const canonicalSub = String(
+      found.record.personnelId ||
+        found.record.id_technician ||
+        found.record.id_operation ||
+        found.record.id ||
+        found.record.code ||
+        found.record.username
+    ).trim();
+    const canonicalRole = resolveRecordCanonicalRole(
+      found.record,
+      found.source === 'technicians' ? 'TECHNICIEN' : 'VIEWER'
+    );
+    const displayName = String(
+      found.record.name || found.record.nom || found.record.username || canonicalSub
+    ).trim();
+
+    const { secret } = getSessionSecretInfo();
+    const issued = signServerSession(
+      {
+        sub: canonicalSub,
+        role: canonicalRole,
+        name: displayName,
+      },
+      secret
+    );
+
+    return res.json({
+      success: true,
+      token: issued.token,
+      expiresAt: new Date(issued.payload.exp * 1000).toISOString(),
+      expiresIn: issued.payload.exp - issued.payload.iat,
+      mustChangePassword: Boolean(credCheck.isDefaultSeed),
+      actor: {
+        sub: issued.payload.sub,
+        role: issued.payload.role,
+        name: issued.payload.name,
+      },
+    });
+  });
+
+  app.post('/api/gmao/auth/logout', (req, res) => {
+    const token =
+      extractServerSessionToken(req.headers as Record<string, unknown>) ||
+      String(req.body?.token || '').trim();
+    if (token) {
+      const { secret } = getSessionSecretInfo();
+      const verified = verifyServerSession(token, secret);
+      if (verified.payload?.sid) {
+        revokedSessionIds.set(verified.payload.sid, verified.payload.exp);
+      }
+    }
+    return res.json({ success: true });
+  });
+
   // Get recent server-side audit trail entries
   app.get('/api/gmao/audit', async (req, res) => {
     try {
@@ -773,14 +1127,22 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
   });
 
-  // Get full GMAO state
+  // Get full GMAO state (hashes are stripped; protected collections hidden unless session-verified or bootstrap)
   app.get('/api/gmao/state', (req, res) => {
     res.setHeader('ETag', `W/"v${dbState.version}"`);
+    const sessionVerified = Boolean((req as any).resolvedServerActor?.sessionVerified);
+    const registryReady = isRegistryInitialized(
+      dbState.users,
+      dbState.technicians,
+      dbState.authAccounts
+    );
     res.json({
       success: true,
       version: dbState.version,
       updatedAt: dbState.updatedAt,
-      data: dbState,
+      data: sanitizeStateSnapshotForTransport(dbState, {
+        includeProtectedCollections: sessionVerified || !registryReady,
+      }),
     });
   });
 
@@ -824,7 +1186,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
           message: `Server state version (${dbState.version}) is newer than client expectedVersion (${expectedVersion}).`,
           version: dbState.version,
           updatedAt: dbState.updatedAt,
-          data: dbState,
+          data: sanitizeStateSnapshotForTransport(dbState, { includeProtectedCollections: true }),
         });
       }
 
@@ -834,7 +1196,8 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         resolveEffectiveServerRole(
           req.headers as Record<string, unknown>,
           dbState.users,
-          dbState.technicians
+          dbState.technicians,
+          dbState.authAccounts
         );
 
       let effectiveIncomingState = incomingState;
@@ -903,7 +1266,10 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
         version: dbState.version,
         updatedAt: dbState.updatedAt,
         acceptedKeys,
-        data: isSmartMergeRequest || preserveServerOnlyItems ? dbState : undefined,
+        data:
+          isSmartMergeRequest || preserveServerOnlyItems
+            ? sanitizeStateSnapshotForTransport(dbState, { includeProtectedCollections: true })
+            : undefined,
       });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error.message });
@@ -929,7 +1295,11 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     if (dbState[entity] === undefined) {
       dbState[entity] = OBJECT_ENTITY_SET.has(entity) ? {} : [];
     }
-    return res.json({ success: true, version: dbState.version, data: dbState[entity] });
+    return res.json({
+      success: true,
+      version: dbState.version,
+      data: stripSensitiveAccountFields(entity, dbState[entity]),
+    });
   });
 
   app.post('/api/gmao/:entity', requireAllowedEntity, async (req, res) => {
@@ -1077,6 +1447,8 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
 
   const cleanup = () => {
     clearInterval(rateLimitCleanupTimer);
+    revokedSessionIds.clear();
+    loginThrottleMap.clear();
     for (const client of sseClients) {
       try {
         client.end();

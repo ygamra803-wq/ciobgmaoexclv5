@@ -887,7 +887,11 @@ export const DataGateway = {
 
     this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
     try {
-      new AuthService().syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+      const authSvc = new AuthService();
+      authSvc.syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+        activateByDefault: true,
+      });
+      authSvc.syncOperationAccountsFromPersonnel(seedOperations, {
         activateByDefault: true,
       });
     } catch {
@@ -1311,7 +1315,11 @@ export const DataGateway = {
       const authSvc = new AuthService();
       if (technicians.length > 0) {
         authSvc.syncTechnicianAccountsFromPersonnel(technicians, { activateByDefault: true });
-      } else if (!hasData) {
+      }
+      if (operations.length > 0) {
+        authSvc.syncOperationAccountsFromPersonnel(operations, { activateByDefault: true });
+      }
+      if (!hasData && technicians.length === 0 && operations.length === 0) {
         authSvc.clearPersonnelAuthAccounts(true);
       }
     } catch {
@@ -1503,7 +1511,11 @@ export const DataGateway = {
         this.saveZones(seedZones);
         this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
         try {
-          new AuthService().syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+          const authSvc = new AuthService();
+          authSvc.syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+            activateByDefault: true,
+          });
+          authSvc.syncOperationAccountsFromPersonnel(seedOperations, {
             activateByDefault: true,
           });
         } catch {

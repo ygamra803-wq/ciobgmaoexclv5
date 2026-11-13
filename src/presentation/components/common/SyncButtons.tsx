@@ -78,11 +78,23 @@ export default function SyncButtons({
       }
     };
 
+    const handleServerSessionError = (e: any) => {
+      const msg =
+        e?.detail?.message ||
+        e?.detail?.error ||
+        'Session serveur LAN expirée ou manquante : reconnectez-vous pour écrire sur le serveur.';
+      setStatusBanner({ type: 'error', text: msg });
+    };
+
     window.addEventListener('gmao:server_synced', handleServerSynced);
     window.addEventListener('gmao:server_conflict', handleServerConflict);
+    window.addEventListener('gmao:server_session_expired', handleServerSessionError);
+    window.addEventListener('gmao:server_session_rejected', handleServerSessionError);
     return () => {
       window.removeEventListener('gmao:server_synced', handleServerSynced);
       window.removeEventListener('gmao:server_conflict', handleServerConflict);
+      window.removeEventListener('gmao:server_session_expired', handleServerSessionError);
+      window.removeEventListener('gmao:server_session_rejected', handleServerSessionError);
     };
   }, [checkServerStatusOnce]);
 

@@ -211,12 +211,25 @@ export function mergeSingleRecord(serverItem: any, incomingItem: any): any {
   if (!serverItem || typeof serverItem !== 'object') return incomingItem;
   if (!incomingItem || typeof incomingItem !== 'object') return serverItem;
 
+  const preserveAuthHash = (merged: any) => {
+    if (
+      merged &&
+      typeof merged === 'object' &&
+      typeof serverItem.passwordHash === 'string' &&
+      serverItem.passwordHash.trim().length > 0 &&
+      (!merged.passwordHash || typeof merged.passwordHash !== 'string' || !merged.passwordHash.trim())
+    ) {
+      return { ...merged, passwordHash: serverItem.passwordHash };
+    }
+    return merged;
+  };
+
   // A1.6 Lifecycle Guard: Never regress an APPROVED/CLOTURE record back to a PENDING/open copy
   if (isTerminalOrApprovedRecord(serverItem) && isPendingOrOpenDraftRecord(incomingItem)) {
-    return { ...incomingItem, ...serverItem };
+    return preserveAuthHash({ ...incomingItem, ...serverItem });
   }
   if (isTerminalOrApprovedRecord(incomingItem) && isPendingOrOpenDraftRecord(serverItem)) {
-    return { ...serverItem, ...incomingItem };
+    return preserveAuthHash({ ...serverItem, ...incomingItem });
   }
 
   const serverTime = getRecordTimestampMs(serverItem);
@@ -224,19 +237,19 @@ export function mergeSingleRecord(serverItem: any, incomingItem: any): any {
 
   if (incomingTime > 0 && serverTime > 0 && incomingTime !== serverTime) {
     if (incomingTime > serverTime) {
-      return { ...serverItem, ...incomingItem };
+      return preserveAuthHash({ ...serverItem, ...incomingItem });
     }
-    return { ...incomingItem, ...serverItem };
+    return preserveAuthHash({ ...incomingItem, ...serverItem });
   }
 
   const serverRank = getRecordLifecycleRank(serverItem);
   const incomingRank = getRecordLifecycleRank(incomingItem);
 
   if (serverRank > incomingRank) {
-    return { ...incomingItem, ...serverItem };
+    return preserveAuthHash({ ...incomingItem, ...serverItem });
   }
 
-  return { ...serverItem, ...incomingItem };
+  return preserveAuthHash({ ...serverItem, ...incomingItem });
 }
 
 function serializeUnkeyedItem(item: any): string {
