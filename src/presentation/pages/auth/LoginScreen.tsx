@@ -261,8 +261,8 @@ export default function LoginScreen() {
 
   const handleSetupPin = async (e) => {
     if (e) e.preventDefault();
-    if (!pinCode.trim() || pinCode.length < 4) {
-      setErrorMsg('Le Master PIN doit comporter au moins 4 chiffres.');
+    if (!pinCode.trim() || pinCode.trim().length < 6) {
+      setErrorMsg('Le Master PIN doit comporter au moins 6 chiffres sécurisés.');
       return;
     }
     setErrorMsg(null);
@@ -633,11 +633,6 @@ export default function LoginScreen() {
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider font-mono">
                     Mot de passe
                   </label>
-                  {selectedRole === 'TECHNICIEN' && (
-                    <span className="text-[10px] font-mono text-slate-400">
-                      Démo par défaut : tech ou 1234
-                    </span>
-                  )}
                 </div>
 
                 <div className="relative">
@@ -747,9 +742,9 @@ export default function LoginScreen() {
                   <span className="font-bold text-emerald-800">Configuration Initiale</span>
                 </div>
                 <p className="text-xs text-emerald-700 leading-relaxed">
-                  C'est votre première connexion. Veuillez définir un <b>Master PIN</b> (4 chiffres
+                  C'est votre première connexion. Veuillez définir un <b>Master PIN</b> (6 chiffres
                   minimum). Ce code servira à chiffrer vos données et sera également le mot de passe
-                  du compte <b>admin</b>.
+                  initial du compte <b>admin</b>.
                 </p>
               </div>
 
@@ -767,7 +762,7 @@ export default function LoginScreen() {
                       setPinCode(e.target.value);
                       if (errorMsg) setErrorMsg(null);
                     }}
-                    placeholder="Choisir un code PIN (ex: 1234)..."
+                    placeholder="Choisir un code PIN sécurisé (6+ chiffres)..."
                     className="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-10 py-2.5 text-xs font-mono text-slate-900 tracking-widest focus:outline-none focus:border-emerald-600 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 transition"
                   />
                   <button
@@ -789,14 +784,6 @@ export default function LoginScreen() {
               >
                 <span>{isLoading ? 'Initialisation...' : 'Configurer & Continuer'}</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAuthMode('CREDENTIALS')}
-                className="w-full text-center text-[10px] text-slate-400 hover:text-emerald-600 transition font-mono uppercase font-bold tracking-tighter"
-              >
-                Ignorer pour l'instant (Utiliser admin/admin)
               </button>
             </form>
           )}

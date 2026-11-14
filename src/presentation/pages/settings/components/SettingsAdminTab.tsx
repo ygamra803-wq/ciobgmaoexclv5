@@ -197,7 +197,7 @@ export default function SettingsAdminTab({
             Aucun mot de passe en clair n&apos;est stocké dans le code ou la base locale.
           </span>
           <span className="font-mono text-[11px] text-slate-500">
-            Chiffrement : AES-256-GCM • Dérivation : PBKDF2 (100 000 itérations)
+            Chiffrement : AES-256-GCM • Dérivation : PBKDF2 (600 000 itérations)
           </span>
         </div>
       </SettingsSectionCard>
@@ -206,7 +206,7 @@ export default function SettingsAdminTab({
       {!isVaultExists && (
         <SettingsSectionCard
           title="Premier Lancement — Définir Master PIN"
-          description="Aucun mot de passe dans le code — Définissez votre Master PIN (4 à 8 chiffres) qui servira de clé de chiffrement maîtresse."
+          description="Aucun mot de passe dans le code — Définissez votre Master PIN (6 à 8 chiffres) qui servira de clé de chiffrement maîtresse."
           icon={<ShieldAlert />}
           tone="warning"
         >
@@ -215,7 +215,7 @@ export default function SettingsAdminTab({
               type="password"
               value={masterPinSetup}
               onChange={(e) => setMasterPinSetup(e.target.value.replace(/[^0-9]/g, ''))}
-              placeholder="Master PIN — 4 à 8 chiffres (ex: 1234)"
+              placeholder="Master PIN — 6 à 8 chiffres sécurisés"
               className={`${SETTINGS_INPUT_CLASS} flex-1 font-mono font-bold bg-white`}
               maxLength={8}
             />

@@ -2733,13 +2733,17 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     expect(storedUsers.length).toBeGreaterThan(0);
     for (const u of storedUsers) {
       expect(u.defaultPass).toBeUndefined();
+      expect(String(u.passwordHash || '').includes('_init_seed')).toBe(false);
     }
-    // Login with default admin credentials still works via seed hash marker and upgrades to real PBKDF2 hash
-    const adminSession = await auth.login('admin', 'admin');
+    // Default password 'admin'/'admin' must be rejected unconditionally
+    await expect(auth.login('admin', 'admin')).rejects.toThrow();
+    // Explicit strong password setup creates a valid PBKDF2 hash and authenticates cleanly
+    await auth.updateUserPassword('admin', 'Admin_S5_Strong_2026!');
+    const adminSession = await auth.login('admin', 'Admin_S5_Strong_2026!');
     expect(adminSession.role).toBe('ADMIN');
     const upgradedAdmin = auth.getStoredUsersList().find((u: any) => u.username === 'admin');
     expect(upgradedAdmin?.defaultPass).toBeUndefined();
-    expect(String(upgradedAdmin?.passwordHash || '').endsWith(':admin_init_seed')).toBe(false);
+    expect(String(upgradedAdmin?.passwordHash || '').startsWith('pbkdf2:v1:')).toBe(true);
 
     // S5-fix: upsertPersonnelAuthAccount without plainPassword also never sets defaultPass on return or storage
     const techAcct = await auth.upsertPersonnelAuthAccount({

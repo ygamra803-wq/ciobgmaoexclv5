@@ -3,7 +3,12 @@
 // Données au repos chiffrées sans aucun mot de passe ni sel statique stocké dans le code source.
 // Master PIN conservé uniquement en mémoire vive (RAM) et coffre persisté dans IndexedDB + cache chiffré.
 
-import { symmetricEncrypt, symmetricDecrypt } from '../core/security/nativeCrypto';
+import {
+  aes256GcmEncrypt,
+  aes256GcmDecrypt,
+  symmetricDecrypt,
+  constantTimeEqual,
+} from '../core/security/nativeCrypto';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { SecurityService } from '../core/security/SecurityService';
 import { Logger } from '../core/logger/LoggerService';
@@ -80,7 +85,7 @@ function readVaultStorageString(key: string): string | null {
   }
   if (typeof localStorage !== 'undefined') {
     const raw = localStorage.getItem(key);
-    if (raw && !raw.startsWith('NC2:') && !raw.startsWith('NC1:')) {
+    if (raw && !raw.startsWith('AG1:') && !raw.startsWith('NC2:') && !raw.startsWith('NC1:')) {
       SecurityService.saveSecure(key, raw);
       return raw;
     }
@@ -316,7 +321,7 @@ export async function hashPinSHA256(pin) {
 export async function setPinHash(pin) {
   const cleanPin = String(pin || '').trim();
   setMasterPin(cleanPin);
-  const hash = await hashPinSHA256(cleanPin);
+  const hash = await SecurityService.hashPassword(cleanPin, null, PBKDF2_STANDARD_ITERATIONS);
   masterPinHashInMemory = hash;
   // Supprimer toute trace du hash de PIN dans localStorage (protection anti-XSS / anti-brute-force)
   SecurityService.removeSecure(VAULT_PIN_HASH_KEY);
@@ -327,7 +332,7 @@ export async function setPinHash(pin) {
 
 export async function verifyPinHash(pin) {
   const cleanPin = String(pin || '').trim();
-  if (masterPinInMemory && cleanPin === masterPinInMemory) {
+  if (masterPinInMemory && constantTimeEqual(cleanPin, masterPinInMemory)) {
     return true;
   }
   let stored = masterPinHashInMemory;
@@ -355,8 +360,19 @@ export async function verifyPinHash(pin) {
     }
     return false;
   }
-  const hash = await hashPinSHA256(cleanPin);
-  const isValid = hash === stored;
+
+  let isValid = false;
+  if (typeof stored === 'string' && stored.startsWith('pbkdf2:v1:')) {
+    isValid = await SecurityService.comparePassword(cleanPin, stored);
+  } else {
+    // Legacy SHA-256 PIN verifier migration -> upgrade to 600,000-iter PBKDF2 on match
+    const legacyHash = await hashPinSHA256(cleanPin);
+    isValid = constantTimeEqual(legacyHash, String(stored || ''));
+    if (isValid) {
+      await setPinHash(cleanPin);
+    }
+  }
+
   if (isValid) {
     setMasterPin(cleanPin);
   }
@@ -388,7 +404,7 @@ export function encrypt(text, password) {
     throw new Error('[vaultService] Encryption aborted: symmetric key is null or empty');
   }
   try {
-    return symmetricEncrypt(String(text), key);
+    return aes256GcmEncrypt(String(text), key);
   } catch (err) {
     Logger.error('encrypt failed:', err, 'vaultService');
     throw err;
@@ -404,7 +420,9 @@ export function decrypt(cipher, password) {
       return decodeURIComponent(atob(parts[1]));
     }
     const key = resolveSymmetricKey(password);
-    const decrypted = symmetricDecrypt(cipher, key);
+    const decrypted = cipher.startsWith('AG1:')
+      ? aes256GcmDecrypt(cipher, key)
+      : symmetricDecrypt(cipher, key);
     return decrypted || cipher;
   } catch {
     return cipher;

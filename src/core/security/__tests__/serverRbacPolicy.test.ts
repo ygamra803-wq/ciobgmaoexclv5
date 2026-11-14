@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -17,6 +17,7 @@ import {
   stripSensitiveAccountFields,
 } from '../serverSession';
 import { pbkdf2Sha256Hex, randomBytesHex } from '../nativeCrypto';
+import { createAuthenticateApiMiddleware } from '../../../server/middleware/authenticateApi';
 import { createGmaoApiApp } from '../../../../server';
 
 function makePbkdf2Hash(plainPassword: string): string {
@@ -406,8 +407,20 @@ describe('SEC-LAN-P0 + SEC-LAN-P1 — Fail-Closed Server RBAC & Server-Issued HM
         id: 'admin',
         passwordHash: 'pbkdf2:v1:7a9f8c6b5d4e3f2a1b0c:100000:admin_init_seed',
       };
-      expect(verifyAccountCredentials(devSeedAccount, 'admin', false).valid).toBe(true);
+      expect(verifyAccountCredentials(devSeedAccount, 'admin', false).valid).toBe(false);
       expect(verifyAccountCredentials(devSeedAccount, 'admin', true).valid).toBe(false);
+
+      const legacyDefaultHashAccount = {
+        id: 'admin',
+        passwordHash: makePbkdf2Hash('admin'),
+      };
+      expect(verifyAccountCredentials(legacyDefaultHashAccount, 'admin', false).valid).toBe(false);
+
+      const strongAccount = {
+        id: 'USR-ADMIN-1',
+        passwordHash: makePbkdf2Hash(ADMIN_PASS),
+      };
+      expect(verifyAccountCredentials(strongAccount, ADMIN_PASS, false).valid).toBe(true);
     });
 
     it('allows localhost/host-LAN origins and blocks arbitrary external origins', () => {
@@ -1641,6 +1654,216 @@ describe('SEC-LAN-P0 + SEC-LAN-P1 — Fail-Closed Server RBAC & Server-Issued HM
         offset: 1,
         hasMore: true,
       });
+    });
+
+    it('SSE Full-Cycle Hardening & Account Write Hygiene: delivers live broadcast on mutation, enforces 401 on replay/expired/IP-mismatch, and strips _init_seed/defaultPass on account writes', async () => {
+      process.env.GMAO_API_TOKEN = 'Strong_Prod_LAN_Secret_2026!';
+      process.env.GMAO_SESSION_SECRET = TEST_SESSION_SECRET;
+
+      const { dbState } = await startInstance({
+        isProduction: true,
+        omitSessionSecret: true,
+        initialState: {
+          users: SAMPLE_DB_USERS.map((u) => ({ ...u })),
+          technicians: SAMPLE_DB_TECHS.map((t) => ({ ...t })),
+          authAccounts: SAMPLE_AUTH_ACCOUNTS.map((a) => ({ ...a })),
+          machines: [{ id: 'M-1', code: 'DET-01' }],
+        },
+      });
+
+      // 1. Unauthenticated ticket issuance is denied (403)
+      const unauthTicketRes = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/events/ticket',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+        },
+        body: {},
+      });
+      expect(unauthTicketRes.status).toBe(403);
+
+      const adminLogin = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/auth/login',
+        headers: { 'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!' },
+        body: { identifier: 'USR-ADMIN-1', password: ADMIN_PASS },
+      });
+      expect(adminLogin.status).toBe(200);
+      const adminToken = adminLogin.json.token;
+
+      // 2. Incoming account writes strip defaultPass & *_init_seed markers
+      const seedInjectUser = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/users',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: {
+          id: 'USR-SEED-TEST',
+          nom: 'Seed Test',
+          role: 'TECHNICIEN',
+          defaultPass: 'admin',
+          passwordHash: 'pbkdf2:v1:abc:100000:admin_init_seed',
+        },
+      });
+      expect(seedInjectUser.status).toBe(201);
+      const storedInjected = dbState.users.find((u: any) => u.id === 'USR-SEED-TEST');
+      expect(storedInjected?.defaultPass).toBeUndefined();
+      expect(storedInjected?.passwordHash).toBeNull();
+
+      // 3. Issue ticket, connect to SSE stream, receive CONNECTED, then mutate /api/gmao/machines and receive live broadcast
+      const ticketRes = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/events/ticket',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: {},
+      });
+      expect(ticketRes.status).toBe(200);
+      const liveTicket = String(ticketRes.json.ticket);
+
+      const sseEvents = await new Promise<{ status: number; rawFrames: string }>((resolve, reject) => {
+        let collected = '';
+        let mutationSent = false;
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path: `/api/gmao/events?ticket=${encodeURIComponent(liveTicket)}`,
+            method: 'GET',
+          },
+          (res) => {
+            res.on('data', async (chunk) => {
+              collected += Buffer.from(chunk).toString('utf-8');
+              if (collected.includes('"type":"CONNECTED"') && !mutationSent) {
+                mutationSent = true;
+                try {
+                  const writeRes = await sendHttpRequest({
+                    port,
+                    method: 'POST',
+                    path: '/api/gmao/machines',
+                    headers: {
+                      'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+                      Authorization: `Bearer ${adminToken}`,
+                    },
+                    body: { id: 'M-SSE-LIVE', code: 'SSE-01' },
+                  });
+                  expect(writeRes.status).toBe(201);
+                } catch (err) {
+                  req.destroy();
+                  reject(err);
+                }
+              }
+              if (collected.includes('machines') || collected.includes('STATE_UPDATED')) {
+                req.destroy();
+                resolve({ status: res.statusCode || 0, rawFrames: collected });
+              }
+            });
+          }
+        );
+        req.on('error', reject);
+        req.end();
+      });
+
+      expect(sseEvents.status).toBe(200);
+      expect(sseEvents.rawFrames).toContain('"type":"CONNECTED"');
+      expect(sseEvents.rawFrames).toContain('"entity":"machines"');
+
+      // 4. Single-use ticket replay rejected (401)
+      const replayRes = await sendHttpRequest({
+        port,
+        method: 'GET',
+        path: `/api/gmao/events?ticket=${encodeURIComponent(liveTicket)}`,
+      });
+      expect(replayRes.status).toBe(401);
+      expect(replayRes.json?.code).toBe('SSE_TICKET_INVALID');
+
+      // 5. Expired ticket rejected (401)
+      const expTicketRes = await sendHttpRequest({
+        port,
+        method: 'POST',
+        path: '/api/gmao/events/ticket',
+        headers: {
+          'x-gmao-api-token': 'Strong_Prod_LAN_Secret_2026!',
+          Authorization: `Bearer ${adminToken}`,
+        },
+        body: {},
+      });
+      expect(expTicketRes.status).toBe(200);
+      const realNow = Date.now();
+      const dateSpy = vi.spyOn(Date, 'now').mockReturnValue(realNow + 120_000);
+      try {
+        const expiredUseRes = await sendHttpRequest({
+          port,
+          method: 'GET',
+          path: `/api/gmao/events?ticket=${encodeURIComponent(expTicketRes.json.ticket)}`,
+        });
+        expect(expiredUseRes.status).toBe(401);
+        expect(expiredUseRes.json?.code).toBe('SSE_TICKET_INVALID');
+      } finally {
+        dateSpy.mockRestore();
+      }
+
+      // 6. IP-mismatched ticket rejected (401)
+      const sseTickets = new Map([
+        [
+          'bound-ip-ticket-1',
+          {
+            sub: 'USR-ADMIN-1',
+            role: 'ADMIN',
+            ip: '192.168.1.10',
+            exp: Date.now() + 30_000,
+          },
+        ],
+      ]);
+      const authMiddleware = createAuthenticateApiMiddleware({
+        dbState,
+        sessionStore: {
+          revokedSessionIds: new Set(),
+          recordSecurityEvent: () => {},
+        } as any,
+        sseTickets,
+        isProduction: true,
+        getSessionSecretInfo: () => ({ secret: TEST_SESSION_SECRET, source: 'ENV_SESSION_SECRET' }),
+      });
+
+      let statusCode = 0;
+      let jsonBody: any = null;
+      let nextCalled = false;
+      authMiddleware(
+        {
+          baseUrl: '/api/gmao',
+          path: '/events',
+          method: 'GET',
+          query: { ticket: 'bound-ip-ticket-1' },
+          headers: {},
+          socket: { remoteAddress: '192.168.1.99' },
+        } as any,
+        {
+          status(code: number) {
+            statusCode = code;
+            return this;
+          },
+          json(body: any) {
+            jsonBody = body;
+            return this;
+          },
+        } as any,
+        () => {
+          nextCalled = true;
+        }
+      );
+      expect(nextCalled).toBe(false);
+      expect(statusCode).toBe(401);
+      expect(jsonBody?.code).toBe('SSE_TICKET_INVALID');
+      expect(sseTickets.has('bound-ip-ticket-1')).toBe(false);
     });
   });
 });

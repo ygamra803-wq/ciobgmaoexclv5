@@ -28,12 +28,13 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
   // S0: Single Source of Secret Key & Insecure Key Prevention
   // ══════════════════════════════════════════════════════════════
   describe('S0 — Single Secret Key Source & Vault Hardening', () => {
-    it('Core SecurityService provides a valid, non-static SECRET_KEY in all modes', () => {
+    it('Core SecurityService provides a valid, non-static SECRET_KEY in RAM and never stores it in localStorage', () => {
       const key = CoreSecurityService.SECRET_KEY;
       expect(key).toBeDefined();
       expect(typeof key).toBe('string');
       expect(key.length).toBeGreaterThanOrEqual(16);
       expect(key).not.toBe('GMAO_SECURE_KEY');
+      expect(localStorage.getItem('_gmao_sec_instance_key')).toBeNull();
     });
 
     it('vaultService.encrypt fails explicitly if key is null or empty instead of returning plaintext', () => {
@@ -70,78 +71,56 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
   // ══════════════════════════════════════════════════════════════
   // S1: Bootstrap Accounts & Default Passwords Guard
   // ══════════════════════════════════════════════════════════════
-  describe('S1 — Bootstrap Accounts & Default Passwords', () => {
-    it('in PRODUCTION: rejects login attempts using initial bootstrap default passwords', async () => {
+  describe('S1 — Bootstrap Accounts & Zero Default Password Backdoor', () => {
+    it('in PRODUCTION: rejects login attempts using uninitialized accounts or default passwords', async () => {
       const auth = new AuthService();
       vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(true);
 
-      // Attempting admin with default password 'admin' on initial seed
       await expect(auth.login('admin', 'admin')).rejects.toThrow(
-        "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
+        'Les mots de passe par défaut interdits (admin, magasinier, viewer, tech, 1234) sont désactivés dans tous les environnements'
       );
 
-      // Attempting magasinier with default password 'magasinier' on initial seed
       await expect(auth.login('magasinier', 'magasinier')).rejects.toThrow(
-        "En production, l'accès avec les mots de passe d'initialisation par défaut"
+        'Les mots de passe par défaut interdits'
       );
 
-      // Attempting viewer with default password 'viewer' on initial seed
       await expect(auth.login('viewer', 'viewer')).rejects.toThrow(
-        "En production, l'accès avec les mots de passe d'initialisation par défaut"
+        'Les mots de passe par défaut interdits'
       );
     });
 
-    it('in DEV: allows login with default passwords and attaches mustChangePassword flag', async () => {
+    it('in DEV: also unconditionally rejects default passwords (zero dev backdoor)', async () => {
       const auth = new AuthService();
       vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
 
-      const session = await auth.login('admin', 'admin');
-      expect(session).toBeDefined();
-      expect(session.username).toBe('admin');
-      expect(session.role).toBe('ADMIN');
-      expect(session.mustChangePassword).toBe(true);
+      await expect(auth.login('admin', 'admin')).rejects.toThrow(
+        'Les mots de passe par défaut interdits'
+      );
+      await expect(auth.login('magasinier', 'magasinier')).rejects.toThrow(
+        'Les mots de passe par défaut interdits'
+      );
+      await expect(auth.login('viewer', 'viewer')).rejects.toThrow(
+        'Les mots de passe par défaut interdits'
+      );
     });
 
-    it('SEC-BOOTSTRAP-P0.1: in PRODUCTION rejects login with default password even AFTER hash is upgraded to modern PBKDF2', async () => {
+    it('SEC-BOOTSTRAP-P0.1: rejects login with prohibited default password even if stored hash is PBKDF2 of default password (both DEV and PROD)', async () => {
       const auth = new AuthService();
-      
-      // Simulate that the user's password was upgraded to a real PBKDF2 hash of 'admin' (no init_seed suffix!)
+
       const upgradedPbkdf2Hash = await CoreSecurityService.hashPassword('admin');
       expect(upgradedPbkdf2Hash).not.toContain('init_seed');
 
-      // Inject the upgraded hash into stored users
       const users = auth.getStoredUsersList();
       const adminIdx = users.findIndex((u) => u.username === 'admin');
       users[adminIdx].passwordHash = upgradedPbkdf2Hash;
       auth.saveStoredUsersList(users, false);
 
-      // Enable PRODUCTION mode
-      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(true);
-
-      // Even though hash is modern PBKDF2 and isSeedHashMatch is false, login with prohibited password 'admin' MUST be rejected!
-      await expect(auth.login('admin', 'admin')).rejects.toThrow(
-        "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
-      );
-    });
-
-    it('SEC-BOOTSTRAP-P0.1: in DEV allows login with upgraded hash of prohibited password and maintains mustChangePassword = true', async () => {
-      const auth = new AuthService();
-      
-      // Upgrade hash to PBKDF2 of 'admin'
-      const upgradedPbkdf2Hash = await CoreSecurityService.hashPassword('admin');
-      const users = auth.getStoredUsersList();
-      const adminIdx = users.findIndex((u) => u.username === 'admin');
-      users[adminIdx].passwordHash = upgradedPbkdf2Hash;
-      auth.saveStoredUsersList(users, false);
-
-      // Enable DEV mode
-      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
-
-      const session = await auth.login('admin', 'admin');
-      expect(session).toBeDefined();
-      expect(session.username).toBe('admin');
-      // mustChangePassword must remain true because password is in the prohibited default list
-      expect(session.mustChangePassword).toBe(true);
+      for (const isProd of [false, true]) {
+        vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(isProd);
+        await expect(auth.login('admin', 'admin')).rejects.toThrow(
+          'Les mots de passe par défaut interdits'
+        );
+      }
     });
 
     it('SEC-BOOTSTRAP-P0.1: updateUserPassword rejects changing password to any prohibited default password', async () => {
@@ -160,15 +139,12 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
       );
     });
 
-    it('in PRODUCTION: allows login once user has set a strong custom password', async () => {
+    it('in PRODUCTION and DEV: allows login once user has set a strong custom password', async () => {
       const auth = new AuthService();
-      // Update admin password to a strong custom password
       await auth.updateUserPassword('admin', 'StrongEnterpriseP@ssw0rd!2026');
 
-      // Now simulate production mode
       vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(true);
 
-      // Login with the new strong password must succeed in production
       const session = await auth.login('admin', 'StrongEnterpriseP@ssw0rd!2026');
       expect(session).toBeDefined();
       expect(session.username).toBe('admin');
@@ -216,14 +192,16 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
   // S3: SEC-P0.2 Mandatory Password Change Gate & Session Lifecycle
   // ══════════════════════════════════════════════════════════════
   describe('S3 — SEC-P0.2: Mandatory Password Change Gate & Session Lifecycle', () => {
-    it('session retains mustChangePassword flag in signed HMAC session envelope upon initial login', async () => {
+    it('session retains mustChangePassword flag in signed HMAC session envelope', async () => {
       const auth = new AuthService();
-      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
+      auth.saveSignedSession({
+        id: 'admin',
+        username: 'admin',
+        role: 'ADMIN',
+        name: 'Administrateur',
+        mustChangePassword: true,
+      });
 
-      const session = await auth.login('admin', 'admin');
-      expect(session.mustChangePassword).toBe(true);
-
-      // Verify that reading through getCurrentUser() validates the HMAC and preserves mustChangePassword = true
       const activeSession = auth.getCurrentUser();
       expect(activeSession).not.toBeNull();
       expect(activeSession.username).toBe('admin');
@@ -232,22 +210,22 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
 
     it('updateUserPassword clears mustChangePassword to false in the active signed session upon valid change', async () => {
       const auth = new AuthService();
-      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
-
-      // 1. Initial login in DEV creates session with mustChangePassword = true
-      await auth.login('admin', 'admin');
+      auth.saveSignedSession({
+        id: 'admin',
+        username: 'admin',
+        role: 'ADMIN',
+        name: 'Administrateur',
+        mustChangePassword: true,
+      });
       expect(auth.getCurrentUser().mustChangePassword).toBe(true);
 
-      // 2. User updates password to a strong non-prohibited password
       await auth.updateUserPassword('admin', 'V@lidNewPass2026!#');
 
-      // 3. Active signed session must now have mustChangePassword = false
       const updatedSession = auth.getCurrentUser();
       expect(updatedSession).not.toBeNull();
       expect(updatedSession.username).toBe('admin');
       expect(updatedSession.mustChangePassword).toBe(false);
 
-      // 4. Verify HMAC token signature in storage is valid and tamper-free
       const rawStoredStr = sessionStorage.getItem('gmao_session_v2');
       expect(rawStoredStr).not.toBeNull();
       const envelope = JSON.parse(rawStoredStr!);
@@ -260,16 +238,16 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
 
     it('failed password update with prohibited password leaves mustChangePassword = true', async () => {
       const auth = new AuthService();
-      vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(false);
-
-      // Initial login with mustChangePassword = true
-      await auth.login('admin', 'admin');
+      auth.saveSignedSession({
+        id: 'admin',
+        username: 'admin',
+        role: 'ADMIN',
+        name: 'Administrateur',
+        mustChangePassword: true,
+      });
       expect(auth.getCurrentUser().mustChangePassword).toBe(true);
 
-      // Attempt to change password to '1234'
       await expect(auth.updateUserPassword('admin', '1234')).rejects.toThrow();
-
-      // Session must remain unchanged with mustChangePassword = true
       expect(auth.getCurrentUser().mustChangePassword).toBe(true);
     });
   });

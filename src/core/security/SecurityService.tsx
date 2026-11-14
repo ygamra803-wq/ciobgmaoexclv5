@@ -4,37 +4,216 @@ import {
   sha256Hex,
   hmacSha256Hex,
   pbkdf2Sha256Hex,
-  symmetricEncrypt,
+  aes256GcmEncrypt,
+  aes256GcmDecrypt,
+  aes256GcmEncryptAsync,
+  aes256GcmDecryptAsync,
   symmetricDecrypt,
   constantTimeEqual,
+  PBKDF2_STANDARD_ITERATIONS,
+  bytesToBase64,
+  base64ToBytes,
 } from './nativeCrypto';
 import { Logger } from '../logger/LoggerService';
 
+const KEYSTORE_DB_NAME = 'gmao_security_keystore_v1';
+const KEYSTORE_STORE_NAME = 'wrapping_keys';
+const KEYSTORE_RECORD_ID = 'master_wrap_v1';
+const LEGACY_LOCALSTORAGE_KEY_NAME = '_gmao_sec_instance_key';
+
+interface KeystoreRecord {
+  id: string;
+  wrappingKey: CryptoKey;
+  iv: Uint8Array;
+  wrappedSecret: ArrayBuffer;
+}
+
 /**
- * @file SecurityService.js
+ * @file SecurityService.tsx
  * @module core/security/SecurityService
  * @description
- * خدمة التشفير وتمرير الرموز والحفاظ على الأمان والتوقيع الرقمي (AES-256 / Web Crypto PBKDF2-SHA256 / HMAC-SHA256 / Fingerprinting).
- * 
- * الوظائف الأمنية المقدمة:
- * - 🔑 تجشيم كلمة السر باستخدام PBKDF2-SHA256 مع 100,000 تكرار و Salt عشوائي 128-bit.
- * - 🔒 تشفير وفك تشفير البيانات الحساسة عبر AES-256.
- * - 🎟️ توليد والتحقق من رموز التوثيق الموقعة بـ HMAC-SHA256.
- * - 🆔 استخراج بصمة رقمية فريدة للجهاز (Device Fingerprint).
+ * Security service providing standard NIST AES-256-GCM authenticated encryption,
+ * PBKDF2-HMAC-SHA256 (600,000 iterations), HMAC-SHA256 signed session tokens,
+ * and non-extractable Web Crypto IndexedDB key separation (zero key material in localStorage).
  */
 export class SecurityService {
-  static _volatileInstanceKey = null;
+  static _volatileInstanceKey: string | null = null;
   static _warnedMissingKey = false;
+  static _initPromise: Promise<void> | null = null;
 
   static generateRandomHex(byteLength = 16): string {
     return randomBytesHex(byteLength);
   }
 
   /**
-   * المفتاح السري الديناميكي للتشفير والتوقيع الرقمي
-   * @returns {string}
+   * Initializes key separation via IndexedDB non-extractable Web Crypto `CryptoKey`,
+   * unwraps the runtime key into RAM only, and purges/migrates any legacy
+   * `_gmao_sec_instance_key` from `localStorage`.
    */
-  static get SECRET_KEY() {
+  static async init(): Promise<void> {
+    if (this._initPromise) {
+      return this._initPromise;
+    }
+
+    this._initPromise = (async () => {
+      const legacyKey = this.readAndRemoveLegacyLocalStorageKey();
+
+      const envSecret = import.meta.env.VITE_SECRET_KEY;
+      if (envSecret && String(envSecret).trim().length > 0) {
+        if (legacyKey && legacyKey !== String(envSecret).trim()) {
+          this.migrateLegacyLocalStorageEntries(legacyKey, String(envSecret).trim());
+        }
+        return;
+      }
+
+      if (
+        typeof indexedDB !== 'undefined' &&
+        typeof crypto !== 'undefined' &&
+        crypto.subtle
+      ) {
+        try {
+          const runtimeSecret = await this.loadOrCreateIdbWrappedSecret();
+          if (runtimeSecret) {
+            this._volatileInstanceKey = runtimeSecret;
+            if (legacyKey && legacyKey !== runtimeSecret) {
+              this.migrateLegacyLocalStorageEntries(legacyKey, runtimeSecret);
+            }
+            return;
+          }
+        } catch (err) {
+          Logger.warn(
+            '[SecurityService] IndexedDB keystore unavailable, using volatile RAM key:',
+            err
+          );
+        }
+      }
+
+      if (!this._volatileInstanceKey) {
+        this._volatileInstanceKey = this.generateRandomHex(32);
+      }
+      if (legacyKey && legacyKey !== this._volatileInstanceKey) {
+        this.migrateLegacyLocalStorageEntries(legacyKey, this._volatileInstanceKey);
+      }
+    })();
+
+    return this._initPromise;
+  }
+
+  private static readAndRemoveLegacyLocalStorageKey(): string | null {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      const legacy = localStorage.getItem(LEGACY_LOCALSTORAGE_KEY_NAME);
+      if (legacy) {
+        localStorage.removeItem(LEGACY_LOCALSTORAGE_KEY_NAME);
+        return legacy;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  }
+
+  private static migrateLegacyLocalStorageEntries(oldKey: string, newKey: string): void {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith('gmao_')) continue;
+        const val = localStorage.getItem(k);
+        if (!val) continue;
+        if (val.startsWith('NC2:') || val.startsWith('NC1:') || val.startsWith('AG1:')) {
+          const plain = symmetricDecrypt(val, oldKey);
+          if (plain) {
+            localStorage.setItem(k, aes256GcmEncrypt(plain, newKey));
+          }
+        }
+      }
+    } catch (err) {
+      Logger.warn('[SecurityService] Legacy localStorage migration skipped:', err);
+    }
+  }
+
+  private static openKeystoreDb(): Promise<IDBDatabase> {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(KEYSTORE_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(KEYSTORE_STORE_NAME)) {
+          db.createObjectStore(KEYSTORE_STORE_NAME, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('Failed to open keystore IndexedDB'));
+    });
+  }
+
+  private static async loadOrCreateIdbWrappedSecret(): Promise<string | null> {
+    const db = await this.openKeystoreDb();
+    try {
+      const existing = await new Promise<KeystoreRecord | null>((resolve, reject) => {
+        const tx = db.transaction(KEYSTORE_STORE_NAME, 'readonly');
+        const store = tx.objectStore(KEYSTORE_STORE_NAME);
+        const getReq = store.get(KEYSTORE_RECORD_ID);
+        getReq.onsuccess = () => resolve((getReq.result as KeystoreRecord) || null);
+        getReq.onerror = () => reject(getReq.error);
+      });
+
+      const dec = new TextDecoder();
+      if (existing?.wrappingKey && existing.iv && existing.wrappedSecret) {
+        const plainBuf = await crypto.subtle.decrypt(
+          { name: 'AES-GCM', iv: existing.iv as Uint8Array<ArrayBuffer> },
+          existing.wrappingKey,
+          existing.wrappedSecret
+        );
+        const unwrapped = dec.decode(plainBuf);
+        if (unwrapped && unwrapped.length >= 32) {
+          return unwrapped;
+        }
+      }
+
+      // Generate a non-extractable AES-256-GCM wrapping key and wrap a fresh 256-bit runtime secret
+      const wrappingKey = await crypto.subtle.generateKey(
+        { name: 'AES-GCM', length: 256 },
+        false, // Non-extractable: XSS cannot call crypto.subtle.exportKey()
+        ['encrypt', 'decrypt']
+      );
+      const runtimeSecret = bytesToBase64(randomBytes(32));
+      const iv = randomBytes(12);
+      const wrappedSecret = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv as Uint8Array<ArrayBuffer> },
+        wrappingKey,
+        new TextEncoder().encode(runtimeSecret) as Uint8Array<ArrayBuffer>
+      );
+
+      const record: KeystoreRecord = {
+        id: KEYSTORE_RECORD_ID,
+        wrappingKey,
+        iv,
+        wrappedSecret,
+      };
+
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(KEYSTORE_STORE_NAME, 'readwrite');
+        const store = tx.objectStore(KEYSTORE_STORE_NAME);
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      });
+
+      return runtimeSecret;
+    } finally {
+      db.close();
+    }
+  }
+
+  /**
+   * Runtime encryption key held strictly in RAM (or resolved from env `VITE_SECRET_KEY`).
+   * Never persisted alongside ciphertexts in `localStorage`.
+   */
+  static get SECRET_KEY(): string {
+    // Ensure legacy plaintext key in localStorage is always cleaned up if encountered
+    this.readAndRemoveLegacyLocalStorageKey();
+
     const envSecret = import.meta.env.VITE_SECRET_KEY;
     if (envSecret && String(envSecret).trim().length > 0) {
       return String(envSecret).trim();
@@ -48,40 +227,29 @@ export class SecurityService {
       this._warnedMissingKey = true;
       if (isProd) {
         Logger.error(
-          '[SecurityService] VITE_SECRET_KEY is missing in production environment (.env.local). Falling back to generated instance key.'
+          '[SecurityService] VITE_SECRET_KEY is missing in production environment. Using non-extractable keystore / volatile RAM key.'
         );
       } else {
         Logger.warn(
-          '[SecurityService] VITE_SECRET_KEY missing in development — using locally generated random key.'
+          '[SecurityService] VITE_SECRET_KEY missing in development — using isolated RAM / IndexedDB keystore key.'
         );
       }
     }
 
-    try {
-      let instanceKey = localStorage.getItem('_gmao_sec_instance_key');
-      if (!instanceKey) {
-        instanceKey = this.generateRandomHex(32);
-        localStorage.setItem('_gmao_sec_instance_key', instanceKey);
-      }
-      return instanceKey;
-    } catch {
-      if (!this._volatileInstanceKey) {
-        this._volatileInstanceKey = this.generateRandomHex(32);
-      }
-      return this._volatileInstanceKey;
+    if (!this._volatileInstanceKey) {
+      this._volatileInstanceKey = this.generateRandomHex(32);
     }
+    return this._volatileInstanceKey;
   }
 
   /**
-   * تجشيم (Hash) كلمة السر باستخدام خوارزمية Web Crypto API (PBKDF2-SHA256 مع Salt عشوائي 128-bit و 100,000 تكرار)
-   * يضمن الأمان التام دون استخدام مكتبات خارجية غير متزامنة ودون إبطاء خيط المتصفح.
-   * 
-   * @param {string} password - كلمة السر المراد تجشيمها
-   * @param {string} [saltHex] - ملح اختياري (يتم توليده عشوائياً إذا لم يمرر)
-   * @param {number} [iterations=100000] - عدد تكرارات PBKDF2
-   * @returns {Promise<string>} نص التجشيم بصيغة `pbkdf2:v1:${saltHex}:${iterations}:${hashHex}`
+   * Hash password using Web Crypto PBKDF2-HMAC-SHA256 (default 600,000 iterations + 128-bit random salt).
    */
-  static async hashPassword(password, saltHex = null, iterations = 100000) {
+  static async hashPassword(
+    password: string,
+    saltHex: string | null = null,
+    iterations = PBKDF2_STANDARD_ITERATIONS
+  ): Promise<string> {
     try {
       if (!password || typeof password !== 'string') {
         throw new Error('Mot de passe invalide pour le hachage.');
@@ -89,14 +257,13 @@ export class SecurityService {
 
       const enc = new TextEncoder();
       const saltBytes = saltHex
-        ? new Uint8Array(saltHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)))
+        ? new Uint8Array((saltHex.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16)))
         : randomBytes(16);
 
       const activeSaltHex = Array.from(saltBytes)
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
 
-      // 1. Web Crypto Native SubtleCrypto (Fast, hardware-accelerated, zero-thread blocking)
       if (typeof crypto !== 'undefined' && crypto.subtle) {
         const keyMaterial = await crypto.subtle.importKey(
           'raw',
@@ -108,9 +275,9 @@ export class SecurityService {
         const derivedBits = await crypto.subtle.deriveBits(
           {
             name: 'PBKDF2',
-            salt: saltBytes,
-            iterations: iterations,
-            hash: 'SHA-256'
+            salt: saltBytes as Uint8Array<ArrayBuffer>,
+            iterations,
+            hash: 'SHA-256',
           },
           keyMaterial,
           256
@@ -122,7 +289,6 @@ export class SecurityService {
         return `pbkdf2:v1:${activeSaltHex}:${iterations}:${hashHex}`;
       }
 
-      // 2. Native PBKDF2-SHA256 fallback if WebCrypto is unavailable in testing/legacy env
       const derivedHex = pbkdf2Sha256Hex(password, activeSaltHex, iterations, 32);
       return `pbkdf2:v1:${activeSaltHex}:${iterations}:${derivedHex}`;
     } catch (error) {
@@ -132,22 +298,17 @@ export class SecurityService {
   }
 
   /**
-   * المقارنة الآمنة بين كلمة السر النصية والرمز المجشم المخزن (Web Crypto PBKDF2 أو Legacy Bcrypt/SHA-256)
-   * 
-   * @param {string} password - كلمة السر النصية المدخلة
-   * @param {string} storedHash - الرمز المجشم المخزن
-   * @returns {Promise<boolean>} true إذا كانت كلمة السر مطابقة
+   * Constant-time password comparison supporting PBKDF2-SHA256 and legacy SHA-256 hashes.
    */
-  static async comparePassword(password, storedHash) {
+  static async comparePassword(password: string, storedHash: string): Promise<boolean> {
     try {
       if (!password || !storedHash || typeof storedHash !== 'string') return false;
 
-      // 1. Modern Web Crypto PBKDF2 format: `pbkdf2:v1:salt:iterations:hash`
       if (storedHash.startsWith('pbkdf2:v1:')) {
         const parts = storedHash.split(':');
         if (parts.length === 5) {
           const [, , saltHex, iterStr, expectedHashHex] = parts;
-          const iterations = parseInt(iterStr, 10) || 100000;
+          const iterations = parseInt(iterStr, 10) || PBKDF2_STANDARD_ITERATIONS;
           const calculated = await this.hashPassword(password, saltHex, iterations);
           const calculatedHashHex = calculated.split(':')[4];
           return constantTimeEqual(
@@ -157,12 +318,10 @@ export class SecurityService {
         }
       }
 
-      // 2. Fallback for legacy bcrypt format indicator (returns false as bcrypt is removed from client-side for zero-trust security)
       if (storedHash.startsWith('$2')) {
         return false;
       }
 
-      // 3. Fallback for legacy SHA-256 hex digest (constant-time; plaintext passwords are strictly rejected)
       if (storedHash.length === 64 && /^[0-9a-f]+$/i.test(storedHash)) {
         return constantTimeEqual(sha256Hex(password).toLowerCase(), storedHash.toLowerCase());
       }
@@ -174,27 +333,18 @@ export class SecurityService {
     }
   }
 
-  /**
-   * فحص ما إذا كان التشفير المخزن قديماً ويحتاج للترقية التلقائية إلى Web Crypto PBKDF2
-   * @param {string} hash
-   * @returns {boolean}
-   */
-  static isLegacyHash(hash) {
+  static isLegacyHash(hash: string): boolean {
     if (!hash || typeof hash !== 'string') return false;
     return !hash.startsWith('pbkdf2:v1:');
   }
 
   /**
-   * تشفير البيانات باستخدام خوارزمية AES-256
-   * 
-   * @param {any} data - البيانات المراد تشفيرها (سيتم تحويلها لـ JSON)
-   * @returns {string} النص المشفر في صيغة String Base64
-   * @throws {Error} عند فشل التشفير
+   * Standard AES-256-GCM encryption (`AG1:` envelope with PBKDF2 600,000 iterations).
    */
-  static encrypt(data) {
+  static encrypt(data: unknown): string {
     try {
-      const encrypted = symmetricEncrypt(JSON.stringify(data), this.SECRET_KEY);
-      Logger.debug('Data encrypted successfully');
+      const encrypted = aes256GcmEncrypt(JSON.stringify(data), this.SECRET_KEY);
+      Logger.debug('Data encrypted successfully (AES-256-GCM)');
       return encrypted;
     } catch (error) {
       Logger.error('Encryption failed', error);
@@ -203,50 +353,72 @@ export class SecurityService {
   }
 
   /**
-   * فك تشفير النص المشفر باستخدام AES-256 لاسترجاع البيانات الأصلية
-   * 
-   * @param {string} encrypted - النص المشفر
-   * @returns {any} البيانات الأصلية المفكوكة
-   * @throws {Error} عند فشل فك التشفير أو التوقيع غير الصحيح
+   * Async Web Crypto AES-256-GCM encryption (`AG1:` envelope with PBKDF2 600,000 iterations).
    */
-  static decrypt(encrypted) {
+  static async encryptAsync(data: unknown): Promise<string> {
+    try {
+      return await aes256GcmEncryptAsync(JSON.stringify(data), this.SECRET_KEY);
+    } catch (error) {
+      Logger.error('Async AES-GCM encryption failed', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Standard AES-256-GCM decryption (`AG1:`), with read-only fallback for legacy `NC2:`/`NC1:` payloads.
+   */
+  static decrypt(encrypted: string): any {
     if (!encrypted || typeof encrypted !== 'string') {
       return null;
     }
 
     const trimmed = encrypted.trim();
-    // Security hardening (Batch S1): Do NOT accept raw plaintext JSON ('[' or '{') as valid ciphertext.
     if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
       Logger.warn('[SecurityService] Rejected unencrypted plaintext JSON in decrypt()');
       throw new Error('Unencrypted plaintext JSON is not accepted by SecurityService.decrypt');
     }
 
     try {
-      const decrypted = symmetricDecrypt(encrypted, this.SECRET_KEY);
+      const decrypted = encrypted.startsWith('AG1:')
+        ? aes256GcmDecrypt(encrypted, this.SECRET_KEY)
+        : symmetricDecrypt(encrypted, this.SECRET_KEY);
       if (!decrypted) {
         throw new Error('Empty decrypted payload or key mismatch');
       }
       Logger.debug('Data decrypted successfully');
       return JSON.parse(decrypted);
     } catch (error: any) {
-      Logger.warn('[SecurityService] Decryption or UTF-8 decode failed (stale key or legacy format)', error?.message || error);
+      Logger.warn(
+        '[SecurityService] Decryption or UTF-8 decode failed (stale key or legacy format)',
+        error?.message || error
+      );
       throw error;
     }
   }
 
   /**
-   * توليد توكن توثيق آمن موثق بتوقيع HMAC-SHA256 (مشابه لـ JWT)
-   * 
-   * @param {Object} payload - البيانات المراد تضمينها بالرمز
-   * @param {number} [expiresInSeconds=2592000] - مدة صلاحية الرمز بالثواني (الافتراضي: 30 يوماً لدعم بيئات الصيانة بدون انقطاع)
-   * @returns {string} الرمز المولد بالصيغة `encodedHeaderPayload.signature`
-   * @throws {Error} عند فشل عملية الإنشاء
+   * Async Web Crypto AES-256-GCM decryption (`AG1:`).
    */
-  static generateToken(payload, expiresInSeconds = 30 * 24 * 60 * 60) {
+  static async decryptAsync(encrypted: string): Promise<any> {
+    if (!encrypted || typeof encrypted !== 'string') {
+      return null;
+    }
+    const trimmed = encrypted.trim();
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      throw new Error('Unencrypted plaintext JSON is not accepted by SecurityService.decryptAsync');
+    }
+    const decrypted = await aes256GcmDecryptAsync(encrypted, this.SECRET_KEY);
+    if (!decrypted) {
+      throw new Error('Empty decrypted payload or key mismatch');
+    }
+    return JSON.parse(decrypted);
+  }
+
+  static generateToken(payload: Record<string, any>, expiresInSeconds = 30 * 24 * 60 * 60): string {
     try {
       const header = {
         alg: 'HS256',
-        typ: 'JWT'
+        typ: 'JWT',
       };
 
       const now = Math.floor(Date.now() / 1000);
@@ -255,13 +427,13 @@ export class SecurityService {
         payload: {
           ...payload,
           iat: now,
-          exp: now + expiresInSeconds
-        }
+          exp: now + expiresInSeconds,
+        },
       };
 
-      const encoded = btoa(JSON.stringify(token));
+      const encoded = bytesToBase64(new TextEncoder().encode(JSON.stringify(token)));
       const signature = hmacSha256Hex(encoded, this.SECRET_KEY);
-      
+
       Logger.debug('Token generated successfully');
       return `${encoded}.${signature}`;
     } catch (error: any) {
@@ -270,16 +442,7 @@ export class SecurityService {
     }
   }
 
-  /**
-   * فحص وتأكيد توقيع رمز التوثيق وصلاحية تاريخ الانتهاء
-   * 
-   * @param {string} token - الرمز المراد فصحه
-   * @param {Object} [options] - خيارات التحقق
-   * @param {boolean} [options.ignoreExpiration=false] - تجاهل انتهاء الصلاحية لفحص المحتوى فقط
-   * @returns {Object} الحمولة الأصلية المفككة
-   * @throws {Error} إذا كان التوقيع ملغياً أو صلاحية الرمز منتهية
-   */
-  static verifyToken(token, { ignoreExpiration = false } = {}) {
+  static verifyToken(token: string, { ignoreExpiration = false } = {}): any {
     if (!token || typeof token !== 'string') {
       throw new Error('Invalid token: token must be a non-empty string');
     }
@@ -297,9 +460,10 @@ export class SecurityService {
       throw new Error('Invalid token signature');
     }
 
-    let decoded;
+    let decoded: any;
     try {
-      decoded = JSON.parse(atob(encoded));
+      const jsonStr = new TextDecoder().decode(base64ToBytes(encoded));
+      decoded = JSON.parse(jsonStr);
     } catch {
       throw new Error('Invalid token payload: base64 decode or JSON parse failed');
     }
@@ -321,19 +485,11 @@ export class SecurityService {
     return decoded.payload;
   }
 
-  /**
-   * توليد معرف عشوائي فريد بالقطع والنص الألفابيتي
-   * 
-   * @returns {string} المعرف العشوائي المولد
-   */
-  static generateId() {
+  static generateId(): string {
     return this.generateRandomHex(12);
   }
 
-  /**
-   * Save encrypted payload to localStorage
-   */
-  static saveSecure(key, data) {
+  static saveSecure(key: string, data: unknown): void {
     try {
       const encrypted = this.encrypt(data);
       localStorage.setItem(key, encrypted);
@@ -342,14 +498,10 @@ export class SecurityService {
     }
   }
 
-  /**
-   * Retrieve and decrypt payload from localStorage
-   */
-  static getSecure(key) {
+  static getSecure(key: string): any {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
-
       return this.decrypt(raw);
     } catch {
       Logger.warn(`[SecurityService] Resetting unreadable or legacy secure item for key: ${key}`);
@@ -362,10 +514,7 @@ export class SecurityService {
     }
   }
 
-  /**
-   * Remove secure item from localStorage and sessionStorage
-   */
-  static removeSecure(key: string) {
+  static removeSecure(key: string): void {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(key);
@@ -378,10 +527,7 @@ export class SecurityService {
     }
   }
 
-  /**
-   * Save encrypted payload to sessionStorage
-   */
-  static saveSessionSecure(key: string, data: any) {
+  static saveSessionSecure(key: string, data: unknown): void {
     try {
       if (typeof sessionStorage === 'undefined') return;
       const encrypted = this.encrypt(data);
@@ -391,9 +537,6 @@ export class SecurityService {
     }
   }
 
-  /**
-   * Retrieve and decrypt/verify payload from sessionStorage (supports encrypted payloads and signed HMAC session envelopes)
-   */
   static getSessionSecure(key: string): any {
     try {
       if (typeof sessionStorage === 'undefined') return null;
@@ -415,25 +558,33 @@ export class SecurityService {
   }
 
   /**
-   * Fast PBKDF2 PIN hashing
+   * Standard PBKDF2-HMAC-SHA256 PIN hashing (600,000 iterations + 128-bit random salt).
    */
-  static hashPin(pin) {
+  static hashPin(pin: string): string {
     if (!pin) return '';
     const salt = this.generateRandomHex(16);
-    const keyHex = pbkdf2Sha256Hex(pin, salt, 10000, 32);
-    return `pbkdf2:v1:${salt}:10000:${keyHex}`;
+    const keyHex = pbkdf2Sha256Hex(pin, salt, PBKDF2_STANDARD_ITERATIONS, 32);
+    return `pbkdf2:v1:${salt}:${PBKDF2_STANDARD_ITERATIONS}:${keyHex}`;
   }
 
   /**
-   * Verify PIN against PBKDF2 hash
+   * Async Web Crypto PBKDF2-HMAC-SHA256 PIN hashing (600,000 iterations).
    */
-  static verifyPIN(enteredPIN, storedPIN) {
+  static async hashPinAsync(pin: string): Promise<string> {
+    if (!pin) return '';
+    return this.hashPassword(pin, null, PBKDF2_STANDARD_ITERATIONS);
+  }
+
+  /**
+   * Constant-time verification of PIN against PBKDF2 hash (`pbkdf2:v1:<salt>:<iterations>:<hashHex>`).
+   */
+  static verifyPIN(enteredPIN: string, storedPIN: string): boolean {
     if (!enteredPIN || !storedPIN) return false;
     if (typeof storedPIN === 'string' && storedPIN.startsWith('pbkdf2:v1:')) {
       const parts = storedPIN.split(':');
       if (parts.length === 5) {
         const [, , saltHex, iterStr, expectedHashHex] = parts;
-        const iterations = parseInt(iterStr, 10) || 10000;
+        const iterations = parseInt(iterStr, 10) || PBKDF2_STANDARD_ITERATIONS;
         const keyHex = pbkdf2Sha256Hex(enteredPIN, saltHex, iterations, 32);
         return constantTimeEqual(keyHex.toLowerCase(), expectedHashHex.toLowerCase());
       }
@@ -441,16 +592,18 @@ export class SecurityService {
     return false;
   }
 
-  /**
-   * استخراج البصمة الرقمية للجهاز (Device Fingerprint) باستخدام الخصائص التقنية للمتصفح والتوقيع بـ SHA-256
-   * 
-   * @returns {string} البصمة المشفرة للجهاز
-   */
-  static getDeviceFingerprint() {
+  static async verifyPINAsync(enteredPIN: string, storedPIN: string): Promise<boolean> {
+    if (!enteredPIN || !storedPIN || typeof storedPIN !== 'string') return false;
+    if (!storedPIN.startsWith('pbkdf2:v1:')) return false;
+    return this.comparePassword(enteredPIN, storedPIN);
+  }
+
+  static getDeviceFingerprint(): string {
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'node';
     const language = typeof navigator !== 'undefined' ? navigator.language : 'en';
-    const timezone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
-    
+    const timezone =
+      typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+
     const fingerprint = `${userAgent}|${language}|${timezone}`;
     return sha256Hex(fingerprint);
   }

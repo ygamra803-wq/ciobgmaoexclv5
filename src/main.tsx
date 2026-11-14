@@ -27,28 +27,30 @@ migrateStorageOnce();
 ServiceProvider.register();
 errorTracker.init();
 
-// Migration: If no Master PIN / Vault is set, ensure default users are using predictable passwords
-const authMigratedFlag = storageService.getItem(STORAGE_KEYS.MIGRATION_AUTH_V1);
-if (!vaultService.isVaultExists() && authMigratedFlag !== true && authMigratedFlag !== 'true') {
-  SecurityService.removeSecure(STORAGE_KEYS.AUTH_ACCOUNTS); // Force AuthService to re-init with 'admin'/'admin'
-  storageService.setItem(STORAGE_KEYS.MIGRATION_AUTH_V1, true);
-}
-
 analytics.track('app_started', 'system', { timestamp: Date.now() });
 
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <ErrorBoundary>
-      <I18nProvider>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </I18nProvider>
-    </ErrorBoundary>
-  );
-}
+const renderApp = () => {
+  const rootElement = document.getElementById('root');
+  if (rootElement) {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <ErrorBoundary>
+        <I18nProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </I18nProvider>
+      </ErrorBoundary>
+    );
+  }
+};
+
+// Initialize key separation (IndexedDB non-extractable CryptoKey -> RAM secret) before rendering
+SecurityService.init()
+  .catch((err) => {
+    Logger.warn('SecurityService keystore init notice:', err, 'SecurityService');
+  })
+  .finally(renderApp);
 
 
 // Background initialization for storage migrations

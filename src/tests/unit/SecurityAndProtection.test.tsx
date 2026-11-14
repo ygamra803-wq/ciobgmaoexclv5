@@ -10,12 +10,13 @@ describe('4. Security & Hardening Tests', () => {
   });
 
   describe('PIN Security & Brute Force Protection', () => {
-    it('should hash PIN and verify authentic logins successfully', () => {
+    it('should hash PIN with 600,000 PBKDF2 iterations and verify authentic logins successfully', () => {
       const pin = '567890';
       const hashed = SecurityService.hashPin(pin);
 
       expect(hashed).toBeDefined();
       expect(hashed).not.toBe(pin); // Should not store as plain text
+      expect(hashed).toContain(':600000:');
       expect(SecurityService.verifyPIN(pin, hashed)).toBe(true);
       expect(SecurityService.verifyPIN('000000', hashed)).toBe(false);
       // Plaintext stored PINs must strictly fail verification
@@ -63,26 +64,56 @@ describe('4. Security & Hardening Tests', () => {
   });
 
   describe('Data Encryption (AES-256 & LocalStorage Wrap)', () => {
-    it('should encrypt and decrypt objects correctly using AES-256', () => {
+    it('should encrypt and decrypt objects using standard AES-256-GCM (600k PBKDF2) interoperable with Web Crypto', async () => {
       const sensitiveData = {
         technicien: 'Achraf Gamra',
-        pin: '1234',
+        pin: '908172',
         isAdmin: true,
       };
 
       const ciphertext = SecurityService.encrypt(sensitiveData);
       expect(ciphertext).toBeDefined();
       expect(typeof ciphertext).toBe('string');
-      expect(ciphertext.startsWith('NC2:')).toBe(true);
-      expect(ciphertext).not.toContain('Achraf Gamra'); // Check payload is actually obfuscated
+      expect(ciphertext.startsWith('AG1:')).toBe(true);
+      expect(ciphertext).not.toContain('Achraf Gamra');
+      expect(localStorage.getItem('_gmao_sec_instance_key')).toBeNull();
 
       const decrypted = SecurityService.decrypt(ciphertext);
       expect(decrypted).toEqual(sensitiveData);
-      // Malformed base64/NC2 payload must strictly fail verification/decryption
+
+      // Verify byte-for-byte parity with Web Crypto subtle AES-256-GCM decryption
+      const decryptedViaWebCrypto = await SecurityService.decryptAsync(ciphertext);
+      expect(decryptedViaWebCrypto).toEqual(sensitiveData);
+
+      const asyncCipher = await SecurityService.encryptAsync(sensitiveData);
+      expect(asyncCipher.startsWith('AG1:')).toBe(true);
+      expect(SecurityService.decrypt(asyncCipher)).toEqual(sensitiveData);
+
+      // Malformed base64/AG1/NC2 payload must strictly fail verification/decryption
+      expect(() => SecurityService.decrypt('AG1:!!!bad:!!!bad:deadbeef')).toThrow();
       expect(() => SecurityService.decrypt('NC2:!!!bad:!!!bad:deadbeef')).toThrow();
+
+      // Bit-for-bit NIST FIPS 197 + SP 800-38D parity against Node built-in OpenSSL AES-256-GCM
+      const nodeCrypto = await import('node:crypto');
+      const { aes256GcmEncryptRaw, aes256GcmDecryptRaw } = await import('../../core/security/nativeCrypto');
+      const testKey = Uint8Array.from({ length: 32 }, (_, i) => (i * 11 + 3) & 0xff);
+      const testIv = Uint8Array.from({ length: 12 }, (_, i) => (i * 7 + 5) & 0xff);
+      const aad = new TextEncoder().encode('ciob-gmao-aad-v1');
+      const plainBytes = new TextEncoder().encode('NIST AES-256-GCM bit-exact parity payload 2026!');
+
+      const nativeOut = aes256GcmEncryptRaw(testKey, testIv, plainBytes, aad);
+      const opensslCipher = nodeCrypto.createCipheriv('aes-256-gcm', testKey, testIv);
+      opensslCipher.setAAD(aad);
+      const opensslBody = Buffer.concat([opensslCipher.update(plainBytes), opensslCipher.final()]);
+      const opensslTag = opensslCipher.getAuthTag();
+      const opensslCombined = new Uint8Array(Buffer.concat([opensslBody, opensslTag]));
+
+      expect(Buffer.from(nativeOut).equals(Buffer.from(opensslCombined))).toBe(true);
+      const roundtripDec = aes256GcmDecryptRaw(testKey, testIv, opensslCombined, aad);
+      expect(new TextDecoder().decode(roundtripDec)).toBe('NIST AES-256-GCM bit-exact parity payload 2026!');
     });
 
-    it('should save and load encrypted items securely from localStorage', () => {
+    it('should save and load encrypted items securely from localStorage without storing any key in localStorage', () => {
       const sensitiveConfig = { dbKey: 'super-secret-key-123' };
 
       SecurityService.saveSecure('sensitive_config_key', sensitiveConfig);
@@ -90,7 +121,9 @@ describe('4. Security & Hardening Tests', () => {
       // Verify that the plain text is not visible in raw localStorage
       const rawInStorage = localStorage.getItem('sensitive_config_key');
       expect(rawInStorage).toBeDefined();
+      expect(rawInStorage?.startsWith('AG1:')).toBe(true);
       expect(rawInStorage).not.toContain('super-secret-key-123');
+      expect(localStorage.getItem('_gmao_sec_instance_key')).toBeNull();
 
       // Retrieve and decrypt correctly
       const retrieved = SecurityService.getSecure('sensitive_config_key');
@@ -217,7 +250,7 @@ describe('4. Security & Hardening Tests', () => {
 
       const hashed = await CoreSec.hashPassword(plain);
       expect(hashed).toBeDefined();
-      expect(hashed).toMatch(/^pbkdf2:v1:[a-f0-9]+:100000:[a-f0-9]+$/);
+      expect(hashed).toMatch(/^pbkdf2:v1:[a-f0-9]+:600000:[a-f0-9]+$/);
       expect(hashed).not.toContain(plain);
 
       // Verify correct password
@@ -349,9 +382,9 @@ describe('4. Security & Hardening Tests', () => {
       expect(decryptedAfter.secretToken).toBe('GMAO-SECURE-KEY-2026');
       expect(decryptedAfter.accounts).toHaveLength(1);
 
-      // 5. Vault artifacts in localStorage must be protected via SecurityService (NC2: envelope)
-      expect(localStorage.getItem('gmao_vault_cipher_v2')?.startsWith('NC2:')).toBe(true);
-      expect(localStorage.getItem('gmao_vault_salt_v2')?.startsWith('NC2:')).toBe(true);
+      // 5. Vault artifacts in localStorage must be protected via SecurityService (AG1: AES-256-GCM envelope)
+      expect(localStorage.getItem('gmao_vault_cipher_v2')?.startsWith('AG1:')).toBe(true);
+      expect(localStorage.getItem('gmao_vault_salt_v2')?.startsWith('AG1:')).toBe(true);
       expect(typeof SecurityService.getSecure('gmao_vault_cipher_v2')).toBe('string');
       expect(typeof SecurityService.getSecure('gmao_vault_salt_v2')).toBe('string');
     });

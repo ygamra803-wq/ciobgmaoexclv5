@@ -9,6 +9,8 @@ import {
   sanitizeBulkStateForRole,
 } from '../../core/security/serverRbacPolicy';
 import {
+  sanitizeIncomingAccountFields,
+  sanitizeIncomingStateCredentials,
   sanitizeStateSnapshotForTransport,
   stripSensitiveAccountFields,
 } from '../../core/security/serverSession';
@@ -224,11 +226,11 @@ export function mountEntityAndStateRoutes(
         });
       }
 
-      let effectiveIncomingState: ServerRecord = incomingState;
+      let effectiveIncomingState: ServerRecord = sanitizeIncomingStateCredentials(incomingState);
       if (!isBootstrapAuthorized) {
         const bulkCheck = sanitizeBulkStateForRole(
           resolvedActor.effectiveRole,
-          incomingState,
+          effectiveIncomingState,
           dbState
         );
         if (!bulkCheck.allowed) {
@@ -238,7 +240,7 @@ export function mountEntityAndStateRoutes(
             message: bulkCheck.reason || 'Role not authorized for this state operation.',
           });
         }
-        effectiveIncomingState = bulkCheck.sanitizedState;
+        effectiveIncomingState = sanitizeIncomingStateCredentials(bulkCheck.sanitizedState);
       }
 
       const baseVersionMatches =
@@ -448,11 +450,12 @@ export function mountEntityAndStateRoutes(
       const prevStock = [...getArraySlice(dbState, 'stock')];
       const prevList = [...(dbState[entity] as unknown[])];
 
+      const sanitizedIncomingItem = sanitizeIncomingAccountFields(entity, rawItem) as ServerRecord;
       const actorRole = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
       const newItem: ServerRecord =
         gmaoReq.isBootstrapAuthorized === true
-          ? rawItem
-          : (clampMakerCheckerRecordForRole(actorRole, entity, rawItem, null) as ServerRecord);
+          ? sanitizedIncomingItem
+          : (clampMakerCheckerRecordForRole(actorRole, entity, sanitizedIncomingItem, null) as ServerRecord);
 
       const rollbackEntity = () => {
         dbState[entity] = prevList;
@@ -570,11 +573,12 @@ export function mountEntityAndStateRoutes(
       const currentList = [...getArraySlice(dbState, entity)];
       const prevRawStock = [...getArraySlice(dbState, 'rawStock')];
       const prevStock = [...getArraySlice(dbState, 'stock')];
+      const sanitizedCollectionPayload = sanitizeIncomingAccountFields(entity, payload) as unknown[];
       const actorRole = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
       const effectivePayload =
         gmaoReq.isBootstrapAuthorized === true
-          ? payload
-          : clampMakerCheckerCollectionForRole(actorRole, entity, payload, currentList);
+          ? sanitizedCollectionPayload
+          : clampMakerCheckerCollectionForRole(actorRole, entity, sanitizedCollectionPayload, currentList);
 
       const rollbackEntity = () => {
         dbState[entity] = currentList;
@@ -673,7 +677,7 @@ export function mountEntityAndStateRoutes(
       const prevRawStock = [...getArraySlice(dbState, 'rawStock')];
       const prevStock = [...getArraySlice(dbState, 'stock')];
       const existingRecord = (currentCollection[index] || {}) as ServerRecord;
-      const mergedRecord = { ...existingRecord, ...updatedData };
+      const mergedRecord = sanitizeIncomingAccountFields(entity, { ...existingRecord, ...updatedData }) as ServerRecord;
       const actorRole = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
       const rollbackEntity = () => {
         dbState[entity] = prevList;

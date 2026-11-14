@@ -153,7 +153,7 @@ try {
       const k = localStorage.key(i);
       if (k && k.startsWith('gmao_')) {
         const item = localStorage.getItem(k);
-        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1') && !item.startsWith('NC1:') && !item.startsWith('NC2:')) {
+        if (item && !item.startsWith('WC:') && !item.startsWith('U2FsdGVkX1') && !item.startsWith('NC1:') && !item.startsWith('NC2:') && !item.startsWith('AG1:')) {
           try {
             const parsed = JSON.parse(item);
             memoryCache.set(k, { data: parsed, _lastAccessed: Date.now() });
@@ -298,7 +298,7 @@ export const storageService = {
 
       // 2. Migrate legacy encrypted items to clean JSON
       // Note: Keys managed by SecurityService.saveSecure/getSecure (like gmao_auth_accounts_v2)
-      // use SecurityService.SECRET_KEY (_gmao_sec_instance_key) and must NOT be decrypted
+      // use SecurityService's IndexedDB-wrapped AES-256-GCM key and must NOT be decrypted
       // or overwritten into plain JSON by storageService.
       const SECURITY_MANAGED_KEYS = new Set([
         'gmao_auth_accounts_v2',
@@ -399,7 +399,7 @@ export const storageService = {
       if (item === null || item === undefined) return fallback;
 
       // If it's a legacy or SecurityService encrypted token, return fallback safely
-      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:') || item.startsWith('NC2:'))) {
+      if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:') || item.startsWith('NC2:') || item.startsWith('AG1:'))) {
         return fallback;
       }
 

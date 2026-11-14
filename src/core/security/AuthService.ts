@@ -8,7 +8,6 @@ import { storageService } from '../../utils/storageService';
 
 const USERS_KEY = 'gmao_auth_accounts_v2';
 const SESSION_KEY = 'gmao_session_v2';
-const TECH_DEFAULT_HASH = 'pbkdf2:v1:9b2c3d4e5f6a7b8c9d0e:100000:tech_init_seed';
 
 export const PROHIBITED_BOOTSTRAP_PASSWORDS = new Set([
   'admin',
@@ -162,7 +161,7 @@ export class AuthService {
         id: 'admin',
         code: 'admin',
         username: 'admin',
-        passwordHash: 'pbkdf2:v1:7a9f8c6b5d4e3f2a1b0c:100000:admin_init_seed',
+        passwordHash: null,
         role: 'ADMIN',
         name: 'Administrateur',
         titleFr: 'Administrateur Système',
@@ -178,7 +177,7 @@ export class AuthService {
         id: 'magasinier',
         code: 'magasinier',
         username: 'magasinier',
-        passwordHash: 'pbkdf2:v1:8a1b2c3d4e5f6a7b8c9d:100000:mag_init_seed',
+        passwordHash: null,
         role: 'RESPONSABLE_MAGASIN',
         name: 'Responsable Magasin',
         titleFr: 'Responsable Magasin (RMG)',
@@ -194,7 +193,7 @@ export class AuthService {
         id: 'viewer',
         code: 'viewer',
         username: 'viewer',
-        passwordHash: 'pbkdf2:v1:0c3d4e5f6a7b8c9d0e1f:100000:viewer_init_seed',
+        passwordHash: null,
         role: 'VIEWER',
         name: 'Observateur',
         titleFr: 'Observateur / Consultation',
@@ -227,7 +226,10 @@ export class AuthService {
       id: existingAccount?.id || `acct-${techId}`,
       code: techId,
       username: existingAccount?.username || defaultUsername,
-      passwordHash: existingAccount?.passwordHash || TECH_DEFAULT_HASH,
+      passwordHash:
+        existingAccount?.passwordHash && !String(existingAccount.passwordHash).includes('_init_seed')
+          ? existingAccount.passwordHash
+          : null,
       role: existingAccount?.role || 'TECHNICIEN',
       name: nom,
       titleFr: zone ? `Technicien (${zone})` : 'Technicien Maintenance',
@@ -276,7 +278,10 @@ export class AuthService {
       id: existingAccount?.id || `acct-${opId}`,
       code: opId,
       username: existingAccount?.username || opId.toLowerCase(),
-      passwordHash: existingAccount?.passwordHash || TECH_DEFAULT_HASH,
+      passwordHash:
+        existingAccount?.passwordHash && !String(existingAccount.passwordHash).includes('_init_seed')
+          ? existingAccount.passwordHash
+          : null,
       role: inferredRole,
       name: nom,
       titleFr: specialite,
@@ -579,7 +584,10 @@ export class AuthService {
       throw new Error(`L'identifiant "${finalUsername}" est déjà utilisé par un autre compte.`);
     }
 
-    let passwordHash = existing?.passwordHash || TECH_DEFAULT_HASH;
+    let passwordHash =
+      existing?.passwordHash && !String(existing.passwordHash).includes('_init_seed')
+        ? existing.passwordHash
+        : null;
 
     const cleanPass = String(plainPassword || '').trim();
     if (cleanPass) {
@@ -955,40 +963,24 @@ export class AuthService {
         throw new Error("Ce compte d'accès est désactivé par l'administrateur.");
       }
 
-      const hashStr = String(user.passwordHash || '');
-      const isSeedHashMatch =
-        (hashStr.endsWith(':admin_init_seed') && cleanPassword === 'admin') ||
-        (hashStr.endsWith(':mag_init_seed') && cleanPassword === 'magasinier') ||
-        (hashStr.endsWith(':viewer_init_seed') && cleanPassword === 'viewer') ||
-        (hashStr === TECH_DEFAULT_HASH && (cleanPassword === 'tech' || cleanPassword === '1234'));
+      if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPassword.toLowerCase())) {
+        throw new Error(
+          "Les mots de passe par défaut interdits (admin, magasinier, viewer, tech, 1234) sont désactivés dans tous les environnements. Veuillez utiliser un mot de passe personnel sécurisé."
+        );
+      }
+
+      const storedHash = String(user.passwordHash || '').trim();
+      const hasValidRealHash =
+        Boolean(storedHash) && !storedHash.includes('_init_seed');
       const isPasswordHashMatch =
-        user.passwordHash && (await SecurityService.comparePassword(cleanPassword, user.passwordHash));
+        hasValidRealHash && (await SecurityService.comparePassword(cleanPassword, storedHash));
       const isPasswordValid =
-        isPasswordHashMatch || isSeedHashMatch || (user.role === 'ADMIN' && isPinMatch);
+        isPasswordHashMatch || (user.role === 'ADMIN' && isPinMatch);
 
       if (isPasswordValid) {
-        // SEC-BOOTSTRAP-P0.1: Check if the provided password is a prohibited default password
-        const isProhibitedDefault = PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPassword.toLowerCase());
-
-        // Reject default passwords in production (both on initial seed and on upgraded PBKDF2 hashes)
-        if (isProhibitedDefault || isSeedHashMatch) {
-          if (AuthService.isProductionMode()) {
-            throw new Error(
-              "En production, l'accès avec les mots de passe d'initialisation par défaut (admin, magasinier, viewer, tech) est désactivé. Veuillez définir un mot de passe sécurisé."
-            );
-          }
-          if (!AuthService._warnedDevBootstrap) {
-            AuthService._warnedDevBootstrap = true;
-            Logger.warn(
-              `[AuthService] Connexion de développement avec mot de passe d'initialisation par défaut pour '${user.username}'. Veuillez le modifier avant la mise en production.`
-            );
-          }
-        }
-
-        // Upgrade legacy or initial seed hash to full PBKDF2-SHA256
+        // Upgrade legacy SHA-256 hash to full PBKDF2-SHA256 (600,000 iterations)
         if (
-          (user.passwordHash && SecurityService.isLegacyHash(user.passwordHash)) ||
-          isSeedHashMatch ||
+          (hasValidRealHash && SecurityService.isLegacyHash(storedHash)) ||
           user.defaultPass
         ) {
           const modernHash = await SecurityService.hashPassword(cleanPassword);
@@ -1003,10 +995,16 @@ export class AuthService {
           personnelName: user.personnelName || user.name || null,
           id_zone: user.id_zone || null,
           specialite: user.specialite || null,
-          authMethod: 'PASSWORD',
-          mustChangePassword: Boolean(isProhibitedDefault || isSeedHashMatch),
+          authMethod: user.role === 'ADMIN' && isPinMatch && !isPasswordHashMatch ? 'ENCRYPTED_PIN' : 'PASSWORD',
+          mustChangePassword: false,
         };
         return this.saveSignedSession(sessionPayload);
+      }
+
+      if (!hasValidRealHash && !(user.role === 'ADMIN' && vaultService.isVaultExists())) {
+        throw new Error(
+          "Ce compte n'est pas encore initialisé. Veuillez définir un mot de passe sécurisé ou configurer le Master PIN."
+        );
       }
     }
 

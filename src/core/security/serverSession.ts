@@ -330,34 +330,35 @@ export function extractServerSessionToken(headers: Record<string, unknown> | und
  * Verifies plain password credentials against a stored account record (`passwordHash`).
  * Supports:
  *  - `pbkdf2:v1:<saltHex>:<iterations>:<hashHex>`
- *  - Dev bootstrap seed hashes (`:admin_init_seed`, `:mag_init_seed`, `:viewer_init_seed`, `:tech_init_seed`)
  *  - Legacy 64-hex SHA-256 digests
- * Rejects prohibited default passwords and init-seed hashes in production mode.
+ * Strictly rejects all init-seed markers and prohibited default passwords in every environment.
  */
 export function verifyAccountCredentials(
   account: any,
   plainPassword: string,
-  isProduction: boolean
+  _isProduction?: boolean
 ): { valid: boolean; reason?: string; isDefaultSeed?: boolean } {
   const cleanPass = String(plainPassword || '').trim();
   if (!account || typeof account !== 'object' || !cleanPass) {
     return { valid: false, reason: 'INVALID_CREDENTIALS' };
   }
 
+  if (PROHIBITED_DEFAULT_PASSWORDS.has(cleanPass.toLowerCase())) {
+    return {
+      valid: false,
+      reason: 'PROHIBITED_DEFAULT_PASSWORD_IN_PROD',
+      isDefaultSeed: true,
+    };
+  }
+
   const hashStr = String(account.passwordHash || '').trim();
-  if (!hashStr) {
+  if (!hashStr || hashStr.includes('_init_seed')) {
     return { valid: false, reason: 'NO_CREDENTIAL_HASH' };
   }
 
-  const isSeedHashMatch =
-    (hashStr.endsWith(':admin_init_seed') && cleanPass === 'admin') ||
-    (hashStr.endsWith(':mag_init_seed') && cleanPass === 'magasinier') ||
-    (hashStr.endsWith(':viewer_init_seed') && cleanPass === 'viewer') ||
-    (hashStr.endsWith(':tech_init_seed') && (cleanPass === 'tech' || cleanPass === '1234'));
-
   let isCryptographicMatch = false;
 
-  if (hashStr.startsWith('pbkdf2:v1:') && !isSeedHashMatch) {
+  if (hashStr.startsWith('pbkdf2:v1:')) {
     const parts = hashStr.split(':');
     if (parts.length === 5) {
       const [, , saltHex, iterStr, expectedHashHex] = parts;
@@ -375,24 +376,13 @@ export function verifyAccountCredentials(
     isCryptographicMatch = constantTimeEqual(digest.toLowerCase(), hashStr.toLowerCase());
   }
 
-  if (!isSeedHashMatch && !isCryptographicMatch) {
+  if (!isCryptographicMatch) {
     return { valid: false, reason: 'INVALID_CREDENTIALS' };
-  }
-
-  const isProhibitedDefault =
-    isSeedHashMatch || PROHIBITED_DEFAULT_PASSWORDS.has(cleanPass.toLowerCase());
-
-  if (isProhibitedDefault && isProduction) {
-    return {
-      valid: false,
-      reason: 'PROHIBITED_DEFAULT_PASSWORD_IN_PROD',
-      isDefaultSeed: true,
-    };
   }
 
   return {
     valid: true,
-    isDefaultSeed: isProhibitedDefault,
+    isDefaultSeed: false,
   };
 }
 
@@ -422,6 +412,46 @@ export function stripSensitiveAccountFields(entityKey: string, data: any): any {
     } = item;
     return safe;
   });
+}
+
+function sanitizeIncomingAccountItem(item: any): any {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+  const copy: Record<string, any> = { ...item };
+  if ('defaultPass' in copy) {
+    delete copy.defaultPass;
+  }
+  if (typeof copy.passwordHash === 'string' && copy.passwordHash.includes('_init_seed')) {
+    copy.passwordHash = null;
+  }
+  return copy;
+}
+
+/**
+ * Strips prohibited `defaultPass` plaintext fields and legacy `*_init_seed` hashes
+ * from incoming `users`, `technicians`, or `authAccounts` writes before persistence.
+ */
+export function sanitizeIncomingAccountFields(entityKey: string, payload: any): any {
+  if (!ACCOUNT_SENSITIVE_ENTITIES.has(entityKey)) return payload;
+  if (Array.isArray(payload)) {
+    return payload.map(sanitizeIncomingAccountItem);
+  }
+  return sanitizeIncomingAccountItem(payload);
+}
+
+/**
+ * Applies `sanitizeIncomingAccountFields` across account collections in bulk state syncs.
+ */
+export function sanitizeIncomingStateCredentials(state: Record<string, any>): Record<string, any> {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return state;
+  let mutated = false;
+  const next: Record<string, any> = { ...state };
+  for (const key of ACCOUNT_SENSITIVE_ENTITIES) {
+    if (Array.isArray(next[key])) {
+      next[key] = sanitizeIncomingAccountFields(key, next[key]);
+      mutated = true;
+    }
+  }
+  return mutated ? next : state;
 }
 
 /**
