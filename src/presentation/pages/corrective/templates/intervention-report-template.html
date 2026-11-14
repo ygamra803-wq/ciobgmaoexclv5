@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Rapport Technique d’Intervention et de Maintenance</title>
+  <style>
+    @page { size: A4; margin: 14mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #e5e7eb;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #1f2937;
+      font-size: 10.5pt;
+      line-height: 1.45;
+    }
+    .sheet {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: #fff;
+      padding: 14mm 15mm;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, .12);
+    }
+    .kicker {
+      font-size: 8.5pt;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #b45309;
+      margin-bottom: 4px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 16pt;
+      color: #0f172a;
+      border-bottom: 2.5px solid #1d4ed8;
+      padding-bottom: 7px;
+    }
+    h2 {
+      margin: 14px 0 6px;
+      font-size: 11pt;
+      color: #1e3a5f;
+      border-bottom: 1px solid #cbd5e1;
+      padding-bottom: 3px;
+    }
+    h3 {
+      margin: 9px 0 4px;
+      font-size: 10pt;
+      color: #1d4ed8;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      vertical-align: top;
+      text-align: left;
+    }
+    .meta td.lbl {
+      width: 21%;
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #475569;
+      font-size: 9pt;
+    }
+    .meta td.val {
+      width: 29%;
+      color: #0f172a;
+      font-weight: 600;
+    }
+    .rca th {
+      background: #1e3a5f;
+      color: #fff;
+      font-size: 9.2pt;
+    }
+    .rca tr.root td {
+      background: #fff7ed;
+      font-weight: 700;
+    }
+    .block {
+      background: #f8fafc;
+      border-left: 3px solid #1d4ed8;
+      padding: 8px 10px;
+      margin: 6px 0;
+    }
+    ul, ol {
+      margin: 4px 0 8px 18px;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    .sign {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .sign-box {
+      border: 1px solid #cbd5e1;
+      padding: 8px 10px;
+      min-height: 62px;
+    }
+    .sign-title {
+      font-size: 9pt;
+      font-weight: 700;
+      color: #475569;
+      margin-bottom: 16px;
+    }
+    .footer {
+      margin-top: 14px;
+      padding-top: 6px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 8.5pt;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+    }
+    [contenteditable="true"] {
+      outline: none;
+    }
+    [contenteditable="true"]:focus {
+      background: #eff6ff;
+    }
+    @media print {
+      body {
+        background: #fff;
+        padding: 0;
+      }
+      .sheet {
+        width: auto;
+        min-height: auto;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="sheet" id="report">
+    <div class="kicker">Maintenance Industrielle &amp; Ingénierie — Rapport Standardisé</div>
+    <h1>Rapport Technique d’Intervention et de Maintenance</h1>
+
+    <table class="meta">
+      <tr>
+        <td class="lbl">Date de l’intervention</td>
+        <td class="val" data-field="date" contenteditable="true"></td>
+        <td class="lbl">Code Machine</td>
+        <td class="val" data-field="code_machine" contenteditable="true"></td>
+      </tr>
+      <tr>
+        <td class="lbl">Type d’équipement</td>
+        <td class="val" data-field="equipment_type" contenteditable="true"></td>
+        <td class="lbl">Référence BT / DI</td>
+        <td class="val" data-field="ref_bt" contenteditable="true"></td>
+      </tr>
+      <tr>
+        <td class="lbl">Type de maintenance</td>
+        <td class="val" data-field="maintenance_type" contenteditable="true"></td>
+        <td class="lbl">Temps d’arrêt / Durée</td>
+        <td class="val" data-field="downtime" contenteditable="true"></td>
+      </tr>
+      <tr>
+        <td class="lbl">Nature de la défaillance</td>
+        <td class="val" colspan="3" data-field="defect_nature" contenteditable="true"></td>
+      </tr>
+    </table>
+
+    <h2>1. Résumé exécutif (Executive Summary)</h2>
+    <div class="block" data-field="executive_summary" contenteditable="true"></div>
+
+    <h2>2. Diagnostic et analyse des causes racines (Root Cause Analysis)</h2>
+    <table class="rca">
+      <thead>
+        <tr>
+          <th style="width:24%">Composant / Sous-ensemble</th>
+          <th style="width:40%">Constat Technique sur Site</th>
+          <th style="width:36%">Impact Technique et Fonctionnel</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td data-field="rca_1_component" contenteditable="true"></td>
+          <td data-field="rca_1_observation" contenteditable="true"></td>
+          <td data-field="rca_1_impact" contenteditable="true"></td>
+        </tr>
+        <tr>
+          <td data-field="rca_2_component" contenteditable="true"></td>
+          <td data-field="rca_2_observation" contenteditable="true"></td>
+          <td data-field="rca_2_impact" contenteditable="true"></td>
+        </tr>
+        <tr class="root">
+          <td data-field="root_cause_title" contenteditable="true">Cause racine / Facteur déclencheur</td>
+          <td data-field="root_cause_detail" contenteditable="true"></td>
+          <td data-field="root_cause_effect" contenteditable="true"></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. Actions correctives et préventives réalisées</h2>
+    <h3>A. Travaux de réparation et remplacement de pièces</h3>
+    <ul>
+      <li data-field="action_repair_1" contenteditable="true"></li>
+      <li data-field="action_repair_2" contenteditable="true"></li>
+    </ul>
+
+    <h3>B. Contrôles, mesures et maintenance préventive</h3>
+    <ul>
+      <li data-field="action_checks" contenteditable="true"></li>
+      <li data-field="action_preventive" contenteditable="true"></li>
+    </ul>
+
+    <h2>4. Recommandations techniques (prévention de récurrence)</h2>
+    <ol>
+      <li data-field="reco_1" contenteditable="true"></li>
+      <li data-field="reco_2" contenteditable="true"></li>
+    </ol>
+
+    <h2>5. Validation et approbation</h2>
+    <div class="sign">
+      <div class="sign-box">
+        <div class="sign-title">Technicien intervenant</div>
+        <div>Nom : <span data-field="tech_name" contenteditable="true"></span></div>
+        <div>Date / Visa : <span data-field="tech_visa" contenteditable="true"></span></div>
+      </div>
+      <div class="sign-box">
+        <div class="sign-title">Responsable ingénierie / maintenance</div>
+        <div>Nom : <span data-field="manager_name" contenteditable="true"></span></div>
+        <div>Date / Visa : <span data-field="manager_visa" contenteditable="true"></span></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Modèle standard de rapport technique d’intervention</span>
+      <span>Réf. interne : <span data-field="doc_ref" contenteditable="true"></span></span>
+    </div>
+  </div>
+
+  <script>
+    window.fillReport = function (data) {
+      document.querySelectorAll('[data-field]').forEach(function (el) {
+        var key = el.getAttribute('data-field');
+        if (data && Object.prototype.hasOwnProperty.call(data, key)) {
+          el.textContent = data[key] == null ? '' : String(data[key]);
+        }
+      });
+    };
+
+    window.collectReport = function () {
+      var out = {};
+      document.querySelectorAll('[data-field]').forEach(function (el) {
+        out[el.getAttribute('data-field')] = (el.textContent || '').trim();
+      });
+      return out;
+    };
+  </script>
+</body>
+</html>
