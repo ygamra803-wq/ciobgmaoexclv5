@@ -5,12 +5,9 @@ import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
 import {
   FileSpreadsheet,
-  Search,
   Check,
   AlertTriangle,
   RotateCcw,
-  Plus,
-  Trash2,
   Package,
   Wrench,
   Clock,
@@ -28,15 +25,9 @@ import {
   ShoppingCart,
   Activity,
   Sparkles,
-  Tag,
-  AlertCircle,
-  CheckCircle2,
-  ClipboardList,
   ShieldAlert,
   Inbox,
   CornerDownRight,
-  RefreshCw,
-  Scale,
   ShieldCheck,
   Hammer,
   Truck,
@@ -63,7 +54,10 @@ import {
   getTechnicianBadgeLabel,
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
-import { reconcileFieldClaim } from '../../../core/security/validationReconciliation';
+import {
+  reconcileFieldClaim,
+  computeReservedStockMap,
+} from '../../../core/security/validationReconciliation';
 import {
   WizardShell,
   useWizardFeature,
@@ -85,6 +79,8 @@ import {
 } from './components/SortieSubTabs';
 import { SortieInterneContextSection } from './components/SortieInterneContextSection';
 import { EntreeInterneContextSection } from './components/EntreeInterneContextSection';
+import { MovementArticlesSection } from './components/MovementArticlesSection';
+import { ExternalMovementContextSections } from './components/ExternalMovementContextSections';
 
 export default function SortieRapideView({
   mouvements = [],
@@ -181,6 +177,31 @@ export default function SortieRapideView({
           d.validation_status === 'NEEDS_CLARIFICATION'
       ),
     [storeSortieDemands]
+  );
+
+  const reservedStockMap = useMemo(
+    () =>
+      computeReservedStockMap({
+        correctiveInterventions: storeCorrectiveInterventions,
+        preventiveExecutions: storePreventiveExecutions,
+        sortieDemands: storeSortieDemands,
+      }),
+    [storeCorrectiveInterventions, storePreventiveExecutions, storeSortieDemands]
+  );
+
+  const getExternalReservedQtyForRef = useCallback(
+    (rawRef: unknown): number => {
+      const refKey = String(rawRef || '').trim().toUpperCase();
+      if (!refKey) return 0;
+      const entry = reservedStockMap.get(refKey);
+      if (!entry) return 0;
+      if (!editingDemandId) return Number(entry.reservedQty || 0);
+      const selfReserved = (entry.sources || [])
+        .filter((src) => src.claimType === 'SORTIE' && String(src.claimId) === String(editingDemandId))
+        .reduce((sum, src) => sum + (Number(src.qty) || 0), 0);
+      return Math.max(0, Number(entry.reservedQty || 0) - selfReserved);
+    },
+    [reservedStockMap, editingDemandId]
   );
 
   const reviewDemandReconciliation = useMemo(() => {
@@ -1154,9 +1175,15 @@ export default function SortieRapideView({
         const currentStock = match
           ? (match.stockActuel ?? match.raw?.stockActuel ?? match.raw?.stockInitial ?? 0)
           : 0;
+        const externalReserved = getExternalReservedQtyForRef(ref);
+        const netAvailable = currentStock - externalReserved;
         if (totalQte > currentStock) {
           errors.push(
             `Stock insuffisant pour [${ref}] (Demandé cumulé: ${totalQte}, Dispo: ${currentStock}).`
+          );
+        } else if (externalReserved > 0 && totalQte > netAvailable) {
+          errors.push(
+            `Stock réservé (soft-lock) pour [${ref}] : Physique ${currentStock}, Réservé ${externalReserved}, Net Dispo ${Math.max(0, netAvailable)}, Demandé ${totalQte}.`
           );
         }
       }
@@ -2329,386 +2356,20 @@ export default function SortieRapideView({
             );
 
             const step2ArticlesSection = (
-              <div className="space-y-3">
-            {/* 5. MULTI-ARTICLES SECTION - EXCEL LIGHT UI PDR */}
-            <div className="space-y-3 pt-3 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-                    <Boxes className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                      <span>Articles & Pièces de Rechange (PDR)</span>
-                      <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
-                        {mouvementItems.length}/5
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-mono font-bold bg-slate-50 text-slate-700 px-2 py-1 rounded-lg border border-slate-200">
-                    Total: {mouvementItems.reduce((sum, it) => sum + (parseFloat(it.quantite) || 0), 0)} {mouvementItems[0]?.unit || 'pcs'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    disabled={mouvementItems.length >= 5}
-                    className="text-xs font-bold text-emerald-700 hover:text-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer bg-emerald-50 hover:bg-emerald-100/80 px-2.5 py-1 rounded-lg border border-emerald-200 transition shadow-2xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Ajouter une pièce</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                {mouvementItems.map((item, idx) => {
-                  const match = unifiedSearchCatalog.find((c) => c.ref === item.ref);
-                  const stockDispo = match ? (match.stockActuel ?? match.raw?.stockActuel ?? match.raw?.stockInitial ?? 0) : 0;
-                  const seuilMin = match?.raw?.seuil ?? 5;
-                  const qteVal = parseFloat(item.quantite) || 0;
-
-                  const isSortie = form.type.includes('Sortie') || form.type === 'Bon de Sortie';
-                  const isEntree = form.type.includes('Entrée');
-                  const isCmd = form.type === 'COMMANDE';
-
-                  // Dynamic Math Formulas (Excel Twin Simulation)
-                  const nouveauSolde = isSortie
-                    ? stockDispo - qteVal
-                    : isEntree || isCmd
-                      ? stockDispo + qteVal
-                      : stockDispo;
-
-                  const isDeficit = isSortie && qteVal > stockDispo;
-                  const deficitAmount = isDeficit ? qteVal - stockDispo : 0;
-                  const isSeuilAlert = isSortie && !isDeficit && nouveauSolde <= seuilMin && nouveauSolde >= 0;
-                  const isStockOk = isSortie && !isDeficit && nouveauSolde > seuilMin;
-                  const isZeroQte = qteVal <= 0;
-
-                  return (
-                    <div
-                      key={`item-line-${idx}`}
-                      className={`p-3 rounded-xl border bg-white transition shadow-2xs space-y-2.5 ${
-                        isDeficit
-                          ? 'border-rose-300 ring-1 ring-rose-200'
-                          : isSeuilAlert
-                            ? 'border-amber-300'
-                            : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      {/* Top Bar: Ligne ID + Catalog Picker + Delete */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-[11px] font-bold text-slate-700">
-                            Ligne {idx + 1}
-                          </span>
-                        </div>
-
-                        {/* Search / Select in catalog button */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTargetItemIndex(idx);
-                            setSearchActiveTab(item.source || 'ALL');
-                            setIsArticleSearchOpen(true);
-                          }}
-                          className="flex-1 py-1.5 px-3 rounded-lg bg-slate-50/90 hover:bg-slate-100 border border-slate-200 hover:border-emerald-500 text-left font-mono text-slate-800 flex items-center justify-between transition cursor-pointer shadow-2xs group"
-                          title="Cliquer pour rechercher ou changer la pièce"
-                        >
-                          <span className="truncate text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>{item.ref || 'Sélectionner une pièce dans le catalogue...'}</span>
-                          </span>
-                          <span className="text-[11px] text-indigo-700 group-hover:text-indigo-800 font-sans font-bold flex items-center gap-1 shrink-0 ml-1.5 bg-white px-2 py-0.5 rounded border border-slate-200">
-                            <Search className="w-3 h-3 text-indigo-600" />
-                            <span>
-                              {item.source === 'STOCK_PDR' ? 'Catalogue PDR' :
-                               item.source === 'WAREHOUSE_PARTIE' ? 'Catalogue Parties' :
-                               item.source === 'WAREHOUSE_COMPOSANT' ? 'Catalogue Composants' : 'Catalogue'}
-                            </span>
-                          </span>
-                        </button>
-
-                        {mouvementItems.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(idx)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition cursor-pointer shrink-0"
-                            title="Supprimer cette ligne"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Fields Row: Designation & Quantity */}
-                      <div className="grid grid-cols-12 gap-2.5 items-start">
-                        <div className="col-span-7">
-                          <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide block mb-1">
-                            Désignation de la pièce
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="Sélectionnez un article..."
-                            value={item.designation}
-                            readOnly
-                            className="w-full h-8 px-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-600 focus:outline-none cursor-not-allowed select-none"
-                          />
-                        </div>
-
-                        <div className="col-span-5">
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">
-                              Quantité ({item.unit || 'pcs'})
-                            </label>
-                            {isSortie && stockDispo > 0 && (
-                              <span className="text-[9.5px] text-slate-500 font-mono">Dispo: <b className="text-slate-800">{stockDispo}</b></span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="number"
-                              min="0.1"
-                              step="any"
-                              value={item.quantite}
-                              onChange={(e) => handleUpdateItem(idx, 'quantite', e.target.value)}
-                              className={`w-full h-8 px-2.5 rounded-lg border font-mono font-bold text-xs text-right focus:outline-none ${
-                                isDeficit
-                                  ? 'border-rose-400 bg-rose-50/50 text-rose-800'
-                                  : isZeroQte
-                                    ? 'border-amber-400 bg-amber-50/50 text-amber-900'
-                                    : 'border-slate-200 bg-white text-slate-900 focus:border-emerald-500'
-                              }`}
-                              required
-                            />
-                            <span className="text-xs text-slate-500 font-mono font-medium shrink-0 px-1.5 py-1 bg-slate-50 rounded border border-slate-200">
-                              {item.unit || 'pcs'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Quick Adjust Buttons (+1, +5, Max, Reset) */}
-                      <div className="flex items-center justify-between gap-1 pt-1.5 border-t border-slate-100 text-[10.5px]">
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-400 text-[10px] font-medium mr-0.5">Ajuster:</span>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItem(idx, 'quantite', Math.max(1, qteVal - 1))}
-                            className="px-2 py-0.5 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-700 font-mono font-bold border border-slate-200 cursor-pointer shadow-2xs"
-                          >
-                            -1
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItem(idx, 'quantite', qteVal + 1)}
-                            className="px-2 py-0.5 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-700 font-mono font-bold border border-slate-200 cursor-pointer shadow-2xs"
-                          >
-                            +1
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItem(idx, 'quantite', qteVal + 5)}
-                            className="px-2 py-0.5 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-700 font-mono font-bold border border-slate-200 cursor-pointer shadow-2xs"
-                          >
-                            +5
-                          </button>
-                          {isSortie && stockDispo > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateItem(idx, 'quantite', stockDispo)}
-                              className="px-2 py-0.5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-mono font-bold border border-emerald-200 cursor-pointer shadow-2xs"
-                              title="Prendre tout le stock disponible"
-                            >
-                              Max ({stockDispo})
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleUpdateItem(idx, 'quantite', 1)}
-                            className="px-2 py-0.5 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-500 font-mono border border-slate-200 cursor-pointer shadow-2xs"
-                            title="Réinitialiser à 1"
-                          >
-                            1
-                          </button>
-                        </div>
-
-                        {match && (
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            Emplacement : <b className="text-slate-800 font-semibold bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">{match.emplacement || '-'}</b>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Real-time Excel Formula & Stock Simulation Bar */}
-                      {match && (
-                        <div className="pt-1.5 border-t border-slate-100">
-                          <div className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-slate-50/80 border border-slate-200 text-xs">
-                            {isSortie ? (
-                              <div className="flex items-center gap-1.5 font-mono text-[11px] flex-wrap">
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Stock Actuel:</span>
-                                <span className="font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                  {stockDispo}
-                                </span>
-                                <span className="font-bold text-rose-600">−</span>
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Sortie:</span>
-                                <span className="font-bold text-rose-700 bg-white px-1.5 py-0.5 rounded border border-rose-200">
-                                  {qteVal}
-                                </span>
-                                <span className="font-bold text-slate-400">=</span>
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Solde Prévu:</span>
-                                <span
-                                  className={`font-bold px-2 py-0.5 rounded border ${
-                                    isDeficit
-                                      ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                      : isSeuilAlert
-                                        ? 'bg-amber-50 text-amber-900 border-amber-200'
-                                        : 'bg-emerald-50 text-emerald-900 border-emerald-200'
-                                  }`}
-                                >
-                                  {nouveauSolde} {item.unit || 'pcs'}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 font-mono text-[11px] flex-wrap">
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Stock Actuel:</span>
-                                <span className="font-bold text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                                  {stockDispo}
-                                </span>
-                                <span className="font-bold text-emerald-600">+</span>
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Entrée:</span>
-                                <span className="font-bold text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200">
-                                  {qteVal}
-                                </span>
-                                <span className="font-bold text-slate-400">=</span>
-                                <span className="text-slate-500 text-[10px] uppercase font-sans font-bold">Nouveau Stock:</span>
-                                <span className="font-bold px-2 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-900">
-                                  {nouveauSolde} {item.unit || 'pcs'}
-                                </span>
-                              </div>
-                            )}
-
-                            {/* Status Badge */}
-                            <div>
-                              {isDeficit && (
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200">
-                                  <AlertCircle className="w-3 h-3 shrink-0 text-rose-600" />
-                                  <span>Déficit: -{deficitAmount} {item.unit || 'pcs'}</span>
-                                </span>
-                              )}
-                              {isSeuilAlert && (
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
-                                  <AlertTriangle className="w-3 h-3 shrink-0 text-amber-600" />
-                                  <span>Alerte Seuil (≤ {seuilMin})</span>
-                                </span>
-                              )}
-                              {isStockOk && (
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">
-                                  <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-600" />
-                                  <span>Stock Conforme</span>
-                                </span>
-                              )}
-                              {isEntree && (
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-900 border border-blue-200">
-                                  <TrendingUp className="w-3 h-3 shrink-0 text-blue-600" />
-                                  <span>Réappro (+{qteVal})</span>
-                                </span>
-                              )}
-                              {isCmd && (
-                                <span className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
-                                  <ShoppingCart className="w-3 h-3 shrink-0 text-amber-600" />
-                                  <span>Commande ({qteVal} pcs)</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* GLOBAL MULTI-ITEMS SUMMARY & VERIFICATION - EXCEL LIGHT STYLE */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 shadow-2xs space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-emerald-600" />
-                    <span className="font-bold uppercase tracking-wider text-[11px] text-slate-800">
-                      Bilan & Contrôle du Bon
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 font-mono">
-                    <span className="text-[11px] text-slate-600">Lignes : <b className="text-slate-900">{mouvementItems.length}</b></span>
-                    <span className="text-[11px] text-slate-300">•</span>
-                    <span className="text-[11px] text-slate-600">Quantité Totale : <b className="text-emerald-700 font-bold">{mouvementItems.reduce((acc, i) => acc + (parseFloat(i.quantite) || 0), 0)} pcs</b></span>
-                  </div>
-                </div>
-
-                {/* Validation Status Indicator */}
-                {(() => {
-                  const isSortie = form.type.includes('Sortie') || form.type === 'Bon de Sortie';
-                  const invalidQte = mouvementItems.some((i) => !i.quantite || parseFloat(i.quantite) <= 0);
-                  const emptyRef = mouvementItems.some((i) => !i.ref || String(i.ref).trim() === '');
-                  const deficitItems = isSortie
-                    ? mouvementItems.filter((i) => {
-                        const m = unifiedSearchCatalog.find((c) => c.ref === i.ref);
-                        const st = m ? (m.stockActuel ?? m.raw?.stockActuel ?? m.raw?.stockInitial ?? 0) : 0;
-                        return (parseFloat(i.quantite) || 0) > st;
-                      })
-                    : [];
-
-                  if (emptyRef) {
-                    return (
-                      <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                        <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-                        <span>Veuillez sélectionner une référence pour toutes les lignes d'articles.</span>
-                      </div>
-                    );
-                  }
-
-                  if (invalidQte) {
-                    return (
-                      <div className="flex items-center gap-2 text-xs text-rose-900 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                        <span>Quantité invalide détectée : chaque article doit avoir une quantité supérieure à 0.</span>
-                      </div>
-                    );
-                  }
-
-                  if (deficitItems.length > 0) {
-                    return (
-                      <div className="flex items-center justify-between text-xs text-rose-900 bg-rose-50 p-2 rounded-lg border border-rose-200">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
-                          <span>
-                            <b>{deficitItems.length} article(s) en déficit</b> par rapport au stock physique.
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded border border-rose-300">
-                          Avertissement
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="flex items-center justify-between text-xs text-emerald-900 bg-emerald-50 p-2 rounded-lg border border-emerald-200">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                        <span>Tous les articles sont conformes et prêts pour l'enregistrement.</span>
-                      </div>
-                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded border border-emerald-300">
-                        Prêt à Valider
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-              </div>
+              <MovementArticlesSection
+                form={form}
+                mouvementItems={mouvementItems}
+                unifiedSearchCatalog={unifiedSearchCatalog}
+                getExternalReservedQtyForRef={getExternalReservedQtyForRef}
+                handleAddItem={handleAddItem}
+                handleRemoveItem={handleRemoveItem}
+                handleUpdateItem={handleUpdateItem}
+                onOpenItemCatalog={(idx, source) => {
+                  setTargetItemIndex(idx);
+                  setSearchActiveTab(source || 'ALL');
+                  setIsArticleSearchOpen(true);
+                }}
+              />
             );
 
             const step3ContextSection = (
@@ -2757,345 +2418,20 @@ export default function SortieRapideView({
               />
             )}
 
-            {/* CASE C: BON DE SORTIE (RÉPARATION EXTERNE / ÉTALONNAGE / GARANTIE) */}
-            {isBonSortie && (
-              <div className="space-y-3 pt-2 border-t border-slate-100 bg-purple-50/40 p-3 rounded-xl border border-purple-200">
-                {/* 3 Action Cards for Bon de Sortie */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-purple-700" />
-                      <span>Motif & Nature de la Sortie Externe (Action) :</span>
-                    </span>
-                    <span className="text-[10px] text-purple-700 font-semibold italic">
-                      3 Actions Disponibles
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      {
-                        id: 'REPARATION_EXTERNE',
-                        label: 'Réparation Externe',
-                        desc: 'Moteur, bobinage, usinage...',
-                        icon: Truck,
-                        color: 'bg-purple-50 border-purple-400 text-purple-950 ring-2 ring-purple-500/20 shadow-2xs font-bold',
-                      },
-                      {
-                        id: 'ETALONNAGE_CONTROLE',
-                        label: 'Étalonnage / Contrôle',
-                        desc: 'Mesure, métrologie, capteurs...',
-                        icon: Gauge,
-                        color: 'bg-blue-50 border-blue-400 text-blue-950 ring-2 ring-blue-500/20 shadow-2xs font-bold',
-                      },
-                      {
-                        id: 'GARANTIE_ECHANGE',
-                        label: 'Garantie / Échange',
-                        desc: 'Retour constructeur, garantie...',
-                        icon: ShieldCheck,
-                        color: 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-500/20 shadow-2xs font-bold',
-                      },
-                    ].map((act) => {
-                      const IconComp = act.icon;
-                      const isActive = form.action_id === act.id;
-                      return (
-                        <button
-                          key={act.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, action_id: act.id })}
-                          className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                            isActive
-                              ? act.color
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <IconComp className="w-3.5 h-3.5 text-purple-700 shrink-0" />
-                            <span className="text-xs font-bold truncate">{act.label}</span>
-                          </div>
-                          <div className="text-[9.5px] text-slate-500 leading-tight truncate">{act.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Prestataire Externe (Obligatoire) */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block mb-1">
-                    Atelier / Prestataire Extérieur (Bobineur / Usineur / Labo) <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <CustomSelect
-                    value={form.prestataire_externe}
-                    onChange={(val) => setForm({ ...form, prestataire_externe: val })}
-                    options={supplierOptions.map((s) => ({ value: s, label: s }))}
-                    placeholder="-- Sélectionner Prestataire Externe --"
-                    onAddNew={(val) => {
-                      if (val) {
-                        setForm({ ...form, prestataire_externe: val });
-                      }
-                    }}
-                  />
-                </div>
-
-                {/* Machine d'Origine (Équipement Source) & Date de Retour Prévue */}
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block mb-1">
-                      Machine d'Origine (Équipement Source)
-                    </label>
-                    <CustomSelect
-                      value={form.id_machine_registered}
-                      onChange={(val) => {
-                        const m = machines.find((mach) => mach.id_machine_registered === val);
-                        setForm({
-                          ...form,
-                          id_machine_registered: val,
-                          id_zone: m?.id_zone_default || form.id_zone,
-                        });
-                      }}
-                      options={[
-                        { value: '', label: '-- Stock Équipement / Non affecté --' },
-                        ...activeMachinesList.map((m) => ({
-                          value: m.id_machine_registered,
-                          label: `[${m.id_machine_registered}] ${m.designation}`,
-                        })),
-                      ]}
-                      placeholder="-- Machine d'origine --"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block mb-1">
-                      Date de Retour Estimée <span className="text-rose-600 font-bold">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={form.date_retour_prevue}
-                      onChange={(e) => setForm({ ...form, date_retour_prevue: e.target.value })}
-                      className="w-full h-8 px-2.5 rounded-xl border border-purple-200 bg-white text-xs font-mono text-slate-800"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Technicien Émetteur (Responsable de la Sortie) */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block mb-1">
-                    Technicien Émetteur (Demandeur de l'Envoi) <span className="text-rose-600 font-bold">*</span>
-                  </label>
-                  <CustomSelect
-                    value={form.technicien}
-                    onChange={(val) => {
-                      const t = technicians.find((tech) => tech.nom === val);
-                      setForm({
-                        ...form,
-                        technicien: val,
-                        id_technician: t?.id_technician || '',
-                      });
-                    }}
-                    options={technicians.map((t) => ({
-                      value: t.nom,
-                      label: t.nom,
-                      badge: t.id_technician,
-                    }))}
-                    placeholder="-- Technicien émetteur --"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* CASE D: ENTRÉE EXTERNE */}
-            {isEntreeExterne && (
-              <div className="space-y-3 pt-2 border-t border-slate-100 bg-emerald-50/40 p-3 rounded-xl border border-emerald-200">
-                {/* 3 Action Cards for Entrée Externe */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-emerald-950 uppercase tracking-wider block mb-1.5 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Inbox className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Nature de la Réception Externe (Action) :</span>
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      {
-                        id: 'REAPPRO',
-                        label: 'Réapprovisionnement',
-                        desc: 'Commande fournisseur / stock',
-                        icon: Truck,
-                      },
-                      {
-                        id: 'RETOUR_REPARATION',
-                        label: 'Retour Réparation',
-                        desc: 'Retour bobinage / usinage',
-                        icon: RefreshCw,
-                      },
-                      {
-                        id: 'INVENTAIRE',
-                        label: 'Régularisation +',
-                        desc: 'Ajustement inventaire',
-                        icon: ClipboardList,
-                      },
-                    ].map((act) => {
-                      const IconComp = act.icon;
-                      const isActive = form.action_id === act.id;
-                      return (
-                        <button
-                          key={act.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, action_id: act.id })}
-                          className={`p-2 rounded-xl border text-left transition cursor-pointer flex flex-col justify-between ${
-                            isActive
-                              ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-500/20 shadow-2xs font-bold'
-                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <IconComp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span className="text-xs font-bold truncate">{act.label}</span>
-                          </div>
-                          <div className="text-[9.5px] text-slate-500 leading-tight truncate">{act.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Smart One-Click Autofill for RETOUR_REPARATION if active external repairs exist */}
-                {activeExternalRepairs.length > 0 && (
-                  <div className="p-2.5 bg-purple-50 rounded-xl border border-purple-200 text-xs">
-                    <div className="font-bold text-purple-950 flex items-center gap-1 mb-1.5">
-                      <Truck className="w-3.5 h-3.5 text-purple-600" />
-                      <span>{activeExternalRepairs.length} Bon(s) de Sortie en Réparation Externe en attente :</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeExternalRepairs.slice(0, 3).map((rep, idx) => (
-                        <button
-                          key={`rep-btn-${idx}`}
-                          type="button"
-                          onClick={() => handleReceiveRepairReturn(rep)}
-                          className="px-2 py-1 bg-white hover:bg-purple-100 border border-purple-300 text-purple-900 rounded-lg text-[10.5px] font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                        >
-                          <span>{rep.code_bon}</span>
-                          <span className="text-slate-500 font-normal">({rep.ref})</span>
-                          <span className="text-emerald-600">↳ Réceptionner</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-[10.5px] font-bold text-emerald-950 uppercase tracking-wider block mb-1">
-                    Fournisseur / Prestataire Expéditeur
-                  </label>
-                  <CustomSelect
-                    value={form.fournisseur}
-                    onChange={(val) => setForm({ ...form, fournisseur: val })}
-                    options={supplierOptions.map((s) => ({ value: s, label: s }))}
-                    placeholder="-- Sélectionner Fournisseur --"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10.5px] font-bold text-emerald-950 uppercase tracking-wider block mb-1">
-                    Emplacement de Réception Magasin
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: Magasin Central - R1"
-                    value={form.emplacement_reception}
-                    onChange={(e) => setForm({ ...form, emplacement_reception: e.target.value })}
-                    className="w-full h-8 px-2.5 rounded-xl border border-emerald-200 bg-white text-xs font-mono text-slate-800"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* CASE E: COMMANDE (Demande d'Achat & Approvisionnement) */}
-            {isCommandeFlow && (
-              <div className="space-y-3 pt-2 border-t border-slate-100 bg-amber-50/40 p-3 rounded-xl border border-amber-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-950">
-                    <ShoppingCart className="w-4 h-4 text-amber-600" />
-                    <span>Informations de la Demande d'Achat</span>
-                  </div>
-                  <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">
-                    APPROVISIONNEMENT
-                  </span>
-                </div>
-
-                {/* Priority Selector */}
-                <div>
-                  <label className="text-[10.5px] font-bold text-amber-950 uppercase tracking-wider block mb-1">
-                    Niveau de Priorité :
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      { id: 'NORMALE', label: '🟢 Normale', color: 'border-emerald-300 text-emerald-900 bg-emerald-50' },
-                      { id: 'URGENTE', label: '🟡 Urgente', color: 'border-amber-300 text-amber-900 bg-amber-50' },
-                      { id: 'CRITIQUE', label: '🔴 Critique (Rupture)', color: 'border-rose-300 text-rose-900 bg-rose-50' },
-                    ].map((p) => {
-                      const isSel = (form.priorite || 'NORMALE') === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setForm({ ...form, priorite: p.id })}
-                          className={`py-1.5 px-2 rounded-xl border text-xs font-bold transition cursor-pointer text-center ${
-                            isSel
-                              ? `${p.color} ring-2 ring-amber-500/20 shadow-2xs`
-                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="text-[10.5px] font-bold text-amber-950 uppercase tracking-wider block mb-1">
-                      Demandeur / Responsable
-                    </label>
-                    <CustomSelect
-                      value={form.technicien}
-                      onChange={(val) => setForm({ ...form, technicien: val })}
-                      options={technicians.map((t) => ({ value: t.nom, label: t.nom }))}
-                      placeholder="-- Demandeur --"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10.5px] font-bold text-amber-950 uppercase tracking-wider block mb-1">
-                      Fournisseur Suggéré
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nom du fournisseur ou prestataire"
-                      value={form.fournisseur}
-                      onChange={(e) => setForm({ ...form, fournisseur: e.target.value })}
-                      className="w-full h-8 px-2.5 rounded-xl border border-amber-200 bg-white text-xs text-slate-800 focus:outline-none focus:border-amber-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Commentaire / Observation */}
-            <div>
-              <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                Commentaire / Motif du Bon
-              </label>
-              <input
-                type="text"
-                placeholder="Observation, raison du mouvement..."
-                value={form.commentaire}
-                onChange={(e) => setForm({ ...form, commentaire: e.target.value })}
-                className="w-full h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-800"
-              />
-            </div>
+            {/* CASES C, D, E: BON DE SORTIE EXTERNE / ENTRÉE EXTERNE / COMMANDE / COMMENTAIRE */}
+            <ExternalMovementContextSections
+              isBonSortie={isBonSortie}
+              isEntreeExterne={isEntreeExterne}
+              isCommandeFlow={isCommandeFlow}
+              form={form}
+              setForm={setForm}
+              supplierOptions={supplierOptions}
+              machines={machines}
+              activeMachinesList={activeMachinesList}
+              technicians={technicians}
+              activeExternalRepairs={activeExternalRepairs}
+              handleReceiveRepairReturn={handleReceiveRepairReturn}
+            />
               </div>
             );
 

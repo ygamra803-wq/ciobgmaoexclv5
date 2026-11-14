@@ -217,9 +217,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
       return event;
     },
 
-    applyRemoteStateUpdate: (remoteState: Record<string, any>) => {
+    /** Synchronizes state slices from an authoritative server/remote snapshot without overriding unsynced local actors. */
+    applyRemoteStateUpdate: (remoteState: Record<string, unknown>) => {
       if (!remoteState || typeof remoteState !== 'object') return;
-      const updates: Record<string, any> = {};
+      const updates: Record<string, unknown> = {};
 
       // Stock
       if (Array.isArray(remoteState.pdrGroups)) updates.pdrGroups = remoteState.pdrGroups;
@@ -306,13 +307,13 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
 
       if (Array.isArray(remoteState.mouvements) || Array.isArray(remoteState.rawStock)) {
         const effectiveMovements = Array.isArray(remoteState.mouvements)
-          ? remoteState.mouvements
+          ? (remoteState.mouvements as import('../application/MovementRepository').MovementEntity[])
           : get().mouvements || [];
         const effectiveRawStock = Array.isArray(remoteState.rawStock)
-          ? remoteState.rawStock
+          ? (remoteState.rawStock as import('../types/domain').IStockItem[])
           : get().rawStock || [];
         movementRepository.bulkReplace(
-          effectiveMovements as any[],
+          effectiveMovements,
           buildInitialStockMapFromList(effectiveRawStock)
         );
       }

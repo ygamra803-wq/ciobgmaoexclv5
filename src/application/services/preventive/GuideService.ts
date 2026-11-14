@@ -2,18 +2,23 @@ import { INITIAL_GUIDES } from './INITIAL_GUIDES';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
+import type { IPreventiveGuideCatalogItem } from '../../../types/store';
 
 export const STORAGE_KEY_GUIDES = STORAGE_KEYS.PREVENTIVE_GUIDES;
 
+/**
+ * Persistence service managing component preventive inspection guides,
+ * checklists, required tooling, and recommended spare-part catalogs.
+ */
 export class GuideService {
-  static getGuides(): any[] {
-    return loadCollection(STORAGE_KEY_GUIDES, {
+  static getGuides(): IPreventiveGuideCatalogItem[] {
+    return loadCollection<IPreventiveGuideCatalogItem[]>(STORAGE_KEY_GUIDES, {
       allowDemoFallback: true,
-      demoSeed: INITIAL_GUIDES,
+      demoSeed: INITIAL_GUIDES as unknown as IPreventiveGuideCatalogItem[],
     });
   }
 
-  static saveGuides(guides: any[]) {
+  static saveGuides(guides: IPreventiveGuideCatalogItem[]): void {
     try {
       storageService.setItem(STORAGE_KEY_GUIDES, guides);
     } catch {
@@ -21,22 +26,27 @@ export class GuideService {
     }
   }
 
-  static addGuide(guideData: any): any[] {
+  static addGuide(guideData: Partial<IPreventiveGuideCatalogItem>): IPreventiveGuideCatalogItem[] {
     const current = [...this.getGuides()];
     const seq = String(current.length + 1).padStart(3, '0');
-    const compSlug = (guideData.composant_type || guideData.composant_nom || 'COMP').replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
-    
-    const newGuide = {
+    const rawComp = String(guideData.composant_type || guideData.composant_nom || 'COMP');
+    const compSlug = rawComp.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+    const guideId = String(guideData.guide_id || `GDE-${compSlug}-${seq}`);
+
+    const newGuide: IPreventiveGuideCatalogItem = {
       ...guideData,
-      guide_id: guideData.guide_id || `GDE-${compSlug}-${seq}`,
-      composant_type: guideData.composant_type || guideData.composant_nom || '',
+      id: guideData.id ?? guideId,
+      code: String(guideData.code || guideId),
+      guide_id: guideId,
+      composant_nom: String(guideData.composant_nom || guideData.composant_type || ''),
+      composant_type: String(guideData.composant_type || guideData.composant_nom || ''),
       actions_recommandees: guideData.actions_recommandees || [],
       periodicite_suggeree: guideData.periodicite_suggeree || '1M',
       points_de_controle: guideData.points_de_controle || [],
       outillage_requis: guideData.outillage_requis || [],
       consignes_securite: guideData.consignes_securite || '',
       active: true,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
 
     current.push(newGuide);
@@ -44,9 +54,12 @@ export class GuideService {
     return current;
   }
 
-  static updateGuide(guide_id: string | number, updatedFields: any): any[] {
+  static updateGuide(
+    guide_id: string | number,
+    updatedFields: Partial<IPreventiveGuideCatalogItem>
+  ): IPreventiveGuideCatalogItem[] {
     const current = [...this.getGuides()];
-    const idx = current.findIndex((g: any) => (g.guide_id || g.id) === guide_id);
+    const idx = current.findIndex((g) => (g.guide_id || g.id) === guide_id);
     if (idx !== -1) {
       current[idx] = { ...current[idx], ...updatedFields, updated_at: new Date().toISOString() };
       this.saveGuides(current);
@@ -54,9 +67,9 @@ export class GuideService {
     return current;
   }
 
-  static deleteGuide(guide_id: string | number): any[] {
+  static deleteGuide(guide_id: string | number): IPreventiveGuideCatalogItem[] {
     const current = this.getGuides();
-    const filtered = current.filter((g: any) => (g.guide_id || g.id) !== guide_id);
+    const filtered = current.filter((g) => (g.guide_id || g.id) !== guide_id);
     this.saveGuides(filtered);
     return filtered;
   }

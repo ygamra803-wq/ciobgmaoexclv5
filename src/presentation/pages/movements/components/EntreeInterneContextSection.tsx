@@ -8,18 +8,28 @@ import {
   CornerDownRight,
 } from 'lucide-react';
 import { CustomSelect } from './MovementSelect';
+import type {
+  InternalMovementFormState,
+  MovementMachineOption,
+  MovementTechnicianOption,
+  MovementZoneOption,
+} from './movementContextTypes';
 
 export interface EntreeInterneContextSectionProps {
-  form: any;
-  setForm: React.Dispatch<React.SetStateAction<any>>;
-  zones: any[];
-  machines: any[];
-  activeMachinesList: any[];
-  technicians: any[];
-  availableTechs: any[];
+  form: InternalMovementFormState;
+  setForm: (updater: React.SetStateAction<InternalMovementFormState>) => void;
+  zones: MovementZoneOption[];
+  machines: MovementMachineOption[];
+  activeMachinesList: MovementMachineOption[];
+  technicians: MovementTechnicianOption[];
+  availableTechs: MovementTechnicianOption[];
   onOpenAddTech?: () => void;
 }
 
+/**
+ * Case B — Internal Stock Reintegration Context (`RETOUR`, `FABRICATION_INTERNE`,
+ * `DEMONTAGE`, `REPARATION_INTERNE`, `INVENTAIRE`, `TRANSFERT`).
+ */
 export const EntreeInterneContextSection: React.FC<EntreeInterneContextSectionProps> = ({
   form,
   setForm,

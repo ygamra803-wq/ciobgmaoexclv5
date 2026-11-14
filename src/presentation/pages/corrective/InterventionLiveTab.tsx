@@ -30,6 +30,9 @@ import {
 } from '../../../core/security/technicianScope';
 import { INTERVENTION_NATURE_OPTIONS } from '../../components/common/ValidationStatusBadge';
 import { SortieExterneService } from '../../../application/services/SortieExterneService';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { canCloseWorkOrderWithLoto } from '../../../domain/corrective/lotoService';
+import LotoPermitPanel from './components/LotoPermitPanel';
 import {
   getLinkedWorkshopOrdersForIntervention,
   isWorkshopOrderActive,
@@ -69,11 +72,13 @@ export default function InterventionLiveTab({
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
+  const isReadOnlyUser = AuthorizationService.isReadOnly(user);
   const { isEnabled: isWizardMode, setEnabled: setWizardMode } =
     useWizardFeature('corrective_bt');
   const blueprints = useGmaoStore((s) => s.blueprints);
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
   const storeSubmitForValidation = useGmaoStore((s) => s.handleSubmitInterventionForValidation);
+  const handleStartLiveIntervention = useGmaoStore((s) => s.handleStartLiveIntervention);
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const handleAddSortieExterne = useGmaoStore((s) => s.handleAddSortieExterne);
   const handleMarkSortieReturned = useGmaoStore((s) => s.handleMarkSortieReturned);
@@ -829,6 +834,16 @@ export default function InterventionLiveTab({
         .join(', ');
       showToast?.(
         `Clôture bloquée : la Demande de Besoin [${openNeeds}] n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD).`,
+        'warning'
+      );
+      return false;
+    }
+
+    const lotoCloseCheck = canCloseWorkOrderWithLoto(activeIntervention);
+    if (!lotoCloseCheck.valid) {
+      showToast?.(
+        lotoCloseCheck.reason ||
+          'Clôture bloquée : le permis de consignation LOTO doit être déconsigné (DECONSIGNE) avant clôture.',
         'warning'
       );
       return false;
@@ -2231,6 +2246,18 @@ export default function InterventionLiveTab({
               message: 'Le rapport de travail réalisé (Col K) est requis pour clôturer le BT.',
             };
           }
+          if (!isTechUser) {
+            const lotoCloseCheck = canCloseWorkOrderWithLoto(activeIntervention);
+            if (!lotoCloseCheck.valid) {
+              return {
+                isValid: false,
+                severity: 'critical',
+                message:
+                  lotoCloseCheck.reason ||
+                  'Clôture bloquée : déconsignez le permis LOTO avant de clôturer le BT.',
+              };
+            }
+          }
           return { isValid: true };
         },
       },
@@ -2353,6 +2380,18 @@ export default function InterventionLiveTab({
           </div>
         </div>
       </div>
+
+      {/* 1b. Permis de Consignation Énergétique (LOTO) */}
+      <LotoPermitPanel
+        intervention={activeIntervention}
+        onUpdateIntervention={onUpdateIntervention}
+        onStartWork={handleStartLiveIntervention}
+        showToast={showToast}
+        isReadOnly={isReadOnlyUser}
+        actorId={user?.personnelId || user?.code || user?.id}
+        actorName={getTechnicianBadgeLabel(user, _technicians)}
+        actorRole={String(user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN')).trim().toUpperCase()}
+      />
 
       {/* Clarification / Pending Validation Alert Banner */}
       {(activeIntervention.validation_status === 'NEEDS_CLARIFICATION' ||

@@ -113,7 +113,41 @@ export function getRolePrivilegeRank(role: string): number {
   return ROLE_PRIVILEGE_RANK[normalizeServerRole(role)] ?? 0;
 }
 
-export function resolveRecordCanonicalRole(record: any, fallbackRole = 'VIEWER'): string {
+export interface ServerActorRecord {
+  id?: string | number;
+  code?: string;
+  username?: string;
+  personnelId?: string;
+  id_operation?: string;
+  id_technician?: string;
+  nom?: string;
+  name?: string;
+  personnelName?: string;
+  role?: string;
+  template_ids?: string[];
+  is_active?: boolean;
+  actif?: boolean;
+  isActive?: boolean;
+  statut?: string;
+  status?: string;
+}
+
+export interface ServerMakerCheckerRecord {
+  id?: string | number;
+  num_bt?: string;
+  code?: string;
+  statut?: string;
+  validation_status?: string;
+  stock_deducted?: boolean;
+  action_fermee?: string;
+}
+
+export type ServerStatePayload = Record<string, unknown>;
+
+export function resolveRecordCanonicalRole(
+  record: ServerActorRecord | null | undefined,
+  fallbackRole = 'VIEWER'
+): string {
   if (!record || typeof record !== 'object') return fallbackRole;
   const rawRole = String(record.role || '').trim().toUpperCase();
   if (
@@ -161,7 +195,7 @@ function readHeaderValue(headers: Record<string, unknown> | undefined, targetKey
   return '';
 }
 
-function isRecordArchived(record: any): boolean {
+function isRecordArchived(record: ServerActorRecord | null | undefined): boolean {
   if (!record || typeof record !== 'object') return false;
   const statut = String(record.statut || '').trim().toUpperCase();
   const status = String(record.status || '').trim().toUpperCase();
@@ -191,9 +225,9 @@ function isRecordArchived(record: any): boolean {
  *    (or `registeredRole` when valid) so claimed privilege can never exceed registry privilege.
  */
 export function isRegistryInitialized(
-  dbUsers: any[] = [],
-  dbTechnicians: any[] = [],
-  dbAuthAccounts: any[] = []
+  dbUsers: ReadonlyArray<ServerActorRecord> = [],
+  dbTechnicians: ReadonlyArray<ServerActorRecord> = [],
+  dbAuthAccounts: ReadonlyArray<ServerActorRecord> = []
 ): boolean {
   return (
     (Array.isArray(dbUsers) && dbUsers.length > 0) ||
@@ -204,9 +238,9 @@ export function isRegistryInitialized(
 
 export function resolveEffectiveServerRole(
   headers: Record<string, unknown>,
-  dbUsers: any[] = [],
-  dbTechnicians: any[] = [],
-  dbAuthAccounts: any[] = []
+  dbUsers: ReadonlyArray<ServerActorRecord> = [],
+  dbTechnicians: ReadonlyArray<ServerActorRecord> = [],
+  dbAuthAccounts: ReadonlyArray<ServerActorRecord> = []
 ): ResolvedServerActor {
   const rawRole = readHeaderValue(headers, 'x-gmao-role');
   const claimedRole = normalizeServerRole(rawRole);
@@ -238,7 +272,7 @@ export function resolveEffectiveServerRole(
   const matchByIdOnly = !isIdGenericOrEmpty;
 
   // 2. Lookup in registered users (ID match is authoritative if actorId was provided)
-  const matchedUser = usersList.find((u: any) => {
+  const matchedUser = usersList.find((u) => {
     if (!u || typeof u !== 'object') return false;
     const candidateIds = [u.id, u.code, u.username, u.personnelId, u.id_operation, u.id_technician]
       .map((v) => String(v || '').trim().toUpperCase())
@@ -290,7 +324,7 @@ export function resolveEffectiveServerRole(
   }
 
   // 3. Lookup in registered technicians (defaults role to TECHNICIEN when record omits .role)
-  const matchedTech = techList.find((t: any) => {
+  const matchedTech = techList.find((t) => {
     if (!t || typeof t !== 'object') return false;
     const candidateIds = [t.id_technician, t.id, t.code, t.username]
       .map((v) => String(v || '').trim().toUpperCase())
@@ -342,7 +376,7 @@ export function resolveEffectiveServerRole(
   }
 
   // 3b. Lookup in registered gateway/auth accounts (e.g. admin, magasinier/RESP-04, viewer)
-  const matchedAuth = authAccountsList.find((a: any) => {
+  const matchedAuth = authAccountsList.find((a) => {
     if (!a || typeof a !== 'object') return false;
     const candidateIds = [a.id, a.code, a.username, a.personnelId]
       .map((v) => String(v || '').trim().toUpperCase())
@@ -433,9 +467,9 @@ export function isLoopbackRemoteAddress(remoteAddress: unknown): boolean {
 export function evaluateBootstrapWriteAllowance(params: {
   method: string;
   targetEntity: string;
-  dbUsers: any[] | undefined;
-  dbTechnicians: any[] | undefined;
-  dbAuthAccounts?: any[] | undefined;
+  dbUsers: ReadonlyArray<ServerActorRecord> | undefined;
+  dbTechnicians: ReadonlyArray<ServerActorRecord> | undefined;
+  dbAuthAccounts?: ReadonlyArray<ServerActorRecord> | undefined;
   remoteAddress: unknown;
   providedToken: unknown;
   expectedToken: unknown;
@@ -592,7 +626,7 @@ export const MAKER_CHECKER_ENTITIES = new Set<string>([
   'sortieDemands',
 ]);
 
-function isRecordApprovedOnServer(item: any): boolean {
+function isRecordApprovedOnServer(item: ServerMakerCheckerRecord | null | undefined): boolean {
   return Boolean(
     item &&
       typeof item === 'object' &&
@@ -606,12 +640,12 @@ function isRecordApprovedOnServer(item: any): boolean {
  * Enforces Maker-Checker clamp on a single record when pushed by `TECHNICIEN` / `OPERATEUR`,
  * preventing self-approval (`validation_status: 'APPROVED'`, `stock_deducted: true`, or `CLOTURE`).
  */
-export function clampMakerCheckerRecordForRole(
+export function clampMakerCheckerRecordForRole<TRecord extends ServerMakerCheckerRecord>(
   effectiveRole: string,
   entityKey: string,
-  record: any,
-  existingServerRecord: any = null
-): any {
+  record: TRecord,
+  existingServerRecord: ServerMakerCheckerRecord | null = null
+): TRecord {
   const role = normalizeServerRole(effectiveRole);
   if ((role !== 'TECHNICIEN' && role !== 'OPERATEUR') || !MAKER_CHECKER_ENTITIES.has(entityKey)) {
     return record;
@@ -641,12 +675,12 @@ export function clampMakerCheckerRecordForRole(
 /**
  * Enforces Maker-Checker clamp across an entity array pushed by `TECHNICIEN` / `OPERATEUR`.
  */
-export function clampMakerCheckerCollectionForRole(
+export function clampMakerCheckerCollectionForRole<TRecord extends ServerMakerCheckerRecord>(
   effectiveRole: string,
   entityKey: string,
-  items: any[],
-  currentServerList: any[] = []
-): any[] {
+  items: TRecord[],
+  currentServerList: ReadonlyArray<ServerMakerCheckerRecord> = []
+): TRecord[] {
   const role = normalizeServerRole(effectiveRole);
   if (
     !Array.isArray(items) ||
@@ -658,12 +692,12 @@ export function clampMakerCheckerCollectionForRole(
 
   const approvedOnServerIds = new Set(
     (Array.isArray(currentServerList) ? currentServerList : [])
-      .filter((item: any) => isRecordApprovedOnServer(item))
-      .map((item: any) => String(item.id || item.num_bt || item.code || ''))
+      .filter((item) => isRecordApprovedOnServer(item))
+      .map((item) => String(item.id || item.num_bt || item.code || ''))
       .filter(Boolean)
   );
 
-  return items.map((item: any) => {
+  return items.map((item) => {
     if (!item || typeof item !== 'object') return item;
     const itemId = String(item.id || item.num_bt || item.code || '');
     const wasAlreadyApproved = Boolean(itemId && approvedOnServerIds.has(itemId));
@@ -683,14 +717,14 @@ export function clampMakerCheckerCollectionForRole(
  *  - Prevents `TECHNICIEN`/`OPERATEUR` from self-approving (`validation_status: 'APPROVED'` + `stock_deducted: true`)
  *    records that were not already approved on the server.
  */
-export function sanitizeBulkStateForRole(
+export function sanitizeBulkStateForRole<TState extends ServerStatePayload = ServerStatePayload>(
   effectiveRole: string,
-  incomingState: Record<string, any>,
-  currentServerState: Record<string, any> = {}
+  incomingState: TState,
+  currentServerState: ServerStatePayload = {}
 ): {
   allowed: boolean;
   reason?: string;
-  sanitizedState: Record<string, any>;
+  sanitizedState: Partial<TState> & ServerStatePayload;
   strippedKeys: string[];
 } {
   const role = normalizeServerRole(effectiveRole);
@@ -699,7 +733,7 @@ export function sanitizeBulkStateForRole(
     return {
       allowed: false,
       reason: 'Role VIEWER is read-only and cannot push state to server.',
-      sanitizedState: {},
+      sanitizedState: {} as Partial<TState> & ServerStatePayload,
       strippedKeys: [],
     };
   }
@@ -708,7 +742,7 @@ export function sanitizeBulkStateForRole(
     return {
       allowed: false,
       reason: `Role '${role}' is not authorized to execute a full factory state replacement (replaceAll).`,
-      sanitizedState: {},
+      sanitizedState: {} as Partial<TState> & ServerStatePayload,
       strippedKeys: [],
     };
   }
@@ -733,7 +767,7 @@ export function sanitizeBulkStateForRole(
     'updatedAt',
   ]);
 
-  const sanitizedState: Record<string, any> = {};
+  const sanitizedState: ServerStatePayload = {};
   const strippedKeys: string[] = [];
 
   for (const [key, value] of Object.entries(incomingState || {})) {
@@ -751,12 +785,14 @@ export function sanitizeBulkStateForRole(
   // Enforce Maker-Checker server-side clamp for TECHNICIEN / OPERATEUR
   if (role === 'TECHNICIEN' || role === 'OPERATEUR') {
     for (const entityKey of MAKER_CHECKER_ENTITIES) {
-      if (Array.isArray(sanitizedState[entityKey])) {
+      const incomingSlice = sanitizedState[entityKey];
+      const serverSlice = currentServerState[entityKey];
+      if (Array.isArray(incomingSlice)) {
         sanitizedState[entityKey] = clampMakerCheckerCollectionForRole(
           role,
           entityKey,
-          sanitizedState[entityKey],
-          currentServerState[entityKey]
+          incomingSlice as ServerMakerCheckerRecord[],
+          Array.isArray(serverSlice) ? (serverSlice as ServerMakerCheckerRecord[]) : []
         );
       }
     }
@@ -764,7 +800,7 @@ export function sanitizeBulkStateForRole(
 
   return {
     allowed: true,
-    sanitizedState,
+    sanitizedState: sanitizedState as Partial<TState> & ServerStatePayload,
     strippedKeys,
   };
 }

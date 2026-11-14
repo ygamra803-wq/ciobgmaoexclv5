@@ -27,12 +27,112 @@ export interface CandidateStoreMovementMatch {
   bonNumberDiffers: boolean;
 }
 
+export interface SpareClaimLine {
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  code?: string;
+  designation?: string;
+  qty?: number | string;
+  quantite?: number | string;
+}
+
+export interface ReconciliationStockItem {
+  id?: string | number;
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  designation?: string;
+  nom?: string;
+  emplacement?: string;
+  type?: string;
+  id_type?: string;
+  unit?: string;
+  unite?: string;
+  stockActuel?: number | string;
+  stock_actuel?: number | string;
+  stockInitial?: number | string;
+  entrees?: number | string;
+  sorties?: number | string;
+  seuil?: number | string;
+  stock_min?: number | string;
+  stockMin?: number | string;
+  min?: number | string;
+}
+
+export interface ReconciliationMovement {
+  id?: string | number;
+  code_bon?: string;
+  num_bon_saisi_par_tech?: string;
+  date?: string;
+  type?: string;
+  ref?: string;
+  code_article?: string;
+  designation?: string;
+  quantite?: number | string;
+  id_machine_registered?: string;
+  machine?: string;
+  technicien?: string;
+  merged_demand_id?: string | null;
+}
+
+export interface ReconciliationCorrectiveBt {
+  id?: string | number;
+  num_bt?: string;
+  code_machine?: string;
+  statut?: string;
+  validation_status?: string;
+  validated_at?: string;
+  num_bon_saisi_par_tech?: string;
+  num_bon?: string;
+  action_realisee?: string;
+  anomalie?: string;
+  travail_a_faire?: string;
+  submitted_by_name?: string;
+  intervenant?: string;
+  submitted_at?: string;
+  date_demande?: string;
+  pieces_proposees?: SpareClaimLine[];
+}
+
+export interface ReconciliationPreventiveExec {
+  id?: string | number;
+  taskCode?: string;
+  actionCode?: string;
+  machineCode?: string;
+  organe?: string;
+  notes?: string;
+  validation_status?: string;
+  validated_at?: string;
+  num_bon_saisi_par_tech?: string;
+  submitted_by_name?: string;
+  executorName?: string;
+  submitted_at?: string;
+  executedAt?: string;
+  sparesProposed?: SpareClaimLine[];
+}
+
+export interface ReconciliationSortieDemand {
+  id?: string | number;
+  code_bon_tech?: string;
+  code_bon_magasin?: string;
+  id_machine_registered?: string;
+  id_zone?: string;
+  technicien?: string;
+  validation_status?: string;
+  validated_at?: string;
+  submitted_by_name?: string;
+  submitted_at?: string;
+  date?: string;
+  items?: SpareClaimLine[];
+}
+
 export interface ClaimReconciliationResult {
   alerts: ReconciliationAlert[];
   hasCritical: boolean;
   hasWarning: boolean;
   candidateStoreMovements: CandidateStoreMovementMatch[];
-  exactMovementMatch?: any | null;
+  exactMovementMatch?: ReconciliationMovement | null;
 }
 
 export interface ReconcileFieldClaimParams {
@@ -42,14 +142,14 @@ export interface ReconcileFieldClaimParams {
   recordId?: string;
   numBonSaisi?: string | null;
   machineCode?: string | null;
-  proposedSpares?: any[];
-  proposedItems?: any[];
-  stockItems?: any[];
-  mouvements?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
-  reservedStockMap?: Map<string, any> | Record<string, any>;
+  proposedSpares?: SpareClaimLine[];
+  proposedItems?: SpareClaimLine[];
+  stockItems?: ReconciliationStockItem[];
+  mouvements?: ReconciliationMovement[];
+  correctiveInterventions?: ReconciliationCorrectiveBt[];
+  preventiveExecutions?: ReconciliationPreventiveExec[];
+  sortieDemands?: ReconciliationSortieDemand[];
+  reservedStockMap?: Map<string, ReservedStockEntry> | Record<string, ReservedStockEntry>;
 }
 
 function normalizeToken(value: unknown): string {
@@ -58,7 +158,12 @@ function normalizeToken(value: unknown): string {
     .toUpperCase();
 }
 
-function extractSpareRefAndQty(raw: any): { ref: string; designation: string; qty: number } {
+/** Extracts normalized ref/designation/positive qty while tolerating legacy Excel aliases. */
+function extractSpareRefAndQty(raw: SpareClaimLine | null | undefined): {
+  ref: string;
+  designation: string;
+  qty: number;
+} {
   const ref = String(raw?.ref || raw?.reference || raw?.code_article || raw?.code || '').trim();
   const designation = String(raw?.designation || ref || 'PDR').trim();
   const qty = Number(raw?.qty ?? raw?.quantite ?? 0);
@@ -106,7 +211,7 @@ export function reconcileFieldClaim({
       : [];
   const alerts: ReconciliationAlert[] = [];
   const candidateStoreMovements: CandidateStoreMovementMatch[] = [];
-  let exactMovementMatch: any | null = null;
+  let exactMovementMatch: ReconciliationMovement | null = null;
   const normClaimId = String(claimId ?? '').trim();
   const normBon = normalizeToken(numBonSaisi);
   const normMachine = normalizeToken(machineCode);
@@ -183,7 +288,7 @@ export function reconcileFieldClaim({
   }
 
   // 3. Build lookup for Stock Actuel & concurrent PENDING_VALIDATION claims
-  const stockByRef = new Map<string, any>();
+  const stockByRef = new Map<string, ReconciliationStockItem>();
   for (const item of stockItems || []) {
     const refKey = normalizeToken(item?.ref || item?.code_article);
     if (refKey) stockByRef.set(refKey, item);
@@ -361,11 +466,11 @@ export function buildAdminValidationRadar({
   preventiveExecutions = [],
   sortieDemands = [],
 }: {
-  stockItems?: any[];
-  mouvements?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
+  stockItems?: ReconciliationStockItem[];
+  mouvements?: ReconciliationMovement[];
+  correctiveInterventions?: ReconciliationCorrectiveBt[];
+  preventiveExecutions?: ReconciliationPreventiveExec[];
+  sortieDemands?: ReconciliationSortieDemand[];
 }): AdminValidationRadarSummary {
   const pendingCorrective = (correctiveInterventions || []).filter(
     (bt) => bt?.validation_status === 'PENDING_VALIDATION'
@@ -534,9 +639,9 @@ export function computeReservedStockMap({
   preventiveExecutions = [],
   sortieDemands = [],
 }: {
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
+  correctiveInterventions?: ReconciliationCorrectiveBt[];
+  preventiveExecutions?: ReconciliationPreventiveExec[];
+  sortieDemands?: ReconciliationSortieDemand[];
 }): Map<string, ReservedStockEntry> {
   const map = new Map<string, ReservedStockEntry>();
 
@@ -613,16 +718,20 @@ export function computeReservedStockMap({
   return map;
 }
 
-export interface ValidationCenterQueuesResult {
-  pendingCorrective: any[];
-  clarificationCorrective: any[];
-  rejectedCorrective: any[];
-  pendingPreventive: any[];
-  clarificationPreventive: any[];
-  rejectedPreventive: any[];
-  pendingSortieDemands: any[];
-  clarificationSortieDemands: any[];
-  rejectedSortieDemands: any[];
+export interface ValidationCenterQueuesResult<
+  TCorrective extends ReconciliationCorrectiveBt = ReconciliationCorrectiveBt,
+  TPrevExec extends ReconciliationPreventiveExec = ReconciliationPreventiveExec,
+  TDemand extends ReconciliationSortieDemand = ReconciliationSortieDemand,
+> {
+  pendingCorrective: TCorrective[];
+  clarificationCorrective: TCorrective[];
+  rejectedCorrective: TCorrective[];
+  pendingPreventive: TPrevExec[];
+  clarificationPreventive: TPrevExec[];
+  rejectedPreventive: TPrevExec[];
+  pendingSortieDemands: TDemand[];
+  clarificationSortieDemands: TDemand[];
+  rejectedSortieDemands: TDemand[];
   totalPending: number;
   totalClarification: number;
   totalRejected: number;
@@ -639,18 +748,23 @@ export interface ValidationCenterQueuesResult {
 /**
  * Pure selector aggregating all pending, clarification, rejected & approved-today
  * Maker-Checker queues for the unified desktop Validation Center (`Centre de validation / À valider`).
+ * Preserves concrete caller array types via generics so downstream UI views keep full entity typings.
  */
-export function selectValidationCenterQueues({
+export function selectValidationCenterQueues<
+  TCorrective extends ReconciliationCorrectiveBt = ReconciliationCorrectiveBt,
+  TPrevExec extends ReconciliationPreventiveExec = ReconciliationPreventiveExec,
+  TDemand extends ReconciliationSortieDemand = ReconciliationSortieDemand,
+>({
   correctiveInterventions = [],
   preventiveExecutions = [],
   sortieDemands = [],
   todayIsoDate,
 }: {
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
+  correctiveInterventions?: TCorrective[];
+  preventiveExecutions?: TPrevExec[];
+  sortieDemands?: TDemand[];
   todayIsoDate?: string;
-}): ValidationCenterQueuesResult {
+}): ValidationCenterQueuesResult<TCorrective, TPrevExec, TDemand> {
   const todayPrefix =
     typeof todayIsoDate === 'string' && todayIsoDate.trim().length >= 10
       ? todayIsoDate.trim().slice(0, 10)
@@ -689,7 +803,9 @@ export function selectValidationCenterQueues({
   );
 
   let hasAnyApprovedTimestamp = false;
-  const isApprovedToday = (record: any): boolean => {
+  const isApprovedToday = (
+    record: { validation_status?: string; validated_at?: string } | null | undefined
+  ): boolean => {
     if (String(record?.validation_status || '').toUpperCase() !== 'APPROVED') return false;
     const rawStamp = String(record?.validated_at || '').trim();
     if (!rawStamp) return false;
@@ -790,10 +906,10 @@ export function computeStockReorderAlerts({
   sortieDemands = [],
   reservedStockMap: providedReservedMap,
 }: {
-  stockItems?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
+  stockItems?: ReconciliationStockItem[];
+  correctiveInterventions?: ReconciliationCorrectiveBt[];
+  preventiveExecutions?: ReconciliationPreventiveExec[];
+  sortieDemands?: ReconciliationSortieDemand[];
   reservedStockMap?: Map<string, ReservedStockEntry>;
 }): StockReorderAlertsSummary {
   const reservedMap =

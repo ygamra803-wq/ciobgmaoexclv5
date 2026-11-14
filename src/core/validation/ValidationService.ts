@@ -6,8 +6,19 @@ import {
   TaskSchema,
 } from '../../utils/validation';
 
+export interface DomainValidationResult<T = unknown> {
+  isValid: boolean;
+  error?: string;
+  errors: string[];
+  data: T | null;
+}
+
+/**
+ * Schema validation facade backed by Zod domain validators (`utils/validation`).
+ * Accepts unvalidated `unknown` payloads at API/store boundaries and returns typed parsed data.
+ */
 export class ValidationService {
-  static validateStockItem(item: any) {
+  static validateStockItem(item: unknown): DomainValidationResult {
     const res = StockItemSchema.safeParse(item);
     const errors = res.success ? [] : res.error.issues.map((i) => i.message);
     return {
@@ -18,11 +29,11 @@ export class ValidationService {
     };
   }
 
-  static validateArticle(article: any) {
+  static validateArticle(article: unknown): DomainValidationResult {
     return this.validateStockItem(article);
   }
 
-  static validateMovement(movement: any) {
+  static validateMovement(movement: unknown): DomainValidationResult {
     const res = MovementSchema.safeParse(movement);
     const errors = res.success ? [] : res.error.issues.map((i) => i.message);
     return {
@@ -33,7 +44,7 @@ export class ValidationService {
     };
   }
 
-  static validateUser(user: any) {
+  static validateUser(user: unknown): DomainValidationResult {
     const res = UserSchema.safeParse(user);
     const errors = res.success ? [] : res.error.issues.map((i) => i.message);
     return {
@@ -44,7 +55,7 @@ export class ValidationService {
     };
   }
 
-  static validateMachine(machine: any) {
+  static validateMachine(machine: unknown): DomainValidationResult {
     const res = MachineSchema.safeParse(machine);
     const errors = res.success ? [] : res.error.issues.map((i) => i.message);
     return {
@@ -55,7 +66,7 @@ export class ValidationService {
     };
   }
 
-  static validateTask(task: any) {
+  static validateTask(task: unknown): DomainValidationResult {
     const res = TaskSchema.safeParse(task);
     const errors = res.success ? [] : res.error.issues.map((i) => i.message);
     return {

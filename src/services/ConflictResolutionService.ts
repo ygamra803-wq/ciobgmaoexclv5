@@ -1,82 +1,108 @@
 /**
- * Conflict Resolution Service for GMAO Application
- * Solves data conflicts when merging local & external Excel/JSON datasets
+ * Conflict Resolution Service for GMAO Application.
+ * Resolves field/record conflicts when merging local & external Excel/JSON datasets.
  */
 import { Logger } from '../core/logger/LoggerService';
 
+export type ConflictRecord = Record<string, unknown>;
+export type ConflictResolutionStrategy =
+  | 'LAST_WRITE_WINS'
+  | 'LOCAL_WINS'
+  | 'SERVER_WINS'
+  | 'MERGE'
+  | string;
+
+export interface FieldConflictDiff {
+  field: string;
+  local: unknown;
+  remote: unknown;
+}
+
+export type MergedConflictRecord<T extends ConflictRecord> = T & {
+  merged_at: string;
+  conflicts: FieldConflictDiff[];
+};
+
 export class ConflictResolutionService {
-  static STRATEGIES = {
+  static readonly STRATEGIES = {
     LAST_WRITE_WINS: 'LAST_WRITE_WINS',
     LOCAL_WINS: 'LOCAL_WINS',
     SERVER_WINS: 'SERVER_WINS',
-    MERGE: 'MERGE'
-  };
+    MERGE: 'MERGE',
+  } as const;
 
-  /**
-   * Resolve conflict using Last Write Wins Strategy based on timestamp
-   */
-  static resolveLastWriteWins(local: any = {}, remote: any = {}) {
-    const localTime = new Date(local.updated_at || local.timestamp || local.date || 0).getTime();
-    const remoteTime = new Date(remote.updated_at || remote.timestamp || remote.date || 0).getTime();
+  /** Resolves record conflict using Last Write Wins strategy based on ISO/numeric timestamps. */
+  static resolveLastWriteWins<T extends ConflictRecord>(
+    local: T = {} as T,
+    remote: T = {} as T
+  ): T {
+    const localTime = new Date(
+      String(local.updated_at || local.timestamp || local.date || 0)
+    ).getTime();
+    const remoteTime = new Date(
+      String(remote.updated_at || remote.timestamp || remote.date || 0)
+    ).getTime();
 
     if (localTime >= remoteTime) {
       Logger.debug('✅ Local version wins (newer or equal)');
       return local;
-    } else {
-      Logger.debug('✅ Remote version wins (newer)');
-      return remote;
     }
+    Logger.debug('✅ Remote version wins (newer)');
+    return remote;
   }
 
-  /**
-   * Resolve conflict using Local Version Wins
-   */
-  static resolveLocalWins(local: any = {}, _remote: any = {}) {
+  /** Resolves record conflict in favor of the local copy. */
+  static resolveLocalWins<T extends ConflictRecord>(local: T = {} as T, _remote: T = {} as T): T {
     Logger.debug('✅ Local version wins:', local?.id || local?.ref || '');
     return local;
   }
 
-  /**
-   * Resolve conflict using Server / Remote Version Wins
-   */
-  static resolveServerWins(_local: any = {}, remote: any = {}) {
+  /** Resolves record conflict in favor of the remote/server copy. */
+  static resolveServerWins<T extends ConflictRecord>(
+    _local: T = {} as T,
+    remote: T = {} as T
+  ): T {
     Logger.debug('✅ Server/Remote version wins');
     return remote;
   }
 
-  /**
-   * Resolve conflict using Property Field Merge Strategy
-   */
-  static resolveMerge(local: any = {}, remote: any = {}) {
+  /** Merges two record versions field-by-field while tracking differing fields in `conflicts`. */
+  static resolveMerge<T extends ConflictRecord>(
+    local: T = {} as T,
+    remote: T = {} as T
+  ): MergedConflictRecord<T> {
     Logger.debug('🔄 Merging versions...');
 
-    const merged: any = {
+    const conflicts: FieldConflictDiff[] = [];
+    const merged: MergedConflictRecord<T> = {
       ...local,
       ...remote,
       merged_at: new Date().toISOString(),
-      conflicts: [] as any[]
+      conflicts,
     };
 
     const keys = new Set([...Object.keys(local || {}), ...Object.keys(remote || {})]);
     for (const key of keys) {
       if (key === 'merged_at' || key === 'conflicts') continue;
       if (local[key] !== undefined && remote[key] !== undefined && local[key] !== remote[key]) {
-        merged.conflicts.push({
+        conflicts.push({
           field: key,
           local: local[key],
-          remote: remote[key]
+          remote: remote[key],
         });
       }
     }
 
-    Logger.debug(`✅ Merged with ${merged.conflicts.length} field conflicts resolved`);
+    Logger.debug(`✅ Merged with ${conflicts.length} field conflicts resolved`);
     return merged;
   }
 
-  /**
-   * Main conflict resolution dispatcher
-   */
-  static resolveConflict(local: any, remote: any, strategy = 'LAST_WRITE_WINS') {
+  /** Dispatches conflict resolution for a single pair of records according to the selected strategy. */
+  static resolveConflict<T extends ConflictRecord>(
+    local: T | null | undefined,
+    remote: T | null | undefined,
+    strategy: ConflictResolutionStrategy = 'LAST_WRITE_WINS'
+  ): T | MergedConflictRecord<T> | null | undefined {
     if (!local) return remote;
     if (!remote) return local;
 
@@ -94,12 +120,15 @@ export class ConflictResolutionService {
     }
   }
 
-  /**
-   * Resolve multiple items array conflict by primary key (id, ref, code)
-   */
-  static resolveMultipleConflicts(localData: any[] = [], remoteData: any[] = [], strategy = 'LAST_WRITE_WINS') {
-    const resolved: any[] = [];
-    const getKey = (item: any) => String(item.id || item.ref || item.code || item.code_bon || '').trim();
+  /** Reconciles two collections of GMAO records by primary key (`id`, `ref`, `code`, or `code_bon`). */
+  static resolveMultipleConflicts<T extends ConflictRecord>(
+    localData: T[] = [],
+    remoteData: T[] = [],
+    strategy: ConflictResolutionStrategy = 'LAST_WRITE_WINS'
+  ): Array<T | MergedConflictRecord<T>> {
+    const resolved: Array<T | MergedConflictRecord<T>> = [];
+    const getKey = (item: ConflictRecord) =>
+      String(item.id || item.ref || item.code || item.code_bon || '').trim();
 
     for (const local of localData) {
       const localKey = getKey(local);
@@ -107,7 +136,7 @@ export class ConflictResolutionService {
 
       if (remote) {
         const resolvedItem = this.resolveConflict(local, remote, strategy);
-        resolved.push(resolvedItem);
+        if (resolvedItem) resolved.push(resolvedItem);
       } else {
         resolved.push(local);
       }

@@ -19,11 +19,150 @@ import {
   EMPTY_FISCAL_BUDGET,
 } from '../../domain/finance/entities/FinancialBudget';
 import { isUnapprovedFieldClaim } from './MonthlyReportCalculationService';
-import { filterActiveMachines } from '../../utils/activeMachines';
+import { filterActiveMachines, type MachineLifecycleLike } from '../../utils/activeMachines';
 import { AvailabilityCalculationService } from '../../domain/services/AvailabilityCalculationService';
 
 export type BudgetVarianceStatus = 'FAVORABLE' | 'WARNING' | 'DEFICIT' | 'UNCONFIGURED';
 export type MachineBerStatus = 'OPTIMAL' | 'ATTENTION' | 'REPLACE_RECOMMENDED' | 'NON_EVALUE';
+
+export interface FinancialRecordDateLike {
+  periodMonth?: string;
+  executedAt?: string;
+  date_cloture?: string;
+  date_realisation?: string;
+  date_intervention?: string;
+  date_fin?: string;
+  demande_date?: string;
+  date_debut?: string;
+  date_expedition?: string;
+  date_demontage?: string;
+  date_montage?: string;
+  date?: string;
+  created_at?: string;
+}
+
+export interface FinancialRecordLike extends FinancialRecordDateLike {
+  validation_status?: string;
+  statut?: string;
+  etat?: string;
+  status?: string;
+}
+
+export interface FinancialMachineLike extends MachineLifecycleLike {
+  famille?: string;
+  valeur_a_neuf?: number;
+  prix_achat?: number;
+  valeur_acquisition?: number;
+  annee_mise_en_service?: number;
+  date_mise_en_service?: string;
+  duree_vie_ans?: number;
+  duree_amortissement?: number;
+}
+
+export interface FinancialStockLike {
+  id?: string | number;
+  ref?: string;
+  ref_article?: string;
+  code_article?: string;
+  reference?: string;
+  code?: string;
+  stockActuel?: number | string;
+  quantite?: number | string;
+  prix_unitaire?: number | string;
+  pmp?: number | string;
+  prix?: number | string;
+  unitPrice?: number | string;
+}
+
+export interface FinancialMovementLike extends FinancialRecordLike {
+  id?: string | number;
+  type?: string;
+  ref?: string;
+  ref_article?: string;
+  code_article?: string;
+  quantite?: number;
+  prix_unitaire?: number;
+  prix?: number;
+}
+
+export interface FinancialSpareLineLike {
+  ref?: string;
+  ref_article?: string;
+  code_article?: string;
+  code?: string;
+  qty?: number;
+  quantite?: number;
+  qte?: number;
+  unitPrice?: number;
+  prix_unitaire?: number;
+  prix?: number;
+}
+
+export interface FinancialPreventiveExecutionLike extends FinancialRecordLike {
+  id?: string;
+  machineCode?: string;
+  id_machine?: string;
+  code_machine?: string;
+  zone?: string;
+  durationMinutes?: number;
+  duree_minutes?: number;
+  duree_execution?: number;
+  duree_reelle_min?: number;
+  sparesCost?: number;
+  pieces_cout?: number;
+  cout_pieces?: number;
+  sparesUsed?: FinancialSpareLineLike[];
+  totalCost?: number;
+  cout_total?: number;
+  executorName?: string;
+  technicien?: string;
+  executeur?: string;
+  technicien_executant?: string;
+}
+
+export interface FinancialCorrectiveLike extends FinancialRecordLike {
+  id?: string | number;
+  code_machine?: string;
+  id_machine?: string;
+  id_machine_registered?: string;
+  zone?: string;
+  duree_intervention_min?: number;
+  temps_intervention_mins?: number;
+  temps_minutes?: number;
+  duree_minutes?: number;
+  dureeMinutes?: number;
+  temps_intervention_calc?: number | string;
+  temps_intervention?: string;
+  duree?: number | string;
+  duree_arret_minutes?: number;
+  temps_arret_min?: number;
+  temps_arret_minutes?: number;
+  downtimeHours?: number;
+  temps_arret?: number | string;
+  duree_arret?: number | string;
+  arret_machine?: boolean | string;
+  pieces_utilisees?: FinancialSpareLineLike[];
+  cout_pieces?: number;
+  pdr_ref?: string;
+  pdr_quantite?: number;
+  prix_unitaire?: number;
+  cout_total?: number;
+  technicien?: string;
+  intervenant?: string;
+}
+
+export interface FinancialSortieExterneLike extends FinancialRecordLike {
+  id?: string | number;
+  id_machine?: string;
+  machine_cible?: string;
+  code_machine?: string;
+  zone?: string;
+  cout_reel?: number | string;
+  cout_bobinage?: number | string;
+  prix_reparation?: number | string;
+  cout_estime?: number | string;
+  cout?: number | string;
+}
 
 export interface BudgetVarianceItem {
   key: BudgetCategoryKey;
@@ -216,9 +355,15 @@ const CATEGORY_META: Array<{ key: BudgetCategoryKey; labelFr: string; labelAr: s
   },
 ];
 
-export function isUnapprovedFinancialRecord(record: any): boolean {
+/**
+ * Excludes unapproved Maker-Checker claims, rejected records, and skipped/cancelled interventions
+ * so provisional field reports never inflate official fiscal KPIs or BER thresholds.
+ */
+export function isUnapprovedFinancialRecord(
+  record: FinancialRecordLike | null | undefined
+): boolean {
   if (!record) return true;
-  if (isUnapprovedFieldClaim(record)) return true;
+  if (isUnapprovedFieldClaim(record as Record<string, unknown>)) return true;
   const valStatus = String(record?.validation_status || '').trim().toUpperCase();
   const status = String(record?.statut || record?.etat || record?.status || '').trim().toUpperCase();
   return (
@@ -239,7 +384,9 @@ export function isUnapprovedFinancialRecord(record: any): boolean {
  * Extracts calendar year and optional month (1..12) from a record's date fields.
  * Returns null if the record carries no date metadata at all.
  */
-export function extractRecordYearAndMonth(record: any): { year: number; month: number | null } | null {
+export function extractRecordYearAndMonth(
+  record: FinancialRecordDateLike | null | undefined
+): { year: number; month: number | null } | null {
   if (!record || typeof record !== 'object') return null;
   const candidates = [
     record.periodMonth,
@@ -298,17 +445,24 @@ export function extractRecordYearAndMonth(record: any): { year: number; month: n
   return null;
 }
 
-export function extractRecordYear(record: any): number | null {
+export function extractRecordYear(
+  record: FinancialRecordDateLike | null | undefined
+): number | null {
   const ym = extractRecordYearAndMonth(record);
   return ym ? ym.year : null;
 }
 
-export function extractRecordMonth(record: any): number | null {
+export function extractRecordMonth(
+  record: FinancialRecordDateLike | null | undefined
+): number | null {
   const ym = extractRecordYearAndMonth(record);
   return ym ? ym.month : null;
 }
 
-export function matchesFiscalYear(record: any, fiscalYear: number): boolean {
+export function matchesFiscalYear(
+  record: FinancialRecordDateLike | null | undefined,
+  fiscalYear: number
+): boolean {
   const recordYear = extractRecordYear(record);
   if (recordYear === null) return true; // Undated records (e.g. minimal unit test fixtures) match active synthesis
   return recordYear === fiscalYear;
@@ -343,12 +497,12 @@ export class FinancialCalculationService {
   static computeFinancialSynthesis(params: {
     budget?: FiscalBudgetConfig;
     exchangeRates?: HistoricalExchangeRate[];
-    machines?: any[];
-    stockItems?: any[];
-    mouvements?: any[];
-    correctiveInterventions?: any[];
-    preventiveExecutions?: any[];
-    sortiesExterne?: any[];
+    machines?: FinancialMachineLike[];
+    stockItems?: FinancialStockLike[];
+    mouvements?: FinancialMovementLike[];
+    correctiveInterventions?: FinancialCorrectiveLike[];
+    preventiveExecutions?: FinancialPreventiveExecutionLike[];
+    sortiesExterne?: FinancialSortieExterneLike[];
   }): FinancialSynthesis {
     const budget = params.budget || EMPTY_FISCAL_BUDGET;
     const activeMachines = filterActiveMachines(params.machines || []);
@@ -444,7 +598,7 @@ export class FinancialCalculationService {
 
       let partsCost = Number(ex.sparesCost ?? ex.pieces_cout ?? ex.cout_pieces ?? 0);
       if (partsCost <= 0 && Array.isArray(ex.sparesUsed) && ex.sparesUsed.length > 0) {
-        partsCost = ex.sparesUsed.reduce((sum: number, sp: any) => {
+        partsCost = ex.sparesUsed.reduce((sum: number, sp: FinancialSpareLineLike) => {
           const qty = Math.max(0, Number(sp.qty ?? sp.quantite ?? 1));
           const refKey = String(sp.ref || sp.code_article || '').trim().toUpperCase();
           const unitPr = Math.max(
@@ -531,7 +685,7 @@ export class FinancialCalculationService {
       // FIN-P1: Spare parts cost from pieces_utilisees or pdr_ref + stockPriceMap PMP
       let partsCost = 0;
       if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
-        partsCost = ci.pieces_utilisees.reduce((sum: number, p: any) => {
+        partsCost = ci.pieces_utilisees.reduce((sum: number, p: FinancialSpareLineLike) => {
           const q = Math.max(0, Number(p.quantite ?? p.qte ?? 1));
           const refKey = String(p.ref || p.ref_article || p.code_article || p.code || '').trim().toUpperCase();
           const pr = Math.max(

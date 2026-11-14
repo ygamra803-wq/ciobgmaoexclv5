@@ -12,13 +12,262 @@ import {
 } from '../../core/security/validationReconciliation';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
 
+/** Validation statuses excluded from official financial, reliability, and stock calculations (Maker-Checker contract). */
 const UNAPPROVED_VALIDATION_STATUSES = new Set([
   'PENDING_VALIDATION',
   'REJECTED',
   'NEEDS_CLARIFICATION',
 ]);
 
-export function isUnapprovedFieldClaim(record: any): boolean {
+export interface UnapprovedClaimLike {
+  validation_status?: unknown;
+  statut?: unknown;
+  etat?: unknown;
+  [key: string]: unknown;
+}
+
+export interface ReportStockItemLike {
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  designation?: string;
+  nom?: string;
+  stockActuel?: number;
+  stock?: number;
+  stockInitial?: number;
+  seuil?: number;
+  stockMin?: number;
+  prix_unitaire?: number;
+  prixUnitaire?: number;
+  prix_achat_ht?: number;
+  prix?: number;
+  unitPrice?: number;
+  [key: string]: unknown;
+}
+
+export interface ReportMovementLike {
+  id?: string;
+  type?: string;
+  ref?: string;
+  reference?: string;
+  id_article?: string;
+  designation?: string;
+  quantite?: number;
+  prix_unitaire?: number;
+  prix_achat_ht?: number;
+  prix?: number;
+  unit?: string;
+  unite?: string;
+  date?: string;
+  action_id?: string;
+  tags?: string[];
+  code_bon?: string;
+  num_bon?: string;
+  num_bon_saisi_par_tech?: string;
+  validation_status?: string;
+  statut?: string;
+  etat?: string;
+  asset_class?: string;
+  id_machine_registered?: string;
+  code_machine?: string;
+  id_machine?: string;
+  machineCode?: string;
+  machine?: string;
+  nom_machine?: string;
+  machineName?: string;
+  system_type_code?: string;
+  [key: string]: unknown;
+}
+
+export interface ReportCorrectivePieceLike {
+  ref?: string;
+  code_article?: string;
+  quantite?: number;
+  qte?: number;
+  qty?: number;
+  prix_unitaire?: number;
+  prix?: number;
+  unitPrice?: number;
+  [key: string]: unknown;
+}
+
+export interface ReportCorrectiveLike {
+  id?: string | number;
+  statut?: string;
+  etat?: string;
+  validation_status?: string;
+  asset_class?: string;
+  code_machine?: string;
+  id_machine?: string;
+  machineCode?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  nom_machine?: string;
+  machineName?: string;
+  system_type_code?: string;
+  date_cloture?: string;
+  date_fin?: string;
+  validated_at?: string;
+  date_demande?: string;
+  demande_date?: string;
+  date?: string;
+  date_debut?: string;
+  created_at?: string;
+  downtimeHours?: number;
+  temps_arret_minutes?: number;
+  duree_arret?: number;
+  temps_arret?: number | string;
+  temps_intervention_mins?: number;
+  temps_minutes?: number;
+  temps_intervention?: string;
+  temps_intervention_calc?: number | string;
+  pdr_cost?: number;
+  cout_pdr?: number;
+  cout_total?: number;
+  pieces_utilisees?: ReportCorrectivePieceLike[];
+  pdr_ref?: string;
+  pdr?: string;
+  pdr_quantite?: number;
+  quantite?: number;
+  pdr_prix?: number;
+  prix_unitaire?: number;
+  intervenant?: string;
+  [key: string]: unknown;
+}
+
+export interface ReportPreventiveTaskLike {
+  id?: string | number;
+  code_tache?: string;
+  active?: boolean;
+  is_active?: boolean;
+  actif?: boolean;
+  archived?: boolean;
+  isArchived?: boolean;
+  statut?: string;
+  status?: string;
+  etat?: string;
+  validation_status?: string;
+  periodMonth?: string;
+  nextDueDate?: string;
+  prochaine_echeance?: string;
+  date_prevue?: string;
+  date_planifiee?: string;
+  dueDate?: string;
+  scheduledDueDate?: string;
+  echeance_precedente?: string;
+  derniere_realisation?: string;
+  date_realisation?: string;
+  executedAt?: string;
+  tache?: string;
+  designation?: string;
+  organe?: string;
+  responsable?: string;
+  technicien?: string;
+  asset_class?: string;
+  code_machine?: string;
+  id_machine?: string;
+  machineCode?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  nom_machine?: string;
+  machineName?: string;
+  system_type_code?: string;
+  [key: string]: unknown;
+}
+
+export type ReportPreventiveExecutionLike = Omit<PreventiveExecutionRecord, 'id'> & {
+  id?: string;
+  date?: string;
+  echeance?: string;
+  dueDate?: string;
+  created_at?: string;
+  asset_class?: string;
+  code_machine?: string;
+  id_machine?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  nom_machine?: string;
+  id_tache?: string;
+  system_type_code?: string;
+  [key: string]: unknown;
+};
+
+export interface ReportSortieExterneLike {
+  id?: string | number;
+  statut?: string;
+  etat?: string;
+  validation_status?: string;
+  date_montage?: string;
+  date_arrivee_reelle?: string;
+  date_retour?: string;
+  date_expedition?: string;
+  date_sortie?: string;
+  date_demontage?: string;
+  date?: string;
+  created_at?: string;
+  id_machine?: string;
+  code_machine?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  nom_machine?: string;
+  machineName?: string;
+  asset_class?: string;
+  system_type_code?: string;
+  cout_bobinage?: number;
+  cout_reparation?: number;
+  cout?: number;
+  montant?: number;
+  [key: string]: unknown;
+}
+
+export interface ReportSortieDemandLike {
+  id?: string | number;
+  validation_status?: string;
+  statut?: string;
+  etat?: string;
+  created_at?: string;
+  date?: string;
+  submitted_at?: string;
+  id_machine_registered?: string;
+  code_machine?: string;
+  id_machine?: string;
+  asset_class?: string;
+  [key: string]: unknown;
+}
+
+export interface ReportMachineLike {
+  id?: string;
+  id_machine_registered?: string;
+  code?: string;
+  id_machine?: string;
+  code_machine?: string;
+  nom?: string;
+  designation?: string;
+  name?: string;
+  asset_class?: string;
+  system_type_code?: string;
+  status?: string;
+  statut?: string;
+  is_active?: boolean;
+  archived?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ReportAssetMetaSource {
+  asset_class?: unknown;
+  code_machine?: unknown;
+  id_machine?: unknown;
+  machineCode?: unknown;
+  id_machine_registered?: unknown;
+  machine?: unknown;
+  nom_machine?: unknown;
+  machineName?: unknown;
+  system_type_code?: unknown;
+  [key: string]: unknown;
+}
+
+/** Returns true when a field claim or intervention is still unapproved in the Maker-Checker workflow. */
+export function isUnapprovedFieldClaim(record: UnapprovedClaimLike | null | undefined): boolean {
   const status = String(record?.validation_status || '').trim().toUpperCase();
   const wfStatus = String(record?.statut || record?.etat || '').trim().toUpperCase();
   return UNAPPROVED_VALIDATION_STATUSES.has(status) || wfStatus === 'EN_ATTENTE_VALIDATION';
@@ -116,7 +365,9 @@ export interface MonthOverMonthComparison {
 
 export class MonthlyReportCalculationService {
   /**
-   * Computes the complete factory executive report for a given month (YYYY-MM)
+   * Computes the complete factory executive report for a given month (`YYYY-MM`).
+   * Excludes unapproved Maker-Checker claims from official costs and isolates
+   * `PRODUCTION` assets from `SYSTEM_GENERAL` assets during MTBF/MTTR reliability calculations.
    */
   static calculateMonthlyReport({
     month,
@@ -131,13 +382,13 @@ export class MonthlyReportCalculationService {
   }: {
     month: string;
     assetClass?: ReportAssetClassFilter;
-    stockItems?: any[];
-    mouvements?: any[];
-    correctiveInterventions?: any[];
-    preventiveTasks?: any[];
-    preventiveExecutions?: PreventiveExecutionRecord[];
-    sortiesExterne?: any[];
-    machines?: any[];
+    stockItems?: ReportStockItemLike[];
+    mouvements?: ReportMovementLike[];
+    correctiveInterventions?: ReportCorrectiveLike[];
+    preventiveTasks?: ReportPreventiveTaskLike[];
+    preventiveExecutions?: ReportPreventiveExecutionLike[];
+    sortiesExterne?: ReportSortieExterneLike[];
+    machines?: ReportMachineLike[];
   }): MonthlyFactoryReportData {
     const targetMonth = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
 
@@ -173,7 +424,7 @@ export class MonthlyReportCalculationService {
       });
     });
 
-    const resolveRecordAssetMeta = (record: any, primaryField?: string) => {
+    const resolveRecordAssetMeta = (record: ReportAssetMetaSource, primaryField?: string) => {
       const explicitClass = String(record?.asset_class || '').trim().toUpperCase();
       const rawCode = String(
         (primaryField ? record?.[primaryField] : '') ||
@@ -363,7 +614,7 @@ export class MonthlyReportCalculationService {
     };
 
     const techMap = new Map<string, TechnicianMonthlySummary>();
-    const productionCorrectiveList: any[] = [];
+    const productionCorrectiveList: ReportCorrectiveLike[] = [];
 
     const ensureTech = (rawName: unknown): TechnicianMonthlySummary => {
       const name = String(rawName || 'Non assigné').trim() || 'Non assigné';
@@ -440,7 +691,7 @@ export class MonthlyReportCalculationService {
       if (Number.isFinite(explicitCost) && explicitCost > 0) {
         btOfficialCost = explicitCost;
       } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
-        ci.pieces_utilisees.forEach((p: any) => {
+        ci.pieces_utilisees.forEach((p: ReportCorrectivePieceLike) => {
           const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
           const pQty = Number(p?.quantite ?? p?.qte ?? 0);
           const pPrice =
@@ -529,7 +780,7 @@ export class MonthlyReportCalculationService {
 
     monthExecutions.forEach((exec) => {
       const meta = resolveRecordAssetMeta(exec, 'machineCode');
-      const exOfficialCost = Number(exec.totalCost ?? (exec as any).sparesCost ?? 0) || 0;
+      const exOfficialCost = Number(exec.totalCost ?? exec.sparesCost ?? 0) || 0;
       if (!meta.isArchived) {
         const costRow = ensureMachineCostRow(meta);
         costRow.preventiveCount++;
@@ -717,19 +968,17 @@ export class MonthlyReportCalculationService {
     return { diff, percent, trend };
   }
 
-  /**
-   * Computes Month-over-Month comparison (currentMonth vs previousMonth)
-   */
+  /** Computes Month-over-Month comparison (`currentMonth` vs `previousMonth`). */
   static calculateMonthOverMonthComparison(params: {
     month: string;
     assetClass?: ReportAssetClassFilter;
-    stockItems?: any[];
-    mouvements?: any[];
-    correctiveInterventions?: any[];
-    preventiveTasks?: any[];
-    preventiveExecutions?: PreventiveExecutionRecord[];
-    sortiesExterne?: any[];
-    machines?: any[];
+    stockItems?: ReportStockItemLike[];
+    mouvements?: ReportMovementLike[];
+    correctiveInterventions?: ReportCorrectiveLike[];
+    preventiveTasks?: ReportPreventiveTaskLike[];
+    preventiveExecutions?: ReportPreventiveExecutionLike[];
+    sortiesExterne?: ReportSortieExterneLike[];
+    machines?: ReportMachineLike[];
   }): MonthOverMonthComparison {
     const currentMonth = params.month && /^\d{4}-\d{2}$/.test(params.month)
       ? params.month
@@ -793,14 +1042,14 @@ export interface ShiftOrWeeklyReportParams {
   from: string; // 'YYYY-MM-DD'
   to: string; // 'YYYY-MM-DD'
   assetClass?: ReportAssetClassFilter;
-  stockItems?: any[];
-  mouvements?: any[];
-  correctiveInterventions?: any[];
-  preventiveTasks?: any[];
-  preventiveExecutions?: PreventiveExecutionRecord[];
-  sortieDemands?: any[];
-  sortiesExterne?: any[];
-  machines?: any[];
+  stockItems?: ReportStockItemLike[];
+  mouvements?: ReportMovementLike[];
+  correctiveInterventions?: ReportCorrectiveLike[];
+  preventiveTasks?: ReportPreventiveTaskLike[];
+  preventiveExecutions?: ReportPreventiveExecutionLike[];
+  sortieDemands?: ReportSortieDemandLike[];
+  sortiesExterne?: ReportSortieExterneLike[];
+  machines?: ReportMachineLike[];
 }
 
 export interface OverduePreventiveTaskSnapshotItem {
@@ -980,9 +1229,9 @@ export function computePmWindowCompliance({
   fromYMD: string;
   toYMD: string;
   assetClass?: ReportAssetClassFilter;
-  preventiveTasks?: any[];
-  preventiveExecutions?: any[];
-  machines?: any[];
+  preventiveTasks?: ReportPreventiveTaskLike[];
+  preventiveExecutions?: ReportPreventiveExecutionLike[];
+  machines?: ReportMachineLike[];
 }): PmWindowComplianceSummary {
   const activeMachinesList = filterActiveMachines(machines || []);
   const activeMachineCodes = new Set<string>();
@@ -1012,7 +1261,7 @@ export function computePmWindowCompliance({
     });
   });
 
-  const resolveTaskAssetMeta = (record: any) => {
+  const resolveTaskAssetMeta = (record: ReportAssetMetaSource) => {
     const explicitClass = String(record?.asset_class || '').trim().toUpperCase();
     const rawCode = String(
       record?.code_machine ||
@@ -1044,7 +1293,7 @@ export function computePmWindowCompliance({
     return recClass === assetClass;
   };
 
-  const isTaskArchivedOrInactive = (t: any): boolean => {
+  const isTaskArchivedOrInactive = (t: ReportPreventiveTaskLike | null | undefined): boolean => {
     if (!t) return true;
     if (t.active === false || t.is_active === false || t.actif === false) return true;
     if (t.archived === true || t.isArchived === true) return true;
@@ -1081,7 +1330,7 @@ export function computePmWindowCompliance({
 
   let archivedExcludedCount = 0;
   let pendingClaimsExcludedCount = 0;
-  const activeTaskById = new Map<string, any>();
+  const activeTaskById = new Map<string, ReportPreventiveTaskLike>();
 
   (preventiveTasks || []).forEach((t) => {
     if (!t) return;
@@ -1100,7 +1349,7 @@ export function computePmWindowCompliance({
   });
 
   // Group executions in window by taskId
-  const approvedExecByTask = new Map<string, any>();
+  const approvedExecByTask = new Map<string, ReportPreventiveExecutionLike>();
   const pendingClaimTaskIds = new Set<string>();
 
   (preventiveExecutions || []).forEach((ex) => {
@@ -1361,7 +1610,7 @@ export function buildShiftOrWeeklyReport({
   });
 
   const resolveRecordAssetClass = (
-    record: any,
+    record: ReportAssetMetaSource,
     primaryMachineField?: string
   ): {
     assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL';
@@ -1488,7 +1737,7 @@ export function buildShiftOrWeeklyReport({
     return row;
   };
   const techMap = new Map<string, TechnicianMonthlySummary>();
-  const productionCorrectiveInPeriod: any[] = [];
+  const productionCorrectiveInPeriod: ReportCorrectiveLike[] = [];
 
   const ensureTech = (rawName: unknown): TechnicianMonthlySummary => {
     const name = String(rawName || 'Non assigné').trim() || 'Non assigné';
@@ -1582,7 +1831,7 @@ export function buildShiftOrWeeklyReport({
     if (Number.isFinite(explicitCost) && explicitCost > 0) {
       btOfficialCost = explicitCost;
     } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
-      ci.pieces_utilisees.forEach((p: any) => {
+      ci.pieces_utilisees.forEach((p: ReportCorrectivePieceLike) => {
         const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
         const pQty = Number(p?.quantite ?? p?.qte ?? p?.qty ?? 0);
         const pPrice =
@@ -1671,7 +1920,8 @@ export function buildShiftOrWeeklyReport({
   (preventiveExecutions || []).forEach((ex) => {
     if (!ex) return;
     const meta = resolveRecordAssetClass(ex, 'machineCode');
-    const eDate = normalizeDateToYMD(ex.executedAt || (ex as any).date);
+    // Prefer ISO executedAt; fall back to legacy date alias without unsafe cast.
+    const eDate = normalizeDateToYMD(ex.executedAt || ex.date);
 
     if (isUnapprovedFieldClaim(ex)) {
       if (isWithinRange(eDate) && matchesClassFilter(meta.assetClass)) {

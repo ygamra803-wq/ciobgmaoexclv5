@@ -1,5 +1,11 @@
 import { Logger } from '../core/logger/LoggerService';
 
+export type SyncQueueHandler = (operation: any, item: any) => Promise<any>;
+
+export interface SyncQueueAddOptions {
+  deferProcess?: boolean;
+}
+
 /**
  * Service de File d'Attente de Synchronisation Hors-Ligne (Offline Sync Queue)
  * Permet d'empiler et de rejouer les opérations critiques lorsque le réseau ou le stockage distant est rétabli.
@@ -7,7 +13,11 @@ import { Logger } from '../core/logger/LoggerService';
 class SyncQueueService {
   queue: any[];
   inMemoryOperations: Map<any, Function>;
+  operationHandlers: Map<string, SyncQueueHandler>;
   isOnline: boolean;
+  isProcessing: boolean;
+  private activeProcessPromise: Promise<void> | null;
+  private rerunRequested: boolean;
   db: any;
   maxRetries: number;
   subscribers: Set<Function>;
@@ -15,11 +25,36 @@ class SyncQueueService {
   constructor() {
     this.queue = [];
     this.inMemoryOperations = new Map(); // id -> callable function
+    this.operationHandlers = new Map(); // operation.type -> serializable persistent handler
     this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    this.isProcessing = false;
+    this.activeProcessPromise = null;
+    this.rerunRequested = false;
     this.db = null;
     this.maxRetries = 3;
     this.subscribers = new Set();
     this.setupListeners();
+  }
+
+  /**
+   * Enregistre un gestionnaire persistant pour un type d'opération sérialisable (ex: PUSH_SERVER_STATE).
+   * Permet de rejouer les opérations stockées dans IndexedDB même après un rechargement de page (F5).
+   */
+  registerOperationHandler(opType: string, handler: SyncQueueHandler): void {
+    const cleanType = String(opType || '').trim();
+    if (!cleanType || typeof handler !== 'function') return;
+    this.operationHandlers.set(cleanType, handler);
+  }
+
+  unregisterOperationHandler(opType: string): void {
+    const cleanType = String(opType || '').trim();
+    if (!cleanType) return;
+    this.operationHandlers.delete(cleanType);
+  }
+
+  hasOperationHandler(opType: string): boolean {
+    const cleanType = String(opType || '').trim();
+    return Boolean(cleanType && this.operationHandlers.has(cleanType));
   }
 
   /**
@@ -116,6 +151,7 @@ class SyncQueueService {
   getState() {
     return {
       isOnline: this.isOnline,
+      isProcessing: this.isProcessing,
       queueLength: this.queue.length,
       pendingCount: this.queue.filter((q) => q.status === 'pending').length,
       failedCount: this.queue.filter((q) => q.status === 'failed').length,
@@ -125,17 +161,18 @@ class SyncQueueService {
 
   /**
    * Ajout d'une opération à la file d'attente
-   * @param {Function|Object} operation - Fonction à exécuter ou description d'action
+   * @param {Function|Object} operation - Fonction à exécuter ou description d'action sérialisable
    * @param {'high'|'normal'|'low'} priority - Priorité d'exécution
    * @param {Object} metadata - Métadonnées sérialisables (ex: type de mouvement, ref, etc.)
+   * @param {Object} addOptions - Options d'ajout (ex: deferProcess pour éviter boucle immédiate sur échec réseau)
    */
-  async add(operation, priority = 'normal', metadata = {}) {
+  async add(operation, priority = 'normal', metadata = {}, addOptions: SyncQueueAddOptions = {}) {
     try {
       if (!this.db) {
         await this.init();
       }
 
-      const id = Date.now() + Math.floor(Math.random() * 1000);
+      const id = Date.now() + Math.floor(Math.random() * 10000);
       let serializableOp = null;
 
       if (typeof operation === 'function') {
@@ -147,6 +184,31 @@ class SyncQueueService {
         };
       } else {
         serializableOp = operation;
+      }
+
+      // Fusion/déduplication pour les opérations idempotentes (ex: PUSH_SERVER_STATE via coalesceKey)
+      const coalesceKey =
+        serializableOp && typeof serializableOp === 'object' ? serializableOp.coalesceKey : undefined;
+      if (coalesceKey) {
+        const existing = this.queue.find(
+          (q) => q.status === 'pending' && q.operation?.coalesceKey === coalesceKey
+        );
+        if (existing) {
+          existing.timestamp = new Date().toISOString();
+          existing.operation = serializableOp;
+          existing.metadata = metadata;
+          existing.priority = priority;
+          existing.retries = 0;
+          existing.error = null;
+          if (this.db) {
+            await this.updateQueueItem(existing);
+          }
+          this.notifySubscribers();
+          if (this.isOnline && !addOptions.deferProcess) {
+            this.processQueue();
+          }
+          return existing;
+        }
       }
 
       const queueItem = {
@@ -171,8 +233,8 @@ class SyncQueueService {
 
       Logger.debug('[SyncQueueService] 📝 Opération ajoutée à la file d’attente:', queueItem);
 
-      // Traitement immédiat si en ligne
-      if (this.isOnline) {
+      // Traitement immédiat si en ligne (sauf si différé explicitement)
+      if (this.isOnline && !addOptions.deferProcess) {
         this.processQueue();
       }
 
@@ -203,34 +265,59 @@ class SyncQueueService {
   }
 
   /**
-   * Traitement séquentiel de la file
+   * Traitement séquentiel de la file protégé par mutex anti-réentrance
    */
   async processQueue() {
     if (!this.isOnline || this.queue.length === 0) {
       return;
     }
 
-    Logger.debug('[SyncQueueService] 🔄 Traitement de la file de synchronisation...');
-
-    // Ordonnancement par priorité
-    const priorityMap: Record<string, number> = { high: 1, normal: 2, low: 3 };
-    this.queue.sort((a: any, b: any) => {
-      const pA = priorityMap[a.priority] || 2;
-      const pB = priorityMap[b.priority] || 2;
-      return pA - pB;
-    });
-
-    for (const item of [...this.queue]) {
-      if (item.status === 'pending') {
-        await this.processItem(item);
-      }
+    if (this.activeProcessPromise) {
+      this.rerunRequested = true;
+      return this.activeProcessPromise;
     }
 
+    this.isProcessing = true;
     this.notifySubscribers();
+
+    this.activeProcessPromise = (async () => {
+      try {
+        do {
+          this.rerunRequested = false;
+          if (!this.isOnline || this.queue.length === 0) break;
+
+          Logger.debug('[SyncQueueService] 🔄 Traitement de la file de synchronisation...');
+
+          const priorityMap: Record<string, number> = { high: 1, normal: 2, low: 3 };
+          this.queue.sort((a: any, b: any) => {
+            const pA = priorityMap[a.priority] || 2;
+            const pB = priorityMap[b.priority] || 2;
+            return pA - pB;
+          });
+
+          const pendingBatch = [...this.queue].filter((item) => item.status === 'pending');
+          for (const item of pendingBatch) {
+            if (!this.isOnline) break;
+            if (item.status === 'pending') {
+              await this.processItem(item);
+            }
+          }
+        } while (this.rerunRequested && this.isOnline);
+      } finally {
+        this.isProcessing = false;
+        this.activeProcessPromise = null;
+        this.notifySubscribers();
+      }
+    })();
+
+    return this.activeProcessPromise;
   }
 
   /**
-   * Traitement d'un élément unique
+   * Traitement d'un élément unique :
+   * 1) Exécute la closure mémoire si présente dans la session courante
+   * 2) Sinon résout un gestionnaire persistant enregistré via registerOperationHandler()
+   * 3) Sinon rejette proprement (fail-closed) au lieu de supprimer silencieusement l'opération
    */
   async processItem(item) {
     try {
@@ -240,6 +327,16 @@ class SyncQueueService {
       if (typeof fn === 'function') {
         await fn();
         this.inMemoryOperations.delete(item.id);
+      } else {
+        const opType = String(item.operation?.type || '').trim();
+        const registeredHandler = opType ? this.operationHandlers.get(opType) : undefined;
+        if (typeof registeredHandler === 'function') {
+          await registeredHandler(item.operation, item);
+        } else {
+          throw new Error(
+            `Opération hors-ligne non rejouable (${opType || 'INCONNUE'}) : aucun gestionnaire enregistré après rechargement.`
+          );
+        }
       }
 
       item.status = 'completed';
@@ -247,7 +344,7 @@ class SyncQueueService {
         await this.updateQueueItem(item);
       }
 
-      // Retrait de la file
+      // Retrait de la file après exécution réussie
       this.queue = this.queue.filter((q) => q.id !== item.id);
       if (this.db) {
         await this.removeItem(item.id);
@@ -272,6 +369,29 @@ class SyncQueueService {
         await this.updateQueueItem(item);
       }
     }
+  }
+
+  /**
+   * Réinitialise les éléments en échec définitif et relance la file si en ligne
+   */
+  async retryFailed() {
+    let resetCount = 0;
+    for (const item of this.queue) {
+      if (item.status === 'failed') {
+        item.status = 'pending';
+        item.retries = 0;
+        item.error = null;
+        resetCount += 1;
+        if (this.db) {
+          await this.updateQueueItem(item);
+        }
+      }
+    }
+    this.notifySubscribers();
+    if (resetCount > 0 && this.isOnline) {
+      await this.processQueue();
+    }
+    return resetCount;
   }
 
   /**

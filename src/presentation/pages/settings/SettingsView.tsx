@@ -1262,11 +1262,12 @@ export default function SettingsView({
       showToast?.('Aucune machine active disponible pour la réassignation.', 'error');
       return;
     }
-    const firstId =
+    const firstId = String(
       activeMachinesList[0]?.id_machine_registered ||
-      activeMachinesList[0]?.id ||
-      activeMachinesList[0]?.code ||
-      '';
+        activeMachinesList[0]?.id ||
+        activeMachinesList[0]?.code ||
+        ''
+    );
     setBulkRelinkModal({
       isOpen: true,
       entityType,

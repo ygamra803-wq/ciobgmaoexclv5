@@ -4,6 +4,8 @@
  * Mobile Supervisors, Storekeepers, and Desktop Admins sync concurrently.
  */
 
+export type LanRecordObject = Record<string, unknown>;
+
 export interface MergeCollectionOptions {
   /**
    * When true (default for cross-version / multi-device sync), records that exist
@@ -11,17 +13,11 @@ export interface MergeCollectionOptions {
    * rather than wiped out.
    */
   preserveServerOnlyItems?: boolean;
-  /**
-   * Alias for preserveServerOnlyItems for backward compatibility
-   */
+  /** Alias for preserveServerOnlyItems for backward compatibility. */
   preserveServerOnly?: boolean;
-  /**
-   * Explicit list of record IDs intentionally deleted by the client.
-   */
+  /** Explicit list of record IDs intentionally deleted by the client. */
   deletedIds?: string[];
-  /**
-   * When true, incoming payload completely replaces the server collection (used for Factory Reset).
-   */
+  /** When true, incoming payload completely replaces the server collection (used for Factory Reset). */
   replaceAll?: boolean;
 }
 
@@ -31,61 +27,68 @@ export interface MergeStateOptions {
   deletedIdsByEntity?: Record<string, string[]>;
 }
 
+function asRecordObject(value: unknown): LanRecordObject | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as LanRecordObject)
+    : null;
+}
+
 /**
- * Extracts a deterministic primary key for any GMAO entity record.
+ * Extracts a deterministic primary key for any GMAO entity record (`machines`, `rawStock`, `mouvements`, etc.).
  */
-export function getEntityRecordId(entity: string, item: any): string {
+export function getEntityRecordId(entity: string, item: unknown): string {
   if (typeof item === 'string' || typeof item === 'number') {
     return String(item).trim();
   }
-  if (!item || typeof item !== 'object') return '';
+  const obj = asRecordObject(item);
+  if (!obj) return '';
 
   if (entity === 'machines') {
-    const k = item.id || item.id_machine_registered || item.id_machine || item.code;
+    const k = obj.id || obj.id_machine_registered || obj.id_machine || obj.code;
     if (k !== undefined && k !== null && String(k).trim() !== '') {
       return String(k).trim().toUpperCase();
     }
   }
 
   if (entity === 'rawStock' || entity === 'stock' || entity === 'designations') {
-    const k = item.id || item.ref || item.code;
+    const k = obj.id || obj.ref || obj.code;
     if (k !== undefined && k !== null && String(k).trim() !== '') {
       return String(k).trim().toUpperCase();
     }
   }
 
   if (entity === 'mouvements') {
-    if (item.id !== undefined && item.id !== null && String(item.id).trim() !== '') {
-      return String(item.id).trim();
+    if (obj.id !== undefined && obj.id !== null && String(obj.id).trim() !== '') {
+      return String(obj.id).trim();
     }
-    const bon = String(item.code_bon || item.num_bon_saisi_par_tech || '').trim().toUpperCase();
-    const ref = String(item.ref || item.code_article || item.reference || '').trim().toUpperCase();
-    const type = String(item.type || '').trim().toUpperCase();
-    const date = String(item.date || item.created_at || '').trim();
+    const bon = String(obj.code_bon || obj.num_bon_saisi_par_tech || '').trim().toUpperCase();
+    const ref = String(obj.ref || obj.code_article || obj.reference || '').trim().toUpperCase();
+    const type = String(obj.type || '').trim().toUpperCase();
+    const date = String(obj.date || obj.created_at || '').trim();
     if (bon || ref) {
       return `MVT::${bon}::${ref}::${type}::${date}`;
     }
   }
 
   const candidate =
-    item.id ??
-    item.id_machine_registered ??
-    item.id_task ??
-    item.id_execution ??
-    item.id_demand ??
-    item.code_bon ??
-    item.id_technician ??
-    item.id_operation ??
-    item.id_zone ??
-    item.code_zone ??
-    item.id_family ??
-    item.id_template ??
-    item.id_blueprint ??
-    item.id_general_system_type ??
-    item.id_action ??
-    item.id_guide ??
-    item.ref ??
-    item.code;
+    obj.id ??
+    obj.id_machine_registered ??
+    obj.id_task ??
+    obj.id_execution ??
+    obj.id_demand ??
+    obj.code_bon ??
+    obj.id_technician ??
+    obj.id_operation ??
+    obj.id_zone ??
+    obj.code_zone ??
+    obj.id_family ??
+    obj.id_template ??
+    obj.id_blueprint ??
+    obj.id_general_system_type ??
+    obj.id_action ??
+    obj.id_guide ??
+    obj.ref ??
+    obj.code;
 
   if (candidate !== undefined && candidate !== null && String(candidate).trim() !== '') {
     return String(candidate).trim();
@@ -97,28 +100,29 @@ export function getEntityRecordId(entity: string, item: any): string {
 /**
  * Extracts the latest modification or lifecycle timestamp (in ms) from a record.
  */
-export function getRecordTimestampMs(item: any): number {
-  if (!item || typeof item !== 'object') return 0;
+export function getRecordTimestampMs(item: unknown): number {
+  const obj = asRecordObject(item);
+  if (!obj) return 0;
 
   const dateFields = [
-    item.updated_at,
-    item.updatedAt,
-    item.validated_at,
-    item.validatedAt,
-    item.reviewed_at,
-    item.reviewedAt,
-    item.cloture_at,
-    item.clotureAt,
-    item.date_retour,
-    item.submitted_at,
-    item.submittedAt,
-    item.completedAt,
-    item.completed_at,
-    item.started_at,
-    item.created_at,
-    item.createdAt,
-    item.timestamp,
-    item.date_execution,
+    obj.updated_at,
+    obj.updatedAt,
+    obj.validated_at,
+    obj.validatedAt,
+    obj.reviewed_at,
+    obj.reviewedAt,
+    obj.cloture_at,
+    obj.clotureAt,
+    obj.date_retour,
+    obj.submitted_at,
+    obj.submittedAt,
+    obj.completedAt,
+    obj.completed_at,
+    obj.started_at,
+    obj.created_at,
+    obj.createdAt,
+    obj.timestamp,
+    obj.date_execution,
   ];
 
   let maxMs = 0;
@@ -137,16 +141,29 @@ export function getRecordTimestampMs(item: any): number {
  * Ensures that an approved or closed record is not accidentally regressed by a stale snapshot
  * lacking explicit timestamps.
  */
-export function getRecordLifecycleRank(item: any): number {
-  if (!item || typeof item !== 'object') return 0;
+export function getRecordLifecycleRank(item: unknown): number {
+  const obj = asRecordObject(item);
+  if (!obj) return 0;
   let rank = 0;
 
-  const status = String(item.statut || item.status || item.etat || '').trim().toUpperCase();
-  if (status === 'CLOTURE' || status === 'CLÔTURÉ' || status === 'TERMINE' || status === 'TERMINÉ' || status === 'MONTE' || status === 'MONTÉ') {
+  const status = String(obj.statut || obj.status || obj.etat || '').trim().toUpperCase();
+  if (
+    status === 'CLOTURE' ||
+    status === 'CLÔTURÉ' ||
+    status === 'TERMINE' ||
+    status === 'TERMINÉ' ||
+    status === 'MONTE' ||
+    status === 'MONTÉ'
+  ) {
     rank += 50;
   } else if (status === 'RETOURNE' || status === 'RETOURNÉ') {
     rank += 40;
-  } else if (status === 'EN_COURS' || status === 'EN COURS' || status === 'EN REPARATION EXTERNE' || status === 'EN RÉPARATION EXTERNE') {
+  } else if (
+    status === 'EN_COURS' ||
+    status === 'EN COURS' ||
+    status === 'EN REPARATION EXTERNE' ||
+    status === 'EN RÉPARATION EXTERNE'
+  ) {
     rank += 25;
   } else if (status === 'EN_ATTENTE_PDR') {
     rank += 20;
@@ -154,7 +171,7 @@ export function getRecordLifecycleRank(item: any): number {
     rank += 10;
   }
 
-  const valStatus = String(item.validation_status || item.validationStatus || '').trim().toUpperCase();
+  const valStatus = String(obj.validation_status || obj.validationStatus || '').trim().toUpperCase();
   if (valStatus === 'APPROVED') {
     rank += 45;
   } else if (valStatus === 'REJECTED') {
@@ -165,30 +182,32 @@ export function getRecordLifecycleRank(item: any): number {
     rank += 20;
   }
 
-  if (item.stock_deducted === true) {
+  if (obj.stock_deducted === true) {
     rank += 10;
   }
 
   return rank;
 }
 
-function isTerminalOrApprovedRecord(item: any): boolean {
-  if (!item || typeof item !== 'object') return false;
-  const valStatus = String(item.validation_status || item.validationStatus || '').trim().toUpperCase();
-  const status = String(item.statut || item.status || item.etat || '').trim().toUpperCase();
+function isTerminalOrApprovedRecord(item: unknown): boolean {
+  const obj = asRecordObject(item);
+  if (!obj) return false;
+  const valStatus = String(obj.validation_status || obj.validationStatus || '').trim().toUpperCase();
+  const status = String(obj.statut || obj.status || obj.etat || '').trim().toUpperCase();
   return (
     valStatus === 'APPROVED' ||
     status === 'CLOTURE' ||
     status === 'CLÔTURÉ' ||
-    item.stock_deducted === true
+    obj.stock_deducted === true
   );
 }
 
-function isPendingOrOpenDraftRecord(item: any): boolean {
-  if (!item || typeof item !== 'object') return false;
-  if (isTerminalOrApprovedRecord(item)) return false;
-  const valStatus = String(item.validation_status || item.validationStatus || '').trim().toUpperCase();
-  const status = String(item.statut || item.status || item.etat || '').trim().toUpperCase();
+function isPendingOrOpenDraftRecord(item: unknown): boolean {
+  const obj = asRecordObject(item);
+  if (!obj) return false;
+  if (isTerminalOrApprovedRecord(obj)) return false;
+  const valStatus = String(obj.validation_status || obj.validationStatus || '').trim().toUpperCase();
+  const status = String(obj.statut || obj.status || obj.etat || '').trim().toUpperCase();
   return (
     valStatus === 'PENDING_VALIDATION' ||
     valStatus === 'PENDING' ||
@@ -206,53 +225,59 @@ function isPendingOrOpenDraftRecord(item: any): boolean {
  * Merges two versions of the same record using Maker-Checker lifecycle protection and timestamp priority.
  * Never allows a pending/open draft to downgrade an already APPROVED/CLOTURE/stock_deducted record,
  * even if the draft carries a newer client timestamp due to clock skew or offline touch.
+ * Also preserves server-side `passwordHash` credentials stripped from redacted client projections.
  */
-export function mergeSingleRecord(serverItem: any, incomingItem: any): any {
-  if (!serverItem || typeof serverItem !== 'object') return incomingItem;
-  if (!incomingItem || typeof incomingItem !== 'object') return serverItem;
+export function mergeSingleRecord<TServer = LanRecordObject, TIncoming = TServer>(
+  serverItem: TServer,
+  incomingItem: TIncoming
+): TServer & TIncoming {
+  const serverObj = asRecordObject(serverItem);
+  const incomingObj = asRecordObject(incomingItem);
+  if (!serverObj) return incomingItem as unknown as TServer & TIncoming;
+  if (!incomingObj) return serverItem as unknown as TServer & TIncoming;
 
-  const preserveAuthHash = (merged: any) => {
+  const preserveAuthHash = (merged: LanRecordObject): TServer & TIncoming => {
+    const serverHash = serverObj.passwordHash;
+    const mergedHash = merged.passwordHash;
     if (
-      merged &&
-      typeof merged === 'object' &&
-      typeof serverItem.passwordHash === 'string' &&
-      serverItem.passwordHash.trim().length > 0 &&
-      (!merged.passwordHash || typeof merged.passwordHash !== 'string' || !merged.passwordHash.trim())
+      typeof serverHash === 'string' &&
+      serverHash.trim().length > 0 &&
+      (!mergedHash || typeof mergedHash !== 'string' || !mergedHash.trim())
     ) {
-      return { ...merged, passwordHash: serverItem.passwordHash };
+      return { ...merged, passwordHash: serverHash } as unknown as TServer & TIncoming;
     }
-    return merged;
+    return merged as unknown as TServer & TIncoming;
   };
 
   // A1.6 Lifecycle Guard: Never regress an APPROVED/CLOTURE record back to a PENDING/open copy
-  if (isTerminalOrApprovedRecord(serverItem) && isPendingOrOpenDraftRecord(incomingItem)) {
-    return preserveAuthHash({ ...incomingItem, ...serverItem });
+  if (isTerminalOrApprovedRecord(serverObj) && isPendingOrOpenDraftRecord(incomingObj)) {
+    return preserveAuthHash({ ...incomingObj, ...serverObj });
   }
-  if (isTerminalOrApprovedRecord(incomingItem) && isPendingOrOpenDraftRecord(serverItem)) {
-    return preserveAuthHash({ ...serverItem, ...incomingItem });
+  if (isTerminalOrApprovedRecord(incomingObj) && isPendingOrOpenDraftRecord(serverObj)) {
+    return preserveAuthHash({ ...serverObj, ...incomingObj });
   }
 
-  const serverTime = getRecordTimestampMs(serverItem);
-  const incomingTime = getRecordTimestampMs(incomingItem);
+  const serverTime = getRecordTimestampMs(serverObj);
+  const incomingTime = getRecordTimestampMs(incomingObj);
 
   if (incomingTime > 0 && serverTime > 0 && incomingTime !== serverTime) {
     if (incomingTime > serverTime) {
-      return preserveAuthHash({ ...serverItem, ...incomingItem });
+      return preserveAuthHash({ ...serverObj, ...incomingObj });
     }
-    return preserveAuthHash({ ...incomingItem, ...serverItem });
+    return preserveAuthHash({ ...incomingObj, ...serverObj });
   }
 
-  const serverRank = getRecordLifecycleRank(serverItem);
-  const incomingRank = getRecordLifecycleRank(incomingItem);
+  const serverRank = getRecordLifecycleRank(serverObj);
+  const incomingRank = getRecordLifecycleRank(incomingObj);
 
   if (serverRank > incomingRank) {
-    return preserveAuthHash({ ...incomingItem, ...serverItem });
+    return preserveAuthHash({ ...incomingObj, ...serverObj });
   }
 
-  return preserveAuthHash({ ...serverItem, ...incomingItem });
+  return preserveAuthHash({ ...serverObj, ...incomingObj });
 }
 
-function serializeUnkeyedItem(item: any): string {
+function serializeUnkeyedItem(item: unknown): string {
   try {
     return JSON.stringify(item);
   } catch {
@@ -265,12 +290,12 @@ function serializeUnkeyedItem(item: any): string {
  * Unkeyed server records (records without an extractable primary key) are also preserved
  * (deduplicated by content signature) when `preserveServerOnlyItems` is active.
  */
-export function mergeEntityCollection(
+export function mergeEntityCollection<T = unknown>(
   entity: string,
-  serverList: any[],
-  incomingList: any[],
+  serverList: T[],
+  incomingList: T[],
   options: MergeCollectionOptions = {}
-): any[] {
+): T[] {
   if (!Array.isArray(incomingList)) {
     return Array.isArray(serverList) ? serverList : [];
   }
@@ -284,8 +309,8 @@ export function mergeEntityCollection(
     (options.deletedIds || []).map((id) => String(id).trim()).filter(Boolean)
   );
 
-  const serverMap = new Map<string, any>();
-  const unkeyedServerItems: any[] = [];
+  const serverMap = new Map<string, T>();
+  const unkeyedServerItems: T[] = [];
 
   for (const sItem of serverList) {
     const key = getEntityRecordId(entity, sItem);
@@ -298,7 +323,7 @@ export function mergeEntityCollection(
 
   const seenKeys = new Set<string>();
   const seenUnkeyedSignatures = new Set<string>();
-  const mergedResult: any[] = [];
+  const mergedResult: T[] = [];
 
   for (const incItem of incomingList) {
     const key = getEntityRecordId(entity, incItem);
@@ -312,7 +337,7 @@ export function mergeEntityCollection(
     }
     seenKeys.add(key);
     const existingServerItem = serverMap.get(key);
-    if (existingServerItem) {
+    if (existingServerItem !== undefined) {
       mergedResult.push(mergeSingleRecord(existingServerItem, incItem));
     } else {
       mergedResult.push(incItem);
@@ -338,11 +363,12 @@ export function mergeEntityCollection(
 }
 
 /**
- * Merges a full incoming GMAO state payload into the server's dbState.
+ * Merges a full incoming GMAO state payload into the server's `dbState`, honoring
+ * `allowedEntities`, object-map vs collection merging, `deletedIdsByEntity`, and `rawStock <-> stock` mirror sync.
  */
 export function mergeGmaoStateSnapshot(
-  serverState: Record<string, any>,
-  incomingState: Record<string, any>,
+  serverState: LanRecordObject,
+  incomingState: LanRecordObject,
   allowedEntities: readonly string[],
   objectEntitySet: Set<string>,
   options: MergeStateOptions = {}
@@ -351,27 +377,29 @@ export function mergeGmaoStateSnapshot(
   let mergedCount = 0;
   const replaceAll = options.replaceAll === true || incomingState?.replaceAll === true;
   const preserveServerOnly = !replaceAll && options.preserveServerOnlyItems !== false;
-  const deletedByEntity = options.deletedIdsByEntity || incomingState?.deletedIdsByEntity || {};
+  const rawDeletedMap = options.deletedIdsByEntity || asRecordObject(incomingState?.deletedIdsByEntity) || {};
 
   for (const key of allowedEntities) {
     if (!Object.prototype.hasOwnProperty.call(incomingState, key)) continue;
     const val = incomingState[key];
 
     if (objectEntitySet.has(key)) {
-      if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const valObj = asRecordObject(val);
+      if (valObj) {
         if (replaceAll || !preserveServerOnly) {
-          serverState[key] = val;
+          serverState[key] = valObj;
         } else {
-          serverState[key] = { ...(serverState[key] || {}), ...val };
+          serverState[key] = { ...(asRecordObject(serverState[key]) || {}), ...valObj };
         }
         acceptedKeys.push(key);
       }
     } else if (Array.isArray(val)) {
-      const currentServerList = Array.isArray(serverState[key]) ? serverState[key] : [];
-      const mergedList = mergeEntityCollection(key, currentServerList, val, {
+      const currentServerList = Array.isArray(serverState[key]) ? (serverState[key] as unknown[]) : [];
+      const entityDeleted = rawDeletedMap[key];
+      const mergedList = mergeEntityCollection(key, currentServerList, val as unknown[], {
         replaceAll,
         preserveServerOnlyItems: preserveServerOnly,
-        deletedIds: Array.isArray(deletedByEntity[key]) ? deletedByEntity[key] : undefined,
+        deletedIds: Array.isArray(entityDeleted) ? entityDeleted.map((id) => String(id)) : undefined,
       });
       serverState[key] = mergedList;
       acceptedKeys.push(key);

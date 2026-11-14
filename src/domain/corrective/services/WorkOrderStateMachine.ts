@@ -18,6 +18,8 @@
  *    - Transitioning to `CLOTURE` is strictly rejected if `hasOpenWorkshopOrder === true` (active `Bon d'Atelier` or external subcontracting order not yet received/mounted) or if work performed (`action_realisee`) is empty.
  */
 
+import { canStartWorkWithLoto, canCloseWorkOrderWithLoto } from '../lotoService';
+
 /**
  * Canonical status values for a Corrective Work Order (`DI` / `BT`).
  */
@@ -207,6 +209,19 @@ export class WorkOrderStateMachine {
       };
     }
 
+    // Domain invariant for EN_COURS: if LOTO is required, equipment must be CONSIGNE
+    if (toStatus === 'EN_COURS') {
+      const lotoStartCheck = canStartWorkWithLoto(intervention, payload);
+      if (!lotoStartCheck.valid) {
+        return {
+          valid: false,
+          fromStatus,
+          toStatus,
+          reason: lotoStartCheck.reason,
+        };
+      }
+    }
+
     // Domain invariant for CLOTURE: must have num_bt (or auto-assigned), work description, and no open workshop order
     if (toStatus === 'CLOTURE') {
       const hasAction = Boolean(
@@ -254,6 +269,16 @@ export class WorkOrderStateMachine {
           toStatus,
           reason:
             "Clôture refusée : une Demande de Besoin liée à ce BT n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD). Terminez la remise et l'essai sur machine avant de clôturer le BT.",
+        };
+      }
+
+      const lotoCloseCheck = canCloseWorkOrderWithLoto(intervention, payload);
+      if (!lotoCloseCheck.valid) {
+        return {
+          valid: false,
+          fromStatus,
+          toStatus,
+          reason: lotoCloseCheck.reason,
         };
       }
     }

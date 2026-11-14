@@ -16,6 +16,9 @@ import {
   ensureFreshServerSession as clientEnsureFreshServerSession,
   revokeServerSession as clientRevokeServerSession,
 } from '../core/security/serverSessionClient';
+import { syncQueueService } from './syncQueueService';
+
+export const PUSH_SERVER_STATE_OP = 'PUSH_SERVER_STATE';
 
 export interface ServerStateSummary {
   version?: number;
@@ -663,9 +666,12 @@ export const serverSyncService = {
     merge?: boolean;
     replaceAll?: boolean;
     customState?: Record<string, any>;
+    fromSyncQueue?: boolean;
+    skipOfflineQueue?: boolean;
   } = {}): Promise<{
     success: boolean;
     merged?: boolean;
+    queued?: boolean;
     conflict?: ConflictDetectionResult;
     version?: number;
     updatedAt?: string;
@@ -686,8 +692,34 @@ export const serverSyncService = {
       if (!serverCheck.online) {
         const offlineMsg = 'الخادم غير متصل حالياً (Server Offline)';
         this.recordSyncError(offlineMsg);
+        let queued = false;
+        const role = getActiveActorRole();
+        if (
+          !options.fromSyncQueue &&
+          !options.skipOfflineQueue &&
+          !options.customState &&
+          role !== 'VIEWER' &&
+          role !== 'OBSERVATEUR'
+        ) {
+          await syncQueueService
+            .add(
+              {
+                type: PUSH_SERVER_STATE_OP,
+                coalesceKey: PUSH_SERVER_STATE_OP,
+                options: { merge: options.merge ?? true, force: Boolean(options.force) },
+              },
+              'high',
+              { module: 'serverSync', reason: 'SERVER_OFFLINE' },
+              { deferProcess: true }
+            )
+            .then(() => {
+              queued = true;
+            })
+            .catch(() => {});
+        }
         return {
           success: false,
+          queued,
           error: offlineMsg,
         };
       }
@@ -812,8 +844,34 @@ export const serverSyncService = {
     } catch (err: any) {
       const errMsg = err?.message || 'فشل الاتصال بالخادم أثناء الحفظ';
       this.recordSyncError(errMsg);
+      let queued = false;
+      const role = getActiveActorRole();
+      if (
+        !options.fromSyncQueue &&
+        !options.skipOfflineQueue &&
+        !options.customState &&
+        role !== 'VIEWER' &&
+        role !== 'OBSERVATEUR'
+      ) {
+        await syncQueueService
+          .add(
+            {
+              type: PUSH_SERVER_STATE_OP,
+              coalesceKey: PUSH_SERVER_STATE_OP,
+              options: { merge: options.merge ?? true, force: Boolean(options.force) },
+            },
+            'high',
+            { module: 'serverSync', reason: 'NETWORK_ERROR' },
+            { deferProcess: true }
+          )
+          .then(() => {
+            queued = true;
+          })
+          .catch(() => {});
+      }
       return {
         success: false,
+        queued,
         error: errMsg,
       };
     }
@@ -829,13 +887,29 @@ export const serverSyncService = {
 
   /**
    * Schedules a non-blocking background server sync (debounced) when local state changes.
-   * Respects optimistic concurrency so it never overwrites a newer server version silently.
+   * When offline, enqueues a persistent PUSH_SERVER_STATE task into SyncQueueService.
    */
   scheduleAutoPush(customState?: Record<string, any>, delayMs = 2500): void {
     if (typeof window === 'undefined') return;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     const role = getActiveActorRole();
     if (role === 'VIEWER' || role === 'OBSERVATEUR') return;
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      syncQueueService.isOnline = false;
+      syncQueueService
+        .add(
+          {
+            type: PUSH_SERVER_STATE_OP,
+            coalesceKey: PUSH_SERVER_STATE_OP,
+            options: { merge: true, force: false },
+          },
+          'high',
+          { module: 'serverSync', reason: 'NAVIGATOR_OFFLINE' },
+          { deferProcess: true }
+        )
+        .catch(() => {});
+      return;
+    }
 
     if (autoPushTimer) {
       clearTimeout(autoPushTimer);
@@ -910,5 +984,23 @@ export const serverSyncService = {
     };
   },
 };
+
+export function registerServerSyncQueueHandler(): void {
+  syncQueueService.registerOperationHandler(PUSH_SERVER_STATE_OP, async (operation: any) => {
+    const opts = operation?.options && typeof operation.options === 'object' ? operation.options : {};
+    const res = await serverSyncService.pushToServer({
+      force: Boolean(opts.force),
+      merge: opts.merge !== undefined ? Boolean(opts.merge) : true,
+      fromSyncQueue: true,
+      skipOfflineQueue: true,
+    });
+    if (!res.success && !res.conflict) {
+      throw new Error(res.error || 'Échec du rejeu de synchronisation serveur');
+    }
+    return res;
+  });
+}
+
+registerServerSyncQueueHandler();
 
 export default serverSyncService;

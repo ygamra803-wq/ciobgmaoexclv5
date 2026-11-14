@@ -55,6 +55,10 @@ import {
   isNeedRequestBlockingBtClosure,
   NEED_STATUS_LABELS,
 } from '../../../domain/corrective/needRequestService';
+import {
+  canCloseWorkOrderWithLoto,
+  canStartWorkWithLoto,
+} from '../../../domain/corrective/lotoService';
 
 export default function BonsTravailTab({
   interventions = [],
@@ -197,6 +201,16 @@ export default function BonsTravailTab({
           .join(', ');
         showToast?.(
           `Approbation bloquée : la Demande de Besoin [${needCodes}] n'a pas encore atteint la clôture terrain (POSE_ESSAI ➔ CLOTURE_FIELD).`,
+          'warning'
+        );
+        return;
+      }
+
+      const lotoCloseCheck = canCloseWorkOrderWithLoto(reviewModalBt);
+      if (!lotoCloseCheck.valid) {
+        showToast?.(
+          lotoCloseCheck.reason ||
+            'Approbation bloquée : le permis de consignation LOTO est encore actif ou non déconsigné.',
           'warning'
         );
         return;
@@ -556,8 +570,16 @@ export default function BonsTravailTab({
   };
 
   const handleStartLiveIntervention = (bt) => {
+    const lotoStartCheck = canStartWorkWithLoto(bt);
     onStartLive(bt.id);
-    showToast?.(`Intervention Live démarrée pour ${bt.num_bt} (${bt.code_machine})`, 'success');
+    if (!lotoStartCheck.valid) {
+      showToast?.(
+        `Permis LOTO requis pour ${bt.num_bt || bt.code_machine} : consignez l'équipement dans la console Live avant de démarrer les travaux.`,
+        'warning'
+      );
+    } else {
+      showToast?.(`Intervention Live démarrée pour ${bt.num_bt} (${bt.code_machine})`, 'success');
+    }
     if (onNavigateToTab) {
       onNavigateToTab('corrective_live');
     }

@@ -20,6 +20,11 @@ import {
   type CreateNeedRequestInput,
   type NeedMaterialClass,
 } from '../../domain/corrective/needRequestService';
+import {
+  validateLotoConsignation,
+  validateLotoDeconsignation,
+  canStartWorkWithLoto,
+} from '../../domain/corrective/lotoService';
 import { storageService } from '../../utils/storageService';
 import { loadBaselineCorrectiveData } from '../../utils/baselineCorrective';
 import { safeId } from '../../utils/safeId';
@@ -93,6 +98,8 @@ export type CorrectiveSliceKeys = Pick<
   | 'handleCreateNeedRequest'
   | 'handleReviewNeedRequest'
   | 'handleTransitionNeedRequestStatus'
+  | 'handleConsignInterventionLoto'
+  | 'handleDeconsignInterventionLoto'
   | 'correctiveKpis'
   | 'correctiveParetoAnomalies'
   | 'correctiveParetoMachines'
@@ -395,8 +402,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const existing = current.find((i) => matchesIntervention(i, id));
       if (!existing) return;
 
-      const nowIso = new Date().toISOString();
+      // Focus the BT in Live View even when LOTO blocks EN_COURS so the operator can open the LOTO permit panel
       get().setActiveLiveInterventionId(existing.id ?? id);
+
+      const lotoCheck = canStartWorkWithLoto(existing);
+      if (!lotoCheck.valid) return;
+
+      const nowIso = new Date().toISOString();
       get().setCorrectiveInterventions((prev) =>
         (prev || []).map((i) =>
           matchesIntervention(i, id)
@@ -1309,6 +1321,121 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       );
 
       return { valid: true, needRequest: updatedNeed };
+    },
+
+    handleConsignInterventionLoto: (id, payload = {}) => {
+      const current = get().correctiveInterventions || [];
+      const existing = current.find((i) => matchesIntervention(i, id));
+      if (!existing) {
+        return { valid: false, reason: 'Bon de travail introuvable.' };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(payload?.actorRole || resolveActiveSessionRole() || actor.actorRole)
+        .trim()
+        .toUpperCase();
+      if (effectiveRole === 'VIEWER' || effectiveRole === 'OBSERVATEUR') {
+        return { valid: false, reason: 'Profil Observateur en lecture seule : consignation LOTO refusée.' };
+      }
+
+      if (existing.statut === 'CLOTURE' || existing.statut === 'ANNULE') {
+        return { valid: false, reason: 'Consignation impossible sur une intervention clôturée ou annulée.' };
+      }
+
+      const check = validateLotoConsignation(existing.loto, {
+        ...payload,
+        consignateur_id: payload.consignateur_id || actor.actorId,
+        consignateur_name: payload.consignateur_name || actor.actorName,
+      });
+      if (!check.valid || !check.permit) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      const updated: CorrectiveInterventionItem = {
+        ...existing,
+        requires_loto: true,
+        loto_status: check.permit.status,
+        loto: check.permit,
+        updated_at: nowIso,
+      };
+
+      get().setCorrectiveInterventions((prev) =>
+        (prev || []).map((i) => (matchesIntervention(i, id) ? updated : i))
+      );
+
+      get().appendAuditEvent?.({
+        actorId: check.permit.consignateur_id || actor.actorId,
+        actorName: check.permit.consignateur_name || actor.actorName,
+        actorRole: effectiveRole,
+        actionType: 'LOTO_CONSIGNED',
+        entityType: 'CORRECTIVE_BT',
+        entityId: String(existing.id || id),
+        before: { loto_status: existing.loto_status || existing.loto?.status || 'NON_REQUIS' },
+        after: {
+          loto_status: check.permit.status,
+          num_cadenas: check.permit.num_cadenas,
+          energy_types: check.permit.energy_types,
+          vat_verified: check.permit.vat_verified,
+        },
+      });
+
+      return { valid: true, intervention: updated };
+    },
+
+    handleDeconsignInterventionLoto: (id, payload = {}) => {
+      const current = get().correctiveInterventions || [];
+      const existing = current.find((i) => matchesIntervention(i, id));
+      if (!existing) {
+        return { valid: false, reason: 'Bon de travail introuvable.' };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(payload?.actorRole || resolveActiveSessionRole() || actor.actorRole)
+        .trim()
+        .toUpperCase();
+      if (effectiveRole === 'VIEWER' || effectiveRole === 'OBSERVATEUR') {
+        return { valid: false, reason: 'Profil Observateur en lecture seule : déconsignation LOTO refusée.' };
+      }
+
+      const check = validateLotoDeconsignation(existing.loto, {
+        ...payload,
+        deconsignateur_id: payload.deconsignateur_id || actor.actorId,
+        deconsignateur_name: payload.deconsignateur_name || actor.actorName,
+      });
+      if (!check.valid || !check.permit) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      const updated: CorrectiveInterventionItem = {
+        ...existing,
+        requires_loto: true,
+        loto_status: check.permit.status,
+        loto: check.permit,
+        updated_at: nowIso,
+      };
+
+      get().setCorrectiveInterventions((prev) =>
+        (prev || []).map((i) => (matchesIntervention(i, id) ? updated : i))
+      );
+
+      get().appendAuditEvent?.({
+        actorId: check.permit.deconsignateur_id || actor.actorId,
+        actorName: check.permit.deconsignateur_name || actor.actorName,
+        actorRole: effectiveRole,
+        actionType: 'LOTO_DECONSIGNED',
+        entityType: 'CORRECTIVE_BT',
+        entityId: String(existing.id || id),
+        before: { loto_status: existing.loto_status || existing.loto?.status },
+        after: {
+          loto_status: check.permit.status,
+          num_cadenas: check.permit.num_cadenas,
+          deconsigned_at: check.permit.deconsigned_at,
+        },
+      });
+
+      return { valid: true, intervention: updated };
     },
 
     correctiveKpis: () => CorrectiveCalculationService.computeKpis(get().correctiveInterventions || []),

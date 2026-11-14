@@ -17,11 +17,40 @@ export interface MovementEntity {
   operation?: string;
 }
 
+interface RawMovementShape {
+  ref?: unknown;
+  code_article?: unknown;
+  'Référence'?: unknown;
+  Reference?: unknown;
+  type?: unknown;
+  'Type (Entrée/Sortie)'?: unknown;
+  quantite?: unknown;
+  quantity?: unknown;
+  'Quantité'?: unknown;
+}
+
+function toMovementDelta(raw: RawMovementShape | null | undefined): MovementDelta {
+  const ref = String(raw?.ref ?? raw?.code_article ?? raw?.['Référence'] ?? raw?.Reference ?? '');
+  const type = String(raw?.type ?? raw?.['Type (Entrée/Sortie)'] ?? '');
+  const rawQty =
+    raw?.quantite != null ? raw.quantite : raw?.quantity != null ? raw.quantity : raw?.['Quantité'];
+  return {
+    ref,
+    type,
+    quantity: Number(rawQty) || 0,
+  };
+}
+
 const channel =
   typeof BroadcastChannel !== 'undefined'
     ? new BroadcastChannel('gmao_cache_sync')
     : null;
 
+/**
+ * Incremental stock ledger coordinator and multi-tab `BroadcastChannel` synchronizer.
+ * Routes delta additions/edits/rollbacks exclusively through `stockIndexStore.index`
+ * to uphold `stockActuel = stockInitial + entrees - sorties`.
+ */
 export class MovementRepository {
   private static channelBound = false;
 
@@ -120,13 +149,10 @@ export class MovementRepository {
     });
   }
 
-  bulkReplace(movements: MovementEntity[], initialStocks?: Map<string, number>): void {
+  /** Rebuilds the entire in-memory stock index from authoritative persisted movements and initial balances. */
+  bulkReplace(movements: ReadonlyArray<MovementEntity | RawMovementShape>, initialStocks?: Map<string, number>): void {
     const list = Array.isArray(movements) ? movements : [];
-    const deltas: MovementDelta[] = list.map((m: any) => ({
-      ref: m?.ref || m?.code_article || m?.['Référence'] || m?.['Reference'] || '',
-      type: m?.type || m?.['Type (Entrée/Sortie)'] || '',
-      quantity: Number(m?.quantite != null ? m.quantite : m?.quantity != null ? m.quantity : m?.['Quantité']) || 0,
-    }));
+    const deltas: MovementDelta[] = list.map((m) => toMovementDelta(m as RawMovementShape));
     stockIndexStore.index.rebuild(deltas, initialStocks);
     stockIndexStore.markHydrated();
     stockIndexStore.notifyAll();
@@ -171,11 +197,9 @@ export class MovementRepository {
       try {
         const rawMovements = storageService.getItem(STORAGE_KEYS.MOUVEMENTS);
         const savedMovements = Array.isArray(rawMovements) ? rawMovements : [];
-        const deltas: MovementDelta[] = savedMovements.map((m: any) => ({
-          ref: m?.ref || m?.code_article || m?.['Référence'] || m?.['Reference'] || '',
-          type: m?.type || m?.['Type (Entrée/Sortie)'] || '',
-          quantity: Number(m?.quantite != null ? m.quantite : m?.quantity != null ? m.quantity : m?.['Quantité']) || 0,
-        }));
+        const deltas: MovementDelta[] = savedMovements.map((m) =>
+          toMovementDelta(m as RawMovementShape)
+        );
         const rawStockList = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
         let initialStockMap: Map<string, number> | undefined;
         if (Array.isArray(rawStockList)) {

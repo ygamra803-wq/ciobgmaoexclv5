@@ -1,5 +1,98 @@
 import { ROLES } from './Roles';
 
+export interface TechnicianActorUser {
+  id?: string;
+  role?: string;
+  personnelId?: string;
+  personnelName?: string;
+  code?: string;
+  name?: string;
+}
+
+export interface TechnicianDirectoryEntry {
+  id_technician?: string;
+  id?: string | number;
+  code?: string;
+  nom?: string;
+  prenom?: string;
+  nom_technicien?: string;
+  name?: string;
+}
+
+export interface TechnicianScopedRecord {
+  id?: string | number;
+  id_machine?: string;
+  composant?: string;
+  action_libelle?: string;
+  date_execution?: string;
+  date_realisation?: string;
+  periodMonth?: string;
+  id_technicien?: string;
+  id_technician?: string;
+  technicien_matricule?: string;
+  responsable?: string;
+  intervenant?: string;
+  technicien?: string;
+  technicien_realisateur?: string;
+  executorName?: string;
+  submitted_by_id?: string;
+  submitted_by_name?: string;
+}
+
+export interface TechnicianPreventiveTask extends TechnicianScopedRecord {
+  is_active?: boolean;
+  active?: boolean;
+  statut?: string;
+  status?: string;
+  _isOrphan?: boolean;
+  etat?: string;
+  frequence?: string;
+  validation_status?: string;
+  validation_note?: string;
+  planning?: Record<string, unknown>;
+  semaine_cible?: string;
+}
+
+export interface TechnicianCorrectiveRecord extends TechnicianScopedRecord {
+  num_bt?: string;
+  code_machine?: string;
+  anomalie?: string;
+  travail_a_faire?: string;
+  statut?: string;
+  validation_status?: string;
+  validation_note?: string;
+}
+
+export interface TechnicianMovementRecord extends TechnicianScopedRecord {
+  type?: string;
+  ref?: string;
+  designation?: string;
+  code_bon?: string;
+  date?: string;
+  id_machine_registered?: string;
+  quantite?: number | string;
+}
+
+export interface BuildTechnicianScopeInput<
+  TTech extends TechnicianDirectoryEntry = TechnicianDirectoryEntry,
+  TTask extends TechnicianPreventiveTask = TechnicianPreventiveTask,
+  TPrevExec extends TechnicianScopedRecord = TechnicianScopedRecord,
+  TCorr extends TechnicianCorrectiveRecord = TechnicianCorrectiveRecord,
+  TMvt extends TechnicianMovementRecord = TechnicianMovementRecord,
+> {
+  user: TechnicianActorUser | null | undefined;
+  technicians?: TTech[];
+  preventiveTasks?: TTask[];
+  preventiveExecutions?: TPrevExec[];
+  correctiveInterventions?: TCorr[];
+  mouvements?: TMvt[];
+  machines?: ReadonlyArray<Record<string, unknown>>;
+  sortieDemands?: ReadonlyArray<Record<string, unknown>>;
+  currentWeekKey?: string;
+  now?: Date | string;
+}
+
+/** Canonicalizes names/codes (strips accents and punctuation) for resilient technician matching. */
 function normalizeToken(val: unknown): string {
   return String(val || '')
     .normalize('NFD')
@@ -9,13 +102,16 @@ function normalizeToken(val: unknown): string {
     .replace(/[^A-Z0-9]/g, '');
 }
 
-export function isTechnicianRole(user: any): boolean {
+export function isTechnicianRole(user: TechnicianActorUser | null | undefined): boolean {
   if (!user) return false;
   const role = String(user.role || '').trim().toUpperCase();
   return role === ROLES.TECHNICIEN || role === 'TECHNICIEN';
 }
 
-export function resolveTechnicianFromDirectory(user: any, technicians: any[] = []): any | null {
+export function resolveTechnicianFromDirectory<TTech extends TechnicianDirectoryEntry>(
+  user: TechnicianActorUser | null | undefined,
+  technicians: TTech[] = []
+): TTech | null {
   if (!user || !Array.isArray(technicians) || technicians.length === 0) return null;
 
   const pIdNorm = normalizeToken(user.personnelId || user.code || '');
@@ -36,7 +132,10 @@ export function resolveTechnicianFromDirectory(user: any, technicians: any[] = [
   return null;
 }
 
-export function getTechnicianDisplayName(user: any, technicians: any[] = []): string {
+export function getTechnicianDisplayName(
+  user: TechnicianActorUser | null | undefined,
+  technicians: TechnicianDirectoryEntry[] = []
+): string {
   if (!user) return '';
   const matched = resolveTechnicianFromDirectory(user, technicians);
   if (matched) {
@@ -52,7 +151,10 @@ export function getTechnicianDisplayName(user: any, technicians: any[] = []): st
   return String(user.personnelId || user.code || '').trim();
 }
 
-export function getTechnicianBadgeLabel(user: any, technicians: any[] = []): string {
+export function getTechnicianBadgeLabel(
+  user: TechnicianActorUser | null | undefined,
+  technicians: TechnicianDirectoryEntry[] = []
+): string {
   if (!user) return 'Technicien';
   const matched = resolveTechnicianFromDirectory(user, technicians);
   const name = getTechnicianDisplayName(user, technicians);
@@ -66,7 +168,14 @@ export function getTechnicianBadgeLabel(user: any, technicians: any[] = []): str
   return name || code || 'Technicien';
 }
 
-export function getTechnicianIdentityTokens(user: any, technicians: any[] = []): Set<string> {
+/**
+ * Collects all normalized identity tokens (IDs, matricules, full name variants) for a user
+ * so records authored under legacy name strings still match canonical `TECH-*` IDs.
+ */
+export function getTechnicianIdentityTokens(
+  user: TechnicianActorUser | null | undefined,
+  technicians: TechnicianDirectoryEntry[] = []
+): Set<string> {
   const tokens = new Set<string>();
   if (!user) return tokens;
 
@@ -106,9 +215,9 @@ export function getTechnicianIdentityTokens(user: any, technicians: any[] = []):
  * against the logged-in technician's identity tokens (`personnelId` & `personnelName`).
  */
 export function matchesTechnicianRecord(
-  record: any,
-  user: any,
-  technicians: any[] = []
+  record: TechnicianScopedRecord | null | undefined,
+  user: TechnicianActorUser | null | undefined,
+  technicians: TechnicianDirectoryEntry[] = []
 ): boolean {
   if (!record || !user) return false;
   const userTokens = getTechnicianIdentityTokens(user, technicians);
@@ -144,7 +253,16 @@ export function getCurrentIsoWeekKey(date: Date = new Date()): string {
   return `S${weekNum}`;
 }
 
-export function buildTechnicianDashboardScope({
+/**
+ * Computes role-scoped technician KPIs and priority queues while excluding archived/orphan tasks.
+ */
+export function buildTechnicianDashboardScope<
+  TTech extends TechnicianDirectoryEntry = TechnicianDirectoryEntry,
+  TTask extends TechnicianPreventiveTask = TechnicianPreventiveTask,
+  TPrevExec extends TechnicianScopedRecord = TechnicianScopedRecord,
+  TCorr extends TechnicianCorrectiveRecord = TechnicianCorrectiveRecord,
+  TMvt extends TechnicianMovementRecord = TechnicianMovementRecord,
+>({
   user,
   technicians = [],
   preventiveTasks = [],
@@ -152,19 +270,7 @@ export function buildTechnicianDashboardScope({
   correctiveInterventions = [],
   mouvements = [],
   currentWeekKey = getCurrentIsoWeekKey(),
-}: {
-  user: any;
-  technicians?: any[];
-  preventiveTasks?: any[];
-  preventiveExecutions?: any[];
-  correctiveInterventions?: any[];
-  mouvements?: any[];
-  machines?: any[];
-  sortieDemands?: any[];
-  currentWeekKey?: string;
-  now?: Date | string;
-  [key: string]: any;
-}) {
+}: BuildTechnicianScopeInput<TTech, TTask, TPrevExec, TCorr, TMvt>) {
   const isTechUser = isTechnicianRole(user);
   const badgeLabel = getTechnicianBadgeLabel(user, technicians);
   const displayName = getTechnicianDisplayName(user, technicians);
@@ -181,7 +287,7 @@ export function buildTechnicianDashboardScope({
     ? activePreventiveTasks.filter((t) => matchesTechnicianRecord(t, user, technicians))
     : activePreventiveTasks;
 
-  const isScheduledThisWeek = (task: any) => {
+  const isScheduledThisWeek = (task: TechnicianPreventiveTask | null | undefined) => {
     if (!task) return false;
     if (task.planning && Boolean(task.planning[currentWeekKey])) return true;
     if (String(task.semaine_cible || '').trim().toUpperCase() === currentWeekKey.toUpperCase()) {
@@ -207,7 +313,7 @@ export function buildTechnicianDashboardScope({
   const doneTasks = myPreventiveTasks.filter((t) => t?.etat === 'Fait');
 
   const priorityTasks = [...myPreventiveTasks].sort((a, b) => {
-    const rank = (t: any) => {
+    const rank = (t: TechnicianPreventiveTask) => {
       if (t?.etat === 'À clarifier' || t?.validation_status === 'NEEDS_CLARIFICATION') return -1;
       if (t?.etat === 'En retard') return 0;
       if (t?.etat !== 'Fait' && isScheduledThisWeek(t)) return 1;
@@ -274,4 +380,5 @@ export function buildTechnicianDashboardScope({
     totalMySortiePieces,
   };
 }
+
 

@@ -11,30 +11,124 @@
  * and prevents discrepancies between Warehouse Stock and Executive Financial Reports.
  */
 
-export interface AuditReconciliationInput {
-  correctiveInterventions: any[];
-  preventiveExecutions: any[];
-  preventiveTasks: any[];
-  sortieDemands: any[];
+export interface AuditSpareLine {
+  ref?: string;
+  code_article?: string;
+  designation?: string;
+  quantite?: number;
+  qty?: number;
+  prix_unitaire?: number;
+  prix?: number;
+  unitPrice?: number;
 }
 
-export interface AuditReconciliationResult {
+export interface AuditMovementRecord {
+  id?: string | number;
+  code_bon?: string;
+  ref?: string;
+  code_article?: string;
+  quantite?: number;
+  qty?: number;
+  prix_unitaire?: number;
+  unitPrice?: number;
+  motif?: string;
+  observation?: string;
+  commentaire?: string;
+  source_bt_id?: string | number;
+  source_execution_id?: string | number;
+  source_demand_id?: string | number;
+  merged_demand_id?: string | number;
+}
+
+export interface AuditCorrectiveBtRecord {
+  id?: string | number;
+  num_bt?: string;
+  pieces_utilisees?: AuditSpareLine[];
+  pieces_proposees?: AuditSpareLine[];
+  pdr_ref?: string;
+  pdr_designation?: string;
+  pdr_quantite?: number;
+  pdr_prix?: number;
+  cout_pdr?: number;
+  pdr_cost?: number;
+  stock_deducted?: boolean;
+  emitted_movement_ids?: string[];
+  validation_note?: string;
+  updated_at?: string;
+}
+
+export interface AuditPreventiveExecRecord {
+  id?: string | number;
+  taskId?: string | number;
+  taskCode?: string;
+  sparesUsed?: AuditSpareLine[];
+  sparesProposed?: AuditSpareLine[];
+  sparesCost?: number;
+  totalCost?: number;
+  durationMinutes?: number;
+  laborRate?: number;
+  stock_deducted?: boolean;
+  emitted_movement_ids?: string[];
+  validation_note?: string;
+  updated_at?: string;
+}
+
+export interface AuditPreventiveTaskRecord {
+  id?: string | number;
+  pieces_proposees?: AuditSpareLine[];
+  cout_cumule?: number;
+  updated_at?: string;
+}
+
+export interface AuditSortieDemandRecord {
+  id?: string | number;
+  code_bon_tech?: string;
+  items?: AuditSpareLine[];
+  emitted_movement_ids?: string[];
+  stock_deducted?: boolean;
+  validation_status?: string;
+  validation_note?: string;
+  updated_at?: string;
+}
+
+export interface AuditReconciliationInput<
+  TCorrective extends AuditCorrectiveBtRecord = AuditCorrectiveBtRecord,
+  TPrevExec extends AuditPreventiveExecRecord = AuditPreventiveExecRecord,
+  TPrevTask extends AuditPreventiveTaskRecord = AuditPreventiveTaskRecord,
+  TDemand extends AuditSortieDemandRecord = AuditSortieDemandRecord,
+> {
+  correctiveInterventions: TCorrective[];
+  preventiveExecutions: TPrevExec[];
+  preventiveTasks: TPrevTask[];
+  sortieDemands: TDemand[];
+}
+
+export interface AuditReconciliationResult<
+  TCorrective extends AuditCorrectiveBtRecord = AuditCorrectiveBtRecord,
+  TPrevExec extends AuditPreventiveExecRecord = AuditPreventiveExecRecord,
+  TPrevTask extends AuditPreventiveTaskRecord = AuditPreventiveTaskRecord,
+  TDemand extends AuditSortieDemandRecord = AuditSortieDemandRecord,
+> {
   linkedType: 'CORRECTIVE_BT' | 'PREVENTIVE_EXEC' | 'SORTIE_DEMAND' | null;
   linkedId: string | null;
   correctiveChanged: boolean;
   preventiveExecsChanged: boolean;
   preventiveTasksChanged: boolean;
   sortieDemandsChanged: boolean;
-  correctiveInterventions: any[];
-  preventiveExecutions: any[];
-  preventiveTasks: any[];
-  sortieDemands: any[];
+  correctiveInterventions: Array<TCorrective & { validation_note?: string }>;
+  preventiveExecutions: Array<TPrevExec & { validation_note?: string }>;
+  preventiveTasks: TPrevTask[];
+  sortieDemands: Array<TDemand & { validation_note?: string; validation_status?: string }>;
   auditSummary: string | null;
 }
 
 const norm = (val: unknown): string => String(val ?? '').trim().toUpperCase();
 
-function matchesBtMovement(mvt: any, bt: any): boolean {
+/** Links a stock movement to its originating Corrective BT by FK, emitted list, or BS-BT code pattern. */
+function matchesBtMovement(
+  mvt: AuditMovementRecord | null | undefined,
+  bt: AuditCorrectiveBtRecord | null | undefined
+): boolean {
   if (!mvt || !bt) return false;
   const mvtId = String(mvt.id || '').trim();
   const btId = String(bt.id || '').trim();
@@ -58,7 +152,10 @@ function matchesBtMovement(mvt: any, bt: any): boolean {
   return false;
 }
 
-function matchesPreventiveExecMovement(mvt: any, exec: any): boolean {
+function matchesPreventiveExecMovement(
+  mvt: AuditMovementRecord | null | undefined,
+  exec: AuditPreventiveExecRecord | null | undefined
+): boolean {
   if (!mvt || !exec) return false;
   const mvtId = String(mvt.id || '').trim();
   const execId = String(exec.id || '').trim();
@@ -80,7 +177,10 @@ function matchesPreventiveExecMovement(mvt: any, exec: any): boolean {
   return false;
 }
 
-function matchesSortieDemandMovement(mvt: any, demand: any): boolean {
+function matchesSortieDemandMovement(
+  mvt: AuditMovementRecord | null | undefined,
+  demand: AuditSortieDemandRecord | null | undefined
+): boolean {
   if (!mvt || !demand) return false;
   const mvtId = String(mvt.id || '').trim();
   const demandId = String(demand.id || '').trim();
@@ -103,11 +203,16 @@ function matchesSortieDemandMovement(mvt: any, demand: any): boolean {
  * Reconciles Corrective BTs, Preventive Executions/Tasks, and Sortie Demands
  * when a stock movement is deleted from the warehouse ledger.
  */
-export function reconcileMakerCheckerOnMovementDelete(
-  mvt: any,
-  state: AuditReconciliationInput
-): AuditReconciliationResult {
-  const result: AuditReconciliationResult = {
+export function reconcileMakerCheckerOnMovementDelete<
+  TCorrective extends AuditCorrectiveBtRecord = AuditCorrectiveBtRecord,
+  TPrevExec extends AuditPreventiveExecRecord = AuditPreventiveExecRecord,
+  TPrevTask extends AuditPreventiveTaskRecord = AuditPreventiveTaskRecord,
+  TDemand extends AuditSortieDemandRecord = AuditSortieDemandRecord,
+>(
+  mvt: AuditMovementRecord | null | undefined,
+  state: AuditReconciliationInput<TCorrective, TPrevExec, TPrevTask, TDemand>
+): AuditReconciliationResult<TCorrective, TPrevExec, TPrevTask, TDemand> {
+  const result: AuditReconciliationResult<TCorrective, TPrevExec, TPrevTask, TDemand> = {
     linkedType: null,
     linkedId: null,
     correctiveChanged: false,
@@ -135,7 +240,7 @@ export function reconcileMakerCheckerOnMovementDelete(
   if (matchedBtIndex >= 0) {
     const bt = result.correctiveInterventions[matchedBtIndex];
     const pieces = Array.isArray(bt.pieces_utilisees) ? [...bt.pieces_utilisees] : [];
-    const updatedPieces: any[] = [];
+    const updatedPieces: AuditSpareLine[] = [];
 
     let remainingToDeductBt = targetQty;
     for (const p of pieces) {
@@ -171,7 +276,7 @@ export function reconcileMakerCheckerOnMovementDelete(
     const prevNote = String(bt.validation_note || '').trim();
     const auditNote = `[Audit Magasin] Mouvement ${mvtBon} (${mvt.ref} x${targetQty}) supprimé — coût PDR recalculé (${newTotalPdrCost} DH).`;
 
-    const updatedBt = {
+    const updatedBt: TCorrective = {
       ...bt,
       pieces_utilisees: updatedPieces,
       pieces_proposees: updatedPieces,
@@ -187,7 +292,7 @@ export function reconcileMakerCheckerOnMovementDelete(
       pdr_cost: newTotalPdrCost,
       stock_deducted: updatedPieces.length > 0,
       emitted_movement_ids: Array.isArray(bt.emitted_movement_ids)
-        ? bt.emitted_movement_ids.filter((id: string) => id !== mvtId)
+        ? bt.emitted_movement_ids.filter((id) => id !== mvtId)
         : [],
       validation_note: prevNote ? `${prevNote} | ${auditNote}` : auditNote,
       updated_at: new Date().toISOString(),
@@ -198,7 +303,7 @@ export function reconcileMakerCheckerOnMovementDelete(
     );
     result.correctiveChanged = true;
     result.linkedType = 'CORRECTIVE_BT';
-    result.linkedId = bt.num_bt || bt.id;
+    result.linkedId = String(bt.num_bt || bt.id || '');
     result.auditSummary = `Coût PDR du BT ${bt.num_bt || bt.id} recalculé suite à la suppression du mouvement ${mvtBon}.`;
     return result;
   }
@@ -210,7 +315,7 @@ export function reconcileMakerCheckerOnMovementDelete(
   if (matchedExecIndex >= 0) {
     const exec = result.preventiveExecutions[matchedExecIndex];
     const spares = Array.isArray(exec.sparesUsed) ? [...exec.sparesUsed] : [];
-    const updatedSpares: any[] = [];
+    const updatedSpares: AuditSpareLine[] = [];
     let removedCostDelta = 0;
     let remainingToDeductPrv = targetQty;
 
@@ -253,7 +358,7 @@ export function reconcileMakerCheckerOnMovementDelete(
     const prevNote = String(exec.validation_note || '').trim();
     const auditNote = `[Audit Magasin] Mouvement ${mvtBon} (${mvt.ref} x${targetQty}) supprimé — coût PDR recalculé (${newSparesCost} DH).`;
 
-    const updatedExec = {
+    const updatedExec: TPrevExec = {
       ...exec,
       sparesUsed: updatedSpares,
       sparesProposed: updatedSpares,
@@ -261,7 +366,7 @@ export function reconcileMakerCheckerOnMovementDelete(
       totalCost: newTotalCost,
       stock_deducted: updatedSpares.length > 0,
       emitted_movement_ids: Array.isArray(exec.emitted_movement_ids)
-        ? exec.emitted_movement_ids.filter((id: string) => id !== mvtId)
+        ? exec.emitted_movement_ids.filter((id) => id !== mvtId)
         : [],
       validation_note: prevNote ? `${prevNote} | ${auditNote}` : auditNote,
       updated_at: new Date().toISOString(),
@@ -301,7 +406,7 @@ export function reconcileMakerCheckerOnMovementDelete(
   if (matchedDemandIndex >= 0) {
     const demand = result.sortieDemands[matchedDemandIndex];
     const items = Array.isArray(demand.items) ? [...demand.items] : [];
-    const remainingItems: any[] = [];
+    const remainingItems: AuditSpareLine[] = [];
     let remainingToDeductDemand = targetQty;
 
     for (const it of items) {
@@ -331,13 +436,13 @@ export function reconcileMakerCheckerOnMovementDelete(
     }
 
     const remainingMovementIds = Array.isArray(demand.emitted_movement_ids)
-      ? demand.emitted_movement_ids.filter((id: string) => id !== mvtId)
+      ? demand.emitted_movement_ids.filter((id) => id !== mvtId)
       : [];
     const allCancelled = remainingItems.length === 0 && remainingMovementIds.length === 0;
     const prevNote = String(demand.validation_note || '').trim();
     const auditNote = `[Audit Magasin] Mouvement ${mvtBon} (${mvt.ref} x${targetQty}) annulé.`;
 
-    const updatedDemand = {
+    const updatedDemand: TDemand = {
       ...demand,
       items: remainingItems,
       emitted_movement_ids: remainingMovementIds,
@@ -369,12 +474,17 @@ export function reconcileMakerCheckerOnMovementDelete(
  * Reconciles Corrective BTs, Preventive Executions/Tasks, and Sortie Demands
  * when a linked stock movement's quantity or unit price is modified in the warehouse.
  */
-export function reconcileMakerCheckerOnMovementUpdate(
-  oldMvt: any,
-  updatedMvt: any,
-  state: AuditReconciliationInput
-): AuditReconciliationResult {
-  const result: AuditReconciliationResult = {
+export function reconcileMakerCheckerOnMovementUpdate<
+  TCorrective extends AuditCorrectiveBtRecord = AuditCorrectiveBtRecord,
+  TPrevExec extends AuditPreventiveExecRecord = AuditPreventiveExecRecord,
+  TPrevTask extends AuditPreventiveTaskRecord = AuditPreventiveTaskRecord,
+  TDemand extends AuditSortieDemandRecord = AuditSortieDemandRecord,
+>(
+  oldMvt: AuditMovementRecord | null | undefined,
+  updatedMvt: AuditMovementRecord | null | undefined,
+  state: AuditReconciliationInput<TCorrective, TPrevExec, TPrevTask, TDemand>
+): AuditReconciliationResult<TCorrective, TPrevExec, TPrevTask, TDemand> {
+  const result: AuditReconciliationResult<TCorrective, TPrevExec, TPrevTask, TDemand> = {
     linkedType: null,
     linkedId: null,
     correctiveChanged: false,
@@ -410,7 +520,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
     let matchedPiece = false;
 
     const updatedPieces = pieces
-      .map((p: any) => {
+      .map((p) => {
         if (!matchedPiece && norm(p?.ref || p?.code_article) === targetRef) {
           matchedPiece = true;
           return {
@@ -422,7 +532,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
         }
         return p;
       })
-      .filter((p: any) => (Number(p?.quantite ?? p?.qty ?? 0) || 0) > 0);
+      .filter((p) => (Number(p?.quantite ?? p?.qty ?? 0) || 0) > 0);
 
     if (matchedPiece) {
       const newTotalPdrCost = Number(
@@ -436,7 +546,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
       );
       const primaryPiece = updatedPieces[0] || null;
 
-      const updatedBt = {
+      const updatedBt: TCorrective = {
         ...bt,
         pieces_utilisees: updatedPieces,
         pieces_proposees: updatedPieces,
@@ -454,7 +564,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
       );
       result.correctiveChanged = true;
       result.linkedType = 'CORRECTIVE_BT';
-      result.linkedId = bt.num_bt || bt.id;
+      result.linkedId = String(bt.num_bt || bt.id || '');
       result.auditSummary = `Coût PDR du BT ${bt.num_bt || bt.id} synchronisé (${newTotalPdrCost} DH).`;
     }
     return result;
@@ -485,7 +595,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
     let matchedSpare = false;
 
     const updatedSpares = spares
-      .map((s: any) => {
+      .map((s) => {
         if (!matchedSpare && norm(s?.ref || s?.code_article) === targetRef) {
           matchedSpare = true;
           return {
@@ -498,7 +608,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
         }
         return s;
       })
-      .filter((s: any) => (Number(s?.qty ?? s?.quantite ?? 0) || 0) > 0);
+      .filter((s) => (Number(s?.qty ?? s?.quantite ?? 0) || 0) > 0);
 
     if (matchedSpare) {
       const newSparesCost = Number(
@@ -516,7 +626,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
       const newTotalCost = Number((newSparesCost + laborCost).toFixed(2));
       const costDiff = newSparesCost - oldSparesCost;
 
-      const updatedExec = {
+      const updatedExec: TPrevExec = {
         ...exec,
         sparesUsed: updatedSpares,
         sparesProposed: updatedSpares,
@@ -564,7 +674,7 @@ export function reconcileMakerCheckerOnMovementUpdate(
     let matchedItem = false;
 
     const updatedItems = items
-      .map((it: any) => {
+      .map((it) => {
         if (!matchedItem && norm(it?.ref || it?.code_article) === targetRef) {
           matchedItem = true;
           return {
@@ -576,10 +686,10 @@ export function reconcileMakerCheckerOnMovementUpdate(
         }
         return it;
       })
-      .filter((it: any) => (Number(it?.quantite ?? it?.qty ?? 0) || 0) > 0);
+      .filter((it) => (Number(it?.quantite ?? it?.qty ?? 0) || 0) > 0);
 
     if (matchedItem) {
-      const updatedDemand = {
+      const updatedDemand: TDemand = {
         ...demand,
         items: updatedItems,
         stock_deducted: updatedItems.length > 0,

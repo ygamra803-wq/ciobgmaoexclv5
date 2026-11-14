@@ -1,33 +1,82 @@
-// src/application/services/SortieExterneService.js
-// SERVICE SORTIE EXTERNE BOBINAGE & REPARATION
-// ARCHITECTURE: ref (Coordonnées externes / Bon bobinier) | code (Adresse interne SORT-EXT-xxx) | id (Passeport unique complet)
+/**
+ * Application service for External Subcontracting (Bobinage / Repair) and Internal
+ * Mechanical Workshop Orders (`BON-ATEL-*` / `SORT-EXT-*`).
+ *
+ * Identifier model:
+ *  - `ref`: External slip / bobinage vendor reference (`BS-*` / `BA-*`)
+ *  - `code`: Internal sequence code (`SORT-EXT-xxx` or `BON-ATEL-xxx`)
+ *  - `id`: Deterministic asset-movement passport (`ID-SORT-EXT-{SEQ}-{MACHINE}-{ORGANE}-...`)
+ */
 
 import { Logger } from '../../core/logger/LoggerService';
 import { storageService } from '../../utils/storageService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../infrastructure/persistence/migrateStorage';
 import initialSorties from '../../data/movements/seedSortiesExternes.json';
+import type { SortieExterneItem, SortieMountedPayload } from '../../types/store';
 
 const STORAGE_KEY = STORAGE_KEYS.SORTIE_EXTERNE;
 
-// Seed Initial issu des archives de l'usine
-export const INITIAL_SORTIES_BOBINAGE = initialSorties;
+export const INITIAL_SORTIES_BOBINAGE: SortieExterneItem[] =
+  initialSorties as unknown as SortieExterneItem[];
+
+export interface SortieWarehouseItemLike {
+  id?: string | number;
+  id_warehouse_item?: string;
+  code?: string;
+  designation?: string;
+  nom?: string;
+  rattachement_type?: 'MACHINE' | 'STOCK' | string;
+  id_machine?: string;
+  id_machine_registered?: string;
+  emplacement?: string;
+  status?: string;
+  statut?: string;
+  etat?: string;
+  technician?: string;
+  historique_bobinage?: Array<Record<string, unknown>>;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+export interface SortieBtReference {
+  id?: string | number;
+  num_bt?: string;
+  code_bt?: string;
+  id_sortie_atelier?: string;
+  code_sortie_atelier?: string;
+  [key: string]: unknown;
+}
+
+export interface SortieReturnInput {
+  date_arrivee_reelle?: string;
+  cout_bobinage?: number;
+  note?: string;
+  technicien_reception?: string;
+  [key: string]: unknown;
+}
+
+export interface SortieStatsSummary {
+  total: number;
+  enCours: number;
+  retournes: number;
+  montes: number;
+  atelierCount: number;
+  externeCount: number;
+  totalCout: number;
+}
 
 export class SortieExterneService {
-  /**
-   * Charge la liste des sorties depuis storageService ou le seed démo si activé
-   */
-  static getSorties() {
-    return loadCollection(STORAGE_KEY, {
+  /** Loads external/workshop orders from canonical storage without silent seed reinjection. */
+  static getSorties(): SortieExterneItem[] {
+    return loadCollection<SortieExterneItem[]>(STORAGE_KEY, {
       allowDemoFallback: false,
       demoSeed: [],
     });
   }
 
-  /**
-   * Sauvegarde les données dans le stockage
-   */
-  static saveSorties(sorties) {
+  /** Persists external/workshop orders to canonical storage. */
+  static saveSorties(sorties: SortieExterneItem[]): void {
     try {
       storageService.setItem(STORAGE_KEY, sorties);
     } catch (e) {
@@ -35,10 +84,11 @@ export class SortieExterneService {
     }
   }
 
-  /**
-   * Génère le prochain code interne (SORT-EXT-001 ou BON-ATEL-001 selon categorieFlux)
-   */
-  static getNextCode(existingSorties?: any[], categorieFlux = 'SOUS_TRAITANCE_EXTERNE') {
+  /** Generates the next sequential internal code (`SORT-EXT-xxx` or `BON-ATEL-xxx`). */
+  static getNextCode(
+    existingSorties?: SortieExterneItem[],
+    categorieFlux = 'SOUS_TRAITANCE_EXTERNE'
+  ): string {
     const list = Array.isArray(existingSorties) ? existingSorties : this.getSorties();
     const isAtelier = String(categorieFlux || '').trim().toUpperCase() === 'ATELIER_MECANIQUE';
     const prefix = isAtelier ? 'BON-ATEL' : 'SORT-EXT';
@@ -56,9 +106,7 @@ export class SortieExterneService {
     return `${prefix}-${String(nextSeq).padStart(3, '0')}`;
   }
 
-  /**
-   * Vérifie si un bon d'atelier / sortie externe est encore ouvert (non réceptionné et non monté).
-   */
+  /** Returns true while the external/workshop dossier is still active (not returned, mounted, scrapped, or closed). */
   static isWorkshopOrderOpen(etat?: string | null): boolean {
     const norm = String(etat || '')
       .trim()
@@ -82,17 +130,18 @@ export class SortieExterneService {
   }
 
   /**
-   * Vérifie si un bon d'atelier / sortie externe est terminé (réceptionné OK ou monté sur machine)
-   * et permet donc la clôture définitive du Bon de Travail (BT) parent.
+   * Checks whether a linked external/workshop order has reached a terminal state (`Retourné OK`,
+   * `Monté`, `Stock`, `Clôturé`, or `Réformé`), unblocking parent Work Order (`BT`) closure.
    */
   static isWorkshopOrderReadyForClosure(etat?: string | null): boolean {
     return !this.isWorkshopOrderOpen(etat);
   }
 
-  /**
-   * Retourne tous les bons d'atelier / sorties externes rattachés à un Bon de Travail (BT).
-   */
-  static getLinkedOrdersForBt(btOrId: any, existingList?: any[]): any[] {
+  /** Returns all external/workshop orders linked to a given Work Order (`BT`) ID or code. */
+  static getLinkedOrdersForBt(
+    btOrId: string | SortieBtReference | null | undefined,
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem[] {
     const list = Array.isArray(existingList) ? existingList : this.getSorties();
     if (!btOrId || !Array.isArray(list) || list.length === 0) return [];
 
@@ -121,18 +170,30 @@ export class SortieExterneService {
       const sCode = String(s.code || '').trim().toUpperCase();
       const sBt = String(s.id_corrective || '').trim().toUpperCase();
       return (
-        (sId && keys.has(sId)) ||
-        (sCode && keys.has(sCode)) ||
-        (sBt && keys.has(sBt))
+        (Boolean(sId) && keys.has(sId)) ||
+        (Boolean(sCode) && keys.has(sCode)) ||
+        (Boolean(sBt) && keys.has(sBt))
       );
     });
   }
 
   /**
-   * Construit le Passport ID unique selon la philosophie convenue:
-   * ID-SORT-EXT-{SEQ}-{MACHINE}-{MOTEUR}-{REF}-{FOURNISSEUR}
+   * Builds a deterministic Passport ID encoding code, machine, component, reference, and vendor:
+   * `ID-SORT-EXT-{SEQ}-{MACHINE}-{ORGANE}-{REF}-{FOURNISSEUR}`.
    */
-  static generatePassportId({ code, machine, moteurReel, refMoteur, fournisseur }) {
+  static generatePassportId({
+    code,
+    machine,
+    moteurReel,
+    refMoteur,
+    fournisseur,
+  }: {
+    code?: string;
+    machine?: string;
+    moteurReel?: string;
+    refMoteur?: string;
+    fournisseur?: string;
+  }): string {
     const cleanCode = String(code || 'SORT-EXT-000').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const cleanMach = String(machine || 'NOMACH').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const cleanMot = String(moteurReel || 'NOMOT').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
@@ -141,10 +202,11 @@ export class SortieExterneService {
     return `ID-${cleanCode}-${cleanMach}-${cleanMot}-${cleanRef}-${cleanFourn}`;
   }
 
-  /**
-   * Ajoute une nouvelle sortie externe bobinage ou bon d'atelier mécanique (rectification / usinage)
-   */
-  static addSortie(payload, existingList?: any[]) {
+  /** Creates and persists a new external repair or internal mechanical workshop order. */
+  static addSortie(
+    payload: Partial<SortieExterneItem> & Record<string, unknown>,
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem {
     const currentList = Array.isArray(existingList) ? [...existingList] : this.getSorties();
     const categorieFlux =
       String(payload?.categorie_flux || '').trim().toUpperCase() === 'ATELIER_MECANIQUE'
@@ -152,64 +214,75 @@ export class SortieExterneService {
         : 'SOUS_TRAITANCE_EXTERNE';
     const isAtelier = categorieFlux === 'ATELIER_MECANIQUE';
 
-    const code = payload.code || this.getNextCode(currentList, categorieFlux);
-    const organeCode =
+    const code = String(payload.code || this.getNextCode(currentList, categorieFlux));
+    const organeCode = String(
       payload.code_moteur_reel ||
-      payload.id_composant ||
-      payload.id_part ||
-      (isAtelier ? 'ORG-MECA-01' : 'mot 01');
-    const prestataire =
+        payload.id_composant ||
+        payload.id_part ||
+        (isAtelier ? 'ORG-MECA-01' : 'mot 01')
+    );
+    const prestataire = String(
       payload.fournisseur_externe ||
-      (isAtelier ? 'Atelier Mécanique Interne' : 'Bobinage Casa');
+        (isAtelier ? 'Atelier Mécanique Interne' : 'Bobinage Casa')
+    );
 
-    const id =
+    const id = String(
       payload.id ||
-      this.generatePassportId({
-        code,
-        machine: payload.id_machine,
-        moteurReel: organeCode,
-        refMoteur: payload.ref_moteur || payload.nature_travail,
-        fournisseur: prestataire,
-      });
+        this.generatePassportId({
+          code,
+          machine: typeof payload.id_machine === 'string' ? payload.id_machine : undefined,
+          moteurReel: organeCode,
+          refMoteur: String(payload.ref_moteur || payload.nature_travail || ''),
+          fournisseur: prestataire,
+        })
+    );
 
     const now = new Date().toISOString();
     const defaultEtat = isAtelier ? 'En cours atelier' : 'En réparation externe';
-    const newEntry = {
+    const newEntry: SortieExterneItem = {
       id,
       code,
       categorie_flux: categorieFlux,
-      nature_travail:
+      nature_travail: String(
         payload.nature_travail ||
-        (isAtelier ? 'Rectification / Usinage' : 'Bobinage & Révision'),
-      ref:
+          (isAtelier ? 'Rectification / Usinage' : 'Bobinage & Révision')
+      ),
+      ref: String(
         payload.ref ||
-        `${isAtelier ? 'BA' : 'BS'}-${new Date().getFullYear()}-${String(
-          Math.floor(Math.random() * 900) + 100
-        )}`,
-      id_machine: payload.id_machine || 'DET-01',
+          `${isAtelier ? 'BA' : 'BS'}-${new Date().getFullYear()}-${String(
+            Math.floor(Math.random() * 900) + 100
+          )}`
+      ),
+      id_machine: String(payload.id_machine || 'DET-01'),
       code_moteur_reel: organeCode,
-      id_composant: payload.id_composant || '',
-      id_part: payload.id_part || '',
-      id_groupe: payload.id_groupe || (isAtelier ? 'GRP-MECA-001' : 'GRP-MOTEUR-001'),
-      id_family: payload.id_family || (isAtelier ? 'FAM-ORGANE-MECA-001' : 'FAM-MOTEUR-ELEC-001'),
-      id_template: payload.id_template || (isAtelier ? 'TPL-MECA-STD-001' : 'TPL-MOT-ASYNC-001'),
-      ref_moteur: payload.ref_moteur || '',
-      designation_moteur: payload.designation_moteur || '',
-      date_demontage: payload.date_demontage || new Date().toISOString().split('T')[0],
-      technicien_demontage: payload.technicien_demontage || '',
-      type_probleme: payload.type_probleme || (isAtelier ? 'usinage / rectification' : 'grille'),
-      observation_probleme: payload.observation_probleme || '',
-      date_expedition: payload.date_expedition || new Date().toISOString().split('T')[0],
+      id_composant: String(payload.id_composant || ''),
+      id_part: String(payload.id_part || ''),
+      id_groupe: String(payload.id_groupe || (isAtelier ? 'GRP-MECA-001' : 'GRP-MOTEUR-001')),
+      id_family: String(
+        payload.id_family || (isAtelier ? 'FAM-ORGANE-MECA-001' : 'FAM-MOTEUR-ELEC-001')
+      ),
+      id_template: String(
+        payload.id_template || (isAtelier ? 'TPL-MECA-STD-001' : 'TPL-MOT-ASYNC-001')
+      ),
+      ref_moteur: String(payload.ref_moteur || ''),
+      designation_moteur: String(payload.designation_moteur || ''),
+      date_demontage: String(payload.date_demontage || new Date().toISOString().split('T')[0]),
+      technicien_demontage: String(payload.technicien_demontage || ''),
+      type_probleme: String(
+        payload.type_probleme || (isAtelier ? 'usinage / rectification' : 'grille')
+      ),
+      observation_probleme: String(payload.observation_probleme || ''),
+      date_expedition: String(payload.date_expedition || new Date().toISOString().split('T')[0]),
       fournisseur_externe: prestataire,
-      date_arrivee_prevue: payload.date_arrivee_prevue || '',
-      date_arrivee_reelle: payload.date_arrivee_reelle || null,
-      technicien_montage: payload.technicien_montage || null,
-      date_montage: payload.date_montage || null,
-      etat: payload.etat || defaultEtat,
+      date_arrivee_prevue: String(payload.date_arrivee_prevue || ''),
+      date_arrivee_reelle: (payload.date_arrivee_reelle as string | null) ?? null,
+      technicien_montage: (payload.technicien_montage as string | null) ?? null,
+      date_montage: (payload.date_montage as string | null) ?? null,
+      etat: String(payload.etat || defaultEtat),
       cout_bobinage: Number(payload.cout_bobinage ?? payload.cout_atelier) || 0,
       duree_usinage_heures: Number(payload.duree_usinage_heures) || 0,
-      note: payload.note || '',
-      id_corrective: payload.id_corrective || '',
+      note: String(payload.note || ''),
+      id_corrective: String(payload.id_corrective || ''),
       created_at: now,
       updated_at: now,
     };
@@ -219,15 +292,17 @@ export class SortieExterneService {
     return newEntry;
   }
 
-  /**
-   * Met à jour un enregistrement existant
-   */
-  static updateSortie(id, updates, existingList?: any[]) {
+  /** Updates an existing external/workshop dossier by ID and persists the updated list. */
+  static updateSortie(
+    id: string | number,
+    updates: Partial<SortieExterneItem> & Record<string, unknown>,
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem | null {
     const currentList = Array.isArray(existingList) ? [...existingList] : this.getSorties();
     const index = currentList.findIndex((s) => s.id === id);
     if (index === -1) return null;
 
-    const updatedRecord = {
+    const updatedRecord: SortieExterneItem = {
       ...currentList[index],
       ...updates,
       updated_at: new Date().toISOString(),
@@ -238,11 +313,13 @@ export class SortieExterneService {
     return updatedRecord;
   }
 
-  /**
-   * Marque une sortie comme "Retourné OK" avec date de retour réelle et coût final
-   */
-  static markAsReturned(id, returnDataOrCost: any = {}, existingList?: any[]) {
-    const opts =
+  /** Marks an order as `Retourné OK` with arrival date, final repair cost, and reception technician. */
+  static markAsReturned(
+    id: string | number,
+    returnDataOrCost: number | SortieReturnInput = {},
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem | null {
+    const opts: SortieReturnInput =
       typeof returnDataOrCost === 'number'
         ? { cout_bobinage: returnDataOrCost }
         : returnDataOrCost || {};
@@ -260,10 +337,12 @@ export class SortieExterneService {
     );
   }
 
-  /**
-   * Marque le moteur / organe comme remonté sur sa machine
-   */
-  static markAsMounted(id, { technicien_montage, date_montage, id_machine_cible, note }, existingList?: any[]) {
+  /** Marks a repaired motor/organ as remounted on the target machine after load verification. */
+  static markAsMounted(
+    id: string | number,
+    { technicien_montage, date_montage, id_machine_cible, note }: SortieMountedPayload,
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem | null {
     return this.updateSortie(
       id,
       {
@@ -277,38 +356,40 @@ export class SortieExterneService {
     );
   }
 
-  /**
-   * Supprime une sortie
-   */
-  static deleteSortie(id, existingList?: any[]) {
+  /** Deletes an external/workshop order by ID and persists the remaining list. */
+  static deleteSortie(
+    id: string | number,
+    existingList?: SortieExterneItem[]
+  ): SortieExterneItem[] {
     const currentList = Array.isArray(existingList) ? existingList : this.getSorties();
     const filtered = currentList.filter((s) => s.id !== id);
     this.saveSorties(filtered);
     return filtered;
   }
 
-  /**
-   * Vide toutes les sorties externes (pour usine réelle)
-   */
-  static clearAll() {
+  /** Clears all external/workshop orders for clean factory initialization. */
+  static clearAll(): SortieExterneItem[] {
     this.saveSorties([]);
     return [];
   }
 
-  /**
-   * Réinitialise les sorties externes avec l'archive de base
-   */
-  static resetToBaseline() {
+  /** Restores baseline seed archive orders when explicitly requested by admin. */
+  static resetToBaseline(): SortieExterneItem[] {
     const baseline = Array.isArray(INITIAL_SORTIES_BOBINAGE) ? [...INITIAL_SORTIES_BOBINAGE] : [];
     this.saveSorties(baseline);
     return baseline;
   }
 
   /**
-   * Synchronise automatiquement l'état du moteur/composant dans warehouseItems
-   * ainsi que son historique_bobinage lors d'une sortie externe, d'un retour ou d'un remontage.
+   * Synchronizes the physical motor/component attachment (`MACHINE` vs `STOCK`) and its
+   * `historique_bobinage` repair timeline inside `warehouseItems` when a sortie changes state.
    */
-  static syncWarehouseItemsWithSortie(warehouseItems: any[] = [], sortieRecord: any): any[] {
+  static syncWarehouseItemsWithSortie<
+    TWarehouse extends SortieWarehouseItemLike = SortieWarehouseItemLike,
+  >(
+    warehouseItems: TWarehouse[] = [],
+    sortieRecord?: SortieExterneItem | null
+  ): TWarehouse[] {
     if (!Array.isArray(warehouseItems) || !sortieRecord || typeof sortieRecord !== 'object') {
       return warehouseItems;
     }
@@ -323,8 +404,10 @@ export class SortieExterneService {
       if (itemCode !== motorCode) return item;
 
       changed = true;
-      const existingHistory = Array.isArray(item.historique_bobinage) ? [...item.historique_bobinage] : [];
-      const historyEntry = {
+      const existingHistory: Array<Record<string, unknown>> = Array.isArray(item.historique_bobinage)
+        ? [...item.historique_bobinage]
+        : [];
+      const historyEntry: Record<string, unknown> = {
         id_sortie: sortieRecord.id,
         code_sortie: sortieRecord.code,
         bon_ref: sortieRecord.ref,
@@ -340,7 +423,7 @@ export class SortieExterneService {
       };
 
       const histIdx = existingHistory.findIndex(
-        (h: any) => h && (h.id_sortie === sortieRecord.id || h.code_sortie === sortieRecord.code)
+        (h) => h && (h.id_sortie === sortieRecord.id || h.code_sortie === sortieRecord.code)
       );
       if (histIdx !== -1) {
         existingHistory[histIdx] = { ...existingHistory[histIdx], ...historyEntry };
@@ -350,17 +433,19 @@ export class SortieExterneService {
 
       const etatUpper = String(sortieRecord.etat || '').trim().toUpperCase();
       if (etatUpper.includes('MONTE') || etatUpper.includes('MONTÉ')) {
-        const targetMachine = sortieRecord.id_machine || item.id_machine_registered || item.id_machine;
+        const targetMachine = String(
+          sortieRecord.id_machine || item.id_machine_registered || item.id_machine || ''
+        );
         return {
           ...item,
-          rattachement_type: 'MACHINE',
+          rattachement_type: 'MACHINE' as const,
           id_machine: targetMachine,
           id_machine_registered: targetMachine,
           emplacement: targetMachine,
           status: 'Actif',
           statut: 'Actif',
           etat: 'Actif',
-          technician: sortieRecord.technicien_montage || item.technician,
+          technician: String(sortieRecord.technicien_montage || item.technician || ''),
           historique_bobinage: existingHistory,
           updated_at: new Date().toISOString(),
         };
@@ -375,7 +460,7 @@ export class SortieExterneService {
       ) {
         return {
           ...item,
-          rattachement_type: 'STOCK',
+          rattachement_type: 'STOCK' as const,
           status: 'Retourné OK',
           statut: 'Retourné OK',
           etat: 'Retourné OK',
@@ -397,10 +482,8 @@ export class SortieExterneService {
     return changed ? nextList : warehouseItems;
   }
 
-  /**
-   * Calcule les KPIs en direct pour le tableau de bord
-   */
-  static getStats(sortiesList = []) {
+  /** Computes live KPI summary counters for the external subcontracting / workshop dashboard. */
+  static getStats(sortiesList: SortieExterneItem[] = []): SortieStatsSummary {
     const list = sortiesList.length > 0 ? sortiesList : this.getSorties();
     const total = list.length;
     const enCours = list.filter((s) => this.isWorkshopOrderOpen(s.etat)).length;

@@ -189,7 +189,7 @@ export interface IMachineTemplate {
   constructeur?: string;
   puissance?: string;
   vitesse?: string;
-  specs?: Record<string, any>;
+  specs?: Record<string, unknown>;
   description?: string;
   [key: string]: any;
 }
@@ -447,7 +447,7 @@ export interface ICompTemplate {
   courant_nominal_a?: number | string;
   indice_protection?: string;
   type_fixation?: string;
-  specs?: Record<string, any>;
+  specs?: Record<string, unknown>;
   description?: string;
   [key: string]: any;
 }
@@ -474,7 +474,7 @@ export interface IEntrepotComponent {
   status?: string;
   statut?: string;
   quantite?: number;
-  historique_bobinage?: Array<Record<string, any>>;
+  historique_bobinage?: Array<Record<string, unknown>>;
   [key: string]: any;
 }
 
@@ -517,11 +517,11 @@ export interface IBlueprint {
   famille_lib?: string;
   template_lib?: string;
   description?: string;
-  specs?: Record<string, any>;
+  specs?: Record<string, unknown>;
   statut?: string;
   ref_plan?: string;
-  components_theoriques?: Array<Record<string, any>>;
-  parts_theoriques?: Array<Record<string, any>>;
+  components_theoriques?: Array<Record<string, unknown>>;
+  parts_theoriques?: Array<Record<string, unknown>>;
   pdr_theoriques: IBlueprintTheoreticalPdr[];
   preventivePlanItems?: IBlueprintPreventivePlanItem[];
   commonFailures?: IBlueprintCommonFailureItem[];
@@ -571,7 +571,7 @@ export interface IWarehouseItem {
   courant_nominal_a?: number | string;
   indice_protection?: string;
   type_fixation?: string;
-  historique_bobinage?: Array<Record<string, any>>;
+  historique_bobinage?: Array<Record<string, unknown>>;
   policy_tags?: MaterialPolicyTag[];
   [key: string]: any;
 }

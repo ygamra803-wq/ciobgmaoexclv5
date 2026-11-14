@@ -149,7 +149,7 @@ export interface PreventiveExecutionRecord {
   followUpDiAnomalie?: string;
   followUpDiPriorite?: string;
   createdAt?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 

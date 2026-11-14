@@ -43,20 +43,71 @@ import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
 import GmaoKpiCard, { GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
+import type {
+  IMachine,
+  IMouvement,
+  ISortieDemand,
+  ISortieDemandItem,
+  IStockItem,
+} from '../../../types/domain';
+import type {
+  PreventiveExecutionRecord,
+  PreventiveExecutionSpareItem,
+} from '../../../types/preventive';
+import type {
+  CorrectiveInterventionItem,
+  CorrectivePdrConsumedItem,
+  ValidationReviewDecisionPayload,
+} from '../../../types/store';
+
+type MovementEmitHandler = ((mvt: IMouvement) => void) | null;
+type ValidationToastType = 'success' | 'warning' | 'error' | 'info' | string;
+
+interface BtPieceDraft extends Partial<CorrectivePdrConsumedItem> {
+  ref: string;
+  designation?: string;
+  quantite?: number;
+  qty?: number;
+}
+
+interface ExecSpareDraft extends PreventiveExecutionSpareItem {
+  reference?: string;
+  quantite?: number;
+  unite?: string;
+  prix_unitaire?: number;
+}
+
+interface DemandItemDraft extends ISortieDemandItem {
+  qty?: number;
+}
+
+type ValidationExportCell = string | number | boolean | null | undefined;
 
 interface ValidationCenterViewProps {
-  stockItems?: any[];
-  machines?: any[];
-  mouvements?: any[];
-  correctiveInterventions?: any[];
-  preventiveExecutions?: any[];
-  sortieDemands?: any[];
-  onReviewCorrectiveValidation?: (id: string, decisionData: any, onAddMouvement?: any) => any;
-  onReviewPreventiveValidation?: (id: string, decisionData: any, onAddMouvement?: any) => any;
-  onReviewSortieDemandValidation?: (id: string, decisionData: any, onAddMouvement?: any) => any;
-  onAddMouvement?: (mvt: any) => any;
+  stockItems?: IStockItem[];
+  machines?: IMachine[];
+  mouvements?: IMouvement[];
+  correctiveInterventions?: CorrectiveInterventionItem[];
+  preventiveExecutions?: PreventiveExecutionRecord[];
+  sortieDemands?: ISortieDemand[];
+  onReviewCorrectiveValidation?: (
+    id: string,
+    decisionData: ValidationReviewDecisionPayload,
+    onAddMouvement?: MovementEmitHandler
+  ) => CorrectiveInterventionItem | null | unknown;
+  onReviewPreventiveValidation?: (
+    id: string,
+    decisionData: ValidationReviewDecisionPayload,
+    onAddMouvement?: MovementEmitHandler
+  ) => PreventiveExecutionRecord | null | undefined;
+  onReviewSortieDemandValidation?: (
+    id: string,
+    decisionData: ValidationReviewDecisionPayload,
+    onAddMouvement?: MovementEmitHandler
+  ) => ISortieDemand | null | unknown;
+  onAddMouvement?: MovementEmitHandler;
   onNavigateToTab?: (tab: string) => void;
-  showToast?: (msg: string, type?: string) => void;
+  showToast?: (msg: string, type?: ValidationToastType) => void;
 }
 
 export default function ValidationCenterView({
@@ -117,7 +168,7 @@ export default function ValidationCenterView({
         isArchived: boolean;
       }
     >();
-    (machines || []).forEach((m: any) => {
+    (machines || []).forEach((m: IMachine) => {
       if (!m) return;
       const codes = [
         m.id_machine_registered,
@@ -166,27 +217,27 @@ export default function ValidationCenterView({
   const [showReservedDetails, setShowReservedDetails] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
-  // 1. Corrective Review Modal State
-  const [reviewBt, setReviewBt] = useState<any | null>(null);
+  // 1. Corrective Review Modal State (Maker-Checker draft copy; never mutates store until APPROVED)
+  const [reviewBt, setReviewBt] = useState<CorrectiveInterventionItem | null>(null);
   const [btActionRealisee, setBtActionRealisee] = useState('');
   const [btNature, setBtNature] = useState('');
-  const [btPieces, setBtPieces] = useState<any[]>([]);
+  const [btPieces, setBtPieces] = useState<BtPieceDraft[]>([]);
   const [btSkipStockDeduction, setBtSkipStockDeduction] = useState(false);
   const [btNote, setBtNote] = useState('');
 
   // 2. Preventive Review Modal State
-  const [reviewExec, setReviewExec] = useState<any | null>(null);
-  const [execSpares, setReviewExecSpares] = useState<any[]>([]);
+  const [reviewExec, setReviewExec] = useState<PreventiveExecutionRecord | null>(null);
+  const [execSpares, setReviewExecSpares] = useState<ExecSpareDraft[]>([]);
   const [execSkipStockDeduction, setExecSkipStockDeduction] = useState(false);
   const [execCreateFollowUpDi, setExecCreateFollowUpDi] = useState(false);
   const [execFollowUpDiAnomalie, setExecFollowUpDiAnomalie] = useState('');
   const [execNote, setExecNote] = useState('');
 
   // 3. SortieDemand Review Modal State
-  const [reviewDemand, setReviewDemand] = useState<any | null>(null);
+  const [reviewDemand, setReviewDemand] = useState<ISortieDemand | null>(null);
   const [demandCodeBonMagasin, setDemandCodeBonMagasin] = useState('');
   const [demandMergeMovementId, setDemandMergeMovementId] = useState('');
-  const [demandItems, setDemandItems] = useState<any[]>([]);
+  const [demandItems, setDemandItems] = useState<DemandItemDraft[]>([]);
   const [demandNote, setDemandNote] = useState('');
 
   // Aggregate Queues via pure selector
@@ -211,7 +262,7 @@ export default function ValidationCenterView({
         : [...queues.pendingCorrective, ...queues.clarificationCorrective];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((bt: any) => {
+    return base.filter((bt: CorrectiveInterventionItem) => {
       const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
       const code = String(bt.num_bt || bt.id || '').toLowerCase();
       const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone}`.toLowerCase();
@@ -233,7 +284,7 @@ export default function ValidationCenterView({
         : [...queues.pendingPreventive, ...queues.clarificationPreventive];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((ex: any) => {
+    return base.filter((ex: PreventiveExecutionRecord) => {
       const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
       const code = String(ex.taskCode || ex.actionCode || ex.id || '').toLowerCase();
       const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone}`.toLowerCase();
@@ -255,7 +306,7 @@ export default function ValidationCenterView({
         : [...queues.pendingSortieDemands, ...queues.clarificationSortieDemands];
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((dem: any) => {
+    return base.filter((dem: ISortieDemand) => {
       const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
       const code = String(dem.code_bon_tech || dem.code_bon_magasin || dem.id || '').toLowerCase();
       const machine = `${mMeta.code} ${mMeta.name} ${mMeta.zone} ${dem.id_zone || ''}`.toLowerCase();
@@ -339,17 +390,18 @@ export default function ValidationCenterView({
   ]);
 
   // Open & Submit Handlers for Section 1 (Corrective BT)
-  const handleOpenBtModal = (bt: any) => {
+  const handleOpenBtModal = (bt: CorrectiveInterventionItem) => {
     if (!canValidateCorrective) {
       showToast?.('Droits insuffisants : la validation des Bons de Travail est réservée au Responsable Maintenance ou Administrateur.', 'warning');
       return;
     }
-    const initialPieces =
+    const initialPieces: BtPieceDraft[] =
       Array.isArray(bt?.pieces_proposees) && bt.pieces_proposees.length > 0
-        ? bt.pieces_proposees.map((p: any) => ({ ...p }))
+        ? bt.pieces_proposees.map((p: CorrectivePdrConsumedItem) => ({ ...p }))
         : Array.isArray(bt?.pieces_utilisees) && bt.pieces_utilisees.length > 0
-        ? bt.pieces_utilisees.map((p: any) => ({ ...p }))
+        ? bt.pieces_utilisees.map((p: CorrectivePdrConsumedItem) => ({ ...p }))
         : [];
+    // Pre-detect if storekeeper already booked the corresponding BS movement to prevent double stock deduction.
     const rec = reconcileFieldClaim({
       claimType: 'CORRECTIVE',
       claimId: String(bt?.id || ''),
@@ -396,15 +448,19 @@ export default function ValidationCenterView({
     }
 
     const reviewFn = onReviewCorrectiveValidation || storeReviewCorrective;
+    const normalizedPieces: CorrectivePdrConsumedItem[] = btPieces.map((p) => ({
+      ...p,
+      quantite: Math.max(1, Number(p.quantite ?? p.qty ?? 1)),
+    }));
     const result = reviewFn(
-      reviewBt.id,
+      String(reviewBt.id ?? reviewBt.num_bt ?? ''),
       {
         decision,
         action_realisee: btActionRealisee,
         travail_a_faire: btActionRealisee,
         intervention_nature: btNature || reviewBt.intervention_nature || '',
-        pieces_utilisees: btPieces,
-        pieces_proposees: btPieces,
+        pieces_utilisees: normalizedPieces,
+        pieces_proposees: normalizedPieces,
         skipStockDeduction: btSkipStockDeduction,
         validation_note: btNote.trim(),
         validated_by_id: user?.id || user?.code || 'admin',
@@ -438,19 +494,19 @@ export default function ValidationCenterView({
   };
 
   // Open & Submit Handlers for Section 2 (Preventive Execution)
-  const handleOpenExecModal = (exec: any) => {
+  const handleOpenExecModal = (exec: PreventiveExecutionRecord) => {
     if (!canValidatePreventive) {
       showToast?.('Droits insuffisants : la validation des exécutions préventives est réservée au Responsable Maintenance ou Administrateur.', 'warning');
       return;
     }
     setReviewExec(exec);
-    const initialSpares =
+    const initialSpares: ExecSpareDraft[] =
       Array.isArray(exec.sparesProposed) && exec.sparesProposed.length > 0
         ? exec.sparesProposed
         : Array.isArray(exec.sparesUsed)
         ? exec.sparesUsed
         : [];
-    const mappedSpares = initialSpares.map((s: any) => ({
+    const mappedSpares: ExecSpareDraft[] = initialSpares.map((s: ExecSpareDraft) => ({
       ref: s.ref || s.reference || '',
       designation: s.designation || s.ref || 'Pièce PDR',
       qty: Math.max(1, Number(s.qty ?? s.quantite ?? 1)),
@@ -490,7 +546,7 @@ export default function ValidationCenterView({
 
     const reviewFn = onReviewPreventiveValidation || storeReviewPreventive;
     const updated = reviewFn(
-      reviewExec.id,
+      String(reviewExec.id),
       {
         decision,
         validation_note: execNote.trim(),
@@ -528,7 +584,7 @@ export default function ValidationCenterView({
   };
 
   // Open & Submit Handlers for Section 3 (SortieDemand)
-  const handleOpenDemandModal = (dem: any) => {
+  const handleOpenDemandModal = (dem: ISortieDemand) => {
     if (!canValidateSortie) {
       showToast?.('Droits insuffisants pour valider les demandes de sortie magasin.', 'warning');
       return;
@@ -536,7 +592,7 @@ export default function ValidationCenterView({
     setReviewDemand(dem);
     setDemandCodeBonMagasin(dem.code_bon_magasin || dem.code_bon_tech || '');
     setDemandMergeMovementId('');
-    setDemandItems(Array.isArray(dem.items) ? dem.items.map((it: any) => ({ ...it })) : []);
+    setDemandItems(Array.isArray(dem.items) ? dem.items.map((it: ISortieDemandItem) => ({ ...it })) : []);
     setDemandNote(dem.validation_note || '');
   };
 
@@ -552,7 +608,7 @@ export default function ValidationCenterView({
 
     const reviewFn = onReviewSortieDemandValidation || storeReviewSortieDemand;
     reviewFn(
-      reviewDemand.id,
+      String(reviewDemand.id),
       {
         decision,
         code_bon_magasin: demandCodeBonMagasin || reviewDemand.code_bon_tech,
@@ -590,7 +646,7 @@ export default function ValidationCenterView({
     if (!canExportQueue) return;
     try {
       const wb = XLSX.utils.book_new();
-      const autoFit = (ws: XLSX.WorkSheet, rows: any[][]) => {
+      const autoFit = (ws: XLSX.WorkSheet, rows: ValidationExportCell[][]) => {
         if (!rows.length) return;
         const maxCols = rows.reduce((m, r) => Math.max(m, r.length), 0);
         ws['!cols'] = Array.from({ length: maxCols }, (_, c) => {
@@ -616,10 +672,10 @@ export default function ValidationCenterView({
         'Action / Anomalie',
         'Pièces Proposées',
       ];
-      const btRows = visibleCorrective.map((bt: any) => {
+      const btRows: ValidationExportCell[][] = visibleCorrective.map((bt: CorrectiveInterventionItem) => {
         const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
         const pcs = (Array.isArray(bt.pieces_proposees) ? bt.pieces_proposees : [])
-          .map((p: any) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`)
+          .map((p: BtPieceDraft) => `${p.ref} x${p.quantite ?? p.qty ?? 1}`)
           .join(', ');
         return [
           bt.num_bt || bt.id || '',
@@ -653,10 +709,10 @@ export default function ValidationCenterView({
         'Observations',
         'Pièces Proposées',
       ];
-      const pmRows = visiblePreventive.map((ex: any) => {
+      const pmRows: ValidationExportCell[][] = visiblePreventive.map((ex: PreventiveExecutionRecord) => {
         const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
         const pcs = (Array.isArray(ex.sparesProposed) ? ex.sparesProposed : [])
-          .map((p: any) => `${p.ref} x${p.qty ?? p.quantite ?? 1}`)
+          .map((p: ExecSpareDraft) => `${p.ref} x${p.qty ?? p.quantite ?? 1}`)
           .join(', ');
         return [
           ex.taskCode || ex.actionCode || ex.id || '',
@@ -688,10 +744,10 @@ export default function ValidationCenterView({
         'Motif / Commentaire',
         'Articles Demandés',
       ];
-      const sdRows = visibleSortieDemands.map((dem: any) => {
+      const sdRows: ValidationExportCell[][] = visibleSortieDemands.map((dem: ISortieDemand) => {
         const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
         const pcs = (Array.isArray(dem.items) ? dem.items : [])
-          .map((it: any) => `${it.ref} x${it.quantite ?? it.qty ?? 1}`)
+          .map((it: DemandItemDraft) => `${it.ref} x${it.quantite ?? it.qty ?? 1}`)
           .join(', ');
         return [
           dem.code_bon_tech || dem.id || '',
@@ -1249,7 +1305,7 @@ export default function ValidationCenterView({
             </div>
           ) : (
             <div className="space-y-3">
-              {visibleCorrective.map((bt: any) => {
+              {visibleCorrective.map((bt: CorrectiveInterventionItem) => {
                 const proposed = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
                 const reconciliation = reconcileFieldClaim({
                   claimType: 'CORRECTIVE',
@@ -1355,7 +1411,7 @@ export default function ValidationCenterView({
                       {proposed.length > 0 ? (
                         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                           <span className="text-[11px] font-bold text-slate-500">PDR proposées :</span>
-                          {proposed.map((p: any, idx: number) => (
+                          {proposed.map((p: BtPieceDraft, idx: number) => (
                             <span
                               key={`${p.ref}-${idx}`}
                               className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-mono text-[11px] font-bold text-slate-800"
@@ -1468,7 +1524,7 @@ export default function ValidationCenterView({
             </div>
           ) : (
             <div className="space-y-3">
-              {visiblePreventive.map((ex: any) => {
+              {visiblePreventive.map((ex: PreventiveExecutionRecord) => {
                 const proposed = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
                 const reconciliation = reconcileFieldClaim({
                   claimType: 'PREVENTIVE',
@@ -1560,7 +1616,7 @@ export default function ValidationCenterView({
                       {proposed.length > 0 ? (
                         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                           <span className="text-[11px] font-bold text-slate-500">PDR proposées :</span>
-                          {proposed.map((p: any, idx: number) => (
+                          {proposed.map((p: ExecSpareDraft, idx: number) => (
                             <span
                               key={`${p.ref}-${idx}`}
                               className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-mono text-[11px] font-bold text-slate-800"
@@ -1673,7 +1729,7 @@ export default function ValidationCenterView({
             </div>
           ) : (
             <div className="space-y-3">
-              {visibleSortieDemands.map((dem: any) => {
+              {visibleSortieDemands.map((dem: ISortieDemand) => {
                 const items = Array.isArray(dem?.items) ? dem.items : [];
                 const reconciliation = reconcileFieldClaim({
                   claimType: 'SORTIE',
@@ -1747,7 +1803,7 @@ export default function ValidationCenterView({
                       {items.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                           <span className="text-[11px] font-bold text-slate-500">Articles demandés :</span>
-                          {items.map((it: any, idx: number) => (
+                          {items.map((it: DemandItemDraft, idx: number) => (
                             <span
                               key={`${it.ref}-${idx}`}
                               className="px-2 py-0.5 rounded-lg bg-white border border-slate-200 font-mono text-[11px] font-bold text-slate-800"

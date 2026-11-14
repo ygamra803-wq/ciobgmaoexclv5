@@ -1,14 +1,57 @@
 /**
  * AvailabilityCalculationService
- * Deterministic industrial calculation engine for MTBF, MTTR, Availability %, and Stock Valuation.
+ * Deterministic industrial reliability engine for MTBF, MTTR, Availability %, and Stock Valuation.
  */
 
+export interface InterventionTimingLike {
+  type?: string;
+  type_panne?: string;
+  anomalie?: string;
+  code_machine?: string;
+  id_machine_registered?: string;
+  machine?: string;
+  statut?: string;
+  etat?: string;
+  temps_intervention_mins?: number | string;
+  temps_minutes?: number | string;
+  dureeMinutes?: number | string;
+  temps_arret_minutes?: number | string;
+  duration?: number;
+  downtimeHours?: number;
+  temps_intervention_calc?: number | string;
+  temps_intervention?: number | string;
+  duree?: number | string;
+  temps_arret?: number | string;
+  duree_arret?: number | string;
+  date_debut?: string;
+  date_fin?: string;
+  heure_debut?: string;
+  heure_fin?: string;
+  startDate?: string;
+  endDate?: string;
+  arret_machine?: boolean | string;
+  is_stoppage?: boolean;
+  [key: string]: unknown;
+}
+
+export interface StockArticleValuationLike {
+  stockActuel?: number;
+  stock_actuel?: number;
+  quantite?: number;
+  prix_unitaire?: number;
+  prix?: number;
+  unitPrice?: number;
+  [key: string]: unknown;
+}
+
+export interface MachineAvailabilityRefLike {
+  id?: string;
+  id_machine_registered?: string;
+  [key: string]: unknown;
+}
+
 export class AvailabilityCalculationService {
-  /**
-   * Parse duration in minutes from various formats
-   * @param {Object} intervention 
-   * @returns {number} duration in minutes
-   */
+  /** Parses duration strings (`2h 30m`, `01:45`, `90 min`, or raw numeric minutes) into minutes. */
   static parseDurationStringMinutes(durationStr: unknown): number {
     if (!durationStr) return 0;
     const str = String(durationStr).trim();
@@ -34,11 +77,12 @@ export class AvailabilityCalculationService {
   }
 
   /**
-   * Parse repair duration in minutes from all canonical & legacy intervention fields
-   * @param {Object} intervention 
-   * @returns {number} duration in minutes
+   * Resolves repair duration in minutes across canonical and legacy intervention fields,
+   * falling back to 45 minutes only when no explicit timestamp or duration metadata exists.
    */
-  static getInterventionDurationMinutes(intervention: any): number {
+  static getInterventionDurationMinutes(
+    intervention: InterventionTimingLike | null | undefined
+  ): number {
     if (!intervention) return 0;
 
     const explicitMins =
@@ -60,9 +104,9 @@ export class AvailabilityCalculationService {
 
     const parsedFromIntervention = this.parseDurationStringMinutes(
       intervention.temps_intervention_calc ||
-      intervention.temps_intervention ||
-      intervention.duree ||
-      intervention.temps_arret
+        intervention.temps_intervention ||
+        intervention.duree ||
+        intervention.temps_arret
     );
     if (parsedFromIntervention > 0) {
       return parsedFromIntervention;
@@ -86,13 +130,11 @@ export class AvailabilityCalculationService {
       }
     }
 
-    return 45; // standard nominal fallback only when no time field exists
+    return 45;
   }
 
-  /**
-   * Parse machine stoppage / downtime duration in minutes
-   */
-  static getDowntimeMinutes(intervention: any): number {
+  /** Parses machine stoppage / downtime duration in minutes. */
+  static getDowntimeMinutes(intervention: InterventionTimingLike | null | undefined): number {
     if (!intervention) return 0;
     if (typeof intervention.downtimeHours === 'number' && intervention.downtimeHours > 0) {
       return Math.round(intervention.downtimeHours * 60);
@@ -109,19 +151,20 @@ export class AvailabilityCalculationService {
     return this.getInterventionDurationMinutes(intervention);
   }
 
-  /**
-   * Calculate MTTR (Mean Time To Repair) in hours
-   * @param {Array} interventions 
-   * @returns {number} MTTR in hours
-   */
-  static calculateMTTR(interventions: any[] = []): number {
+  /** Computes MTTR (Mean Time To Repair) in hours across closed corrective interventions. */
+  static calculateMTTR(interventions: InterventionTimingLike[] = []): number {
     if (!Array.isArray(interventions) || interventions.length === 0) return 0;
 
     let totalRepairMinutes = 0;
     let repairCount = 0;
 
     for (const item of interventions) {
-      const isCorrective = !item.type || item.type === 'CORRECTIVE' || item.type_panne || item.anomalie || item.code_machine;
+      const isCorrective =
+        !item.type ||
+        item.type === 'CORRECTIVE' ||
+        item.type_panne ||
+        item.anomalie ||
+        item.code_machine;
       const status = String(item.statut || item.etat || '').toUpperCase();
       const isClosed =
         status === 'CLOTURE' ||
@@ -145,12 +188,8 @@ export class AvailabilityCalculationService {
     return Number((avgMinutes / 60).toFixed(2));
   }
 
-  /**
-   * Calculate MTTR formatted as "Xh Ym"
-   * @param {Array} interventions 
-   * @returns {string} Formatted MTTR
-   */
-  static formatMTTR(interventions: any[] = []): string {
+  /** Formats MTTR as zero-padded `HHh MMm`. */
+  static formatMTTR(interventions: InterventionTimingLike[] = []): string {
     const hoursDecimal = this.calculateMTTR(interventions);
     const totalMinutes = Math.round(hoursDecimal * 60);
     const h = Math.floor(totalMinutes / 60);
@@ -159,13 +198,13 @@ export class AvailabilityCalculationService {
   }
 
   /**
-   * Calculate MTBF (Mean Time Between Failures) in hours
-   * Formula: (Total Operating Time - Total Downtime) / Number of Failures
-   * @param {Array} interventions 
-   * @param {number} totalOperatingHours optional total scheduled hours (e.g. 160h per machine)
-   * @returns {number} MTBF in hours
+   * Computes MTBF (Mean Time Between Failures) in hours:
+   * `(Total Operating Time - Total Downtime) / Failure Count`.
    */
-  static calculateMTBF(interventions: any[] = [], totalOperatingHours: number | null = null): number {
+  static calculateMTBF(
+    interventions: InterventionTimingLike[] = [],
+    totalOperatingHours: number | null = null
+  ): number {
     if (!Array.isArray(interventions) || interventions.length === 0) {
       return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 168;
     }
@@ -177,7 +216,8 @@ export class AvailabilityCalculationService {
       const status = String(item.statut || item.etat || '').toUpperCase();
       if (status === 'ANNULE') continue;
 
-      const isFailure = !item.type || item.type === 'CORRECTIVE' || item.type_panne || item.code_machine;
+      const isFailure =
+        !item.type || item.type === 'CORRECTIVE' || item.type_panne || item.code_machine;
       if (isFailure) {
         failureCount++;
         const isStoppage =
@@ -197,7 +237,6 @@ export class AvailabilityCalculationService {
       return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 168;
     }
 
-    // If total operating period not provided, infer from distinct machines (160h monthly shift per machine) or 720h baseline
     const distinctMachines = new Set(
       interventions
         .map((i) => i.code_machine || i.id_machine_registered || i.machine)
@@ -211,14 +250,11 @@ export class AvailabilityCalculationService {
     return Math.max(1, Math.round(netOperatingHours / failureCount));
   }
 
-  /**
-   * Calculate Operational Availability (%)
-   * Availability = (MTBF / (MTBF + MTTR)) * 100
-   * @param {Array} interventions 
-   * @param {number} totalScheduledHours 
-   * @returns {number} Availability percentage
-   */
-  static calculateAvailability(interventions: any[] = [], totalScheduledHours: number | null = null): number {
+  /** Computes operational availability percentage: `(MTBF / (MTBF + MTTR)) * 100`. */
+  static calculateAvailability(
+    interventions: InterventionTimingLike[] = [],
+    totalScheduledHours: number | null = null
+  ): number {
     if (!Array.isArray(interventions) || interventions.length === 0) return 100;
 
     const mtbf = this.calculateMTBF(interventions, totalScheduledHours);
@@ -231,12 +267,8 @@ export class AvailabilityCalculationService {
     return Number(Math.max(0, Math.min(100, availability)).toFixed(2));
   }
 
-  /**
-   * Calculate Stock Value (Total valuation of current physical inventory)
-   * @param {Array} articles 
-   * @returns {number} Total monetary stock value
-   */
-  static calculateStockValue(articles = []) {
+  /** Computes total monetary valuation across positive stock quantities and unit prices. */
+  static calculateStockValue(articles: StockArticleValuationLike[] = []): number {
     if (!Array.isArray(articles) || articles.length === 0) return 0;
 
     return articles.reduce((total, article) => {
@@ -246,14 +278,21 @@ export class AvailabilityCalculationService {
     }, 0);
   }
 
-  /**
-   * Verification & Sanity Check
-   * @param {Object} machine 
-   * @param {Array} interventions 
-   * @returns {Object} verification result
-   */
-  static verifyCalculations(machine: any = {}, interventions: any[] = []) {
-    const errors = [];
+  /** Sanity-checks MTBF, MTTR, and Availability bounds against physical non-negativity invariants. */
+  static verifyCalculations(
+    machine: MachineAvailabilityRefLike = {},
+    interventions: InterventionTimingLike[] = []
+  ): {
+    isValid: boolean;
+    errors: string[];
+    metrics: {
+      machineId: string;
+      mtbf: string;
+      mttr: string;
+      availability: string;
+    };
+  } {
+    const errors: string[] = [];
     const mtbf = this.calculateMTBF(interventions);
     const mttr = this.calculateMTTR(interventions);
     const availability = this.calculateAvailability(interventions);
@@ -266,7 +305,7 @@ export class AvailabilityCalculationService {
       isValid: errors.length === 0,
       errors,
       metrics: {
-        machineId: machine?.id || machine?.id_machine_registered || 'GLOBAL',
+        machineId: String(machine?.id || machine?.id_machine_registered || 'GLOBAL'),
         mtbf: `${mtbf}h`,
         mttr: this.formatMTTR(interventions),
         availability: `${availability}%`,

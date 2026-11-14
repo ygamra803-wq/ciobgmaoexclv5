@@ -3,79 +3,149 @@ import { GuideService } from './preventive/GuideService';
 import { PlanService } from './preventive/PlanService';
 import { TaskService } from './preventive/TaskService';
 import { ExecutionService } from './preventive/ExecutionService';
+import type { PreventiveExecutionRecord } from '../../types/preventive';
+import type { IPreventiveActionCatalogItem, IPreventiveGuideCatalogItem } from '../../types/store';
 
+export type PreventiveRecord = Record<string, unknown>;
+
+export interface PreventiveActionInput {
+  action_id?: string;
+  id?: string | number;
+  code?: string;
+  libelle?: string;
+  description?: string;
+  type_maintenance?: string;
+  frequence_defaut?: string;
+  color?: string;
+  symbole?: string;
+  duree_estimee_min?: number | string;
+  [key: string]: unknown;
+}
+
+export interface PreventiveGuidePiece {
+  ref?: string;
+  reference?: string;
+  code?: string;
+  nom?: string;
+  designation?: string;
+  quantite?: number | string;
+  qty?: number | string;
+  unite?: string;
+  unit?: string;
+  prix_unitaire?: number | string;
+  unitPrice?: number | string;
+  [key: string]: unknown;
+}
+
+export interface RecommendedPdrItem {
+  id_article?: string;
+  ref?: string;
+  reference?: string;
+  nom?: string;
+  designation?: string;
+  quantite?: number;
+  unite?: string;
+  prix_unitaire?: number;
+  [key: string]: unknown;
+}
+
+export interface PreventiveTaskLookupShape {
+  id?: string | number;
+  code?: string;
+  action_code?: string;
+  responsable?: string;
+  id_machine?: string;
+  machine?: string;
+  composant?: string;
+  nom_composant?: string;
+  nom_part?: string;
+  etat?: string;
+  pdr_ref?: string;
+  pdr_designation?: string;
+  pdr_requises?: PreventiveGuidePiece[];
+  derniere_realisation?: string;
+  lastExecutedAt?: string;
+  derniere_execution?: string;
+  prochaine_echeance?: string;
+  frequence?: string;
+  cout_cumule?: number;
+  cout_total?: number;
+  cout_pdr?: number;
+  [key: string]: unknown;
+}
+
+export interface MachinePreventiveProfile {
+  tasks: PreventiveTaskLookupShape[];
+  total_tasks: number;
+  fait_tasks: number;
+  retard_tasks: number;
+  compliance_rate: number;
+  health_status: 'Optimale' | 'Moyenne' | 'Critique';
+  prochaine_intervention: { semaine: string; date: string } | null;
+  cout_total_preventif: number;
+}
+
+/**
+ * Application-layer facade coordinating Preventive Maintenance sub-services
+ * (Actions, Guides, Plans, Tasks, Executions) and computing machine compliance/cost profiles.
+ */
 export class PreventiveService {
-  static getExecutions() {
+  static getExecutions(): PreventiveExecutionRecord[] {
     return ExecutionService.getExecutions();
   }
 
-  static saveExecutions(executions: any[]) {
+  static saveExecutions(executions: PreventiveExecutionRecord[]): PreventiveExecutionRecord[] {
     return ExecutionService.saveExecutions(executions);
   }
 
-  static recordExecution(task: any, validationData?: any) {
+  static recordExecution(
+    task: PreventiveRecord | null | undefined,
+    validationData?: PreventiveRecord
+  ) {
     return ExecutionService.recordExecution(task, validationData);
   }
 
-  static deleteExecution(id: string) {
+  static deleteExecution(id: string): PreventiveExecutionRecord[] {
     return ExecutionService.deleteExecution(id);
   }
 
-  static clearExecutions() {
+  static clearExecutions(): PreventiveExecutionRecord[] {
     return ExecutionService.clearExecutions();
   }
 
-  static getActions() {
+  static getActions(): IPreventiveActionCatalogItem[] {
     return ActionService.getActions();
   }
 
-  static saveActions(actions: any[]) {
-    return ActionService.saveActions(actions);
+  static saveActions(actions: IPreventiveActionCatalogItem[]): void {
+    ActionService.saveActions(actions);
   }
 
-  static addAction(actionData: any) {
-    const current = [...this.getActions()];
-    const code = (actionData.code || 'X').trim().toUpperCase();
-    const libelle = (actionData.libelle || 'Action').trim();
-    const shortLib = libelle.replace(/[^a-zA-Z0-9]/g, '').slice(0, 5).toUpperCase();
-    const seq = String(current.length + 1).padStart(3, '0');
-    
-    const newAction = {
-      action_id: `ACT-${code}-${shortLib}-${seq}`,
-      code,
-      libelle,
-      description: actionData.description || '',
-      type_maintenance: actionData.type_maintenance || 'Préventif',
-      frequence_defaut: actionData.frequence_defaut || '1M',
-      color: actionData.color || '#3b82f6',
-      symbole: actionData.symbole || code,
-      duree_estimee_min: Number(actionData.duree_estimee_min) || 30,
-      active: true,
-      created_at: new Date().toISOString()
-    };
-
-    current.push(newAction);
-    this.saveActions(current);
-    return current;
+  /** Registers a new standardized preventive action catalog item with auto-generated code/sequence ID. */
+  static addAction(actionData: PreventiveActionInput): IPreventiveActionCatalogItem[] {
+    return ActionService.addAction(actionData as Partial<IPreventiveActionCatalogItem>, this);
   }
 
-  static updateAction(id: string | number, actionData: any) {
-    return ActionService.updateAction(id, actionData);
+  static updateAction(
+    id: string | number,
+    actionData: Partial<IPreventiveActionCatalogItem>
+  ): IPreventiveActionCatalogItem[] {
+    return ActionService.updateAction(id, actionData, this);
   }
 
-  static deleteAction(id: string | number) {
-    return ActionService.deleteAction(id);
+  static deleteAction(id: string | number): IPreventiveActionCatalogItem[] {
+    return ActionService.deleteAction(id, this);
   }
 
-  static getTasks() {
-    return TaskService.getTasks();
+  static getTasks(): PreventiveTaskLookupShape[] {
+    return TaskService.getTasks() as PreventiveTaskLookupShape[];
   }
 
-  static saveTasks(tasks: any[]) {
+  static saveTasks(tasks: PreventiveRecord[]) {
     return TaskService.saveTasks(tasks);
   }
 
-  static markTaskAsDone(id: string | number, validationData?: any) {
+  static markTaskAsDone(id: string | number, validationData?: PreventiveRecord) {
     return TaskService.markTaskAsDone(id, validationData);
   }
 
@@ -87,7 +157,7 @@ export class PreventiveService {
     return TaskService.updateTask(id, { etat: newStatus });
   }
 
-  static updateTask(id: string | number, taskData: any) {
+  static updateTask(id: string | number, taskData: PreventiveRecord) {
     return TaskService.updateTask(id, taskData);
   }
 
@@ -95,7 +165,7 @@ export class PreventiveService {
     return TaskService.deleteTask(id);
   }
 
-  static bulkImportTasks(tasksArray: any[], replace = false) {
+  static bulkImportTasks(tasksArray: PreventiveRecord[], replace = false) {
     const current = replace ? [] : this.getTasks();
     return TaskService.injectRealData([...tasksArray, ...current]);
   }
@@ -108,18 +178,27 @@ export class PreventiveService {
     return TaskService.loadFromPublicJson();
   }
 
-  static getRecommendedPDRForAction(actionCode?: string, composant?: string, task?: any) {
-    const result: any[] = [];
+  /**
+   * Resolves spare parts recommended for a preventive task by merging:
+   *  1. Explicit BOM `pdr_requises` / `pdr_ref` attached to the task (highest priority)
+   *  2. Component guide catalog fallback (`GuideService.getGuides`) deduplicated case-insensitively by `ref`.
+   */
+  static getRecommendedPDRForAction(
+    _actionCode?: string,
+    composant?: string,
+    task?: PreventiveTaskLookupShape | null
+  ): RecommendedPdrItem[] {
+    const result: RecommendedPdrItem[] = [];
     const seenRefs = new Set<string>();
 
-    // 1. Explicit required PDRs attached to the PreventiveTask (P7.1 canonical link)
-    const explicitList = Array.isArray(task?.pdr_requises)
+    // 1. Explicit required PDRs attached to the PreventiveTask (canonical link)
+    const explicitList: PreventiveGuidePiece[] = Array.isArray(task?.pdr_requises)
       ? task.pdr_requises
       : task?.pdr_ref && String(task.pdr_ref).trim()
       ? [{ ref: String(task.pdr_ref).trim(), nom: task.pdr_designation || task.pdr_ref, quantite: 1 }]
       : [];
 
-    explicitList.forEach((p: any) => {
+    explicitList.forEach((p) => {
       const ref = String(p?.ref || p?.reference || p?.code || '').trim();
       if (!ref) return;
       const key = ref.toLowerCase();
@@ -139,59 +218,74 @@ export class PreventiveService {
     });
 
     // 2. Guide fallback recommendations
-    const guides = GuideService.getGuides();
-    const targetComp = String(composant || task?.composant || task?.nom_composant || task?.nom_part || '').trim();
+    const guides = GuideService.getGuides() as Array<{
+      composant_nom?: unknown;
+      composant_type?: unknown;
+      pieces_rechange?: PreventiveGuidePiece[];
+    }>;
+    const targetComp = String(
+      composant || task?.composant || task?.nom_composant || task?.nom_part || ''
+    ).trim();
     if (Array.isArray(guides) && targetComp) {
       const compLower = targetComp.toLowerCase();
       const match =
-        guides.find((g: any) => String(g.composant_nom || g.composant_type || '').toLowerCase() === compLower) ||
-        guides.find((g: any) => compLower.includes(String(g.composant_nom || g.composant_type || '').toLowerCase()));
+        guides.find((g) => String(g.composant_nom || g.composant_type || '').toLowerCase() === compLower) ||
+        guides.find((g) => compLower.includes(String(g.composant_nom || g.composant_type || '').toLowerCase()));
       const guidePieces = Array.isArray(match?.pieces_rechange) ? match.pieces_rechange : [];
-      guidePieces.forEach((gp: any) => {
+      guidePieces.forEach((gp) => {
         const ref = String(gp?.reference || gp?.ref || gp?.code || '').trim();
         const key = (ref || String(gp?.designation || '')).toLowerCase();
         if (!key || seenRefs.has(key)) return;
         seenRefs.add(key);
-        result.push(gp);
+        result.push(gp as RecommendedPdrItem);
       });
     }
 
     return result;
   }
 
-  static createPlanWithTasks(planData: any, taskItems: any[]) {
+  static createPlanWithTasks(planData: PreventiveRecord, taskItems: PreventiveRecord[]) {
     return PlanService.createPlanWithTasks(planData, taskItems);
   }
 
-  static getGuides() {
+  static getGuides(): IPreventiveGuideCatalogItem[] {
     return GuideService.getGuides();
   }
 
-  static saveGuides(guides: any[]) {
-    return GuideService.saveGuides(guides);
+  static saveGuides(guides: IPreventiveGuideCatalogItem[]): void {
+    GuideService.saveGuides(guides);
   }
 
-  static addGuide(guideData: any) {
+  static addGuide(guideData: Partial<IPreventiveGuideCatalogItem>): IPreventiveGuideCatalogItem[] {
     return GuideService.addGuide(guideData);
   }
 
-  static updateGuide(id: string | number, guideData: any) {
+  static updateGuide(
+    id: string | number,
+    guideData: Partial<IPreventiveGuideCatalogItem>
+  ): IPreventiveGuideCatalogItem[] {
     return GuideService.updateGuide(id, guideData);
   }
 
-  static deleteGuide(id: string | number) {
+  static deleteGuide(id: string | number): IPreventiveGuideCatalogItem[] {
     return GuideService.deleteGuide(id);
   }
 
-  static getMachinePreventiveProfile(machineId: string) {
+  /**
+   * Computes a machine's preventive compliance rate, health tier (`Optimale | Moyenne | Critique`),
+   * next scheduled intervention, and cumulative preventive cost from approved executions.
+   * Unapproved (`PENDING_VALIDATION` / `NEEDS_CLARIFICATION` / `REJECTED`) and `SKIPPED` executions
+   * are excluded from the realized cost roll-up.
+   */
+  static getMachinePreventiveProfile(machineId: string): MachinePreventiveProfile {
     const idUpper = String(machineId || '').trim().toUpperCase();
     const allTasks = Array.isArray(this.getTasks()) ? this.getTasks() : [];
     const allExecutions = Array.isArray(this.getExecutions()) ? this.getExecutions() : [];
 
     const tasks = allTasks.filter(
-      (t: any) => String(t.id_machine || t.machine || '').trim().toUpperCase() === idUpper
+      (t) => String(t.id_machine || t.machine || '').trim().toUpperCase() === idUpper
     );
-    const executions = allExecutions.filter((ex: any) => {
+    const executions = allExecutions.filter((ex) => {
       const exMach = String(ex.machineCode || ex.id_machine || ex.machine || '').trim().toUpperCase();
       if (exMach !== idUpper) return false;
       const valStatus = String(ex.validation_status || 'APPROVED').toUpperCase();
@@ -203,16 +297,16 @@ export class PreventiveService {
 
     const total_tasks = tasks.length;
     const fait_tasks = tasks.filter(
-      (t: any) => String(t.etat || '').toLowerCase() === 'fait'
+      (t) => String(t.etat || '').toLowerCase() === 'fait'
     ).length;
     const retard_tasks = tasks.filter(
-      (t: any) => String(t.etat || '').toLowerCase().includes('retard')
+      (t) => String(t.etat || '').toLowerCase().includes('retard')
     ).length;
 
     const compliance_rate =
       total_tasks > 0 ? Math.round((fait_tasks / total_tasks) * 100) : 100;
 
-    const health_status =
+    const health_status: MachinePreventiveProfile['health_status'] =
       retard_tasks === 0 && compliance_rate >= 80
         ? 'Optimale'
         : retard_tasks <= 2 && compliance_rate >= 50
@@ -220,7 +314,7 @@ export class PreventiveService {
         : 'Critique';
 
     const pendingTask = tasks.find(
-      (t: any) => String(t.etat || '').toLowerCase() !== 'fait'
+      (t) => String(t.etat || '').toLowerCase() !== 'fait'
     );
     const lastRealisation =
       pendingTask?.derniere_realisation ||
@@ -228,7 +322,7 @@ export class PreventiveService {
       pendingTask?.derniere_execution;
     const prochaine_intervention = pendingTask
       ? {
-          semaine: pendingTask.prochaine_echeance || pendingTask.frequence || 'Planifié',
+          semaine: String(pendingTask.prochaine_echeance || pendingTask.frequence || 'Planifié'),
           date: lastRealisation
             ? `Dernière: ${lastRealisation}`
             : 'Calendrier annuel',
@@ -236,12 +330,12 @@ export class PreventiveService {
       : null;
 
     const tasksCost = tasks.reduce(
-      (sum: number, t: any) =>
+      (sum, t) =>
         sum + (Number(t.cout_cumule ?? t.cout_total ?? t.cout_pdr ?? 0) || 0),
       0
     );
     const execsCost = executions.reduce(
-      (sum: number, ex: any) =>
+      (sum, ex) =>
         sum + (Number(ex.totalCost ?? ex.sparesCost ?? ex.cout_total ?? ex.cout_pdr ?? 0) || 0),
       0
     );

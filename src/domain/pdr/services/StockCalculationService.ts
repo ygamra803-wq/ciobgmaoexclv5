@@ -260,6 +260,61 @@ export class StockCalculationService {
   }
 
   /**
+   * Soft-lock availability check subtracting active virtual reservations (`reservedQty`)
+   * from physical `stockActuel`. When editing/approving an existing claim, callers may pass
+   * `excludeClaimReservedQty` so the claim does not double-count against its own lock.
+   */
+  static checkNetAvailability(
+    ref: string,
+    requestedQty: number,
+    article: any,
+    movements: any[] = [],
+    reservedQty = 0,
+    excludeClaimReservedQty = 0
+  ) {
+    const qty = safeNum(requestedQty, 0);
+    const base = this.checkAvailability(ref, qty, article, movements);
+    const totalReserved = Math.max(0, safeNum(reservedQty, 0));
+    const selfReserved = Math.max(0, safeNum(excludeClaimReservedQty, 0));
+    const effectiveReserved = Math.max(0, totalReserved - selfReserved);
+    const netAvailable = base.currentStock - effectiveReserved;
+
+    if (qty <= 0) {
+      return {
+        ...base,
+        reservedQty: effectiveReserved,
+        netAvailable,
+      };
+    }
+
+    if (netAvailable < qty) {
+      const shortage = qty - Math.max(0, netAvailable);
+      return {
+        available: false,
+        currentStock: base.currentStock,
+        reservedQty: effectiveReserved,
+        netAvailable,
+        requestedQty: qty,
+        shortage,
+        message:
+          effectiveReserved > 0
+            ? `Stock net insuffisant pour [${ref}] : Physique ${base.currentStock}, Réservé ${effectiveReserved}, Net disponible ${netAvailable}, Demandé ${qty}.`
+            : base.message,
+      };
+    }
+
+    return {
+      available: true,
+      currentStock: base.currentStock,
+      reservedQty: effectiveReserved,
+      netAvailable,
+      requestedQty: qty,
+      shortage: 0,
+      message: 'Stock net disponible suffisant.',
+    };
+  }
+
+  /**
    * Serializes concurrent asynchronous stock movement mutations targeting the same `ref` key
    * via a per-reference Promise chain. Invalidates calculation caches prior to each task execution
    * so subsequent tasks in the queue always observe the latest committed balance.

@@ -12,26 +12,33 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { CustomSelect } from './MovementSelect';
+import type {
+  InternalMovementFormState,
+  MovementMachineOption,
+  MovementOperationPersonOption,
+  MovementTechnicianOption,
+  MovementZoneOption,
+} from './movementContextTypes';
 
 export interface SortieInterneContextSectionProps {
-  form: any;
-  setForm: React.Dispatch<React.SetStateAction<any>>;
-  zones: any[];
-  machines: any[];
-  activeMachinesList: any[];
-  availableMachines: any[];
-  technicians: any[];
-  availableTechs: any[];
-  responsablesList: any[];
-  operatorsList: any[];
-  currentUsageResponsable: any;
-  maintenanceZone: any;
-  usageAllowedZones: any[];
-  usageAvailableMachines: any[];
-  operatorFilteredResponsables: any[];
-  getResponsableAllowedZones: (resp: any) => any[];
-  getResponsablesForZone: (zoneId: string) => any[];
-  findSupervisorForZone: (zoneId: string) => any;
+  form: InternalMovementFormState;
+  setForm: (updater: React.SetStateAction<InternalMovementFormState>) => void;
+  zones: MovementZoneOption[];
+  machines: MovementMachineOption[];
+  activeMachinesList: MovementMachineOption[];
+  availableMachines: MovementMachineOption[];
+  technicians: MovementTechnicianOption[];
+  availableTechs: MovementTechnicianOption[];
+  responsablesList: MovementOperationPersonOption[];
+  operatorsList: MovementOperationPersonOption[];
+  currentUsageResponsable: MovementOperationPersonOption | null;
+  maintenanceZone: MovementZoneOption;
+  usageAllowedZones: MovementZoneOption[];
+  usageAvailableMachines: MovementMachineOption[];
+  operatorFilteredResponsables: MovementOperationPersonOption[];
+  getResponsableAllowedZones: (resp?: MovementOperationPersonOption | null) => MovementZoneOption[];
+  getResponsablesForZone: (zoneId: string) => MovementOperationPersonOption[];
+  findSupervisorForZone: (zoneId: string) => MovementOperationPersonOption | null;
   onOpenAddZone?: () => void;
   onOpenAddMachine?: () => void;
   onOpenAddTech?: () => void;
@@ -39,6 +46,10 @@ export interface SortieInterneContextSectionProps {
   onOpenAddOperator?: () => void;
 }
 
+/**
+ * Case A — Internal Stock Issue Context (`CORRECTIVE`, `PREVENTIVE`, `AMELIORATIVE`, `USAGE`, `INVENTAIRE`).
+ * Dynamically scopes zones, active machines (`filterActiveMachines`), and supervising `RESP` referents.
+ */
 export const SortieInterneContextSection: React.FC<SortieInterneContextSectionProps> = ({
   form,
   setForm,
@@ -125,7 +136,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                 key={act.id}
                 type="button"
                 onClick={() => {
-                  const updatedForm: any = { ...form, action_id: act.id };
+                  const updatedForm: InternalMovementFormState = { ...form, action_id: act.id };
                   if (act.id === 'USAGE') {
                     const uType = form.usage_type || 'responsable';
                     if (uType === 'technician') {
@@ -223,7 +234,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                   ? form.id_zone
                   : (allowed[0]?.id_zone || '');
                 const machs = activeMachinesList.filter((m) => m.id_zone_default === nextZone);
-                setForm((prev: any) => ({
+                setForm((prev) => ({
                   ...prev,
                   usage_type: 'responsable',
                   operation: resp ? resp.nom : '',
@@ -257,7 +268,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
               type="button"
               onClick={() => {
                 const tech = technicians.find((t) => t.nom === form.technicien) || technicians[0];
-                setForm((prev: any) => ({
+                setForm((prev) => ({
                   ...prev,
                   usage_type: 'technician',
                   technicien: tech ? tech.nom : '',
@@ -293,7 +304,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                 const respsForZone = getResponsablesForZone(opZone);
                 const bestResp = respsForZone[0] || null;
                 const machs = activeMachinesList.filter((m) => m.id_zone_default === opZone);
-                setForm((prev: any) => ({
+                setForm((prev) => ({
                   ...prev,
                   usage_type: 'operation',
                   operation: op ? op.nom : '',
@@ -342,7 +353,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                       const isZoneValid = allowed.some((z) => z.id_zone === form.id_zone);
                       const nextZone = isZoneValid ? form.id_zone : (allowed[0]?.id_zone || '');
                       const machs = activeMachinesList.filter((m) => m.id_zone_default === nextZone);
-                      setForm((prev: any) => ({
+                      setForm((prev) => ({
                         ...prev,
                         operation: val,
                         id_operation: resp?.id_operation || '',
@@ -375,7 +386,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     value={form.id_zone}
                     onChange={(val) => {
                       const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
-                      setForm((prev: any) => ({
+                      setForm((prev) => ({
                         ...prev,
                         id_zone: val,
                         id_machine_registered: machs.some((m) => m.id_machine_registered === prev.id_machine_registered)
@@ -433,7 +444,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     value={form.technicien}
                     onChange={(val) => {
                       const tech = technicians.find((t) => t.nom === val);
-                      setForm((prev: any) => ({
+                      setForm((prev) => ({
                         ...prev,
                         technicien: val,
                         id_technician: tech?.id_technician || '',
@@ -494,7 +505,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                       const respsForZone = getResponsablesForZone(opZone);
                       const bestResp = respsForZone[0] || null;
                       const machs = activeMachinesList.filter((m) => m.id_zone_default === opZone);
-                      setForm((prev: any) => ({
+                      setForm((prev) => ({
                         ...prev,
                         operation: val,
                         id_operation: op?.id_operation || '',
@@ -550,7 +561,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     value={form.responsable_validation || form.technicien}
                     onChange={(val) => {
                       const r = responsablesList.find((resp) => resp.nom === val);
-                      setForm((prev: any) => ({
+                      setForm((prev) => ({
                         ...prev,
                         responsable_validation: val,
                         id_responsable_validation: r?.id_operation || '',
@@ -623,7 +634,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                   onChange={(val) => {
                     const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                     const sup = findSupervisorForZone(val);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_zone: val,
                       id_machine_registered: machs.some((m) => m.id_machine_registered === prev.id_machine_registered)
@@ -653,7 +664,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     const m = machines.find((mach) => mach.id_machine_registered === val);
                     const targetZone = m?.id_zone_default || form.id_zone;
                     const sup = findSupervisorForZone(targetZone);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_machine_registered: val,
                       id_zone: targetZone,
@@ -767,7 +778,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                   onChange={(val) => {
                     const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                     const sup = findSupervisorForZone(val);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_zone: val,
                       id_machine_registered: machs.some((m) => m.id_machine_registered === prev.id_machine_registered)
@@ -797,7 +808,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     const m = machines.find((mach) => mach.id_machine_registered === val);
                     const targetZone = m?.id_zone_default || form.id_zone;
                     const sup = findSupervisorForZone(targetZone);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_machine_registered: val,
                       id_zone: targetZone,
@@ -909,7 +920,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                   onChange={(val) => {
                     const machs = activeMachinesList.filter((m) => m.id_zone_default === val);
                     const sup = findSupervisorForZone(val);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_zone: val,
                       id_machine_registered: machs.some((m) => m.id_machine_registered === prev.id_machine_registered)
@@ -939,7 +950,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                     const m = machines.find((mach) => mach.id_machine_registered === val);
                     const targetZone = m?.id_zone_default || form.id_zone;
                     const sup = findSupervisorForZone(targetZone);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_machine_registered: val,
                       id_zone: targetZone,
@@ -1050,7 +1061,7 @@ export const SortieInterneContextSection: React.FC<SortieInterneContextSectionPr
                   value={form.id_zone}
                   onChange={(val) => {
                     const sup = findSupervisorForZone(val);
-                    setForm((prev: any) => ({
+                    setForm((prev) => ({
                       ...prev,
                       id_zone: val,
                       operation: sup ? sup.nom : prev.operation,

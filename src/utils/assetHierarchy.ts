@@ -1,4 +1,4 @@
-import { isArchivedMachine } from './activeMachines';
+import { isArchivedMachine, type MachineLifecycleLike } from './activeMachines';
 
 /**
  * 🏛️ ASSET-HIERARCHY-P0 — Operational Line / Parent Machine Grouping (CIOB 3-Tier Philosophy)
@@ -22,12 +22,40 @@ import { isArchivedMachine } from './activeMachines';
 
 export type AssetHierarchyLevel = 'MACHINE' | 'LINE';
 
+export interface HierarchyMachineLike extends MachineLifecycleLike {
+  parent_id?: string | null;
+  id_parent?: string | null;
+  previous_parent_id?: string | null;
+  asset_level?: AssetHierarchyLevel | string;
+  id_family?: string;
+  id_blueprint?: string;
+}
+
+export interface HierarchyCorrectiveLike {
+  validation_status?: string;
+  statut?: string;
+  status?: string;
+  action_fermee?: string;
+  id_machine?: string;
+  code_machine?: string;
+  id_machine_registered?: string;
+  machineId?: string;
+  temps_arret_machine_min?: number | string;
+  duree_arret_min?: number | string;
+  duree_intervention_min?: number | string;
+  temps_reparation_min?: number | string;
+  duree_arret_heures?: number | string;
+  temps_arret?: number | string;
+}
+
 export const ASSET_HIERARCHY_LEVEL_LABELS: Record<AssetHierarchyLevel, string> = {
   MACHINE: 'Machine / Équipement individuel',
   LINE: 'Ligne de Production / Machine Mère (Regroupement)',
 };
 
-export function getMachineCanonicalId(machine: any): string {
+export function getMachineCanonicalId(
+  machine: HierarchyMachineLike | null | undefined
+): string {
   if (!machine || typeof machine !== 'object') return '';
   return String(
     machine.id_machine_registered || machine.id_machine || machine.id || machine.code || ''
@@ -36,7 +64,9 @@ export function getMachineCanonicalId(machine: any): string {
     .toUpperCase();
 }
 
-export function getMachineParentId(machine: any): string | null {
+export function getMachineParentId(
+  machine: HierarchyMachineLike | null | undefined
+): string | null {
   if (!machine || typeof machine !== 'object') return null;
   const raw = machine.parent_id ?? machine.id_parent ?? null;
   if (raw === null || raw === undefined) return null;
@@ -49,7 +79,9 @@ export function getMachineParentId(machine: any): string | null {
  * Any legacy or non-machine/line value ('SITE', 'ZONE_LINK', 'SUB_SYSTEM') normalizes to 'MACHINE'
  * so geographical Zones and internal BOM Components are never conflated with registered machines.
  */
-export function getMachineAssetLevel(machine: any): AssetHierarchyLevel {
+export function getMachineAssetLevel(
+  machine: HierarchyMachineLike | null | undefined
+): AssetHierarchyLevel {
   if (!machine || typeof machine !== 'object') return 'MACHINE';
   const raw = String(machine.asset_level || '').trim().toUpperCase();
   return raw === 'LINE' ? 'LINE' : 'MACHINE';
@@ -60,7 +92,7 @@ export function getMachineAssetLevel(machine: any): AssetHierarchyLevel {
  * (`A -> A` or `A -> B -> ... -> A`) in the given machines collection.
  */
 export function wouldCreateHierarchyCycle(
-  machines: any[],
+  machines: HierarchyMachineLike[],
   childId: string,
   candidateParentId: string | null | undefined
 ): boolean {
@@ -103,7 +135,10 @@ export function wouldCreateHierarchyCycle(
 /**
  * Returns all direct and transitive descendant IDs (normalized uppercase) for a given parent ID.
  */
-export function getDescendantMachineIds(parentId: string, machines: any[]): string[] {
+export function getDescendantMachineIds(
+  parentId: string,
+  machines: HierarchyMachineLike[]
+): string[] {
   const target = String(parentId || '').trim().toUpperCase();
   if (!target || !Array.isArray(machines) || machines.length === 0) return [];
 
@@ -142,13 +177,15 @@ export function getDescendantMachineIds(parentId: string, machines: any[]): stri
  * Note: Physical `Zone`, `Technician`, `Family`, `Template`, and `Blueprint` belong strictly
  * to the individual `Machine Registered` and are NEVER overwritten or inherited from the parent line.
  */
-export interface IMachineHierarchyContext {
+export interface IMachineHierarchyContext<
+  T extends HierarchyMachineLike = HierarchyMachineLike,
+> {
   id: string;
   level: AssetHierarchyLevel;
   levelLabel: string;
   parentId: string | null;
   parentDesignation: string | null;
-  parentMachine: any | null;
+  parentMachine: T | null;
   childrenCount: number;
   breadcrumbIds: string[];
   breadcrumbLabels: string[];
@@ -158,15 +195,17 @@ export interface IMachineHierarchyContext {
   isRoot: boolean;
 }
 
-export function resolveMachineHierarchyContext(
-  machine: any,
-  machines: any[] = []
-): IMachineHierarchyContext {
+export function resolveMachineHierarchyContext<
+  T extends HierarchyMachineLike = HierarchyMachineLike,
+>(
+  machine: T | null | undefined,
+  machines: T[] = []
+): IMachineHierarchyContext<T> {
   const selfId = getMachineCanonicalId(machine);
   const level = getMachineAssetLevel(machine);
   const levelLabel = ASSET_HIERARCHY_LEVEL_LABELS[level];
 
-  const byId = new Map<string, any>();
+  const byId = new Map<string, T>();
   if (Array.isArray(machines)) {
     for (const m of machines) {
       const id = getMachineCanonicalId(m);
@@ -246,7 +285,7 @@ export interface IParentArchivePolicyEvaluation {
 
 export function evaluateParentArchivePolicy(
   parentId: string,
-  machines: any[] = [],
+  machines: HierarchyMachineLike[] = [],
   options?: { strictBlock?: boolean }
 ): IParentArchivePolicyEvaluation {
   const cleanParentId = String(parentId || '').trim().toUpperCase();
@@ -295,11 +334,13 @@ export function evaluateParentArchivePolicy(
  *    any active child machine pointing to that archived parent has its active `parent_id`
  *    detached to `null` and `previous_parent_id` preserved so children never break.
  */
-export function sanitizeMachinesHierarchy(machines: any[] = []): any[] {
+export function sanitizeMachinesHierarchy<
+  T extends HierarchyMachineLike = HierarchyMachineLike,
+>(machines: T[] = []): T[] {
   if (!Array.isArray(machines)) return [];
 
-  // Pass 1: Normalize fields
-  const normalized = machines.map((m) => {
+  // Pass 1: Normalize parent pointers and enforce strict MACHINE | LINE operational role
+  const normalized: T[] = machines.map((m) => {
     if (!m || typeof m !== 'object') return m;
     const rawParent = getMachineParentId(m);
     const selfId = getMachineCanonicalId(m);
@@ -314,7 +355,7 @@ export function sanitizeMachinesHierarchy(machines: any[] = []): any[] {
   });
 
   // Build lookup map
-  const byId = new Map<string, any>();
+  const byId = new Map<string, T>();
   for (const m of normalized) {
     const id = getMachineCanonicalId(m);
     if (id) byId.set(id, m);
@@ -367,7 +408,9 @@ export interface IParentCorrectiveRollup {
   mtbfHours: number | null;
 }
 
-export function isApprovedCorrectiveIntervention(ci: any): boolean {
+export function isApprovedCorrectiveIntervention(
+  ci: HierarchyCorrectiveLike | null | undefined
+): boolean {
   if (!ci || typeof ci !== 'object') return false;
   const valStatus = String(ci.validation_status || '').trim().toUpperCase();
   if (valStatus === 'REJECTED' || valStatus === 'PENDING_APPROVAL') {
@@ -383,8 +426,8 @@ export function isApprovedCorrectiveIntervention(ci: any): boolean {
 
 export function computeParentCorrectiveRollup(
   parentId: string,
-  machines: any[] = [],
-  correctiveInterventions: any[] = [],
+  machines: HierarchyMachineLike[] = [],
+  correctiveInterventions: HierarchyCorrectiveLike[] = [],
   operatingWindowHours = 720
 ): IParentCorrectiveRollup {
   const cleanParentId = String(parentId || '').trim().toUpperCase();

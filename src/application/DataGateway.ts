@@ -16,7 +16,57 @@ import {
   type BudgetAuditEntry,
 } from '../domain/finance/entities/FinancialBudget';
 import type { GmaoStoreSetters } from '../types/store';
-import type { IPartGroup, IPartDesignation } from '../types/domain';
+import type { IAuditEvent, AuditSnapshot } from '../types/audit';
+
+/** Normalizes arbitrary audit snapshot values into a frozen object record or null before persisting. */
+function freezeAuditSnapshot(val: unknown): AuditSnapshot {
+  if (val && typeof val === 'object' && !Array.isArray(val)) {
+    return Object.freeze({ ...(val as Record<string, unknown>) });
+  }
+  if (Array.isArray(val)) {
+    return Object.freeze({ items: Object.freeze([...val]) });
+  }
+  return val == null ? null : Object.freeze({ value: val });
+}
+import type {
+  IStockItem,
+  IMouvement,
+  IType,
+  IPartGroup,
+  IPartDesignation,
+  PdrGroup,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IBlueprint,
+  IGeneralSystemType,
+  IZone,
+  IUserRecord,
+  ITechnician,
+  IOperation,
+  IWarehouseItem,
+  IEntrepotComponent,
+  ICompGroup,
+  ICompFamily,
+  ICompTemplate,
+  IPartType,
+  ISortieDemand,
+} from '../types/domain';
+import type { IReplenishmentOrder } from '../types/replenishment';
+import type {
+  MachineElement,
+  PreventiveTaskItem,
+  IPreventiveActionCatalogItem,
+  IPreventiveGuideCatalogItem,
+  IPreventivePlanCatalogItem,
+  SortieExterneItem,
+  CorrectiveInterventionItem,
+  CorrectiveIntervenantEntry,
+} from '../types/store';
+import type { PreventiveExecutionRecord } from '../types/preventive';
+import type { IMeterReading } from '../types/meter';
+import type { IWorkshopOrder } from '../domain/corrective/workshopOrderService';
+import type { INeedRequest } from '../domain/corrective/needRequestService';
 
 import seedMachines from '../data/machines/seedMachines.json';
 import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json';
@@ -62,7 +112,9 @@ import seedPartDesignations from '../data/warehouse/seedPartDesignations.json';
  * @param rawStock - Array of stock articles (`IStockItem[]`).
  * @returns Map of trimmed reference strings to numeric `stockInitial` balances.
  */
-function buildInitialStockMap(rawStock: any[] = []): Map<string, number> {
+function buildInitialStockMap(
+  rawStock: ReadonlyArray<{ ref?: unknown; Ref?: unknown; stockInitial?: unknown }> = []
+): Map<string, number> {
   const map = new Map<string, number>();
   if (!Array.isArray(rawStock)) return map;
   for (const item of rawStock) {
@@ -109,7 +161,7 @@ export const DataGateway = {
    * @param item - Candidate entity payload to validate.
    * @returns Validation outcome containing `isValid`/`valid`, `errors`, and normalized `data`.
    */
-  validateEntity(entityType, item) {
+  validateEntity(entityType: string, item: unknown) {
     switch (entityType) {
       case 'stock':
         return ValidationService.validateStockItem(item);
@@ -117,10 +169,16 @@ export const DataGateway = {
         return ValidationService.validateMachine(item);
       case 'movement':
         return ValidationService.validateMovement(item);
-      case 'zone':
-        return (ValidationService as any).validateZone
-          ? (ValidationService as any).validateZone(item)
-          : { isValid: Boolean(item && (item.id_zone || item.id)), errors: [], data: item };
+      case 'zone': {
+        const validatorWithZone = ValidationService as {
+          validateZone?: (z: unknown) => { isValid: boolean; errors: string[]; data: unknown };
+        };
+        if (typeof validatorWithZone.validateZone === 'function') {
+          return validatorWithZone.validateZone(item);
+        }
+        const z = item as { id_zone?: unknown; id?: unknown } | null | undefined;
+        return { isValid: Boolean(z && (z.id_zone || z.id)), errors: [], data: item };
+      }
       case 'user':
         return ValidationService.validateUser(item);
       default:
@@ -442,7 +500,7 @@ export const DataGateway = {
    * @param list - Array of workshop order records (`IWorkshopOrder[]`).
    * @returns Persisted workshop orders array.
    */
-  saveWorkshopOrders(list: any[] = []) {
+  saveWorkshopOrders<T = IWorkshopOrder>(list: T[] = []): T[] {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.WORKSHOP_ORDERS, clean);
     return clean;
@@ -455,7 +513,7 @@ export const DataGateway = {
    * @param list - Array of need request records (`INeedRequest[]`).
    * @returns Persisted need requests array.
    */
-  saveNeedRequests(list: any[] = []) {
+  saveNeedRequests<T = INeedRequest>(list: T[] = []): T[] {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.NEED_REQUESTS, clean);
     return clean;
@@ -728,9 +786,9 @@ export const DataGateway = {
    *
    * @returns Array of immutable audit event records (`IAuditEvent[]`).
    */
-  getAuditEvents(): any[] {
+  getAuditEvents(): IAuditEvent[] {
     const raw = storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS);
-    return Array.isArray(raw) ? raw : [];
+    return Array.isArray(raw) ? (raw as IAuditEvent[]) : [];
   },
 
   /**
@@ -740,7 +798,7 @@ export const DataGateway = {
    * @param list - Array of audit events.
    * @returns Persisted audit events array.
    */
-  saveAuditEvents(list: any[] = []): any[] {
+  saveAuditEvents(list: IAuditEvent[] = []): IAuditEvent[] {
     const clean = Array.isArray(list) ? list : [];
     storageService.setItem(STORAGE_KEYS.AUDIT_EVENTS, clean);
     if (typeof window !== 'undefined') {
@@ -765,20 +823,14 @@ export const DataGateway = {
     actionType: string;
     entityType: string;
     entityId: string;
-    before: any;
-    after: any;
-    meta?: Record<string, any>;
-  }) {
+    before: unknown;
+    after: unknown;
+    meta?: Record<string, unknown>;
+  }): { event: IAuditEvent; list: IAuditEvent[] } {
     const current = this.getAuditEvents();
-    const safeBefore =
-      payload.before && typeof payload.before === 'object'
-        ? Object.freeze({ ...payload.before })
-        : payload.before ?? null;
-    const safeAfter =
-      payload.after && typeof payload.after === 'object'
-        ? Object.freeze({ ...payload.after })
-        : payload.after ?? null;
-    const event = Object.freeze({
+    const safeBefore = freezeAuditSnapshot(payload.before);
+    const safeAfter = freezeAuditSnapshot(payload.after);
+    const event: IAuditEvent = Object.freeze({
       id: payload.id || safeId('AUD'),
       ts: payload.ts || new Date().toISOString(),
       actorId: String(payload.actorId || payload.actorName || 'SYSTEM').trim(),
@@ -806,16 +858,18 @@ export const DataGateway = {
   // 8. EXPLICIT DEMO DATA LOADER & FACTORY CLEAR
   // ==========================================
   /**
-   * Explicitly loads real stock data.
+   * Explicitly loads canonical real-factory PDR stock catalog into store and storage.
    */
   initRealStock(setters: GmaoStoreSetters = {}) {
-    this.savePdrGroups(seedPdrGroups as any);
-    this.saveStockTypes(seedStockTypes as any);
-    this.saveStock(seedStockItems as any);
-    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
-    if (setters.setTypes) setters.setTypes(seedStockTypes as any);
-    if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
-    // Also update designations if needed, but for now focus on RAW_STOCK
+    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
+    const typedStockTypes = seedStockTypes as unknown as IType[];
+    const typedStockItems = seedStockItems as unknown as IStockItem[];
+    this.savePdrGroups(typedPdrGroups);
+    this.saveStockTypes(typedStockTypes);
+    this.saveStock(typedStockItems);
+    if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
+    if (setters.setTypes) setters.setTypes(typedStockTypes);
+    if (setters.setRawStock) setters.setRawStock(typedStockItems);
     return { stockCount: seedStockItems.length };
   },
 
@@ -828,22 +882,34 @@ export const DataGateway = {
    * @returns Summary counts of loaded seed entities (`machinesCount`, `stockCount`, `preventiveCount`, `correctiveCount`, `movementsCount`).
    */
   loadDemoData(setters: GmaoStoreSetters = {}) {
-    const derivedDesignations = seedStockItems.map((s) => ({
-      id: (s as any).id || s.ref,
-      ref: s.ref,
-      designation: s.designation,
-      id_group: (s as any).id_group || null,
-      id_type: (s as any).id_type || s.type,
-      type: s.type,
-      stockInitial: s.stockInitial,
-      seuil: s.seuil,
-      emplacement: s.emplacement,
-    }));
+    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
+    const typedStockTypes = seedStockTypes as unknown as IType[];
+    const typedStockItems = seedStockItems as unknown as IStockItem[];
+    const typedMovements = seedMouvements as unknown as IMouvement[];
 
-    const formattedCompTemplates = seedCompTemplates.map((t, idx) => ({
-      ...t,
-      id_templates: t.id_templates || t.id_template || (t as any).id_comp_template || `TPL-${idx + 1}`,
-    }));
+    const derivedDesignations: IPartDesignation[] = seedStockItems.map((s) => {
+      const rec = s as Record<string, unknown>;
+      return {
+        id: (rec.id as string | number | undefined) || s.ref,
+        ref: s.ref,
+        designation: s.designation,
+        id_group: (rec.id_group as string | null | undefined) || null,
+        id_type: (rec.id_type as string | undefined) || s.type,
+        type: s.type,
+        stockInitial: s.stockInitial,
+        seuil: s.seuil,
+        emplacement: s.emplacement,
+      };
+    });
+
+    const formattedCompTemplates = seedCompTemplates.map((t, idx) => {
+      const rec = t as Record<string, unknown>;
+      return {
+        ...t,
+        id_templates:
+          t.id_templates || t.id_template || (rec.id_comp_template as string | undefined) || `TPL-${idx + 1}`,
+      };
+    });
 
     // 1. Set DEMO_MODE and START_MODE flags explicitly
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, true);
@@ -862,14 +928,14 @@ export const DataGateway = {
     this.saveZones(seedZones);
     this.saveMachineBom(seedMachineBomLedger);
 
-    this.savePdrGroups(seedPdrGroups);
-    this.saveStockTypes(seedStockTypes);
-    this.saveStock(seedStockItems);
+    this.savePdrGroups(typedPdrGroups);
+    this.saveStockTypes(typedStockTypes);
+    this.saveStock(typedStockItems);
     this.saveDesignations(derivedDesignations);
-    this.saveMouvements(seedMouvements);
+    this.saveMouvements(typedMovements);
     this.saveSortieDemands([]);
     this.saveReplenishmentOrders([]);
-    movementRepository.bulkReplace(seedMouvements as any[], buildInitialStockMap(seedStockItems));
+    movementRepository.bulkReplace(typedMovements, buildInitialStockMap(seedStockItems));
 
     this.savePreventiveTasks(seedPreventiveTasks, { machines: seedMachines });
     this.savePreventiveActions(seedPreventiveActions);
@@ -920,11 +986,11 @@ export const DataGateway = {
     if (setters.setZones) setters.setZones(seedZones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
 
-    if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
-    if (setters.setTypes) setters.setTypes(seedStockTypes as any);
-    if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
-    if (setters.setDesignations) setters.setDesignations(derivedDesignations as any);
-    if (setters.setMouvements) setters.setMouvements(seedMouvements as any);
+    if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
+    if (setters.setTypes) setters.setTypes(typedStockTypes);
+    if (setters.setRawStock) setters.setRawStock(typedStockItems);
+    if (setters.setDesignations) setters.setDesignations(derivedDesignations);
+    if (setters.setMouvements) setters.setMouvements(typedMovements);
     if (setters.setSortieDemands) setters.setSortieDemands([]);
     if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
@@ -1017,7 +1083,7 @@ export const DataGateway = {
    * @param setters - Optional store setter callbacks to zero out live React state immediately.
    * @returns Promise resolving to `{ cleared: true }` once all synchronous and asynchronous stores are wiped.
    */
-  clearAllForRealFactory(setters: Record<string, any> = {}) {
+  clearAllForRealFactory(setters: GmaoStoreSetters = {}) {
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, 'empty');
     storageService.removeItem(STORAGE_KEYS.FULL_STATE_SNAPSHOT);
@@ -1137,7 +1203,7 @@ export const DataGateway = {
     }
 
     // Return a promise that resolves once IndexedDB batch write + entity store clear completes
-    const emptyBatch: Record<string, any> = {
+    const emptyBatch: Record<string, unknown> = {
       [STORAGE_KEYS.DEMO_MODE]: false,
       [STORAGE_KEYS.START_MODE]: 'empty',
       [STORAGE_KEYS.MACHINES]: [],
@@ -1199,73 +1265,113 @@ export const DataGateway = {
   /**
    * Loads and applies full server state (from gmao_state.json) directly through canonical keys and React state setters.
    */
-  loadFullServerState(serverData: Record<string, any> = {}, setters: Record<string, any> = {}) {
+  loadFullServerState(serverData: Record<string, unknown> = {}, setters: GmaoStoreSetters = {}) {
     if (!serverData || typeof serverData !== 'object') return;
 
-    const rawStock = Array.isArray(serverData.rawStock)
-      ? serverData.rawStock
-      : Array.isArray(serverData.stock)
-      ? serverData.stock
-      : [];
-    const pdrGroups = Array.isArray(serverData.pdrGroups) ? serverData.pdrGroups : [];
-    const types = Array.isArray(serverData.types) ? serverData.types : [];
-    const designations = Array.isArray(serverData.designations) ? serverData.designations : [];
-    const machines = Array.isArray(serverData.machines) ? serverData.machines : [];
-    const generalSystemTypes = Array.isArray(serverData.generalSystemTypes)
+    const rawStock = (
+      Array.isArray(serverData.rawStock)
+        ? serverData.rawStock
+        : Array.isArray(serverData.stock)
+        ? serverData.stock
+        : []
+    ) as IStockItem[];
+    const pdrGroups = (Array.isArray(serverData.pdrGroups) ? serverData.pdrGroups : []) as PdrGroup[];
+    const types = (Array.isArray(serverData.types) ? serverData.types : []) as IType[];
+    const designations = (Array.isArray(serverData.designations)
+      ? serverData.designations
+      : []) as IPartDesignation[];
+    const machines = (Array.isArray(serverData.machines) ? serverData.machines : []) as IMachine[];
+    const generalSystemTypes = (Array.isArray(serverData.generalSystemTypes)
       ? serverData.generalSystemTypes
-      : [];
-    const families = Array.isArray(serverData.families) ? serverData.families : [];
-    const templates = Array.isArray(serverData.templates) ? serverData.templates : [];
-    const blueprints = Array.isArray(serverData.blueprints) ? serverData.blueprints : [];
-    const zones = Array.isArray(serverData.zones) ? serverData.zones : [];
-    const machineElementsLedger = Array.isArray(serverData.machineElementsLedger)
+      : []) as IGeneralSystemType[];
+    const families = (Array.isArray(serverData.families) ? serverData.families : []) as IMachineFamily[];
+    const templates = (Array.isArray(serverData.templates)
+      ? serverData.templates
+      : []) as IMachineTemplate[];
+    const blueprints = (Array.isArray(serverData.blueprints) ? serverData.blueprints : []) as IBlueprint[];
+    const zones = (Array.isArray(serverData.zones) ? serverData.zones : []) as IZone[];
+    const machineElementsLedger = (Array.isArray(serverData.machineElementsLedger)
       ? serverData.machineElementsLedger
-      : [];
-    const mouvements = Array.isArray(serverData.mouvements) ? serverData.mouvements : [];
-    const preventiveTasks = Array.isArray(serverData.preventiveTasks) ? serverData.preventiveTasks : [];
-    const preventiveActions = Array.isArray(serverData.preventiveActions) ? serverData.preventiveActions : [];
-    const preventiveGuides = Array.isArray(serverData.preventiveGuides) ? serverData.preventiveGuides : [];
-    const preventivePlans = Array.isArray(serverData.preventivePlans) ? serverData.preventivePlans : [];
-    const preventiveExecutions = Array.isArray(serverData.preventiveExecutions) ? serverData.preventiveExecutions : [];
-    const correctiveInterventions = Array.isArray(serverData.correctiveInterventions)
+      : []) as MachineElement[];
+    const mouvements = (Array.isArray(serverData.mouvements) ? serverData.mouvements : []) as IMouvement[];
+    const preventiveTasks = (Array.isArray(serverData.preventiveTasks)
+      ? serverData.preventiveTasks
+      : []) as PreventiveTaskItem[];
+    const preventiveActions = (Array.isArray(serverData.preventiveActions)
+      ? serverData.preventiveActions
+      : []) as IPreventiveActionCatalogItem[];
+    const preventiveGuides = (Array.isArray(serverData.preventiveGuides)
+      ? serverData.preventiveGuides
+      : []) as IPreventiveGuideCatalogItem[];
+    const preventivePlans = (Array.isArray(serverData.preventivePlans)
+      ? serverData.preventivePlans
+      : []) as IPreventivePlanCatalogItem[];
+    const preventiveExecutions = (Array.isArray(serverData.preventiveExecutions)
+      ? serverData.preventiveExecutions
+      : []) as PreventiveExecutionRecord[];
+    const correctiveInterventions = (Array.isArray(serverData.correctiveInterventions)
       ? serverData.correctiveInterventions
-      : [];
-    const correctiveActionsByPanne =
+      : []) as CorrectiveInterventionItem[];
+    const correctiveActionsByPanne = (
       serverData.correctiveActionsByPanne && typeof serverData.correctiveActionsByPanne === 'object'
         ? serverData.correctiveActionsByPanne
-        : {};
-    const correctivePanneCategories =
+        : {}
+    ) as Record<string, string[]>;
+    const correctivePanneCategories = (
       serverData.correctivePanneCategories && typeof serverData.correctivePanneCategories === 'object'
         ? serverData.correctivePanneCategories
-        : {};
-    const correctiveTravauxAFaire = Array.isArray(serverData.correctiveTravauxAFaire)
+        : {}
+    ) as Record<string, string[]>;
+    const correctiveTravauxAFaire = (Array.isArray(serverData.correctiveTravauxAFaire)
       ? serverData.correctiveTravauxAFaire
-      : [];
-    const correctiveIntervenants = Array.isArray(serverData.correctiveIntervenants)
+      : []) as string[];
+    const correctiveIntervenants = (Array.isArray(serverData.correctiveIntervenants)
       ? serverData.correctiveIntervenants
-      : [];
-    const users = Array.isArray(serverData.users) ? serverData.users : [];
-    const technicians = Array.isArray(serverData.technicians) ? serverData.technicians : [];
-    const operations = Array.isArray(serverData.operations) ? serverData.operations : [];
-    const warehouseItems = Array.isArray(serverData.warehouseItems) ? serverData.warehouseItems : [];
-    const entrepotComponents = Array.isArray(serverData.entrepotComponents)
+      : []) as CorrectiveIntervenantEntry[];
+    const users = (Array.isArray(serverData.users) ? serverData.users : []) as IUserRecord[];
+    const technicians = (Array.isArray(serverData.technicians)
+      ? serverData.technicians
+      : []) as ITechnician[];
+    const operations = (Array.isArray(serverData.operations) ? serverData.operations : []) as IOperation[];
+    const warehouseItems = (Array.isArray(serverData.warehouseItems)
+      ? serverData.warehouseItems
+      : []) as IWarehouseItem[];
+    const entrepotComponents = (Array.isArray(serverData.entrepotComponents)
       ? serverData.entrepotComponents
-      : [];
-    const compGroups = Array.isArray(serverData.compGroups) ? serverData.compGroups : [];
-    const compFamilies = Array.isArray(serverData.compFamilies) ? serverData.compFamilies : [];
-    const compTemplates = Array.isArray(serverData.compTemplates) ? serverData.compTemplates : [];
-    const partGroups = Array.isArray(serverData.partGroups) ? serverData.partGroups : [];
-    const partTypes = Array.isArray(serverData.partTypes) ? serverData.partTypes : [];
-    const partDesignations = Array.isArray(serverData.partDesignations) ? serverData.partDesignations : [];
-    const sortiesExterne = Array.isArray(serverData.sortiesExterne) ? serverData.sortiesExterne : [];
-    const sortieDemands = Array.isArray(serverData.sortieDemands) ? serverData.sortieDemands : [];
-    const replenishmentOrders = Array.isArray(serverData.replenishmentOrders)
+      : []) as IEntrepotComponent[];
+    const compGroups = (Array.isArray(serverData.compGroups) ? serverData.compGroups : []) as ICompGroup[];
+    const compFamilies = (Array.isArray(serverData.compFamilies)
+      ? serverData.compFamilies
+      : []) as ICompFamily[];
+    const compTemplates = (Array.isArray(serverData.compTemplates)
+      ? serverData.compTemplates
+      : []) as ICompTemplate[];
+    const partGroups = (Array.isArray(serverData.partGroups) ? serverData.partGroups : []) as IPartGroup[];
+    const partTypes = (Array.isArray(serverData.partTypes) ? serverData.partTypes : []) as IPartType[];
+    const partDesignations = (Array.isArray(serverData.partDesignations)
+      ? serverData.partDesignations
+      : []) as IPartDesignation[];
+    const sortiesExterne = (Array.isArray(serverData.sortiesExterne)
+      ? serverData.sortiesExterne
+      : []) as SortieExterneItem[];
+    const sortieDemands = (Array.isArray(serverData.sortieDemands)
+      ? serverData.sortieDemands
+      : []) as ISortieDemand[];
+    const replenishmentOrders = (Array.isArray(serverData.replenishmentOrders)
       ? serverData.replenishmentOrders
-      : [];
-    const meterReadings = Array.isArray(serverData.meterReadings) ? serverData.meterReadings : [];
-    const auditEvents = Array.isArray(serverData.auditEvents) ? serverData.auditEvents : [];
-    const workshopOrders = Array.isArray(serverData.workshopOrders) ? serverData.workshopOrders : [];
-    const needRequests = Array.isArray(serverData.needRequests) ? serverData.needRequests : [];
+      : []) as IReplenishmentOrder[];
+    const meterReadings = (Array.isArray(serverData.meterReadings)
+      ? serverData.meterReadings
+      : []) as IMeterReading[];
+    const auditEvents = (Array.isArray(serverData.auditEvents)
+      ? serverData.auditEvents
+      : []) as IAuditEvent[];
+    const workshopOrders = (Array.isArray(serverData.workshopOrders)
+      ? serverData.workshopOrders
+      : []) as IWorkshopOrder[];
+    const needRequests = (Array.isArray(serverData.needRequests)
+      ? serverData.needRequests
+      : []) as INeedRequest[];
 
     const hasData =
       rawStock.length > 0 ||
@@ -1295,7 +1401,7 @@ export const DataGateway = {
     this.saveMouvements(mouvements);
     this.saveSortieDemands(sortieDemands);
     this.saveReplenishmentOrders(replenishmentOrders);
-    movementRepository.bulkReplace(mouvements as any[], buildInitialStockMap(rawStock));
+    movementRepository.bulkReplace(mouvements, buildInitialStockMap(rawStock));
     this.savePreventiveTasks(preventiveTasks);
     this.savePreventiveActions(preventiveActions);
     this.savePreventiveGuides(preventiveGuides);
@@ -1437,37 +1543,51 @@ export const DataGateway = {
       return this.loadDemoData(setters);
     }
 
-    const derivedDesignations = seedStockItems.map((s) => ({
-      id: (s as any).id || s.ref,
-      ref: s.ref,
-      designation: s.designation,
-      id_group: (s as any).id_group || null,
-      id_type: (s as any).id_type || s.type,
-      type: s.type,
-      stockInitial: s.stockInitial,
-      seuil: s.seuil,
-      emplacement: s.emplacement,
-    }));
+    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
+    const typedStockTypes = seedStockTypes as unknown as IType[];
+    const typedStockItems = seedStockItems as unknown as IStockItem[];
+    const typedMovements = seedMouvements as unknown as IMouvement[];
 
-    const formattedCompTemplates = seedCompTemplates.map((t, idx) => ({
-      ...t,
-      id_templates: t.id_templates || t.id_template || (t as any).id_comp_template || `TPL-${idx + 1}`,
-    }));
+    const derivedDesignations: IPartDesignation[] = seedStockItems.map((s) => {
+      const rec = s as Record<string, unknown>;
+      return {
+        id: (rec.id as string | number | undefined) || s.ref,
+        ref: s.ref,
+        designation: s.designation,
+        id_group: (rec.id_group as string | null | undefined) || null,
+        id_type: (rec.id_type as string | undefined) || s.type,
+        type: s.type,
+        stockInitial: s.stockInitial,
+        seuil: s.seuil,
+        emplacement: s.emplacement,
+      };
+    });
+
+    const formattedCompTemplates = seedCompTemplates.map((t, idx) => {
+      const rec = t as Record<string, unknown>;
+      return {
+        ...t,
+        id_templates:
+          t.id_templates || t.id_template || (rec.id_comp_template as string | undefined) || `TPL-${idx + 1}`,
+      };
+    });
 
     switch (section) {
       case 'stock':
-        this.savePdrGroups(seedPdrGroups);
-        this.saveStockTypes(seedStockTypes);
-        this.saveStock(seedStockItems);
+        this.savePdrGroups(typedPdrGroups);
+        this.saveStockTypes(typedStockTypes);
+        this.saveStock(typedStockItems);
         this.saveDesignations(derivedDesignations);
         movementRepository.bulkReplace(
-          (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
+          (Array.isArray(storageService.getItem(STORAGE_KEYS.MOUVEMENTS))
+            ? storageService.getItem(STORAGE_KEYS.MOUVEMENTS)
+            : []) as IMouvement[],
           buildInitialStockMap(seedStockItems)
         );
-        if (setters.setPdrGroups) setters.setPdrGroups(seedPdrGroups as any);
-        if (setters.setTypes) setters.setTypes(seedStockTypes as any);
-        if (setters.setRawStock) setters.setRawStock(seedStockItems as any);
-        if (setters.setDesignations) setters.setDesignations(derivedDesignations as any);
+        if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
+        if (setters.setTypes) setters.setTypes(typedStockTypes);
+        if (setters.setRawStock) setters.setRawStock(typedStockItems);
+        if (setters.setDesignations) setters.setDesignations(derivedDesignations);
         break;
 
       case 'parc':
@@ -1529,13 +1649,13 @@ export const DataGateway = {
 
       case 'mouvements':
       case 'movements':
-        this.saveMouvements(seedMouvements);
+        this.saveMouvements(typedMovements);
         this.saveSortiesExterne(seedSortiesExternes);
         movementRepository.bulkReplace(
-          seedMouvements as any[],
+          typedMovements,
           buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
         );
-        if (setters.setMouvements) setters.setMouvements(seedMouvements as any);
+        if (setters.setMouvements) setters.setMouvements(typedMovements);
         if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
         break;
 
@@ -1587,7 +1707,9 @@ export const DataGateway = {
         this.savePdrGroups([]);
         this.saveDesignations([]);
         movementRepository.bulkReplace(
-          (storageService.getItem(STORAGE_KEYS.MOUVEMENTS) || []) as any[],
+          (Array.isArray(storageService.getItem(STORAGE_KEYS.MOUVEMENTS))
+            ? storageService.getItem(STORAGE_KEYS.MOUVEMENTS)
+            : []) as IMouvement[],
           new Map()
         );
         if (setters.setRawStock) setters.setRawStock([]);

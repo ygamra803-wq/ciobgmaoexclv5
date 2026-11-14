@@ -28,6 +28,9 @@ export type AuditActionType =
   | 'BUDGET_UPDATED'
   | string;
 
+/** Immutable snapshot stored on audit ledger entries (object map or null when entity did not exist). */
+export type AuditSnapshot = Readonly<Record<string, unknown>> | null;
+
 export interface IAuditEvent {
   id: string;
   ts: string;
@@ -37,12 +40,12 @@ export interface IAuditEvent {
   actionType: AuditActionType;
   entityType: AuditEntityType | string;
   entityId: string;
-  before: any;
-  after: any;
+  before: AuditSnapshot;
+  after: AuditSnapshot;
   meta?: {
     ip?: string;
     userAgent?: string;
     summary?: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
