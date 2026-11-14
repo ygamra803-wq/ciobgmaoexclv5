@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCurrentStock, getStockStatus } from '@/domain/stockCalculations';
+import { StockCalculationService } from '@/domain/pdr/services/StockCalculationService';
+import { calculateStockStatus } from '@/utils/formulaEngine';
 import { ValidationService } from '@/domain/validators/index.js';
 
 describe('Stock Movement Integration Flow', () => {
   it('يجب محاكاة حركة صرف مع التحقق من الرصيد والبيانات', () => {
     // 1. Initial State
-    let stockItem = {
+    const stockItem = {
       code: 'ROUL-6204',
       designation: 'Roulement 6204',
       quantity: 50,
@@ -27,11 +28,14 @@ describe('Stock Movement Integration Flow', () => {
     expect(ValidationService.validateMouvement(movement).valid).toBe(true);
 
     // 3. Update Stock
-    const updatedQty = calculateCurrentStock(stockItem.quantity, 0, movement.quantity);
+    const updatedQty = StockCalculationService.calculateStockActuel(
+      { ref: 'ROUL-6204', stockInitial: stockItem.quantity, seuil: stockItem.minStock },
+      [{ ref: 'ROUL-6204', type: 'Sortie', quantite: movement.quantity }]
+    );
     stockItem.quantity = updatedQty;
 
     expect(stockItem.quantity).toBe(35);
-    expect(getStockStatus(stockItem.quantity, stockItem.minStock)).toBe('OPTIMAL');
+    expect(calculateStockStatus(stockItem.quantity, 0, 0, stockItem.minStock).alerte).toBe('OK');
 
     // 4. Perform Critical OUT
     const bigMovement = {
@@ -42,8 +46,11 @@ describe('Stock Movement Integration Flow', () => {
       user: 'Technicien Ali',
     };
 
-    stockItem.quantity = calculateCurrentStock(stockItem.quantity, 0, bigMovement.quantity);
+    stockItem.quantity = StockCalculationService.calculateStockActuel(
+      { ref: 'ROUL-6204', stockInitial: stockItem.quantity, seuil: stockItem.minStock },
+      [{ ref: 'ROUL-6204', type: 'Sortie', quantite: bigMovement.quantity }]
+    );
     expect(stockItem.quantity).toBe(5);
-    expect(getStockStatus(stockItem.quantity, stockItem.minStock)).toBe('ALERTE');
+    expect(calculateStockStatus(stockItem.quantity, 0, 0, stockItem.minStock).alerte).toBe('ALERTE');
   });
 });

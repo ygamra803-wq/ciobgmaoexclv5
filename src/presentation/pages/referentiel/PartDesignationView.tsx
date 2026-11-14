@@ -266,8 +266,6 @@ export default function PartDesignationView({
       id_part: cleanRef,
       ref: cleanRef,
       id_group: effectiveGroup,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: effectiveGroup,
       matiere_nuance: form.matiere_nuance.trim(),
       ref_plan: form.ref_plan.trim(),
       dimensions_brut: form.dimensions_brut.trim(),

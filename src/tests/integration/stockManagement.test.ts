@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { calculateCurrentStock, getStockStatus } from '@/domain/stockCalculations';
+import { StockCalculationService } from '@/domain/pdr/services/StockCalculationService';
+import { calculateStockStatus } from '@/utils/formulaEngine';
 import { ValidationService } from '@/domain/validators/index.js';
 
 /**
@@ -52,11 +53,14 @@ describe('Stock Management Integration Tests', () => {
       };
 
       const current = mockDatabase.get('ITEM-002');
-      const updatedQty = calculateCurrentStock(current.quantity, 0, movement.quantity);
+      const updatedQty = StockCalculationService.calculateStockActuel(
+        { ref: 'ITEM-002', stockInitial: current.quantity, seuil: current.minStock },
+        [{ ref: 'ITEM-002', type: 'Sortie', quantite: movement.quantity }]
+      );
       current.quantity = updatedQty;
 
       expect(current.quantity).toBe(40);
-      expect(getStockStatus(current.quantity, current.minStock)).toBe('OPTIMAL');
+      expect(calculateStockStatus(current.quantity, 0, 0, current.minStock).alerte).toBe('OK');
     });
 
     it('يجب اكتشاف الكميات غير الكافية ومنع الحركة الخاطئة', () => {
@@ -79,7 +83,7 @@ describe('Stock Management Integration Tests', () => {
         minStock: 10
       };
 
-      const status = getStockStatus(stockItem.quantity, stockItem.minStock);
+      const status = calculateStockStatus(stockItem.quantity, 0, 0, stockItem.minStock).alerte;
       expect(status).toBe('ALERTE');
     });
 

@@ -614,12 +614,14 @@ export function useAppComplexHandlers({
   // COMPONENT GROUPS, FAMILIES & TEMPLATES CRUD
   const handleUpdateCompGroup = (id, updatedGroup) => {
     setCompGroups((prev) =>
-      prev.map((g) => (g.id === id || g.id_groupe === id ? updatedGroup : g))
+      prev.map((g) => (g.id === id || g.id_group === id || g.id_groupe === id ? updatedGroup : g))
     );
-    if (id !== (updatedGroup.id_groupe || updatedGroup.id)) {
-      const newGroupId = updatedGroup.id_groupe || updatedGroup.id;
+    const newGroupId = updatedGroup.id_group || updatedGroup.id_groupe || updatedGroup.id;
+    if (newGroupId && id !== newGroupId) {
       setCompFamilies((prev) =>
-        prev.map((f) => (f.id_groupe === id ? { ...f, id_groupe: newGroupId } : f))
+        prev.map((f) =>
+          f.id_group === id || f.id_groupe === id ? { ...f, id_group: newGroupId } : f
+        )
       );
     }
     showToast(`Groupe "${updatedGroup.libelle || id}" mis à jour avec succès !`);
@@ -627,7 +629,7 @@ export function useAppComplexHandlers({
 
   const handleDeleteCompGroup = (id) => {
     const linkedFamilies = (compFamilies || []).filter(
-      (f) => f.id_groupe === id || f.groupe === id
+      (f) => f.id_group === id || f.id_groupe === id || f.groupe === id
     ).length;
     if (linkedFamilies > 0) {
       showToast?.(
@@ -636,7 +638,9 @@ export function useAppComplexHandlers({
       );
       return;
     }
-    setCompGroups((prev) => prev.filter((g) => g.id !== id && g.id_groupe !== id));
+    setCompGroups((prev) =>
+      prev.filter((g) => g.id !== id && g.id_group !== id && g.id_groupe !== id)
+    );
     showToast?.(`Groupe supprimé avec succès !`, 'info');
   };
 
@@ -707,16 +711,12 @@ export function useAppComplexHandlers({
     if (newGroupId && id !== newGroupId) {
       setPartTypes?.((prev) =>
         (prev || []).map((t) =>
-          t.id_group === id || t.id_groupe === id
-            ? { ...t, id_group: newGroupId, id_groupe: newGroupId }
-            : t
+          t.id_group === id || t.id_groupe === id ? { ...t, id_group: newGroupId } : t
         )
       );
       setWarehouseItems?.((prev) =>
         (prev || []).map((w) =>
-          w.id_group === id || w.id_groupe === id
-            ? { ...w, id_group: newGroupId, id_groupe: newGroupId }
-            : w
+          w.id_group === id || w.id_groupe === id ? { ...w, id_group: newGroupId } : w
         )
       );
     }

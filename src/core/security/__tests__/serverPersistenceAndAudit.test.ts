@@ -286,4 +286,56 @@ describe('Server Hardening — Atomic Persistence Rollback, Bounded Audit Tail &
     expect(mergeConflict.json?.code).toBe('STOCK_NEGATIVE_PREVENTED');
     expect(dbState.mouvements).toHaveLength(1);
   });
+
+  it('blocks DELETE /api/gmao/mouvements/:id when removing an ENTREE drives stock negative, while allowing safe deletions', async () => {
+    const { dbState } = await startTestServer({
+      users: [
+        {
+          id: 'USR-ADMIN',
+          username: 'admin',
+          nom: 'Admin',
+          role: 'ADMIN',
+          passwordHash: makePbkdf2Hash(ADMIN_PASS),
+          is_active: true,
+        },
+      ],
+      technicians: [],
+      rawStock: [{ id: 'S-2', ref: 'JOINT-SPI', designation: 'Joint', stockInitial: 0 }],
+      stock: [{ id: 'S-2', ref: 'JOINT-SPI', designation: 'Joint', stockInitial: 0 }],
+      mouvements: [
+        { id: 'MVT-ENT-1', ref: 'JOINT-SPI', type: 'ENTREE', quantite: 5 },
+        { id: 'MVT-SOR-1', ref: 'JOINT-SPI', type: 'SORTIE', quantite: 4 },
+      ],
+    });
+
+    const login = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/auth/login',
+      body: { identifier: 'USR-ADMIN', password: ADMIN_PASS },
+    });
+    const token = login.json.token;
+
+    // Deleting MVT-ENT-1 leaves balance = 0 - 4 = -4 -> must reject 409 and keep state intact
+    const blockedDelete = await sendHttpRequest({
+      port,
+      method: 'DELETE',
+      path: '/api/gmao/mouvements/MVT-ENT-1',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(blockedDelete.status).toBe(409);
+    expect(blockedDelete.json?.code).toBe('STOCK_NEGATIVE_PREVENTED');
+    expect(dbState.mouvements).toHaveLength(2);
+
+    // Deleting MVT-SOR-1 leaves balance = +5 (>= 0) -> must succeed (200)
+    const allowedDelete = await sendHttpRequest({
+      port,
+      method: 'DELETE',
+      path: '/api/gmao/mouvements/MVT-SOR-1',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(allowedDelete.status).toBe(200);
+    expect(dbState.mouvements).toHaveLength(1);
+    expect(dbState.mouvements[0].id).toBe('MVT-ENT-1');
+  });
 });

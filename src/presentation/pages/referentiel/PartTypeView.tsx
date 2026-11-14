@@ -220,8 +220,6 @@ export default function PartTypeView({
       ...form,
       id_type: form.id_type.trim().toUpperCase(),
       id_group: cleanGroupId,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: cleanGroupId,
     });
     setForm({ id_type: '', id_group: '', libelle: '' });
     setShowAddModal(false);

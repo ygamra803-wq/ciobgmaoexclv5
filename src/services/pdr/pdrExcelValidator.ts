@@ -285,7 +285,6 @@ export function validateAndReconcilePdrCatalogImport(
       id_type: existingType ? existingType.id_type : rawCodeType,
       libelle: rawLibelle || existingType?.libelle || rawCodeType,
       id_group: targetGroup.id,
-      id_groupe: targetGroup.id,
       domaine_technique: rawTypeDomaine || undefined,
       is_active: parseExcelBoolean(row.is_active ?? row.IS_ACTIVE, true),
     };
@@ -495,7 +494,6 @@ export function validateAndReconcilePdrCatalogImport(
       ref: existingItem ? existingItem.ref : rawRef,
       designation: rawDesignation,
       id_group: typeGroup.id,
-      id_groupe: typeGroup.id,
       id_type: matchedType.id_type,
       type: matchedType.libelle || matchedType.id_type,
       unite: rawUnite,

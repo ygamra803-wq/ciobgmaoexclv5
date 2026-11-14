@@ -339,5 +339,17 @@ describe('Pack 2 — LOTO FSM, Stock Réservé Soft-Lock & Offline SyncQueue Rep
       expect(syncQueueService.getState().queueLength).toBe(0);
       expect(serverSyncService.getLastServerVersion()).toBe(12);
     });
+
+    it('tracks durable vs ephemeral reloadability counts and rejects malformed serializable commands', async () => {
+      syncQueueService.isOnline = false;
+      await syncQueueService.add({ type: 'DURABLE_SYNC_CMD', payload: { ref: 'PDR-9' } }, 'normal');
+      await syncQueueService.add(async () => 'ephemeral', 'low');
+
+      const state = syncQueueService.getState();
+      expect(state.durableCount).toBe(1);
+      expect(state.ephemeralCount).toBe(1);
+
+      await expect(syncQueueService.add({ type: '   ' }, 'normal')).rejects.toThrow();
+    });
   });
 });

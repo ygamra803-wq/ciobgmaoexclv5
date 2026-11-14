@@ -99,8 +99,6 @@ export default function AddArticleModal({
       ref: cleanRef,
       designation: designation.trim() || cleanRef,
       id_group: canonicalGroupId,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: canonicalGroupId,
       id_type: selectedType,
       type: selectedType,
       unite: uniteMesure,

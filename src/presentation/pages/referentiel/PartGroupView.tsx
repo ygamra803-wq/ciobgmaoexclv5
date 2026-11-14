@@ -322,8 +322,6 @@ export default function PartGroupView({
     onAddPartGroup?.({
       id: autoId,
       id_group: autoId,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: autoId,
       code: cleanCode,
       libelle: cleanLibelle,
       description: form.description.trim(),
@@ -363,8 +361,6 @@ export default function PartGroupView({
       ...editingGroup,
       id: targetId,
       id_group: targetId,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: targetId,
       code: cleanCode,
       libelle: cleanLibelle,
       description: form.description.trim(),
@@ -380,7 +376,7 @@ export default function PartGroupView({
 
   const handleToggleActive = (group: IPartGroup) => {
     if (!canEditStock) return;
-    const gId = String(group.id || group.id_group || group.id_groupe || '');
+    const gId = getGroupRecordId(group);
     const nextActive = group.is_active === false;
     onUpdatePartGroup?.(gId, {
       ...group,

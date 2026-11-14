@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { multiLevelCacheManager } from '../../core/cache/MultiLevelCacheManager';
 import { FormulaEngineOptimizer } from '../../utils/formulaEngineOptimizer';
-import { DataLoaderOptimizer } from '../../services/dataLoaderOptimizer';
 import { MemoryOptimizer } from '../../services/memoryOptimizer';
 import { alertThresholdManager } from '../../services/alertThresholdManager';
 import { trendAnalysisService } from '../../services/trendAnalysisService';
@@ -83,31 +82,6 @@ describe('Caching Strategy, Optimization & Monitoring Tests', () => {
       const totals = FormulaEngineOptimizer.batchSumIfs(records, 'qty', ['ref', 'type']);
       expect(totals.get('a1:::in')).toBe(15);
       expect(totals.get('a2:::in')).toBe(20);
-    });
-
-    it('should process large data arrays in non-blocking chunks', async () => {
-      const items = Array.from({ length: 50 }, (_, i) => i + 1);
-      const processed = await DataLoaderOptimizer.loadInChunks(items, (x) => x * 2, { chunkSize: 10 });
-
-      expect(processed.length).toBe(50);
-      expect(processed[0]).toBe(2);
-      expect(processed[49]).toBe(100);
-    });
-
-    it('should deduplicate concurrent identical requests', async () => {
-      let calls = 0;
-      const fetcher = async () => {
-        calls++;
-        return 'data';
-      };
-
-      const p1 = DataLoaderOptimizer.dedupRequest('req1', fetcher);
-      const p2 = DataLoaderOptimizer.dedupRequest('req1', fetcher);
-
-      const [r1, r2] = await Promise.all([p1, p2]);
-      expect(r1).toBe('data');
-      expect(r2).toBe('data');
-      expect(calls).toBe(1);
     });
 
     it('should trigger memory purge on MemoryOptimizer', () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SecurityService } from '../../utils/securityService';
-import { RateLimiter } from '../../utils/rateLimiter';
+import { SecurityService } from '../../core/security/SecurityService';
+import { createSecurityCacheController } from '../../server/middleware/rateLimiter';
 import { sanitizeString, sanitizeObject, sanitizeHtml, sanitizeFilename } from '../../utils/sanitize';
 
 describe('4. Security & Hardening Tests', () => {
@@ -22,22 +22,43 @@ describe('4. Security & Hardening Tests', () => {
       expect(SecurityService.verifyPIN('567890', '567890')).toBe(false);
     });
 
-    it('should prevent brute force attacks by rate-limiting attempts', () => {
-      // Allow max 3 attempts within a 60 second window
-      const limiter = new RateLimiter(3, 60000);
-      const userKey = 'tech_pin_attempts';
+    it('should prevent brute force attacks by rate-limiting API bursts with HTTP 429', () => {
+      const controller = createSecurityCacheController({
+        pruneExpired: () => false,
+        persistAsync: async () => {},
+      } as any);
 
-      // First 3 attempts are allowed
-      expect(limiter.isAllowed(userKey)).toBe(true);
-      expect(limiter.isAllowed(userKey)).toBe(true);
-      expect(limiter.isAllowed(userKey)).toBe(true);
+      try {
+        let nextCalls = 0;
+        let lastStatus = 200;
+        const headers: Record<string, string> = {};
+        const req = { headers: {}, socket: { remoteAddress: '10.0.0.50' }, ip: '10.0.0.50' } as any;
+        const res = {
+          setHeader: (k: string, v: string) => {
+            headers[k] = v;
+          },
+          status: (code: number) => {
+            lastStatus = code;
+            return { json: () => ({ status: code }) };
+          },
+        } as any;
 
-      // 4th attempt must be rejected/rate-limited
-      expect(limiter.isAllowed(userKey)).toBe(false);
+        for (let i = 0; i < 300; i++) {
+          controller.apiRateLimiter(req, res, () => {
+            nextCalls += 1;
+          });
+        }
+        expect(nextCalls).toBe(300);
+        expect(headers['X-RateLimit-Remaining']).toBe('0');
 
-      // Reset allows it again
-      limiter.reset(userKey);
-      expect(limiter.isAllowed(userKey)).toBe(true);
+        controller.apiRateLimiter(req, res, () => {
+          nextCalls += 1;
+        });
+        expect(lastStatus).toBe(429);
+        expect(nextCalls).toBe(300);
+      } finally {
+        controller.dispose();
+      }
     });
   });
 
@@ -57,8 +78,8 @@ describe('4. Security & Hardening Tests', () => {
 
       const decrypted = SecurityService.decrypt(ciphertext);
       expect(decrypted).toEqual(sensitiveData);
-      // Malformed base64/NC2 payload must return null without throwing
-      expect(SecurityService.decrypt('NC2:!!!bad:!!!bad:deadbeef')).toBeNull();
+      // Malformed base64/NC2 payload must strictly fail verification/decryption
+      expect(() => SecurityService.decrypt('NC2:!!!bad:!!!bad:deadbeef')).toThrow();
     });
 
     it('should save and load encrypted items securely from localStorage', () => {
@@ -76,9 +97,8 @@ describe('4. Security & Hardening Tests', () => {
       expect(retrieved).toEqual(sensitiveConfig);
     });
 
-    it('should handle corrupt or invalid ciphertexts gracefully without throwing', () => {
-      const badData = SecurityService.decrypt('invalid-ciphertext-payload-123!!!');
-      expect(badData).toBeNull();
+    it('should reject corrupt or invalid ciphertexts explicitly', () => {
+      expect(() => SecurityService.decrypt('invalid-ciphertext-payload-123!!!')).toThrow();
     });
 
     it('should remain backward-compatible with legacy NC1 ciphertexts and keep storageService isolated from NC2', async () => {

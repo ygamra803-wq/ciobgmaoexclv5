@@ -291,12 +291,22 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   ]),
 };
 
+export interface AuthActor {
+  id?: string | number;
+  role?: string;
+  username?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+export type AuthActorInput = string | AuthActor | null | undefined;
+
 /**
  * Authorization Service
  * ✅ خدمة التحقق من الصلاحيات والتحكم في الوصول المباشر
  */
 export class AuthorizationService {
-  static hasPermission(user: any, permission: string): boolean {
+  static hasPermission(user: AuthActorInput, permission: string): boolean {
     if (!user) {
       Logger.warn('⚠️ User is null or undefined during permission check');
       return false;
@@ -308,7 +318,7 @@ export class AuthorizationService {
       return false;
     }
 
-    const rawRole = typeof user === 'string' ? user : user.role;
+    const rawRole = typeof user === 'string' ? user : String(user.role || '');
     const normalized = normalizeRole(rawRole);
 
     const hasPerm =
@@ -317,7 +327,7 @@ export class AuthorizationService {
 
     if (!hasPerm) {
       Logger.warn('⚠️ Permission denied', {
-        userId: user?.id,
+        userId: typeof user === 'object' ? user?.id : undefined,
         permission,
         userRole: rawRole,
       });
@@ -329,9 +339,9 @@ export class AuthorizationService {
   /**
    * التحقق من صلاحية الوصول إلى تبويب/شاشة معينة حسب دور المستخدم
    */
-  static canAccessTab(userOrRole: any, tabId: string): boolean {
+  static canAccessTab(userOrRole: AuthActorInput, tabId: string): boolean {
     if (!userOrRole) return false;
-    const rawRole = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+    const rawRole = typeof userOrRole === 'string' ? userOrRole : String(userOrRole.role || '');
     const normalized = normalizeRole(rawRole);
     const allowed = ROLE_ALLOWED_TABS[normalized];
     if (allowed === '*') return true;
@@ -353,14 +363,14 @@ export class AuthorizationService {
   /**
    * التحقق مما إذا كان الحساب للقراءة فقط (Observateur / VIEWER)
    */
-  static isReadOnly(userOrRole: any): boolean {
+  static isReadOnly(userOrRole: AuthActorInput): boolean {
     if (!userOrRole) return true;
-    const rawRole = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+    const rawRole = typeof userOrRole === 'string' ? userOrRole : String(userOrRole.role || '');
     return normalizeRole(rawRole) === ROLES.VIEWER;
   }
 
   static requirePermission(permission: string) {
-    return (user: any) => {
+    return (user: AuthActorInput) => {
       if (!this.hasPermission(user, permission)) {
         throw new PermissionError(`Permission denied: ${permission}`, permission);
       }
@@ -374,7 +384,7 @@ export class AuthorizationService {
       .map(([permission]) => permission);
   }
 
-  static canAccess(user: any, resource: string): boolean {
+  static canAccess(user: AuthActorInput, resource: string): boolean {
     const permissions = this._getResourcePermissions(resource);
     return permissions.some((p) => this.hasPermission(user, p));
   }

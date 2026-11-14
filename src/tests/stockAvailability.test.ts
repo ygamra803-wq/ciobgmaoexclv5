@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { stockAvailabilityService } from '../services/stockAvailabilityService';
+import { StockCalculationService } from '../domain/pdr/services/StockCalculationService';
 
-describe('stockAvailabilityService Tests', () => {
+describe('StockCalculationService availability checks', () => {
   it('should validate availability correctly', () => {
     const article = { ref: 'TEST-AVAIL', stockInitial: 10, seuil: 2 };
     const movements = [];
-    const res = stockAvailabilityService.checkAvailability('TEST-AVAIL', 5, article, movements);
+    const res = StockCalculationService.checkAvailability('TEST-AVAIL', 5, article, movements);
     expect(res.available).toBe(true);
     expect(res.currentStock).toBe(10);
   });

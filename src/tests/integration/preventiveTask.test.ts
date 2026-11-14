@@ -1,30 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { calculateNextDueDate, getComplianceRate } from '@/domain/preventiveScheduling';
+import { computeNextDueDate } from '@/application/services/preventive/TaskService';
+import { PreventiveService } from '@/application/services/PreventiveService';
 
 describe('Preventive Task Integration Flow', () => {
   it('يجب تنفيذ مهمة وقائية وتحديث تاريخ الاستحقاق التالي وحساب نسبة الإنجاز', () => {
-    const task: Record<string, any> = {
-      id: 'PREV-001',
-      titre: 'Graissage paliers',
-      machine: 'Extrudeuse 01',
-      periodicite: 'HEBDO',
-      derniereDate: new Date('2026-09-01'),
-      status: 'A_FAIRE',
-    };
+    const executionDate = '2026-09-08';
+    const nextDate = computeNextDueDate(executionDate, 'Hebdomadaire');
 
-    // Simulate validation/execution
-    const executionDate = new Date('2026-09-08');
-    const nextDate = calculateNextDueDate(executionDate, task.periodicite);
+    expect(new Date(nextDate).getTime()).toBeGreaterThan(new Date(executionDate).getTime());
 
-    task.derniereDate = executionDate;
-    task.prochaineDate = nextDate;
-    task.status = 'REALISE';
+    PreventiveService.saveTasks([
+      {
+        id: 'PREV-001',
+        id_machine: 'MCH-01',
+        action_code: 'GRAISSAGE',
+        composant: 'Palier',
+        frequence: 'Hebdomadaire',
+        derniere_realisation: executionDate,
+        prochaine_echeance: nextDate,
+        etat: 'Fait',
+      },
+    ]);
+    PreventiveService.saveExecutions([]);
 
-    expect(task.status).toBe('REALISE');
-    expect(task.prochaineDate.getTime()).toBeGreaterThan(task.derniereDate.getTime());
+    const profile = PreventiveService.getMachinePreventiveProfile('MCH-01');
 
-    // Check rate
-    const compliance = getComplianceRate(10, 10);
-    expect(compliance).toBe(100);
+    expect(profile.fait_tasks).toBe(1);
+    expect(profile.compliance_rate).toBe(100);
   });
 });

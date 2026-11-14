@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import fc from 'fast-check';
 import { StockCalculationService } from '../../domain/pdr/services/StockCalculationService';
-import { calculateCurrentStock, getStockStatus } from '../../domain/stockCalculations';
 import { calculateStockStatus } from '../../utils/formulaEngine';
 
 // Arbitraries for Property-Based Testing
@@ -130,7 +129,7 @@ describe('6.A — Property-Based Testing & Critical Edge Cases for Stock Calcula
 
     it('Negative quantities & excess exits: preserves negative physical stock for deficit tracking', () => {
       // Exits exceeding initial + entries
-      expect(calculateCurrentStock(10, 5, 50)).toBe(-35);
+      expect(calculateStockStatus(10, 5, 50, 5).stockActuelRaw).toBe(-35);
 
       const article = { ref: 'PDR-NEG', stockInitial: 10, seuil: 5 };
       const movements = [{ id: 'm1', ref: 'PDR-NEG', type: 'Sortie', quantite: 25 }];
@@ -148,7 +147,7 @@ describe('6.A — Property-Based Testing & Critical Edge Cases for Stock Calcula
       const largeIn = 500_000_000;
       const largeOut = 250_000_000;
 
-      const stock = calculateCurrentStock(largeInit, largeIn, largeOut);
+      const stock = calculateStockStatus(largeInit, largeIn, largeOut, 1000).stockActuel;
       expect(stock).toBe(1_250_000_000);
 
       const article = {
@@ -201,7 +200,7 @@ describe('6.A — Property-Based Testing & Critical Edge Cases for Stock Calcula
         corruptedMovements as any
       );
       expect(balance).toBe(15);
-      expect(getStockStatus(NaN, undefined)).toBe('RUPTURE');
+      expect(calculateStockStatus(NaN, 0, 0, undefined as any).alerte).toBe('RUPTURE');
       expect(calculateStockStatus(NaN, 'abc' as any, null as any, undefined as any).stockActuel).toBe(0);
     });
   });

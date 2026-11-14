@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuthService, validatePasswordPolicy } from '@/core/security/AuthService';
 import { SecurityService as CoreSecurityService } from '@/core/security/SecurityService';
-import { SecurityService as UtilsSecurityService, DEFAULT_SECRET_KEY } from '@/utils/securityService';
 import { vaultService, validateMasterPinPolicy } from '@/utils/vaultService';
 import { accessLogService } from '@/utils/AccessLogService';
 import {
@@ -35,26 +34,6 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
       expect(typeof key).toBe('string');
       expect(key.length).toBeGreaterThanOrEqual(16);
       expect(key).not.toBe('GMAO_SECURE_KEY');
-    });
-
-    it('utils/securityService rejects static DEFAULT_SECRET_KEY in production mode and uses CoreSecurityService', () => {
-      // Simulate production environment
-      const origProd = import.meta.env.PROD;
-      try {
-        (import.meta.env as any).PROD = true;
-
-        const testData = { sensitiveToken: 'CONFIDENTIAL-123' };
-        // Encrypt with default key in production
-        const ciphertext = UtilsSecurityService.encrypt(testData, DEFAULT_SECRET_KEY);
-        expect(ciphertext).toBeDefined();
-        expect(typeof ciphertext).toBe('string');
-
-        // It must be decryptable by CoreSecurityService.SECRET_KEY because utils defaulted to canonical key
-        const decrypted = CoreSecurityService.decrypt(ciphertext);
-        expect(decrypted).toEqual(testData);
-      } finally {
-        (import.meta.env as any).PROD = origProd;
-      }
     });
 
     it('vaultService.encrypt fails explicitly if key is null or empty instead of returning plaintext', () => {

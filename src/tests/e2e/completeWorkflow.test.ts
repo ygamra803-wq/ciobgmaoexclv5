@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCurrentStock, getStockStatus } from '@/domain/stockCalculations';
+import { StockCalculationService } from '@/domain/pdr/services/StockCalculationService';
+import { calculateStockStatus } from '@/utils/formulaEngine';
 import { ValidationService } from '@/domain/validators/index.js';
-import { monitoringService } from '@/infrastructure/monitoringService.js';
+import { performanceService } from '@/services/performanceService';
 
 /**
  * 🔄 اختبارات E2E للسير والمشاهد الميدانية الكاملة (GMAO End-to-End Workflows)
@@ -33,15 +34,18 @@ describe('Complete GMAO E2E Workflows', () => {
         expect(mvtValidation.valid).toBe(true);
 
         // 3. Recalculate Stock
-        stockItem.quantity = calculateCurrentStock(stockItem.quantity, 0, mvt.quantity);
-        const status = getStockStatus(stockItem.quantity, stockItem.minStock);
+        stockItem.quantity = StockCalculationService.calculateStockActuel(
+          { ref: stockItem.code, stockInitial: stockItem.quantity, seuil: stockItem.minStock },
+          [{ ref: stockItem.code, type: 'Sortie', quantite: mvt.quantity }]
+        );
+        const status = calculateStockStatus(stockItem.quantity, 0, 0, stockItem.minStock).alerte;
 
         return { finalStock: stockItem.quantity, status };
       };
 
-      const result = await monitoringService.measure('e2e_stock_workflow', runStockWorkflow);
+      const result = await performanceService.measure('e2e_stock_workflow', runStockWorkflow);
       expect(result.finalStock).toBe(8);
-      expect(result.status).toBe('OPTIMAL');
+      expect(result.status).toBe('OK');
     });
   });
 

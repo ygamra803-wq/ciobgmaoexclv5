@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import { Settings as SettingsIcon } from 'lucide-react';
 
@@ -27,13 +27,33 @@ import { syncQueueService } from '../../../services/syncQueueService';
 import { errorTracker } from '../../../services/ErrorTrackingService';
 import { analytics } from '../../../services/AnalyticsService';
 import { useAuth } from '../../../context/AuthContext';
-import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { AuthorizationService, type AuthActor } from '../../../core/security/AuthorizationService';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import { StockCalculationService } from '../../../domain/pdr/services/StockCalculationService';
 import { stockIndex } from '../../../application/IncrementalStockIndex';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { confirmAction } from '../../../utils/confirmAction';
 import { useTranslation } from '../../../i18n/I18nContext';
+import type {
+  IStockItem,
+  IMouvement,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IZone,
+  ITechnician,
+  IOperation,
+  StockType,
+  IWarehouseItem,
+  PdrGroup,
+} from '../../../types/domain';
+import type {
+  PreventiveTaskItem,
+  CorrectiveInterventionItem,
+  MachineElement,
+  SortieExterneItem,
+  StateUpdater,
+} from '../../../types/store';
 import BackupManagerModal from '../../components/backup/BackupManagerModal';
 import PerformanceDashboardPanel from '../../components/settings/PerformanceDashboardPanel';
 import AppearanceLayoutSelector from '../../components/settings/AppearanceLayoutSelector';
@@ -54,7 +74,145 @@ import {
   AuditUserModal,
   AuditArticleModal,
   AuditRelinkModal,
+  type AuditZoneRecord,
+  type AuditTechnicianRecord,
+  type AuditOperationRecord,
+  type AuditStockRecord,
+  type AuditMachineRecord,
+  type AuditRelinkDataState,
 } from './components/AuditModals';
+
+export interface LinkedFileHandleLike {
+  getFile: () => Promise<{ size: number; lastModified: number }>;
+}
+
+export interface SettingsAccountSummary {
+  id: string;
+  code?: string;
+  username?: string;
+  name?: string;
+  libelle?: string;
+  role: string;
+  titleFr?: string;
+  avatar?: string;
+  badgeColor?: string;
+  description?: string;
+  personnelId?: string | null;
+  personnelName?: string | null;
+  id_zone?: string | null;
+  specialite?: string | null;
+  isActive?: boolean;
+}
+
+interface SettingsAuthContextShape {
+  user?: (AuthActor & { id?: string; username?: string; name?: string }) | null;
+  getAvailableAccounts?: (includeInactive?: boolean) => SettingsAccountSummary[];
+  updateUserPassword?: (username: string, newPass: string, masterPin?: string) => Promise<unknown>;
+  resetAllAccountsToDefaults?: (masterPin?: string) => Promise<boolean>;
+  switchSessionToUser?: (username: string, masterPin?: string) => Promise<unknown>;
+  isVaultExists?: boolean;
+  isVaultUnlocked?: boolean;
+  setupMasterPin?: (pin: string) => Promise<boolean>;
+}
+
+export interface DiscoveredAuditItem {
+  code: string;
+  count: number;
+  sourceList: string;
+  sample?: string;
+  inferredRole?: 'CHEF' | 'OPERATEUR' | 'TECHNICIEN';
+  entityType: 'machine' | 'article' | 'zone' | 'user';
+}
+
+interface DiscoveredCandidateAccumulator {
+  count: number;
+  sources: Set<string>;
+  sample: string;
+}
+
+interface DiscoveredUserAccumulator {
+  count: number;
+  techCount: number;
+  opCount: number;
+  demandeurCount: number;
+  sources: Set<string>;
+}
+
+interface BackupSnapshotSummary {
+  id: string;
+  timestamp: string | number;
+  userId: string;
+  reason?: string;
+}
+
+interface RestoredBackupPayload {
+  Stock_Actuel?: IStockItem[];
+  Mouvement?: IMouvement[];
+  Machines_Registered?: IMachine[];
+  Families?: IMachineFamily[];
+  Templates?: IMachineTemplate[];
+  Zones?: IZone[];
+  Technicians?: ITechnician[];
+  Operations?: IOperation[];
+}
+
+interface SettingsPerformanceStats {
+  heapMB: number | string;
+  recalcStats: ReturnType<typeof performanceService.getStats>;
+}
+
+export interface SettingsViewProps {
+  rawStock?: IStockItem[];
+  setRawStock?: (val: StateUpdater<IStockItem[]>) => void;
+  mouvements?: IMouvement[];
+  setMouvements?: (val: StateUpdater<IMouvement[]>) => void;
+  machines?: IMachine[];
+  setMachines?: (val: StateUpdater<IMachine[]>) => void;
+  families?: IMachineFamily[];
+  setFamilies?: (val: StateUpdater<IMachineFamily[]>) => void;
+  templates?: IMachineTemplate[];
+  setTemplates?: (val: StateUpdater<IMachineTemplate[]>) => void;
+  zones?: IZone[];
+  setZones?: (val: StateUpdater<IZone[]>) => void;
+  technicians?: ITechnician[];
+  setTechnicians?: (val: StateUpdater<ITechnician[]>) => void;
+  operations?: IOperation[];
+  setOperations?: (val: StateUpdater<IOperation[]>) => void;
+  types?: Array<StockType | string>;
+  setTypes?: (val: StateUpdater<StockType[]>) => void;
+  warehouseItems?: IWarehouseItem[];
+  sortiesExterne?: SortieExterneItem[];
+  preventiveTasks?: PreventiveTaskItem[];
+  setPreventiveTasks?: (val: StateUpdater<PreventiveTaskItem[]>) => void;
+  correctiveInterventions?: CorrectiveInterventionItem[];
+  setCorrectiveInterventions?: (val: StateUpdater<CorrectiveInterventionItem[]>) => void;
+  machineElementsLedger?: MachineElement[];
+  setMachineElementsLedger?: (val: StateUpdater<MachineElement[]>) => void;
+  onResetCorrective?: () => void;
+  onBulkImportCorrective?: (items: CorrectiveInterventionItem[]) => void;
+  onLoadDemoData?: () => void;
+  onClearAllForRealFactory?: () => void;
+  onLoadDemoSection?: (section: string) => void;
+  onClearDemoSection?: (section: string) => void;
+  onExportExcel?: () => void;
+  onDownloadBlankTemplate?: () => void;
+  showToast?: (message: string, type?: string) => void;
+  linkedFileHandle?: LinkedFileHandleLike | null;
+  linkedFileName?: string | null;
+  onDirectLink?: () => void;
+  initialTab?: string;
+  [key: string]: unknown;
+}
+
+function getErrorMessage(err: unknown, fallback = 'Erreur inattendue'): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg.trim()) return msg;
+  }
+  return fallback;
+}
 
 export default function SettingsView({
   rawStock = [],
@@ -96,7 +254,7 @@ export default function SettingsView({
   linkedFileName,
   onDirectLink,
   initialTab,
-}: any) {
+}: SettingsViewProps) {
   const { language } = useTranslation();
   const langKey = (language === 'ar' || language === 'en' ? language : 'fr') as 'fr' | 'ar' | 'en';
 
@@ -220,6 +378,7 @@ export default function SettingsView({
   });
 
   // Admin & Security Config States (Zero-Knowledge Vault)
+  const authContext = (useAuth() || {}) as SettingsAuthContextShape;
   const {
     user: currentUser,
     getAvailableAccounts,
@@ -229,7 +388,7 @@ export default function SettingsView({
     isVaultExists,
     isVaultUnlocked,
     setupMasterPin,
-  } = (useAuth() || {}) as any;
+  } = authContext;
 
   // Internal RBAC capability flags (ST-1 & ST-AUTH-NULL: fail-closed when currentUser is null)
   const canManageSettings =
@@ -274,7 +433,7 @@ export default function SettingsView({
     }
   }, [allowedTabIds, activeTab]);
 
-  const [accountsList, setAccountsList] = useState(() => {
+  const [accountsList, setAccountsList] = useState<SettingsAccountSummary[]>(() => {
     return getAvailableAccounts ? getAvailableAccounts(true) : [];
   });
   const [masterPinSetup, setMasterPinSetup] = useState('');
@@ -300,10 +459,10 @@ export default function SettingsView({
       if (resetAllAccountsToDefaults) {
         await resetAllAccountsToDefaults(pin);
         setAccountsList(getAvailableAccounts ? getAvailableAccounts(true) : []);
-        showToast('Le coffre-fort a été réinitialisé. Définissez votre nouveau Master PIN.', 'info');
+        showToast?.('Le coffre-fort a été réinitialisé. Définissez votre nouveau Master PIN.', 'info');
       }
-    } catch (err: any) {
-      showToast(err.message || 'Échec de la réinitialisation.', 'error');
+    } catch (err: unknown) {
+      showToast?.(getErrorMessage(err, 'Échec de la réinitialisation.'), 'error');
       throw err;
     }
   };
@@ -336,7 +495,7 @@ export default function SettingsView({
     seuil: 5,
   });
   const [showRelinkModal, setShowRelinkModal] = useState(false);
-  const [relinkData, setRelinkData] = useState({
+  const [relinkData, setRelinkData] = useState<AuditRelinkDataState>({
     entityType: 'machine',
     oldKey: '',
     targetKey: '',
@@ -347,7 +506,7 @@ export default function SettingsView({
   const getNextUserId = (type: string) => {
     if (type === 'TECHNICIEN') {
       const nums = technicians
-        .map((t: any) => {
+        .map((t: ITechnician) => {
           const m = String(t.id_technician || '').match(/TECH-(\d+)/i);
           return m ? parseInt(m[1], 10) : 0;
         })
@@ -356,8 +515,8 @@ export default function SettingsView({
       return `TECH-${String(max + 1).padStart(2, '0')}`;
     } else if (type === 'OPERATEUR') {
       const nums = operations
-        .filter((o: any) => o.type_profil === 'OPERATEUR')
-        .map((o: any) => {
+        .filter((o: IOperation) => o.type_profil === 'OPERATEUR')
+        .map((o: IOperation) => {
           const m = String(o.id_operation || '').match(/OP-(\d+)/i);
           return m ? parseInt(m[1], 10) : 0;
         })
@@ -366,8 +525,8 @@ export default function SettingsView({
       return `OP-${String(max + 1).padStart(2, '0')}`;
     } else if (type === 'CHEF') {
       const nums = operations
-        .filter((o: any) => o.type_profil === 'CHEF')
-        .map((o: any) => {
+        .filter((o: IOperation) => o.type_profil === 'CHEF')
+        .map((o: IOperation) => {
           const m = String(o.id_operation || '').match(/CHEF-(\d+)/i);
           return m ? parseInt(m[1], 10) : 0;
         })
@@ -380,7 +539,7 @@ export default function SettingsView({
 
   const getNextZoneId = () => {
     const nums = zones
-      .map((z: any) => {
+      .map((z: IZone) => {
         const m = String(z.id_zone || '').match(/ZONE-(\d+)/i);
         return m ? parseInt(m[1], 10) : 0;
       })
@@ -390,34 +549,34 @@ export default function SettingsView({
   };
 
   // AUDIT & VERIFICATION ENGINE (Multi-Entity Strict Relational Matching)
-  const discoveredItems = useMemo(() => {
-    const candidates: Record<string, any> = {};
+  const discoveredItems = useMemo<DiscoveredAuditItem[]>(() => {
+    const candidates: Record<string, DiscoveredCandidateAccumulator> = {};
 
     if (auditTarget === 'machines') {
       const registeredIds = new Set(
         (machines || [])
-          .map((m: any) => String(m.id_machine_registered || '').toLowerCase().trim())
+          .map((m: IMachine) => String(m.id_machine_registered || '').toLowerCase().trim())
           .filter(Boolean)
       );
 
-      (mouvements || []).forEach((m: any, idx: number) => {
+      (mouvements || []).forEach((m: IMouvement, idx: number) => {
         const code = String(m.id_machine_registered || '').trim();
         if (code && !registeredIds.has(code.toLowerCase())) {
           if (!candidates[code]) {
-            candidates[code] = { count: 0, sources: new Set(), sample: `Mouvement #${idx + 1}` };
+            candidates[code] = { count: 0, sources: new Set<string>(), sample: `Mouvement #${idx + 1}` };
           }
           candidates[code].count += 1;
           candidates[code].sources.add('Mouvements');
         }
       });
 
-      (correctiveInterventions || []).forEach((ci: any) => {
+      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
         const code = String(ci.id_machine || ci.machine_id || '').trim();
         if (code && !registeredIds.has(code.toLowerCase())) {
           if (!candidates[code]) {
             candidates[code] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Correctif (${ci.id || ci.code_bon || 'BT'})`,
             };
           }
@@ -426,13 +585,13 @@ export default function SettingsView({
         }
       });
 
-      (preventiveTasks || []).forEach((pt: any) => {
+      (preventiveTasks || []).forEach((pt: PreventiveTaskItem) => {
         const code = String(pt.machine_id || pt.id_machine || '').trim();
         if (code && !registeredIds.has(code.toLowerCase())) {
           if (!candidates[code]) {
             candidates[code] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Préventif (${pt.id || pt.code || 'Tâche'})`,
             };
           }
@@ -442,9 +601,9 @@ export default function SettingsView({
       });
 
       const mchRegex = /\b([A-Z]{2,4}-\d{2,3}|[A-Z]{2,4}-\d{1,2})\b/gi;
-      const scanTexts = (text: string, sourceLabel: string) => {
+      const scanTexts = (text: string | undefined, sourceLabel: string) => {
         if (!text) return;
-        let match;
+        let match: RegExpExecArray | null;
         mchRegex.lastIndex = 0;
         while ((match = mchRegex.exec(text)) !== null) {
           const code = match[1].toUpperCase();
@@ -460,7 +619,7 @@ export default function SettingsView({
 
           if (!registeredIds.has(code.toLowerCase())) {
             if (!candidates[code]) {
-              candidates[code] = { count: 0, sources: new Set(), sample: sourceLabel };
+              candidates[code] = { count: 0, sources: new Set<string>(), sample: sourceLabel };
             }
             candidates[code].count += 1;
             candidates[code].sources.add(sourceLabel);
@@ -468,7 +627,7 @@ export default function SettingsView({
         }
       };
 
-      (mouvements || []).forEach((m: any, idx: number) => {
+      (mouvements || []).forEach((m: IMouvement, idx: number) => {
         scanTexts(m.commentaire, `Commentaire Mvt #${idx + 1}`);
       });
 
@@ -478,23 +637,23 @@ export default function SettingsView({
           count: meta.count,
           sourceList: Array.from(meta.sources).join(', '),
           sample: meta.sample,
-          entityType: 'machine',
+          entityType: 'machine' as const,
         }))
         .sort((a, b) => b.count - a.count);
     } else if (auditTarget === 'articles') {
       const registeredRefs = new Set(
         (rawStock || [])
-          .map((s: any) => String(s.ref || '').toUpperCase().trim())
+          .map((s: IStockItem) => String(s.ref || '').toUpperCase().trim())
           .filter(Boolean)
       );
 
-      (mouvements || []).forEach((m: any, idx: number) => {
+      (mouvements || []).forEach((m: IMouvement, idx: number) => {
         const ref = String(m.ref || '').trim();
         if (ref && !registeredRefs.has(ref.toUpperCase())) {
           if (!candidates[ref]) {
             candidates[ref] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Mvt #${idx + 1} (${m.type || 'Mvt'} ${m.quantite || 1})`,
             };
           }
@@ -509,36 +668,36 @@ export default function SettingsView({
           count: meta.count,
           sourceList: Array.from(meta.sources).join(', '),
           sample: meta.sample,
-          entityType: 'article',
+          entityType: 'article' as const,
         }))
         .sort((a, b) => b.count - a.count);
     } else if (auditTarget === 'zones') {
       const registeredZones = new Set(
         [
-          ...(zones || []).map((z: any) => String(z.id_zone || '').toLowerCase().trim()),
-          ...(zones || []).map((z: any) => String(z.libelle || '').toLowerCase().trim()),
-          ...(zones || []).map((z: any) => String(z.nom || '').toLowerCase().trim()),
+          ...(zones || []).map((z: IZone) => String(z.id_zone || '').toLowerCase().trim()),
+          ...(zones || []).map((z: IZone) => String(z.libelle || '').toLowerCase().trim()),
+          ...(zones || []).map((z: IZone) => String(z.nom || '').toLowerCase().trim()),
         ].filter(Boolean)
       );
 
-      (mouvements || []).forEach((m: any, idx: number) => {
+      (mouvements || []).forEach((m: IMouvement, idx: number) => {
         const code = String(m.id_zone || '').trim();
         if (code && !registeredZones.has(code.toLowerCase())) {
           if (!candidates[code]) {
-            candidates[code] = { count: 0, sources: new Set(), sample: `Mouvement #${idx + 1}` };
+            candidates[code] = { count: 0, sources: new Set<string>(), sample: `Mouvement #${idx + 1}` };
           }
           candidates[code].count += 1;
           candidates[code].sources.add('Mouvements');
         }
       });
 
-      (machines || []).forEach((m: any) => {
+      (machines || []).forEach((m: IMachine) => {
         const code = String(m.id_zone_default || m.id_zone || '').trim();
         if (code && !registeredZones.has(code.toLowerCase())) {
           if (!candidates[code]) {
             candidates[code] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Machine ${m.id_machine_registered}`,
             };
           }
@@ -553,23 +712,23 @@ export default function SettingsView({
           count: meta.count,
           sourceList: Array.from(meta.sources).join(', '),
           sample: meta.sample,
-          entityType: 'zone',
+          entityType: 'zone' as const,
         }))
         .sort((a, b) => b.count - a.count);
     } else if (auditTarget === 'utilisateurs') {
       const registeredNames = new Set(
         [
-          ...(technicians || []).map((t: any) => String(t.nom || '').toLowerCase().trim()),
-          ...(technicians || []).map((t: any) => String(t.id_technician || '').toLowerCase().trim()),
-          ...(operations || []).map((o: any) => String(o.nom || '').toLowerCase().trim()),
-          ...(operations || []).map((o: any) => String(o.id_operation || '').toLowerCase().trim()),
+          ...(technicians || []).map((t: ITechnician) => String(t.nom || '').toLowerCase().trim()),
+          ...(technicians || []).map((t: ITechnician) => String(t.id_technician || '').toLowerCase().trim()),
+          ...(operations || []).map((o: IOperation) => String(o.nom || '').toLowerCase().trim()),
+          ...(operations || []).map((o: IOperation) => String(o.id_operation || '').toLowerCase().trim()),
         ].filter(Boolean)
       );
 
-      const userMap: Record<string, any> = {};
-      const addCandidate = (rawName: string, sourceField: string) => {
+      const userMap: Record<string, DiscoveredUserAccumulator> = {};
+      const addCandidate = (rawName: string | undefined, sourceField: string) => {
         if (!rawName) return;
-        const name = rawName.trim();
+        const name = String(rawName).trim();
         if (!name) return;
         if (registeredNames.has(name.toLowerCase())) return;
         if (/^(OP-|CHEF-|TECH-)/i.test(name)) return;
@@ -580,7 +739,7 @@ export default function SettingsView({
             techCount: 0,
             opCount: 0,
             demandeurCount: 0,
-            sources: new Set(),
+            sources: new Set<string>(),
           };
         }
         userMap[name].count += 1;
@@ -590,25 +749,25 @@ export default function SettingsView({
         if (sourceField === 'Demandeur') userMap[name].demandeurCount += 1;
       };
 
-      (mouvements || []).forEach((m: any) => {
+      (mouvements || []).forEach((m: IMouvement) => {
         if (m.technicien) addCandidate(m.technicien, 'Technicien');
         if (m.operation) addCandidate(m.operation, 'Opération/Chef');
-        if (m.demandeur) addCandidate(m.demandeur, 'Demandeur');
+        if (m.demandeur) addCandidate(String(m.demandeur), 'Demandeur');
       });
 
-      (correctiveInterventions || []).forEach((ci: any) => {
+      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
         if (ci.technicien_id || ci.technicien)
-          addCandidate(ci.technicien_id || ci.technicien, 'Technicien');
+          addCandidate(String(ci.technicien_id || ci.technicien), 'Technicien');
         if (ci.demandeur) addCandidate(ci.demandeur, 'Demandeur');
       });
 
-      (machines || []).forEach((m: any) => {
+      (machines || []).forEach((m: IMachine) => {
         if (m.technician) addCandidate(m.technician, 'Parc Machine');
       });
 
       return Object.entries(userMap)
         .map(([name, meta]) => {
-          let inferredRole;
+          let inferredRole: 'CHEF' | 'OPERATEUR' | 'TECHNICIEN';
           if (/\bchef\b/i.test(name) || /\bsuperviseur\b/i.test(name)) {
             inferredRole = 'CHEF';
           } else if (/\bop/i.test(name) || /\bopér/i.test(name) || meta.opCount > meta.techCount) {
@@ -622,23 +781,23 @@ export default function SettingsView({
             count: meta.count,
             inferredRole,
             sourceList,
-            entityType: 'user',
+            entityType: 'user' as const,
           };
         })
         .sort((a, b) => b.count - a.count);
     } else if (auditTarget === 'correctif') {
       const registeredMachines = new Set(
         (machines || [])
-          .map((m: any) => String(m.id_machine_registered || '').toUpperCase().trim())
+          .map((m: IMachine) => String(m.id_machine_registered || '').toUpperCase().trim())
           .filter(Boolean)
       );
-      (correctiveInterventions || []).forEach((ci: any) => {
+      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
         const mKey = String(ci.id_machine || ci.machine_id || '').trim();
         if (mKey && !registeredMachines.has(mKey.toUpperCase())) {
           if (!candidates[mKey]) {
             candidates[mKey] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Intervention ${ci.id || ci.code_bon || 'Sans ID'}`,
             };
           }
@@ -652,22 +811,22 @@ export default function SettingsView({
           count: meta.count,
           sourceList: Array.from(meta.sources).join(', '),
           sample: meta.sample,
-          entityType: 'machine',
+          entityType: 'machine' as const,
         }))
         .sort((a, b) => b.count - a.count);
     } else if (auditTarget === 'preventif') {
       const registeredMachines = new Set(
         (machines || [])
-          .map((m: any) => String(m.id_machine_registered || '').toUpperCase().trim())
+          .map((m: IMachine) => String(m.id_machine_registered || '').toUpperCase().trim())
           .filter(Boolean)
       );
-      (preventiveTasks || []).forEach((pt: any) => {
+      (preventiveTasks || []).forEach((pt: PreventiveTaskItem) => {
         const mKey = String(pt.machine_id || pt.id_machine || '').trim();
         if (mKey && !registeredMachines.has(mKey.toUpperCase())) {
           if (!candidates[mKey]) {
             candidates[mKey] = {
               count: 0,
-              sources: new Set(),
+              sources: new Set<string>(),
               sample: `Tâche ${pt.id || pt.code || 'Sans ID'}`,
             };
           }
@@ -681,7 +840,7 @@ export default function SettingsView({
           count: meta.count,
           sourceList: Array.from(meta.sources).join(', '),
           sample: meta.sample,
-          entityType: 'machine',
+          entityType: 'machine' as const,
         }))
         .sort((a, b) => b.count - a.count);
     }
@@ -725,7 +884,7 @@ export default function SettingsView({
   const [jsonError, setJsonError] = useState<string | null>(null);
 
   const originalJsonText = useMemo(() => {
-    let targetData: any[] = [];
+    let targetData: unknown[] = [];
     if (jsonTarget === 'rawStock') targetData = rawStock;
     else if (jsonTarget === 'mouvements') targetData = mouvements;
     else if (jsonTarget === 'machines') targetData = machines;
@@ -742,7 +901,7 @@ export default function SettingsView({
     else if (jsonTarget === 'operations') targetData = operations;
     else if (jsonTarget === 'types') targetData = types;
     else if (jsonTarget === 'users')
-      targetData = (accountsList || []).map((u: any) => ({
+      targetData = (accountsList || []).map((u: SettingsAccountSummary) => ({
         id: u.id,
         username: u.username || u.code,
         name: u.name || u.libelle,
@@ -785,7 +944,7 @@ export default function SettingsView({
       return;
     }
     try {
-      const parsed = JSON.parse(jsonText);
+      const parsed: unknown = JSON.parse(jsonText);
       if (!Array.isArray(parsed)) {
         throw new Error("La structure doit être un tableau JSON d'objets.");
       }
@@ -793,13 +952,14 @@ export default function SettingsView({
       const store = useGmaoStore.getState();
 
       if (jsonTarget === 'rawStock') {
+        const parsedStock = parsed as IStockItem[];
         const calcMap = new Map(
-          StockCalculationService.calculateAllStocks(parsed, mouvements).map((c) => [
+          StockCalculationService.calculateAllStocks(parsedStock, mouvements).map((c) => [
             String(c.ref || '').trim().toUpperCase(),
             c,
           ])
         );
-        const recalculatedStock = parsed.map((art: any) => {
+        const recalculatedStock: IStockItem[] = parsedStock.map((art: IStockItem) => {
           const k = String(art?.ref || '').trim().toUpperCase();
           const c = calcMap.get(k);
           if (!c) return art;
@@ -812,20 +972,21 @@ export default function SettingsView({
           };
         });
         const initMap = new Map<string, number>();
-        recalculatedStock.forEach((art: any) => {
+        recalculatedStock.forEach((art: IStockItem) => {
           if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
         });
         stockIndex.rebuild(mouvements, initMap);
-        setRawStock(recalculatedStock);
+        setRawStock?.(recalculatedStock);
         storageService.saveArticles(recalculatedStock);
       } else if (jsonTarget === 'mouvements') {
+        const parsedMvts = parsed as IMouvement[];
         const calcMap = new Map(
-          StockCalculationService.calculateAllStocks(rawStock, parsed).map((c) => [
+          StockCalculationService.calculateAllStocks(rawStock, parsedMvts).map((c) => [
             String(c.ref || '').trim().toUpperCase(),
             c,
           ])
         );
-        const recalculatedStock = (rawStock || []).map((art: any) => {
+        const recalculatedStock: IStockItem[] = (rawStock || []).map((art: IStockItem) => {
           const k = String(art?.ref || '').trim().toUpperCase();
           const c = calcMap.get(k);
           if (!c) return art;
@@ -838,54 +999,54 @@ export default function SettingsView({
           };
         });
         const initMap = new Map<string, number>();
-        recalculatedStock.forEach((art: any) => {
+        recalculatedStock.forEach((art: IStockItem) => {
           if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
         });
-        stockIndex.rebuild(parsed, initMap);
-        setMouvements(parsed);
+        stockIndex.rebuild(parsedMvts, initMap);
+        setMouvements?.(parsedMvts);
         if (setRawStock) setRawStock(recalculatedStock);
         storageService.saveArticles(recalculatedStock);
       } else if (jsonTarget === 'machines') {
-        if (setMachines) setMachines(parsed);
-        else store.setMachines(parsed);
+        if (setMachines) setMachines(parsed as IMachine[]);
+        else store.setMachines(parsed as IMachine[]);
       } else if (jsonTarget === 'preventiveTasks' || jsonTarget === 'preventive') {
-        if (setPreventiveTasks) setPreventiveTasks(parsed);
-        else store.setPreventiveTasks(parsed);
+        if (setPreventiveTasks) setPreventiveTasks(parsed as PreventiveTaskItem[]);
+        else store.setPreventiveTasks(parsed as PreventiveTaskItem[]);
       } else if (jsonTarget === 'correctiveInterventions') {
-        if (setCorrectiveInterventions) setCorrectiveInterventions(parsed);
-        else store.setCorrectiveInterventions(parsed);
+        if (setCorrectiveInterventions) setCorrectiveInterventions(parsed as CorrectiveInterventionItem[]);
+        else store.setCorrectiveInterventions(parsed as CorrectiveInterventionItem[]);
       } else if (jsonTarget === 'warehouseItems') {
-        store.setWarehouseItems(parsed);
+        store.setWarehouseItems(parsed as IWarehouseItem[]);
       } else if (jsonTarget === 'sortiesExterne') {
-        store.setSortiesExterne(parsed);
+        store.setSortiesExterne(parsed as SortieExterneItem[]);
       } else if (jsonTarget === 'machineElementsLedger') {
-        if (setMachineElementsLedger) setMachineElementsLedger(parsed);
-        else store.setMachineElementsLedger(parsed);
+        if (setMachineElementsLedger) setMachineElementsLedger(parsed as MachineElement[]);
+        else store.setMachineElementsLedger(parsed as MachineElement[]);
       } else if (jsonTarget === 'families') {
-        if (setFamilies) setFamilies(parsed);
-        else store.setFamilies(parsed);
+        if (setFamilies) setFamilies(parsed as IMachineFamily[]);
+        else store.setFamilies(parsed as IMachineFamily[]);
       } else if (jsonTarget === 'templates') {
-        if (setTemplates) setTemplates(parsed);
-        else store.setTemplates(parsed);
+        if (setTemplates) setTemplates(parsed as IMachineTemplate[]);
+        else store.setTemplates(parsed as IMachineTemplate[]);
       } else if (jsonTarget === 'zones') {
-        if (setZones) setZones(parsed);
-        else store.setZones(parsed);
+        if (setZones) setZones(parsed as IZone[]);
+        else store.setZones(parsed as IZone[]);
       } else if (jsonTarget === 'technicians') {
-        if (setTechnicians) setTechnicians(parsed);
-        else store.setTechnicians(parsed);
+        if (setTechnicians) setTechnicians(parsed as ITechnician[]);
+        else store.setTechnicians(parsed as ITechnician[]);
       } else if (jsonTarget === 'operations') {
-        if (setOperations) setOperations(parsed);
-        else store.setOperations(parsed);
+        if (setOperations) setOperations(parsed as IOperation[]);
+        else store.setOperations(parsed as IOperation[]);
       } else if (jsonTarget === 'types') {
-        if (setTypes) setTypes(parsed);
-        else store.setTypes(parsed);
+        if (setTypes) setTypes(parsed as StockType[]);
+        else store.setTypes(parsed as StockType[]);
       }
 
       setJsonError(null);
-      showToast('Modification appliquée et synchronisée avec succès !', 'success');
-    } catch (err: any) {
-      setJsonError(err.message);
-      showToast('Erreur de validation du JSON.', 'error');
+      showToast?.('Modification appliquée et synchronisée avec succès !', 'success');
+    } catch (err: unknown) {
+      setJsonError(getErrorMessage(err));
+      showToast?.('Erreur de validation du JSON.', 'error');
     }
   };
 
@@ -900,33 +1061,34 @@ export default function SettingsView({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast('Fichier JSON téléchargé avec succès.', 'success');
+      showToast?.('Fichier JSON téléchargé avec succès.', 'success');
     } catch {
-      showToast('Erreur lors du téléchargement.', 'error');
+      showToast?.('Erreur lors du téléchargement.', 'error');
     }
   };
 
-  const handleUploadJSON = (e: any) => {
+  const handleUploadJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event: any) => {
+    reader.onload = (event: ProgressEvent<FileReader>) => {
       try {
-        const text = event.target.result;
-        const parsed = JSON.parse(text);
+        const result = event.target?.result;
+        const text = typeof result === 'string' ? result : '';
+        const parsed: unknown = JSON.parse(text);
         if (!Array.isArray(parsed)) {
-          showToast("Avertissement : Le fichier importé n'est pas un tableau d'objets.", 'info');
+          showToast?.("Avertissement : Le fichier importé n'est pas un tableau d'objets.", 'info');
         }
         setJsonText(JSON.stringify(parsed, null, 2));
         setJsonError(null);
-        showToast(
+        showToast?.(
           "Fichier chargé dans l'éditeur. Veuillez l'enregistrer pour appliquer.",
           'success'
         );
-      } catch (err: any) {
-        setJsonError(`JSON invalide : ${err.message}`);
-        showToast('Le fichier importé contient un JSON invalide.', 'error');
+      } catch (err: unknown) {
+        setJsonError(`JSON invalide : ${getErrorMessage(err)}`);
+        showToast?.('Le fichier importé contient un JSON invalide.', 'error');
       }
     };
     reader.readAsText(file);
@@ -936,7 +1098,7 @@ export default function SettingsView({
   const handleCancelEdits = () => {
     setJsonText(originalJsonText);
     setJsonError(null);
-    showToast("Modification annulée. Retour aux données d'origine.", 'info');
+    showToast?.("Modification annulée. Retour aux données d'origine.", 'info');
   };
 
   // Directory details
@@ -974,7 +1136,7 @@ export default function SettingsView({
         })
       );
     }
-    showToast('Paramètres système et synchronisation réseau mis à jour !', 'success');
+    showToast?.('Paramètres système et synchronisation réseau mis à jour !', 'success');
   };
 
   // DATA INJECTION HUB HANDLERS
@@ -994,20 +1156,20 @@ export default function SettingsView({
         onClearAllForRealFactory();
       } else {
         useGmaoStore.getState().setPdrGroups([]);
-        setRawStock([]);
-        setMouvements([]);
-        setMachines([]);
-        setFamilies([]);
-        setTemplates([]);
-        setZones([]);
-        setTechnicians([]);
-        setOperations([]);
-        setTypes([]);
+        setRawStock?.([]);
+        setMouvements?.([]);
+        setMachines?.([]);
+        setFamilies?.([]);
+        setTemplates?.([]);
+        setZones?.([]);
+        setTechnicians?.([]);
+        setOperations?.([]);
+        setTypes?.([]);
         if (setPreventiveTasks) setPreventiveTasks([]);
         if (setCorrectiveInterventions) setCorrectiveInterventions([]);
       }
       setIsDemoMode(false);
-      showToast('Base de données vidée (Mode Usine Réelle actif) !', 'info');
+      showToast?.('Base de données vidée (Mode Usine Réelle actif) !', 'info');
     }
   };
 
@@ -1027,35 +1189,35 @@ export default function SettingsView({
         preventive: 'Planning & Référentiel Préventif',
         corrective: 'Interventions Correctives & Catalogue Pannes',
       };
-      showToast(`Données Démo injectées avec succès pour : ${labels[group] || group}.`, 'success');
+      showToast?.(`Données Démo injectées avec succès pour : ${labels[group] || group}.`, 'success');
       return;
     }
 
     if (group === 'stock') {
-      useGmaoStore.getState().setPdrGroups(initialPdrGroups as any);
-      setTypes(initialStockTypes);
-      setRawStock(initialStock);
-      showToast(`${initialStock.length} articles injectés dans le stock avec quantités.`, 'success');
+      useGmaoStore.getState().setPdrGroups(initialPdrGroups as unknown as PdrGroup[]);
+      setTypes?.(initialStockTypes as StockType[]);
+      setRawStock?.(initialStock as IStockItem[]);
+      showToast?.(`${initialStock.length} articles injectés dans le stock avec quantités.`, 'success');
     } else if (group === 'parc') {
-      setMachines(initialMachines);
-      setFamilies(initialFamilies);
-      setTemplates(initialTemplates);
-      showToast(`Parc machine initialisé avec succès (${initialMachines.length} machines).`, 'success');
+      setMachines?.(initialMachines as IMachine[]);
+      setFamilies?.(initialFamilies as IMachineFamily[]);
+      setTemplates?.(initialTemplates as IMachineTemplate[]);
+      showToast?.(`Parc machine initialisé avec succès (${initialMachines.length} machines).`, 'success');
     } else if (group === 'zones') {
-      setZones(initialZones);
-      setTechnicians(initialTechnicians);
-      setOperations(initialOperations);
-      showToast('Zones et équipes initialisées avec succès.', 'success');
+      setZones?.(initialZones as IZone[]);
+      setTechnicians?.(initialTechnicians as ITechnician[]);
+      setOperations?.(initialOperations as IOperation[]);
+      showToast?.('Zones et équipes initialisées avec succès.', 'success');
     } else if (group === 'mouvements') {
-      setMouvements(initialMouvements);
-      showToast(`${initialMouvements.length} mouvements historiques injectés.`, 'success');
+      setMouvements?.(initialMouvements as unknown as IMouvement[]);
+      showToast?.(`${initialMouvements.length} mouvements historiques injectés.`, 'success');
     } else if (group === 'corrective') {
       if (typeof onResetCorrective === 'function') {
         onResetCorrective();
       } else if (typeof onBulkImportCorrective === 'function') {
-        onBulkImportCorrective(initialCorrectiveInterventions);
+        onBulkImportCorrective(initialCorrectiveInterventions as CorrectiveInterventionItem[]);
       }
-      showToast(`${initialCorrectiveInterventions.length} interventions correctives injectées.`, 'success');
+      showToast?.(`${initialCorrectiveInterventions.length} interventions correctives injectées.`, 'success');
     }
   };
 
@@ -1070,7 +1232,7 @@ export default function SettingsView({
     }
     if (typeof onClearDemoSection === 'function') {
       onClearDemoSection(group);
-      showToast(`La section "${group}" a été vidée avec succès.`, 'info');
+      showToast?.(`La section "${group}" a été vidée avec succès.`, 'info');
     }
   };
 
@@ -1112,7 +1274,7 @@ export default function SettingsView({
       handleInjectGroup('corrective');
     }
     setIsDemoMode(true);
-    showToast("Injection globale de toute l'usine (Données Démo SSOT) terminée avec succès.", 'success');
+    showToast?.("Injection globale de toute l'usine (Données Démo SSOT) terminée avec succès.", 'success');
   };
 
   // Orphan calculations & handlers
@@ -1120,14 +1282,14 @@ export default function SettingsView({
     () =>
       dataIntegrityService
         .annotatePreventiveOrphans(preventiveTasks, machines)
-        .filter((t: any) => t._isOrphan),
+        .filter((t) => Boolean(t._isOrphan)),
     [preventiveTasks, machines]
   );
   const correctiveOrphans = useMemo(
     () =>
       dataIntegrityService
         .annotateCorrectiveOrphans(correctiveInterventions, machines)
-        .filter((i: any) => i._isOrphan),
+        .filter((i) => Boolean(i._isOrphan)),
     [correctiveInterventions, machines]
   );
   const systemGeneralBomLeaks = useMemo(
@@ -1156,9 +1318,9 @@ export default function SettingsView({
         machines
       );
       if (setMachineElementsLedger) {
-        setMachineElementsLedger(kept);
+        setMachineElementsLedger(kept as MachineElement[]);
       } else {
-        useGmaoStore.getState().setMachineElementsLedger(kept);
+        useGmaoStore.getState().setMachineElementsLedger(kept as MachineElement[]);
       }
       runIntegrityCheck();
       showToast?.(
@@ -1191,7 +1353,7 @@ export default function SettingsView({
       })
     ) {
       const { kept } = dataIntegrityService.purgeOrphanPreventiveTasks(preventiveTasks, machines);
-      setPreventiveTasks(kept);
+      setPreventiveTasks?.(kept as PreventiveTaskItem[]);
       showToast?.(`${preventiveOrphans.length} tâche(s) orpheline(s) purgée(s) avec succès.`, 'success');
     }
   };
@@ -1222,7 +1384,7 @@ export default function SettingsView({
         correctiveInterventions,
         machines
       );
-      setCorrectiveInterventions(kept);
+      setCorrectiveInterventions?.(kept as CorrectiveInterventionItem[]);
       showToast?.(
         `${correctiveOrphans.length} intervention(s) orpheline(s) purgée(s) avec succès.`,
         'success'
@@ -1280,26 +1442,35 @@ export default function SettingsView({
     const target = bulkRelinkModal.targetMachineId.trim();
     if (!target) return;
     const entityType = bulkRelinkModal.entityType;
-    const items = entityType === 'preventive' ? preventiveTasks : correctiveInterventions;
-    const { updated, changedCount, error } = dataIntegrityService.bulkRelinkOrphans({
-      entityType,
-      items,
-      machines,
-      newMachineId: target,
-    });
-
-    if (error) {
-      showToast?.('Erreur: Machine cible invalide ou archivée.', 'error');
-      return;
-    }
-
     if (entityType === 'preventive') {
-      setPreventiveTasks(updated);
+      const { updated, changedCount, error } = dataIntegrityService.bulkRelinkOrphans({
+        entityType: 'preventive',
+        items: preventiveTasks,
+        machines,
+        newMachineId: target,
+      });
+      if (error) {
+        showToast?.('Erreur: Machine cible invalide ou archivée.', 'error');
+        return;
+      }
+      setPreventiveTasks?.(updated as PreventiveTaskItem[]);
+      setBulkRelinkModal({ isOpen: false, entityType: 'preventive', targetMachineId: '' });
+      showToast?.(`${changedCount} élément(s) réassigné(s) avec succès à ${target}.`, 'success');
     } else {
-      setCorrectiveInterventions(updated);
+      const { updated, changedCount, error } = dataIntegrityService.bulkRelinkOrphans({
+        entityType: 'corrective',
+        items: correctiveInterventions,
+        machines,
+        newMachineId: target,
+      });
+      if (error) {
+        showToast?.('Erreur: Machine cible invalide ou archivée.', 'error');
+        return;
+      }
+      setCorrectiveInterventions?.(updated as CorrectiveInterventionItem[]);
+      setBulkRelinkModal({ isOpen: false, entityType: 'preventive', targetMachineId: '' });
+      showToast?.(`${changedCount} élément(s) réassigné(s) avec succès à ${target}.`, 'success');
     }
-    setBulkRelinkModal({ isOpen: false, entityType: 'preventive', targetMachineId: '' });
-    showToast?.(`${changedCount} élément(s) réassigné(s) avec succès à ${target}.`, 'success');
   };
 
   const handleRegisterDiscovered = () => {
@@ -1311,7 +1482,7 @@ export default function SettingsView({
       const defaultZone = zones[0]?.id_zone || '';
       const defaultTech = technicians[0]?.nom || '';
 
-      const newMachines = discoveredItems.map((dm: any) => ({
+      const newMachines: IMachine[] = discoveredItems.map((dm: DiscoveredAuditItem) => ({
         id_machine_registered: dm.code,
         designation: `Machine Auto-Détectée ${dm.code}`,
         id_family: defaultFamily,
@@ -1320,23 +1491,23 @@ export default function SettingsView({
         technician: defaultTech,
         status: 'En service',
       }));
-      setMachines((prev: any[]) => [...prev, ...newMachines]);
-      showToast(`${newMachines.length} machines enregistrées avec succès.`, 'success');
+      setMachines?.((prev: IMachine[]) => [...prev, ...newMachines]);
+      showToast?.(`${newMachines.length} machines enregistrées avec succès.`, 'success');
     } else if (auditTarget === 'utilisateurs') {
       let regTech = 0;
       let regChef = 0;
       let regOp = 0;
 
-      const nextTechs = [...technicians];
-      const nextOps = [...operations];
+      const nextTechs: ITechnician[] = [...technicians];
+      const nextOps: IOperation[] = [...operations];
 
-      discoveredItems.forEach((item: any) => {
+      discoveredItems.forEach((item: DiscoveredAuditItem) => {
         const name = item.code;
         const role = item.inferredRole || 'TECHNICIEN';
 
         if (role === 'TECHNICIEN') {
           const nums = nextTechs
-            .map((t: any) => {
+            .map((t: ITechnician) => {
               const m = String(t.id_technician || '').match(/TECH-(\d+)/i);
               return m ? parseInt(m[1], 10) : 0;
             })
@@ -1354,8 +1525,8 @@ export default function SettingsView({
           regTech++;
         } else if (role === 'CHEF') {
           const nums = nextOps
-            .filter((o: any) => o.type_profil === 'CHEF' || String(o.id_operation).startsWith('CHEF'))
-            .map((o: any) => {
+            .filter((o: IOperation) => o.type_profil === 'CHEF' || String(o.id_operation).startsWith('CHEF'))
+            .map((o: IOperation) => {
               const m = String(o.id_operation || '').match(/CHEF-(\d+)/i);
               return m ? parseInt(m[1], 10) : 0;
             })
@@ -1374,9 +1545,9 @@ export default function SettingsView({
         } else {
           const nums = nextOps
             .filter(
-              (o: any) => o.type_profil === 'OPERATEUR' || !String(o.id_operation).startsWith('CHEF')
+              (o: IOperation) => o.type_profil === 'OPERATEUR' || !String(o.id_operation).startsWith('CHEF')
             )
-            .map((o: any) => {
+            .map((o: IOperation) => {
               const m = String(o.id_operation || '').match(/OP-(\d+)/i);
               return m ? parseInt(m[1], 10) : 0;
             })
@@ -1395,16 +1566,20 @@ export default function SettingsView({
         }
       });
 
-      setTechnicians(nextTechs);
-      setOperations(nextOps);
-      showToast(
+      setTechnicians?.(nextTechs);
+      setOperations?.(nextOps);
+      showToast?.(
         `${discoveredItems.length} utilisateur(s) enregistrés automatiquement (${regTech} Techs, ${regChef} Chefs, ${regOp} Opérateurs) avec identifiants séquentiels uniques.`,
         'success'
       );
     } else if (auditTarget === 'articles') {
-      const defaultType = types[0]?.id_type || 'MECANIQUE';
-      const newArticles = discoveredItems.map((item: any) => {
-        const baseArticle = {
+      const firstType = types[0];
+      const defaultType =
+        typeof firstType === 'string'
+          ? firstType
+          : firstType?.id_type || firstType?.libelle || 'MECANIQUE';
+      const newArticles: IStockItem[] = discoveredItems.map((item: DiscoveredAuditItem) => {
+        const baseArticle: IStockItem = {
           ref: item.code,
           designation: `Pièce PDR ${item.code}`,
           type: defaultType,
@@ -1422,12 +1597,12 @@ export default function SettingsView({
         };
       });
       if (setRawStock) {
-        setRawStock((prev: any[]) => [...prev, ...newArticles]);
+        setRawStock((prev: IStockItem[]) => [...prev, ...newArticles]);
       }
       storageService.saveArticles([...rawStock, ...newArticles]);
-      showToast(`${newArticles.length} article(s) de stock enregistrés et calculés avec succès.`, 'success');
+      showToast?.(`${newArticles.length} article(s) de stock enregistrés et calculés avec succès.`, 'success');
     } else {
-      showToast(
+      showToast?.(
         'Veuillez enregistrer les éléments manuellement pour attribuer leurs libellés ou utilisez le bouton Rattacher.',
         'info'
       );
@@ -1452,12 +1627,12 @@ export default function SettingsView({
     });
 
     if (result.success) {
-      if (setMouvements && result.nextMouvements) setMouvements(result.nextMouvements);
+      if (setMouvements && result.nextMouvements) setMouvements(result.nextMouvements as IMouvement[]);
       if (setCorrectiveInterventions && result.nextInterventions)
-        setCorrectiveInterventions(result.nextInterventions);
+        setCorrectiveInterventions(result.nextInterventions as CorrectiveInterventionItem[]);
       if (setPreventiveTasks && result.nextPreventiveTasks)
-        setPreventiveTasks(result.nextPreventiveTasks);
-      if (setMachines && result.nextMachines) setMachines(result.nextMachines);
+        setPreventiveTasks(result.nextPreventiveTasks as PreventiveTaskItem[]);
+      if (setMachines && result.nextMachines) setMachines(result.nextMachines as IMachine[]);
 
       showToast?.(
         `${result.affectedCount} occurrence(s) rattachée(s) et corrigée(s) vers "${relinkData.targetKey}".`,
@@ -1468,17 +1643,17 @@ export default function SettingsView({
     }
   };
 
-  const [backupsList, setBackupsList] = useState<any[]>([]);
+  const [backupsList, setBackupsList] = useState<BackupSnapshotSummary[]>([]);
   const [showBackupManagerModal, setShowBackupManagerModal] = useState(false);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<Array<Record<string, unknown>>>([]);
   const [loadingAudit, setLoadingAudit] = useState(false);
-  const [accessLogs, setAccessLogs] = useState<any[]>([]);
+  const [accessLogs, setAccessLogs] = useState<Array<Record<string, unknown>>>([]);
   const [auditSubTab, setAuditSubTab] = useState('access');
-  const [integrityReport, setIntegrityReport] = useState<any>(null);
+  const [integrityReport, setIntegrityReport] = useState<ReturnType<typeof dataIntegrityService.getIntegrityReport> | null>(null);
   const [checkingIntegrity, setCheckingIntegrity] = useState(false);
   const [currentChecksum, setCurrentChecksum] = useState('');
   const [syncQueueState, setSyncQueueState] = useState(() => syncQueueService.getState());
-  const [perfStats, setPerfStats] = useState<any>({
+  const [perfStats, setPerfStats] = useState<SettingsPerformanceStats>({
     heapMB: 0,
     recalcStats: null,
   });
@@ -1495,8 +1670,10 @@ export default function SettingsView({
       throw new Error(
         `Erreur Diagnostic Simulée CIOB GMAO [Code: DIAG-${Date.now().toString().slice(-4)}]`
       );
-    } catch (err: any) {
-      errorTracker.captureException(err, { source: 'Diagnostic Simulation' });
+    } catch (err: unknown) {
+      errorTracker.captureException(err instanceof Error ? err : new Error(getErrorMessage(err)), {
+        source: 'Diagnostic Simulation',
+      });
       refreshTelemetry();
       showToast?.(
         'Erreur de test interceptée et enregistrée avec succès dans le journal local !',
@@ -1576,9 +1753,9 @@ export default function SettingsView({
       mouvements,
     });
     if (setRawStock) {
-      setRawStock(repairedStock);
+      setRawStock(repairedStock as IStockItem[]);
     }
-    storageService.saveArticles(repairedStock);
+    storageService.saveArticles(repairedStock as IStockItem[]);
     runIntegrityCheck();
     showToast?.(
       `${fixedCount} correction(s) et alignement(s) de formules appliqués avec succès.`,
@@ -1603,7 +1780,7 @@ export default function SettingsView({
             item.out += qty;
           }
         }
-        return rawStock.map((s: any) => {
+        return rawStock.map((s: IStockItem) => {
           const r = String(s.ref || '').trim().toUpperCase();
           const mvt = mvtsMap.get(r);
           return {
@@ -1613,7 +1790,7 @@ export default function SettingsView({
         });
       });
       refreshPerformanceMetrics();
-      showToast('Benchmark de performance calculé avec succès.', 'success');
+      showToast?.('Benchmark de performance calculé avec succès.', 'success');
     } catch (e) {
       Logger.error('Performance benchmark error:', e, 'SettingsView');
     }
@@ -1629,7 +1806,7 @@ export default function SettingsView({
 
   const loadAccessLogs = () => {
     const logs = accessLogService.getLogs();
-    setAccessLogs(logs || []);
+    setAccessLogs(Array.isArray(logs) ? (logs as Array<Record<string, unknown>>) : []);
   };
 
   const handleClearAccessLogs = async () => {
@@ -1646,7 +1823,7 @@ export default function SettingsView({
     ) {
       accessLogService.clearLogs();
       setAccessLogs([]);
-      showToast('Journal des accès réinitialisé.', 'info');
+      showToast?.('Journal des accès réinitialisé.', 'info');
     }
   };
 
@@ -1663,7 +1840,7 @@ export default function SettingsView({
     try {
       setLoadingAudit(true);
       const list = await auditService.getLog();
-      setAuditLogs(list || []);
+      setAuditLogs(Array.isArray(list) ? (list as Array<Record<string, unknown>>) : []);
     } catch (e) {
       Logger.error('Failed to load audit logs:', e, 'SettingsView');
     } finally {
@@ -1691,32 +1868,33 @@ export default function SettingsView({
     )
       return;
     try {
-      const data: any = await backupService.restoreBackup(id);
+      const data: unknown = await backupService.restoreBackup(id);
       if (!data) {
-        showToast('Sauvegarde introuvable ou impossible à restaurer.', 'error');
+        showToast?.('Sauvegarde introuvable ou impossible à restaurer.', 'error');
         return;
       }
-      if (typeof data === 'object') {
-        if (data.Stock_Actuel) setRawStock(data.Stock_Actuel);
-        if (data.Mouvement) setMouvements(data.Mouvement);
-        if (data.Machines_Registered) setMachines(data.Machines_Registered);
-        if (data.Families) setFamilies(data.Families);
-        if (data.Templates) setTemplates(data.Templates);
-        if (data.Zones) setZones(data.Zones);
-        if (data.Technicians) setTechnicians(data.Technicians);
-        if (data.Operations) setOperations(data.Operations);
+      if (typeof data === 'object' && data !== null) {
+        const payload = data as RestoredBackupPayload;
+        if (payload.Stock_Actuel) setRawStock?.(payload.Stock_Actuel);
+        if (payload.Mouvement) setMouvements?.(payload.Mouvement);
+        if (payload.Machines_Registered) setMachines?.(payload.Machines_Registered);
+        if (payload.Families) setFamilies?.(payload.Families);
+        if (payload.Templates) setTemplates?.(payload.Templates);
+        if (payload.Zones) setZones?.(payload.Zones);
+        if (payload.Technicians) setTechnicians?.(payload.Technicians);
+        if (payload.Operations) setOperations?.(payload.Operations);
       }
       // Rebuild stock index & recalculate stock invariant across the restored SSOT store
       const store = useGmaoStore.getState();
-      const restoredStock = Array.isArray(store.rawStock) ? store.rawStock : rawStock;
-      const restoredMvts = Array.isArray(store.mouvements) ? store.mouvements : mouvements;
+      const restoredStock: IStockItem[] = Array.isArray(store.rawStock) ? store.rawStock : rawStock;
+      const restoredMvts: IMouvement[] = Array.isArray(store.mouvements) ? store.mouvements : mouvements;
       const calcMap = new Map(
         StockCalculationService.calculateAllStocks(restoredStock, restoredMvts).map((c) => [
           String(c.ref || '').trim().toUpperCase(),
           c,
         ])
       );
-      const recalculatedStock = restoredStock.map((art: any) => {
+      const recalculatedStock: IStockItem[] = restoredStock.map((art: IStockItem) => {
         const k = String(art?.ref || '').trim().toUpperCase();
         const c = calcMap.get(k);
         if (!c) return art;
@@ -1729,26 +1907,26 @@ export default function SettingsView({
         };
       });
       const initMap = new Map<string, number>();
-      recalculatedStock.forEach((art: any) => {
+      recalculatedStock.forEach((art: IStockItem) => {
         if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
       });
       stockIndex.rebuild(restoredMvts, initMap);
       if (setRawStock) setRawStock(recalculatedStock);
       storageService.saveArticles(recalculatedStock);
 
-      showToast('Restauration complète (SSOT + Stock recalculé) réussie !', 'success');
+      showToast?.('Restauration complète (SSOT + Stock recalculé) réussie !', 'success');
       logger.info('Backup restored manually', { backupId: id });
     } catch {
-      showToast('Erreur lors de la restauration.', 'error');
+      showToast?.('Erreur lors de la restauration.', 'error');
     }
   };
 
   const handleExportBackup = async (id: string) => {
     try {
       await backupService.exportBackup(id);
-      showToast('Export réussi !', 'success');
+      showToast?.('Export réussi !', 'success');
     } catch {
-      showToast("Erreur lors de l'export.", 'error');
+      showToast?.("Erreur lors de l'export.", 'error');
     }
   };
 
@@ -2028,7 +2206,7 @@ export default function SettingsView({
         auditZoneForm={auditZoneForm}
         setAuditZoneForm={setAuditZoneForm}
         getNextZoneId={getNextZoneId}
-        setZones={setZones}
+        setZones={(setZones || (() => {})) as unknown as React.Dispatch<React.SetStateAction<AuditZoneRecord[]>>}
         showToast={showToast}
       />
 
@@ -2038,9 +2216,9 @@ export default function SettingsView({
         auditUserForm={auditUserForm}
         setAuditUserForm={setAuditUserForm}
         getNextUserId={getNextUserId}
-        zones={zones}
-        setTechnicians={setTechnicians}
-        setOperations={setOperations}
+        zones={zones as unknown as AuditZoneRecord[]}
+        setTechnicians={(setTechnicians || (() => {})) as unknown as React.Dispatch<React.SetStateAction<AuditTechnicianRecord[]>>}
+        setOperations={(setOperations || (() => {})) as unknown as React.Dispatch<React.SetStateAction<AuditOperationRecord[]>>}
         showToast={showToast}
       />
 
@@ -2050,10 +2228,10 @@ export default function SettingsView({
         auditArticleForm={auditArticleForm}
         setAuditArticleForm={setAuditArticleForm}
         types={types}
-        setRawStock={setRawStock}
-        rawStock={rawStock}
-        mouvements={mouvements}
-        storageService={storageService}
+        setRawStock={setRawStock as unknown as React.Dispatch<React.SetStateAction<AuditStockRecord[]>>}
+        rawStock={rawStock as unknown as AuditStockRecord[]}
+        mouvements={mouvements as unknown as Array<Record<string, unknown>>}
+        storageService={storageService as unknown as { saveArticles: (articles: AuditStockRecord[]) => void }}
         showToast={showToast}
       />
 
@@ -2062,11 +2240,11 @@ export default function SettingsView({
         onClose={() => setShowRelinkModal(false)}
         relinkData={relinkData}
         setRelinkData={setRelinkData}
-        machines={machines}
-        rawStock={rawStock}
-        zones={zones}
-        technicians={technicians}
-        operations={operations}
+        machines={machines as unknown as AuditMachineRecord[]}
+        rawStock={rawStock as unknown as AuditStockRecord[]}
+        zones={zones as unknown as AuditZoneRecord[]}
+        technicians={technicians as unknown as AuditTechnicianRecord[]}
+        operations={operations as unknown as AuditOperationRecord[]}
         handleExecuteRelink={handleExecuteRelink}
       />
 
@@ -2109,8 +2287,8 @@ export default function SettingsView({
                   }
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-400 text-xs font-semibold text-slate-800 bg-white focus:border-sky-600 focus:ring-2 focus:ring-sky-100 outline-none"
                 >
-                  {filterActiveMachines(machines).map((m: any) => {
-                    const mId = m.id_machine_registered || m.id || m.code;
+                  {filterActiveMachines(machines).map((m: IMachine) => {
+                    const mId = String(m.id_machine_registered || m.id || m.code || '');
                     return (
                       <option key={mId} value={mId}>
                         {mId} — {m.designation || m.nom || 'Machine'}

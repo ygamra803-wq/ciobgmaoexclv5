@@ -22,8 +22,8 @@ export async function readRecentAuditEntries(
   try {
     const stats = await fs.promises.stat(auditFilePath);
     fileSize = stats.size;
-  } catch (err: any) {
-    if (err?.code === 'ENOENT') {
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') {
       return [];
     }
     throw err;

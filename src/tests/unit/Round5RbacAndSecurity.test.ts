@@ -109,11 +109,16 @@ describe('Round 5 — Enterprise RBAC, Tab Access Control, and Server Role/Token
       expect(reqInit.headers['x-gmao-actor']).toBe('Responsable Magasin');
     });
 
-    it('verifies server.ts enforces explicit invalid token rejection and RBAC role checks', () => {
+    it('verifies server.ts & modular RBAC middleware enforce explicit invalid token rejection and RBAC role checks', () => {
       const serverCode = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf-8');
-      expect(serverCode).toContain('ADMIN_ONLY_ENTITIES');
-      expect(serverCode).toContain("role === 'VIEWER'");
-      expect(serverCode).toContain('expectedToken && token !== undefined && token !== expectedToken');
+      const authMiddlewareCode = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/server/middleware/authenticateApi.ts'),
+        'utf-8'
+      );
+      expect(serverCode).toContain('createAuthenticateApiMiddleware');
+      expect(authMiddlewareCode).toContain('ADMIN_ONLY_ENTITIES');
+      expect(authMiddlewareCode).toContain("role === 'VIEWER'");
+      expect(authMiddlewareCode).toContain('evaluateServerApiTokenGuard');
     });
   });
 });

@@ -1,0 +1,82 @@
+
+بصفتي مهندس برمجيات معماري وخبير أنظمة GMAO / CMMS في الصيانة الصناعية والعمل الميداني، أقدّم لك تشخيصاً واقعياً وصارماً لحالة المشروع الحالية (~202,693 سطر كود في src/ وserver.ts).
+أولاً — الوضع التنفيذي الحالي:
+البناء والترجمة: فحص الإنتاج (vite build عبر compile_applet)، وفحص ESLint (lint_applet)، وفحص tsc --noEmit (المتحقق منه بعد آخر تعديل برمجي) كلها سليمة بـ 0 أخطاء؛ أما تشغيل حزمة Vitest الكاملة فقد أُلغي قبل إتمام التقرير النهائي لبطء وقت التنفيذ (مرّت اختبارات الأداء والنسخ الاحتياطي والمصادقة أثناء تشغيله، لذا تبقى النتيجة الكاملة للحزمة غير مؤكدة في هذه اللحظة).
+الحكم العام: نواة الدومين (IncrementalStockIndex، WorkOrderStateMachine، Maker-Checker VAL-1..VAL-5، 3-Tier Asset/Blueprint) متينة جداً مقارنة بتطبيقات محلية مشابهة، لكن التطبيق ما زال يحمل ديوناً معمارية وتشغيلية وأمنية ملموسة، بالإضافة إلى فجوات حقيقية على مستوى بيئة المصنع والورشة.
+1. ملفات ضخمة ما زالت بحاجة ماسة إلى التفكيك (Monoliths)
+رغم تقسيم useGmaoStore.ts وFinanceView.tsx وBlueprintMachineView.tsx وDashboardView.tsx، ما زال هناك 18+ ملفاً يتجاوز 1,500–5,100 سطر:
+الملف	عدد الأسطر	التقييم المعماري
+src/presentation/pages/movements/SortieRapideView.tsx	5,119	حرج (#1) — ما زال أكبر ملف في المشروع؛ يجمع نموذج الخروج السريع، المعالج (Wizard)، التحقق، التصدير، وجدول الحركات.
+src/presentation/pages/warehouse/EntrepotView.tsx	3,047	كبير جداً؛ يحتاج فصل تبويبات الجرد/المكونات/الأعضاء (SubTabs).
+src/presentation/pages/machines/MachinesRegisteredView.tsx	2,845	كبير؛ يخلط منطق الخطوط (LINE/MACHINE) مع الواجهة والنوافذ.
+src/presentation/pages/dashboard/DashboardView.tsx	2,613	ما زال ثقيلاً؛ يحتاج استخراج بطاقات المؤشرات (KPI Panels) والرسوم البيانية.
+src/presentation/pages/system/NexusView.tsx	2,574	يحتاج فصل محرر BOM As-Built عن عرض شجرة التوائم.
+src/presentation/pages/equipment/EquipmentView.tsx	2,506	يحتاج فصل إدارة SYSTEM_GENERAL عن جدول المعدات.
+src/presentation/pages/corrective/InterventionLiveTab.tsx	2,501	واجهة العمل الحيّ للفني معقدة؛ يجب فصل المؤقت، استهلاك PDR، وتوقيع الإغلاق.
+src/presentation/pages/validation/ValidationCenterView.tsx	2,416	مركز Maker-Checker يحتاج فصل صفوف المراجعة الثلاثة (BT, PM, Sorties).
+src/presentation/pages/warehouse/MouvementsJournalTable.tsx	2,325	جدول مزدحم؛ يحتاج فصل الفلاتر والتصدير وعناصر الصف.
+src/presentation/pages/preventive/components/TabMainView.tsx	2,253	يحتاج فصل مصفوفة S1..S52 عن نوافذ التنفيذ.
+src/presentation/pages/corrective/BonsTravailTab.tsx	2,244	يحتاج فصل النوافذ والفلاتر والتصدير.
+src/application/services/MonthlyReportCalculationService.ts	2,188	خدمة حسابية ضخمة؛ يُفضَّل تجزئتها إلى KpiAggregator وCostAggregator وParetoEngine.
+src/presentation/pages/settings/SettingsView.tsx	2,156	يحتاج فصل منطق الحالة عن التبويبات الفرعية.
+src/presentation/pages/corrective/DemandesInterventionTab.tsx	2,133	يحتاج فصل نافذة إنشاء DI والتحويل إلى BT.
+server.ts	2,117	حرج معمارياً — ملف واحد يجمع Express app، المصادقة، الجلسات، SSE، Rate Limiting، Swagger، وقراءة/كتابة gmao_state.json. يجب تقسيمه إلى routes/, middleware/, persistence/.
+src/presentation/pages/utilisateurs/UtilisateursView.tsx	2,013	يحتاج فصل مصفوفة الصلاحيات عن إدارة الحسابات.
+2. الثغرات ونقاط الضعف في الكود والمنطق والتزامن (Security & Concurrency)
+تزامن المخزون والاعتماد الكلي على المتصفح (Client-Authoritative Stock & FSM):
+الخادم server.ts يعمل كـ مخزن JSON مسطح (gmao_state.json عبر mergeGmaoStateSnapshot في src/services/lanStateMergeService.ts). لا توجد قيود معاملات (Transactions / Row Locks) ولا إعادة تحقق على مستوى الخادم لقانون المخزون (stockInitial + entrées − sorties >= 0) أو آلة الحالة (WorkOrderStateMachine).
+الخطر الميداني: إذا اعتمد مشرفان أو أمينا مخزن خروج آخر قطعة في المخزون (مثلاً 1 رولمان بلي متبقٍ) من جهازين على الشبكة المحلية (LAN) أو عند عودة جهاز لوحي من وضع Offline، يقوم mergeEntityCollection بدمج الحركتين (Sortie + Sortie) فتنتج كمية مخزون سالبة صامتة!
+بلع أخطاء الكتابة على القرص في server.ts (الأسطر 905–926):
+دالة persistState تعدّل dbState في الذاكرة وتزيد version فوراً، ثم تلتقط أخطاء writeFile/rename في .catch(...) وتطبعها فقط في console.error دون رفض الـ Promise؛ ما يعني أن الخادم قد يرد بـ 200 OK للعميل بينما القرص ممتلئ أو الكتابة فشلت فعلياً!
+تضخم ملف التدقيق عند القراءة في server.ts (الأسطر 1473–1500):
+نقطة GET /api/gmao/audit تنفذ fs.promises.readFile(AUDIT_FILE, 'utf-8') على كامل ملف gmao_audit.jsonl دفعة واحدة في الذاكرة ثم تقرأ آخر أسطره. بعد سنة من العمل الصناعي سيستهلك هذا ذاكرة وزمن استجابة متزايدين خطياً 
+.
+توقّف طابور المزامنة Offline عند إعادة تحميل الصفحة (syncQueueService.ts):
+src/services/syncQueueService.ts يحفظ البيانات الوصفية للطابور في IndexedDB (GMAO_SyncQueue)، لكنه يخزّن الدوال الفعلية للتنفيذ في this.inMemoryOperations = new Map() بالذاكرة! إذا أغلق الفني المتصفح أو انقطع عن الشبكة وأعاد التحديث في الورشة، تضيع مراجع التنفيذ الفعلية. كما أن ملفات البنية التحتية (errorRecoveryService.ts, dataLoaderOptimizer.ts, rateLimiter.ts) معزولة وغير موصولة بدورة الحياة الفعلية (DataGateway / serverSyncService).
+مفاتيح التشفير والتعثر في حال غياب متغيرات البيئة (SecurityService.tsx & AuthService.ts):
+في src/core/security/SecurityService.tsx (الأسطر 37–73): عند غياب VITE_SECRET_KEY في الإنتاج، يُولَّد مفتاح _gmao_sec_instance_key ويُحفظ في localStorage (أي عرضة للوصول عبر أي XSS في نفس النطاق، ولا ينتقل بين الأجهزة).
+في src/core/security/AuthService.ts (الأسطر 10، 164–196): ما زالت توجد بذور حسابات افتراضية بصيغ غير قياسية مثل admin_init_seed وtech_init_seed كحالة أولية (Bootstrap).
+في server.ts (السطر 580): طلبات GET للمجموعات التشغيلية (الآلات، المخزون، الصيانة، الحركات) تكتفي بتمرير ترويسة x-gmao-client-origin: gmao-web-client إذا لم يُفعَّل GMAO_STRICT_TOKEN=true على الشبكة المحلية، رغم حماية المجموعات الحساسة (users, authAccounts, auditEvents).
+بقايا console.* في الخادم:
+في src/ تم تنظيف الكود ليعتمد على LoggerService، لكن server.ts ما زال يحتوي على 16 استدعاءً مباشراً لـ console.log / warn / error.
+3. بقايا التعديلات، الملفات غير المستعملة، والديون التقنية والتوثيقية
+ملفات ميتة / غير مستعملة في كود التشغيل الفعلي (src/ خارج الاختبارات):
+src/domain/preventiveScheduling.ts (57 سطراً — غير مستورد في التطبيق)
+src/domain/stockCalculations.ts (24 سطراً — غير مستورد في التطبيق)
+src/utils/BackupService.tsx (211 سطراً — استُبدل عملياً بـ src/core/backup/AutoBackupService.tsx)
+src/utils/securityService.ts (160 سطراً — غلاف قديم يحمل DEFAULT_SECRET_KEY = 'GMAO_SECURE_KEY')
+src/utils/rateLimiter.ts
+src/hooks/useMovementSubState.ts
+src/infrastructure/errorRecoveryService.ts (245 سطراً)
+src/infrastructure/monitoringService.ts
+src/services/dataLoaderOptimizer.ts (89 سطراً)
+src/services/formulaEngineWithErrorHandling.ts
+src/services/stockAvailabilityService.ts
+src/services/healthCheckService.ts وsrc/services/productionLoggerService.ts وsrc/services/productionPerformanceMonitor.tsx (يُختبر بعضها في IndexedDBRetryAndDegradation.test.ts فقط دون استهلاك فعلي في التطبيق!)
+تكرار مسارات StockCalculationService في 3 أماكن: src/domain/pdr/services/StockCalculationService.ts (الأصل) + src/core/domain/services/StockCalculationService.ts + src/services/stockCalculationService.ts.
+بقايا ديون الأنواع (any) وTODO:
+ما زال هناك 1,471 موضع any في ملفات الإنتاج (src/ + server.ts)، أعلاها: SettingsView.tsx (63)، server.ts (43)، DataGateway.ts (38)، validationReconciliation.ts (35)، ValidationCenterView.tsx (34)، MonthlyReportCalculationService.ts (33)، types/domain.ts (28)، PreventiveService.ts (26)، serverRbacPolicy.ts (25)، PartDesignationView.tsx (24)، EntrepotView.tsx (23)، auditLockReconciliation.ts (23).
+8 مواضع // TODO(ALIAS-ID-GROUP) ما زالت تكتب حقلاً قديماً (id_groupe) في EntrepotView.tsx وPartTypeView.tsx وPartGroupView.tsx وPartDesignationView.tsx وAddArticleModal.tsx وEditArticleModal.tsx.
+3 مواضع eslint-disable (useAppRouterProps.ts, SortieRapideView.tsx, TabPlanBuilder.tsx).
+توثيقات قديمة ومسارات غير متطابقة:
+أكثر من 25 ملفاً في docs/ (منها DESIGN_SYSTEM_UI_UX.md وWIZARD_ENGINE.md وOPERATIONAL_SECURITY_GUIDE.md وملفات docs/modules/*) ما زالت تحمل عنوان CIOB GMAO v4 أو v4.1.0 رغم أن النظام v5.0.2 (كما أن JSDoc في DataGateway.ts:80 ما زال يذكر v4).
+ملف AGENTS.md نفسه يحوي 3 مسارات غير دقيقة:
+يذكر src/application/services/StockCalculationService.ts (غير موجود؛ المسار الفعلي src/domain/pdr/services/StockCalculationService.ts).
+يذكر src/domain/maintenance/WorkOrderStateMachine.ts (غير موجود؛ المسار الفعلي src/domain/corrective/services/WorkOrderStateMachine.ts).
+يذكر AuditService.recordEvent بينما src/utils/AuditService.ts لا يملك سوى .log()، والآلية الفعلية هي DataGateway.appendAuditEvent.
+4. رأيي كخبير صيانة صناعية وعمل ميداني (GMAO / Shopfloor Engineering)
+من زاوية مهندس صيانة يعيش أعطال الخطوط (Arrêts Machine) وضغط الورشة والمخزن:
+التصميم المعرفي ممتاز لكنه ثقيل على يد الفني في الورشة:
+فكرة Tier 1/2/3 (Family/Template ← Machine ← Blueprint)، وعزل SYSTEM_GENERAL، وفصل Maker-Checker بين تصريح الفني واعتماد المخزنجي/المشرف، كلها هندسة صناعية ناضجة.
+العيب الميداني: العمل اليدوي في الورشة (يدان متسختان بالشحم، قفازات، قلة إضاءة، شبكة Wi-Fi متقطعة) يتطلب شاشة 3 نقرات للإغلاق ومسح باركود/QR فوري للآلة والقطعة (Scan Machine QR → Select Fault/PDR → Close). شاشات مثل SortieRapideView (5,119 سطراً) وBonsTravailTab (2,244 سطراً) متخمة بالحقول والخيارات بالنسبة للفني.
+ثغرات تشغيلية حرجة في منطق GMAO الصناعي:
+التمييز بين المخزون الفعلي والمحجوز (Physical vs Allocated/Reserved vs Available): التنبيه في validationReconciliation.ts يحصل عند المراجعة؛ في المصنع الحقيقي، يجب حجز القطعة لحظة اعتماد BT / Plan Préventif حتى لا يرى فني آخر أنها متاحة ويوقف ماكينة ثانية دون توفر القطعة.
+العزل/التأمين الصناعي (LOTO — Lockout/Tagout & Permis de Travail): لا يوجد قفل حالة صريح في WorkOrderStateMachine يمنع انتقال أمر عمل كهربائي/هيدروليكي عالي الخطورة إلى EN_COURS قبل توثيق العزل (Consignation).
+تعدد المخازن والمواقع والدُفعات (Multi-Bin / FIFO / Lot & Expiry / CUMP): المعادلة الحالية Stock Initial + Entrées − Sorties تحسب رصيداً كلياً لكل ref وتسعّر بسعر الصنف الحالي في rawStock، بدون تتبع تاريخ الصلاحية (حاسم للزيوت، السيور، والمواد اللاصقة) وبدون تقييم مالي تاريخي FIFO أو CUMP (CMP) عند تغير أسعار الموردين.
+الصيانة الشرطية الفعلية (CBM / IoT): قراءة العدادات اليدوية (MeterService.ts) خطوة ممتازة، لكن المصانع الحديثة تحتاج ربطاً مباشراً بـ MQTT / OPC-UA / Modbus أو استيراد قراءات الاهتزاز والحرارة والأمبير لتوليد DI تلقائي قبل الكسر (P-F Curve).
+تخطيط السعة والمهارات (Capacity & Habilitation): إسناد BT أو PM لا يتحقق تلقائياً من تأهيل الفني (Habilitation Électrique / Mécanique) أو ساعات عبء العمل المتاحة في الوردية (Shift Workload).
+الخلاصة وخارطة الطريق المقترحة (الأولويات)
+عاجل (أسبوع 1): إصلاح persistState في server.ts كي لا يُعيد 200 OK عند فشل الكتابة على القرص + فرض فحص عدم سالبية المخزون على الخادم عند دمج mouvements + تنظيف AGENTS.md والوثائق من إشارات v4 والمسارات الخاطئة.
+مهم (أسبوع 2–3): تفكيك SortieRapideView.tsx (5,119 سطر) وserver.ts (2,117 سطر) + حذف أو توحيد الملفات الميتة (BackupService.tsx, utils/securityService.ts, preventiveScheduling.ts, stockCalculations.ts, إلخ) + تصفير TODO(ALIAS-ID-GROUP).
+تطور صناعي حقيقي (المرحلة القادمة): ربط syncQueueService فعلياً بأوامر DataGateway عبر أفعال قابلة للتسلسل (Serializable Actions بدل دوال الذاكرة) + إضافة Stock Réservé vs Disponible + LOTO Checklist على أوامر العمل الحرجة + تقييم CUMP/FIFO.
+

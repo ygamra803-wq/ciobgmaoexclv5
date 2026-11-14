@@ -137,15 +137,19 @@ describe('Round 7 — LAN Host Architecture (P3.1..P3.4) & SettingsView Modular 
       expect(rev.updatedAt).toBe('2026-10-20T14:30:00.000Z');
     });
 
-    it('verifies server.ts exposes /api/network/info, /api/gmao/revision, and /api/gmao/events with SSE broadcast', () => {
-      const serverPath = path.resolve(process.cwd(), 'server.ts');
-      const serverCode = fs.readFileSync(serverPath, 'utf-8');
+    it('verifies server.ts & systemRoutes expose /api/network/info, /api/gmao/revision, and /api/gmao/events with SSE broadcast', () => {
+      const serverCode = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf-8');
+      const systemRoutesCode = fs.readFileSync(
+        path.resolve(process.cwd(), 'src/server/routes/systemRoutes.ts'),
+        'utf-8'
+      );
 
-      expect(serverCode).toContain("app.get('/api/network/info'");
-      expect(serverCode).toContain("app.get('/api/gmao/revision'");
-      expect(serverCode).toContain("app.get('/api/gmao/events'");
-      expect(serverCode).toContain('broadcastSseEvent');
-      expect(serverCode).toContain('os.networkInterfaces()');
+      expect(serverCode).toContain('createSystemRoutesController');
+      expect(systemRoutesCode).toContain("app.get('/api/network/info'");
+      expect(systemRoutesCode).toContain("app.get('/api/gmao/revision'");
+      expect(systemRoutesCode).toContain("app.get('/api/gmao/events'");
+      expect(systemRoutesCode).toContain('broadcastSseEvent');
+      expect(systemRoutesCode).toContain('os.networkInterfaces()');
     });
   });
 });

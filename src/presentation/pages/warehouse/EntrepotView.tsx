@@ -766,8 +766,6 @@ export default function EntrepotView({
         id_family: isComp ? addForm.id_family : '',
         id_templates: isComp ? addForm.id_templates : '',
         id_group: inheritedPartGroup,
-        // TODO(ALIAS-ID-GROUP): Remove legacy id_groupe write once all consumers use getGroupId()
-        id_groupe: inheritedPartGroup,
         id_type: !isComp ? addForm.id_type : '',
         id_diag: !isComp ? addForm.id_diag : '',
         matiere_nuance: !isComp ? String(addForm.matiere_nuance || '').trim() : undefined,
@@ -821,8 +819,6 @@ export default function EntrepotView({
         id_family: isComp ? editForm.id_family : '',
         id_templates: isComp ? editForm.id_templates : '',
         id_group: inheritedPartGroup,
-        // TODO(ALIAS-ID-GROUP): Remove legacy id_groupe write once all consumers use getGroupId()
-        id_groupe: inheritedPartGroup,
         id_type: !isComp ? editForm.id_type : '',
         id_diag: !isComp ? editForm.id_diag : '',
         matiere_nuance: !isComp ? String(editForm.matiere_nuance || '').trim() : undefined,

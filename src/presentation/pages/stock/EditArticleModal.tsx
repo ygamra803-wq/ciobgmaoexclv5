@@ -73,8 +73,6 @@ export default function EditArticleModal({
       id: targetId,
       designation: form.designation.trim(),
       id_group: canonicalGroupId,
-      // TODO(ALIAS-ID-GROUP): keep id_groupe temporarily for legacy consumers
-      id_groupe: canonicalGroupId,
       id_type: form.id_type,
       type: form.id_type,
       unite: form.unite_mesure || 'PCS',
