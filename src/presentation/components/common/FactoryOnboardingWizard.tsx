@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
-export const ONBOARDING_DISMISSED_KEY = 'gmao_onboarding_dismissed_v1';
+export const ONBOARDING_DISMISSED_KEY = STORAGE_KEYS.ONBOARDING_DISMISSED;
 
 export interface FactoryOnboardingStatus {
   zonesCount: number;
@@ -124,7 +126,8 @@ export default function FactoryOnboardingWizard({
 
   const [dismissedFlag, setDismissedFlag] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(ONBOARDING_DISMISSED_KEY) === 'true';
+      const val = storageService.getItem(ONBOARDING_DISMISSED_KEY);
+      return val === true || val === 'true';
     } catch {
       return false;
     }
@@ -132,7 +135,8 @@ export default function FactoryOnboardingWizard({
 
   const startMode = useMemo(() => {
     try {
-      return localStorage.getItem('gmao_start_mode');
+      const val = storageService.getItem(STORAGE_KEYS.START_MODE);
+      return typeof val === 'string' ? val : val != null ? String(val) : null;
     } catch {
       return null;
     }
@@ -186,7 +190,7 @@ export default function FactoryOnboardingWizard({
 
   const handleDismiss = () => {
     try {
-      localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
+      storageService.setItem(ONBOARDING_DISMISSED_KEY, true);
     } catch {
       // ignore storage errors
     }

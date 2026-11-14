@@ -12,21 +12,43 @@ import {
   Truck,
 } from 'lucide-react';
 
+import type { IMouvement, IStockItem, IWarehouseItem } from '../../../../types/domain';
+
+export interface MovementFlowFormState {
+  date: string;
+  heure?: string;
+  type: string;
+  item_source: string;
+  destination_type: string;
+  num_commande: string;
+  [key: string]: unknown;
+}
+
+export interface MovementFlowItemDraft {
+  source: string;
+  ref: string;
+  designation: string;
+  quantite: number;
+  unit?: string;
+  emplacement?: string;
+  [key: string]: unknown;
+}
+
 export interface MovementFlowSelectorSectionProps {
-  form: any;
-  setForm: (val: any) => void;
-  mouvementItems: any[];
-  setMouvementItems: (items: any[]) => void;
+  form: MovementFlowFormState;
+  setForm: React.Dispatch<React.SetStateAction<MovementFlowFormState>>;
+  mouvementItems: MovementFlowItemDraft[];
+  setMouvementItems: React.Dispatch<React.SetStateAction<MovementFlowItemDraft[]>>;
   isSortieInterne: boolean;
   isEntreeInterne: boolean;
   isBonSortie: boolean;
   isEntreeExterne: boolean;
   isCommandeFlow: boolean;
   handleTypeChange: (newType: string) => void;
-  activeExternalRepairs: any[];
-  pendingOrders: any[];
-  handleReceiveRepairReturn: (rep: any) => void;
-  handleFulfillOrder: (ord: any) => void;
+  activeExternalRepairs: IMouvement[];
+  pendingOrders: IMouvement[];
+  handleReceiveRepairReturn: (rep: IMouvement) => void;
+  handleFulfillOrder: (ord: IMouvement) => void;
 }
 
 export function MovementFlowSelectorSection({
@@ -511,7 +533,9 @@ export function MovementFlowSelectorSection({
                     title="Réceptionner cette commande livrée par le fournisseur"
                   >
                     <ShoppingCart className="w-3 h-3 text-amber-600 shrink-0" />
-                    <span className="font-mono font-bold text-[10px] text-amber-800">{ord.num_commande || ord.code_bon}</span>
+                    <span className="font-mono font-bold text-[10px] text-amber-800">
+                      {String(ord.num_commande || ord.code_bon || '')}
+                    </span>
                     <span className="truncate max-w-[100px]">{ord.ref}</span>
                     <span className="text-[9px] text-amber-500 font-mono">({ord.quantite} pcs)</span>
                   </button>
@@ -570,13 +594,29 @@ export function MovementFlowSelectorSection({
   );
 }
 
-export function findSupervisorForZoneHelper(zoneId: string, responsablesList: any[]) {
+export interface SupervisorZoneCandidate {
+  id?: string | number;
+  id_operation: string;
+  nom: string;
+  name?: string;
+  templates?: Array<string | { id?: string }>;
+  template_ids?: string[];
+  template_id?: string;
+  zones?: string[];
+  id_zone?: string;
+  [key: string]: unknown;
+}
+
+export function findSupervisorForZoneHelper<T extends SupervisorZoneCandidate>(
+  zoneId: string,
+  responsablesList: T[]
+): T | null {
   if (!zoneId) return responsablesList[0] || null;
 
-  const hasTpl = (s: any, tplId: string) => {
+  const hasTpl = (s: T, tplId: string) => {
     if (
       Array.isArray(s.templates) &&
-      s.templates.some((t: any) => (typeof t === 'string' ? t : t?.id) === tplId)
+      s.templates.some((t) => (typeof t === 'string' ? t : t?.id) === tplId)
     ) {
       return true;
     }
@@ -585,8 +625,8 @@ export function findSupervisorForZoneHelper(zoneId: string, responsablesList: an
     return false;
   };
 
-  const zoneMatches = (s: any) =>
-    (s.zones && (s.zones.includes(zoneId) || s.zones.includes('ALL'))) ||
+  const zoneMatches = (s: T) =>
+    Boolean(s.zones && (s.zones.includes(zoneId) || s.zones.includes('ALL'))) ||
     s.id_zone === zoneId ||
     s.id_zone === 'ALL' ||
     (typeof s.id_zone === 'string' &&
@@ -607,8 +647,51 @@ export function findSupervisorForZoneHelper(zoneId: string, responsablesList: an
   return responsablesList[0] || null;
 }
 
-export function buildUnifiedMovementSearchCatalog(stockItems: any[], warehouseItems: any[]) {
-  const catalog: any[] = [];
+export interface UnifiedMovementCatalogItem {
+  id: string;
+  source: 'STOCK_PDR' | 'WAREHOUSE_PARTIE' | 'WAREHOUSE_COMPOSANT';
+  ref: string;
+  code: string;
+  designation: string;
+  category: string;
+  badge: string;
+  badgeColor: string;
+  stockActuel: number;
+  emplacement: string;
+  type: string;
+  unit: string;
+  etat?: string;
+  raw: IStockItem | IWarehouseItem;
+}
+
+type StockCatalogInput = IStockItem & {
+  is_active?: boolean;
+  actif?: boolean;
+  statut?: string;
+  id_type?: string;
+};
+
+type WarehouseCatalogInput = IWarehouseItem & {
+  is_active?: boolean;
+  actif?: boolean;
+  statut?: string;
+  nature?: string;
+  code?: string;
+  ref?: string;
+  nom?: string;
+  quantite?: number;
+  stockActuel?: number;
+  rattachement_val?: string;
+  id_family?: string;
+  id_type?: string;
+  unite?: string;
+};
+
+export function buildUnifiedMovementSearchCatalog(
+  stockItems: StockCatalogInput[],
+  warehouseItems: WarehouseCatalogInput[]
+): UnifiedMovementCatalogItem[] {
+  const catalog: UnifiedMovementCatalogItem[] = [];
 
   stockItems.forEach((s) => {
     if (!s || s.is_active === false || s.actif === false || s.statut === 'ARCHIVE') return;
@@ -621,7 +704,7 @@ export function buildUnifiedMovementSearchCatalog(stockItems: any[], warehouseIt
       category: 'PDR Consommable',
       badge: 'Stock PDR',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-      stockActuel: s.stockActuel ?? s.stockInitial ?? 0,
+      stockActuel: Number(s.stockActuel ?? s.stockInitial ?? 0),
       emplacement: s.emplacement || 'Magasin Central',
       type: s.id_type || 'PDR',
       unit: 'pcs',
@@ -640,23 +723,23 @@ export function buildUnifiedMovementSearchCatalog(stockItems: any[], warehouseIt
       return;
     }
     const isPartie = w.category === 'PARTIE' || w.nature === 'PARTIE';
-    const codeStr = w.id_warehouse_item || w.code || w.ref || `EXT-${w.id}`;
+    const codeStr = String(w.id_warehouse_item || w.code || w.ref || `EXT-${w.id ?? ''}`);
     catalog.push({
       id: `WH-${w.id || w.id_warehouse_item || w.code}`,
       source: isPartie ? 'WAREHOUSE_PARTIE' : 'WAREHOUSE_COMPOSANT',
       ref: codeStr,
       code: codeStr,
-      designation: w.designation || w.nom || '',
+      designation: String(w.designation || w.nom || ''),
       category: isPartie ? 'PARTIE (Machine Twin)' : 'COMPOSANT (Stock Twin)',
       badge: isPartie ? 'Entrepôt: PARTIE' : 'Entrepôt: COMPOSANT',
       badgeColor: isPartie
         ? 'bg-purple-50 text-purple-800 border-purple-200'
         : 'bg-blue-50 text-blue-800 border-blue-200',
-      stockActuel: w.quantite ?? w.stockActuel ?? 1,
-      emplacement: w.emplacement || w.rattachement_val || 'Entrepôt',
-      type: isPartie ? w.id_family || 'Machine' : w.id_type || 'Composant',
-      unit: w.unite || 'pcs',
-      etat: w.etat || 'Fonctionnel',
+      stockActuel: Number(w.quantite ?? w.stockActuel ?? 1),
+      emplacement: String(w.emplacement || w.rattachement_val || 'Entrepôt'),
+      type: String(isPartie ? w.id_family || 'Machine' : w.id_type || 'Composant'),
+      unit: String(w.unite || 'pcs'),
+      etat: String(w.etat || 'Fonctionnel'),
       raw: w,
     });
   });
@@ -665,10 +748,10 @@ export function buildUnifiedMovementSearchCatalog(stockItems: any[], warehouseIt
 }
 
 export function filterMovementCatalogResults(
-  unifiedSearchCatalog: any[],
+  unifiedSearchCatalog: UnifiedMovementCatalogItem[],
   searchActiveTab: string,
   searchQuery: string
-) {
+): UnifiedMovementCatalogItem[] {
   return unifiedSearchCatalog.filter((item) => {
     if (searchActiveTab !== 'ALL' && item.source !== searchActiveTab) {
       return false;

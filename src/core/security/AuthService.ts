@@ -4,6 +4,7 @@ import { Logger } from '../logger/LoggerService';
 import { indexedDBService } from '../../infrastructure/database/IndexedDBService';
 import { vaultService } from '../../utils/vaultService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { storageService } from '../../utils/storageService';
 
 const USERS_KEY = 'gmao_auth_accounts_v2';
 const SESSION_KEY = 'gmao_session_v2';
@@ -907,7 +908,8 @@ export class AuthService {
       throw new Error('Code PIN incorrect.');
     }
 
-    const configuredRole = localStorage.getItem('gmao_admin_role') || 'ADMIN';
+    const configuredRole =
+      (storageService.getItem(STORAGE_KEYS.ADMIN_ROLE) as string) || 'ADMIN';
     return this.createAdminSession(configuredRole, 'ENCRYPTED_PIN');
   }
 
@@ -931,7 +933,8 @@ export class AuthService {
 
     // If username is admin with valid admin PIN, authenticate as Admin
     if (cleanUsername === 'admin' && isPinMatch) {
-      const configuredRole = localStorage.getItem('gmao_admin_role') || 'ADMIN';
+      const configuredRole =
+        (storageService.getItem(STORAGE_KEYS.ADMIN_ROLE) as string) || 'ADMIN';
       return this.createAdminSession(configuredRole, 'ENCRYPTED_PIN');
     }
 

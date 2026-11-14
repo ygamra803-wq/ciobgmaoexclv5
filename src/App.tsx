@@ -33,6 +33,9 @@ import MachineQrFieldModal from './presentation/pages/machines/components/Machin
 import { useAppShell } from './core/shell/shellPolicy';
 import MobileShell from './presentation/components/shell/MobileShell';
 import { getMachineAssetClass } from './utils/activeMachines';
+import { storageService } from './utils/storageService';
+import { STORAGE_KEYS } from './infrastructure/persistence/storageKeys';
+import { SecurityService } from './core/security/SecurityService';
 
 export default function App() {
   const { user: currentUser, logout } = useAuth();
@@ -56,9 +59,10 @@ export default function App() {
     enabled: Boolean(currentUser && !currentUser.mustChangePassword),
     onIdle: () => {
       try {
-        if (typeof sessionStorage !== 'undefined') {
-          sessionStorage.setItem(IDLE_EXPIRED_STORAGE_FLAG, 'Session expirée pour inactivité');
-        }
+        SecurityService.saveSessionSecure(
+          IDLE_EXPIRED_STORAGE_FLAG,
+          'Session expirée pour inactivité'
+        );
       } catch {
         // ignore storage errors
       }
@@ -205,14 +209,14 @@ export default function App() {
 
   // Load real stock if empty ONLY when not in explicit empty factory mode
   useEffect(() => {
-    const startMode = localStorage.getItem('gmao_start_mode');
-    const demoFlag = localStorage.getItem('gmao_demo_data_loaded_v1');
+    const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+    const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
+    const isDemoActive = demoFlag === true || demoFlag === 'true';
     if (
       rawStock &&
       rawStock.length === 0 &&
       startMode !== 'empty' &&
-      demoFlag !== 'false' &&
-      demoFlag === 'true'
+      isDemoActive
     ) {
       DataGateway.initRealStock({ setRawStock: gmaoState.setRawStock });
     }
@@ -480,7 +484,7 @@ export default function App() {
           currentUser={currentUser}
           onLogout={() => {
             try {
-              localStorage.setItem('gmao_active_tab', 'dashboard');
+              storageService.setItem(STORAGE_KEYS.ACTIVE_TAB, 'dashboard');
             } catch {
               /* ignore */
             }
@@ -603,7 +607,7 @@ export default function App() {
           zones: zones.length,
           technicians: technicians.length,
           operations: operations.length,
-          equipment: (machines || []).filter((m: any) => getMachineAssetClass(m) === 'SYSTEM_GENERAL').length,
+          equipment: (machines || []).filter((m) => getMachineAssetClass(m) === 'SYSTEM_GENERAL').length,
         }}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}

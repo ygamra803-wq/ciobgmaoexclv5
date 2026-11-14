@@ -15,37 +15,66 @@ import {
 import {
   getTechnicianDisplayName,
   isTechnicianRole,
+  type TechnicianActorUser,
+  type buildTechnicianDashboardScope,
 } from '../../../../core/security/technicianScope';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
 import ValidationStatusBadge, {
   INTERVENTION_NATURE_OPTIONS,
 } from '../../common/ValidationStatusBadge';
+import type {
+  IMachine,
+  IMouvement,
+  IStockItem,
+  ITechnician,
+  IZone,
+} from '../../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  CorrectivePdrConsumedItem,
+  PreventiveTaskItem,
+} from '../../../../types/store';
+import type { PreventiveExecutionRecord } from '../../../../types/preventive';
 
 export type MobileCorrFilter = 'ACTIVE' | 'CLARIFY' | 'REJECTED' | 'PENDING' | 'ALL';
 
-interface ProposedBtPart {
-  ref: string;
+type MobileTechScope = ReturnType<
+  typeof buildTechnicianDashboardScope<
+    ITechnician,
+    PreventiveTaskItem,
+    PreventiveExecutionRecord,
+    CorrectiveInterventionItem,
+    IMouvement
+  >
+>;
+
+type ProposedBtPart = CorrectivePdrConsumedItem & {
   designation: string;
   quantite: number;
   unite: string;
   prix_unitaire: number;
-}
+};
 
 interface CorrectiveTabProps {
-  currentUser: any;
-  technicians: any[];
-  techScope: any;
-  machines: any[];
-  zones: any[];
-  stockItems: any[];
+  currentUser: (TechnicianActorUser & { id_technician?: string; nom?: string }) | null;
+  technicians: ITechnician[];
+  techScope: MobileTechScope;
+  machines: IMachine[];
+  zones: IZone[];
+  stockItems: IStockItem[];
   activeLiveInterventionId?: string | number | null;
   initialFilter?: MobileCorrFilter;
   initialOpenNewDi?: boolean;
-  initialBtToSubmit?: any | null;
+  initialBtToSubmit?: CorrectiveInterventionItem | null;
   onClearInitialIntent?: () => void;
-  onAddDemandeIntervention: (data: any) => any;
-  onStartLiveIntervention: (id: string) => void;
-  onSubmitInterventionForValidation: (id: string, submissionData: any) => any;
+  onAddDemandeIntervention: (
+    data: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => CorrectiveInterventionItem;
+  onStartLiveIntervention: (id: string | number) => void;
+  onSubmitInterventionForValidation: (
+    id: string | number,
+    submissionData?: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => CorrectiveInterventionItem | null;
   onOpenMachineQrModal?: (machineId: string) => void;
   showToast?: (msg: string, type?: string) => void;
 }
@@ -80,7 +109,8 @@ export default function CorrectiveTab({
   const [diArretMachine, setDiArretMachine] = useState(false);
 
   // BT Report Submission Sheet State (Maker-Checker)
-  const [selectedBtForSubmit, setSelectedBtForSubmit] = useState<any | null>(null);
+  const [selectedBtForSubmit, setSelectedBtForSubmit] =
+    useState<CorrectiveInterventionItem | null>(null);
   const [btActionRealisee, setBtActionRealisee] = useState('');
   const [btNature, setBtNature] = useState('');
   const [btNumBon, setBtNumBon] = useState('');
@@ -112,7 +142,7 @@ export default function CorrectiveTab({
   const clarifyOnlyCorrective = useMemo(
     () =>
       myInterventions.filter(
-        (i: any) =>
+        (i) =>
           String(i.statut || '').toUpperCase() !== 'CLOTURE' &&
           String(i.validation_status || '').toUpperCase() === 'NEEDS_CLARIFICATION'
       ),
@@ -121,7 +151,7 @@ export default function CorrectiveTab({
   const rejectedCorrective = useMemo(
     () =>
       myInterventions.filter(
-        (i: any) =>
+        (i) =>
           String(i.statut || '').toUpperCase() !== 'CLOTURE' &&
           String(i.validation_status || '').toUpperCase() === 'REJECTED'
       ),
@@ -130,7 +160,7 @@ export default function CorrectiveTab({
   const pendingValCorrective = techScope?.pendingValidationCorrective || [];
 
   const filteredItems = useMemo(() => {
-    let base: any[] = [];
+    let base: CorrectiveInterventionItem[] = [];
     if (corrFilter === 'CLARIFY') {
       base = clarifyOnlyCorrective;
     } else if (corrFilter === 'REJECTED') {
@@ -148,7 +178,7 @@ export default function CorrectiveTab({
 
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((item: any) => {
+    return base.filter((item) => {
       const machine = String(item.code_machine || item.id_machine_registered || '').toLowerCase();
       const bt = String(item.num_bt || item.id || '').toLowerCase();
       const anom = String(item.anomalie || item.travail_a_faire || '').toLowerCase();
@@ -198,12 +228,13 @@ export default function CorrectiveTab({
       id_machine_registered: machineCode,
       nom_machine: targetMachine?.designation || targetMachine?.nom || machineCode,
       id_zone: targetMachine?.id_zone_default || targetMachine?.id_zone || '',
-      zone:
+      zone: String(
         targetZone?.nom_zone ||
-        targetZone?.libelle ||
-        targetMachine?.id_zone_default ||
-        targetMachine?.id_zone ||
-        '',
+          targetZone?.libelle ||
+          targetMachine?.id_zone_default ||
+          targetMachine?.id_zone ||
+          ''
+      ),
       anomalie: diAnomalie.trim(),
       travail_a_faire: diAnomalie.trim(),
       urgence: diUrgence,
@@ -223,18 +254,18 @@ export default function CorrectiveTab({
     showToast?.("Demande d'intervention (DI) enregistrée sur le terrain.", 'success');
   };
 
-  const handleOpenBtSubmitSheet = (bt: any) => {
+  const handleOpenBtSubmitSheet = (bt: CorrectiveInterventionItem) => {
     setSelectedBtForSubmit(bt);
-    setBtActionRealisee(bt.action_realisee || bt.travail_a_faire || '');
-    setBtNature(bt.intervention_nature || '');
-    setBtNumBon(bt.num_bon_saisi_par_tech || '');
+    setBtActionRealisee(String(bt.action_realisee || bt.travail_a_faire || ''));
+    setBtNature(String(bt.intervention_nature || ''));
+    setBtNumBon(String(bt.num_bon_saisi_par_tech || ''));
     setBtArretMachine(Boolean(bt.arret_machine));
-    setBtTempsArret(bt.temps_arret || '');
+    setBtTempsArret(String(bt.temps_arret || ''));
 
     const initialParts: ProposedBtPart[] = [];
-    const rawList =
+    const rawList: Array<Record<string, unknown>> =
       Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0
-        ? bt.pieces_proposees
+        ? (bt.pieces_proposees as Array<Record<string, unknown>>)
         : bt.pdr_ref
         ? [
             {
@@ -245,7 +276,7 @@ export default function CorrectiveTab({
           ]
         : [];
 
-    rawList.forEach((p: any) => {
+    rawList.forEach((p) => {
       const ref = String(p?.ref || p?.code_article || '').trim();
       if (!ref) return;
       const stockMatch = stockItems.find(
@@ -472,7 +503,7 @@ export default function CorrectiveTab({
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filteredItems.map((item: any) => {
+          {filteredItems.map((item) => {
             const status = String(item.statut || 'DEMANDE').toUpperCase();
             const vStatus = String(item.validation_status || 'NONE').toUpperCase();
             const isClosed =
@@ -534,13 +565,15 @@ export default function CorrectiveTab({
                     )}
 
                     <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono text-slate-500">
-                      {item.demande_date && (
+                      {Boolean(item.demande_date) && (
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {item.demande_date} {item.demande_heure || ''}
+                          {String(item.demande_date || '')} {String(item.demande_heure || '')}
                         </span>
                       )}
-                      {item.urgence && <span>• Urgence : {item.urgence}</span>}
+                      {Boolean(item.urgence) && (
+                        <span>• Urgence : {String(item.urgence || '')}</span>
+                      )}
                     </div>
                   </div>
 
@@ -579,12 +612,12 @@ export default function CorrectiveTab({
                   <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 flex-wrap text-[11px] text-slate-700 font-mono">
                     <Package className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                     <span>PDR proposées :</span>
-                    {item.pieces_proposees.map((p: any, idx: number) => (
+                    {item.pieces_proposees.map((p, idx: number) => (
                       <span
                         key={`${p.ref}-${idx}`}
                         className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold"
                       >
-                        {p.ref} ×{p.quantite ?? p.qty ?? 1}
+                        {String(p.ref || '')} ×{Number(p.quantite ?? p.qty ?? 1)}
                       </span>
                     ))}
                   </div>
@@ -597,7 +630,7 @@ export default function CorrectiveTab({
                       <button
                         type="button"
                         onClick={() => {
-                          onStartLiveIntervention(item.id);
+                          onStartLiveIntervention(item.id || '');
                           showToast?.('Intervention démarrée en mode Live (EN_COURS).', 'info');
                         }}
                         data-testid={`mobile-corr-start-btn-${item.id}`}
@@ -679,9 +712,9 @@ export default function CorrectiveTab({
                   className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-xs font-mono bg-white"
                 >
                   <option value="">— Sélectionner la machine / équipement —</option>
-                  {activeMachines.map((m: any) => {
-                    const code = m.id_machine_registered || m.id || m.code;
-                    const label = m.designation || m.nom || code;
+                  {activeMachines.map((m) => {
+                    const code = String(m.id_machine_registered || m.id || m.code || '');
+                    const label = String(m.designation || m.nom || code);
                     return (
                       <option key={code} value={code}>
                         {code} — {label}
@@ -715,7 +748,9 @@ export default function CorrectiveTab({
                   </label>
                   <select
                     value={diUrgence}
-                    onChange={(e) => setDiUrgence(e.target.value as any)}
+                    onChange={(e) =>
+                      setDiUrgence(e.target.value as 'Mineure' | 'Majeure' | 'Critique (Arrêt)')
+                    }
                     className="w-full rounded-xl border border-slate-300 px-2.5 py-2 text-xs bg-white font-semibold"
                   >
                     <option value="Mineure">Mineure</option>

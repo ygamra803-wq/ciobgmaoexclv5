@@ -12,6 +12,7 @@ import { analytics } from './services/AnalyticsService';
 import { migrateStorageOnce } from './infrastructure/persistence/migrateStorage';
 import { vaultService } from './utils/vaultService';
 import { STORAGE_KEYS } from './infrastructure/persistence/storageKeys';
+import { SecurityService } from './core/security/SecurityService';
 
 // Ensure visual attributes are initialized on root DOM element
 const initialAccent = storageService.getItem(STORAGE_KEYS.ACCENT_COLOR) || 'emerald';
@@ -27,9 +28,10 @@ ServiceProvider.register();
 errorTracker.init();
 
 // Migration: If no Master PIN / Vault is set, ensure default users are using predictable passwords
-if (!vaultService.isVaultExists() && !localStorage.getItem('gmao_migration_auth_v1')) {
-  localStorage.removeItem('gmao_auth_accounts_v2'); // Force AuthService to re-init with 'admin'/'admin'
-  localStorage.setItem('gmao_migration_auth_v1', 'true');
+const authMigratedFlag = storageService.getItem(STORAGE_KEYS.MIGRATION_AUTH_V1);
+if (!vaultService.isVaultExists() && authMigratedFlag !== true && authMigratedFlag !== 'true') {
+  SecurityService.removeSecure(STORAGE_KEYS.AUTH_ACCOUNTS); // Force AuthService to re-init with 'admin'/'admin'
+  storageService.setItem(STORAGE_KEYS.MIGRATION_AUTH_V1, true);
 }
 
 analytics.track('app_started', 'system', { timestamp: Date.now() });

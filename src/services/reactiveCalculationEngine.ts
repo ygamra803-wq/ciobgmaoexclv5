@@ -9,6 +9,8 @@ import { Logger } from '../core/logger/LoggerService';
 import { safeNum, calculateStockStatus } from '../utils/formulaEngine';
 import { INITIAL_STOCK_LOOKUP } from '../utils/baselineStock';
 import { stockIndexStore } from '../application/StockIndexStore';
+import { storageService } from '../utils/storageService';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
 class ReactiveCalculationEngine {
   hf: any;
@@ -132,10 +134,9 @@ class ReactiveCalculationEngine {
         } else {
           let isEmptyStartMode = false;
           try {
-            if (typeof localStorage !== 'undefined') {
-              const rawMode = localStorage.getItem('gmao_start_mode') || '';
-              isEmptyStartMode = rawMode.replace(/^"|"$/g, '') === 'empty';
-            }
+            const rawMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+            isEmptyStartMode =
+              String(rawMode || '').replace(/^"|"$/g, '') === 'empty';
           } catch {}
           if (!isEmptyStartMode) {
             const baseline =

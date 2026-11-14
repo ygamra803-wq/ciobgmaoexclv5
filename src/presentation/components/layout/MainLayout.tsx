@@ -119,7 +119,7 @@ export default function MainLayout({
     (options?: { preserveActiveTab?: boolean }) => {
       if (!options?.preserveActiveTab) {
         try {
-          localStorage.setItem('gmao_active_tab', 'dashboard');
+          storageService.setItem(STORAGE_KEYS.ACTIVE_TAB, 'dashboard');
         } catch {
           /* ignore */
         }

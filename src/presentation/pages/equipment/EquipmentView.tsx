@@ -39,6 +39,8 @@ import {
 } from '../../../utils/activeMachines';
 import { generateSystemGeneralCode } from '../machines/AddMachineModal';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { usePermission } from '../../components/common/PermissionGate';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
@@ -182,9 +184,9 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   // Handle cross-page navigation focus from MachinesRegisteredView
   useEffect(() => {
     try {
-      const targetId = localStorage.getItem('gmao_equipment_focus_id');
-      if (targetId) {
-        localStorage.removeItem('gmao_equipment_focus_id');
+      const targetId = storageService.getItem(STORAGE_KEYS.EQUIPMENT_FOCUS_ID);
+      if (typeof targetId === 'string' && targetId.trim()) {
+        storageService.removeItem(STORAGE_KEYS.EQUIPMENT_FOCUS_ID);
         setActiveSection('equipments');
         setSearchTerm(targetId);
         setFocusedEquipmentId(targetId);

@@ -4,6 +4,8 @@
  * Designed for offline Windows & PWA operation with optional remote syncing
  */
 import { Logger } from '../core/logger/LoggerService';
+import { storageService } from '../utils/storageService';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
 export interface Breadcrumb {
   timestamp: string;
@@ -29,7 +31,7 @@ export interface ErrorReport {
 
 export class ErrorTrackingService {
   private static instance: ErrorTrackingService;
-  private readonly storageKey = 'gmao_error_reports';
+  private readonly storageKey = STORAGE_KEYS.ERROR_REPORTS;
   private readonly maxReports = 50;
   private readonly maxBreadcrumbs = 25;
   private breadcrumbs: Breadcrumb[] = [];
@@ -108,8 +110,10 @@ export class ErrorTrackingService {
 
   public getReports(): ErrorReport[] {
     try {
-      const data = localStorage.getItem(this.storageKey);
-      return data ? JSON.parse(data) : [];
+      const data = storageService.getItem(this.storageKey, []);
+      if (Array.isArray(data)) return data as ErrorReport[];
+      if (typeof data === 'string') return JSON.parse(data) as ErrorReport[];
+      return [];
     } catch {
       return [];
     }
@@ -117,7 +121,7 @@ export class ErrorTrackingService {
 
   public clearReports(): void {
     try {
-      localStorage.removeItem(this.storageKey);
+      storageService.removeItem(this.storageKey);
       this.breadcrumbs = [];
     } catch {
       /* ignore */
@@ -134,9 +138,9 @@ export class ErrorTrackingService {
       const reports = this.getReports();
       reports.unshift(report);
       const trimmed = reports.slice(0, this.maxReports);
-      localStorage.setItem(this.storageKey, JSON.stringify(trimmed));
+      storageService.setItem(this.storageKey, trimmed);
     } catch (e) {
-      Logger.warn('Failed to save error report to localStorage', e);
+      Logger.warn('Failed to save error report to storage', e);
     }
   }
 }

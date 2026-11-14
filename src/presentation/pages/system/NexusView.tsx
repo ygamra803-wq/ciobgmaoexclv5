@@ -178,14 +178,14 @@ export default function NexusView({
     );
   }, [selectedMachineId, activeMachines]);
 
-  const defaultMachineTechnician = useMemo(() => {
-    return (
+  const defaultMachineTechnician = useMemo<string>(() => {
+    return String(
       activeMachine?.technician ||
-      activeMachine?.technicien_responsable ||
-      activeMachine?.technicien ||
-      activeTechnicians[0]?.nom ||
-      activeTechnicians[0]?.name ||
-      'Technicien'
+        activeMachine?.technicien_responsable ||
+        activeMachine?.technicien ||
+        activeTechnicians[0]?.nom ||
+        activeTechnicians[0]?.name ||
+        'Technicien'
     );
   }, [activeMachine, activeTechnicians]);
 
@@ -520,9 +520,9 @@ export default function NexusView({
   const referenceOptions = useMemo(() => {
     if (formData.element_type === 'PDR') {
       return consumablePdrItems.map((s) => ({
-        ref: s.ref || s.reference,
-        designation: s.designation || '',
-        stock: s.stockActuel ?? 0,
+        ref: String(s.ref || s.reference || ''),
+        designation: String(s.designation || ''),
+        stock: Number(s.stockActuel ?? 0) || 0,
       }));
     }
     if (formData.element_type === 'COMPONENT') {
@@ -533,9 +533,9 @@ export default function NexusView({
           return nat !== 'PART' && nat !== 'ORGANE' && st !== 'ARCHIVEE' && st !== 'ARCHIVE';
         })
         .map((w) => ({
-          ref: w.id_warehouse_item || w.ref || '',
-          designation: w.designation || w.nom_composant || '',
-          stock: w.quantite ?? 1,
+          ref: String(w.id_warehouse_item || w.ref || ''),
+          designation: String(w.designation || w.nom_composant || ''),
+          stock: Number(w.quantite ?? 1) || 1,
         }))
         .filter((o) => Boolean(o.ref));
 
@@ -543,8 +543,8 @@ export default function NexusView({
 
       return (compTemplates || [])
         .map((ct) => ({
-          ref: ct.id_comp_template || ct.code || ct.id || '',
-          designation: ct.designation || ct.libelle || ct.nom || '',
+          ref: String(ct.id_comp_template || ct.id_template || ct.code || ct.id || ''),
+          designation: String(ct.designation || ct.libelle || ct.nom || ''),
           stock: 1,
         }))
         .filter((o) => Boolean(o.ref));
@@ -556,21 +556,21 @@ export default function NexusView({
         return nat === 'PART' || nat === 'ORGANE' || Boolean(w?.part_type || w?.id_part);
       })
       .map((w) => ({
-        ref: w.id_warehouse_item || w.ref || '',
-        designation: w.designation || w.designation_part || '',
+        ref: String(w.id_warehouse_item || w.ref || ''),
+        designation: String(w.designation || w.designation_part || ''),
         stock: 1,
       }))
       .filter((o) => Boolean(o.ref));
 
     const catalogParts = [...(partTypes || []), ...(partDesignations || [])]
       .map((p) => ({
-        ref: p.id_part_type || p.id_part_designation || p.code || p.id || '',
-        designation: p.designation || p.libelle || p.nom || '',
+        ref: String(p.id_part_type || p.id_part_designation || p.code || p.id || ''),
+        designation: String(p.designation || p.libelle || p.nom || ''),
         stock: 1,
       }))
       .filter((o) => Boolean(o.ref));
 
-    const seen = new Set();
+    const seen = new Set<string>();
     return [...whParts, ...catalogParts].filter((o) => {
       if (seen.has(o.ref)) return false;
       seen.add(o.ref);
@@ -720,7 +720,7 @@ export default function NexusView({
         ...entry,
         technicien:
           entry.technicien && entry.technicien !== 'tech'
-            ? entry.technicien
+            ? String(entry.technicien)
             : defaultMachineTechnician,
       });
     });

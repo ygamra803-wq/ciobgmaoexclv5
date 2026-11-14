@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { STORAGE_KEYS } from '../../../../infrastructure/persistence/storageKeys';
+import { storageService } from '../../../../utils/storageService';
 import { Logger } from '../../../../core/logger/LoggerService';
 import type { WizardFeatureFlagsState, WizardModuleKey } from './wizard.types';
 
@@ -24,9 +25,12 @@ const WIZARD_FLAGS_EVENT = 'gmao:wizard-feature-flags-changed';
 export function readWizardFeatureFlags(): WizardFeatureFlagsState {
   if (typeof window === 'undefined') return { ...DEFAULT_WIZARD_FEATURE_FLAGS };
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEYS.WIZARD_FEATURE_FLAGS);
+    const raw = storageService.getItem(STORAGE_KEYS.WIZARD_FEATURE_FLAGS);
     if (!raw) return { ...DEFAULT_WIZARD_FEATURE_FLAGS };
-    const parsed = JSON.parse(raw) as Partial<WizardFeatureFlagsState>;
+    const parsed =
+      typeof raw === 'string'
+        ? (JSON.parse(raw) as Partial<WizardFeatureFlagsState>)
+        : (raw as Partial<WizardFeatureFlagsState>);
     return {
       ...DEFAULT_WIZARD_FEATURE_FLAGS,
       ...parsed,
@@ -39,10 +43,7 @@ export function readWizardFeatureFlags(): WizardFeatureFlagsState {
 export function writeWizardFeatureFlags(nextFlags: WizardFeatureFlagsState): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(
-      STORAGE_KEYS.WIZARD_FEATURE_FLAGS,
-      JSON.stringify(nextFlags)
-    );
+    storageService.setItem(STORAGE_KEYS.WIZARD_FEATURE_FLAGS, nextFlags);
     window.dispatchEvent(new CustomEvent(WIZARD_FLAGS_EVENT, { detail: nextFlags }));
   } catch (err) {
     Logger.error('[GMAO WizardFeatureFlags] Failed to persist flags:', err);

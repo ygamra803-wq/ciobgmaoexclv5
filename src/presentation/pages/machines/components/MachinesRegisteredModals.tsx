@@ -34,36 +34,55 @@ import {
 import { buildMachineActivityLedger } from '../../../../application/services/MachineHealthPassportService';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
 
+import type {
+  IBlueprint,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IMouvement,
+  ISortieDemand,
+  ITechnician,
+  IWarehouseItem,
+  IZone,
+} from '../../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  MachineElement,
+  PreventiveTaskItem,
+  SortieExterneItem,
+} from '../../../../types/store';
+import type { PreventiveExecutionRecord } from '../../../../types/preventive';
+
 export interface MachinesRegisteredModalsProps {
-  toEdit: any;
-  setToEdit: (val: any) => void;
-  toDelete: any;
-  setToDelete: (val: any) => void;
+  toEdit: IMachine | null;
+  setToEdit: (val: IMachine | null) => void;
+  toDelete: IMachine | null;
+  setToDelete: (val: IMachine | null) => void;
   showFormulasModal: boolean;
   setShowFormulasModal: (val: boolean) => void;
-  preventiveMachine: any;
-  setPreventiveMachine: (val: any) => void;
-  machines: any[];
-  families: any[];
-  templates: any[];
-  blueprints: any[];
-  zones: any[];
-  technicians: any[];
-  preventiveTasks: any[];
-  preventiveExecutions: any[];
-  correctiveInterventions: any[];
-  mouvements: any[];
-  machineElementsLedger: any[];
-  sortiesExterne: any[];
-  sortieDemands: any[];
-  warehouseItems: any[];
-  onUpdateMachine: (id: any, data: any) => void;
-  onDeleteMachine: (id: any) => void;
+  preventiveMachine: IMachine | null;
+  setPreventiveMachine: (val: IMachine | null) => void;
+  machines: IMachine[];
+  families: IMachineFamily[];
+  templates: IMachineTemplate[];
+  blueprints: IBlueprint[];
+  zones: IZone[];
+  technicians: ITechnician[];
+  preventiveTasks: PreventiveTaskItem[];
+  preventiveExecutions: PreventiveExecutionRecord[];
+  correctiveInterventions: CorrectiveInterventionItem[];
+  mouvements: IMouvement[];
+  machineElementsLedger: MachineElement[];
+  sortiesExterne: SortieExterneItem[];
+  sortieDemands: ISortieDemand[];
+  warehouseItems: IWarehouseItem[];
+  onUpdateMachine: (id: string, data: Partial<IMachine>) => void;
+  onDeleteMachine: (id: string) => void;
   navigateToEquipmentForMachine: (machineId?: string) => void;
   onNavigateToPreventive?: (machineId?: string) => void;
-  getMachineSerialNumber: (m: any) => string;
-  getMachineCommissioningDate: (m: any) => string;
-  getZoneByRef: (ref: any, zonesList?: any[]) => any;
+  getMachineSerialNumber: (m: IMachine) => string;
+  getMachineCommissioningDate: (m: IMachine) => string;
+  getZoneByRef: (ref?: string | null, zonesList?: IZone[]) => IZone | null | undefined;
 }
 
 export function MachinesRegisteredModals({

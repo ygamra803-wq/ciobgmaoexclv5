@@ -269,6 +269,7 @@ export default function AppRouter({
                           <SettingsView
                             {...props.settings}
                             initialTab={currentTab === 'appearance' ? 'appearance' : undefined}
+                            onNavigateToTab={_setCurrentTab}
                           />
                         </ErrorBoundary>
                       )}

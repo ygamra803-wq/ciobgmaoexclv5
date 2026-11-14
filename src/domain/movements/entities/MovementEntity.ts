@@ -16,6 +16,7 @@ export class MovementEntity implements IMouvement {
   fournisseur?: string;
   emplacement_reception?: string;
   commentaire?: string;
+  [key: string]: unknown;
 
   constructor({
     id,

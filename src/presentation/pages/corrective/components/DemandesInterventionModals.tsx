@@ -1,20 +1,112 @@
 import React from 'react';
 import { Flame, X, Wrench, BookOpen, Check } from 'lucide-react';
 import { useI18n } from '../../../../i18n/I18nContext';
+import type {
+  IBlueprintCommonFailureItem,
+  IStockItem,
+  IWarehouseItem,
+} from '../../../../types/domain';
+import type { CorrectiveInterventionItem } from '../../../../types/store';
+import type { TechnicianSuitabilityEvaluation } from '../../../../domain/workforce/workforceCapacityService';
+import type { SpareReservationEvaluation } from '../../../../domain/stock/stockReservationService';
+
+export interface DemandesNewFormState {
+  code_machine: string;
+  id_composant: string;
+  nom_composant: string;
+  id_part: string;
+  nom_part: string;
+  pdr_ref: string;
+  pdr_quantite: number;
+  demandeur: string;
+  priorite: string;
+  type_panne: string;
+  anomalie: string;
+  travail_a_faire: string;
+  arret_machine: boolean;
+}
+
+export interface DemandesConvertFormState {
+  num_bt: string;
+  intervenant: string;
+  priorite: string;
+  travail_a_faire: string;
+  duree_prevue_mins: number;
+  pdr_ref: string;
+  pdr_quantite: number;
+  allowWaitPdrOnConflict: boolean;
+}
+
+export interface DemandesMachineOption {
+  id: string;
+  id_machine_registered: string;
+  code: string;
+  id_blueprint: string;
+  zone: string;
+  designation: string;
+  totalInterventions: number;
+}
+
+export interface DemandesTechnicianOption {
+  id_technician: string;
+  nom: string;
+  name: string;
+  role: string;
+  isCorrective?: boolean;
+}
+
+export interface DemandesWarehousePartOption extends IWarehouseItem {
+  nom_composant?: string;
+  nom?: string;
+  designation_part?: string;
+}
+
+export interface DemandesRankedStockItem {
+  id?: string | number;
+  ref?: string;
+  reference?: string;
+  code_article?: string;
+  id_article?: string;
+  code?: string;
+  designation?: string;
+  nom?: string;
+  stockActuel?: number;
+  stock_actuel?: number;
+  stockInitial?: number;
+  quantite?: number;
+  qte?: number;
+  seuil?: number;
+  unite?: string;
+  prixUnitaire?: number;
+  prix_unitaire?: number;
+  emplacement?: string;
+  categorie?: string;
+  famille?: string;
+  isBomRecommended?: boolean;
+  bomPriority?: 1 | 2 | 3;
+  bomSourceLabel?: string;
+  bomReason?: string;
+}
+
+export interface DemandesReservationEvalSummary {
+  canAllocateAll: boolean;
+  evaluations: SpareReservationEvaluation[];
+  conflicts: SpareReservationEvaluation[];
+}
 
 export interface DemandesInterventionModalsProps {
   showCreateModal: boolean;
   setShowCreateModal: (v: boolean) => void;
   handleCreateSubmit: (e: React.FormEvent) => void;
-  newForm: any;
-  setNewForm: React.Dispatch<React.SetStateAction<any>>;
-  allMachineOptions: any[];
-  blueprintCommonFailures: any[];
+  newForm: DemandesNewFormState;
+  setNewForm: React.Dispatch<React.SetStateAction<DemandesNewFormState>>;
+  allMachineOptions: DemandesMachineOption[];
+  blueprintCommonFailures: IBlueprintCommonFailureItem[];
   selectedMachineBlueprintId: string;
-  handleApplyBlueprintCommonFailure: (cf: any) => void;
-  machineComponents: any[];
-  machineParts: any[];
-  rankedStockItems: any[];
+  handleApplyBlueprintCommonFailure: (cf: IBlueprintCommonFailureItem) => void;
+  machineComponents: DemandesWarehousePartOption[];
+  machineParts: DemandesWarehousePartOption[];
+  rankedStockItems: DemandesRankedStockItem[];
   panneCategories: Record<string, string[]>;
   availableCategories: string[];
   anomaliesForSelectedCategory: string[];
@@ -24,17 +116,17 @@ export interface DemandesInterventionModalsProps {
   travauxSearchTerm: string;
   setTravauxSearchTerm: (v: string) => void;
   filteredStandardTravaux: string[];
-  showToast?: (msg: string, type?: string) => void;
-  showConvertModal: any;
-  setShowConvertModal: (di: any) => void;
+  showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info' | string) => void;
+  showConvertModal: CorrectiveInterventionItem | null;
+  setShowConvertModal: (di: CorrectiveInterventionItem | null) => void;
   handleConvertSubmit: (e: React.FormEvent) => void;
-  convertForm: any;
-  setConvertForm: React.Dispatch<React.SetStateAction<any>>;
-  allTechnicianOptions: any[];
-  selectedConvertTechEval: any;
-  convertTechEvaluations: any[];
-  stockItems: any[];
-  convertReservationEval: any;
+  convertForm: DemandesConvertFormState;
+  setConvertForm: React.Dispatch<React.SetStateAction<DemandesConvertFormState>>;
+  allTechnicianOptions: DemandesTechnicianOption[];
+  selectedConvertTechEval: TechnicianSuitabilityEvaluation | null;
+  convertTechEvaluations: TechnicianSuitabilityEvaluation[];
+  stockItems: IStockItem[];
+  convertReservationEval: DemandesReservationEvalSummary | null;
 }
 
 export default function DemandesInterventionModals({
@@ -215,8 +307,8 @@ export default function DemandesInterventionModals({
                   >
                     <option value="">-- Machine Globale / Sans composant --</option>
                     {machineComponents.map((c) => {
-                      const id = c.id_warehouse_item || c.id;
-                      const name = c.designation || c.nom_composant || c.nom || id;
+                      const id = String(c.id_warehouse_item || c.id || '');
+                      const name = String(c.designation || c.nom_composant || c.nom || id);
                       return (
                         <option key={id} value={id}>
                           {name} ({c.status || c.statut || 'En Service'})
@@ -252,8 +344,8 @@ export default function DemandesInterventionModals({
                   >
                     <option value="">-- Aucune localisation structurelle --</option>
                     {machineParts.map((p) => {
-                      const id = p.id_warehouse_item || p.id;
-                      const name = p.designation_part || p.designation || id;
+                      const id = String(p.id_warehouse_item || p.id || '');
+                      const name = String(p.designation_part || p.designation || id);
                       return (
                         <option key={id} value={id}>
                           {name}
@@ -283,12 +375,15 @@ export default function DemandesInterventionModals({
                     className="flex-1 py-1.5 px-2.5 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-amber-400 focus:outline-hidden"
                   >
                     <option value="">-- Aucune PDR consommable requise --</option>
-                    {rankedStockItems.map((s) => (
-                      <option key={s.ref} value={s.ref}>
-                        {s.isBomRecommended ? `★ [${s.bomSourceLabel}] ` : ''}
-                        {s.ref} - {s.designation} (Dispo: {s.stockActuel ?? s.stock_actuel ?? 0} {s.unite || 'U'})
-                      </option>
-                    ))}
+                    {rankedStockItems.map((s) => {
+                      const itemRef = String(s.ref || s.reference || s.id_article || s.code || '');
+                      return (
+                        <option key={itemRef || String(s.id ?? '')} value={itemRef}>
+                          {s.isBomRecommended ? `★ [${s.bomSourceLabel}] ` : ''}
+                          {itemRef} - {s.designation || s.nom || ''} (Dispo: {s.stockActuel ?? s.stock_actuel ?? 0} {s.unite || 'U'})
+                        </option>
+                      );
+                    })}
                   </select>
                   {newForm.pdr_ref && (
                     <input
@@ -447,7 +542,7 @@ export default function DemandesInterventionModals({
                         <div
                           key={tIdx}
                           onClick={() => {
-                            setNewForm((prev: any) => ({
+                            setNewForm((prev) => ({
                               ...prev,
                               travail_a_faire: prev.travail_a_faire ? `${prev.travail_a_faire}\n${trv}` : trv,
                             }));
@@ -484,7 +579,7 @@ export default function DemandesInterventionModals({
                           key={idx}
                           type="button"
                           onClick={() => {
-                            setNewForm((prev: any) => ({
+                            setNewForm((prev) => ({
                               ...prev,
                               travail_a_faire: prev.travail_a_faire ? `${prev.travail_a_faire}\n${act}` : act,
                             }));
@@ -754,9 +849,9 @@ export default function DemandesInterventionModals({
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                     Travail à Faire (Suggestions d&apos;Atelier)
                   </label>
-                  {getActionsForPanne(showConvertModal.anomalie).length > 0 && (
+                  {getActionsForPanne(String(showConvertModal.anomalie || '')).length > 0 && (
                     <span className="text-[10px] font-bold text-blue-700">
-                      {getActionsForPanne(showConvertModal.anomalie).length} actions recommandées
+                      {getActionsForPanne(String(showConvertModal.anomalie || '')).length} actions recommandées
                     </span>
                   )}
                 </div>
@@ -769,18 +864,18 @@ export default function DemandesInterventionModals({
                 />
 
                 {/* Quick Action Badges for Selected Panne in Convert Modal */}
-                {getActionsForPanne(showConvertModal.anomalie).length > 0 && (
+                {getActionsForPanne(String(showConvertModal.anomalie || '')).length > 0 && (
                   <div className="mt-2 p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-1.5">
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-900 block">
                       Actions types pour « {showConvertModal.anomalie} » :
                     </span>
                     <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                      {getActionsForPanne(showConvertModal.anomalie).map((act, idx) => (
+                      {getActionsForPanne(String(showConvertModal.anomalie || '')).map((act, idx) => (
                         <button
                           key={idx}
                           type="button"
                           onClick={() => {
-                            setConvertForm((prev: any) => ({
+                            setConvertForm((prev) => ({
                               ...prev,
                               travail_a_faire: prev.travail_a_faire ? `${prev.travail_a_faire}\n${act}` : act,
                             }));

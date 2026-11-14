@@ -7,47 +7,105 @@ import {
   Trash2,
 } from 'lucide-react';
 import PrintWorkOrderModal from './PrintWorkOrderModal';
-import SystemGeneralRoundModal from './SystemGeneralRoundModal';
+import SystemGeneralRoundModal, {
+  type RoundStockEntry,
+  type RoundTaskCorrectivePayload,
+  type RoundTaskEntry,
+  type RoundTaskValidationPayload,
+  type RoundZoneEntry,
+} from './SystemGeneralRoundModal';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
+import type {
+  IMachine,
+  IMouvement,
+  ISortieDemand,
+  IStockItem,
+  ITechnician,
+  IWarehouseItem,
+} from '../../../../types/domain';
+import type { PreventiveExecutionRecord } from '../../../../types/preventive';
+import type { CorrectiveInterventionItem } from '../../../../types/store';
+
+export interface TabMainPdrDraftItem {
+  id_article: string;
+  designation: string;
+  reference: string;
+  ref?: string;
+  quantite: number;
+  qty?: number;
+  unite: string;
+  prix_unitaire: number;
+  source?: string;
+}
+
+export interface TabMainInventoryOption extends RoundStockEntry {
+  isBomRecommended?: boolean;
+  bomSourceLabel?: string;
+}
+
+export interface TabMainValidationFormState {
+  date_realisation: string;
+  technicien: string;
+  duree_reelle: string;
+  taux_horaire: number;
+  observations: string;
+  usedPDR: TabMainPdrDraftItem[];
+  num_bon_saisi_par_tech: string;
+  skipStockDeduction: boolean;
+  createFollowUpDi: boolean;
+  followUpDiAnomalie: string;
+  mode_calcul_recurrence: string;
+  compteur_releve: string | number;
+  id_composant: string;
+  nom_composant: string;
+  id_part: string;
+  nom_part: string;
+}
+
+export interface TabMainWarehouseComponentOption extends IWarehouseItem {
+  nom_composant?: string;
+  nom?: string;
+  designation_part?: string;
+}
 
 export interface TabMainModalsProps {
-  selectedTaskForValidation: any;
-  setSelectedTaskForValidation: (task: any) => void;
+  selectedTaskForValidation: RoundTaskEntry | null;
+  setSelectedTaskForValidation: (task: RoundTaskEntry | null) => void;
   isTechUser: boolean;
-  validationData: any;
-  setValidationData: (data: any) => void;
+  validationData: TabMainValidationFormState;
+  setValidationData: React.Dispatch<React.SetStateAction<TabMainValidationFormState>>;
   handleConfirmValidation: (e: React.FormEvent) => void;
-  validationMachineComponents: any[];
-  validationMachineParts: any[];
+  validationMachineComponents: TabMainWarehouseComponentOption[];
+  validationMachineParts: TabMainWarehouseComponentOption[];
   handleRemovePdrFromValidation: (idx: number) => void;
-  newPdrItem: any;
-  setNewPdrItem: (item: any) => void;
-  rankedValidationInventory: any[];
-  handleAddPdrToValidation: (item: any) => void;
-  stockItems: any[];
-  storeMouvements: any[];
-  storeCorrectiveInterventions: any[];
-  executions: any[];
-  storeSortieDemands: any[];
-  selectedTaskForBT: any;
-  setSelectedTaskForBT: (task: any) => void;
+  newPdrItem: TabMainPdrDraftItem;
+  setNewPdrItem: React.Dispatch<React.SetStateAction<TabMainPdrDraftItem>>;
+  rankedValidationInventory: TabMainInventoryOption[];
+  handleAddPdrToValidation: (item: TabMainPdrDraftItem) => void;
+  stockItems: IStockItem[];
+  storeMouvements: IMouvement[];
+  storeCorrectiveInterventions: CorrectiveInterventionItem[];
+  executions: PreventiveExecutionRecord[];
+  storeSortieDemands: ISortieDemand[];
+  selectedTaskForBT: RoundTaskEntry | null;
+  setSelectedTaskForBT: (task: RoundTaskEntry | null) => void;
   btData: { description: string; priorite: string };
-  setBtData: (data: { description: string; priorite: string }) => void;
+  setBtData: React.Dispatch<React.SetStateAction<{ description: string; priorite: string }>>;
   handleConfirmCorrective: (e: React.FormEvent) => void;
-  selectedTaskForPrint: any;
-  setSelectedTaskForPrint: (task: any) => void;
+  selectedTaskForPrint: RoundTaskEntry | null;
+  setSelectedTaskForPrint: (task: RoundTaskEntry | null) => void;
   showSystemGeneralRoundModal: boolean;
   setShowSystemGeneralRoundModal: (v: boolean) => void;
-  scopedTasks: any[];
-  machines: any[];
-  zones: any[];
-  technicians: any[];
-  availableInventory: any[];
+  scopedTasks: RoundTaskEntry[];
+  machines: IMachine[];
+  zones: RoundZoneEntry[];
+  technicians: Array<ITechnician | string>;
+  availableInventory: RoundStockEntry[];
   techDisplayName: string;
-  onMarkTaskDone?: (taskId: string, payload: any) => void;
-  onCreateCorrective?: (payload: any) => void;
-  showToast?: (message: string, type?: string) => void;
+  onMarkTaskDone?: (taskId: string, payload: RoundTaskValidationPayload) => void;
+  onCreateCorrective?: (task: RoundTaskEntry, payload: RoundTaskCorrectivePayload) => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'warning' | 'info' | string) => void;
 }
 
 export default function TabMainModals({
@@ -143,9 +201,9 @@ export default function TabMainModals({
                       : 'Exécution rejetée par le responsable'}
                   </span>
                 </div>
-                {selectedTaskForValidation.validation_note && (
+                {Boolean(selectedTaskForValidation.validation_note) && (
                   <p className="text-rose-800 font-medium">
-                    Motif : « {selectedTaskForValidation.validation_note} »
+                    Motif : « {String(selectedTaskForValidation.validation_note)} »
                   </p>
                 )}
               </div>
@@ -238,8 +296,8 @@ export default function TabMainModals({
                     >
                       <option value="">-- Machine entière / Sans composant spécifique --</option>
                       {validationMachineComponents.map((c) => {
-                        const cId = c.id_warehouse_item || c.id;
-                        const cName = c.designation || c.nom_composant || c.nom || cId;
+                        const cId = String(c.id_warehouse_item || c.id || '');
+                        const cName = String(c.designation || c.nom_composant || c.nom || cId);
                         return (
                           <option key={cId} value={cId}>
                             {cId} · {cName}
@@ -271,8 +329,8 @@ export default function TabMainModals({
                     >
                       <option value="">-- Aucune localisation structurelle --</option>
                       {validationMachineParts.map((p) => {
-                        const pId = p.id_warehouse_item || p.id;
-                        const pName = p.designation_part || p.designation || p.nom || pId;
+                        const pId = String(p.id_warehouse_item || p.id || '');
+                        const pName = String(p.designation_part || p.designation || p.nom || pId);
                         return (
                           <option key={pId} value={pId}>
                             {pId} · {pName}
@@ -303,7 +361,7 @@ export default function TabMainModals({
                 {/* Used PDR Items list */}
                 {validationData.usedPDR.length > 0 && (
                   <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {validationData.usedPDR.map((pdr: any, idx: number) => (
+                    {validationData.usedPDR.map((pdr: TabMainPdrDraftItem, idx: number) => (
                       <div key={idx} className="bg-white p-2 rounded-xl border border-indigo-100 flex items-center justify-between text-xs">
                         <div>
                           <span className="font-bold text-slate-800">{pdr.designation}</span>
@@ -331,12 +389,13 @@ export default function TabMainModals({
                       onChange={(e) => {
                         const it = rankedValidationInventory.find((i) => i.reference === e.target.value || i.ref === e.target.value);
                         if (it) {
+                          const refCode = String(it.reference || it.ref || '');
                           setNewPdrItem({
-                            id_article: it.id_article || `PDR-${it.reference}`,
+                            id_article: String(it.id_article || `PDR-${refCode}`),
                             designation: it.designation,
-                            reference: it.reference,
+                            reference: refCode,
                             quantite: 1,
-                            unite: it.unite || 'pcs',
+                            unite: String(it.unite || 'pcs'),
                             prix_unitaire: Number(it.prix_unitaire || 0),
                             source: it.source,
                           });
@@ -346,9 +405,9 @@ export default function TabMainModals({
                     >
                       <option value="">Sélectionner une pièce consommable (Stock PDR Magasin)...</option>
                       {rankedValidationInventory.map((item, idx) => (
-                        <option key={idx} value={item.reference}>
-                          {item.isBomRecommended ? `★ [${item.bomSourceLabel}] ` : `[${item.source}] `}
-                          {item.reference} - {item.designation} (Stock: {item.stockActuel})
+                        <option key={idx} value={item.reference || item.ref}>
+                          {item.isBomRecommended ? `★ [${item.bomSourceLabel}] ` : `[${item.source || 'STOCK'}] `}
+                          {item.reference || item.ref} - {item.designation} (Stock: {item.stockActuel ?? 0})
                         </option>
                       ))}
                     </select>
@@ -381,7 +440,7 @@ export default function TabMainModals({
                         claimId: String(selectedTaskForValidation?.id || ''),
                         numBonSaisi: nextBon,
                         machineCode: selectedTaskForValidation?.id_machine,
-                        proposedSpares: (validationData.usedPDR || []).map((p: any) => ({
+                        proposedSpares: (validationData.usedPDR || []).map((p: TabMainPdrDraftItem) => ({
                           ref: p.reference || p.ref,
                           designation: p.designation,
                           qty: p.quantite || p.qty,

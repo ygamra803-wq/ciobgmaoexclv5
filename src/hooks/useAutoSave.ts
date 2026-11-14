@@ -176,7 +176,8 @@ export function useAutoSave(state, debounceMs = 1000, onStateChange = null) {
         isInitialSave.current = false;
       } else {
         serverSyncService.markLocalModified();
-        const autoWriteEnabled = localStorage.getItem('gmao_auto_write_excel') !== 'false';
+        const autoWriteRaw = storageService.getItem(STORAGE_KEYS.AUTO_WRITE_EXCEL);
+        const autoWriteEnabled = autoWriteRaw !== false && autoWriteRaw !== 'false';
         if (autoWriteEnabled) {
           serverSyncService.scheduleAutoPush(fullState, 2000);
         }

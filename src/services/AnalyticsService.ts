@@ -4,6 +4,9 @@
  * Persists locally in localStorage without relying on external network servers
  */
 import { Logger } from '../core/logger/LoggerService';
+import { storageService } from '../utils/storageService';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
+import { SecurityService } from '../core/security/SecurityService';
 
 export interface AnalyticsEvent {
   id: string;
@@ -16,7 +19,7 @@ export interface AnalyticsEvent {
 
 export class AnalyticsService {
   private static instance: AnalyticsService;
-  private readonly storageKey = 'gmao_analytics_events';
+  private readonly storageKey = STORAGE_KEYS.ANALYTICS_EVENTS;
   private readonly maxStoredEvents = 200;
   private sessionId: string;
   private isEnabled = true;
@@ -34,10 +37,11 @@ export class AnalyticsService {
 
   private getOrCreateSessionId(): string {
     try {
-      let id = sessionStorage.getItem('gmao_session_id');
+      const existing = SecurityService.getSessionSecure('gmao_session_id');
+      let id = typeof existing === 'string' && existing ? existing : '';
       if (!id) {
         id = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-        sessionStorage.setItem('gmao_session_id', id);
+        SecurityService.saveSessionSecure('gmao_session_id', id);
       }
       return id;
     } catch {
@@ -67,8 +71,10 @@ export class AnalyticsService {
 
   public getEvents(): AnalyticsEvent[] {
     try {
-      const data = localStorage.getItem(this.storageKey);
-      return data ? JSON.parse(data) : [];
+      const data = storageService.getItem(this.storageKey, []);
+      if (Array.isArray(data)) return data as AnalyticsEvent[];
+      if (typeof data === 'string') return JSON.parse(data) as AnalyticsEvent[];
+      return [];
     } catch {
       return [];
     }
@@ -93,7 +99,7 @@ export class AnalyticsService {
 
   public clearEvents(): void {
     try {
-      localStorage.removeItem(this.storageKey);
+      storageService.removeItem(this.storageKey);
     } catch {
       /* ignore */
     }
@@ -108,7 +114,7 @@ export class AnalyticsService {
       const events = this.getEvents();
       events.unshift(event);
       const trimmed = events.slice(0, this.maxStoredEvents);
-      localStorage.setItem(this.storageKey, JSON.stringify(trimmed));
+      storageService.setItem(this.storageKey, trimmed);
     } catch (e) {
       Logger.warn('Failed to save analytics event', e);
     }

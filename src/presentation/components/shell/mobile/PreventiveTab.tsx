@@ -12,9 +12,33 @@ import {
   Package,
   FileText,
 } from 'lucide-react';
-import { getTechnicianDisplayName } from '../../../../core/security/technicianScope';
+import {
+  getTechnicianDisplayName,
+  type TechnicianActorUser,
+  type buildTechnicianDashboardScope,
+} from '../../../../core/security/technicianScope';
+import type {
+  IMouvement,
+  IStockItem,
+  ITechnician,
+} from '../../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  PreventiveTaskItem,
+} from '../../../../types/store';
+import type { PreventiveExecutionRecord } from '../../../../types/preventive';
 
 export type MobilePrevFilter = 'TODO' | 'OVERDUE' | 'CLARIFY' | 'PENDING' | 'DONE' | 'ALL';
+
+type MobileTechScope = ReturnType<
+  typeof buildTechnicianDashboardScope<
+    ITechnician,
+    PreventiveTaskItem,
+    PreventiveExecutionRecord,
+    CorrectiveInterventionItem,
+    IMouvement
+  >
+>;
 
 interface ProposedSpareRow {
   ref: string;
@@ -25,14 +49,17 @@ interface ProposedSpareRow {
 }
 
 interface PreventiveTabProps {
-  currentUser: any;
-  technicians: any[];
-  techScope: any;
-  stockItems: any[];
+  currentUser: (TechnicianActorUser & { id_technician?: string; nom?: string }) | null;
+  technicians: ITechnician[];
+  techScope: MobileTechScope;
+  stockItems: IStockItem[];
   initialFilter?: MobilePrevFilter;
-  initialTaskToExecute?: any | null;
+  initialTaskToExecute?: PreventiveTaskItem | null;
   onClearInitialTask?: () => void;
-  onMarkTaskDone: (id: string, validationData: any) => void;
+  onMarkTaskDone: (
+    id: string | number,
+    validationData?: Record<string, unknown>
+  ) => PreventiveExecutionRecord | null | void;
   onOpenMachineQrModal?: (machineId: string) => void;
   showToast?: (msg: string, type?: string) => void;
 }
@@ -53,7 +80,7 @@ export default function PreventiveTab({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Execution Sheet State
-  const [selectedTaskForExec, setSelectedTaskForExec] = useState<any | null>(null);
+  const [selectedTaskForExec, setSelectedTaskForExec] = useState<PreventiveTaskItem | null>(null);
   const [execNotes, setExecNotes] = useState('');
   const [execDuration, setExecDuration] = useState('20');
   const [execNumBon, setExecNumBon] = useState('');
@@ -82,28 +109,28 @@ export default function PreventiveTab({
   const doneTasks = techScope?.doneTasks || [];
 
   const overdueIdSet = useMemo(
-    () => new Set(overdueTasks.map((t: any) => String(t.id))),
+    () => new Set(overdueTasks.map((t) => String(t.id))),
     [overdueTasks]
   );
   const thisWeekIdSet = useMemo(
-    () => new Set(thisWeekTasks.map((t: any) => String(t.id))),
+    () => new Set(thisWeekTasks.map((t) => String(t.id))),
     [thisWeekTasks]
   );
   const clarifyIdSet = useMemo(
-    () => new Set(clarifyTasks.map((t: any) => String(t.id))),
+    () => new Set(clarifyTasks.map((t) => String(t.id))),
     [clarifyTasks]
   );
   const pendingIdSet = useMemo(
-    () => new Set(pendingValTasks.map((t: any) => String(t.id))),
+    () => new Set(pendingValTasks.map((t) => String(t.id))),
     [pendingValTasks]
   );
   const doneIdSet = useMemo(
-    () => new Set(doneTasks.map((t: any) => String(t.id))),
+    () => new Set(doneTasks.map((t) => String(t.id))),
     [doneTasks]
   );
 
   const filteredTasks = useMemo(() => {
-    let base: any[] = [];
+    let base: PreventiveTaskItem[] = [];
     if (prevFilter === 'OVERDUE') {
       base = overdueTasks;
     } else if (prevFilter === 'CLARIFY') {
@@ -123,7 +150,7 @@ export default function PreventiveTab({
 
     const q = searchQuery.trim().toLowerCase();
     if (!q) return base;
-    return base.filter((t: any) => {
+    return base.filter((t) => {
       const machine = String(t.id_machine || t.machine || '').toLowerCase();
       const nomMachine = String(t.nom_machine || '').toLowerCase();
       const title = String(t.tache || t.intitule || t.consigne || t.organe || '').toLowerCase();
@@ -140,16 +167,16 @@ export default function PreventiveTab({
     doneTasks,
   ]);
 
-  const handleOpenExecSheet = (task: any) => {
+  const handleOpenExecSheet = (task: PreventiveTaskItem) => {
     setSelectedTaskForExec(task);
-    setExecNotes(task.observations_validation || task.observations || '');
+    setExecNotes(String(task.observations_validation || task.observations || ''));
     setExecDuration(
       String(
         parseInt(String(task.duree_reelle || task.duree_estimee_min || task.duree_estimee || 20), 10) ||
           20
       )
     );
-    setExecNumBon(task.num_bon_saisi_par_tech || '');
+    setExecNumBon(String(task.num_bon_saisi_par_tech || ''));
     setExecCompteur(
       task.compteur_actuel || task.dernier_releve
         ? String(task.compteur_actuel || task.dernier_releve)
@@ -158,11 +185,11 @@ export default function PreventiveTab({
 
     // Pre-populate spares from pieces_proposees or pdr_requises or single pdr_ref
     const initialSpares: ProposedSpareRow[] = [];
-    const existingList =
+    const existingList: Array<Record<string, unknown>> =
       Array.isArray(task.pieces_proposees) && task.pieces_proposees.length > 0
-        ? task.pieces_proposees
+        ? (task.pieces_proposees as Array<Record<string, unknown>>)
         : Array.isArray(task.pdr_requises) && task.pdr_requises.length > 0
-        ? task.pdr_requises
+        ? (task.pdr_requises as unknown as Array<Record<string, unknown>>)
         : task.pdr_ref
         ? [
             {
@@ -173,7 +200,7 @@ export default function PreventiveTab({
           ]
         : [];
 
-    existingList.forEach((p: any) => {
+    existingList.forEach((p) => {
       const ref = String(p?.ref || p?.reference || p?.code || '').trim();
       if (!ref) return;
       const stockMatch = stockItems.find(
@@ -402,14 +429,14 @@ export default function PreventiveTab({
         </div>
       ) : (
         <div className="space-y-2.5">
-          {filteredTasks.map((task: any) => {
+          {filteredTasks.map((task) => {
             const taskIdStr = String(task.id);
             const isOverdue = overdueIdSet.has(taskIdStr);
             const isThisWeek = thisWeekIdSet.has(taskIdStr);
             const isClarify = clarifyIdSet.has(taskIdStr);
             const isPending = pendingIdSet.has(taskIdStr);
             const isDone = doneIdSet.has(taskIdStr);
-            const machineCode = task.id_machine || task.machine || 'MACHINE';
+            const machineCode = String(task.id_machine || task.machine || 'MACHINE');
 
             return (
               <div
@@ -468,34 +495,34 @@ export default function PreventiveTab({
                     </div>
 
                     <div className="text-xs font-bold text-slate-900">
-                      {task.tache || task.intitule || task.consigne || 'Inspection préventive'}
+                      {String(task.tache || task.intitule || task.consigne || 'Inspection préventive')}
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500">
-                      {(task.organe || task.composant) && (
-                        <span>Organe : {task.organe || task.composant}</span>
+                      {Boolean(task.organe || task.composant) && (
+                        <span>Organe : {String(task.organe || task.composant || '')}</span>
                       )}
-                      {task.prochaine_echeance && (
+                      {Boolean(task.prochaine_echeance) && (
                         <span className="font-mono flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {task.prochaine_echeance}
+                          {String(task.prochaine_echeance || '')}
                         </span>
                       )}
                     </div>
                   </div>
 
                   <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-[10px] font-bold shrink-0">
-                    {task.frequence || task.periodicite || 'Hebdo'}
+                    {String(task.frequence || task.periodicite || 'Hebdo')}
                   </span>
                 </div>
 
                 {/* Supervisor Clarification Note if NEEDS_CLARIFICATION / REJECTED */}
-                {task.validation_note && (
+                {Boolean(task.validation_note) && (
                   <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 flex items-start gap-2 text-xs text-rose-900">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-black">Demande de précision Admin : </span>
-                      <span>{task.validation_note}</span>
+                      <span>{String(task.validation_note || '')}</span>
                     </div>
                   </div>
                 )}
@@ -505,12 +532,12 @@ export default function PreventiveTab({
                   <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-1.5 flex-wrap text-[11px] text-slate-700 font-mono">
                     <Package className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                     <span>PDR déclarées :</span>
-                    {task.pieces_proposees.map((p: any, idx: number) => (
+                    {task.pieces_proposees.map((p, idx: number) => (
                       <span
-                        key={`${p.ref}-${idx}`}
+                        key={`${String(p.ref || '')}-${idx}`}
                         className="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-[10px] font-bold"
                       >
-                        {p.ref} ×{p.qty ?? p.quantite ?? 1}
+                        {String(p.ref || '')} ×{Number(p.qty ?? p.quantite ?? 1)}
                       </span>
                     ))}
                   </div>
@@ -519,7 +546,7 @@ export default function PreventiveTab({
                 {/* Card Footer & Touch Action */}
                 <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-2">
                   <span className="text-[11px] text-slate-500 font-mono">
-                    Durée est. : {task.duree_estimee_min || task.duree_estimee || 20} min
+                    Durée est. : {String(task.duree_estimee_min || task.duree_estimee || 20)} min
                   </span>
 
                   <button
@@ -562,16 +589,18 @@ export default function PreventiveTab({
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-mono text-xs font-black text-indigo-700">
-                    {selectedTaskForExec.id_machine || selectedTaskForExec.machine}
+                    {String(selectedTaskForExec.id_machine || selectedTaskForExec.machine || '')}
                   </span>
                   <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 font-mono text-[10px] font-bold">
                     Maker-Checker
                   </span>
                 </div>
                 <h3 className="text-sm font-black text-slate-900 mt-0.5">
-                  {selectedTaskForExec.tache ||
-                    selectedTaskForExec.intitule ||
-                    "Valider l'exécution préventive"}
+                  {String(
+                    selectedTaskForExec.tache ||
+                      selectedTaskForExec.intitule ||
+                      "Valider l'exécution préventive"
+                  )}
                 </h3>
               </div>
               <button
@@ -583,10 +612,10 @@ export default function PreventiveTab({
               </button>
             </div>
 
-            {selectedTaskForExec.validation_note && (
+            {Boolean(selectedTaskForExec.validation_note) && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900">
                 <span className="font-black">Note du responsable : </span>
-                {selectedTaskForExec.validation_note}
+                {String(selectedTaskForExec.validation_note || '')}
               </div>
             )}
 

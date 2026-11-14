@@ -29,9 +29,106 @@ import SyncButtons from '../../../components/common/SyncButtons';
 import { confirmAction } from '../../../../utils/confirmAction';
 import { performanceService } from '../../../../services/performanceService';
 import { syncQueueService } from '../../../../services/syncQueueService';
+import type { dataIntegrityService, IntegrityIssueRecord } from '../../../../services/dataIntegrityService';
+import type { ErrorReport } from '../../../../services/ErrorTrackingService';
+import type { AnalyticsEvent } from '../../../../services/AnalyticsService';
+import type { IStockItem, IMouvement } from '../../../../types/domain';
+import type { IAuditEvent } from '../../../../types/audit';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import Action3DButton from '../../../components/common/Action3DButton';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+
+export interface AccessLogEntry {
+  id?: string;
+  status?: string;
+  userName?: string;
+  userRole?: string;
+  stationName?: string;
+  deviceId?: string;
+  ip?: string;
+  os?: string;
+  browser?: string;
+  screenRes?: string;
+  loginTime?: string | number;
+  logoutTime?: string | number;
+  durationMinutes?: number;
+  [key: string]: unknown;
+}
+
+export interface LegacyAuditLogEntry {
+  id?: string;
+  ts?: string;
+  timestamp?: string;
+  actorId?: string;
+  userId?: string;
+  actorName?: string;
+  actorRole?: string;
+  actionType?: string;
+  action?: string;
+  entityType?: string;
+  entity?: string;
+  entityId?: string;
+  before?: unknown;
+  after?: unknown;
+  meta?: Record<string, unknown> & { summary?: string };
+  [key: string]: unknown;
+}
+
+export interface BackupSummaryEntry {
+  id?: string;
+  timestamp?: string | number;
+  userId?: string;
+  reason?: string;
+}
+
+export type IntegrityReportData = ReturnType<typeof dataIntegrityService.getIntegrityReport>;
+
+export interface PerfStatsSummary {
+  heapMB: number | string;
+  recalcStats: ReturnType<typeof performanceService.getStats>;
+}
+
+export interface SettingsBackupAuditTabProps {
+  auditSubTab: string;
+  setAuditSubTab: (tab: string) => void;
+  accessLogs?: AccessLogEntry[];
+  auditLogs?: LegacyAuditLogEntry[];
+  backupsList?: Array<BackupSummaryEntry | string>;
+  errorReports?: ErrorReport[];
+  analyticsEvents?: AnalyticsEvent[];
+  loadAccessLogs?: () => void;
+  handleClearAccessLogs?: () => void | Promise<void>;
+  loadAuditLogs?: () => void | Promise<void>;
+  loadingAudit?: boolean;
+  loadBackups?: () => void | Promise<void>;
+  setShowBackupManagerModal: (show: boolean) => void;
+  handleExportBackup: (id: string) => void | Promise<void>;
+  handleRestoreBackup: (id: string) => void | Promise<void>;
+  runIntegrityCheck?: () => void;
+  checkingIntegrity?: boolean;
+  handleRepairData?: () => void | Promise<void>;
+  integrityReport?: IntegrityReportData | null;
+  rawStock?: IStockItem[];
+  mouvements?: IMouvement[];
+  currentChecksum?: string;
+  preventiveOrphans?: unknown[];
+  correctiveOrphans?: unknown[];
+  systemGeneralBomLeaks?: unknown[];
+  handlePurgePreventiveOrphans?: () => void | Promise<void>;
+  handlePurgeCorrectiveOrphans?: () => void | Promise<void>;
+  handlePurgeSystemGeneralBomLeaks?: () => void | Promise<void>;
+  handleBulkRelink?: (entityType: 'preventive' | 'corrective') => void;
+  refreshPerformanceMetrics?: () => void;
+  runPerformanceBenchmark?: () => void | Promise<void>;
+  perfStats?: PerfStatsSummary;
+  syncQueueState?: ReturnType<typeof syncQueueService.getState>;
+  refreshTelemetry?: () => void;
+  handleSimulateError?: () => void;
+  handleExportErrorReports?: () => void;
+  handleClearErrorReports?: () => void;
+  handleClearAnalytics?: () => void;
+  showToast?: (message: string, type?: string) => void;
+}
 
 /**
  * Access Logs, Data Audits, Restore Points, Data Integrity, Orphan Cleanup & Telemetry Hub.
@@ -69,23 +166,32 @@ export default function SettingsBackupAuditTab({
   refreshPerformanceMetrics,
   runPerformanceBenchmark,
   perfStats = { heapMB: 0, recalcStats: null },
-  syncQueueState = { isOnline: true, pendingCount: 0, failedCount: 0 },
+  syncQueueState = {
+    isOnline: true,
+    isProcessing: false,
+    queueLength: 0,
+    pendingCount: 0,
+    failedCount: 0,
+    durableCount: 0,
+    ephemeralCount: 0,
+    items: [],
+  },
   refreshTelemetry,
   handleSimulateError,
   handleExportErrorReports,
   handleClearErrorReports,
   handleClearAnalytics,
   showToast,
-}: any) {
+}: SettingsBackupAuditTabProps) {
   const storeAuditEvents = useGmaoStore((s) => s.auditEvents);
   const [entityTypeFilter, setEntityTypeFilter] = useState<string>('ALL');
 
-  const combinedAuditEvents = useMemo(() => {
+  const combinedAuditEvents = useMemo<Array<IAuditEvent | LegacyAuditLogEntry>>(() => {
     const fromStore = Array.isArray(storeAuditEvents) ? storeAuditEvents : [];
-    const fromLegacy = Array.isArray(auditLogs)
+    const fromLegacy: LegacyAuditLogEntry[] = Array.isArray(auditLogs)
       ? auditLogs
-          .filter((l: any) => l && !fromStore.some((s) => s.id === l.id))
-          .map((l: any, idx: number) => ({
+          .filter((l): l is LegacyAuditLogEntry => Boolean(l) && !fromStore.some((s) => s.id === l.id))
+          .map((l, idx: number) => ({
             id: l.id || `LEG-${l.ts || l.timestamp || idx}-${idx}`,
             ts: l.ts || l.timestamp || new Date().toISOString(),
             actorId: l.actorId || l.userId || 'SYSTEM',
@@ -99,8 +205,8 @@ export default function SettingsBackupAuditTab({
             meta: l.meta || {},
           }))
       : [];
-    const merged = [...fromStore, ...fromLegacy].sort(
-      (a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime()
+    const merged: Array<IAuditEvent | LegacyAuditLogEntry> = [...fromStore, ...fromLegacy].sort(
+      (a, b) => new Date(String(b.ts || 0)).getTime() - new Date(String(a.ts || 0)).getTime()
     );
     if (entityTypeFilter === 'ALL') return merged;
     return merged.filter((ev) => String(ev.entityType).toUpperCase() === entityTypeFilter);
@@ -232,7 +338,7 @@ export default function SettingsBackupAuditTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {accessLogs.map((log: any, idx: number) => (
+                {accessLogs.map((log: AccessLogEntry, idx: number) => (
                   <tr
                     key={`${log.id || log.loginTime || 'access'}-${idx}`}
                     className="hover:bg-slate-50/80 transition-colors"
@@ -278,7 +384,9 @@ export default function SettingsBackupAuditTab({
                     <td className="px-3.5 py-2.5 whitespace-nowrap font-mono text-[11px] text-slate-700">
                       <div className="flex items-center gap-1">
                         <LogIn className="w-3 h-3 text-emerald-600" />
-                        <span>{new Date(log.loginTime).toLocaleString('fr-FR')}</span>
+                        <span>
+                          {log.loginTime ? new Date(log.loginTime).toLocaleString('fr-FR') : '—'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-3.5 py-2.5 whitespace-nowrap font-mono text-[11px] text-slate-500">
@@ -360,13 +468,13 @@ export default function SettingsBackupAuditTab({
                     </td>
                   </tr>
                 ) : (
-                  combinedAuditEvents.slice(0, 100).map((log: any, idx: number) => (
+                  combinedAuditEvents.slice(0, 100).map((log, idx: number) => (
                     <tr
                       key={`${log.id || log.ts || 'audit'}-${idx}`}
                       className="hover:bg-slate-50/80 transition-colors"
                     >
                       <td className="px-3.5 py-2.5 whitespace-nowrap font-mono text-[10px] text-slate-500">
-                        {new Date(log.ts).toLocaleString('fr-FR')}
+                        {log.ts ? new Date(log.ts).toLocaleString('fr-FR') : '—'}
                       </td>
                       <td className="px-3.5 py-2.5 whitespace-nowrap">
                         <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-sky-900 border border-slate-200 text-[10px] font-bold font-mono">
@@ -382,7 +490,7 @@ export default function SettingsBackupAuditTab({
                         <div className="font-mono text-[10px] text-slate-400">{log.actorRole}</div>
                       </td>
                       <td className="px-3.5 py-2.5 text-[11px] text-slate-600 max-w-md">
-                        {log.meta?.summary ? (
+                        {typeof log.meta?.summary === 'string' && log.meta.summary ? (
                           <div className="font-medium text-slate-800 mb-0.5">{log.meta.summary}</div>
                         ) : null}
                         <div
@@ -448,7 +556,7 @@ export default function SettingsBackupAuditTab({
                     </td>
                   </tr>
                 ) : (
-                  backupsList.map((b: any, idx: number) => {
+                  backupsList.map((b: BackupSummaryEntry | string, idx: number) => {
                     const backupId = typeof b === 'string' ? b : b?.id || `backup-${idx}`;
                     const rawTs = typeof b === 'object' ? b?.timestamp : null;
                     const displayDate = rawTs ? new Date(rawTs).toLocaleString('fr-FR') : backupId;
@@ -717,7 +825,7 @@ export default function SettingsBackupAuditTab({
               </div>
             ) : (
               <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 text-xs">
-                {integrityReport.stock?.errors?.map((err: any, i: number) => (
+                {integrityReport.stock?.errors?.map((err: IntegrityIssueRecord, i: number) => (
                   <div key={`se-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -726,7 +834,7 @@ export default function SettingsBackupAuditTab({
                     </div>
                   </div>
                 ))}
-                {integrityReport.stock?.warnings?.map((warn: any, i: number) => (
+                {integrityReport.stock?.warnings?.map((warn: IntegrityIssueRecord, i: number) => (
                   <div key={`sw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -735,7 +843,7 @@ export default function SettingsBackupAuditTab({
                     </div>
                   </div>
                 ))}
-                {integrityReport.movements?.errors?.map((err: any, i: number) => (
+                {integrityReport.movements?.errors?.map((err: IntegrityIssueRecord, i: number) => (
                   <div key={`me-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -744,7 +852,7 @@ export default function SettingsBackupAuditTab({
                     </div>
                   </div>
                 ))}
-                {integrityReport.movements?.warnings?.map((warn: any, i: number) => (
+                {integrityReport.movements?.warnings?.map((warn: IntegrityIssueRecord, i: number) => (
                   <div key={`mw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -753,7 +861,7 @@ export default function SettingsBackupAuditTab({
                     </div>
                   </div>
                 ))}
-                {integrityReport.referential?.errors?.map((err: any, i: number) => (
+                {integrityReport.referential?.errors?.map((err: IntegrityIssueRecord, i: number) => (
                   <div key={`re-${i}`} className="p-3 bg-rose-50/50 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -762,7 +870,7 @@ export default function SettingsBackupAuditTab({
                     </div>
                   </div>
                 ))}
-                {integrityReport.referential?.warnings?.map((warn: any, i: number) => (
+                {integrityReport.referential?.warnings?.map((warn: IntegrityIssueRecord, i: number) => (
                   <div key={`rw-${i}`} className="p-3 bg-amber-50/40 flex items-start gap-2.5">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
@@ -810,7 +918,7 @@ export default function SettingsBackupAuditTab({
                 <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200">
                   <div className="text-[11px] font-mono text-slate-500">Consommation Mémoire Heap</div>
                   <div className="text-lg font-black text-slate-900 mt-1 font-mono">
-                    {perfStats?.heapMB ? `${perfStats.heapMB.toFixed(1)} Mo` : 'Non disponible'}
+                    {perfStats?.heapMB ? `${Number(perfStats.heapMB).toFixed(1)} Mo` : 'Non disponible'}
                   </div>
                   <div className="text-[10px] text-slate-400 mt-1">Estimée via performance.memory</div>
                 </div>

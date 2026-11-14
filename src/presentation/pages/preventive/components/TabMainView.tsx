@@ -62,6 +62,8 @@ import { AuthorizationService } from '../../../../core/security/AuthorizationSer
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
+import { storageService } from '../../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../../infrastructure/persistence/storageKeys';
 
 export { buildConsumablePdrInventory };
 
@@ -196,9 +198,9 @@ export default function TabMainView({
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedMachine, setSelectedMachine] = useState(() => {
     try {
-      const target = localStorage.getItem('gmao_preventive_target_machine');
-      if (target && target.trim()) {
-        localStorage.removeItem('gmao_preventive_target_machine');
+      const target = storageService.getItem(STORAGE_KEYS.PREVENTIVE_TARGET_MACHINE);
+      if (typeof target === 'string' && target.trim()) {
+        storageService.removeItem(STORAGE_KEYS.PREVENTIVE_TARGET_MACHINE);
         return target.trim();
       }
     } catch {

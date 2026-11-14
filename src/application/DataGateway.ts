@@ -911,13 +911,9 @@ export const DataGateway = {
       };
     });
 
-    // 1. Set DEMO_MODE and START_MODE flags explicitly
+    // 1. Set DEMO_MODE and START_MODE flags explicitly via storageService SSOT
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, true);
     storageService.setItem(STORAGE_KEYS.START_MODE, 'demo');
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.DEMO_MODE, 'true');
-      localStorage.setItem(STORAGE_KEYS.START_MODE, 'demo');
-    }
 
     // 2. Write all seeds to canonical STORAGE_KEYS only (Groups -> Types -> Items -> Mouvements)
     this.saveMachines(seedMachines);
@@ -1087,12 +1083,6 @@ export const DataGateway = {
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
     storageService.setItem(STORAGE_KEYS.START_MODE, 'empty');
     storageService.removeItem(STORAGE_KEYS.FULL_STATE_SNAPSHOT);
-
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEYS.DEMO_MODE, 'false');
-      localStorage.setItem(STORAGE_KEYS.START_MODE, 'empty');
-      localStorage.removeItem(STORAGE_KEYS.FULL_STATE_SNAPSHOT);
-    }
 
     // Purge all legacy keys so Stage 2 of loadCollection can never resurrect old data
     this.purgeLegacyKeysFor(null);

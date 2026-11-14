@@ -1,10 +1,135 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type ChangeEvent, type RefObject } from 'react';
 import * as XLSX from 'xlsx';
 import { validateImportedData } from '../utils/validation';
 import { sanitizeObject } from '../utils/sanitize';
 import { storageService } from '../utils/storageService';
 import { Logger } from '../core/logger/LoggerService';
 import { excelEngineService } from '../services/excelEngineService';
+import type {
+  IBlueprint,
+  ICompFamily,
+  ICompGroup,
+  ICompTemplate,
+  IDiagnostic,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  IMouvement,
+  IOperation,
+  IPartDesignation,
+  IPartType,
+  IStockItem,
+  ITechnician,
+  IType,
+  IWarehouseItem,
+  IZone,
+} from '../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  MachineElement,
+  PreventiveTaskItem,
+  SortieExterneItem,
+  StateUpdater,
+} from '../types/store';
+
+export interface FileSystemWritableLike {
+  write: (data: ArrayBuffer | Uint8Array | Blob | string) => Promise<void>;
+  close: () => Promise<void>;
+}
+
+export interface FileSystemFileHandleLike {
+  getFile: () => Promise<File>;
+  createWritable: () => Promise<FileSystemWritableLike>;
+}
+
+export interface ExcelOperationsStoreState {
+  rawStock: IStockItem[];
+  setRawStock: (stock: StateUpdater<IStockItem[]>) => void;
+  mouvements: IMouvement[];
+  setMouvements: (mvts: StateUpdater<IMouvement[]>) => void;
+  machines: IMachine[];
+  setMachines: (machines: StateUpdater<IMachine[]>) => void;
+  warehouseItems: IWarehouseItem[];
+  setWarehouseItems: (items: StateUpdater<IWarehouseItem[]>) => void;
+  families: IMachineFamily[];
+  setFamilies: (families: StateUpdater<IMachineFamily[]>) => void;
+  templates: IMachineTemplate[];
+  setTemplates: (templates: StateUpdater<IMachineTemplate[]>) => void;
+  blueprints: IBlueprint[];
+  setBlueprints: (blueprints: StateUpdater<IBlueprint[]>) => void;
+  zones: IZone[];
+  setZones: (zones: StateUpdater<IZone[]>) => void;
+  technicians: ITechnician[];
+  setTechnicians: (techs: StateUpdater<ITechnician[]>) => void;
+  operations: IOperation[];
+  setOperations: (ops: StateUpdater<IOperation[]>) => void;
+  types: IType[];
+  compGroups: ICompGroup[];
+  setCompGroups?: (groups: StateUpdater<ICompGroup[]>) => void;
+  compFamilies: ICompFamily[];
+  setCompFamilies: (families: StateUpdater<ICompFamily[]>) => void;
+  compTemplates: ICompTemplate[];
+  setCompTemplates: (templates: StateUpdater<ICompTemplate[]>) => void;
+  partTypes: IPartType[];
+  setPartTypes: (types: StateUpdater<IPartType[]>) => void;
+  partDesignations: IPartDesignation[];
+  setPartDesignations: (designations: StateUpdater<IPartDesignation[]>) => void;
+  machineElementsLedger?: MachineElement[];
+  setMachineElementsLedger?: (ledger: StateUpdater<MachineElement[]>) => void;
+  sortiesExterne?: SortieExterneItem[];
+  setSortiesExterne?: (sorties: StateUpdater<SortieExterneItem[]>) => void;
+  preventiveTasks?: PreventiveTaskItem[];
+  setPreventiveTasks?: (tasks: StateUpdater<PreventiveTaskItem[]>) => void;
+  setCorrectiveInterventions?: (interventions: StateUpdater<CorrectiveInterventionItem[]>) => void;
+  demandes?: CorrectiveInterventionItem[];
+  bonsTravail?: CorrectiveInterventionItem[];
+}
+
+export interface UseAppExcelOperationsParams {
+  state: ExcelOperationsStoreState;
+  stockItems?: IStockItem[];
+  diagnostics?: IDiagnostic[];
+  showToast: (message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+}
+
+interface ImportedExcelPayload {
+  Stock_Actuel?: IStockItem[];
+  Mouvements?: IMouvement[];
+  Mouvement?: IMouvement[];
+  Machines_Registered?: IMachine[];
+  Machines?: IMachine[];
+  Warehouse_Items?: IWarehouseItem[];
+  Families?: IMachineFamily[];
+  Templates?: IMachineTemplate[];
+  Blueprints?: IBlueprint[];
+  Zones?: IZone[];
+  Technicians?: ITechnician[];
+  Operations?: IOperation[];
+  Comp_Groups?: ICompGroup[];
+  Comp_Families?: ICompFamily[];
+  Comp_Templates?: ICompTemplate[];
+  Part_Types?: IPartType[];
+  Part_Designations?: IPartDesignation[];
+  Machine_BOM_Ledger?: MachineElement[];
+  Elements_Machines?: MachineElement[];
+  BOM?: MachineElement[];
+  Sortie_Externe?: SortieExterneItem[];
+  Preventive_S1_S52?: PreventiveTaskItem[];
+  Bons_Travail?: CorrectiveInterventionItem[];
+  Demandes_Intervention?: CorrectiveInterventionItem[];
+  [key: string]: unknown;
+}
+
+function isFileAccessBlockedError(err: unknown): { aborted: boolean; crossOrigin: boolean } {
+  if (!(err instanceof Error)) return { aborted: false, crossOrigin: false };
+  const aborted = err.name === 'AbortError';
+  const crossOrigin =
+    err.name === 'SecurityError' ||
+    err.name === 'NotAllowedError' ||
+    Boolean(err.message && err.message.toLowerCase().includes('cross origin'));
+  return { aborted, crossOrigin };
+}
 
 /**
  * Hook to handle Excel Export, Import, Direct File System Linking and Save, with automatic versioned backups
@@ -15,7 +140,7 @@ export function useAppExcelOperations({
   diagnostics = [],
   showToast,
   fileInputRef,
-}: any) {
+}: UseAppExcelOperationsParams) {
   const {
     rawStock,
     setRawStock,
@@ -55,7 +180,7 @@ export function useAppExcelOperations({
     setCorrectiveInterventions,
   } = state;
 
-  const [linkedFileHandle, setLinkedFileHandle] = useState<any>(null);
+  const [linkedFileHandle, setLinkedFileHandle] = useState<FileSystemFileHandleLike | null>(null);
   const [linkedFileName, setLinkedFileName] = useState('');
   const [operationProgress, setOperationProgress] = useState({ active: false, percent: 0, status: '' });
 
@@ -113,13 +238,14 @@ export function useAppExcelOperations({
 
         storageService.setItem('gmao_backups_list', updatedList);
         return dateStr;
-      } catch (err: any) {
-      if (err.name === "AbortError") return;
-      if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
-        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
-        fileInputRef.current?.click();
-        return;
-      }
+      } catch (err: unknown) {
+        const { aborted, crossOrigin } = isFileAccessBlockedError(err);
+        if (aborted) return;
+        if (crossOrigin) {
+          showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", 'info');
+          fileInputRef.current?.click();
+          return;
+        }
         Logger.error('[ExcelOperations] Backup creation error:', err);
         return new Date().toLocaleString('fr-FR');
       }
@@ -148,12 +274,12 @@ export function useAppExcelOperations({
   const buildWorkbook = useCallback(() => {
     const wb = XLSX.utils.book_new();
 
-    const autoFit = (ws: any, rows: any[]) => {
+    const autoFit = (ws: XLSX.WorkSheet, rows: Array<Record<string, unknown>>) => {
       if (!rows || rows.length === 0) return;
       const keys = Object.keys(rows[0] || {});
       ws['!cols'] = keys.map((key) => {
         let maxLen = String(key).length;
-        rows.slice(0, 100).forEach((r: any) => {
+        rows.slice(0, 100).forEach((r) => {
           const val = r[key];
           if (val != null) {
             const len = String(val).length;
@@ -164,16 +290,16 @@ export function useAppExcelOperations({
       });
     };
 
-    const appendSheetWithAutofit = (name: string, data: any[]) => {
+    const appendSheetWithAutofit = (name: string, data: unknown[]) => {
       if (Array.isArray(data) && data.length > 0) {
         const ws = XLSX.utils.json_to_sheet(data);
-        autoFit(ws, data);
+        autoFit(ws, data as Array<Record<string, unknown>>);
         XLSX.utils.book_append_sheet(wb, ws, name);
       }
     };
 
     // 1. Stock_Actuel
-    const stockData = stockItems.map((s: any) => ({
+    const stockData = stockItems.map((s) => ({
       Ref: s.ref,
       Désignation: s.designation,
       ID_Type: s.id_type,
@@ -189,7 +315,7 @@ export function useAppExcelOperations({
     appendSheetWithAutofit('Stock_Actuel', stockData);
 
     // 2. Machines_Registered
-    const mchData = machines.map((m: any) => ({
+    const mchData = machines.map((m) => ({
       'Code Machine (Ref)': m.id_machine_registered,
       Désignation: m.designation,
       ID_Family: m.id_family,
@@ -201,7 +327,7 @@ export function useAppExcelOperations({
     appendSheetWithAutofit('Machines_Registered', mchData);
 
     // 3. Warehouse_Items (Entrepôt)
-    const warehouseData = warehouseItems.map((w: any) => ({
+    const warehouseData = warehouseItems.map((w) => ({
       'Code Entrepôt (Ref)': w.id_warehouse_item || w.id_machine_registered,
       Désignation: w.designation,
       Nature: w.nature || 'COMPOSANT',
@@ -384,7 +510,7 @@ export function useAppExcelOperations({
 
   // FILE IMPORT HANDLER WITH AUTOMATIC DATED BACKUP
   const handleImportFile = useCallback(
-    async (e) => {
+    async (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
 
@@ -413,18 +539,20 @@ export function useAppExcelOperations({
         showToast('Erreur de lecture du fichier sélectionné.', 'error');
       };
 
-      reader.onload = async (evt: any) => {
+      reader.onload = async (evt: ProgressEvent<FileReader>) => {
         setOperationProgress({ active: true, percent: 30, status: 'Traitement du fichier...' });
         try {
-          let importedData: Record<string, any> = {};
+          const resultPayload = evt.target?.result;
+          let importedData: ImportedExcelPayload = {};
           if (file.name.endsWith('.json')) {
-            importedData = JSON.parse(evt.target.result);
+            importedData = JSON.parse(typeof resultPayload === 'string' ? resultPayload : '{}') as ImportedExcelPayload;
           } else {
             try {
-              importedData = await excelEngineService.parseWorkbookFile(file);
+              importedData = (await excelEngineService.parseWorkbookFile(file)) as ImportedExcelPayload;
             } catch (engineErr) {
               Logger.warn('[ExcelOperations] ExcelJS parse error, falling back to XLSX:', engineErr);
-              const data = new Uint8Array(evt.target.result);
+              const buffer = resultPayload instanceof ArrayBuffer ? resultPayload : new ArrayBuffer(0);
+              const data = new Uint8Array(buffer);
               const workbook = XLSX.read(data, { type: 'array' });
 
               if (workbook.SheetNames.includes('Stock_Actuel')) {
@@ -527,7 +655,7 @@ export function useAppExcelOperations({
           if (importedData.Preventive_S1_S52 && importedData.Preventive_S1_S52.length > 0 && typeof setPreventiveTasks === 'function') {
             setPreventiveTasks(sanitizeObject(importedData.Preventive_S1_S52));
           }
-          if ((importedData.Bons_Travail?.length > 0 || importedData.Demandes_Intervention?.length > 0) && typeof setCorrectiveInterventions === 'function') {
+          if ((importedData.Bons_Travail && importedData.Bons_Travail.length > 0 || importedData.Demandes_Intervention && importedData.Demandes_Intervention.length > 0) && typeof setCorrectiveInterventions === 'function') {
             const mergedCorrectif = [
               ...(importedData.Demandes_Intervention || []),
               ...(importedData.Bons_Travail || []),
@@ -539,10 +667,11 @@ export function useAppExcelOperations({
 
           showToast('Import réussi مع استخراج ذكي! (Backup بتاريخ ' + backupDate + ')', 'success');
           Logger.info('[ExcelOperations] File imported successfully with smart parser', { file: file.name });
-        } catch (err: any) {
-          if (err.name === "AbortError") return;
-          if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
-            showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
+        } catch (err: unknown) {
+          const { aborted, crossOrigin } = isFileAccessBlockedError(err);
+          if (aborted) return;
+          if (crossOrigin) {
+            showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", 'info');
             fileInputRef.current?.click();
             return;
           }
@@ -592,7 +721,17 @@ export function useAppExcelOperations({
     }
 
     try {
-      const [handle] = await (window as any).showOpenFilePicker({
+      const winWithPicker = window as Window & {
+        showOpenFilePicker?: (opts: {
+          types: Array<{ description: string; accept: Record<string, string[]> }>;
+          multiple: boolean;
+        }) => Promise<FileSystemFileHandleLike[]>;
+      };
+      if (!winWithPicker.showOpenFilePicker) {
+        fileInputRef.current?.click();
+        return;
+      }
+      const [handle] = await winWithPicker.showOpenFilePicker({
         types: [
           {
             description: 'Fichiers Excel GMAO (.xlsx)',
@@ -613,7 +752,7 @@ export function useAppExcelOperations({
       const arrayBuffer = await file.arrayBuffer();
       const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
 
-      const importedData: Record<string, any> = {};
+      const importedData: ImportedExcelPayload = {};
       if (workbook.SheetNames.includes('Stock_Actuel')) {
         importedData.Stock_Actuel = XLSX.utils.sheet_to_json(workbook.Sheets['Stock_Actuel']);
       }
@@ -648,17 +787,16 @@ export function useAppExcelOperations({
         `🔗 Fichier "${file.name}" lié en direct ! (Backup sauvegardé : ${backupDate})`,
         'success'
       );
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
-        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
+    } catch (err: unknown) {
+      const { aborted, crossOrigin } = isFileAccessBlockedError(err);
+      if (aborted) return;
+      if (crossOrigin) {
+        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", 'info');
         fileInputRef.current?.click();
         return;
       }
-      if (err.name !== 'AbortError') {
-        Logger.error('[ExcelOperations] Direct link error:', err);
-        showToast("Erreur lors de l'accès au fichier sélectionné.", 'error');
-      }
+      Logger.error('[ExcelOperations] Direct link error:', err);
+      showToast("Erreur lors de l'accès au fichier sélectionné.", 'error');
     }
   }, [createAutomaticBackup, fileInputRef, setMachines, setMouvements, setRawStock, showToast]);
 
@@ -670,14 +808,14 @@ export function useAppExcelOperations({
     }
 
     try {
-      let buffer;
+      let buffer: ArrayBuffer | Uint8Array;
       try {
         const workbook = await excelEngineService.buildGmaoWorkbook(getFullDataset());
-        buffer = await workbook.xlsx.writeBuffer();
+        buffer = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
       } catch (eEngineErr) {
         Logger.warn('[ExcelOperations] ExcelJS save fallback to XLSX:', eEngineErr);
         const wb = buildWorkbook();
-        buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' }) as Uint8Array;
       }
 
       const writable = await linkedFileHandle.createWritable();
@@ -685,10 +823,11 @@ export function useAppExcelOperations({
       await writable.close();
 
       showToast(`💾 Écriture directe avec formules vivantes réussie dans "${linkedFileName}" !`, 'success');
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-      if (err.name === "SecurityError" || err.name === "NotAllowedError" || (err.message && err.message.toLowerCase().includes("cross origin"))) {
-        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", "info");
+    } catch (err: unknown) {
+      const { aborted, crossOrigin } = isFileAccessBlockedError(err);
+      if (aborted) return;
+      if (crossOrigin) {
+        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", 'info');
         fileInputRef.current?.click();
         return;
       }
@@ -696,7 +835,7 @@ export function useAppExcelOperations({
       showToast('Écriture directe impossible. Exportation standard...', 'info');
       handleExportExcel();
     }
-  }, [buildWorkbook, getFullDataset, handleExportExcel, linkedFileHandle, linkedFileName, showToast]);
+  }, [buildWorkbook, fileInputRef, getFullDataset, handleExportExcel, linkedFileHandle, linkedFileName, showToast]);
 
   // BLANK MASTER TEMPLATE EXPORT HANDLER
   const handleDownloadBlankTemplate = useCallback(async () => {
@@ -715,7 +854,11 @@ export function useAppExcelOperations({
   const exportMasterTopologyWorkbook = useCallback(() => {
     try {
       const wb = XLSX.utils.book_new();
-      const usersData = (technicians || []).map((t: any) => ({ ID: t.id_technicien || t.id, Nom: t.nom || t.name, Role: t.role || 'Technicien' }));
+      const usersData = (technicians || []).map((t) => ({
+        ID: t.id_technician || t.id,
+        Nom: t.nom || t.prenom || '',
+        Role: t.role || 'Technicien',
+      }));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(usersData), 'Utilisateurs');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zones || []), 'Zones');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(families || []), 'Family_Machines');

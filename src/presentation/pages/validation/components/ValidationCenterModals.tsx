@@ -1,27 +1,59 @@
 import React from 'react';
 import { X, AlertTriangle, Trash2, Calculator } from 'lucide-react';
 import { INTERVENTION_NATURE_OPTIONS } from '../../../components/common/ValidationStatusBadge';
+import type {
+  CandidateStoreMovementMatch,
+  ClaimReconciliationResult,
+  ReconciliationAlert,
+} from '../../../../core/security/validationReconciliation';
+import type { ISortieDemand, ISortieDemandItem } from '../../../../types/domain';
+import type {
+  PreventiveExecutionRecord,
+  PreventiveExecutionSpareItem,
+} from '../../../../types/preventive';
+import type {
+  CorrectiveInterventionItem,
+  CorrectivePdrConsumedItem,
+} from '../../../../types/store';
+
+export interface ValidationBtPieceDraft extends Partial<CorrectivePdrConsumedItem> {
+  ref: string;
+  designation?: string;
+  quantite?: number;
+  qty?: number;
+}
+
+export interface ValidationExecSpareDraft extends PreventiveExecutionSpareItem {
+  reference?: string;
+  quantite?: number;
+  unite?: string;
+  prix_unitaire?: number;
+}
+
+export interface ValidationDemandItemDraft extends ISortieDemandItem {
+  qty?: number;
+}
 
 export interface ValidationCenterModalsProps {
-  reviewBt: any;
-  setReviewBt: (bt: any) => void;
-  activeBtReconciliation: any;
+  reviewBt: CorrectiveInterventionItem | null;
+  setReviewBt: (bt: CorrectiveInterventionItem | null) => void;
+  activeBtReconciliation: ClaimReconciliationResult | null;
   btNature: string;
   setBtNature: (v: string) => void;
   btActionRealisee: string;
   setBtActionRealisee: (v: string) => void;
-  btPieces: any[];
-  setBtPieces: React.Dispatch<React.SetStateAction<any[]>>;
+  btPieces: ValidationBtPieceDraft[];
+  setBtPieces: React.Dispatch<React.SetStateAction<ValidationBtPieceDraft[]>>;
   btSkipStockDeduction: boolean;
   setBtSkipStockDeduction: (v: boolean) => void;
   btNote: string;
   setBtNote: (v: string) => void;
   handleConfirmBtDecision: (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => void;
-  reviewExec: any;
-  setReviewExec: (exec: any) => void;
-  activeExecReconciliation: any;
-  execSpares: any[];
-  setReviewExecSpares: React.Dispatch<React.SetStateAction<any[]>>;
+  reviewExec: PreventiveExecutionRecord | null;
+  setReviewExec: (exec: PreventiveExecutionRecord | null) => void;
+  activeExecReconciliation: ClaimReconciliationResult | null;
+  execSpares: ValidationExecSpareDraft[];
+  setReviewExecSpares: React.Dispatch<React.SetStateAction<ValidationExecSpareDraft[]>>;
   execSkipStockDeduction: boolean;
   setExecSkipStockDeduction: (v: boolean) => void;
   execCreateFollowUpDi: boolean;
@@ -31,15 +63,15 @@ export interface ValidationCenterModalsProps {
   execNote: string;
   setExecNote: (v: string) => void;
   handleConfirmExecDecision: (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => void;
-  reviewDemand: any;
-  setReviewDemand: (d: any) => void;
-  activeDemandReconciliation: any;
+  reviewDemand: ISortieDemand | null;
+  setReviewDemand: (d: ISortieDemand | null) => void;
+  activeDemandReconciliation: ClaimReconciliationResult | null;
   demandCodeBonMagasin: string;
   setDemandCodeBonMagasin: (v: string) => void;
   demandMergeMovementId: string;
   setDemandMergeMovementId: (v: string) => void;
-  demandItems: any[];
-  setDemandItems: React.Dispatch<React.SetStateAction<any[]>>;
+  demandItems: ValidationDemandItemDraft[];
+  setDemandItems: React.Dispatch<React.SetStateAction<ValidationDemandItemDraft[]>>;
   demandNote: string;
   setDemandNote: (v: string) => void;
   handleConfirmDemandDecision: (decision: 'APPROVED' | 'NEEDS_CLARIFICATION' | 'REJECTED') => void;
@@ -127,7 +159,7 @@ export default function ValidationCenterModals({
 
             {activeBtReconciliation && activeBtReconciliation.alerts.length > 0 && (
               <div className="space-y-1.5">
-                {activeBtReconciliation.alerts.map((alert: any, idx: number) => (
+                {activeBtReconciliation.alerts.map((alert: ReconciliationAlert, idx: number) => (
                   <div
                     key={idx}
                     className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
@@ -317,7 +349,7 @@ export default function ValidationCenterModals({
 
             {activeExecReconciliation && activeExecReconciliation.alerts.length > 0 && (
               <div className="space-y-1.5">
-                {activeExecReconciliation.alerts.map((alert: any, idx: number) => (
+                {activeExecReconciliation.alerts.map((alert: ReconciliationAlert, idx: number) => (
                   <div
                     key={idx}
                     className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
@@ -519,7 +551,7 @@ export default function ValidationCenterModals({
 
             {activeDemandReconciliation && activeDemandReconciliation.alerts.length > 0 && (
               <div className="space-y-1.5">
-                {activeDemandReconciliation.alerts.map((alert: any, idx: number) => (
+                {activeDemandReconciliation.alerts.map((alert: ReconciliationAlert, idx: number) => (
                   <div
                     key={idx}
                     className={`p-3 rounded-xl border text-xs flex items-start gap-2 ${
@@ -563,7 +595,7 @@ export default function ValidationCenterModals({
                       className="w-full rounded-xl border border-amber-300 px-3 py-2 text-xs font-mono bg-white"
                     >
                       <option value="">— Créer un nouveau mouvement de sortie —</option>
-                      {activeDemandReconciliation.candidateStoreMovements.map((cand: any) => (
+                      {activeDemandReconciliation.candidateStoreMovements.map((cand: CandidateStoreMovementMatch) => (
                         <option key={cand.movementId} value={cand.movementId}>
                           Fusionner avec {cand.code_bon} ({cand.ref} ×{cand.quantite} le {cand.date})
                         </option>

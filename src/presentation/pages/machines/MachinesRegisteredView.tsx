@@ -35,6 +35,8 @@ import { useGmaoStore } from '../../../store/useGmaoStore';
 import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
 import { usePermission } from '../../components/common/PermissionGate';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
 // Helper to retrieve machine serial number with smart fallback
 export const getMachineSerialNumber = (m) => {
@@ -206,7 +208,7 @@ export default function MachinesRegisteredView({
   const navigateToEquipmentForMachine = (machineId?: string) => {
     try {
       if (machineId) {
-        localStorage.setItem('gmao_equipment_focus_id', String(machineId));
+        storageService.setItem(STORAGE_KEYS.EQUIPMENT_FOCUS_ID, String(machineId));
       }
     } catch {
       // Ignore storage access errors

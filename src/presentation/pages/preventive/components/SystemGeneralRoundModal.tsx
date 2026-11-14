@@ -16,6 +16,14 @@ import {
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { buildConsumablePdrInventory } from '../../../../core/domain';
+import type {
+  IGeneralSystemType,
+  IMachine,
+  IStockItem,
+  ITechnician,
+  IZone,
+} from '../../../../types/domain';
+import type { PreventiveTaskItem } from '../../../../types/store';
 
 export type RoundPointOutcome = 'CONFORME' | 'ANOMALIE' | 'PDR';
 
@@ -29,19 +37,77 @@ export interface RoundPointState {
   numBon: string;
 }
 
+export interface RoundUsedPdrLine {
+  id_article: string;
+  reference: string;
+  designation: string;
+  quantite: number;
+  unite: string;
+  prix_unitaire: number;
+}
+
+export interface RoundTaskValidationPayload {
+  date_realisation: string;
+  technicien: string;
+  duree_reelle: string;
+  taux_horaire: number;
+  observations: string;
+  usedPDR: RoundUsedPdrLine[];
+  num_bon_saisi_par_tech: string;
+  mode_calcul_recurrence: string;
+}
+
+export interface RoundTaskCorrectivePayload {
+  description: string;
+  priorite: string;
+  demandeur: string;
+}
+
+export type RoundTaskEntry = PreventiveTaskItem & {
+  id: string;
+  id_machine?: string;
+  nom_machine?: string;
+  composant?: string;
+  consigne?: string;
+  type_intervention?: string;
+  etat?: string;
+  validation_status?: string;
+};
+
+export type RoundZoneEntry = IZone & {
+  status?: string;
+};
+
+export interface RoundStockEntry {
+  id?: string | number;
+  id_article?: string;
+  ref: string;
+  reference?: string;
+  designation?: string;
+  nom?: string;
+  stockActuel?: number;
+  stock_actuel?: number;
+  stockInitial?: number;
+  seuil?: number;
+  unite?: string;
+  prix_unitaire?: number;
+  source?: string;
+  emplacement?: string;
+}
+
 interface SystemGeneralRoundModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tasks: any[];
-  machines: any[];
-  zones: any[];
-  technicians: any[];
-  stockItems: any[];
+  tasks: RoundTaskEntry[];
+  machines: IMachine[];
+  zones: RoundZoneEntry[];
+  technicians: Array<ITechnician | string>;
+  stockItems: RoundStockEntry[];
   isTechUser?: boolean;
   defaultTechName?: string;
-  onMarkTaskDone: (taskId: string, validationData: any) => void;
-  onCreateCorrective?: (task: any, btData: any) => void;
-  showToast?: (msg: string, type?: string) => void;
+  onMarkTaskDone?: (taskId: string, validationData: RoundTaskValidationPayload) => void;
+  onCreateCorrective?: (task: RoundTaskEntry, btData: RoundTaskCorrectivePayload) => void;
+  showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info' | string) => void;
 }
 
 export default function SystemGeneralRoundModal({
@@ -76,18 +142,23 @@ export default function SystemGeneralRoundModal({
   }, [defaultTechName, roundTech]);
 
   const activeZones = useMemo(
-    () => (zones || []).filter((z: any) => String(z?.status || 'ACTIVE').toUpperCase() !== 'ARCHIVEE'),
+    () =>
+      (zones || []).filter(
+        (z: RoundZoneEntry) => String(z?.status || 'ACTIVE').toUpperCase() !== 'ARCHIVEE'
+      ),
     [zones]
   );
 
   const activeTechnicians = useMemo(
     () =>
-      (technicians || []).filter(
-        (t: any) =>
-          t?.is_active !== false &&
-          t?.actif !== false &&
-          String(t?.statut || '').toUpperCase() !== 'ARCHIVE'
-      ),
+      (technicians || []).filter((t): t is ITechnician => {
+        if (!t || typeof t !== 'object') return false;
+        return (
+          t.is_active !== false &&
+          t.actif !== false &&
+          String(t.statut || '').toUpperCase() !== 'ARCHIVE'
+        );
+      }),
     [technicians]
   );
 
@@ -98,7 +169,7 @@ export default function SystemGeneralRoundModal({
 
   // Build machine lookup map
   const machineMap = useMemo(() => {
-    const map = new Map<string, any>();
+    const map = new Map<string, IMachine>();
     for (const m of machines || []) {
       const id = String(m?.id_machine_registered || m?.id || m?.code || '').trim();
       if (id) {
@@ -112,9 +183,8 @@ export default function SystemGeneralRoundModal({
   // Filter tasks belonging to SYSTEM_GENERAL machines
   const sysGenTasks = useMemo(() => {
     return (tasks || []).filter((t) => {
-      const m =
-        machineMap.get(t.id_machine) ||
-        machineMap.get(String(t.id_machine || '').trim().toUpperCase());
+      const mId = String(t.id_machine || '');
+      const m = machineMap.get(mId) || machineMap.get(mId.trim().toUpperCase());
       return getMachineAssetClass(m) === 'SYSTEM_GENERAL';
     });
   }, [tasks, machineMap]);
@@ -223,18 +293,18 @@ export default function SystemGeneralRoundModal({
       const st = pointStates[task.id];
       if (!st) continue;
 
-      let usedPDR: any[] = [];
+      let usedPDR: RoundUsedPdrLine[] = [];
       if (st.outcome === 'PDR' && st.pdrRef) {
         const matchedStock = consumableStockItems.find(
-          (s: any) => String(s.ref || '').toLowerCase() === st.pdrRef.toLowerCase()
+          (s: RoundStockEntry) => String(s.ref || '').toLowerCase() === st.pdrRef.toLowerCase()
         );
         usedPDR = [
           {
-            id_article: matchedStock?.id_article || `PDR-${st.pdrRef}`,
+            id_article: String(matchedStock?.id_article || `PDR-${st.pdrRef}`),
             reference: matchedStock?.ref || st.pdrRef,
             designation: matchedStock?.designation || st.pdrRef,
             quantite: Math.max(1, Number(st.pdrQty || 1)),
-            unite: matchedStock?.unite || 'Pièce',
+            unite: String(matchedStock?.unite || 'Pièce'),
             prix_unitaire: Number(matchedStock?.prix_unitaire || 0),
           },
         ];
@@ -249,7 +319,7 @@ export default function SystemGeneralRoundModal({
           ? `[RONDE SYSTÈME GÉNÉRAL - PDR UTILISÉE] Contrôle effectué avec remplacement PDR (${st.pdrRef} x${st.pdrQty}).`
           : `[RONDE SYSTÈME GÉNÉRAL - CONFORME] Inspection périodique conforme (${task.composant || task.id_machine}).`;
 
-      onMarkTaskDone(task.id, {
+      onMarkTaskDone?.(String(task.id), {
         date_realisation: roundDate,
         technicien: roundTech || task.responsable || 'Technicien',
         duree_reelle: durationPerPoint || '10 min',
@@ -331,7 +401,7 @@ export default function SystemGeneralRoundModal({
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:border-indigo-500 outline-none"
               >
                 <option value="ALL">Tous les Systèmes ({sysGenTasks.length})</option>
-                {generalSystemTypes.map((st: any) => (
+                {generalSystemTypes.map((st: IGeneralSystemType) => (
                   <option key={st.id} value={st.id}>
                     {st.code ? `${st.code} • ` : ''}
                     {st.name}
@@ -352,8 +422,8 @@ export default function SystemGeneralRoundModal({
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:border-indigo-500 outline-none"
               >
                 <option value="ALL">Toutes les Zones</option>
-                {activeZones.map((z: any) => {
-                  const zCode = z.code_zone || z.code || z.id_zone;
+                {activeZones.map((z: RoundZoneEntry) => {
+                  const zCode = z.code_zone || z.code || z.id_zone || '';
                   return (
                     <option key={zCode} value={zCode}>
                       {zCode} • {z.libelle}
@@ -379,7 +449,7 @@ export default function SystemGeneralRoundModal({
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 disabled:bg-slate-100"
               />
               <datalist id="round-tech-list">
-                {activeTechnicians.map((t: any) => (
+                {activeTechnicians.map((t: ITechnician) => (
                   <option key={t.id_technician || t.nom} value={t.nom} />
                 ))}
               </datalist>
@@ -469,11 +539,10 @@ export default function SystemGeneralRoundModal({
               </div>
             ) : (
               filteredRoundTasks.map((task, idx) => {
-                const m =
-                  machineMap.get(task.id_machine) ||
-                  machineMap.get(String(task.id_machine || '').trim().toUpperCase());
+                const mId = String(task.id_machine || '');
+                const m = machineMap.get(mId) || machineMap.get(mId.trim().toUpperCase());
                 const sysTypeObj = generalSystemTypes.find(
-                  (st: any) => st.id === m?.id_general_system_type
+                  (st: IGeneralSystemType) => st.id === m?.id_general_system_type
                 );
                 const st: RoundPointState = pointStates[task.id] || {
                   selected: true,
@@ -618,7 +687,7 @@ export default function SystemGeneralRoundModal({
                             className="w-full h-8 px-2.5 rounded-xl border border-amber-300 bg-white text-xs font-mono font-bold text-slate-800"
                           >
                             <option value="">— Choisir Pièce PDR (Stock) —</option>
-                            {consumableStockItems.map((item: any) => (
+                            {consumableStockItems.map((item: RoundStockEntry) => (
                               <option key={item.ref} value={item.ref}>
                                 {item.ref} — {item.designation} (Stock: {item.stockActuel})
                               </option>

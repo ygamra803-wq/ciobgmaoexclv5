@@ -197,6 +197,7 @@ export interface SettingsViewProps {
   linkedFileName?: string | null;
   onDirectLink?: () => void;
   initialTab?: string;
+  onNavigateToTab?: (tab: string) => void;
   [key: string]: unknown;
 }
 
@@ -250,6 +251,7 @@ export default function SettingsView({
   linkedFileName,
   onDirectLink,
   initialTab,
+  onNavigateToTab,
 }: SettingsViewProps) {
   const { language } = useTranslation();
   const langKey = (language === 'ar' || language === 'en' ? language : 'fr') as 'fr' | 'ar' | 'en';
@@ -276,18 +278,18 @@ export default function SettingsView({
   }[langKey];
 
   const [activeTab, setActiveTab] = useState(() => {
-    const pendingTarget = localStorage.getItem('gmao_settings_target_tab');
-    if (pendingTarget) {
-      localStorage.removeItem('gmao_settings_target_tab');
+    const pendingTarget = storageService.getItem(STORAGE_KEYS.SETTINGS_TARGET_TAB);
+    if (typeof pendingTarget === 'string' && pendingTarget.trim()) {
+      storageService.removeItem(STORAGE_KEYS.SETTINGS_TARGET_TAB);
       return pendingTarget;
     }
     return initialTab || 'overview';
   });
 
   useEffect(() => {
-    const pendingTarget = localStorage.getItem('gmao_settings_target_tab');
-    if (pendingTarget) {
-      localStorage.removeItem('gmao_settings_target_tab');
+    const pendingTarget = storageService.getItem(STORAGE_KEYS.SETTINGS_TARGET_TAB);
+    if (typeof pendingTarget === 'string' && pendingTarget.trim()) {
+      storageService.removeItem(STORAGE_KEYS.SETTINGS_TARGET_TAB);
       setActiveTab(pendingTarget);
     } else if (initialTab) {
       setActiveTab(initialTab);
@@ -306,7 +308,7 @@ export default function SettingsView({
   }, [rawStock, mouvements, machines, families, templates, zones, technicians, operations, types]);
 
   const [allocatedCacheCeilingMB, setAllocatedCacheCeilingMB] = useState(() => {
-    const saved = localStorage.getItem('gmao_cache_ceiling_mb');
+    const saved = storageService.getItem(STORAGE_KEYS.CACHE_CEILING_MB);
     return saved ? Number(saved) : 1024;
   });
 
@@ -335,7 +337,7 @@ export default function SettingsView({
   const handleCeilingChange = (newCeilingMB: number | string) => {
     const val = Number(newCeilingMB) || 1024;
     setAllocatedCacheCeilingMB(val);
-    localStorage.setItem('gmao_cache_ceiling_mb', String(val));
+    storageService.setItem(STORAGE_KEYS.CACHE_CEILING_MB, val);
     indexedDBService.requestPersistentStorage();
     showToast?.(
       `Capacité Cache Navigateur (IndexedDB L2) configurée sur ${val >= 1024 ? `${val / 1024} GB` : `${val} MB`}`,
@@ -356,15 +358,16 @@ export default function SettingsView({
 
   // Shared working directory path
   const [sharedFolderPath, setSharedFolderPath] = useState(() => {
-    return localStorage.getItem('gmao_shared_folder_path') || 'Z:\\Partage\\CIOB_GMAO';
+    return (storageService.getItem(STORAGE_KEYS.SHARED_FOLDER_PATH) as string) || 'Z:\\Partage\\CIOB_GMAO';
   });
 
   const [autoWriteExcel, setAutoWriteExcel] = useState(() => {
-    return localStorage.getItem('gmao_auto_write_excel') !== 'false';
+    const raw = storageService.getItem(STORAGE_KEYS.AUTO_WRITE_EXCEL);
+    return raw !== false && raw !== 'false';
   });
 
   const [pollingInterval, setPollingInterval] = useState(() => {
-    return localStorage.getItem('gmao_polling_interval') || '10s';
+    return (storageService.getItem(STORAGE_KEYS.POLLING_INTERVAL) as string) || '10s';
   });
 
   const [isDemoMode, setIsDemoMode] = useState(() => {
@@ -465,7 +468,8 @@ export default function SettingsView({
 
   const [tempRole, setTempRole] = useState(() => {
     return (
-      localStorage.getItem('gmao_admin_role') || 'Gestionnaire Principal du Stock & Mouvements'
+      (storageService.getItem(STORAGE_KEYS.ADMIN_ROLE) as string) ||
+      'Gestionnaire Principal du Stock & Mouvements'
     );
   });
 
@@ -1886,7 +1890,9 @@ export default function SettingsView({
             updateUserPassword={updateUserPassword}
             switchSessionToUser={switchSessionToUser}
             technicians={technicians}
-            onNavigateToUsers={() => useGmaoStore.getState().setCurrentTab('utilisateurs')}
+            onNavigateToUsers={
+              onNavigateToTab ? () => onNavigateToTab('utilisateurs') : undefined
+            }
           />
         )}
 

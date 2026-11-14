@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { storageService } from '../utils/storageService';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import fr from './translations/fr.json';
 import ar from './translations/ar.json';
 import en from './translations/en.json';
@@ -53,7 +55,8 @@ const I18nContext = createContext<I18nContextType>({
 export function I18nProvider({ children }) {
   const [language, setLanguageState] = useState(() => {
     try {
-      return localStorage.getItem('gmao_language') || 'fr';
+      const saved = storageService.getItem(STORAGE_KEYS.LANGUAGE, 'fr');
+      return typeof saved === 'string' && saved in dictionaries ? saved : 'fr';
     } catch {
       return 'fr';
     }
@@ -65,7 +68,7 @@ export function I18nProvider({ children }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem('gmao_language', language);
+      storageService.setItem(STORAGE_KEYS.LANGUAGE, language);
     } catch {
       /* ignore */
     }

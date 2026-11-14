@@ -10,26 +10,62 @@ import {
   X,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import type { IMachine, ITechnician } from '../../../../types/domain';
+import type { IMachine, ITechnician, IZone } from '../../../../types/domain';
 import type { MachineElement } from '../../../../types/store';
+import type { BlueprintLedgerElement } from '../../../../core/domain/Blueprint';
+
+export interface NexusElementFormData {
+  element_type: string;
+  ref_element: string;
+  designation: string;
+  qte_montee: number;
+  unite: string;
+  criticalite: string;
+  duree_vie_estimee_heures: number;
+  heures_actuelles: number;
+  date_installation: string;
+  emplacement_machine: string;
+  parent_component_key: string;
+  technicien: string;
+  statut: string;
+  remarques: string;
+}
+
+export interface NexusBlueprintConformity {
+  blueprintId: string;
+  totalTheoretical: number;
+  mountedCount: number;
+  missingCount: number;
+  conformityRate: number;
+  missingEntries: BlueprintLedgerElement[];
+  matchedEntries: BlueprintLedgerElement[];
+  extraEntries: BlueprintLedgerElement[];
+}
+
+export interface NexusPdrStockStatus {
+  isPdr: boolean;
+  available: number | null;
+  status: string;
+  label: string;
+}
 
 export interface NexusModalsProps {
   isGapModalOpen: boolean;
   setIsGapModalOpen: (v: boolean) => void;
-  blueprintConformity: any;
+  blueprintConformity: NexusBlueprintConformity | null;
   activeMachine: IMachine | null;
   canManageNexus: boolean;
   handleInitializeFromBlueprint: () => void;
-  getPdrLiveStockStatus: (item: any) => { isPdr: boolean; available: number | null; status: string; label: string };
-  handleMountSingleMissingEntry: (entry: any) => void;
+  getPdrLiveStockStatus: (item: BlueprintLedgerElement) => NexusPdrStockStatus;
+  handleMountSingleMissingEntry: (entry: BlueprintLedgerElement) => void;
   isAddModalOpen: boolean;
   setIsAddModalOpen: (v: boolean) => void;
-  editingElement: any;
-  formData: any;
-  setFormData: (val: any) => void;
+  editingElement: BlueprintLedgerElement | MachineElement | null;
+  formData: NexusElementFormData;
+  setFormData: React.Dispatch<React.SetStateAction<NexusElementFormData>>;
   handleSaveElement: (e: React.FormEvent) => void;
   referenceOptions: Array<{ ref: string; designation: string; stock: number }>;
-  machineOrganes: any[];
+  machineOrganes: BlueprintLedgerElement[];
   defaultMachineTechnician: string;
   activeTechnicians: ITechnician[];
 }
@@ -132,7 +168,7 @@ export function NexusModals({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-rose-100">
-                        {blueprintConformity.missingEntries.map((entry: any) => {
+                        {blueprintConformity.missingEntries.map((entry: BlueprintLedgerElement) => {
                           const st = getPdrLiveStockStatus(entry);
                           return (
                             <tr key={entry.ref_element} className="hover:bg-rose-50/30">
@@ -183,7 +219,7 @@ export function NexusModals({
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {blueprintConformity.matchedEntries.map((el: any) => (
+                    {blueprintConformity.matchedEntries.map((el: BlueprintLedgerElement) => (
                       <span
                         key={el.id}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-[11px] font-semibold"
@@ -213,7 +249,7 @@ export function NexusModals({
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {blueprintConformity.extraEntries.map((el: any) => (
+                    {blueprintConformity.extraEntries.map((el: BlueprintLedgerElement) => (
                       <span
                         key={el.id}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 font-mono text-[11px] font-semibold"
@@ -458,12 +494,12 @@ export function NexusModals({
                       {defaultMachineTechnician} (Référent Machine)
                     </option>
                     {activeTechnicians
-                      .filter((t) => (t.nom || t.name) !== defaultMachineTechnician)
+                      .filter((t) => String(t.nom || t.name || '') !== defaultMachineTechnician)
                       .map((t) => {
-                        const tName = t.nom || t.name;
+                        const tName = String(t.nom || t.name || '');
                         return (
-                          <option key={t.id_technician || t.id || tName} value={tName}>
-                            {tName} ({t.id_zone || t.zone || 'Usine'})
+                          <option key={String(t.id_technician || t.id || tName)} value={tName}>
+                            {tName} ({String(t.id_zone || t.zone || 'Usine')})
                           </option>
                         );
                       })}
@@ -597,16 +633,16 @@ export function exportNexusBomExcel({
   showToast,
 }: {
   activeMachine: IMachine | null;
-  activeZone: any;
-  currentMachineElements: any[];
+  activeZone: IZone | null | undefined;
+  currentMachineElements: BlueprintLedgerElement[];
   machineElementsLedger: MachineElement[];
-  computeEffectiveWearHours: (item: any) => { hours: number; isEstimated: boolean };
-  getPdrLiveStockStatus: (item: any) => { isPdr: boolean; available: number | null; status: string; label: string };
-  showToast?: (message: string, type?: string) => void;
+  computeEffectiveWearHours: (item: BlueprintLedgerElement) => { hours: number; isEstimated: boolean };
+  getPdrLiveStockStatus: (item: BlueprintLedgerElement) => NexusPdrStockStatus;
+  showToast?: (message: string, type?: 'success' | 'error' | 'warning' | 'info' | string) => void;
 }) {
   try {
     const wb = XLSX.utils.book_new();
-    const applyCols = (ws: XLSX.WorkSheet, rows: any[]) => {
+    const applyCols = (ws: XLSX.WorkSheet, rows: Record<string, unknown>[]) => {
       if (!rows || rows.length === 0) return;
       const headers = Object.keys(rows[0]);
       ws['!cols'] = headers.map((h) => {

@@ -29,6 +29,7 @@ import { notificationService } from '../../../services/NotificationService';
 import { getParentModuleForTab } from './navConfig';
 import { storageService } from '../../../utils/storageService';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { SecurityService } from '../../../core/security/SecurityService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
 import ShellModeSwitcher from '../common/ShellModeSwitcher';
 import { useTranslation } from '../../../i18n/I18nContext';
@@ -140,22 +141,17 @@ export default function Header({
   // DEPTH-DEFENSE-LIGHT: 1-Click Application Screen Lock (preserves all data & current tab, requires password to resume)
   const handleLockScreen = () => {
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        if (currentUser) {
-          sessionStorage.setItem(
-            'gmao_screen_locked_account',
-            JSON.stringify({
-              username: currentUser.username || currentUser.code || 'admin',
-              role: currentUser.role || 'ADMIN',
-              name: currentUser.name || 'Administrateur',
-            })
-          );
-        }
-        sessionStorage.setItem(
-          'gmao_session_idle_expired',
-          'Écran verrouillé — Veuillez saisir votre mot de passe pour reprendre votre session.'
-        );
+      if (currentUser) {
+        SecurityService.saveSessionSecure('gmao_screen_locked_account', {
+          username: currentUser.username || currentUser.code || 'admin',
+          role: currentUser.role || 'ADMIN',
+          name: currentUser.name || 'Administrateur',
+        });
       }
+      SecurityService.saveSessionSecure(
+        'gmao_session_idle_expired',
+        'Écran verrouillé — Veuillez saisir votre mot de passe pour reprendre votre session.'
+      );
     } catch {
       // ignore storage errors
     }

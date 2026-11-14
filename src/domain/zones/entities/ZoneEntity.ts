@@ -6,6 +6,7 @@ export class ZoneEntity implements IZone {
   libelle: string;
   description?: string;
   philosophie?: string;
+  [key: string]: unknown;
 
   constructor({
     code = '',

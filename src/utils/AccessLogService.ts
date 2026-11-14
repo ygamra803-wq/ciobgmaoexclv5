@@ -5,6 +5,7 @@
 import { storageService } from './storageService';
 import { safeId } from './safeId';
 import { Logger } from '../core/logger/LoggerService';
+import { SecurityService } from '../core/security/SecurityService';
 
 const LOGS_STORAGE_KEY = 'gmao_access_logs_v1';
 const CURRENT_SESSION_KEY = 'gmao_active_session_tracking';
@@ -118,14 +119,14 @@ export const accessLogService = {
       status: 'En cours',
     };
 
-    // Store active session tracker
+    // Store active session tracker securely in sessionStorage
     try {
-      sessionStorage.setItem(CURRENT_SESSION_KEY, JSON.stringify({
+      SecurityService.saveSessionSecure(CURRENT_SESSION_KEY, {
         sessionId,
         loginTime: Date.now(),
         userId: logEntry.userId,
         userName: logEntry.userName,
-      }));
+      });
     } catch (err) {
       Logger.warn(
         `[AccessLogService] Failed to persist active session key '${CURRENT_SESSION_KEY}':`,
@@ -147,8 +148,10 @@ export const accessLogService = {
   recordLogout() {
     let activeSession = null;
     try {
-      const raw = sessionStorage.getItem(CURRENT_SESSION_KEY);
-      if (raw) activeSession = JSON.parse(raw);
+      const raw = SecurityService.getSessionSecure(CURRENT_SESSION_KEY);
+      if (raw) {
+        activeSession = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      }
     } catch (err) {
       Logger.warn(
         `[AccessLogService] Failed to parse active session key '${CURRENT_SESSION_KEY}':`,
@@ -181,7 +184,7 @@ export const accessLogService = {
     }
 
     try {
-      sessionStorage.removeItem(CURRENT_SESSION_KEY);
+      SecurityService.removeSecure(CURRENT_SESSION_KEY);
     } catch (err) {
       Logger.warn(
         `[AccessLogService] Failed to remove active session key '${CURRENT_SESSION_KEY}':`,

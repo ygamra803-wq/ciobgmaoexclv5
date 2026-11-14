@@ -48,6 +48,86 @@ import {
   type NeedRequestStatus,
 } from '../../../domain/corrective/needRequestService';
 import { InterventionLiveHandoffPanels } from './components/InterventionLiveHandoffPanels';
+import type { IMachine, IMouvement, IStockItem, ITechnician, IWarehouseItem } from '../../../types/domain';
+import type { CorrectiveInterventionItem, CorrectivePdrConsumedItem } from '../../../types/store';
+import type { BlueprintStockItemInput } from '../../../core/domain/Blueprint';
+import type { ToastState } from '../../../hooks/useAppViewController';
+
+type LivePieceUsedItem = CorrectivePdrConsumedItem & {
+  unite?: string;
+  marque?: string;
+  etat_piece?: string;
+};
+
+interface LiveInterventionFormState {
+  travail_a_faire: string;
+  action_realisee: string;
+  intervention_nature: string;
+  pdr_ref: string;
+  pdr_designation: string;
+  pdr_quantite: number;
+  pdr_prix?: number;
+  pdr_unite?: string;
+  pdr_stock_actuel?: number;
+  marque: string;
+  etat_piece: string;
+  arret_machine: boolean;
+  temps_arret: string;
+  pieces_utilisees: LivePieceUsedItem[];
+  num_bon_saisi_par_tech: string;
+  id_composant: string;
+  nom_composant: string;
+  id_part: string;
+  nom_part: string;
+  statut_composant_cloture: string;
+}
+
+type LiveWarehouseOption = IWarehouseItem & {
+  id_item?: string;
+  nom_composant?: string;
+  nom?: string;
+  designation_part?: string;
+};
+
+type LiveRankedStockItem = BlueprintStockItemInput & {
+  type?: string;
+  marque?: string;
+  prix?: number;
+  isBomRecommended?: boolean;
+  bomPriority?: 1 | 2 | 3;
+  bomSourceLabel?: string;
+  bomReason?: string;
+};
+
+export interface InterventionLiveTabProps {
+  interventions?: CorrectiveInterventionItem[];
+  machines?: IMachine[];
+  technicians?: ITechnician[];
+  activeLiveId?: string | number | null;
+  setActiveLiveId?: (id: string | number | null) => void;
+  onSubmitForValidation?: (
+    id: string | number,
+    submissionData?: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => unknown;
+  onClotureIntervention?: (
+    id: string | number,
+    clotureData?: Partial<CorrectiveInterventionItem> & Record<string, unknown>,
+    onAddMouvement?: ((mvt: IMouvement) => void) | null
+  ) => unknown;
+  onUpdateIntervention?: (
+    id: string | number,
+    patch?: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => void;
+  onNavigateToTab?: (tab: string) => void;
+  stockItems?: IStockItem[];
+  warehouseItems?: IWarehouseItem[];
+  onAddMouvement?: (mvt: IMouvement) => void;
+  actionsByPanne?: Record<string, string[]>;
+  travauxAFaire?: string[];
+  getActionsForPanne?: (panne: string) => string[];
+  onAddActionForPanne?: (panneKey: string, actionText: string) => void;
+  showToast?: (msg: string, type?: ToastState['type']) => void;
+}
 
 export default function InterventionLiveTab({
   interventions = [],
@@ -67,7 +147,7 @@ export default function InterventionLiveTab({
   getActionsForPanne: getActionsForPanneProp,
   onAddActionForPanne: _onAddActionForPanne,
   showToast,
-}) {
+}: InterventionLiveTabProps) {
   const { t } = useI18n();
   const { user } = useAuth();
   const isTechUser = isTechnicianRole(user);
@@ -200,7 +280,7 @@ export default function InterventionLiveTab({
   }, [currentTimestamp]);
 
   // Form State for closing or modifying the live intervention
-  const [formState, setFormState] = useState<any>({
+  const [formState, setFormState] = useState<LiveInterventionFormState>({
     travail_a_faire: '',
     action_realisee: '',
     intervention_nature: '',
@@ -227,7 +307,7 @@ export default function InterventionLiveTab({
   // Sync initial values when active intervention changes
   useEffect(() => {
     if (activeIntervention) {
-      const initialPieces =
+      const rawPieces =
         Array.isArray(activeIntervention.pieces_utilisees) &&
         activeIntervention.pieces_utilisees.length > 0
           ? activeIntervention.pieces_utilisees
@@ -235,26 +315,35 @@ export default function InterventionLiveTab({
             activeIntervention.pieces_proposees.length > 0
           ? activeIntervention.pieces_proposees
           : [];
+      const initialPieces: LivePieceUsedItem[] = rawPieces.map((p) => ({
+        ref: String(p.ref || ''),
+        designation: String(p.designation || p.ref || ''),
+        quantite: Number(p.quantite || 1),
+        prix_unitaire: Number(p.prix_unitaire || 0),
+        unite: String(p.unite || 'Pièce'),
+        marque: typeof p.marque === 'string' ? p.marque : '',
+        etat_piece: typeof p.etat_piece === 'string' ? p.etat_piece : 'Neuve',
+      }));
       setFormState({
-        travail_a_faire: activeIntervention.travail_a_faire || '',
-        action_realisee: activeIntervention.action_realisee || '',
-        intervention_nature: activeIntervention.intervention_nature || '',
-        pdr_ref: activeIntervention.pdr_ref || activeIntervention.pdr || '',
-        pdr_designation: activeIntervention.pdr_designation || '',
-        pdr_quantite: activeIntervention.pdr_quantite || 1,
-        marque: activeIntervention.marque || '',
-        etat_piece: activeIntervention.etat_piece || 'Neuve',
+        travail_a_faire: String(activeIntervention.travail_a_faire || ''),
+        action_realisee: String(activeIntervention.action_realisee || ''),
+        intervention_nature: String(activeIntervention.intervention_nature || ''),
+        pdr_ref: String(activeIntervention.pdr_ref || activeIntervention.pdr || ''),
+        pdr_designation: String(activeIntervention.pdr_designation || ''),
+        pdr_quantite: Number(activeIntervention.pdr_quantite || 1),
+        marque: String(activeIntervention.marque || ''),
+        etat_piece: String(activeIntervention.etat_piece || 'Neuve'),
         arret_machine: Boolean(activeIntervention.arret_machine),
-        temps_arret: activeIntervention.temps_arret || '',
+        temps_arret: String(activeIntervention.temps_arret || ''),
         pieces_utilisees: initialPieces,
-        num_bon_saisi_par_tech: activeIntervention.num_bon_saisi_par_tech || '',
-        id_composant: activeIntervention.id_composant || '',
-        nom_composant: activeIntervention.nom_composant || '',
-        id_part: activeIntervention.id_part || '',
-        nom_part: activeIntervention.nom_part || '',
-        statut_composant_cloture: activeIntervention.statut_composant_cloture || 'En service',
+        num_bon_saisi_par_tech: String(activeIntervention.num_bon_saisi_par_tech || ''),
+        id_composant: String(activeIntervention.id_composant || ''),
+        nom_composant: String(activeIntervention.nom_composant || ''),
+        id_part: String(activeIntervention.id_part || ''),
+        nom_part: String(activeIntervention.nom_part || ''),
+        statut_composant_cloture: String(activeIntervention.statut_composant_cloture || 'En service'),
       });
-      setTravailSearch(activeIntervention.travail_a_faire || '');
+      setTravailSearch(String(activeIntervention.travail_a_faire || ''));
     }
   }, [activeIntervention]);
 
@@ -322,9 +411,10 @@ export default function InterventionLiveTab({
       id_ref_pdr: needForm.id_ref_pdr.trim() || formState.pdr_ref || null,
       designation_pdr: formState.pdr_designation || null,
       id_part: formState.id_part || activeIntervention.id_part || null,
-      nom_part: formState.nom_part || activeIntervention.nom_part || null,
+      nom_part: String(formState.nom_part || activeIntervention.nom_part || '') || null,
       id_composant: formState.id_composant || activeIntervention.id_composant || null,
-      nom_composant: formState.nom_composant || activeIntervention.nom_composant || null,
+      nom_composant:
+        String(formState.nom_composant || activeIntervention.nom_composant || '') || null,
       quantite: Math.max(1, Number(needForm.quantite) || 1),
       description_besoin: desc,
     });
@@ -404,7 +494,7 @@ export default function InterventionLiveTab({
     });
 
     if (created) {
-      setFormState((prev: any) => ({
+      setFormState((prev) => ({
         ...prev,
         intervention_nature: 'ATELIER',
         action_realisee:
@@ -469,7 +559,7 @@ export default function InterventionLiveTab({
         '',
     });
 
-    setFormState((prev: any) => ({
+    setFormState((prev) => ({
       ...prev,
       intervention_nature: 'ATELIER',
       action_realisee:
@@ -484,7 +574,7 @@ export default function InterventionLiveTab({
       onUpdateIntervention(activeIntervention.id, {
         ...formState,
         intervention_nature: 'ATELIER',
-        id_sortie_atelier: created.id,
+        id_sortie_atelier: String(created.id),
         code_sortie_atelier: created.code,
         cout_atelier: Number(workshopQuickForm.cout_bobinage || 0),
         nature_travail_atelier: workshopQuickForm.nature_travail,
@@ -604,18 +694,20 @@ export default function InterventionLiveTab({
   }, [rankedMachineStockItems, pdrSearch]);
 
   // Handle Select PDR
-  const handleSelectPdr = (item) => {
-    const stockQty = item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0;
+  const handleSelectPdr = (item: LiveRankedStockItem) => {
+    const stockQty = Number(item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0);
     setFormState((prev) => ({
       ...prev,
-      pdr_ref: item.ref || item.code_article,
-      pdr_designation: item.designation || item.nom,
-      pdr_prix: item.prix || item.prix_unitaire || 0,
-      pdr_unite: item.unite || 'Pièce',
+      pdr_ref: String(item.ref || item.code_article || ''),
+      pdr_designation: String(item.designation || item.nom || ''),
+      pdr_prix: Number(item.prix || item.prix_unitaire || 0),
+      pdr_unite: String(item.unite || 'Pièce'),
       pdr_stock_actuel: stockQty,
-      marque: item.marque || prev.marque || 'Origine',
+      marque: String(item.marque || prev.marque || 'Origine'),
     }));
-    setPdrSearch(`${item.ref || item.code_article} - ${item.designation || item.nom}`);
+    setPdrSearch(
+      `${item.ref || item.code_article || ''} - ${item.designation || item.nom || ''}`
+    );
     setShowPdrList(false);
   };
 
@@ -664,23 +756,24 @@ export default function InterventionLiveTab({
     setFormState((prev) => ({
       ...prev,
       pieces_utilisees: (prev.pieces_utilisees || []).filter(
-        (p: any) => String(p.ref || '').toUpperCase() !== String(refToRemove || '').toUpperCase()
+        (p: LivePieceUsedItem) =>
+          String(p.ref || '').toUpperCase() !== String(refToRemove || '').toUpperCase()
       ),
     }));
   };
 
   // Merge any pending single-input PDR (`pdr_ref`) with `pieces_utilisees` so a selected part
   // is never silently dropped if the user clicks Suivant/Valider without clicking "+ Ajouter".
-  const buildEffectivePiecesList = (state: any) => {
-    const baseList = Array.isArray(state.pieces_utilisees)
-      ? state.pieces_utilisees.map((item: any) => ({ ...item }))
+  const buildEffectivePiecesList = (state: LiveInterventionFormState): LivePieceUsedItem[] => {
+    const baseList: LivePieceUsedItem[] = Array.isArray(state.pieces_utilisees)
+      ? state.pieces_utilisees.map((item) => ({ ...item }))
       : [];
     const pendingRef = String(state.pdr_ref || '').trim();
     const pendingQty = Number(state.pdr_quantite || 0);
 
     if (pendingRef && pendingQty > 0) {
       const existingIdx = baseList.findIndex(
-        (p: any) => String(p.ref || '').trim().toUpperCase() === pendingRef.toUpperCase()
+        (p) => String(p.ref || '').trim().toUpperCase() === pendingRef.toUpperCase()
       );
       if (existingIdx >= 0) {
         baseList[existingIdx] = {
@@ -818,7 +911,7 @@ export default function InterventionLiveTab({
     // 2. ADMIN / SUPERVISOR PATH: Direct approved closure & single stock deduction
     if (openWorkshopOrders.length > 0) {
       const openCodes = openWorkshopOrders
-        .map((o: any) => o.code_bon || o.code)
+        .map((o) => ('code_bon' in o ? o.code_bon : o.code))
         .join(', ');
       showToast?.(
         `Clôture bloquée : le Bon d'Atelier / Externe [${openCodes}] est encore en cours. Réceptionnez le bon (Retourné OK) ou suspendez le BT en attente (EN_ATTENTE_PDR).`,
@@ -960,7 +1053,7 @@ export default function InterventionLiveTab({
                 type="button"
                 data-testid={`live-nature-${opt.code}`}
                 onClick={() =>
-                  setFormState((p: any) => ({
+                  setFormState((p) => ({
                     ...p,
                     intervention_nature: isSelected ? '' : opt.code,
                   }))
@@ -1012,7 +1105,11 @@ export default function InterventionLiveTab({
         workshopQuickForm={workshopQuickForm}
         setWorkshopQuickForm={setWorkshopQuickForm}
         handleQuickCreateWorkshopOrder={handleQuickCreateWorkshopOrder}
-        showToast={showToast}
+        showToast={
+          showToast
+            ? (message: string, type?: string) => showToast(message, type as ToastState['type'])
+            : undefined
+        }
       />
 
       {/* Travail à faire & Suggestions d'Atelier */}
@@ -1118,11 +1215,13 @@ export default function InterventionLiveTab({
           {showPdrList && matchedStockItems.length > 0 && (
             <div className="absolute left-0 right-0 top-full mt-1 z-40 bg-white rounded-2xl border border-cyan-200 shadow-xl max-h-48 overflow-y-auto p-2 space-y-1">
               {matchedStockItems.map((item) => {
-                const dispo = item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0;
+                const itemRef = String(item.ref || item.code_article || '');
+                const itemDesig = String(item.designation || item.nom || '');
+                const dispo = Number(item.stockActuel ?? item.stock_actuel ?? item.quantite ?? 0);
                 return (
                   <div
-                    key={item.ref || item.code_article}
-                    onClick={() => handleSelectPdr(item)}
+                    key={itemRef}
+                    onClick={() => handleSelectPdr(item as LiveRankedStockItem)}
                     className="p-2 text-xs rounded-lg hover:bg-cyan-50 text-slate-800 cursor-pointer font-medium transition flex items-center justify-between"
                   >
                     <div className="min-w-0 pr-2 flex items-center gap-1.5 flex-wrap">
@@ -1131,8 +1230,8 @@ export default function InterventionLiveTab({
                           ★ {item.bomSourceLabel || 'BOM'}
                         </span>
                       )}
-                      <span className="font-mono font-bold text-cyan-900">{item.ref || item.code_article}</span>
-                      <span className="text-slate-600 truncate">{item.designation || item.nom}</span>
+                      <span className="font-mono font-bold text-cyan-900">{itemRef}</span>
+                      <span className="text-slate-600 truncate">{itemDesig}</span>
                     </div>
                     <span
                       className={`font-mono text-[11px] font-bold px-2 py-0.5 rounded border shrink-0 ${
@@ -1223,11 +1322,11 @@ export default function InterventionLiveTab({
           <div className="flex items-center justify-between text-[11px] font-bold text-cyan-950">
             <span>Pièces sélectionnées pour sortie magasin ({formState.pieces_utilisees.length}) :</span>
             <span className="font-mono text-cyan-700">
-              Total Qte: {formState.pieces_utilisees.reduce((s: number, p: any) => s + Number(p.quantite || 0), 0)}
+              Total Qte: {formState.pieces_utilisees.reduce((s: number, p: LivePieceUsedItem) => s + Number(p.quantite || 0), 0)}
             </span>
           </div>
           <div className="space-y-1.5">
-            {formState.pieces_utilisees.map((piece: any) => (
+            {formState.pieces_utilisees.map((piece: LivePieceUsedItem) => (
               <div
                 key={piece.ref}
                 className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-cyan-50/70 border border-cyan-200/80 text-xs"
@@ -1242,7 +1341,7 @@ export default function InterventionLiveTab({
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="font-mono font-black text-cyan-900 bg-cyan-100 px-2 py-0.5 rounded">
-                    × {piece.quantite} {piece.unite || 'Pièce'}
+                    × {piece.quantite} {String(piece.unite || piece.unit || 'Pièce')}
                   </span>
                   <button
                     type="button"
@@ -1327,8 +1426,8 @@ export default function InterventionLiveTab({
               value={formState.id_composant || ''}
               onChange={(e) => {
                 const val = e.target.value;
-                const found = machineComponents.find(
-                  (c: any) => String(c.id_warehouse_item || c.id || c.id_item) === val
+                const found = (machineComponents as LiveWarehouseOption[]).find(
+                  (c) => String(c.id_warehouse_item || c.id || c.id_item || '') === val
                 );
                 setFormState({
                   ...formState,
@@ -1341,8 +1440,8 @@ export default function InterventionLiveTab({
               className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-cyan-400 focus:outline-hidden"
             >
               <option value="">— Aucun composant spécifique —</option>
-              {machineComponents.map((comp: any) => {
-                const cId = comp.id_warehouse_item || comp.id || comp.id_item;
+              {(machineComponents as LiveWarehouseOption[]).map((comp) => {
+                const cId = String(comp.id_warehouse_item || comp.id || comp.id_item || '');
                 return (
                   <option key={cId} value={cId}>
                     {cId} · {comp.designation || comp.nom || 'Composant'} ({comp.status || 'En service'})
@@ -1377,8 +1476,8 @@ export default function InterventionLiveTab({
               value={formState.id_part || ''}
               onChange={(e) => {
                 const val = e.target.value;
-                const found = machineParts.find(
-                  (p: any) => String(p.id_warehouse_item || p.id || p.id_item) === val
+                const found = (machineParts as LiveWarehouseOption[]).find(
+                  (p) => String(p.id_warehouse_item || p.id || p.id_item || '') === val
                 );
                 setFormState({
                   ...formState,
@@ -1391,8 +1490,8 @@ export default function InterventionLiveTab({
               className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-slate-200 bg-white focus:border-cyan-400 focus:outline-hidden"
             >
               <option value="">— Aucun site structurel —</option>
-              {machineParts.map((part: any) => {
-                const pId = part.id_warehouse_item || part.id || part.id_item;
+              {(machineParts as LiveWarehouseOption[]).map((part) => {
+                const pId = String(part.id_warehouse_item || part.id || part.id_item || '');
                 return (
                   <option key={pId} value={pId}>
                     {pId} · {part.designation_part || part.designation || part.nom || 'Part'}
@@ -1553,7 +1652,7 @@ export default function InterventionLiveTab({
             }
 
             const stockItem = rankedMachineStockItems.find(
-              (s: any) =>
+              (s: LiveRankedStockItem) =>
                 String(s.ref || s.code_article || '').trim().toUpperCase() === ref.toUpperCase()
             );
             const availableStock =

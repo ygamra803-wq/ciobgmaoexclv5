@@ -28,14 +28,20 @@ import {
   computeMachineHealthPassport,
   buildMachineActivityLedger,
 } from '../../../../application/services/MachineHealthPassportService';
+import type { IBlueprint, IMachine, IWarehouseItem } from '../../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  MachineElement,
+  PreventiveTaskItem,
+} from '../../../../types/store';
 
 interface MachineQrFieldModalProps {
-  machine: any | null;
+  machine: IMachine | null;
   initialMode?: 'ETIQUETTE' | 'FICHE_TERRAIN';
   onClose: () => void;
   onNavigateToPreventive?: (machineCode: string) => void;
-  onNavigateToQuickSortie?: (machine: any) => void;
-  showToast?: (msg: string, type?: any) => void;
+  onNavigateToQuickSortie?: (machine: IMachine) => void;
+  showToast?: (msg: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 export default function MachineQrFieldModal({
@@ -120,7 +126,7 @@ export default function MachineQrFieldModal({
   ).trim();
   const assetClass = getMachineAssetClass(machine);
   const sysTypeObj = generalSystemTypes.find(
-    (t: any) => t.id === machine.id_general_system_type
+    (t) => t.id === machine.id_general_system_type
   );
 
   const qrUrl = `${hostBaseUrl.replace(/\/+$/, '')}/?machine_qr=${encodeURIComponent(
@@ -135,14 +141,14 @@ export default function MachineQrFieldModal({
   const machineTasks = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
     return (preventiveTasks || []).filter(
-      (t: any) => String(t.id_machine || t.code_machine || '').trim().toUpperCase() === codeUpper
+      (t: PreventiveTaskItem) => String(t.id_machine || t.code_machine || '').trim().toUpperCase() === codeUpper
     );
   }, [preventiveTasks, machineCode]);
 
   const dueTasks = useMemo(
     () =>
       machineTasks.filter(
-        (t: any) => t.etat !== 'Fait' && t.validation_status !== 'PENDING_VALIDATION'
+        (t: PreventiveTaskItem) => t.etat !== 'Fait' && t.validation_status !== 'PENDING_VALIDATION'
       ),
     [machineTasks]
   );
@@ -151,14 +157,14 @@ export default function MachineQrFieldModal({
   const recentCorrective = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
     return (correctiveInterventions || [])
-      .filter((ci: any) => String(ci.code_machine || '').trim().toUpperCase() === codeUpper)
+      .filter((ci: CorrectiveInterventionItem) => String(ci.code_machine || '').trim().toUpperCase() === codeUpper)
       .slice(0, 5);
   }, [correctiveInterventions, machineCode]);
 
   // Open BTs on this machine eligible for 3-Click Express Workshop Closure
   const openMachineBts = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
-    return (correctiveInterventions || []).filter((ci: any) => {
+    return (correctiveInterventions || []).filter((ci: CorrectiveInterventionItem) => {
       const mMatch = String(ci.code_machine || '').trim().toUpperCase() === codeUpper;
       if (!mMatch) return false;
       const st = String(ci.statut || '').toUpperCase();
@@ -186,15 +192,15 @@ export default function MachineQrFieldModal({
   const machineComponentsAndBom = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
     const whAttached = (warehouseItems || []).filter(
-      (w: any) =>
+      (w: IWarehouseItem) =>
         String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase() === codeUpper
     );
     const ledgerAttached = (machineElementsLedger || []).filter(
-      (el: any) =>
+      (el: MachineElement) =>
         String(el.id_machine_registered || el.id_machine || '').trim().toUpperCase() === codeUpper
     );
     const bpMatch = (blueprints || []).find(
-      (bp: any) =>
+      (bp: IBlueprint) =>
         bp.id_blueprint === machine.id_blueprint ||
         (machine.id_templates && bp.id_templates === machine.id_templates)
     );
@@ -259,7 +265,7 @@ export default function MachineQrFieldModal({
     setTimeout(() => setDiSuccessMsg(''), 4000);
   };
 
-  const handleQuickCompleteTask = (task: any) => {
+  const handleQuickCompleteTask = (task: PreventiveTaskItem) => {
     if (typeof handleMarkTaskDone !== 'function') return;
     const shouldSubmitForValidation = isTechUser;
 
@@ -290,7 +296,7 @@ export default function MachineQrFieldModal({
 
   const handleExpress3ClickClose = () => {
     const targetBt =
-      openMachineBts.find((b: any) => String(b.id) === String(expressSelectedBtId)) ||
+      openMachineBts.find((b: CorrectiveInterventionItem) => String(b.id) === String(expressSelectedBtId)) ||
       openMachineBts[0];
     if (!targetBt) return;
 
@@ -726,7 +732,7 @@ export default function MachineQrFieldModal({
                       </label>
                       <select
                         value={diPriorite}
-                        onChange={(e) => setDiPriorite(e.target.value as any)}
+                        onChange={(e) => setDiPriorite(e.target.value as 'URGENTE' | 'HAUTE' | 'NORMALE')}
                         className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                       >
                         <option value="URGENTE">🔴 URGENTE</option>
@@ -741,7 +747,7 @@ export default function MachineQrFieldModal({
                       </label>
                       <select
                         value={diArretMachine}
-                        onChange={(e) => setDiArretMachine(e.target.value as any)}
+                        onChange={(e) => setDiArretMachine(e.target.value as 'OUI' | 'NON')}
                         className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-bold"
                       >
                         <option value="NON">NON (En marche dégradée)</option>
@@ -817,7 +823,7 @@ export default function MachineQrFieldModal({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {machineTasks.map((t: any) => {
+                      {machineTasks.map((t: PreventiveTaskItem) => {
                         const isDone = t.etat === 'Fait';
                         const isPending = t.validation_status === 'PENDING_VALIDATION';
                         return (
@@ -836,7 +842,7 @@ export default function MachineQrFieldModal({
                                 </span>
                               </div>
                               <p className="text-[11px] text-slate-500 mt-0.5">
-                                {t.consigne || t.type_intervention || 'Contrôle préventif standard'}
+                                {String(t.consigne || t.type_intervention || 'Contrôle préventif standard')}
                               </p>
                             </div>
 
@@ -884,7 +890,7 @@ export default function MachineQrFieldModal({
                       </div>
                     ) : (
                       <div className="space-y-1.5">
-                        {recentCorrective.map((ci: any, idx: number) => (
+                        {recentCorrective.map((ci: CorrectiveInterventionItem, idx: number) => (
                           <div
                             key={ci.id || idx}
                             className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2"
@@ -905,7 +911,7 @@ export default function MachineQrFieldModal({
                               )}
                             </div>
                             <span className="font-mono text-[10px] text-slate-500 shrink-0">
-                              {ci.date_demande || ci.date_fin || '—'}
+                              {String(ci.date_demande || ci.date_fin || '—')}
                             </span>
                           </div>
                         ))}
@@ -934,7 +940,7 @@ export default function MachineQrFieldModal({
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {machineComponentsAndBom.whAttached.map((w: any) => (
+                        {machineComponentsAndBom.whAttached.map((w: IWarehouseItem) => (
                           <div
                             key={w.id_warehouse_item || w.id}
                             className="p-2.5 rounded-xl bg-teal-50/50 border border-teal-200/80 flex items-center justify-between gap-2"
@@ -954,17 +960,17 @@ export default function MachineQrFieldModal({
                           </div>
                         ))}
 
-                        {machineComponentsAndBom.ledgerAttached.map((el: any) => (
+                        {machineComponentsAndBom.ledgerAttached.map((el: MachineElement) => (
                           <div
-                            key={el.id || el.id_element_instance}
+                            key={String(el.id || el.id_element_instance)}
                             className="p-2.5 rounded-xl bg-blue-50/50 border border-blue-200/80 flex items-center justify-between gap-2"
                           >
                             <div className="min-w-0">
                               <div className="font-mono font-bold text-blue-900 text-[11px]">
-                                {el.ref_element || el.code_element || el.id_element_instance || el.id}
+                                {String(el.ref_element || el.code_element || el.id_element_instance || el.id)}
                               </div>
                               <div className="font-semibold text-slate-800 truncate">
-                                {el.designation || el.designation_element}
+                                {String(el.designation || el.designation_element || '')}
                               </div>
                             </div>
                             <span className="px-2 py-0.5 rounded bg-white text-blue-800 border border-blue-200 text-[10px] font-mono shrink-0">
@@ -1081,7 +1087,7 @@ export default function MachineQrFieldModal({
                           Clic 1 — Bon de Travail Actif sur {machineCode}
                         </span>
                         <div className="grid grid-cols-1 gap-2">
-                          {openMachineBts.map((bt: any) => {
+                          {openMachineBts.map((bt: CorrectiveInterventionItem) => {
                             const isSelected =
                               expressSelectedBtId
                                 ? String(bt.id) === String(expressSelectedBtId)

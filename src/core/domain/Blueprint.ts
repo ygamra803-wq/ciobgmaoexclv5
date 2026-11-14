@@ -24,6 +24,7 @@ export interface BlueprintCommonFailureItem {
   pdr_refs?: string[];
   component_ref?: string;
   id_part?: string;
+  [key: string]: unknown;
 }
 
 export interface BlueprintPdrItem {
@@ -187,6 +188,7 @@ export interface BlueprintPreventiveTaskInput {
   derniere_realisation?: string | null;
   id_corrective?: string | null;
   created_at?: string;
+  [key: string]: unknown;
 }
 
 export interface BlueprintLedgerElement {
@@ -217,6 +219,7 @@ export interface BlueprintLedgerElement {
   _source?: string;
   _warehouseItemId?: string | number;
   _warehouseStatus?: string;
+  [key: string]: unknown;
 }
 
 export interface BlueprintStockItemInput {

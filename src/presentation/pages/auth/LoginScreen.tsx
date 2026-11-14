@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { confirmAction } from '../../../utils/confirmAction';
+import { SecurityService } from '../../../core/security/SecurityService';
+import { storageService } from '../../../utils/storageService';
 
 const ROLE_TILES = [
   {
@@ -72,12 +74,10 @@ export default function LoginScreen() {
   // Check if returning from a Quick Screen Lock to pre-select the locked operator's account
   const lockedAccountInit = useMemo(() => {
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        const raw = sessionStorage.getItem('gmao_screen_locked_account');
-        if (raw) {
-          sessionStorage.removeItem('gmao_screen_locked_account');
-          return JSON.parse(raw);
-        }
+      const locked = SecurityService.getSessionSecure('gmao_screen_locked_account');
+      if (locked) {
+        SecurityService.removeSecure('gmao_screen_locked_account');
+        return typeof locked === 'string' ? JSON.parse(locked) : locked;
       }
     } catch {
       // ignore
@@ -97,12 +97,10 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState(() => {
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        const idleMsg = sessionStorage.getItem('gmao_session_idle_expired');
-        if (idleMsg) {
-          sessionStorage.removeItem('gmao_session_idle_expired');
-          return idleMsg;
-        }
+      const idleMsg = SecurityService.getSessionSecure('gmao_session_idle_expired');
+      if (idleMsg) {
+        SecurityService.removeSecure('gmao_session_idle_expired');
+        return typeof idleMsg === 'string' ? idleMsg : String(idleMsg);
       }
     } catch {
       // ignore
@@ -290,6 +288,7 @@ export default function LoginScreen() {
         variant: 'danger',
       })
     ) {
+      storageService.clearCache();
       localStorage.clear();
       sessionStorage.clear();
       window.location.reload();

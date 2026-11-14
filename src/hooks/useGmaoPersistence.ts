@@ -142,7 +142,8 @@ export function useGmaoPersistence({
         clearInterval(intervalId);
         intervalId = null;
       }
-      const ms = parseIntervalMs(localStorage.getItem('gmao_polling_interval'));
+      const rawInterval = storageService.getItem(STORAGE_KEYS.POLLING_INTERVAL);
+      const ms = parseIntervalMs(rawInterval != null ? String(rawInterval) : null);
       if (ms <= 0) return;
 
       intervalId = setInterval(async () => {

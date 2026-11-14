@@ -15,10 +15,12 @@ import {
   Download,
 } from 'lucide-react';
 import { indexedDBService } from '../../../../utils/indexedDBService';
+import { storageService } from '../../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../../infrastructure/persistence/storageKeys';
 import { AutoBackupService } from '../../../../core/backup/AutoBackupService';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
-const STORAGE_CEILING_KEY = 'gmao_storage_ceiling_mb';
+const STORAGE_CEILING_KEY = STORAGE_KEYS.STORAGE_CEILING_MB;
 
 /**
  * Overview Tab — Storage Quota (L1 localStorage & L2 IndexedDB), Data Volume Counters, and Excel Twin Export.
@@ -55,7 +57,7 @@ export default function SettingsOverviewTab({
     preventiveCount ?? (Array.isArray(preventiveTasks) ? preventiveTasks.length : 0);
 
   const [ceilingMB, setCeilingMB] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_CEILING_KEY);
+    const saved = storageService.getItem(STORAGE_CEILING_KEY);
     return saved ? Number(saved) : 1024;
   });
 
@@ -93,7 +95,7 @@ export default function SettingsOverviewTab({
 
   const handleCeilingChange = async (newCeiling: number) => {
     setCeilingMB(newCeiling);
-    localStorage.setItem(STORAGE_CEILING_KEY, String(newCeiling));
+    storageService.setItem(STORAGE_CEILING_KEY, newCeiling);
     setRequestingPersist(true);
     try {
       const granted = await indexedDBService.requestPersistentStorage();

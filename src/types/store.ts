@@ -55,11 +55,15 @@ export type StateUpdater<T> = T | ((prev: T) => T);
 
 export interface MachineElement {
   id: string;
+  id_element?: string;
   id_machine_registered?: string;
   element_type?: 'COMPONENT' | 'PART' | 'PDR' | string;
-  id_element?: string;
   ref_element?: string;
+  ref?: string;
+  code_element?: string;
   designation?: string;
+  nom_element?: string;
+  nature?: string;
   qte_montee?: number;
   unite?: string;
   criticalite?: string;
@@ -69,23 +73,28 @@ export interface MachineElement {
   technicien?: string;
   statut?: string;
   emplacement_machine?: string;
+  parent_component_key?: string;
   remarques?: string;
-  [key: string]: any;
+  _source?: string;
+  [key: string]: unknown;
 }
 
 export interface PreventiveTaskItem {
   id: string | number;
+  code?: string;
   code_tache?: string;
   machine_id?: string;
   id_machine?: string;
   id_machine_registered?: string;
   machine_nom?: string;
+  id_zone?: string;
   zone?: string;
   composant?: string;
   id_composant?: string;
   nom_composant?: string;
   id_part?: string;
   nom_part?: string;
+  pdr_ref?: string;
   pdr_requises?: PreventiveRequiredPdrItem[];
   titre?: string;
   description?: string;
@@ -93,6 +102,9 @@ export interface PreventiveTaskItem {
   periodicite?: string;
   frequence?: string;
   statut?: string;
+  priorite?: string;
+  responsable?: string;
+  is_active?: boolean;
   date_echeance?: string;
   prochaine_echeance?: string;
   derniere_execution?: string;
@@ -103,7 +115,7 @@ export interface PreventiveTaskItem {
   compteur_unite?: MeterUnit | string;
   type_declencheur?: 'CALENDRIER' | 'COMPTEUR' | 'HYBRIDE' | string;
   updated_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPreventiveActionCatalogItem {
@@ -117,7 +129,7 @@ export interface IPreventiveActionCatalogItem {
   duree_standard?: number | string;
   outils?: string[] | string;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPreventiveGuideCatalogItem {
@@ -132,7 +144,7 @@ export interface IPreventiveGuideCatalogItem {
   consignes_securite?: string[] | string;
   criticite?: string;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPreventivePlanCatalogItem {
@@ -154,7 +166,7 @@ export interface IPreventivePlanCatalogItem {
   description?: string;
   nb_taches?: number;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SortieExterneItem {
@@ -178,7 +190,7 @@ export interface SortieExterneItem {
   technicien_sortie?: string;
   technicien_retour?: string;
   remarques?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface SortieMountedPayload {
@@ -186,7 +198,7 @@ export interface SortieMountedPayload {
   id_machine_cible: string;
   note: string;
   technicien_montage: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CorrectivePdrConsumedItem {
@@ -196,21 +208,26 @@ export interface CorrectivePdrConsumedItem {
   unit?: string;
   prix_unitaire?: number;
   num_bon_saisi_par_tech?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface CorrectiveInterventionItem {
   id?: string;
   num_bt?: string;
   code_machine?: string;
+  id_machine?: string;
   id_machine_registered?: string;
   machine?: string;
+  nom_machine?: string;
   zone?: string;
   id_zone?: string;
+  id_composant?: string;
+  id_part?: string;
   demandeur?: string;
   intervenant?: string;
   technicien_matricule?: string;
   anomalie?: string;
+  panne?: string;
   type_panne?: string;
   priorite?: string;
   travail_a_faire?: string;
@@ -218,16 +235,24 @@ export interface CorrectiveInterventionItem {
   intervention_nature?: 'REPLACE' | 'ATELIER' | 'REPAIR' | 'CLEAN' | 'ADJUST' | 'INSPECT' | 'OTHER' | string;
   stock_effect?: string;
   statut?: string;
+  status?: string;
   action_fermee?: 'OUI' | 'NON' | string;
   arret_machine?: 'OUI' | 'NON' | boolean | string;
   temps_arret?: string | number;
+  date?: string;
   demande_date?: string;
+  date_demande?: string;
   demande_heure?: string;
+  heure_demande?: string;
   date_debut?: string;
   heure_debut?: string;
   date_fin?: string;
   heure_fin?: string;
+  date_fin_proposee?: string;
+  heure_fin_proposee?: string;
+  date_cloture?: string;
   temps_intervention?: string;
+  temps_intervention_propose?: string;
   temps_intervention_mins?: number;
   pdr_ref?: string;
   pdr_designation?: string;
@@ -261,6 +286,7 @@ export interface CorrectiveInterventionItem {
   validated_by_name?: string;
   validated_at?: string;
   validation_note?: string;
+  validated_with_edits?: boolean;
   stock_deducted?: boolean;
   emitted_movement_ids?: string[];
   requires_loto?: boolean;
@@ -268,7 +294,7 @@ export interface CorrectiveInterventionItem {
   loto?: ILotoPermit;
   created_at?: string;
   updated_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type CorrectiveIntervenantEntry =
@@ -278,7 +304,7 @@ export type CorrectiveIntervenantEntry =
       nom: string;
       role?: string;
       specialite?: string;
-      [key: string]: any;
+      [key: string]: unknown;
     };
 
 export interface CorrectiveKpiComputedSummary {
@@ -321,7 +347,13 @@ export interface ValidationReviewDecisionPayload {
   notes?: string;
   validated_by_id?: string;
   validated_by_name?: string;
-  [key: string]: any;
+  date_fin?: string;
+  heure_fin?: string;
+  temps_intervention?: string;
+  temps_intervention_mins?: number;
+  action_realisee?: string;
+  intervention_nature?: string;
+  [key: string]: unknown;
 }
 
 export interface MeterReadingRecordPayload {
@@ -680,7 +712,7 @@ export interface GmaoStoreState {
     payload: Omit<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'> &
       Partial<Pick<IAuditEvent, 'id' | 'ts' | 'actorId' | 'actorName' | 'actorRole'>>
   ) => IAuditEvent;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**

@@ -72,7 +72,7 @@ export interface PdrGroup {
   default_policy_tags?: MaterialPolicyTag[];  // default ['REPLACING'] for standard PDR
   sort_order?: number;
   is_active?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface StockType {
@@ -82,7 +82,7 @@ export interface StockType {
   id_groupe?: string | null;
   domaine_technique?: TechnicalDomain | string;
   is_active?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IStockItem {
@@ -114,7 +114,7 @@ export interface IStockItem {
   fournisseur?: string;
   code_barre?: string;
   policy_tags?: MaterialPolicyTag[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IMachineComponentReel {
@@ -125,7 +125,7 @@ export interface IMachineComponentReel {
   id_template?: string;
   quantite?: number;
   etat?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IMachine {
@@ -134,12 +134,17 @@ export interface IMachine {
   id?: string;
   code?: string;
   designation: string;
+  nom?: string;
   libelle?: string;
   id_family?: string;
+  famille?: string;
   id_templates?: string;
+  modele?: string;
   id_zone_default?: string;
+  id_zone?: string;
   zone?: string;
   technician?: string;
+  machine?: string;
   status?: MachineStatus | string;
   statut?: string;
   lifecycle_status?: string;
@@ -154,7 +159,10 @@ export interface IMachine {
   previous_parent_id?: string | null;
   asset_level?: 'MACHINE' | 'LINE' | string;
   serial_number?: string;
+  numero_serie?: string;
   date_mise_en_service?: string;
+  date_installation?: string;
+  annee?: string | number;
   components_reels?: IMachineComponentReel[];
   compteur_actuel?: number;
   compteur_heures?: number;
@@ -162,8 +170,10 @@ export interface IMachine {
   compteur_km?: number;
   dernier_releve_compteur?: number;
   date_releve_compteur?: string;
+  date_dernier_releve?: string;
   compteur_unite_defaut?: 'Heures' | 'Cycles' | 'Km' | string;
-  [key: string]: any;
+  unite_compteur?: string;
+  [key: string]: unknown;
 }
 
 export interface IMachineFamily {
@@ -173,8 +183,9 @@ export interface IMachineFamily {
   nom?: string;
   name?: string;
   code?: string;
+  componentCode?: string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IMachineTemplate {
@@ -191,7 +202,7 @@ export interface IMachineTemplate {
   vitesse?: string;
   specs?: Record<string, unknown>;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IMouvement {
@@ -218,7 +229,7 @@ export interface IMouvement {
   commentaire?: string;
   prix_unitaire?: number;
   cout_total?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ISortieDemandItem {
@@ -231,7 +242,7 @@ export interface ISortieDemandItem {
   unite?: string;
   emplacement?: string;
   prix_unitaire?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ISortieDemand {
@@ -251,6 +262,7 @@ export interface ISortieDemand {
   operation?: string;
   id_operation?: string;
   commentaire?: string;
+  motif?: string;
   items: ISortieDemandItem[];
   validation_status: ValidationWorkflowStatus | string;
   discrepancy_status?: 'NONE' | 'QTY_ADJUSTED' | 'PARTIAL' | string;
@@ -263,17 +275,19 @@ export interface ISortieDemand {
   validation_note?: string;
   stock_deducted?: boolean;
   emitted_movement_ids?: string[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IZone {
+  id?: string;
   code: string;
   code_zone?: string;
   id_zone?: string;
   libelle: string;
+  nom?: string;
   description?: string;
   philosophie?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IOperation {
@@ -287,15 +301,17 @@ export interface IOperation {
   specialite?: string;
   is_active?: boolean;
   actif?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ITechnician {
   id_technician: string;
   id?: string;
   nom: string;
+  name?: string;
   prenom?: string;
   id_zone?: string;
+  zone?: string;
   zones?: string[];
   role?: string;
   type_profil?: ProfileType | string;
@@ -304,7 +320,7 @@ export interface ITechnician {
   is_active?: boolean;
   actif?: boolean;
   statut?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IUserRecord {
@@ -326,7 +342,7 @@ export interface IUserRecord {
   passwordHash?: string;
   mustChangePassword?: boolean;
   titleFr?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IDiagnostic {
@@ -341,7 +357,7 @@ export interface IDiagnostic {
   delai_appro_jours?: number;
   domaine_technique?: TechnicalDomain | string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IType {
@@ -352,7 +368,7 @@ export interface IType {
   type?: string;
   description?: string;
   famille?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPartGroup {
@@ -368,7 +384,7 @@ export interface IPartGroup {
   sort_order?: number;
   is_active?: boolean;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPartType {
@@ -380,7 +396,7 @@ export interface IPartType {
   nom?: string;
   description?: string;
   domaine_technique?: TechnicalDomain | string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IPartDesignation {
@@ -388,6 +404,7 @@ export interface IPartDesignation {
   id?: string | number;
   ref: string;
   designation: string;
+  libelle?: string;
   id_group?: string | null;
   id_groupe?: string | null;
   id_type?: string;
@@ -401,7 +418,7 @@ export interface IPartDesignation {
   dimensions_brut?: string;
   traitement_thermique?: string;
   policy_tags?: MaterialPolicyTag[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ICompGroup {
@@ -414,7 +431,7 @@ export interface ICompGroup {
   description?: string;
   domaine_technique?: TechnicalDomain | string;
   created_at?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ICompFamily {
@@ -428,7 +445,7 @@ export interface ICompFamily {
   ref?: string;
   type?: string;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface ICompTemplate {
@@ -449,7 +466,7 @@ export interface ICompTemplate {
   type_fixation?: string;
   specs?: Record<string, unknown>;
   description?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IEntrepotComponent {
@@ -475,7 +492,7 @@ export interface IEntrepotComponent {
   statut?: string;
   quantite?: number;
   historique_bobinage?: Array<Record<string, unknown>>;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IBlueprintPreventivePlanItem {
@@ -485,7 +502,7 @@ export interface IBlueprintPreventivePlanItem {
   frequence: string;
   description?: string;
   duree_min?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IBlueprintCommonFailureItem {
@@ -496,7 +513,7 @@ export interface IBlueprintCommonFailureItem {
   urgence?: string;
   recommended_action?: string;
   pdr_ref?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IBlueprintTheoreticalPdr {
@@ -505,10 +522,11 @@ export interface IBlueprintTheoreticalPdr {
   designation?: string;
   quantite_recommandee?: number;
   type?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IBlueprint {
+  id?: string;
   id_blueprint: string;
   id_family: string;
   id_templates: string;
@@ -525,7 +543,7 @@ export interface IBlueprint {
   pdr_theoriques: IBlueprintTheoreticalPdr[];
   preventivePlanItems?: IBlueprintPreventivePlanItem[];
   commonFailures?: IBlueprintCommonFailureItem[];
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface IWarehouseItem {
@@ -573,5 +591,5 @@ export interface IWarehouseItem {
   type_fixation?: string;
   historique_bobinage?: Array<Record<string, unknown>>;
   policy_tags?: MaterialPolicyTag[];
-  [key: string]: any;
+  [key: string]: unknown;
 }

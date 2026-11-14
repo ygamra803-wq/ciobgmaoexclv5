@@ -14,6 +14,16 @@ import type { IWorkshopOrder } from '../../domain/corrective/workshopOrderServic
 import type { INeedRequest } from '../../domain/corrective/needRequestService';
 import { getEntityRecordId } from '../../services/lanStateMergeService';
 import { SecurityService } from '../../core/security/SecurityService';
+import type {
+  IMachine,
+  IMouvement,
+  IOperation,
+  IStockItem,
+  ITechnician,
+  IUserRecord,
+  IZone,
+} from '../../types/domain';
+import type { CorrectiveInterventionItem, SortieExterneItem } from '../../types/store';
 
 import initialPdrGroups from '../../data/stock/seedPdrGroups.json';
 import initialStockSeed from '../../data/stock/seedStockItems.json';
@@ -44,11 +54,30 @@ import initialIntervenants from '../../data/corrective/seedIntervenants.json';
 export const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
 export const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
 
+interface SessionPayloadShape {
+  userId?: string;
+  id?: string;
+  username?: string;
+  nom?: string;
+  name?: string;
+  role?: string;
+}
+
+interface SessionWrapperShape {
+  payload?: SessionPayloadShape;
+  userId?: string;
+  id?: string;
+  username?: string;
+  nom?: string;
+  name?: string;
+  role?: string;
+}
+
 export function resolveActiveActorContext(): { actorId: string; actorName: string; actorRole: string } {
   try {
-    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2') as SessionWrapperShape | null;
     if (parsed && typeof parsed === 'object') {
-      const payload = parsed?.payload || parsed || {};
+      const payload: SessionPayloadShape = parsed.payload || parsed;
       return {
         actorId: String(payload.userId || payload.id || payload.username || 'ADMIN').trim(),
         actorName: String(payload.nom || payload.name || payload.username || 'Administrateur').trim(),
@@ -65,25 +94,26 @@ export function resolveActiveActorContext(): { actorId: string; actorName: strin
   };
 }
 
-export function isMachineArchivedState(m: any): boolean {
+export function isMachineArchivedState(m: Partial<IMachine> | Record<string, unknown> | null | undefined): boolean {
   if (!m || typeof m !== 'object') return false;
-  const statusUpper = String(m.status || m.statut || '').trim().toUpperCase();
-  const lifecycleUpper = String(m.lifecycle_status || '').trim().toUpperCase();
+  const rec = m as Partial<IMachine>;
+  const statusUpper = String(rec.status || rec.statut || '').trim().toUpperCase();
+  const lifecycleUpper = String(rec.lifecycle_status || '').trim().toUpperCase();
   return (
     statusUpper === 'ARCHIVEE' ||
     statusUpper === 'ARCHIVED' ||
     lifecycleUpper === 'ARCHIVED' ||
-    m.is_active === false ||
-    m.actif === false ||
-    m.archived === true
+    rec.is_active === false ||
+    rec.actif === false ||
+    rec.archived === true
   );
 }
 
 export function resolveActiveSessionRole(): string {
   try {
-    const parsed = SecurityService.getSessionSecure('gmao_session_v2');
+    const parsed = SecurityService.getSessionSecure('gmao_session_v2') as SessionWrapperShape | null;
     if (parsed && typeof parsed === 'object') {
-      const role = parsed?.payload?.role || parsed?.role || '';
+      const role = parsed.payload?.role || parsed.role || '';
       return String(role).trim().toUpperCase();
     }
   } catch {
@@ -109,16 +139,17 @@ export function normalizeInterventionNature(raw: unknown): string | undefined {
 }
 
 export function syncCorrectiveInterventionsWithSortieRecord(
-  interventions: any[],
-  sortieRecord: any,
-  allSorties: any[]
-): { changed: boolean; nextInterventions: any[] } {
+  interventions: CorrectiveInterventionItem[],
+  sortieRecord: SortieExterneItem | Record<string, unknown> | null | undefined,
+  allSorties: SortieExterneItem[]
+): { changed: boolean; nextInterventions: CorrectiveInterventionItem[] } {
   if (!Array.isArray(interventions) || !sortieRecord || typeof sortieRecord !== 'object') {
     return { changed: false, nextInterventions: interventions };
   }
-  const targetBtKey = String(sortieRecord.id_corrective || '').trim().toUpperCase();
-  const sortieId = String(sortieRecord.id || '').trim();
-  const sortieCode = String(sortieRecord.code || '').trim();
+  const sortie = sortieRecord as SortieExterneItem;
+  const targetBtKey = String(sortie.id_corrective || '').trim().toUpperCase();
+  const sortieId = String(sortie.id || '').trim();
+  const sortieCode = String(sortie.code || '').trim();
   if (!targetBtKey && !sortieId && !sortieCode) {
     return { changed: false, nextInterventions: interventions };
   }
@@ -151,14 +182,14 @@ export function syncCorrectiveInterventionsWithSortieRecord(
 
     return {
       ...bt,
-      id_sortie_atelier: sortieRecord.id || bt.id_sortie_atelier || '',
-      code_sortie_atelier: sortieRecord.code || bt.code_sortie_atelier || '',
+      id_sortie_atelier: sortie.id ? String(sortie.id) : bt.id_sortie_atelier || '',
+      code_sortie_atelier: sortie.code || bt.code_sortie_atelier || '',
       cout_atelier: totalAtelierCost,
       cout_total: Number((totalPdrCost + totalAtelierCost).toFixed(2)),
       nature_travail_atelier:
-        sortieRecord.nature_travail || sortieRecord.type_probleme || bt.nature_travail_atelier || '',
+        sortie.nature_travail || sortie.type_probleme || bt.nature_travail_atelier || '',
       prestataire_atelier:
-        sortieRecord.fournisseur_externe || bt.prestataire_atelier || '',
+        sortie.fournisseur_externe || bt.prestataire_atelier || '',
       ...(bt.intervention_nature ? {} : { intervention_nature: 'ATELIER' }),
     };
   });
@@ -189,18 +220,18 @@ export function recordLocalDeletedIds(entity: string, removedIds: unknown[]): vo
   } catch {}
 }
 
-export function trackRemovedEntityIds(entity: string, prevList: any[], nextList: any[]): void {
+export function trackRemovedEntityIds<T>(entity: string, prevList: T[], nextList: T[]): void {
   if (!Array.isArray(prevList) || prevList.length === 0) return;
   const nextArr = Array.isArray(nextList) ? nextList : [];
   if (nextArr.length >= prevList.length) {
     const nextIds = new Set<string>();
     for (const item of nextArr) {
-      const id = getEntityRecordId(entity, item);
+      const id = getEntityRecordId(entity, item as Record<string, unknown>);
       if (id) nextIds.add(id);
     }
     const removed: string[] = [];
     for (const prevItem of prevList) {
-      const prevId = getEntityRecordId(entity, prevItem);
+      const prevId = getEntityRecordId(entity, prevItem as Record<string, unknown>);
       if (prevId && !nextIds.has(prevId)) removed.push(prevId);
     }
     if (removed.length > 0) recordLocalDeletedIds(entity, removed);
@@ -208,12 +239,12 @@ export function trackRemovedEntityIds(entity: string, prevList: any[], nextList:
   }
   const nextIds = new Set<string>();
   for (const item of nextArr) {
-    const id = getEntityRecordId(entity, item);
+    const id = getEntityRecordId(entity, item as Record<string, unknown>);
     if (id) nextIds.add(id);
   }
   const removed: string[] = [];
   for (const prevItem of prevList) {
-    const prevId = getEntityRecordId(entity, prevItem);
+    const prevId = getEntityRecordId(entity, prevItem as Record<string, unknown>);
     if (prevId && !nextIds.has(prevId)) {
       removed.push(prevId);
     }
@@ -224,14 +255,14 @@ export function trackRemovedEntityIds(entity: string, prevList: any[], nextList:
 }
 
 export function isPartAlreadyDeductedByStoreBon(
-  mouvements: any[],
+  mouvements: Array<Partial<IMouvement>>,
   numBonSaisi: unknown,
   ref: unknown
 ): boolean {
   const cleanBon = String(numBonSaisi || '').trim().toUpperCase();
   const cleanRef = String(ref || '').trim().toUpperCase();
   if (!cleanBon || !cleanRef) return false;
-  return (mouvements || []).some((m: any) => {
+  return (mouvements || []).some((m) => {
     if (!m) return false;
     const mType = String(m.type || '').trim().toLowerCase();
     if (!mType.includes('sortie') && mType !== 'out') return false;
@@ -247,7 +278,7 @@ export function resolveUpdate<T>(updater: T | ((prev: T) => T), current: T): T {
   return typeof updater === 'function' ? (updater as (prev: T) => T)(current) : updater;
 }
 
-export function buildInitialStockMapFromList(rawStock: any[] = []): Map<string, number> {
+export function buildInitialStockMapFromList(rawStock: Array<Partial<IStockItem> & { Ref?: string }> = []): Map<string, number> {
   const map = new Map<string, number>();
   if (!Array.isArray(rawStock)) return map;
   for (const item of rawStock) {
@@ -259,21 +290,22 @@ export function buildInitialStockMapFromList(rawStock: any[] = []): Map<string, 
   return map;
 }
 
-export function isRealPersonnelUser(u: any): boolean {
+export function isRealPersonnelUser(u: Partial<IUserRecord> | Record<string, unknown> | null | undefined): boolean {
   if (!u || typeof u !== 'object') return false;
-  if (u.passwordHash) return false;
-  const idStr = String(u.id || u.id_technician || u.id_operation || '').trim().toUpperCase();
-  const usernameStr = String(u.username || '').trim().toLowerCase();
+  const rec = u as Partial<IUserRecord>;
+  if (rec.passwordHash) return false;
+  const idStr = String(rec.id || rec.id_technician || rec.id_operation || '').trim().toUpperCase();
+  const usernameStr = String(rec.username || '').trim().toLowerCase();
   if (['ADMIN', 'MAGASINIER', 'VIEWER'].includes(idStr) || ['admin', 'magasinier', 'viewer'].includes(usernameStr)) {
     return false;
   }
-  if (idStr === 'TECH' && (!u.nom || u.nom === 'Technicien Maintenance')) {
+  if (idStr === 'TECH' && (!rec.nom || rec.nom === 'Technicien Maintenance')) {
     return false;
   }
   return true;
 }
 
-export function deriveTechnicians(users: any[]) {
+export function deriveTechnicians(users: IUserRecord[]): ITechnician[] {
   return (users || [])
     .filter((u) => {
       if (!u || !isRealPersonnelUser(u)) return false;
@@ -287,7 +319,7 @@ export function deriveTechnicians(users: any[]) {
     }));
 }
 
-export function deriveOperations(users: any[]) {
+export function deriveOperations(users: IUserRecord[]): IOperation[] {
   return (users || [])
     .filter((u) => {
       if (!u || !isRealPersonnelUser(u)) return false;
@@ -310,10 +342,10 @@ export function getInitialStock() {
     allowDemoFallback: true,
     demoSeed: initialStockSeed,
   });
-  const demoDesignations = initialStockSeed.map((s: any) => ({
+  const demoDesignations = (initialStockSeed as Array<Partial<IStockItem> & { id_diag?: string }>).map((s) => ({
     id: s.id,
-    ref: s.ref,
-    designation: s.designation,
+    ref: s.ref || '',
+    designation: s.designation || '',
     id_type: s.id_type,
     type: s.type,
     stockInitial: s.stockInitial,
@@ -331,11 +363,11 @@ export function getInitialStock() {
   return { types, rawStock, designations, pdrGroups };
 }
 
-export function normalizeMachinesList(list: any[] = []) {
+export function normalizeMachinesList(list: IMachine[] = []): IMachine[] {
   if (!Array.isArray(list)) return [];
   const baseNormalized = list.map((m) => {
     if (!m || typeof m !== 'object') return m;
-    const assetClass =
+    const assetClass: 'SYSTEM_GENERAL' | 'PRODUCTION' =
       String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
         ? 'SYSTEM_GENERAL'
         : 'PRODUCTION';
@@ -362,20 +394,20 @@ export function getInitialMachines() {
     allowDemoFallback: false,
     demoSeed: [],
   });
-  const loadedMachines = loadCollection(STORAGE_KEYS.MACHINES, {
+  const loadedMachines = loadCollection<IMachine>(STORAGE_KEYS.MACHINES, {
     allowDemoFallback: true,
-    demoSeed: initialMachines,
+    demoSeed: initialMachines as IMachine[],
   });
   const machines = normalizeMachinesList(loadedMachines);
   const generalSystemTypes = loadCollection(STORAGE_KEYS.GENERAL_SYSTEM_TYPES, {
     allowDemoFallback: true,
     demoSeed: initialGeneralSystemTypes,
   });
-  const loadedZones = loadCollection(STORAGE_KEYS.ZONES, {
+  const loadedZones = loadCollection<IZone>(STORAGE_KEYS.ZONES, {
     allowDemoFallback: true,
-    demoSeed: initialZones,
+    demoSeed: initialZones as IZone[],
   });
-  const zones = loadedZones.map((z: any) => ({
+  const zones = loadedZones.map((z) => ({
     ...z,
     code_zone: z.code_zone || z.code || z.id_zone,
     id_zone: z.id_zone || z.code_zone || z.code,

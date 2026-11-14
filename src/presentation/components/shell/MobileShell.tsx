@@ -18,6 +18,7 @@ import {
   buildTechnicianDashboardScope,
   getTechnicianDisplayName,
   getTechnicianBadgeLabel,
+  type TechnicianActorUser,
 } from '../../../core/security/technicianScope';
 import { filterActiveMachines } from '../../../utils/activeMachines';
 import ShellModeSwitcher from '../common/ShellModeSwitcher';
@@ -26,29 +27,51 @@ import TodayTab from './mobile/TodayTab';
 import PreventiveTab, { type MobilePrevFilter } from './mobile/PreventiveTab';
 import CorrectiveTab, { type MobileCorrFilter } from './mobile/CorrectiveTab';
 import SupervisoryMobileCockpit from './mobile/SupervisoryMobileCockpit';
+import type {
+  IMachine,
+  IMouvement,
+  ISortieDemand,
+  IStockItem,
+  ITechnician,
+  IZone,
+} from '../../../types/domain';
+import type {
+  CorrectiveInterventionItem,
+  PreventiveTaskItem,
+} from '../../../types/store';
+import type { PreventiveExecutionRecord } from '../../../types/preventive';
+import type { ToastState } from '../../../hooks/useAppViewController';
 
 interface MobileShellProps {
-  currentUser: any;
+  currentUser: (TechnicianActorUser & { username?: string }) | null;
   onLogout: () => void;
   setCurrentTab: (tab: string) => void;
-  machines: any[];
-  zones: any[];
-  stockItems: any[];
-  technicians: any[];
-  preventiveTasks: any[];
-  preventiveExecutions: any[];
-  correctiveInterventions: any[];
-  sortieDemands: any[];
-  mouvements: any[];
+  machines: IMachine[];
+  zones: IZone[];
+  stockItems: IStockItem[];
+  technicians: ITechnician[];
+  preventiveTasks: PreventiveTaskItem[];
+  preventiveExecutions: PreventiveExecutionRecord[];
+  correctiveInterventions: CorrectiveInterventionItem[];
+  sortieDemands: ISortieDemand[];
+  mouvements: IMouvement[];
   activeLiveInterventionId?: string | number | null;
-  onMarkTaskDone: (id: string, validationData: any) => void;
-  onAddDemandeIntervention: (data: any) => any;
-  onStartLiveIntervention: (id: string) => void;
-  onSubmitInterventionForValidation: (id: string, submissionData: any) => any;
+  onMarkTaskDone: (
+    id: string | number,
+    validationData?: Record<string, unknown>
+  ) => PreventiveExecutionRecord | null | void;
+  onAddDemandeIntervention: (
+    data: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => CorrectiveInterventionItem;
+  onStartLiveIntervention: (id: string | number) => void;
+  onSubmitInterventionForValidation: (
+    id: string | number,
+    submissionData?: Partial<CorrectiveInterventionItem> & Record<string, unknown>
+  ) => CorrectiveInterventionItem | null;
   onOpenMachineQrModal?: (machineId: string) => void;
-  showToast?: (msg: string, type?: any) => void;
-  toast?: { message: string; type?: string } | null;
-  setToast?: (t: any) => void;
+  showToast?: (msg: string, type?: ToastState['type']) => void;
+  toast?: ToastState | null;
+  setToast?: (t: ToastState | null) => void;
 }
 
 export type MobileTabId = 'today' | 'preventive' | 'corrective' | 'more';
@@ -84,11 +107,11 @@ export default function MobileShell({
 
   // Cross-tab navigation intents from TodayTab
   const [prevInitialFilter, setPrevInitialFilter] = useState<MobilePrevFilter>('TODO');
-  const [prevTaskToExecute, setPrevTaskToExecute] = useState<any | null>(null);
+  const [prevTaskToExecute, setPrevTaskToExecute] = useState<PreventiveTaskItem | null>(null);
 
   const [corrInitialFilter, setCorrInitialFilter] = useState<MobileCorrFilter>('ACTIVE');
   const [corrOpenNewDi, setCorrOpenNewDi] = useState(false);
-  const [corrBtToSubmit, setCorrBtToSubmit] = useState<any | null>(null);
+  const [corrBtToSubmit, setCorrBtToSubmit] = useState<CorrectiveInterventionItem | null>(null);
 
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
 
@@ -151,7 +174,7 @@ export default function MobileShell({
     if (matchedMachine) {
       setIsQrScannerOpen(false);
       onOpenMachineQrModal?.(
-        matchedMachine.id_machine_registered || matchedMachine.id || matchedMachine.code
+        String(matchedMachine.id_machine_registered || matchedMachine.id || matchedMachine.code || '')
       );
       return;
     }
@@ -182,7 +205,11 @@ export default function MobileShell({
           sortieDemands={sortieDemands}
           mouvements={mouvements}
           onAddDemandeIntervention={onAddDemandeIntervention}
-          showToast={showToast}
+          showToast={
+            showToast
+              ? (msg: string, type?: string) => showToast(msg, type as ToastState['type'])
+              : undefined
+          }
         />
 
         {isQrScannerOpen && (
@@ -301,7 +328,11 @@ export default function MobileShell({
               setActiveTab('corrective');
             }}
             onStartLiveIntervention={onStartLiveIntervention}
-            showToast={showToast}
+            showToast={
+              showToast
+                ? (msg: string, type?: string) => showToast(msg, type as ToastState['type'])
+                : undefined
+            }
           />
         )}
 
@@ -317,7 +348,11 @@ export default function MobileShell({
             onClearInitialTask={() => setPrevTaskToExecute(null)}
             onMarkTaskDone={onMarkTaskDone}
             onOpenMachineQrModal={onOpenMachineQrModal}
-            showToast={showToast}
+            showToast={
+              showToast
+                ? (msg: string, type?: string) => showToast(msg, type as ToastState['type'])
+                : undefined
+            }
           />
         )}
 
@@ -342,7 +377,11 @@ export default function MobileShell({
             onStartLiveIntervention={onStartLiveIntervention}
             onSubmitInterventionForValidation={onSubmitInterventionForValidation}
             onOpenMachineQrModal={onOpenMachineQrModal}
-            showToast={showToast}
+            showToast={
+              showToast
+                ? (msg: string, type?: string) => showToast(msg, type as ToastState['type'])
+                : undefined
+            }
           />
         )}
 

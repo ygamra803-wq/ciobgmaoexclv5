@@ -1,11 +1,69 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import type {
+  IMachine,
+  IMouvement,
+  IOperation,
+  IStockItem,
+  ITechnician,
+  IWarehouseItem,
+  IZone,
+} from '../../../types/domain';
+
+export type JournalMovementInput = Partial<IMouvement> & {
+  num_commande?: string;
+  source_category?: string;
+  id_type?: string;
+  demandeur?: string;
+  prestataire_externe?: string;
+  prestataire?: string;
+  stock_avant?: number;
+  stock_apres?: number;
+  seuil_min?: number;
+  unit?: string;
+};
+
+export interface JournalStockArticleOption extends Partial<IStockItem> {
+  id_article?: string;
+}
+
+export interface JournalWarehouseItemOption extends Partial<IWarehouseItem> {
+  seuil?: number;
+}
+
+export interface JournalMachineOption extends Partial<IMachine> {
+  id_zone?: string;
+}
+
+export interface JournalLookupContext {
+  stockItems?: JournalStockArticleOption[];
+  warehouseItems?: JournalWarehouseItemOption[];
+  machines?: JournalMachineOption[];
+  zones?: Array<Partial<IZone>>;
+  technicians?: Array<Partial<ITechnician>>;
+  operations?: Array<Partial<IOperation>>;
+}
+
+export interface TableFilterOption {
+  value: string;
+  label: string;
+  icon?: React.ReactNode;
+  badge?: string;
+}
+
+export interface TableFilterSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options?: TableFilterOption[];
+  icon?: React.ReactNode;
+  className?: string;
+}
 
 /**
  * Smart OT / Commande resolver:
  * Fallback to INCONNU if empty, null, undefined or whitespace
  */
-export const getSmartOtCommande = (m: any = {}) => {
+export const getSmartOtCommande = (m: JournalMovementInput = {}) => {
   if (!m) return 'INCONNU';
   const val = m.num_commande != null ? String(m.num_commande).trim() : '';
   if (val === '' || val.toUpperCase() === 'NULL' || val.toUpperCase() === 'UNDEFINED') {
@@ -17,7 +75,7 @@ export const getSmartOtCommande = (m: any = {}) => {
 /**
  * Smart Flux Type Resolver (Column B)
  */
-export const getSmartFluxType = (m: any = {}) => {
+export const getSmartFluxType = (m: JournalMovementInput = {}) => {
   if (!m) return 'Sortie Interne';
   const rawType = String(m.type || '').trim();
   const rawAction = String(m.action_id || '').toUpperCase();
@@ -49,7 +107,10 @@ export const getSmartFluxType = (m: any = {}) => {
 /**
  * Smart Article Info Resolver (Column D)
  */
-export const resolveArticleInfo = (m: any = {}, { stockItems = [], warehouseItems = [] }: any = {}) => {
+export const resolveArticleInfo = (
+  m: JournalMovementInput = {},
+  { stockItems = [], warehouseItems = [] }: Pick<JournalLookupContext, 'stockItems' | 'warehouseItems'> = {}
+) => {
   const rawRef = String(m.ref || '').trim();
 
   // Source category identification
@@ -64,14 +125,14 @@ export const resolveArticleInfo = (m: any = {}, { stockItems = [], warehouseItem
   // Lookup in Stock PDR
   const rawRefLower = rawRef.toLowerCase();
   const matchedStock = stockItems.find(
-    (s: any) =>
+    (s) =>
       String(s.ref || '').trim().toLowerCase() === rawRefLower ||
       String(s.designation || '').trim().toLowerCase() === rawRefLower
   );
 
   // Lookup in Warehouse
   const matchedWarehouse = warehouseItems.find(
-    (w: any) =>
+    (w) =>
       (w.id_warehouse_item && String(w.id_warehouse_item).trim().toLowerCase() === rawRefLower) ||
       (w.designation && String(w.designation).trim().toLowerCase() === rawRefLower)
   );
@@ -130,18 +191,18 @@ export const resolveArticleInfo = (m: any = {}, { stockItems = [], warehouseItem
  * Smart Destination Resolver (Column G)
  */
 export const resolveDestinationInfo = (
-  m: any = {},
-  { machines = [], zones = [] }: any = {}
+  m: JournalMovementInput = {},
+  { machines = [], zones = [] }: JournalLookupContext = {}
 ) => {
   const flux = getSmartFluxType(m);
   const action = String(m.action_id || '').toUpperCase();
 
   // Helper to format Zone label
-  const resolveZoneText = (zoneId: any) => {
+  const resolveZoneText = (zoneId?: string | null) => {
     if (!zoneId) return '';
     const clean = String(zoneId).trim().toLowerCase();
     const found = zones.find(
-      (z: any) =>
+      (z) =>
         (z.id_zone && String(z.id_zone).trim().toLowerCase() === clean) ||
         (z.libelle && String(z.libelle).trim().toLowerCase() === clean)
     );
@@ -152,11 +213,11 @@ export const resolveDestinationInfo = (
   };
 
   // Helper to lookup registered machine
-  const resolveMachine = (mchId: any, rawComment: any) => {
+  const resolveMachine = (mchId?: string | null, rawComment?: string | null) => {
     if (mchId) {
       const cleanMch = String(mchId).trim().toLowerCase();
       const found = machines.find(
-        (mc: any) =>
+        (mc) =>
           (mc.id_machine_registered &&
             String(mc.id_machine_registered).trim().toLowerCase() === cleanMch) ||
           (mc.designation && String(mc.designation).trim().toLowerCase() === cleanMch)
@@ -180,7 +241,7 @@ export const resolveDestinationInfo = (
     if (rawComment) {
       const commentStr = String(rawComment).trim().toLowerCase();
       const matchRegistered = machines.find(
-        (mc: any) =>
+        (mc) =>
           (mc.designation && String(mc.designation).trim().toLowerCase().includes(commentStr)) ||
           (mc.id_machine_registered &&
             String(mc.id_machine_registered).trim().toLowerCase() === commentStr)
@@ -317,8 +378,8 @@ export const resolveDestinationInfo = (
  * Smart Intervenant & Demandeur Resolver (Column H)
  */
 export const resolveIntervenantInfo = (
-  m: any = {},
-  { technicians = [], operations = [] }: any = {}
+  m: JournalMovementInput = {},
+  { technicians = [], operations = [] }: Pick<JournalLookupContext, 'technicians' | 'operations'> = {}
 ) => {
   const flux = getSmartFluxType(m);
   const action = String(m.action_id || '').toUpperCase();
@@ -333,7 +394,7 @@ export const resolveIntervenantInfo = (
     const clean = val.toLowerCase();
     return (
       technicians.find(
-        (t: any) =>
+        (t) =>
           String(t.nom || '').trim().toLowerCase() === clean ||
           String(t.id_technician || '').trim().toLowerCase() === clean
       ) || null
@@ -345,7 +406,7 @@ export const resolveIntervenantInfo = (
     const clean = val.toLowerCase();
     return (
       operations.find(
-        (op: any) =>
+        (op) =>
           String(op.nom || '').trim().toLowerCase() === clean ||
           String(op.id_operation || '').trim().toLowerCase() === clean
       ) || null
@@ -548,7 +609,10 @@ export const resolveIntervenantInfo = (
 /**
  * Smart Stock Progression & Equation Resolver (Column E)
  */
-export const resolveStockEquation = (m: any = {}, { stockItems = [], warehouseItems = [] }: any = {}) => {
+export const resolveStockEquation = (
+  m: JournalMovementInput = {},
+  { stockItems = [], warehouseItems = [] }: Pick<JournalLookupContext, 'stockItems' | 'warehouseItems'> = {}
+) => {
   const isOutflow = String(m.type || '').toLowerCase().includes('sortie');
   const qte = Number(m.quantite) || 0;
 
@@ -559,13 +623,13 @@ export const resolveStockEquation = (m: any = {}, { stockItems = [], warehouseIt
   const rawRef = String(m.ref || '').trim();
   const rawRefLower = rawRef.toLowerCase();
   const matchedStock = stockItems.find(
-    (s: any) =>
+    (s) =>
       (s.ref && String(s.ref).trim().toLowerCase() === rawRefLower) ||
       (s.id_article && String(s.id_article).trim().toLowerCase() === rawRefLower) ||
       (s.designation && String(s.designation).trim().toLowerCase() === rawRefLower)
   );
   const matchedWarehouse = warehouseItems.find(
-    (w: any) =>
+    (w) =>
       (w.id_warehouse_item && String(w.id_warehouse_item).trim().toLowerCase() === rawRefLower) ||
       (w.code && String(w.code).trim().toLowerCase() === rawRefLower) ||
       (w.designation && String(w.designation).trim().toLowerCase() === rawRefLower)
@@ -617,13 +681,19 @@ export const resolveStockEquation = (m: any = {}, { stockItems = [], warehouseIt
 /**
  * Custom Select Helper component
  */
-export function TableFilterSelect({ value, onChange, options = [], icon, className = '' }: any) {
+export function TableFilterSelect({
+  value,
+  onChange,
+  options = [],
+  icon,
+  className = '',
+}: TableFilterSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<any>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target)) {
+      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) {
         setIsOpen(false);
       }
     };
@@ -631,7 +701,7 @@ export function TableFilterSelect({ value, onChange, options = [], icon, classNa
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const selectedOption = options.find((o: any) => o.value === value) || options[0];
+  const selectedOption = options.find((o) => o.value === value) || options[0];
 
   return (
     <div className={`relative ${className}`} ref={ref}>
@@ -657,7 +727,7 @@ export function TableFilterSelect({ value, onChange, options = [], icon, classNa
 
       {isOpen && (
         <div className="absolute left-0 mt-1 w-56 bg-white rounded-xl border border-slate-200 shadow-xl z-50 p-1 space-y-0.5 animate-in fade-in">
-          {options.map((opt: any) => (
+          {options.map((opt) => (
             <button
               key={opt.value}
               type="button"

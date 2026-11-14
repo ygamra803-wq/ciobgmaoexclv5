@@ -2,6 +2,8 @@ import { startTransition, useMemo, useCallback } from 'react';
 import type { IGeneralSystemType } from '../../types/domain';
 import type { GmaoStoreSetters, StateUpdater } from '../../types/store';
 import { buildNexusAutomationCallbacks } from './hooks/buildNexusAutomationCallbacks';
+import { storageService } from '../../utils/storageService';
+import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 
 export interface AppRouterSettersMap extends Partial<GmaoStoreSetters> {
   generalSystemTypes?: IGeneralSystemType[];
@@ -250,7 +252,7 @@ export function useAppRouterProps({
         onNavigateToUsers: () => navigateTo('utilisateurs'),
         onNavigateToSettings: (targetSubTab?: string) => {
           if (typeof targetSubTab === 'string' && targetSubTab.trim()) {
-            localStorage.setItem('gmao_settings_target_tab', targetSubTab.trim());
+            storageService.setItem(STORAGE_KEYS.SETTINGS_TARGET_TAB, targetSubTab.trim());
           }
           navigateTo('settings');
         },
@@ -544,7 +546,7 @@ export function useAppRouterProps({
         onNavigateToPreventive: (machId: string) => {
           if (typeof machId === 'string' && machId.trim()) {
             try {
-              localStorage.setItem('gmao_preventive_target_machine', machId.trim());
+              storageService.setItem(STORAGE_KEYS.PREVENTIVE_TARGET_MACHINE, machId.trim());
             } catch {
               // ignore storage errors
             }
@@ -574,7 +576,7 @@ export function useAppRouterProps({
         onNavigateToPreventive: (machId: string) => {
           if (typeof machId === 'string' && machId.trim()) {
             try {
-              localStorage.setItem('gmao_preventive_target_machine', machId.trim());
+              storageService.setItem(STORAGE_KEYS.PREVENTIVE_TARGET_MACHINE, machId.trim());
             } catch {
               // ignore storage errors
             }
