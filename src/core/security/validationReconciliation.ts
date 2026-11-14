@@ -83,6 +83,7 @@ export interface ReconciliationCorrectiveBt {
   statut?: string;
   validation_status?: string;
   validated_at?: string;
+  stock_deducted?: boolean;
   num_bon_saisi_par_tech?: string;
   num_bon?: string;
   action_realisee?: string;
@@ -93,6 +94,27 @@ export interface ReconciliationCorrectiveBt {
   submitted_at?: string;
   date_demande?: string;
   pieces_proposees?: SpareClaimLine[];
+  pieces_reservees?: SpareClaimLine[];
+  pieces_prevues?: SpareClaimLine[];
+}
+
+export interface ReconciliationPreventiveTask {
+  id?: string | number;
+  code_tache?: string;
+  code?: string;
+  action_code?: string;
+  id_machine?: string;
+  code_machine?: string;
+  machine_id?: string;
+  machine?: string;
+  composant?: string;
+  responsable?: string;
+  etat?: string;
+  statut?: string;
+  validation_status?: string;
+  reserve_stock?: boolean;
+  pieces_reservees?: SpareClaimLine[];
+  pdr_requises?: SpareClaimLine[];
 }
 
 export interface ReconciliationPreventiveExec {
@@ -638,10 +660,12 @@ export function computeReservedStockMap({
   correctiveInterventions = [],
   preventiveExecutions = [],
   sortieDemands = [],
+  preventiveTasks = [],
 }: {
   correctiveInterventions?: ReconciliationCorrectiveBt[];
   preventiveExecutions?: ReconciliationPreventiveExec[];
   sortieDemands?: ReconciliationSortieDemand[];
+  preventiveTasks?: ReconciliationPreventiveTask[];
 }): Map<string, ReservedStockEntry> {
   const map = new Map<string, ReservedStockEntry>();
 
@@ -666,18 +690,56 @@ export function computeReservedStockMap({
 
   for (const bt of correctiveInterventions || []) {
     const status = String(bt?.validation_status || '');
-    if (status !== 'PENDING_VALIDATION' && status !== 'NEEDS_CLARIFICATION') continue;
-    const pieces = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
-    for (const p of pieces) {
-      const parsed = extractSpareRefAndQty(p);
-      addReservation(parsed.ref, parsed.qty, {
-        claimType: 'CORRECTIVE',
-        claimId: String(bt?.id || ''),
-        code: String(bt?.num_bt || bt?.id || 'BT'),
-        machineCode: String(bt?.code_machine || ''),
-        technicianName: String(bt?.submitted_by_name || bt?.intervenant || 'Technicien'),
-        status,
-      });
+    const btStatut = String(bt?.statut || '').toUpperCase();
+    if (status === 'PENDING_VALIDATION' || status === 'NEEDS_CLARIFICATION') {
+      const pieces =
+        Array.isArray(bt?.pieces_proposees) && bt.pieces_proposees.length > 0
+          ? bt.pieces_proposees
+          : Array.isArray(bt?.pieces_reservees)
+          ? bt.pieces_reservees
+          : [];
+      for (const p of pieces) {
+        const parsed = extractSpareRefAndQty(p);
+        addReservation(parsed.ref, parsed.qty, {
+          claimType: 'CORRECTIVE',
+          claimId: String(bt?.id || ''),
+          code: String(bt?.num_bt || bt?.id || 'BT'),
+          machineCode: String(bt?.code_machine || ''),
+          technicianName: String(bt?.submitted_by_name || bt?.intervenant || 'Technicien'),
+          status,
+        });
+      }
+      continue;
+    }
+
+    // Pre-reservation on active/approved BT (BT_PLANIFIE / EN_COURS / EN_ATTENTE_PDR) before closure/stock deduction
+    const isActiveBt =
+      btStatut !== 'CLOTURE' &&
+      status !== 'APPROVED' &&
+      status !== 'REJECTED' &&
+      !bt?.stock_deducted &&
+      (Boolean(bt?.num_bt) ||
+        btStatut === 'BT_PLANIFIE' ||
+        btStatut === 'EN_COURS' ||
+        btStatut === 'EN_ATTENTE_PDR');
+
+    if (isActiveBt) {
+      const reservedPieces = Array.isArray(bt?.pieces_reservees)
+        ? bt.pieces_reservees
+        : Array.isArray(bt?.pieces_prevues)
+        ? bt.pieces_prevues
+        : [];
+      for (const p of reservedPieces) {
+        const parsed = extractSpareRefAndQty(p);
+        addReservation(parsed.ref, parsed.qty, {
+          claimType: 'CORRECTIVE',
+          claimId: String(bt?.id || ''),
+          code: String(bt?.num_bt || bt?.id || 'BT'),
+          machineCode: String(bt?.code_machine || ''),
+          technicianName: String(bt?.intervenant || bt?.submitted_by_name || 'Planifié BT'),
+          status: 'BT_RESERVE',
+        });
+      }
     }
   }
 
@@ -694,6 +756,37 @@ export function computeReservedStockMap({
         machineCode: String(ex?.machineCode || ''),
         technicianName: String(ex?.submitted_by_name || ex?.executorName || 'Technicien'),
         status,
+      });
+    }
+  }
+
+  // Pre-reservation on scheduled/active Preventive Tasks with explicit reservation
+  for (const task of preventiveTasks || []) {
+    const etatLower = String(task?.etat || '').trim().toLowerCase();
+    const statutUpper = String(task?.statut || '').trim().toUpperCase();
+    if (
+      etatLower === 'fait' ||
+      etatLower === 'en attente validation' ||
+      statutUpper === 'TERMINE' ||
+      statutUpper === 'CLOTURE' ||
+      task?.validation_status === 'PENDING_VALIDATION'
+    ) {
+      continue;
+    }
+    const reservedPieces = Array.isArray(task?.pieces_reservees)
+      ? task.pieces_reservees
+      : task?.reserve_stock && Array.isArray(task?.pdr_requises)
+      ? task.pdr_requises
+      : [];
+    for (const p of reservedPieces) {
+      const parsed = extractSpareRefAndQty(p);
+      addReservation(parsed.ref, parsed.qty, {
+        claimType: 'PREVENTIVE',
+        claimId: String(task?.id || ''),
+        code: String(task?.code_tache || task?.code || task?.action_code || task?.id || 'PM-PLAN'),
+        machineCode: String(task?.id_machine || task?.code_machine || task?.machine_id || ''),
+        technicianName: String(task?.responsable || 'Plan Préventif'),
+        status: 'PLAN_PREVENTIF_RESERVE',
       });
     }
   }

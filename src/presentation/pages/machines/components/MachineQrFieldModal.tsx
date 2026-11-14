@@ -17,6 +17,7 @@ import {
   Package,
   ExternalLink,
   Hash,
+  Zap,
 } from 'lucide-react';
 import { networkConfigService } from '../../../../services/networkConfigService';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
@@ -59,11 +60,20 @@ export default function MachineQrFieldModal({
   const generalSystemTypes = useGmaoStore((s) => s.generalSystemTypes) || [];
   const handleAddDemandeIntervention = useGmaoStore((s) => s.handleAddDemandeIntervention);
   const handleMarkTaskDone = useGmaoStore((s) => s.handleMarkTaskDone);
+  const handleSubmitInterventionForValidation = useGmaoStore(
+    (s) => s.handleSubmitInterventionForValidation
+  );
+  const handleClotureIntervention = useGmaoStore((s) => s.handleClotureIntervention);
 
   const [mode, setMode] = useState<'ETIQUETTE' | 'FICHE_TERRAIN'>(initialMode);
-  const [activeFieldTab, setActiveFieldTab] = useState<'SIGNALER_DI' | 'PREVENTIF_DU' | 'HISTORIQUE_BOM'>(
-    'SIGNALER_DI'
+  const [activeFieldTab, setActiveFieldTab] = useState<
+    'SIGNALER_DI' | 'PREVENTIF_DU' | 'HISTORIQUE_BOM' | 'EXPRESS_3CLICS'
+  >('SIGNALER_DI');
+  const [expressSelectedBtId, setExpressSelectedBtId] = useState<string>('');
+  const [expressQuickAction, setExpressQuickAction] = useState<string>(
+    'Remplacement pièce & remise en service nominale'
   );
+  const [expressClosedMsg, setExpressClosedMsg] = useState<string>('');
   const [hostBaseUrl, setHostBaseUrl] = useState<string>(() => {
     if (typeof window !== 'undefined' && window.location?.origin) {
       return window.location.origin;
@@ -143,6 +153,21 @@ export default function MachineQrFieldModal({
     return (correctiveInterventions || [])
       .filter((ci: any) => String(ci.code_machine || '').trim().toUpperCase() === codeUpper)
       .slice(0, 5);
+  }, [correctiveInterventions, machineCode]);
+
+  // Open BTs on this machine eligible for 3-Click Express Workshop Closure
+  const openMachineBts = useMemo(() => {
+    const codeUpper = machineCode.toUpperCase();
+    return (correctiveInterventions || []).filter((ci: any) => {
+      const mMatch = String(ci.code_machine || '').trim().toUpperCase() === codeUpper;
+      if (!mMatch) return false;
+      const st = String(ci.statut || '').toUpperCase();
+      return (
+        st !== 'CLOTURE' &&
+        ci.validation_status !== 'PENDING_VALIDATION' &&
+        ci.validation_status !== 'APPROVED'
+      );
+    });
   }, [correctiveInterventions, machineCode]);
 
   // Idea 3: Passeport Santé Machine (12-Month TCO = Préventif + Correctif PDR + Bobinage Externe, Downtime & Recurrent Organ BER Alerts)
@@ -261,6 +286,51 @@ export default function MachineQrFieldModal({
         : `Tâche ${task.composant} validée avec succès !`,
       'success'
     );
+  };
+
+  const handleExpress3ClickClose = () => {
+    const targetBt =
+      openMachineBts.find((b: any) => String(b.id) === String(expressSelectedBtId)) ||
+      openMachineBts[0];
+    if (!targetBt) return;
+
+    const nowIso = new Date().toISOString();
+    const today = nowIso.slice(0, 10);
+    const timeNow = nowIso.slice(11, 16);
+    const reservedPieces = Array.isArray(targetBt.pieces_reservees)
+      ? targetBt.pieces_reservees
+      : [];
+
+    if (isTechUser && typeof handleSubmitInterventionForValidation === 'function') {
+      handleSubmitInterventionForValidation(String(targetBt.id), {
+        action_realisee: `[ATELIER EXPRESS QR 3-CLICS] ${expressQuickAction}`,
+        intervention_nature: reservedPieces.length > 0 ? 'REPLACE' : 'REPAIR',
+        pieces_proposees: reservedPieces,
+        date_fin_proposee: today,
+        heure_fin_proposee: timeNow,
+      });
+      setExpressClosedMsg(
+        `BT ${targetBt.num_bt || targetBt.id} soumis en 3 clics pour validation responsable !`
+      );
+      showToast?.(
+        `Atelier Express : BT ${targetBt.num_bt || targetBt.id} soumis en 3 clics !`,
+        'success'
+      );
+    } else if (typeof handleClotureIntervention === 'function') {
+      handleClotureIntervention(String(targetBt.id), {
+        action_realisee: `[ATELIER EXPRESS QR 3-CLICS] ${expressQuickAction}`,
+        pieces_utilisees: reservedPieces,
+        date_fin: today,
+        heure_fin: timeNow,
+        intervenant: defaultRequester,
+      });
+      setExpressClosedMsg(`BT ${targetBt.num_bt || targetBt.id} clôturé en 3 clics avec succès !`);
+      showToast?.(
+        `Atelier Express : BT ${targetBt.num_bt || targetBt.id} clôturé en 3 clics !`,
+        'success'
+      );
+    }
+    setTimeout(() => setExpressClosedMsg(''), 4000);
   };
 
   return (
@@ -461,8 +531,8 @@ export default function MachineQrFieldModal({
           /* MODE 2: FICHE TERRAIN MOBILE (3 ACTIONS RAPIDES) */
           /* ===================================================================== */
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden text-xs">
-            {/* 3 Quick Action Tabs */}
-            <div className="grid grid-cols-3 gap-1.5 p-3 bg-slate-100 border-b border-slate-200 shrink-0">
+            {/* 4 Quick Action Tabs (including 3-Click Express Workshop Mode) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-3 bg-slate-100 border-b border-slate-200 shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveFieldTab('SIGNALER_DI')}
@@ -473,7 +543,21 @@ export default function MachineQrFieldModal({
                 }`}
               >
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                <span>1. Signaler Panne (DI)</span>
+                <span>1. Signaler DI</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveFieldTab('EXPRESS_3CLICS')}
+                data-testid="qr-express-3clics-tab"
+                className={`py-2.5 px-2 rounded-xl font-black text-xs flex flex-col sm:flex-row items-center justify-center gap-1.5 transition cursor-pointer ${
+                  activeFieldTab === 'EXPRESS_3CLICS'
+                    ? 'bg-amber-500 text-slate-950 shadow-xs'
+                    : 'bg-white text-slate-700 hover:bg-amber-50 border border-slate-200/80'
+                }`}
+              >
+                <Zap className="w-4 h-4 shrink-0" />
+                <span>⚡ Close 3 Clics ({openMachineBts.length})</span>
               </button>
 
               <button
@@ -499,7 +583,7 @@ export default function MachineQrFieldModal({
                 }`}
               >
                 <Layers className="w-4 h-4 shrink-0" />
-                <span>3. Journal & BOM ({activityLedger.length})</span>
+                <span>3. Journal ({activityLedger.length})</span>
               </button>
             </div>
 
@@ -962,6 +1046,123 @@ export default function MachineQrFieldModal({
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* TAB 4: MODE ATELIER EXPRESS (SCAN QR -> CLOSE EN 3 CLICS) */}
+              {activeFieldTab === 'EXPRESS_3CLICS' && (
+                <div className="space-y-4" data-testid="express-3clics-panel">
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300 space-y-1">
+                    <div className="font-black text-amber-950 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-amber-600" />
+                      <span>Mode Atelier Rapide par Code-Barres / QR (Scan ➔ Action ➔ Clôture en 3 Clics)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-900">
+                      Conçu pour les techniciens en atelier avec gants : 1. Sélectionnez le BT scanné • 2. Touchez le geste réalisé • 3. Clôturez en un clic.
+                    </p>
+                  </div>
+
+                  {expressClosedMsg && (
+                    <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-900 font-bold flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{expressClosedMsg}</span>
+                    </div>
+                  )}
+
+                  {openMachineBts.length === 0 ? (
+                    <div className="p-5 rounded-2xl bg-slate-50 border border-dashed border-slate-200 text-center text-slate-500">
+                      Aucun Bon de Travail (BT) ouvert sur <b>{machineCode}</b>.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* CLIC 1: Select Active BT */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-black uppercase text-slate-600 block">
+                          Clic 1 — Bon de Travail Actif sur {machineCode}
+                        </span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {openMachineBts.map((bt: any) => {
+                            const isSelected =
+                              expressSelectedBtId
+                                ? String(bt.id) === String(expressSelectedBtId)
+                                : bt.id === openMachineBts[0]?.id;
+                            return (
+                              <button
+                                key={bt.id}
+                                type="button"
+                                onClick={() => setExpressSelectedBtId(String(bt.id))}
+                                className={`p-3 rounded-2xl border text-left transition cursor-pointer flex items-center justify-between ${
+                                  isSelected
+                                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                                    : 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50'
+                                }`}
+                              >
+                                <div>
+                                  <span className="font-mono font-black text-xs">
+                                    {bt.num_bt || bt.id}
+                                  </span>{' '}
+                                  • <span className="font-bold">{bt.anomalie || 'Intervention'}</span>
+                                  {Array.isArray(bt.pieces_reservees) &&
+                                    bt.pieces_reservees.length > 0 && (
+                                      <span className="ml-2 px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-200 font-mono text-[10px]">
+                                        PDR réservée: {bt.pieces_reservees[0].ref} (x
+                                        {bt.pieces_reservees[0].quantite})
+                                      </span>
+                                    )}
+                                </div>
+                                <CheckCircle2
+                                  className={`w-4 h-4 ${
+                                    isSelected ? 'text-amber-400' : 'text-slate-300'
+                                  }`}
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* CLIC 2: 1-Tap Standard Workshop Action */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-black uppercase text-slate-600 block">
+                          Clic 2 — Action Standard Réalisée (1 Tap)
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {[
+                            'Remplacement pièce & remise en service nominale',
+                            'Réarmement protection & contrôle capteurs',
+                            'Nettoyage, graissage & réglage mécanique',
+                            'Serrage connexions & test fonctionnel OK',
+                          ].map((actLabel) => (
+                            <button
+                              key={actLabel}
+                              type="button"
+                              onClick={() => setExpressQuickAction(actLabel)}
+                              className={`p-2.5 rounded-xl border font-bold text-left text-[11px] cursor-pointer ${
+                                expressQuickAction === actLabel
+                                  ? 'bg-indigo-600 text-white border-indigo-700'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-indigo-50'
+                              }`}
+                            >
+                              {actLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* CLIC 3: Close in 1 Tap */}
+                      <button
+                        type="button"
+                        onClick={handleExpress3ClickClose}
+                        data-testid="express-3clics-submit-btn"
+                        className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer"
+                      >
+                        <Zap className="w-4 h-4" />
+                        <span>
+                          Clic 3 — {isTechUser ? 'Soumettre & Terminer en 1 Clic' : 'Clôturer le BT en 1 Clic'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

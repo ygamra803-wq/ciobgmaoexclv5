@@ -41,6 +41,8 @@ import {
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
 import ValidationStatusBadge from '../../components/common/ValidationStatusBadge';
+import { evaluateBatchSpareAllocation } from '../../../domain/stock/stockReservationService';
+import { evaluateTechniciansForIntervention } from '../../../domain/workforce/workforceCapacityService';
 
 export default function DemandesInterventionTab({
   interventions = [],
@@ -74,6 +76,9 @@ export default function DemandesInterventionTab({
     [user, technicians]
   );
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger);
+  const storePreventiveExecutions = useGmaoStore((s) => s.preventiveExecutions);
+  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
+  const storePreventiveTasks = useGmaoStore((s) => s.preventiveTasks);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showConvertModal, setShowConvertModal] = useState<any>(null); // holds selected DI
   const [showTravauxSelector, setShowTravauxSelector] = useState(false);
@@ -407,7 +412,64 @@ export default function DemandesInterventionTab({
     intervenant: allTechnicianOptions[0]?.nom || '',
     priorite: 'HAUTE',
     travail_a_faire: '',
+    duree_prevue_mins: 90,
+    pdr_ref: '',
+    pdr_quantite: 1,
+    allowWaitPdrOnConflict: false,
   });
+
+  const convertTechEvaluations = useMemo(() => {
+    if (!showConvertModal) return [];
+    return evaluateTechniciansForIntervention({
+      intervention: showConvertModal,
+      technicians: technicians?.length > 0 ? technicians : allTechnicianOptions,
+      activeInterventions: interventions,
+      preventiveTasks: storePreventiveTasks,
+      estimatedTaskMinutes: Number(convertForm.duree_prevue_mins) || 90,
+    });
+  }, [
+    showConvertModal,
+    technicians,
+    allTechnicianOptions,
+    interventions,
+    storePreventiveTasks,
+    convertForm.duree_prevue_mins,
+  ]);
+
+  const selectedConvertTechEval = useMemo(() => {
+    const target = String(convertForm.intervenant || '').trim().toLowerCase();
+    if (!target) return null;
+    return (
+      convertTechEvaluations.find(
+        (ev) => ev.technicianName.trim().toLowerCase() === target
+      ) || null
+    );
+  }, [convertTechEvaluations, convertForm.intervenant]);
+
+  const convertReservationEval = useMemo(() => {
+    if (!showConvertModal || !convertForm.pdr_ref) return null;
+    return evaluateBatchSpareAllocation(
+      [{ ref: convertForm.pdr_ref, quantite: Math.max(1, Number(convertForm.pdr_quantite) || 1) }],
+      {
+        machineCode: showConvertModal.code_machine,
+        excludeClaimId: String(showConvertModal.id || ''),
+        stockItems,
+        correctiveInterventions: interventions,
+        preventiveExecutions: storePreventiveExecutions,
+        sortieDemands: storeSortieDemands,
+        preventiveTasks: storePreventiveTasks,
+      }
+    );
+  }, [
+    showConvertModal,
+    convertForm.pdr_ref,
+    convertForm.pdr_quantite,
+    stockItems,
+    interventions,
+    storePreventiveExecutions,
+    storeSortieDemands,
+    storePreventiveTasks,
+  ]);
 
   // Category Panne Options
   const availableCategories = useMemo(() => {
@@ -632,6 +694,10 @@ export default function DemandesInterventionTab({
         (isTechUser && techDisplayName ? techDisplayName : allTechnicianOptions[0]?.nom || ''),
       priorite: di.priorite || 'HAUTE',
       travail_a_faire: di.travail_a_faire || '',
+      duree_prevue_mins: Number(di.duree_prevue_mins) || 90,
+      pdr_ref: di.pdr_ref || '',
+      pdr_quantite: Number(di.pdr_quantite) || 1,
+      allowWaitPdrOnConflict: false,
     });
   };
 
@@ -639,6 +705,20 @@ export default function DemandesInterventionTab({
   const handleConvertSubmit = (e) => {
     e.preventDefault();
     if (!showConvertModal) return;
+
+    if (
+      convertReservationEval &&
+      !convertReservationEval.canAllocateAll &&
+      !convertForm.allowWaitPdrOnConflict
+    ) {
+      const firstConflict = convertReservationEval.conflicts[0];
+      showToast?.(
+        firstConflict?.conflictMessageFr ||
+          'Conflit de réservation PDR : stock disponible insuffisant.',
+        'error'
+      );
+      return;
+    }
 
     const selectedNameLower = String(convertForm.intervenant || '').trim().toLowerCase();
     const matchedTech =
@@ -655,12 +735,40 @@ export default function DemandesInterventionTab({
       matchedTech?.id ||
       (isTechUser && user?.personnelId ? user.personnelId : undefined);
 
+    const reservedSpares =
+      convertForm.pdr_ref &&
+      (!convertReservationEval || convertReservationEval.canAllocateAll)
+        ? [
+            {
+              ref: convertForm.pdr_ref,
+              designation:
+                stockItems.find((s) => s.ref === convertForm.pdr_ref)?.designation ||
+                convertForm.pdr_ref,
+              quantite: Math.max(1, Number(convertForm.pdr_quantite) || 1),
+            },
+          ]
+        : [];
+
+    const nextStatut =
+      convertReservationEval &&
+      !convertReservationEval.canAllocateAll &&
+      convertForm.allowWaitPdrOnConflict
+        ? 'EN_ATTENTE_PDR'
+        : 'EN_COURS';
+
     onConvertToBt(showConvertModal.id, {
       ...convertForm,
+      statut: nextStatut,
       ...(resolvedMatricule ? { technicien_matricule: resolvedMatricule } : {}),
+      ...(reservedSpares.length > 0 ? { pieces_reservees: reservedSpares } : {}),
     });
 
-    showToast?.(`DI convertie en Bon de Travail ${convertForm.num_bt}`, 'success');
+    showToast?.(
+      reservedSpares.length > 0
+        ? `BT ${convertForm.num_bt} créé avec réservation ferme de ${reservedSpares[0].quantite}x ${reservedSpares[0].ref} !`
+        : `DI convertie en Bon de Travail ${convertForm.num_bt}`,
+      'success'
+    );
     setShowConvertModal(null);
     if (onNavigateToTab) {
       onNavigateToTab('corrective_bt');
@@ -2037,11 +2145,30 @@ export default function DemandesInterventionTab({
                 />
               </div>
 
-              {/* Affectation Technicien */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Affecter un Intervenant / Technicien
-                </label>
+              {/* Affectation Technicien + Habilitations & Capacité Poste */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                    Affecter un Intervenant / Technicien
+                  </label>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500">Durée estimée (min):</span>
+                    <input
+                      type="number"
+                      min={15}
+                      max={480}
+                      step={15}
+                      value={convertForm.duree_prevue_mins}
+                      onChange={(e) =>
+                        setConvertForm({
+                          ...convertForm,
+                          duree_prevue_mins: Math.max(15, Number(e.target.value) || 90),
+                        })
+                      }
+                      className="w-16 py-0.5 px-1.5 rounded border border-slate-300 font-mono text-[11px] text-center"
+                    />
+                  </div>
+                </div>
                 <select
                   value={convertForm.intervenant}
                   onChange={(e) => setConvertForm({ ...convertForm, intervenant: e.target.value })}
@@ -2058,6 +2185,142 @@ export default function DemandesInterventionTab({
                     </option>
                   ))}
                 </select>
+
+                {selectedConvertTechEval && (
+                  <div
+                    className={`p-2.5 rounded-xl border text-[11px] space-y-1 ${
+                      !selectedConvertTechEval.isHabilitationCompliant ||
+                      selectedConvertTechEval.wouldExceedShiftCapacity
+                        ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between font-bold">
+                      <span>
+                        Habilitations & Capacité Poste ({selectedConvertTechEval.shift}) :
+                      </span>
+                      <span className="font-mono">
+                        Charge : {selectedConvertTechEval.workload.totalAssignedMinutes} /{' '}
+                        {selectedConvertTechEval.workload.capacityMinutes} min (
+                        {selectedConvertTechEval.projectedUtilizationPct}% après affectation)
+                      </span>
+                    </div>
+                    <div className="text-[10.5px] flex items-center justify-between gap-2">
+                      <span>{selectedConvertTechEval.recommendationLabelFr}</span>
+                      {convertTechEvaluations[0] &&
+                        convertTechEvaluations[0].technicianName !== convertForm.intervenant && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setConvertForm({
+                                ...convertForm,
+                                intervenant: convertTechEvaluations[0].technicianName,
+                              })
+                            }
+                            className="px-2 py-0.5 rounded bg-blue-600 text-white font-bold text-[10px] cursor-pointer shrink-0"
+                          >
+                            Choisir recommandé ({convertTechEvaluations[0].technicianName})
+                          </button>
+                        )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Réservation Préalable PDR (Stock Réservé vs Disponible) */}
+              <div className="p-3 rounded-2xl bg-purple-50/60 border border-purple-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-purple-950">
+                    Réservation Préalable PDR (Stock Réservé vs Disponible)
+                  </span>
+                  <span className="text-[10px] font-mono text-purple-700">
+                    Anti-conflit inter-machines
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2">
+                    <select
+                      value={convertForm.pdr_ref}
+                      onChange={(e) =>
+                        setConvertForm({
+                          ...convertForm,
+                          pdr_ref: e.target.value,
+                          allowWaitPdrOnConflict: false,
+                        })
+                      }
+                      className="w-full py-1.5 px-2.5 rounded-xl border border-purple-200 bg-white text-xs font-medium"
+                    >
+                      <option value="">-- Aucune pièce réservée à l&apos;avance --</option>
+                      {stockItems.map((st) => (
+                        <option key={st.ref} value={st.ref}>
+                          {st.ref} — {st.designation} (Physique: {st.stockActuel ?? st.stockInitial ?? 0})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      min={1}
+                      disabled={!convertForm.pdr_ref}
+                      value={convertForm.pdr_quantite}
+                      onChange={(e) =>
+                        setConvertForm({
+                          ...convertForm,
+                          pdr_quantite: Math.max(1, Number(e.target.value) || 1),
+                        })
+                      }
+                      className="w-full py-1.5 px-2.5 rounded-xl border border-purple-200 bg-white font-mono font-bold text-xs text-center disabled:opacity-50"
+                      placeholder="Qté"
+                    />
+                  </div>
+                </div>
+
+                {convertReservationEval && convertReservationEval.evaluations[0] && (
+                  <div
+                    className={`p-2.5 rounded-xl border text-[11px] space-y-1.5 ${
+                      convertReservationEval.canAllocateAll
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-rose-50 border-rose-300 text-rose-950'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 font-mono font-bold">
+                      <span>
+                        Physique: {convertReservationEval.evaluations[0].stockPhysique}{' '}
+                        {convertReservationEval.evaluations[0].unit}
+                      </span>
+                      <span>
+                        Déjà Réservé: {convertReservationEval.evaluations[0].reservedByOtherClaimsQty}{' '}
+                        {convertReservationEval.evaluations[0].unit}
+                      </span>
+                      <span className="underline">
+                        Disponible Net: {convertReservationEval.evaluations[0].stockDisponible}{' '}
+                        {convertReservationEval.evaluations[0].unit}
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] leading-snug">
+                      {convertReservationEval.evaluations[0].conflictMessageFr}
+                    </p>
+                    {!convertReservationEval.canAllocateAll && (
+                      <label className="flex items-center gap-2 pt-1 font-bold text-rose-900 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={convertForm.allowWaitPdrOnConflict}
+                          onChange={(e) =>
+                            setConvertForm({
+                              ...convertForm,
+                              allowWaitPdrOnConflict: e.target.checked,
+                            })
+                          }
+                          className="rounded border-rose-400 text-rose-600"
+                        />
+                        <span>
+                          Créer le BT en statut « EN_ATTENTE_PDR » sans doubler la réservation
+                        </span>
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Instructions de Travail */}

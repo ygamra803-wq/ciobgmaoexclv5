@@ -22,6 +22,7 @@ import {
 import { MeterService } from '../../../../application/services/meter/MeterService';
 import type { IMeterReading, MeterUnit } from '../../../../types/meter';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
+import CbmIoTSensorPanel from './CbmIoTSensorPanel';
 
 interface PreventiveMetersViewProps {
   machines: any[];
@@ -273,6 +274,9 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* CBM / IoT Sensor Telemetry Panel (MQTT / OPC-UA / Modbus) */}
+      <CbmIoTSensorPanel machines={activeMachines} showToast={showToast} />
+
       {/* ========================================================================= */}
       {/* 1. TOP COCKPIT KPIS                                                       */}
       {/* ========================================================================= */}

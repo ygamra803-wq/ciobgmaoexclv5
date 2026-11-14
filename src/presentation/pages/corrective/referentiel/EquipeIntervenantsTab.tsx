@@ -16,7 +16,17 @@ import {
   Trash2,
   X,
   Check,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
+import {
+  computeTechnicianShiftWorkload,
+  extractTechnicianHabilitations,
+  HABILITATION_CATALOG,
+  type HabilitationCode,
+  type ShiftPosteCode,
+} from '../../../../domain/workforce/workforceCapacityService';
 
 export default function EquipeIntervenantsTab({
   filteredIntervenants = [],
@@ -47,6 +57,21 @@ export default function EquipeIntervenantsTab({
   const [formNom, setFormNom] = useState('');
   const [formZone, setFormZone] = useState('');
   const [formSpecialite, setFormSpecialite] = useState('');
+  const [formShift, setFormShift] = useState<ShiftPosteCode>('MATIN');
+  const [formCapacityMin, setFormCapacityMin] = useState<number>(480);
+  const [formHabilitations, setFormHabilitations] = useState<HabilitationCode[]>([
+    'BR',
+    'LOTO_CONSIGNATION',
+  ]);
+
+  const storeInterventions = useGmaoStore((s) => s.correctiveInterventions) || [];
+  const storePreventiveTasks = useGmaoStore((s) => s.preventiveTasks) || [];
+
+  const toggleFormHabilitation = (code: HabilitationCode) => {
+    setFormHabilitations((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
 
   // Reset page when filter changes
   useEffect(() => {
@@ -80,6 +105,9 @@ export default function EquipeIntervenantsTab({
     const defaultZone = zones.length > 0 ? (zones[0].id_zone || zones[0].nom || 'AFM') : 'Toutes zones';
     setFormZone(defaultZone);
     setFormSpecialite('Maintenance & Dépannage');
+    setFormShift('MATIN');
+    setFormCapacityMin(480);
+    setFormHabilitations(['BR', 'LOTO_CONSIGNATION']);
     setIsAddModalOpen(true);
   };
 
@@ -89,6 +117,10 @@ export default function EquipeIntervenantsTab({
     setFormNom(tech.nom || tech.name || '');
     setFormZone(tech.id_zone || tech.zone || 'Toutes zones');
     setFormSpecialite(tech.specialite || 'Maintenance & Dépannage');
+    setFormShift((tech.shift_poste || tech.poste || 'MATIN') as ShiftPosteCode);
+    setFormCapacityMin(Number(tech.capacite_journaliere_min) || 480);
+    const extracted = extractTechnicianHabilitations(tech).map((h) => h.code);
+    setFormHabilitations(extracted.length > 0 ? extracted : ['BR']);
   };
 
   const handleSaveAdd = (e) => {
@@ -104,6 +136,9 @@ export default function EquipeIntervenantsTab({
       id_zone: formZone.trim() || 'Toutes zones',
       zone: formZone.trim() || 'Toutes zones',
       specialite: formSpecialite.trim() || 'Maintenance & Dépannage',
+      shift_poste: formShift,
+      capacite_journaliere_min: Math.max(60, Number(formCapacityMin) || 480),
+      habilitations: formHabilitations.map((code) => ({ code, expiresAt: null })),
       role: 'Technicien',
       status: 'Habilité',
       created_at: new Date().toISOString(),
@@ -130,6 +165,9 @@ export default function EquipeIntervenantsTab({
       id_zone: formZone.trim() || 'Toutes zones',
       zone: formZone.trim() || 'Toutes zones',
       specialite: formSpecialite.trim() || 'Maintenance & Dépannage',
+      shift_poste: formShift,
+      capacite_journaliere_min: Math.max(60, Number(formCapacityMin) || 480),
+      habilitations: formHabilitations.map((code) => ({ code, expiresAt: null })),
       role: editingTech.role || 'Technicien',
     };
 
@@ -216,32 +254,54 @@ export default function EquipeIntervenantsTab({
         },
       },
       {
-        key: 'total',
-        label: t('corrective.intervenants.col_total', 'INTERVENTIONS BT'),
+        key: 'habilitations',
+        label: 'HABILITATIONS & CERTIFICATIONS',
         colLetter: 'Col E',
-        icon: FileSpreadsheet,
-        align: 'center',
+        icon: ShieldCheck,
         render: (tech) => {
-          const total = tech.total || 0;
+          const habs = extractTechnicianHabilitations(tech);
           return (
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-black bg-indigo-50 text-indigo-900 border border-indigo-200 whitespace-nowrap">
-              {total} BT{total > 1 ? 's' : ''}
-            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              {habs.slice(0, 4).map((h) => (
+                <span
+                  key={h.code}
+                  className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-[10px]"
+                  title={HABILITATION_CATALOG[h.code]?.labelFr || h.code}
+                >
+                  {h.code}
+                </span>
+              ))}
+              {habs.length === 0 && <span className="text-slate-400 text-[10px]">Standard</span>}
+            </div>
           );
         },
       },
       {
-        key: 'statut',
-        label: 'STATUT GMAO',
+        key: 'capacity',
+        label: 'CHARGE POSTE (CAPACITÉ)',
         colLetter: 'Col F',
-        icon: CheckCircle2,
+        icon: Clock,
         align: 'center',
-        render: () => (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 whitespace-nowrap">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Habilité</span>
-          </span>
-        ),
+        render: (tech) => {
+          const wl = computeTechnicianShiftWorkload({
+            technician: tech,
+            activeInterventions: storeInterventions,
+            preventiveTasks: storePreventiveTasks,
+          });
+          const badgeCls =
+            wl.loadStatus === 'OVERLOADED'
+              ? 'bg-rose-100 text-rose-900 border-rose-300'
+              : wl.loadStatus === 'HIGH_LOAD'
+              ? 'bg-amber-100 text-amber-900 border-amber-300'
+              : 'bg-indigo-50 text-indigo-900 border-indigo-200';
+          return (
+            <div className="inline-flex flex-col items-center gap-0.5 whitespace-nowrap">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black border ${badgeCls}`}>
+                {wl.shift} • {wl.totalAssignedMinutes}/{wl.capacityMinutes} min ({wl.utilizationRatePct}%)
+              </span>
+            </div>
+          );
+        },
       },
       {
         key: 'actions',
@@ -291,7 +351,7 @@ export default function EquipeIntervenantsTab({
         },
       },
     ],
-    [startIndex, onAddDemandeWithPreset, t]
+    [startIndex, onAddDemandeWithPreset, t, storeInterventions, storePreventiveTasks]
   );
 
   return (
@@ -571,6 +631,54 @@ export default function EquipeIntervenantsTab({
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Poste / Shift (3x8) :</label>
+                  <select
+                    value={formShift}
+                    onChange={(e) => setFormShift(e.target.value as ShiftPosteCode)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+                  >
+                    <option value="MATIN">MATIN (06h-14h)</option>
+                    <option value="SOIR">SOIR (14h-22h)</option>
+                    <option value="NUIT">NUIT (22h-06h)</option>
+                    <option value="JOUR">JOUR NORMAL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Capacité Poste (min) :</label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={720}
+                    step={30}
+                    value={formCapacityMin}
+                    onChange={(e) => setFormCapacityMin(Math.max(60, Number(e.target.value) || 480))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Habilitations Certifiées :</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(HABILITATION_CATALOG) as HabilitationCode[]).map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => toggleFormHabilitation(code)}
+                      className={`px-2 py-1 rounded-lg font-mono font-bold text-[10px] border cursor-pointer ${
+                        formHabilitations.includes(code)
+                          ? 'bg-emerald-600 text-white border-emerald-700'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -654,6 +762,54 @@ export default function EquipeIntervenantsTab({
                   onChange={(e) => setFormSpecialite(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Poste / Shift (3x8) :</label>
+                  <select
+                    value={formShift}
+                    onChange={(e) => setFormShift(e.target.value as ShiftPosteCode)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800"
+                  >
+                    <option value="MATIN">MATIN (06h-14h)</option>
+                    <option value="SOIR">SOIR (14h-22h)</option>
+                    <option value="NUIT">NUIT (22h-06h)</option>
+                    <option value="JOUR">JOUR NORMAL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Capacité Poste (min) :</label>
+                  <input
+                    type="number"
+                    min={60}
+                    max={720}
+                    step={30}
+                    value={formCapacityMin}
+                    onChange={(e) => setFormCapacityMin(Math.max(60, Number(e.target.value) || 480))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-900"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Habilitations Certifiées :</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(Object.keys(HABILITATION_CATALOG) as HabilitationCode[]).map((code) => (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => toggleFormHabilitation(code)}
+                      className={`px-2 py-1 rounded-lg font-mono font-bold text-[10px] border cursor-pointer ${
+                        formHabilitations.includes(code)
+                          ? 'bg-blue-600 text-white border-blue-700'
+                          : 'bg-slate-50 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

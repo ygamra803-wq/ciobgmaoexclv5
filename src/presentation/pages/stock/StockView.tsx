@@ -57,6 +57,7 @@ import {
 } from '../../../domain/stock/pdrHierarchyService';
 import PdrGroupsModal from './components/PdrGroupsModal';
 import PdrCatalogExcelModal from './components/PdrCatalogExcelModal';
+import StockLotCumpModal from './components/StockLotCumpModal';
 import { downloadPdrCatalogWorkbook } from '../../../services/pdrHierarchyExcelService';
 
 const TYPE_STYLES = {
@@ -124,6 +125,7 @@ export default function StockView({
   const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
   const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
+  const storePreventiveTasks = useGmaoStore((s) => s.preventiveTasks);
 
   const reservedStockMap = useMemo(
     () =>
@@ -131,8 +133,9 @@ export default function StockView({
         correctiveInterventions: storeCorrective,
         preventiveExecutions: storePreventiveExecs,
         sortieDemands: storeSortieDemands,
+        preventiveTasks: storePreventiveTasks,
       }),
-    [storeCorrective, storePreventiveExecs, storeSortieDemands]
+    [storeCorrective, storePreventiveExecs, storeSortieDemands, storePreventiveTasks]
   );
 
   const getReservedEntry = useCallback(
@@ -175,6 +178,7 @@ export default function StockView({
 
   const [showReorderPanel, setShowReorderPanel] = useState(false);
   const [showReplenishmentModal, setShowReplenishmentModal] = useState(false);
+  const [showLotCumpModal, setShowLotCumpModal] = useState(false);
 
   const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
 
@@ -832,6 +836,15 @@ export default function StockView({
           <FormulasModalButton
             onClick={() => setShowFormulasModal(true)}
             title={t('stock.formulas_button', 'Formules Excel (Col. B → K)')}
+          />
+
+          {/* 3D Lots, Multi-Bin & CUMP/FEFO Button */}
+          <Action3DButton
+            variant="circle"
+            color="primary"
+            icon={Boxes}
+            onClick={() => setShowLotCumpModal(true)}
+            title="Multi-Emplacements (Bins), Lots & Péremption (FEFO/FIFO) & Valorisation CUMP"
           />
 
           {/* 3D Replenishment & Purchase Orders Button (Warehouse / Admin only) */}
@@ -1973,6 +1986,15 @@ export default function StockView({
         <StockReplenishmentModal
           onClose={() => setShowReplenishmentModal(false)}
           reorderAlerts={reorderAlerts}
+        />
+      )}
+
+      {showLotCumpModal && (
+        <StockLotCumpModal
+          stockItems={stockItems}
+          mouvements={mouvements}
+          onAddMouvement={canCreateStock ? onAddMouvement : undefined}
+          onClose={() => setShowLotCumpModal(false)}
         />
       )}
     </AnimatedPage>
