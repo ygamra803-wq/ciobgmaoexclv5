@@ -34,42 +34,42 @@ const TONE_STYLES: Record<
   {
     card: string;
     header: string;
-    iconBox: string;
+    iconColor: string;
     title: string;
     description: string;
     footer: string;
   }
 > = {
   default: {
-    card: 'bg-white border-slate-400/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]',
-    header: 'border-slate-300 bg-slate-100/90',
-    iconBox: 'bg-white text-slate-800 border-slate-400 shadow-2xs',
+    card: 'bg-white border-slate-200/90 shadow-[0_1px_3px_rgba(15,23,42,0.05),0_6px_16px_-6px_rgba(15,23,42,0.06)] hover:shadow-[0_2px_6px_rgba(15,23,42,0.06),0_10px_22px_-8px_rgba(15,23,42,0.08)]',
+    header: 'border-slate-100 bg-white',
+    iconColor: 'text-sky-700',
     title: 'text-slate-900',
-    description: 'text-slate-600',
-    footer: 'border-slate-300 bg-slate-50/90',
+    description: 'text-slate-500',
+    footer: 'border-slate-100 bg-slate-50/60',
   },
   warning: {
-    card: 'bg-white border-amber-400/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]',
-    header: 'border-amber-300 bg-amber-50/70',
-    iconBox: 'bg-white text-amber-800 border-amber-400 shadow-2xs',
+    card: 'bg-white border-amber-200/90 shadow-[0_8px_24px_-8px_rgba(245,158,11,0.14),0_2px_6px_-1px_rgba(15,23,42,0.04)]',
+    header: 'border-amber-100 bg-amber-50/35',
+    iconColor: 'text-amber-600',
     title: 'text-slate-900',
-    description: 'text-amber-900/80',
-    footer: 'border-amber-200 bg-amber-50/40',
+    description: 'text-amber-900/75',
+    footer: 'border-amber-100 bg-amber-50/30',
   },
   danger: {
-    card: 'bg-white border-rose-400/90 shadow-[0_1px_2px_rgba(15,23,42,0.06)]',
-    header: 'border-rose-300 bg-rose-50/70',
-    iconBox: 'bg-white text-rose-700 border-rose-400 shadow-2xs',
+    card: 'bg-white border-rose-200/90 shadow-[0_8px_24px_-8px_rgba(244,63,94,0.14),0_2px_6px_-1px_rgba(15,23,42,0.04)]',
+    header: 'border-rose-100 bg-rose-50/35',
+    iconColor: 'text-rose-600',
     title: 'text-rose-950',
-    description: 'text-rose-900/80',
-    footer: 'border-rose-200 bg-rose-50/40',
+    description: 'text-rose-800/80',
+    footer: 'border-rose-100 bg-rose-50/30',
   },
 };
 
 /**
- * Unified industrial Light Excel UI card container for all Settings sections.
- * Uses crisp slate/charcoal borders (border-slate-400), structured sheet-header bars (bg-slate-100/90),
- * and subtle sky-blue interactive accents.
+ * Unified Modern BDR Light GMAO card container for all Settings sections.
+ * Features pure unboxed icons, hairline slate-200 borders, soft 3D elevation,
+ * and industrial teal control-panel theme alignment.
  */
 export function SettingsSectionCard({
   title,
@@ -88,21 +88,19 @@ export function SettingsSectionCard({
   return (
     <section
       data-testid={testId}
-      className={`rounded-xl border overflow-hidden transition-colors ${styles.card} ${className}`}
+      className={`rounded-2xl border overflow-hidden transition-all duration-300 ${styles.card} ${className}`}
     >
       <div
-        className={`px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${styles.header}`}
+        className={`px-5 py-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${styles.header}`}
       >
         <div className="flex items-start sm:items-center gap-3 min-w-0">
           {icon && (
-            <div
-              className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${styles.iconBox}`}
-            >
+            <span className={`shrink-0 inline-flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5 ${styles.iconColor}`}>
               {icon}
-            </div>
+            </span>
           )}
           <div className="min-w-0">
-            <h3 className={`text-sm font-bold tracking-tight ${styles.title}`}>{title}</h3>
+            <h3 className={`text-sm font-extrabold tracking-tight ${styles.title}`}>{title}</h3>
             {description && (
               <p className={`text-xs mt-0.5 leading-relaxed ${styles.description}`}>
                 {description}
@@ -110,13 +108,13 @@ export function SettingsSectionCard({
             )}
           </div>
         </div>
-        {headerRight && <div className="flex items-center gap-2 shrink-0">{headerRight}</div>}
+        {headerRight && <div className="flex items-center gap-2 shrink-0 flex-wrap">{headerRight}</div>}
       </div>
 
       <div className={`p-5 ${bodyClassName}`}>{children}</div>
 
       {footer && (
-        <div className={`px-4 py-3 border-t text-xs text-slate-700 ${styles.footer}`}>
+        <div className={`px-5 py-3.5 border-t text-xs text-slate-600 ${styles.footer}`}>
           {footer}
         </div>
       )}
@@ -126,16 +124,19 @@ export function SettingsSectionCard({
 
 export const SETTINGS_BUTTON_STYLES = {
   primary:
-    'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white border border-slate-900 text-xs font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)] active:translate-y-px transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-sky-800 hover:bg-sky-900 text-white border border-sky-900 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.14)] active:translate-y-px active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none select-none whitespace-nowrap',
   secondary:
-    'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-sky-50 text-slate-900 border border-slate-400 hover:border-slate-800 text-xs font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.15)] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-950 border border-slate-200/95 hover:border-slate-300 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none select-none whitespace-nowrap',
   warning:
-    'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-500 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-amber-50/50 text-amber-800 border border-amber-300/80 hover:border-amber-400 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_2px_5px_-1px_rgba(15,23,42,0.07)] active:bg-amber-50 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none select-none whitespace-nowrap',
   danger:
-    'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white border border-slate-900 text-xs font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)] transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-rose-700 hover:bg-rose-800 text-white border border-rose-800 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.14)] active:translate-y-px active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none select-none whitespace-nowrap',
   dangerSoft:
-    'inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-400 text-xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-rose-50/50 text-rose-700 border border-rose-200/90 hover:border-rose-300 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_2px_5px_-1px_rgba(15,23,42,0.07)] active:bg-rose-50 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:pointer-events-none select-none whitespace-nowrap',
 };
+
+export const SETTINGS_INPUT_CLASS =
+  'w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/70 focus:bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 transition-all';
 
 interface TabMetaEntry {
   category: 'factory' | 'advanced';
@@ -348,7 +349,7 @@ export function SettingsPageHeader({
   const copy = meta[langKey];
   const Icon = meta.icon;
 
-  const categoryBadge =
+  const categoryLabel =
     meta.category === 'factory'
       ? language === 'ar'
         ? 'تشغيل المصنع'
@@ -362,25 +363,19 @@ export function SettingsPageHeader({
           : 'Système & Avancé';
 
   return (
-    <div className="mb-5 pb-4 border-b border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div className="flex items-start sm:items-center gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-800 text-slate-800 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.75)] flex items-center justify-center shrink-0">
-          <Icon className="w-5 h-5 text-sky-700" />
-        </div>
+    <div className="mb-6 pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+        <Icon className="w-6 h-6 text-sky-700 shrink-0" />
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">{copy.title}</h2>
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                meta.category === 'factory'
-                  ? 'bg-sky-50 text-sky-800 border-sky-300'
-                  : 'bg-slate-100 text-slate-800 border-slate-400'
-              }`}
-            >
-              {categoryBadge}
+            <span className="text-[10px] font-black uppercase tracking-wider text-sky-800">
+              {categoryLabel}
             </span>
           </div>
-          <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{copy.subtitle}</p>
+          <h2 className="text-base md:text-lg font-black text-slate-900 tracking-tight mt-0.5">
+            {copy.title}
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{copy.subtitle}</p>
         </div>
       </div>
       {rightSlot && <div className="flex items-center gap-2 shrink-0">{rightSlot}</div>}

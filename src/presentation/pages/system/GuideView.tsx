@@ -1,4 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import AnimatedPage from '../../components/common/AnimatedPage';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
+import Action3DButton from '../../components/common/Action3DButton';
 import {
   BookOpen,
   Boxes,
@@ -7,11 +11,11 @@ import {
   Code2,
   UserCheck,
   Layers,
+  ChevronLeft,
   ChevronRight,
   CheckCircle2,
   Clock,
   FileText,
-  Sparkles,
   ArrowUpRight,
   Cpu,
   Wrench,
@@ -19,6 +23,8 @@ import {
   Factory,
   BarChart3,
   Settings,
+  LayoutGrid,
+  X,
 } from 'lucide-react';
 
 interface GuideViewProps {
@@ -287,7 +293,7 @@ function renderInlineFormatting(text: string): React.ReactNode[] {
       return (
         <code
           key={idx}
-          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-[11.5px] text-emerald-800 font-semibold"
+          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono text-[11.5px] text-amber-800 font-semibold"
         >
           {tok.slice(1, -1)}
         </code>
@@ -489,7 +495,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
         if (block.type === 'h2') {
           return (
             <div key={index} className="pt-3 pb-1 border-b border-slate-200/80 flex items-center gap-2.5">
-              <span className="w-2 h-5 rounded-full bg-emerald-600 shrink-0" />
+              <span className="w-1.5 h-5 rounded-full bg-amber-500 shrink-0" />
               <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                 {block.text}
               </h2>
@@ -498,8 +504,8 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
         }
         if (block.type === 'h3') {
           return (
-            <h3 key={index} className="text-sm font-extrabold text-emerald-950 pt-2 flex items-center gap-2">
-              <ChevronRight className="w-4 h-4 text-emerald-600 shrink-0" />
+            <h3 key={index} className="text-sm font-extrabold text-slate-900 pt-2 flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 text-amber-600 shrink-0" />
               <span>{block.text}</span>
             </h3>
           );
@@ -508,7 +514,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
           return (
             <div
               key={index}
-              className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50/90 to-emerald-50/60 border border-amber-200/80 font-mono text-xs sm:text-sm font-bold text-slate-900 text-center shadow-2xs"
+              className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50/90 to-orange-50/50 border border-amber-200/80 font-mono text-xs sm:text-sm font-bold text-slate-900 text-center shadow-2xs"
             >
               {block.formula}
             </div>
@@ -518,7 +524,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
           return (
             <pre
               key={index}
-              className="p-4 rounded-2xl bg-slate-900 text-emerald-300 font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"
+              className="p-4 rounded-2xl bg-slate-900 text-amber-300 font-mono text-xs overflow-x-auto border border-slate-800 leading-relaxed"
             >
               <code>{block.code}</code>
             </pre>
@@ -539,7 +545,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
                 </thead>
                 <tbody className="divide-y divide-slate-200/70 bg-white">
                   {block.rows.map((row, ri) => (
-                    <tr key={ri} className="hover:bg-emerald-50/30 transition-colors">
+                    <tr key={ri} className="hover:bg-amber-50/40 transition-colors">
                       {row.map((cell, ci) => (
                         <td key={ci} className="py-2.5 px-3.5 text-slate-700 leading-relaxed">
                           {renderInlineFormatting(cell)}
@@ -557,7 +563,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
             <ul key={index} className="space-y-2 pl-1">
               {block.items.map((item, ii) => (
                 <li key={ii} className="flex items-start gap-2.5 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-2 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 shrink-0" />
                   <div className="flex-1">{renderInlineFormatting(item)}</div>
                 </li>
               ))}
@@ -569,7 +575,7 @@ function MarkdownBodyRenderer({ markdown }: { markdown: string }) {
             <ol key={index} className="space-y-2.5 pl-1">
               {block.items.map((item, ii) => (
                 <li key={ii} className="flex items-start gap-2.5 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
-                  <span className="w-5 h-5 rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-900 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="w-5 h-5 rounded-lg bg-amber-100 border border-amber-200 text-amber-900 font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5">
                     {ii + 1}
                   </span>
                   <div className="flex-1">{renderInlineFormatting(item)}</div>
@@ -601,15 +607,17 @@ export default function GuideView({ onNavigateToTab }: GuideViewProps) {
     });
   }, []);
 
-  const [selectedGroupId, setSelectedGroupId] = useState<string>('01-stock-pdr');
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [audienceFilter, setAudienceFilter] = useState<'all' | 'user' | 'developer'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedDocId, setSelectedDocId] = useState<string>(() => {
-    const firstPage = allDocs.find((d) => d.docType === 'page');
-    return firstPage?.id || allDocs[0]?.id || '';
-  });
+  const [selectedDocId, setSelectedDocId] = useState<string>('');
+  const stripContainerRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const isReaderOpen = selectedGroupId !== null;
 
   const filteredDocs = useMemo(() => {
+    if (!selectedGroupId) return [];
     const q = searchQuery.trim().toLowerCase();
     return allDocs.filter((doc) => {
       if (selectedGroupId !== 'all' && doc.groupId !== selectedGroupId) return false;
@@ -626,13 +634,14 @@ export default function GuideView({ onNavigateToTab }: GuideViewProps) {
   }, [allDocs, selectedGroupId, audienceFilter, searchQuery]);
 
   const activeDoc = useMemo(() => {
+    if (!selectedGroupId) return null;
     return (
       filteredDocs.find((d) => d.id === selectedDocId) ||
       filteredDocs[0] ||
       allDocs.find((d) => d.id === selectedDocId) ||
-      allDocs[0]
+      null
     );
-  }, [filteredDocs, allDocs, selectedDocId]);
+  }, [filteredDocs, allDocs, selectedDocId, selectedGroupId]);
 
   const docsCountByGroup = useMemo(() => {
     const counts: Record<string, { total: number; pages: number; arch: number }> = {};
@@ -645,99 +654,233 @@ export default function GuideView({ onNavigateToTab }: GuideViewProps) {
     return counts;
   }, [allDocs]);
 
+  const scrollCardIntoStripCenter = (groupId: string) => {
+    window.setTimeout(() => {
+      cardRefs.current[groupId]?.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest',
+      });
+    }, 360);
+  };
+
+  const handleSelectGroup = (groupId: string) => {
+    setSelectedGroupId(groupId);
+    const firstMatchingDoc =
+      allDocs.find(
+        (d) =>
+          d.groupId === groupId &&
+          (audienceFilter === 'all' || d.audience === audienceFilter)
+      ) || allDocs.find((d) => d.groupId === groupId);
+    if (firstMatchingDoc) setSelectedDocId(firstMatchingDoc.id);
+    scrollCardIntoStripCenter(groupId);
+  };
+
   const handleSelectDocByTab = (tabId: string) => {
     const targetDoc = allDocs.find((d) => d.tabId === tabId);
     if (targetDoc) {
       setSelectedGroupId(targetDoc.groupId);
       setAudienceFilter('all');
       setSelectedDocId(targetDoc.id);
+      scrollCardIntoStripCenter(targetDoc.groupId);
     } else if (onNavigateToTab) {
       onNavigateToTab(tabId);
     }
   };
 
+  const handleScrollStrip = (direction: 'left' | 'right') => {
+    const el = stripContainerRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: direction === 'left' ? -300 : 300,
+      behavior: 'smooth',
+    });
+  };
+
+  const handleCloseReader = () => {
+    setSelectedGroupId(null);
+    setSelectedDocId('');
+    setSearchQuery('');
+  };
+
+  const floatingCircleDepth =
+    'shadow-[0_10px_24px_-4px_rgba(245,158,11,0.24),0_4px_10px_-2px_rgba(15,23,42,0.12),inset_0_1px_1px_rgba(255,255,255,0.95)]';
+  const floatingNeutralDepth =
+    'shadow-[0_8px_20px_-4px_rgba(15,23,42,0.14),0_3px_8px_-2px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]';
+
   return (
-    <div className="space-y-5 pb-10">
-      {/* En-tête Exécutif du Centre de Documentation Vivant */}
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-950 text-white p-5 sm:p-7 shadow-lg border border-emerald-800/60 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-          <div className="space-y-2 max-w-3xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-800/70 border border-emerald-600/40 text-emerald-200 text-[11px] font-bold uppercase tracking-wider">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              <span>Centre de Connaissances Vivant — Double Couche (Opérateur & Architecte)</span>
+    <AnimatedPage className="space-y-5 pb-10 select-none font-sans">
+      {/* 1. En-tête Exécutif Partagé (BDR Light GMAO Header Card + Orange/Amber Sidebar Theme) */}
+      <div className="bg-white px-5 py-4 md:px-6 md:py-5 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 relative overflow-hidden group/header">
+        {/* Subtle Ambient Glow matching Sidebar Amber/Orange Color */}
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-amber-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-amber-500/10 transition-colors duration-500" />
+
+        <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
+          <PageHeaderIcon icon={BookOpen} colorClass="text-amber-600" />
+
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg md:text-xl font-black text-slate-900 tracking-tight">
+                Guide d’Utilisation & Architecture GMAO
+              </h2>
+              <span className="px-2.5 py-0.5 text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 rounded-full">
+                {allDocs.length} documents
+              </span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-3">
-              <BookOpen className="w-7 h-7 text-amber-300 shrink-0" />
-              <span>Guide d’Utilisation & Architecture Métier CIOB GMAO Nexus v5.0.2</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed">
-              Documentation officielle synchronisée avec le code source (`docs/modules/*`). Chaque groupe combine un{' '}
-              <strong className="text-white">Guide Opérationnel par Écran</strong> (destiné aux magasiniers, techniciens et responsables) et une{' '}
-              <strong className="text-amber-300">Spécification d’Architecture & Invariants</strong> (destinée aux développeurs, auditeurs et agents d’ingénierie).
+            <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-snug">
+              {isReaderOpen
+                ? 'Navigation rapide entre modules dans le ruban horizontal ou retour à la vue complète.'
+                : 'Sélectionnez une carte de module ci-dessous pour ouvrir son guide opérationnel et ses spécifications.'}
             </p>
           </div>
+        </div>
 
-          {/* Sélecteur de profil de lecture */}
-          <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 bg-emerald-950/60 p-2.5 rounded-2xl border border-emerald-800/80">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 px-1">
-              Mode de Lecture :
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setAudienceFilter('all')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  audienceFilter === 'all'
-                    ? 'bg-amber-400 text-slate-950 shadow-xs'
-                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>Tout ({allDocs.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAudienceFilter('user');
+        {/* Sélecteur de profil de lecture + Retour Grille 3D Flottant */}
+        <div className="flex flex-wrap items-center justify-end gap-2.5 shrink-0 relative">
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100/90 rounded-2xl border border-slate-200/90 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setAudienceFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                audienceFilter === 'all'
+                  ? 'bg-white text-amber-700 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-amber-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 shrink-0" />
+              <span>Tout ({allDocs.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAudienceFilter('user');
+                if (selectedGroupId) {
                   const firstUserDoc = allDocs.find(
                     (d) => (selectedGroupId === 'all' || d.groupId === selectedGroupId) && d.audience === 'user'
                   );
                   if (firstUserDoc) setSelectedDocId(firstUserDoc.id);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  audienceFilter === 'user'
-                    ? 'bg-emerald-400 text-slate-950 shadow-xs'
-                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
-                }`}
-              >
-                <UserCheck className="w-3.5 h-3.5" />
-                <span>Guides Utilisateur</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAudienceFilter('developer');
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                audienceFilter === 'user'
+                  ? 'bg-white text-amber-700 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-amber-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>Guides Utilisateur</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAudienceFilter('developer');
+                if (selectedGroupId) {
                   const firstDevDoc = allDocs.find(
                     (d) => (selectedGroupId === 'all' || d.groupId === selectedGroupId) && d.audience === 'developer'
                   );
                   if (firstDevDoc) setSelectedDocId(firstDevDoc.id);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                  audienceFilter === 'developer'
-                    ? 'bg-cyan-400 text-slate-950 shadow-xs'
-                    : 'bg-emerald-900/60 text-emerald-100 hover:bg-emerald-800/70'
-                }`}
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>Architecture & Dev</span>
-              </button>
-            </div>
+                }
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                audienceFilter === 'developer'
+                  ? 'bg-white text-amber-700 shadow-[0_2px_8px_rgba(0,0,0,0.08)] border border-amber-200/70'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Architecture & Dev</span>
+            </button>
           </div>
+
+          <AnimatePresence>
+            {isReaderOpen && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.75 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.75 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Action3DButton
+                  variant="circle"
+                  color="amber"
+                  icon={LayoutGrid}
+                  onClick={handleCloseReader}
+                  title="Afficher la grille complète des modules"
+                  ariaLabel="Afficher la grille complète des modules"
+                  className={floatingCircleDepth}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Cartes des 6 Groupes Fonctionnels de l'Application */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
+      {/* 2. Barre de contrôle du ruban horizontal (Visible uniquement lorsqu'une carte est sélectionnée) */}
+      <AnimatePresence>
+        {isReaderOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.45, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+            className="flex items-center justify-between gap-3 px-1"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">
+                Ruban Modules ({MODULE_ROADMAP.length})
+              </span>
+              {selectedGroupId === 'all' && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                  Tous les modules
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Action3DButton
+                variant="circle"
+                color="slate"
+                icon={ChevronLeft}
+                onClick={() => handleScrollStrip('left')}
+                title="Faire défiler vers la gauche"
+                ariaLabel="Faire défiler vers la gauche"
+                className={`!w-9 !h-9 ${floatingNeutralDepth}`}
+              />
+              <Action3DButton
+                variant="circle"
+                color="slate"
+                icon={ChevronRight}
+                onClick={() => handleScrollStrip('right')}
+                title="Faire défiler vers la droite"
+                ariaLabel="Faire défiler vers la droite"
+                className={`!w-9 !h-9 ${floatingNeutralDepth}`}
+              />
+              <Action3DButton
+                variant="circle"
+                color="amber"
+                icon={X}
+                onClick={handleCloseReader}
+                title="Fermer le lecteur et revenir à la grille"
+                ariaLabel="Fermer le lecteur et revenir à la grille"
+                className={`!w-9 !h-9 ${floatingCircleDepth}`}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. Cartes des Modules : Grille complète par défaut ➔ Ruban horizontal fluide au clic */}
+      <motion.div
+        ref={stripContainerRef}
+        layout
+        transition={{ layout: { duration: 0.7, ease: [0.22, 1, 0.36, 1] } }}
+        className={
+          isReaderOpen
+            ? 'flex items-stretch gap-3 overflow-x-auto pb-3 pt-1 px-1 snap-x snap-mandatory scroll-smooth [scrollbar-width:thin]'
+            : 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
+        }
+      >
         {MODULE_ROADMAP.map((group) => {
           const stats = docsCountByGroup[group.groupId] || { total: 0, pages: 0, arch: 0 };
           const isDocumented = stats.total > 0;
@@ -745,345 +888,385 @@ export default function GuideView({ onNavigateToTab }: GuideViewProps) {
           const IconComponent = group.icon;
 
           return (
-            <div
+            <motion.div
               key={group.groupId}
+              ref={(el) => {
+                cardRefs.current[group.groupId] = el;
+              }}
+              layout
+              transition={{ layout: { duration: 0.72, ease: [0.22, 1, 0.36, 1] } }}
               onClick={() => {
                 if (isDocumented) {
-                  setSelectedGroupId(group.groupId);
-                  const firstGroupDoc = allDocs.find((d) => d.groupId === group.groupId);
-                  if (firstGroupDoc) setSelectedDocId(firstGroupDoc.id);
+                  handleSelectGroup(group.groupId);
                 }
               }}
-              className={`rounded-2xl p-4 border transition-all flex flex-col justify-between gap-3 ${
-                isDocumented ? 'cursor-pointer' : 'opacity-80'
+              className={`group rounded-2xl border transition-shadow duration-300 flex flex-col justify-between ${
+                isReaderOpen
+                  ? 'min-w-[235px] sm:min-w-[260px] max-w-[280px] shrink-0 snap-center p-3.5 gap-2'
+                  : 'p-4.5 gap-3'
+              } ${
+                isDocumented ? 'cursor-pointer hover:-translate-y-0.5' : 'opacity-80'
               } ${
                 isSelected
-                  ? 'bg-emerald-50/90 border-emerald-600 ring-2 ring-emerald-500/20 shadow-sm'
+                  ? 'bg-gradient-to-br from-amber-50/95 via-white to-orange-50/70 border-amber-500 ring-2 ring-amber-500/20 shadow-[0_10px_25px_-5px_rgba(245,158,11,0.22),0_4px_10px_-3px_rgba(15,23,42,0.08)]'
                   : isDocumented
-                  ? 'bg-white border-slate-200 hover:border-emerald-400 shadow-2xs'
+                  ? 'bg-white border-slate-200/90 hover:border-amber-400 shadow-[0_4px_14px_-4px_rgba(15,23,42,0.07)] hover:shadow-[0_12px_26px_-6px_rgba(245,158,11,0.16)]'
                   : 'bg-slate-50/80 border-slate-200/80'
               }`}
             >
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
-                        isDocumented
-                          ? 'bg-emerald-700 text-white shadow-2xs'
-                          : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      <IconComponent className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 block">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <IconComponent
+                      className={`shrink-0 mt-0.5 transition-transform duration-300 group-hover:scale-110 ${
+                        isReaderOpen ? 'w-5 h-5' : 'w-6 h-6'
+                      } ${isDocumented ? 'text-amber-600' : 'text-slate-400'}`}
+                    />
+                    <div className="min-w-0">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-700 block">
                         Groupe {group.number}
                       </span>
-                      <h3 className="text-xs sm:text-sm font-black text-slate-900 leading-snug">
+                      <h3
+                        className={`font-black text-slate-900 leading-snug ${
+                          isReaderOpen ? 'text-xs line-clamp-2' : 'text-xs sm:text-sm'
+                        }`}
+                      >
                         {group.title}
                       </h3>
                     </div>
                   </div>
 
                   {isDocumented ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-[10px] font-black shrink-0">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                      <span>{stats.total} Docs Vérifiés</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-black shrink-0">
+                      <CheckCircle2 className="w-3 h-3 text-amber-600" />
+                      <span>{stats.total}</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-600 text-[10px] font-bold shrink-0">
                       <Clock className="w-3 h-3" />
-                      <span>Prochaine étape</span>
+                      <span>Bientôt</span>
                     </span>
                   )}
                 </div>
 
-                <p className="text-[11.5px] text-slate-600 leading-relaxed">{group.description}</p>
+                {!isReaderOpen && (
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed">{group.description}</p>
+                )}
               </div>
 
-              {/* Liens rapides vers les écrans du groupe */}
-              <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center gap-1.5">
-                {group.tabs.map((t) => {
-                  const hasPageDoc = allDocs.some((d) => d.tabId === t.tabId);
-                  return (
-                    <button
-                      key={t.tabId}
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasPageDoc) {
-                          handleSelectDocByTab(t.tabId);
-                        } else if (onNavigateToTab) {
-                          onNavigateToTab(t.tabId);
+              {/* Liens rapides vers les écrans du groupe (affichés en vue grille complète) */}
+              {!isReaderOpen && (
+                <div className="pt-2.5 border-t border-slate-200/70 flex flex-wrap items-center gap-1.5">
+                  {group.tabs.map((t) => {
+                    const hasPageDoc = allDocs.some((d) => d.tabId === t.tabId);
+                    return (
+                      <button
+                        key={t.tabId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (hasPageDoc) {
+                            handleSelectDocByTab(t.tabId);
+                          } else if (onNavigateToTab) {
+                            onNavigateToTab(t.tabId);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
+                          hasPageDoc
+                            ? 'bg-white border border-amber-200/90 text-amber-900 hover:bg-amber-600 hover:text-white hover:border-amber-600'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900'
+                        }`}
+                        title={
+                          hasPageDoc
+                            ? `Lire le guide de l'écran ${t.label}`
+                            : `Ouvrir directement l'écran ${t.label}`
                         }
-                      }}
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold transition cursor-pointer ${
-                        hasPageDoc
-                          ? 'bg-white border border-emerald-300 text-emerald-900 hover:bg-emerald-600 hover:text-white'
-                          : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900'
-                      }`}
-                      title={
-                        hasPageDoc
-                          ? `Lire le guide de l'écran ${t.label}`
-                          : `Ouvrir directement l'écran ${t.label}`
-                      }
-                    >
-                      <span>{t.label}</span>
-                      <ArrowUpRight className="w-3 h-3 opacity-70" />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Corps Principal : Sommaire Latéral + Lecteur de Document */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Colonne Gauche : Recherche & Arborescence des Fichiers du Groupe */}
-        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-xs p-4 space-y-4 lg:sticky lg:top-4">
-          {/* Barre de recherche */}
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher (PO, stock, retour, TYP...)"
-              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-emerald-600 focus:bg-white transition"
-            />
-          </div>
-
-          {/* Liste structurée des documents */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-500">
-                Sommaire du Groupe Actif ({filteredDocs.length})
-              </span>
-              {selectedGroupId !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedGroupId('all')}
-                  className="text-[10.5px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                >
-                  Voir tout
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-1.5">
-              {filteredDocs.map((doc) => {
-                const isSelected = activeDoc?.id === doc.id;
-                const isArch = doc.docType === 'architecture';
-
-                return (
-                  <button
-                    key={doc.id}
-                    type="button"
-                    onClick={() => setSelectedDocId(doc.id)}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-2.5 cursor-pointer ${
-                      isSelected
-                        ? isArch
-                          ? 'bg-slate-900 border-slate-800 text-white shadow-sm'
-                          : 'bg-emerald-700 border-emerald-700 text-white shadow-sm'
-                        : 'bg-slate-50/70 border-slate-200/80 hover:bg-white hover:border-emerald-300 text-slate-800'
-                    }`}
-                  >
-                    <div
-                      className={`w-7 h-7 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                        isSelected
-                          ? 'bg-white/15 text-white'
-                          : isArch
-                          ? 'bg-cyan-100 text-cyan-900'
-                          : 'bg-emerald-100 text-emerald-900'
-                      }`}
-                    >
-                      {isArch ? <Code2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded ${
-                            isSelected
-                              ? 'bg-white/20 text-white'
-                              : isArch
-                              ? 'bg-cyan-100 text-cyan-900'
-                              : 'bg-emerald-100 text-emerald-900'
-                          }`}
-                        >
-                          {isArch ? 'Architecture & Dev' : 'Guide Écran'}
-                        </span>
-                        {doc.tabId && (
-                          <span
-                            className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded ${
-                              isSelected ? 'bg-black/25 text-emerald-200' : 'bg-slate-200 text-slate-700'
-                            }`}
-                          >
-                            #{doc.tabId}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-extrabold mt-1 leading-snug truncate">{doc.title}</p>
-                      {doc.subtitle && (
-                        <p
-                          className={`text-[10.5px] mt-0.5 line-clamp-1 ${
-                            isSelected ? 'text-emerald-100' : 'text-slate-500'
-                          }`}
-                        >
-                          {doc.subtitle}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-
-              {filteredDocs.length === 0 && (
-                <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
-                  Aucun document ne correspond à votre filtre « {searchQuery} ».
+                      >
+                        <span>{t.label}</span>
+                        <ArrowUpRight className="w-3 h-3 opacity-70" />
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-            </div>
-          </div>
-        </div>
+            </motion.div>
+          );
+        })}
+      </motion.div>
 
-        {/* Colonne Droite : Contenu Détaillé du Document Sélectionné */}
-        <div className="lg:col-span-8 xl:col-span-9">
-          {activeDoc ? (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-              {/* Bannière du Document */}
-              <div
-                className={`p-5 sm:p-6 border-b ${
-                  activeDoc.docType === 'architecture'
-                    ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 text-white border-slate-800'
-                    : 'bg-gradient-to-r from-emerald-50/90 via-teal-50/50 to-white text-slate-900 border-slate-200'
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider ${
-                          activeDoc.docType === 'architecture'
-                            ? 'bg-cyan-400 text-slate-950'
-                            : 'bg-emerald-700 text-white'
-                        }`}
-                      >
-                        {activeDoc.docType === 'architecture'
-                          ? 'Spécification Architecture & Logique Métier'
-                          : 'Guide Opérationnel Utilisateur'}
-                      </span>
-                      <span
-                        className={`text-xs font-bold ${
-                          activeDoc.docType === 'architecture' ? 'text-emerald-300' : 'text-emerald-800'
-                        }`}
-                      >
-                        • {activeDoc.groupTitle}
-                      </span>
-                      <span
-                        className={`text-[11px] font-mono px-2 py-0.5 rounded ${
-                          activeDoc.docType === 'architecture'
-                            ? 'bg-white/10 text-slate-300'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {activeDoc.filePath}
-                      </span>
-                    </div>
+      {/* 4. Corps Principal : Sommaire Latéral + Lecteur de Document (N'apparaît qu'après sélection d'une carte) */}
+      <AnimatePresence mode="wait">
+        {isReaderOpen && (
+          <motion.div
+            key={`guide-reader-${selectedGroupId}`}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.52, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start"
+          >
+            {/* Colonne Gauche : Recherche & Arborescence des Fichiers du Groupe */}
+            <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-3xl border border-slate-200 shadow-xs p-4 space-y-4 lg:sticky lg:top-4">
+              {/* Barre de recherche */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Rechercher (PO, stock, retour, TYP...)"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-900 focus:outline-none focus:border-amber-500 focus:bg-white transition"
+                />
+              </div>
 
-                    <h2 className="text-lg sm:text-xl font-black tracking-tight">{activeDoc.title}</h2>
-                    {activeDoc.subtitle && (
-                      <p
-                        className={`text-xs sm:text-sm font-medium ${
-                          activeDoc.docType === 'architecture' ? 'text-slate-300' : 'text-slate-600'
-                        }`}
-                      >
-                        {activeDoc.subtitle}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Bouton d'action directe pour ouvrir la page correspondante */}
-                  {activeDoc.tabId && onNavigateToTab && (
+              {/* Liste structurée des documents */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-500">
+                    Sommaire ({filteredDocs.length})
+                  </span>
+                  {selectedGroupId !== 'all' && (
                     <button
                       type="button"
-                      onClick={() => onNavigateToTab(activeDoc.tabId!)}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black shadow-sm transition shrink-0 cursor-pointer"
+                      onClick={() => setSelectedGroupId('all')}
+                      className="text-[10.5px] font-bold text-amber-700 hover:underline cursor-pointer"
                     >
-                      <span>Ouvrir l’écran dans l’application</span>
-                      <ExternalLink className="w-4 h-4" />
+                      Voir tout
                     </button>
                   )}
                 </div>
 
-                {/* Résumé exécutif */}
-                {activeDoc.summary && (
-                  <div
-                    className={`mt-4 p-3.5 rounded-2xl text-xs leading-relaxed border ${
-                      activeDoc.docType === 'architecture'
-                        ? 'bg-white/5 border-white/10 text-emerald-100'
-                        : 'bg-white border-emerald-200/80 text-slate-700 shadow-2xs'
-                    }`}
-                  >
-                    <strong className="font-black uppercase tracking-wider text-[10.5px] mr-1.5">
-                      Résumé :
-                    </strong>
-                    {activeDoc.summary}
-                  </div>
-                )}
-              </div>
+                <div className="space-y-1.5">
+                  {filteredDocs.map((doc) => {
+                    const isSelected = activeDoc?.id === doc.id;
+                    const isArch = doc.docType === 'architecture';
 
-              {/* Corps du Document Markdown */}
-              <div className="p-5 sm:p-7">
-                <MarkdownBodyRenderer markdown={activeDoc.body} />
-              </div>
-
-              {/* Pied de document : Navigation croisée & raccourcis d'écrans */}
-              {activeDoc.relatedTabs.length > 0 && (
-                <div className="px-5 sm:px-7 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <span className="text-xs font-extrabold text-slate-700">
-                    Écrans & Guides Associés dans ce Groupe :
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {activeDoc.relatedTabs.map((relTab) => {
-                      const linkedDoc = allDocs.find((d) => d.tabId === relTab);
-                      const label = TAB_LABELS[relTab] || relTab;
-                      return (
-                        <div key={relTab} className="inline-flex items-center rounded-xl overflow-hidden border border-slate-300 bg-white shadow-2xs">
-                          {linkedDoc && (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDocId(linkedDoc.id)}
-                              className="px-3 py-1.5 text-xs font-bold text-slate-800 hover:bg-emerald-50 hover:text-emerald-800 transition flex items-center gap-1.5 cursor-pointer"
-                              title={`Lire le guide : ${linkedDoc.title}`}
+                    return (
+                      <button
+                        key={doc.id}
+                        type="button"
+                        onClick={() => setSelectedDocId(doc.id)}
+                        className={`w-full text-left p-3 rounded-2xl border transition-all flex items-start gap-2.5 cursor-pointer ${
+                          isSelected
+                            ? isArch
+                              ? 'bg-slate-900 border-slate-800 text-white shadow-sm'
+                              : 'bg-amber-600 border-amber-600 text-white shadow-sm'
+                            : 'bg-slate-50/70 border-slate-200/80 hover:bg-white hover:border-amber-300 text-slate-800'
+                        }`}
+                      >
+                        {isArch ? (
+                          <Code2
+                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                              isSelected ? 'text-amber-300' : 'text-slate-600'
+                            }`}
+                          />
+                        ) : (
+                          <FileText
+                            className={`w-4 h-4 shrink-0 mt-0.5 ${
+                              isSelected ? 'text-white' : 'text-amber-600'
+                            }`}
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span
+                              className={`text-[9.5px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded ${
+                                isSelected
+                                  ? 'bg-white/20 text-white'
+                                  : isArch
+                                  ? 'bg-slate-200/80 text-slate-800'
+                                  : 'bg-amber-100 text-amber-900'
+                              }`}
                             >
-                              <BookOpen className="w-3.5 h-3.5 text-emerald-700" />
-                              <span>{label}</span>
-                            </button>
-                          )}
-                          {onNavigateToTab && (
-                            <button
-                              type="button"
-                              onClick={() => onNavigateToTab(relTab)}
-                              className="px-2.5 py-1.5 bg-slate-100 hover:bg-emerald-700 hover:text-white text-slate-700 text-[11px] font-bold border-l border-slate-200 transition flex items-center gap-1 cursor-pointer"
-                              title={`Aller directement à l'écran ${label}`}
+                              {isArch ? 'Architecture & Dev' : 'Guide Écran'}
+                            </span>
+                            {doc.tabId && (
+                              <span
+                                className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded ${
+                                  isSelected ? 'bg-black/25 text-amber-200' : 'bg-slate-200 text-slate-700'
+                                }`}
+                              >
+                                #{doc.tabId}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-extrabold mt-1 leading-snug truncate">{doc.title}</p>
+                          {doc.subtitle && (
+                            <p
+                              className={`text-[10.5px] mt-0.5 line-clamp-1 ${
+                                isSelected ? 'text-amber-100' : 'text-slate-500'
+                              }`}
                             >
-                              <span>Ouvrir</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </button>
+                              {doc.subtitle}
+                            </p>
                           )}
                         </div>
-                      );
-                    })}
+                      </button>
+                    );
+                  })}
+
+                  {filteredDocs.length === 0 && (
+                    <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-500">
+                      Aucun document ne correspond à votre filtre « {searchQuery} ».
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Colonne Droite : Contenu Détaillé du Document Sélectionné */}
+            <div className="lg:col-span-8 xl:col-span-9">
+              {activeDoc ? (
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+                  {/* Bannière du Document */}
+                  <div
+                    className={`p-5 sm:p-6 border-b ${
+                      activeDoc.docType === 'architecture'
+                        ? 'bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950/90 text-white border-slate-800'
+                        : 'bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-white text-slate-900 border-slate-200'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider ${
+                              activeDoc.docType === 'architecture'
+                                ? 'bg-amber-400 text-slate-950'
+                                : 'bg-amber-600 text-white'
+                            }`}
+                          >
+                            {activeDoc.docType === 'architecture'
+                              ? 'Spécification Architecture & Logique Métier'
+                              : 'Guide Opérationnel Utilisateur'}
+                          </span>
+                          <span
+                            className={`text-xs font-bold ${
+                              activeDoc.docType === 'architecture' ? 'text-amber-300' : 'text-amber-800'
+                            }`}
+                          >
+                            • {activeDoc.groupTitle}
+                          </span>
+                          <span
+                            className={`text-[11px] font-mono px-2 py-0.5 rounded ${
+                              activeDoc.docType === 'architecture'
+                                ? 'bg-white/10 text-slate-300'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            {activeDoc.filePath}
+                          </span>
+                        </div>
+
+                        <h2 className="text-lg sm:text-xl font-black tracking-tight">{activeDoc.title}</h2>
+                        {activeDoc.subtitle && (
+                          <p
+                            className={`text-xs sm:text-sm font-medium ${
+                              activeDoc.docType === 'architecture' ? 'text-slate-300' : 'text-slate-600'
+                            }`}
+                          >
+                            {activeDoc.subtitle}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bouton d'action circulaire 3D flottant pour ouvrir la page correspondante */}
+                      {activeDoc.tabId && onNavigateToTab && (
+                        <Action3DButton
+                          variant="circle"
+                          color="amber"
+                          icon={ExternalLink}
+                          onClick={() => onNavigateToTab(activeDoc.tabId!)}
+                          title={`Ouvrir l’écran : ${TAB_LABELS[activeDoc.tabId!] || activeDoc.tabId}`}
+                          ariaLabel={`Ouvrir l’écran : ${TAB_LABELS[activeDoc.tabId!] || activeDoc.tabId}`}
+                          className={floatingCircleDepth}
+                        />
+                      )}
+                    </div>
+
+                    {/* Résumé exécutif */}
+                    {activeDoc.summary && (
+                      <div
+                        className={`mt-4 p-3.5 rounded-2xl text-xs leading-relaxed border ${
+                          activeDoc.docType === 'architecture'
+                            ? 'bg-white/5 border-white/10 text-amber-100'
+                            : 'bg-white border-amber-200/80 text-slate-700 shadow-2xs'
+                        }`}
+                      >
+                        <strong className="font-black uppercase tracking-wider text-[10.5px] mr-1.5">
+                          Résumé :
+                        </strong>
+                        {activeDoc.summary}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Corps du Document Markdown */}
+                  <div className="p-5 sm:p-7">
+                    <MarkdownBodyRenderer markdown={activeDoc.body} />
+                  </div>
+
+                  {/* Pied de document : Navigation croisée avec bouton 3D flottant intégré dans chaque carte */}
+                  {activeDoc.relatedTabs.length > 0 && (
+                    <div className="px-5 sm:px-7 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <span className="text-xs font-extrabold text-slate-700">
+                        Écrans & Guides Associés dans ce Groupe :
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        {activeDoc.relatedTabs.map((relTab) => {
+                          const linkedDoc = allDocs.find((d) => d.tabId === relTab);
+                          const label = TAB_LABELS[relTab] || relTab;
+                          return (
+                            <div
+                              key={relTab}
+                              className="inline-flex items-center gap-2.5 pl-3 pr-1.5 py-1.5 rounded-2xl border border-slate-200/90 bg-white shadow-[0_4px_12px_-3px_rgba(15,23,42,0.07)] hover:border-amber-300 hover:shadow-[0_8px_20px_-4px_rgba(245,158,11,0.16)] transition-all"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (linkedDoc) {
+                                    setSelectedDocId(linkedDoc.id);
+                                  } else if (onNavigateToTab) {
+                                    onNavigateToTab(relTab);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 hover:text-amber-700 transition cursor-pointer"
+                                title={
+                                  linkedDoc
+                                    ? `Lire le guide : ${linkedDoc.title}`
+                                    : `Ouvrir l'écran : ${label}`
+                                }
+                              >
+                                <BookOpen className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>{label}</span>
+                              </button>
+                              {onNavigateToTab && (
+                                <Action3DButton
+                                  variant="circle"
+                                  color="amber"
+                                  icon={ExternalLink}
+                                  onClick={() => onNavigateToTab(relTab)}
+                                  title={`Aller directement à l'écran ${label}`}
+                                  ariaLabel={`Aller directement à l'écran ${label}`}
+                                  className={`!w-8 !h-8 ${floatingCircleDepth}`}
+                                />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center text-xs text-slate-500">
+                  Aucun document disponible pour le filtre actif.
                 </div>
               )}
             </div>
-          ) : null}
-        </div>
-      </div>
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </AnimatedPage>
   );
 }

@@ -161,13 +161,13 @@ export default function PerformanceDashboardPanel({
         title={
           <span className="flex items-center gap-2 flex-wrap">
             <span>Supervision des Performances &amp; Cache Multi-Niveaux</span>
-            <span className="text-[10px] bg-sky-50 text-sky-800 font-mono px-2 py-0.5 rounded-md border border-sky-300">
+            <span className="text-[10px] bg-slate-100 text-sky-900 font-mono font-bold px-2.5 py-0.5 rounded-full border border-slate-200">
               Moteur Temps Réel
             </span>
           </span>
         }
         description="Supervision en temps réel du Caching Multi-Niveaux (L1/L2/L3), de la latence du moteur de formules et de la mémoire vive."
-        icon={<Activity className="w-4 h-4" />}
+        icon={<Activity />}
         headerRight={
           <div className="flex items-center gap-2">
             <button
@@ -223,10 +223,10 @@ export default function PerformanceDashboardPanel({
         </div>
 
         {/* Metric 2: Event Loop Lag */}
-        <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs flex flex-col justify-between">
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-sky-700" /> Lag Thread Principal
+              <Clock className="w-4 h-4 text-amber-600" /> Lag Thread Principal
             </span>
             <span
               className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
@@ -252,9 +252,9 @@ export default function PerformanceDashboardPanel({
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
             <span className="flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-amber-500" /> Taux de Succès Cache
+              <Zap className="w-4 h-4 text-sky-700" /> Taux de Succès Cache
             </span>
-            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-sky-900 border border-slate-200">
               L1/L2/L3 Active
             </span>
           </div>
@@ -302,22 +302,25 @@ export default function PerformanceDashboardPanel({
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => handleInvalidateTag('stock')}
-              className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer"
+              className={SETTINGS_BUTTON_STYLES.secondary}
             >
               Invalider Tag Stock
             </button>
             <button
+              type="button"
               onClick={() => handleInvalidateTag('formula')}
-              className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all cursor-pointer"
+              className={SETTINGS_BUTTON_STYLES.secondary}
             >
               Invalider Tag Formules
             </button>
             <button
+              type="button"
               onClick={handleClearAllCaches}
-              className="px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-all cursor-pointer"
+              className={SETTINGS_BUTTON_STYLES.dangerSoft}
             >
               Vider Tout le Cache
             </button>
@@ -346,10 +349,10 @@ export default function PerformanceDashboardPanel({
           </div>
 
           {/* L2 Persistent Storage Cache Card */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-300">
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">L2 - Storage Persistent</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-sky-50 text-sky-800 border border-sky-300 rounded-md font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-white text-sky-800 border border-slate-200 rounded-md font-bold">
                 IndexedDB
               </span>
             </div>
@@ -360,7 +363,7 @@ export default function PerformanceDashboardPanel({
               </div>
               <div className="flex justify-between">
                 <span>Succès (Hits):</span>
-                <span className="font-bold text-sky-700">{cacheMetrics.l2Hits}</span>
+                <span className="font-bold text-sky-800">{cacheMetrics.l2Hits}</span>
               </div>
             </div>
           </div>
@@ -369,7 +372,7 @@ export default function PerformanceDashboardPanel({
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/80">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-slate-800">L3 - Formula Engine</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold">
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-sky-900 border border-slate-200 rounded-md font-bold">
                 Formula Map
               </span>
             </div>
@@ -380,7 +383,7 @@ export default function PerformanceDashboardPanel({
               </div>
               <div className="flex justify-between">
                 <span>Entrées Pré-chauffées:</span>
-                <span className="font-bold text-amber-600">{cacheMetrics.warmedEntriesCount}</span>
+                <span className="font-bold text-sky-800">{cacheMetrics.warmedEntriesCount}</span>
               </div>
             </div>
           </div>
@@ -402,12 +405,13 @@ export default function PerformanceDashboardPanel({
               </p>
             </div>
             <button
+              type="button"
               onClick={handleRunBenchmark}
               disabled={isBenchmarking}
-              className="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              className={SETTINGS_BUTTON_STYLES.primary}
             >
               <Play className="w-3.5 h-3.5" />
-              {isBenchmarking ? 'Calcul...' : 'Lancer Benchmark'}
+              <span>{isBenchmarking ? 'Calcul...' : 'Lancer Benchmark'}</span>
             </button>
           </div>
 

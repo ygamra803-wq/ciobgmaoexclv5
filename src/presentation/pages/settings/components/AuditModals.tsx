@@ -1,7 +1,10 @@
 import React, { useEffect } from 'react';
-import { MapPin, Users, Package, Link2 } from 'lucide-react';
+import { MapPin, Users, Package, Link2, Layers, X } from 'lucide-react';
 import { StockCalculationService } from '../../../../domain/pdr/services/StockCalculationService';
-import { SETTINGS_BUTTON_STYLES } from './settingsUi';
+import { filterActiveMachines } from '../../../../utils/activeMachines';
+import type { IMachine } from '../../../../types/domain';
+import Action3DButton from '../../../components/common/Action3DButton';
+import { SETTINGS_BUTTON_STYLES, SETTINGS_INPUT_CLASS } from './settingsUi';
 
 export interface AuditZoneFormState {
   libelle: string;
@@ -156,22 +159,20 @@ export function AuditZoneModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
-              <MapPin className="w-4 h-4" />
-            </div>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <MapPin className="w-5 h-5 text-sky-700 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-extrabold text-slate-900">
                 Fiche d&apos;enregistrement de Zone
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -179,12 +180,15 @@ export function AuditZoneModal({
               </p>
             </div>
           </div>
-          <button
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
-          >
-            ×
-          </button>
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
         </div>
         <div className="space-y-3">
           <div>
@@ -197,7 +201,7 @@ export function AuditZoneModal({
               onChange={(e) =>
                 setAuditZoneForm((prev) => ({ ...prev, libelle: e.target.value }))
               }
-              className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 focus:outline-none focus:border-sky-600"
+              className={SETTINGS_INPUT_CLASS}
               placeholder="ex: Atelier Conditionnement"
             />
           </div>
@@ -267,22 +271,20 @@ export function AuditUserModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
-              <Users className="w-4 h-4" />
-            </div>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <Users className="w-5 h-5 text-sky-700 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-extrabold text-slate-900">
                 Fiche d&apos;enregistrement d&apos;utilisateur
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -290,20 +292,23 @@ export function AuditUserModal({
               </p>
             </div>
           </div>
-          <button
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
-          >
-            ×
-          </button>
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
         </div>
 
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-300 space-y-1.5">
+        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-600">
               ID Sécurisé généré :
             </span>
-            <span className="font-mono font-extrabold text-xs bg-sky-50 text-sky-900 border border-slate-800 px-2.5 py-0.5 rounded-md">
+            <span className="font-mono font-extrabold text-xs bg-white text-sky-900 border border-slate-300 px-2.5 py-0.5 rounded-full">
               {getNextUserId(auditUserForm.type)}
             </span>
           </div>
@@ -322,7 +327,7 @@ export function AuditUserModal({
               onChange={(e) =>
                 setAuditUserForm((prev) => ({ ...prev, type: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
+              className={`${SETTINGS_INPUT_CLASS} bg-white`}
             >
               <option value="TECHNICIEN">Technicien (Maintenance / GMAO)</option>
               <option value="OPERATEUR">Opérateur (Production)</option>
@@ -340,7 +345,7 @@ export function AuditUserModal({
               onChange={(e) =>
                 setAuditUserForm((prev) => ({ ...prev, nom: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+              className={SETTINGS_INPUT_CLASS}
               placeholder="Nom de l'utilisateur"
             />
           </div>
@@ -356,7 +361,7 @@ export function AuditUserModal({
                 onChange={(e) =>
                   setAuditUserForm((prev) => ({ ...prev, specialite: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+                className={SETTINGS_INPUT_CLASS}
                 placeholder="Spécialité du technicien (ex: Mécanique, Électricité)"
               />
             </div>
@@ -370,7 +375,7 @@ export function AuditUserModal({
                 onChange={(e) =>
                   setAuditUserForm((prev) => ({ ...prev, id_zone: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
+                className={`${SETTINGS_INPUT_CLASS} bg-white`}
               >
                 <option value="">Sélectionner une zone</option>
                 {zones.map((z) => (
@@ -473,22 +478,20 @@ export function AuditArticleModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
-              <Package className="w-4 h-4" />
-            </div>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <Package className="w-5 h-5 text-sky-700 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-extrabold text-slate-900">
                 Fiche d&apos;enregistrement Pièce PDR
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -496,12 +499,15 @@ export function AuditArticleModal({
               </p>
             </div>
           </div>
-          <button
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
-          >
-            ×
-          </button>
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
         </div>
 
         <div className="space-y-3">
@@ -515,7 +521,7 @@ export function AuditArticleModal({
               onChange={(e) =>
                 setAuditArticleForm((p) => ({ ...p, ref: e.target.value }))
               }
-              className="w-full text-xs font-mono font-bold border border-slate-400 rounded-lg p-2.5 text-slate-800 bg-slate-50"
+              className={`${SETTINGS_INPUT_CLASS} font-mono font-bold`}
               readOnly
             />
           </div>
@@ -530,12 +536,12 @@ export function AuditArticleModal({
               onChange={(e) =>
                 setAuditArticleForm((p) => ({ ...p, designation: e.target.value }))
               }
-              className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+              className={SETTINGS_INPUT_CLASS}
               placeholder="ex: Roulement à billes 6204-2RS"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Famille / Type
@@ -545,7 +551,7 @@ export function AuditArticleModal({
                 onChange={(e) =>
                   setAuditArticleForm((p) => ({ ...p, type: e.target.value }))
                 }
-                className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
+                className={`${SETTINGS_INPUT_CLASS} bg-white`}
               >
                 {(types || []).map((t, idx) => {
                   const val = typeof t === 'string' ? t : t.id_type || String(idx);
@@ -570,13 +576,13 @@ export function AuditArticleModal({
                 onChange={(e) =>
                   setAuditArticleForm((p) => ({ ...p, emplacement: e.target.value }))
                 }
-                className="w-full text-xs font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+                className={SETTINGS_INPUT_CLASS}
                 placeholder="ex: Magasin PDR"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2.5">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
                 Stock Initial
@@ -591,7 +597,7 @@ export function AuditArticleModal({
                     stockInitial: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+                className={`${SETTINGS_INPUT_CLASS} font-mono`}
               />
             </div>
 
@@ -609,7 +615,7 @@ export function AuditArticleModal({
                     seuil: Number(e.target.value) || 0,
                   }))
                 }
-                className="w-full text-xs font-mono font-medium border border-slate-400 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-sky-600"
+                className={`${SETTINGS_INPUT_CLASS} font-mono`}
               />
             </div>
           </div>
@@ -693,22 +699,20 @@ export function AuditRelinkModal({
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-white rounded-xl border border-slate-800 shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-md w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-400 text-sky-700 flex items-center justify-center font-bold">
-              <Link2 className="w-4 h-4" />
-            </div>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <Link2 className="w-5 h-5 text-sky-700 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-900">
+              <h3 className="text-sm font-extrabold text-slate-900">
                 Rattachement &amp; Correction de Clé
               </h3>
               <p className="text-[11px] text-slate-500">
@@ -716,18 +720,21 @@ export function AuditRelinkModal({
               </p>
             </div>
           </div>
-          <button
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 font-bold text-lg cursor-pointer"
-          >
-            ×
-          </button>
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
         </div>
 
-        <div className="p-3 bg-sky-50/70 rounded-xl border border-sky-300 space-y-1.5 text-xs text-slate-900">
+        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs text-slate-900">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-600">Élément à corriger :</span>
-            <span className="font-mono font-bold px-2 py-0.5 bg-white text-sky-900 rounded border border-slate-800">
+            <span className="font-mono font-bold px-2.5 py-0.5 bg-white text-sky-900 rounded-full border border-slate-300">
               {relinkData.oldKey}
             </span>
           </div>
@@ -745,7 +752,7 @@ export function AuditRelinkModal({
             onChange={(e) =>
               setRelinkData((prev) => ({ ...prev, targetKey: e.target.value }))
             }
-            className="w-full text-xs font-semibold border border-slate-400 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:border-sky-600"
+            className={`${SETTINGS_INPUT_CLASS} bg-white`}
           >
             <option value="">Sélectionner un élément valide...</option>
             {relinkData.entityType === 'machine' &&
@@ -808,3 +815,108 @@ export function AuditRelinkModal({
     </div>
   );
 }
+
+export interface BulkRelinkModalState {
+  isOpen: boolean;
+  entityType: string;
+  targetMachineId: string;
+}
+
+export interface BulkRelinkModalProps {
+  modalState: BulkRelinkModalState;
+  setModalState: React.Dispatch<React.SetStateAction<BulkRelinkModalState>>;
+  machines: IMachine[];
+  onConfirm: (e: React.FormEvent) => void;
+}
+
+export function BulkRelinkModal({
+  modalState,
+  setModalState,
+  machines,
+  onConfirm,
+}: BulkRelinkModalProps) {
+  if (!modalState.isOpen) return null;
+
+  const closeModal = () => setModalState((prev) => ({ ...prev, isOpen: false }));
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+      onClick={closeModal}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="bg-white rounded-2xl border border-slate-200/90 shadow-2xl w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 bg-white border-b border-slate-100 text-slate-900 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Layers className="w-5 h-5 text-sky-700 shrink-0" />
+            <div>
+              <h4 className="text-sm font-extrabold text-slate-900">
+                Réassigner en masse (
+                {modalState.entityType === 'preventive'
+                  ? 'Tâches Préventives'
+                  : 'Interventions Correctives'}
+                )
+              </h4>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Sélectionnez la machine active cible pour rattacher les éléments orphelins
+              </p>
+            </div>
+          </div>
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
+            onClick={closeModal}
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
+        </div>
+        <form onSubmit={onConfirm} className="p-5 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Machine Active Cible
+            </label>
+            <select
+              required
+              value={modalState.targetMachineId}
+              onChange={(e) =>
+                setModalState((prev) => ({ ...prev, targetMachineId: e.target.value }))
+              }
+              className={`${SETTINGS_INPUT_CLASS} bg-white`}
+            >
+              {filterActiveMachines(machines).map((m: IMachine) => {
+                const mId = String(m.id_machine_registered || m.id || m.code || '');
+                return (
+                  <option key={mId} value={mId}>
+                    {mId} — {m.designation || m.nom || 'Machine'}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={closeModal}
+              className={SETTINGS_BUTTON_STYLES.secondary}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className={SETTINGS_BUTTON_STYLES.primary}
+            >
+              Confirmer la réassignation
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+

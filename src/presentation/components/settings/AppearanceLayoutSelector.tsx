@@ -264,9 +264,9 @@ export function AppearanceLayoutSelector({
   };
 
   const activeOptionCardClass =
-    'border-slate-900 bg-sky-50/70 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]';
+    'border-sky-700/75 bg-white ring-1 ring-sky-700/15 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.08)]';
   const inactiveOptionCardClass =
-    'border-slate-300 bg-white hover:border-slate-600';
+    'border-slate-200/90 bg-slate-50/70 hover:bg-white hover:border-slate-300 shadow-[0_1px_2px_rgba(15,23,42,0.03)]';
 
   return (
     <div className={`w-full space-y-6 text-slate-800 ${className}`}>
@@ -498,7 +498,7 @@ export function AppearanceLayoutSelector({
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Sun className="w-4 h-4 text-amber-500" />
+                  <Sun className="w-4 h-4 text-sky-700" />
                   <div className="text-left">
                     <span className="block text-xs font-bold text-slate-900">Thème Clair (Standard)</span>
                     <span className="block text-[10.5px] text-slate-500">Haute lisibilité en atelier</span>

@@ -5,19 +5,7 @@ import QuickMovementModal from './QuickMovementModal';
 import { storageService } from '../../../utils/storageService';
 import { useSmartTableLoader } from '../../hooks/useSmartTableLoader';
 import { Logger } from '../../../core/logger/LoggerService';
-import {
-  Plus,
-  MapPin,
-  Layers,
-  CheckCircle2,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  ChevronDown,
-  Warehouse,
-  Factory,
-  Tag,
-} from 'lucide-react';
+import { Plus, MapPin, Layers, CheckCircle2, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, Warehouse, Factory, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CubeIcon } from '../../components/common/icons/CubeIcon';
 import { LayersIcon } from '../../components/common/icons/LayersIcon';
@@ -31,19 +19,108 @@ import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
 import ComponentsTable from './components/ComponentsTable';
 import PartsTable from './components/PartsTable';
 import { useTranslation } from '../../../i18n/I18nContext';
-import {
-  isComponentNature,
-  isPartNature,
-  isWarehouseComponent,
-  isWarehousePart,
-} from '../../../core/domain/EntrepotItem';
+import { isComponentNature, isPartNature, isWarehouseComponent, isWarehousePart } from '../../../core/domain/EntrepotItem';
 import { filterProductionMachines, filterActiveMachines } from '../../../utils/activeMachines';
 import { useGmaoStore } from '../../../store/useGmaoStore';
-import { MaterialPolicyTag } from '../../../types/domain';
+import {
+  MaterialPolicyTag, type ICompFamily, type ICompTemplate, type IDiagnostic, type IMachine,
+  type IMachineFamily, type IMachineTemplate, type IMouvement, type IPartDesignation,
+  type IPartGroup, type IPartType, type ITechnician, type IType, type IWarehouseItem, type IZone,
+} from '../../../types/domain';
 import { getEffectivePolicyTags } from '../../../domain/corrective/needRequestService';
 import { EntrepotDeleteModal, EntrepotFormulasModal } from './components/EntrepotModals';
 import { EntrepotDetailsModal } from './components/EntrepotDetailsModal';
 import { EntrepotFormModals } from './components/EntrepotFormModals';
+
+type EntrepotCatalogDiag = IPartDesignation & Partial<IDiagnostic>;
+type EntrepotCatalogType = IPartType & Partial<IType>;
+type EntrepotCatalogFamily = ICompFamily & Partial<IMachineFamily>;
+type EntrepotCatalogTemplate = ICompTemplate & Partial<IMachineTemplate>;
+
+interface EntrepotFormState {
+  id_warehouse_item: string;
+  designation: string;
+  nature: string;
+  id_family: string;
+  family_prefix?: string;
+  id_templates: string;
+  id_type: string;
+  id_diag: string;
+  matiere_nuance: string;
+  ref_plan: string;
+  dimensions_brut: string;
+  rattachement_type: string;
+  id_machine_registered: string;
+  id_zone: string;
+  technician: string;
+  status: string;
+  emplacement: string;
+  stockInitial: number;
+  seuil: number;
+  remarques: string;
+  traitement_thermique: string;
+  mode_reparation_defaut: string;
+  tension_nominale: string | number;
+  courant_nominal_a: string | number;
+  indice_protection: string;
+  type_fixation: string;
+  policy_tags?: MaterialPolicyTag[];
+}
+
+interface QuickModalState {
+  isOpen: boolean;
+  article: Record<string, unknown> | null;
+  initialFlow: string;
+  initialAction: string;
+}
+
+interface EntrepotViewProps {
+  warehouseItems?: IWarehouseItem[];
+  _entrepotComponents?: IWarehouseItem[];
+  families?: EntrepotCatalogFamily[];
+  templates?: EntrepotCatalogTemplate[];
+  types?: EntrepotCatalogType[];
+  diagnostics?: EntrepotCatalogDiag[];
+  compFamilies?: EntrepotCatalogFamily[];
+  compTemplates?: EntrepotCatalogTemplate[];
+  partGroups?: IPartGroup[];
+  partTypes?: EntrepotCatalogType[];
+  partDesignations?: EntrepotCatalogDiag[];
+  zones?: IZone[];
+  machines?: IMachine[];
+  technicians?: ITechnician[];
+  mouvements?: IMouvement[];
+  whFamilyFilter?: string;
+  setWhFamilyFilter?: (val: string) => void;
+  whTemplateFilter?: string;
+  setWhTemplateFilter?: (val: string) => void;
+  whPartGroupFilter?: string;
+  setWhPartGroupFilter?: (val: string) => void;
+  whTypeFilter?: string;
+  setWhTypeFilter?: (val: string) => void;
+  whNatureFilter?: string;
+  setWhNatureFilter?: (val: string) => void;
+  whRattachementFilter?: string;
+  setWhRattachementFilter?: (val: string) => void;
+  whStatusFilter?: string;
+  setWhStatusFilter?: (val: string) => void;
+  whSearch?: string;
+  setWhSearch?: (val: string) => void;
+  onAddWarehouseItem?: (item: Partial<IWarehouseItem>) => void;
+  onUpdateWarehouseItem?: (id: string, item: Partial<IWarehouseItem>) => void;
+  onDeleteWarehouseItem?: (id: string) => void;
+  onAddMouvement?: (mvt: Partial<IMouvement>) => void;
+  onUpdateFamily?: (id: string, fam: Partial<EntrepotCatalogFamily>) => void;
+  onNavigateToFamily?: (id?: string) => void;
+  onNavigateToTemplate?: (id?: string) => void;
+  onNavigateToPartGroups?: (id?: string) => void;
+  onNavigateToType?: (id?: string) => void;
+  onNavigateToPartTypes?: (id?: string) => void;
+  onNavigateToDiag?: (id?: string) => void;
+  onNavigateToZone?: (id?: string) => void;
+  onNavigateToMachine?: (id?: string) => void;
+  showToast?: (msg: string, type?: string) => void;
+}
 
 export default function EntrepotView({
   warehouseItems = [],
@@ -91,7 +168,7 @@ export default function EntrepotView({
   onNavigateToZone,
   onNavigateToMachine,
   showToast,
-}: any) {
+}: EntrepotViewProps) {
   const { t } = useTranslation();
   const storePartGroups = useGmaoStore((s) => s.partGroups);
   const effectivePartGroups = useMemo(
@@ -109,14 +186,14 @@ export default function EntrepotView({
   const diagnostics = partDesignations && partDesignations.length > 0 ? partDesignations : propDiagnostics;
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
-  const [toEdit, setToEdit] = useState<any>(null);
-  const [toDelete, setToDelete] = useState<any>(null);
-  const [selectedDetails, setSelectedDetails] = useState<any>(null);
+  const [toEdit, setToEdit] = useState<IWarehouseItem | null>(null);
+  const [toDelete, setToDelete] = useState<IWarehouseItem | null>(null);
+  const [selectedDetails, setSelectedDetails] = useState<IWarehouseItem | null>(null);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
 
   // Quick Action / Movement Modal State
-  const [activeActionMenuId, setActiveActionMenuId] = useState<any>(null);
-  const [quickModalState, setQuickModalState] = useState<any>({
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | number | null>(null);
+  const [quickModalState, setQuickModalState] = useState<QuickModalState>({
     isOpen: false,
     article: null,
     initialFlow: 'Sortie Interne',
@@ -394,7 +471,7 @@ export default function EntrepotView({
     }
   };
 
-  const [addForm, setAddForm] = useState<any>({
+  const [addForm, setAddForm] = useState<EntrepotFormState>({
     id_warehouse_item: '',
     designation: '',
     nature: 'COMPONENT', // 'COMPONENT' (Machine Twin) | 'PART' (Stock Twin)
@@ -425,7 +502,7 @@ export default function EntrepotView({
   });
 
   // Form state for edit modal
-  const [editForm, setEditForm] = useState<any>({
+  const [editForm, setEditForm] = useState<EntrepotFormState>({
     id_warehouse_item: '',
     designation: '',
     nature: 'COMPONENT',
@@ -460,8 +537,10 @@ export default function EntrepotView({
     if (activeWarehouseTab === 'PARTS') {
       const defaultType = types[0]?.id_type || 'TYPE-MEC';
       const relDiags = diagnostics.filter((d) => d.id_type === defaultType);
-      const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
-      const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+      const getDiagId = (d: EntrepotCatalogDiag | null | undefined) =>
+        d ? String(d.id_part || d.ref || d.id_diag || d.id || '') : '';
+      const getDiagLabel = (d: EntrepotCatalogDiag | null | undefined) =>
+        d ? String(d.designation || d.libelle || '') : '';
       const defaultDiagObj = relDiags[0] || null;
       const defaultDiag = getDiagId(defaultDiagObj);
       const autoCode = getNextPartRef(defaultType);
@@ -516,8 +595,8 @@ export default function EntrepotView({
         dimensions_brut: '',
         traitement_thermique: '',
         mode_reparation_defaut: defaultTplObj?.mode_reparation_defaut || 'NON_DEFINI',
-        tension_nominale: defaultTplObj?.tension_nominale || defaultTplObj?.specs?.V || '',
-        courant_nominal_a: defaultTplObj?.courant_nominal_a || defaultTplObj?.specs?.A || '',
+        tension_nominale: String(defaultTplObj?.tension_nominale || defaultTplObj?.specs?.V || ''),
+        courant_nominal_a: String(defaultTplObj?.courant_nominal_a || defaultTplObj?.specs?.A || ''),
         indice_protection: defaultTplObj?.indice_protection || '',
         type_fixation: defaultTplObj?.type_fixation || '',
         rattachement_type: 'ENTREPOT',
@@ -535,7 +614,7 @@ export default function EntrepotView({
   };
 
   // Switch Nature in Add Modal
-  const handleAddNatureSwitch = (newNature) => {
+  const handleAddNatureSwitch = (newNature: string) => {
     if (isComponentNature(newNature)) {
       const defaultFam = addForm.id_family || families[0]?.id_family || 'FAM-MOT';
       const relTemplates = templates.filter((t) => t.id_family === defaultFam);
@@ -557,8 +636,10 @@ export default function EntrepotView({
       // PART
       const defaultType = addForm.id_type || types[0]?.id_type || 'TYPE-MEC';
       const relDiags = diagnostics.filter((d) => d.id_type === defaultType);
-      const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
-      const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+      const getDiagId = (d: EntrepotCatalogDiag | null | undefined) =>
+        d ? String(d.id_part || d.ref || d.id_diag || d.id || '') : '';
+      const getDiagLabel = (d: EntrepotCatalogDiag | null | undefined) =>
+        d ? String(d.designation || d.libelle || '') : '';
       const defaultDiagObj = relDiags[0] || null;
       const defaultDiag = getDiagId(defaultDiagObj);
       const autoCode = getNextPartRef(defaultType);
@@ -577,12 +658,12 @@ export default function EntrepotView({
   };
 
   // Open Edit Modal
-  const handleOpenEditModal = (item) => {
+  const handleOpenEditModal = (item: IWarehouseItem) => {
     if (!canEditStock) return;
     const linkedDiag = diagnostics.find(
-      (d: any) => (d.id_part || d.ref || d.id_diag || d.id) === item.id_diag
+      (d: EntrepotCatalogDiag) => (d.id_part || d.ref || d.id_diag || d.id) === item.id_diag
     );
-    const linkedTpl = templates.find((t: any) => t.id_templates === item.id_templates);
+    const linkedTpl = templates.find((tItem: EntrepotCatalogTemplate) => tItem.id_templates === item.id_templates);
     setToEdit(item);
     setEditForm({
       id_warehouse_item: item.id_warehouse_item || '',
@@ -597,8 +678,8 @@ export default function EntrepotView({
       dimensions_brut: item.dimensions_brut || linkedDiag?.dimensions_brut || '',
       traitement_thermique: item.traitement_thermique || linkedDiag?.traitement_thermique || '',
       mode_reparation_defaut: item.mode_reparation_defaut || linkedTpl?.mode_reparation_defaut || 'NON_DEFINI',
-      tension_nominale: item.tension_nominale || linkedTpl?.tension_nominale || linkedTpl?.specs?.V || '',
-      courant_nominal_a: item.courant_nominal_a != null ? item.courant_nominal_a : (linkedTpl?.courant_nominal_a || linkedTpl?.specs?.A || ''),
+      tension_nominale: String(item.tension_nominale || linkedTpl?.tension_nominale || linkedTpl?.specs?.V || ''),
+      courant_nominal_a: String(item.courant_nominal_a != null ? item.courant_nominal_a : (linkedTpl?.courant_nominal_a || linkedTpl?.specs?.A || '')),
       indice_protection: item.indice_protection || linkedTpl?.indice_protection || '',
       type_fixation: item.type_fixation || linkedTpl?.type_fixation || '',
       rattachement_type: item.rattachement_type || 'ENTREPOT',
@@ -677,24 +758,26 @@ export default function EntrepotView({
     }));
   };
 
-  const handleAddTemplateChange = (newTpl) => {
+  const handleAddTemplateChange = (newTpl: string) => {
     const tplObj = templates.find((t) => t.id_templates === newTpl);
     setAddForm((prev) => ({
       ...prev,
       id_templates: newTpl,
-      designation: tplObj ? tplObj.libelle : prev.designation,
-      mode_reparation_defaut: tplObj?.mode_reparation_defaut || prev.mode_reparation_defaut || 'NON_DEFINI',
-      tension_nominale: tplObj?.tension_nominale || tplObj?.specs?.V || prev.tension_nominale || '',
-      courant_nominal_a: tplObj?.courant_nominal_a || tplObj?.specs?.A || prev.courant_nominal_a || '',
-      indice_protection: tplObj?.indice_protection || prev.indice_protection || '',
-      type_fixation: tplObj?.type_fixation || prev.type_fixation || '',
+      designation: tplObj ? String(tplObj.libelle || prev.designation) : prev.designation,
+      mode_reparation_defaut: String(tplObj?.mode_reparation_defaut || prev.mode_reparation_defaut || 'NON_DEFINI'),
+      tension_nominale: String(tplObj?.tension_nominale || tplObj?.specs?.V || prev.tension_nominale || ''),
+      courant_nominal_a: String(tplObj?.courant_nominal_a || tplObj?.specs?.A || prev.courant_nominal_a || ''),
+      indice_protection: String(tplObj?.indice_protection || prev.indice_protection || ''),
+      type_fixation: String(tplObj?.type_fixation || prev.type_fixation || ''),
     }));
   };
 
-  const handleAddTypeChange = (newType) => {
+  const handleAddTypeChange = (newType: string) => {
     const relDiags = diagnostics.filter((d) => d.id_type === newType);
-    const getDiagId = (d: any) => d ? (d.id_part || d.ref || d.id_diag || d.id || '') : '';
-    const getDiagLabel = (d: any) => d ? (d.designation || d.libelle || '') : '';
+    const getDiagId = (d: EntrepotCatalogDiag | null | undefined) =>
+      d ? String(d.id_part || d.ref || d.id_diag || d.id || '') : '';
+    const getDiagLabel = (d: EntrepotCatalogDiag | null | undefined) =>
+      d ? String(d.designation || d.libelle || '') : '';
     const diagObj = relDiags[0] || null;
     const newDiag = getDiagId(diagObj);
     const autoCode = getNextPartRef(newType);
@@ -714,7 +797,7 @@ export default function EntrepotView({
     }));
   };
 
-  const handleAddDiagChange = (newDiag) => {
+  const handleAddDiagChange = (newDiag: string) => {
     const diagObj = diagnostics.find(
       (d) => (d.id_part || d.ref || d.id_diag || d.id) === newDiag
     );
@@ -733,7 +816,7 @@ export default function EntrepotView({
   };
 
   // Submit Add
-  const handleSubmitAdd = (e) => {
+  const handleSubmitAdd = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canCreateStock) return;
     if (!addForm.id_warehouse_item || !addForm.designation) {
@@ -754,7 +837,7 @@ export default function EntrepotView({
 
     if (onAddWarehouseItem) {
       const matchedPartType = !isComp
-        ? types.find((tObj: any) => tObj.id_type === addForm.id_type)
+        ? types.find((tObj: EntrepotCatalogType) => tObj.id_type === addForm.id_type)
         : null;
       const inheritedPartGroup = !isComp
         ? String(matchedPartType?.id_group || matchedPartType?.id_groupe || '').trim() || undefined
@@ -796,9 +879,9 @@ export default function EntrepotView({
   };
 
   // Submit Edit
-  const handleSubmitEdit = (e) => {
+  const handleSubmitEdit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!canEditStock) return;
+    if (!canEditStock || !toEdit) return;
     if (!editForm.designation) {
       showToast?.('La désignation est obligatoire.', 'warning');
       return;
@@ -807,12 +890,12 @@ export default function EntrepotView({
     if (onUpdateWarehouseItem) {
       const isComp = isComponentNature(editForm.nature);
       const matchedPartType = !isComp
-        ? types.find((tObj: any) => tObj.id_type === editForm.id_type)
+        ? types.find((tObj: EntrepotCatalogType) => tObj.id_type === editForm.id_type)
         : null;
       const inheritedPartGroup = !isComp
         ? String(matchedPartType?.id_group || matchedPartType?.id_groupe || toEdit.id_group || toEdit.id_groupe || '').trim() || undefined
         : undefined;
-      onUpdateWarehouseItem(toEdit.id_warehouse_item, {
+      onUpdateWarehouseItem(String(toEdit.id_warehouse_item || ''), {
         ...toEdit,
         designation: editForm.designation.trim(),
         nature: editForm.nature,
@@ -936,7 +1019,7 @@ export default function EntrepotView({
 
       // Groupe de Parts filter (Niveau 1 — for parts)
       if (itemIsPart && currentPartGroupFilter !== 'ALL') {
-        const typeObj = types.find((tObj: any) => tObj.id_type === item.id_type);
+        const typeObj = types.find((tObj: EntrepotCatalogType) => tObj.id_type === item.id_type);
         const itemGrp = String(
           item.id_group ||
             item.id_groupe ||
@@ -1236,7 +1319,7 @@ export default function EntrepotView({
     }
     if (currentPartGroupFilter !== 'ALL') {
       const grpObj = effectivePartGroups.find(
-        (g: any) =>
+        (g: IPartGroup) =>
           String(g.id_group || g.id_groupe || g.code || '').trim().toUpperCase() ===
           String(currentPartGroupFilter).trim().toUpperCase()
       );
@@ -1579,7 +1662,7 @@ export default function EntrepotView({
                     value: 'ALL',
                     label: `${t('part_types.all_groups', 'Tous les Groupes')} (${effectivePartGroups.length})`,
                   },
-                  ...effectivePartGroups.map((g: any) => ({
+                  ...effectivePartGroups.map((g: IPartGroup) => ({
                     value: String(g.id_group || g.id_groupe || g.code || ''),
                     label: `${g.code || g.id_group} — ${g.libelle}`,
                   })),
@@ -1614,14 +1697,14 @@ export default function EntrepotView({
                 options={[
                   { value: 'ALL', label: `${t('entrepot.filters.all_types')} (${types.length})` },
                   ...types
-                    .filter((tObj: any) => {
+                    .filter((tObj: EntrepotCatalogType) => {
                       if (currentPartGroupFilter === 'ALL') return true;
                       const gId = String(tObj.id_group || tObj.id_groupe || '').trim().toUpperCase();
                       if (currentPartGroupFilter === 'UNASSIGNED') return !gId;
                       return gId === String(currentPartGroupFilter).trim().toUpperCase();
                     })
-                    .map((tObj: any) => ({
-                      value: tObj.id_type,
+                    .map((tObj: EntrepotCatalogType) => ({
+                      value: String(tObj.id_type || ''),
                       label: `${tObj.libelle} (${tObj.id_type})`,
                     })),
                 ]}

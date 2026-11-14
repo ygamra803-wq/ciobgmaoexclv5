@@ -50,6 +50,14 @@ export default function Action3DButton({
       glow: 'hover:shadow-[0_8px_20px_-3px_rgba(20,184,166,0.3),0_3px_8px_-2px_rgba(20,184,166,0.15)]',
       solidBg: 'bg-gradient-to-b from-teal-600 to-teal-700 hover:from-teal-500 hover:to-teal-600 text-white border-teal-500/50 shadow-[0_4px_14px_rgba(20,184,166,0.35)]',
     },
+    sky: {
+      border: 'border-slate-200/90 hover:border-sky-600/50',
+      bgHover: 'hover:bg-slate-50',
+      text: 'text-sky-800 hover:text-sky-950',
+      iconText: 'text-sky-700 group-hover:text-sky-900',
+      glow: 'hover:shadow-[0_6px_16px_-3px_rgba(15,23,42,0.14),0_2px_6px_-1px_rgba(15,23,42,0.08)]',
+      solidBg: 'bg-sky-800 hover:bg-sky-900 text-white border-sky-900 shadow-[0_1px_2px_rgba(15,23,42,0.10)]',
+    },
     indigo: {
       border: 'border-slate-200/90 hover:border-indigo-400',
       bgHover: 'hover:bg-indigo-50/80',
@@ -115,9 +123,9 @@ export default function Action3DButton({
   // Base 3D elevation + tactile interaction styles
   const base3DStyles = `
     group relative inline-flex items-center justify-center font-bold transition-all duration-300 ease-out
-    shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.05)]
+    shadow-[0_6px_16px_-3px_rgba(15,23,42,0.12),0_2px_6px_-1px_rgba(15,23,42,0.06),inset_0_1px_1px_rgba(255,255,255,0.92)]
     hover:-translate-y-1 ${theme.glow}
-    active:translate-y-0.5 active:scale-95 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.12)]
+    active:translate-y-0.5 active:scale-95 active:shadow-[inset_0_2px_4px_rgba(0,0,0,0.15)]
     disabled:opacity-50 disabled:pointer-events-none cursor-pointer select-none
   `;
 
@@ -126,11 +134,11 @@ export default function Action3DButton({
   if (variant === 'circle') {
     variantStyles = `w-10 sm:w-11 h-10 sm:h-11 rounded-full bg-white border ${theme.border} ${theme.bgHover} ${theme.text} shrink-0`;
   } else if (variant === 'pill') {
-    variantStyles = `px-4 py-2 rounded-full bg-white border text-xs gap-2 ${theme.border} ${theme.bgHover} ${theme.text} shrink-0`;
+    variantStyles = `px-4 py-2 rounded-full bg-white border text-xs gap-2 ${theme.border} ${theme.bgHover} ${theme.text} shadow-[0_1px_2px_rgba(15,23,42,0.06)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.10)] shrink-0`;
   } else if (variant === 'square') {
     variantStyles = `px-4 py-2.5 rounded-xl border text-xs gap-2 ${theme.border} ${theme.bgHover} ${theme.text} shrink-0`;
   } else if (variant === 'solid') {
-    variantStyles = `px-4 py-2.5 rounded-xl text-xs gap-2 ${theme.solidBg} shrink-0`;
+    variantStyles = `px-4 py-2 rounded-full text-xs gap-2 border shadow-[0_1px_2px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.12)] ${theme.solidBg} shrink-0`;
   }
 
   return (

@@ -95,18 +95,18 @@ export default function TelemetryAuditPanel({
             <div className="text-[10px] text-slate-400 mt-0.5">Buffer local (Max 50)</div>
           </div>
 
-          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-300">
+          <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
               <span>Navigation</span>
-              <MousePointer className="w-3.5 h-3.5 text-sky-600" />
+              <MousePointer className="w-3.5 h-3.5 text-sky-700" />
             </div>
-            <div className="text-xl font-black text-sky-700 mt-1 font-mono">
+            <div className="text-xl font-black text-sky-800 mt-1 font-mono">
               {categoryCounts.navigation}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">Changements d&apos;onglets</div>
           </div>
 
-          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-300">
+          <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
               <span>Actions Stock</span>
               <Layers className="w-3.5 h-3.5 text-emerald-500" />
@@ -117,23 +117,23 @@ export default function TelemetryAuditPanel({
             <div className="text-[10px] text-slate-400 mt-0.5">Entrées &amp; Sorties PDR</div>
           </div>
 
-          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-300">
+          <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
               <span>Actions Excel</span>
-              <FileSpreadsheet className="w-3.5 h-3.5 text-amber-500" />
+              <FileSpreadsheet className="w-3.5 h-3.5 text-sky-700" />
             </div>
-            <div className="text-xl font-black text-amber-600 mt-1 font-mono">
+            <div className="text-xl font-black text-sky-800 mt-1 font-mono">
               {categoryCounts.excel}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">Export / Import / Save</div>
           </div>
 
-          <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-300">
+          <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200">
             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500">
               <span>Total Événements</span>
-              <Activity className="w-3.5 h-3.5 text-sky-600" />
+              <Activity className="w-3.5 h-3.5 text-sky-700" />
             </div>
-            <div className="text-xl font-black text-sky-700 mt-1 font-mono">
+            <div className="text-xl font-black text-sky-800 mt-1 font-mono">
               {analyticsEvents.length}
             </div>
             <div className="text-[10px] text-slate-400 mt-0.5">Session active</div>
@@ -246,7 +246,7 @@ export default function TelemetryAuditPanel({
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              className="text-xs font-bold px-2.5 py-1.5 bg-white rounded-lg border border-slate-400 text-slate-700 cursor-pointer focus:outline-none focus:border-sky-600"
+              className="text-xs font-bold px-3 py-1.5 bg-white rounded-xl border border-slate-200 text-slate-700 cursor-pointer focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
             >
               <option value="all">Toutes Catégories</option>
               <option value="navigation">Navigation</option>
@@ -283,13 +283,13 @@ export default function TelemetryAuditPanel({
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
                       event.category === 'navigation'
-                        ? 'bg-sky-50 text-sky-800 border-sky-300'
+                        ? 'bg-slate-100 text-sky-900 border-slate-200'
                         : event.category === 'stock'
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : event.category === 'excel'
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            ? 'bg-orange-50 text-orange-800 border-orange-200'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                     }`}
                   >

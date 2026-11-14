@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AutoBackupService } from '../../../core/backup/AutoBackupService';
 import { usePermission } from '../common/PermissionGate';
+import Action3DButton from '../common/Action3DButton';
 
 export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) {
   const [activeTab, setActiveTab] = useState('snapshots'); // 'snapshots' | 'partitions'
@@ -179,53 +180,59 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-950/70 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col max-h-[88vh]">
         {/* Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center shadow-xs">
-              <Database className="w-4 h-4 text-white" />
-            </div>
+        <div className="px-6 py-4 bg-white text-slate-900 flex items-center justify-between border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <Database className="w-5 h-5 text-sky-700 shrink-0" />
             <div>
-              <h2 className="text-sm font-bold tracking-wide">Sauvegardes & Partitions GMAO</h2>
-              <p className="text-[11px] text-slate-400 font-mono">Modèle Dual Partition (Master / Opérations) • 100% Offline</p>
+              <h2 className="text-sm font-extrabold tracking-tight text-slate-900">
+                Sauvegardes &amp; Partitions GMAO
+              </h2>
+              <p className="text-[11px] text-slate-500 font-mono">
+                Modèle Dual Partition (Master / Opérations) • 100% Offline
+              </p>
             </div>
           </div>
 
-          <button
-            type="button"
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={X}
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            title="Fermer"
+            ariaLabel="Fermer"
+            className="!w-8 !h-8"
+          />
         </div>
 
         {/* Tab Navigation */}
-        <div className="px-6 pt-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setActiveTab('snapshots')}
-            className={`px-3 py-2 text-xs font-bold rounded-t-xl transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'snapshots'
-                ? 'text-slate-900 border-emerald-600 bg-white shadow-xs'
-                : 'text-slate-500 border-transparent hover:text-slate-800'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Points de Restauration ({snapshots.length})</span>
-          </button>
+        <div className="px-6 py-2.5 bg-slate-50/80 border-b border-slate-200 shrink-0">
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 bg-slate-100/90 rounded-xl border border-slate-200/90">
+            <button
+              type="button"
+              onClick={() => setActiveTab('snapshots')}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 border cursor-pointer flex items-center gap-1.5 select-none ${
+                activeTab === 'snapshots'
+                  ? 'bg-white text-slate-950 border-slate-200 shadow-2xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60 border-transparent'
+              }`}
+            >
+              <Clock className={`w-3.5 h-3.5 ${activeTab === 'snapshots' ? 'text-sky-700' : 'text-slate-400'}`} />
+              <span>Points de Restauration ({snapshots.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('partitions')}
-            className={`px-3 py-2 text-xs font-bold rounded-t-xl transition-all border-b-2 cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'partitions'
-                ? 'text-slate-900 border-indigo-600 bg-white shadow-xs'
-                : 'text-slate-500 border-transparent hover:text-slate-800'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            <span>Modèle Dual Partition (Master vs Opérations)</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('partitions')}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-150 border cursor-pointer flex items-center gap-1.5 select-none ${
+                activeTab === 'partitions'
+                  ? 'bg-white text-slate-950 border-slate-200 shadow-2xs'
+                  : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60 border-transparent'
+              }`}
+            >
+              <Layers className={`w-3.5 h-3.5 ${activeTab === 'partitions' ? 'text-sky-700' : 'text-slate-400'}`} />
+              <span>Modèle Dual Partition (Master vs Opérations)</span>
+            </button>
+          </div>
         </div>
 
         {/* Status Alerts */}
@@ -303,12 +310,12 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
           <>
             {/* Toolbar */}
             <div className="p-4 bg-white border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   disabled={!canBackup}
                   onClick={handleCreateManual}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-4 py-2 rounded-full bg-sky-800 hover:bg-sky-900 border border-sky-900 disabled:opacity-40 text-xs font-semibold text-white transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.14)] active:translate-y-px active:scale-[0.99]"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Créer un point maintenant</span>
@@ -317,10 +324,10 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                 <button
                   type="button"
                   onClick={handleExportFull}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/95 hover:border-slate-300 text-xs font-semibold text-slate-700 hover:text-slate-950 transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99]"
                   title="Télécharger toutes les données au format JSON"
                 >
-                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <Download className="w-3.5 h-3.5 text-sky-700" />
                   <span>Exporter Global JSON</span>
                 </button>
               </div>
@@ -337,10 +344,10 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                   type="button"
                   disabled={!canRestore}
                   onClick={() => fileInputRef.current?.click()}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 transition flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-40"
+                  className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/95 hover:border-slate-300 text-xs font-semibold text-slate-700 hover:text-slate-950 transition-all duration-150 flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] disabled:opacity-40"
                   title="Restaurer à partir d'un fichier .json externe"
                 >
-                  <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                  <Upload className="w-3.5 h-3.5 text-sky-700" />
                   <span>Importer JSON</span>
                 </button>
               </div>
@@ -462,12 +469,10 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
         {activeTab === 'partitions' && (
           <div className="p-5 overflow-y-auto space-y-4 grow">
             {/* Partition 1 Card: Master Referential */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center font-bold">
-                    <Server className="w-4 h-4 text-indigo-700" />
-                  </div>
+            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Server className="w-5 h-5 text-sky-700 shrink-0" />
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
                       Partition 1 : Référentiel Master Usine (Master Referential)
@@ -477,8 +482,8 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-900 font-mono">
-                  Protégé & Immuable
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-sky-900 border border-slate-200 font-mono">
+                  Protégé &amp; Immuable
                 </span>
               </div>
 
@@ -490,21 +495,19 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                 <button
                   type="button"
                   onClick={() => handleExportPartition('master')}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/95 hover:border-slate-300 text-slate-800 hover:text-slate-950 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all duration-150"
                 >
-                  <Download className="w-3.5 h-3.5 text-indigo-600" />
+                  <Download className="w-3.5 h-3.5 text-sky-700" />
                   <span>Exporter Référentiel Master JSON</span>
                 </button>
               </div>
             </div>
 
             {/* Partition 2 Card: Operations History */}
-            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
-                    <Activity className="w-4 h-4 text-amber-700" />
-                  </div>
+            <div className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Activity className="w-5 h-5 text-sky-700 shrink-0" />
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">
                       Partition 2 : Historique Opérationnel (Operations History)
@@ -514,7 +517,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 font-mono">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white text-sky-900 border border-slate-200 font-mono">
                   Transactionnel
                 </span>
               </div>
@@ -527,26 +530,26 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                 <button
                   type="button"
                   onClick={() => handleExportPartition('operations')}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  className="px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200/95 hover:border-slate-300 text-slate-800 hover:text-slate-950 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all duration-150"
                 >
-                  <Download className="w-3.5 h-3.5 text-amber-700" />
+                  <Download className="w-3.5 h-3.5 text-sky-700" />
                   <span>Exporter Opérations JSON</span>
                 </button>
 
                 {confirmResetOps ? (
-                  <div className="flex items-center gap-1.5 bg-rose-100 p-1.5 rounded-xl border border-rose-300 animate-in fade-in">
-                    <span className="text-[10px] font-bold text-rose-900 px-1">Confirmer la purge ?</span>
+                  <div className="flex items-center gap-1.5 bg-rose-100 p-1.5 rounded-full border border-rose-300 animate-in fade-in">
+                    <span className="text-[10px] font-bold text-rose-900 px-2">Confirmer la purge ?</span>
                     <button
                       type="button"
                       onClick={handleResetOperations}
-                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] cursor-pointer shadow-2xs"
+                      className="px-3 py-1 rounded-full bg-rose-700 hover:bg-rose-800 text-white font-semibold text-[11px] cursor-pointer shadow-2xs"
                     >
                       Oui, Purger Opérations
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmResetOps(false)}
-                      className="px-2 py-1 rounded-lg bg-white text-slate-700 font-bold text-[11px] hover:bg-slate-100 border border-slate-300 cursor-pointer"
+                      className="px-2.5 py-1 rounded-full bg-white text-slate-700 font-semibold text-[11px] hover:bg-slate-100 border border-slate-300 cursor-pointer"
                     >
                       Annuler
                     </button>
@@ -555,7 +558,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
                   <button
                     type="button"
                     onClick={() => setConfirmResetOps(true)}
-                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="px-4 py-2 rounded-full bg-white hover:bg-rose-50/50 border border-rose-200/90 hover:border-rose-300 text-rose-700 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_2px_5px_-1px_rgba(15,23,42,0.07)] active:bg-rose-50 active:scale-[0.99] transition-all duration-150"
                     title="Purger l'historique sans toucher aux machines et catalogues"
                   >
                     <Trash2 className="w-3.5 h-3.5 text-rose-600" />
@@ -577,7 +580,7 @@ export default function BackupManagerModal({ isOpen, onClose, onDataRestored }) 
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 font-bold text-xs text-slate-800 transition cursor-pointer"
+            className="px-4.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-300/90 font-semibold text-xs text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.05)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all cursor-pointer"
           >
             Fermer
           </button>

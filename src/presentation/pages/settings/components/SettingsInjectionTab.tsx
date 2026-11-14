@@ -19,8 +19,6 @@ import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Data Injection Hub: Seed factory baseline data, reset datasets, toggle demo mode.
- * Wrapped in SettingsSectionCard (tone="warning" for seeding, tone="danger" for factory reset)
- * with unified SETTINGS_BUTTON_STYLES.
  */
 export default function SettingsInjectionTab({
   handleInjectAll,
@@ -145,7 +143,7 @@ export default function SettingsInjectionTab({
           <span className="flex items-center gap-2 flex-wrap">
             <span>Mode Données Démo Usine (Contrôle Global &amp; Par Section)</span>
             <span
-              className={`px-2 py-0.5 text-[10px] font-bold rounded-md border ${
+              className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${
                 isDemoMode
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                   : 'bg-slate-100 text-slate-700 border-slate-200'
@@ -156,13 +154,13 @@ export default function SettingsInjectionTab({
           </span>
         }
         description="Activez ou videz les jeux d'essai sur toute l'application ou ciblez uniquement une section précise sans altérer le reste de vos données."
-        icon={<Power className="w-4 h-4" />}
+        icon={<Power />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedDemoSection}
               onChange={(e) => setSelectedDemoSection(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-slate-400 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-sky-600 cursor-pointer"
+              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 cursor-pointer"
               title="Choisir la section cible"
             >
               {Object.entries(sectionLabels).map(([key, label]) => (
@@ -192,7 +190,7 @@ export default function SettingsInjectionTab({
           </div>
         }
       >
-        <div className="text-xs text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-slate-600 bg-white/80 px-4 py-3 rounded-xl border border-amber-200/60 flex flex-wrap items-center justify-between gap-2">
           <span>
             Règle SSOT : Aucune donnée de démonstration n&apos;est réinjectée silencieusement au rechargement (F5) lorsque le mode usine vierge est actif.
           </span>
@@ -206,7 +204,7 @@ export default function SettingsInjectionTab({
       <SettingsSectionCard
         title="Injection ou Purge Granulaire par Module"
         description="Chargez ou videz individuellement chaque référentiel métier (Stock PDR, Parc Machines, Entrepôt, Préventif, Correctif, Mouvements, Équipes)."
-        icon={<Sliders className="w-4 h-4" />}
+        icon={<Sliders />}
         headerRight={
           <button
             type="button"
@@ -224,18 +222,18 @@ export default function SettingsInjectionTab({
             return (
               <div
                 key={mod.key}
-                className={`p-4 rounded-xl border border-slate-300 bg-slate-50/70 flex flex-col justify-between gap-3 ${
+                className={`p-4 rounded-2xl border border-slate-200/90 bg-slate-50/50 hover:border-slate-300 hover:bg-white transition-all flex flex-col justify-between gap-3 ${
                   mod.fullSpan ? 'col-span-1 sm:col-span-2 lg:col-span-3' : ''
                 }`}
               >
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                    <Icon className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+                  <h4 className="text-xs font-extrabold text-slate-900 flex items-center gap-2">
+                    <Icon className="w-4 h-4 text-sky-700 shrink-0" />
                     <span>{mod.title}</span>
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{mod.desc}</p>
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">{mod.desc}</p>
                 </div>
-                <div className="flex items-center gap-2 pt-2 border-t border-slate-200/80">
+                <div className="flex items-center gap-2 pt-2.5 border-t border-slate-200/70">
                   <button
                     type="button"
                     onClick={() => handleInjectGroup?.(mod.key)}
@@ -266,7 +264,7 @@ export default function SettingsInjectionTab({
         tone="danger"
         title="Préférence de Démarrage & Réinitialisation Complète d'Usine"
         description="Configurez le comportement par défaut au lancement ou effacez l'intégralité des tables pour démarrer l'exploitation réelle à zéro."
-        icon={<AlertTriangle className="w-4 h-4" />}
+        icon={<AlertTriangle />}
         footer={
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3">
             <label className="inline-flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-slate-700">
@@ -278,7 +276,7 @@ export default function SettingsInjectionTab({
                   setIsDemoMode?.(next);
                   onToggleDemoMode?.(next);
                 }}
-                className="w-4 h-4 rounded text-sky-600 border-slate-400 focus:ring-sky-500 cursor-pointer"
+                className="w-4 h-4 rounded text-sky-700 border-slate-300 focus:ring-sky-600 cursor-pointer"
               />
               <span>Afficher les maquettes et fiches d&apos;exemples au démarrage</span>
             </label>
@@ -320,7 +318,7 @@ export default function SettingsInjectionTab({
           </div>
         }
       >
-        <div className="text-xs text-rose-900 bg-rose-50/60 px-3.5 py-2.5 rounded-xl border border-rose-200/80">
+        <div className="text-xs text-rose-900 bg-rose-50/60 px-4 py-3 rounded-xl border border-rose-200/80">
           <b>Attention :</b> L&apos;action « Effacer tout et démarrer à vide » purge toutes les tables transactionnelles et référentielles (0 enregistrement) et verrouille <code className="font-mono">START_MODE = &apos;empty&apos;</code>. Exportez un Snapshot JSON au préalable si nécessaire.
         </div>
       </SettingsSectionCard>

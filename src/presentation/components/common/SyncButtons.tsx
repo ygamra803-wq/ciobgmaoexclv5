@@ -270,12 +270,12 @@ export default function SyncButtons({
           )}
 
           {/* Explicit Buttons */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <button
               type="button"
               onClick={() => handleSaveToServer(false)}
               disabled={actionLoading !== null}
-              className="w-full py-2.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow transition flex items-center justify-between cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-full bg-sky-800 hover:bg-sky-900 text-white border border-sky-900 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.14)] active:translate-y-px active:scale-[0.99] transition-all duration-150 flex items-center justify-between cursor-pointer disabled:opacity-50"
             >
               <span className="flex items-center gap-2">
                 {actionLoading === 'push' ? (
@@ -285,7 +285,7 @@ export default function SyncButtons({
                 )}
                 <span>{actionLoading === 'push' ? t('server_sync.saving') : t('server_sync.push_button')}</span>
               </span>
-              <span className="text-[10px] font-mono text-emerald-100 bg-white/15 px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-mono text-sky-50 bg-white/15 px-2 py-0.5 rounded-full">
                 {t('server_sync.push_badge')}
               </span>
             </button>
@@ -294,17 +294,17 @@ export default function SyncButtons({
               type="button"
               onClick={() => handleRestoreFromServer(false)}
               disabled={actionLoading !== null}
-              className="w-full py-2.5 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow transition flex items-center justify-between cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 px-4 rounded-full bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-950 border border-slate-300/95 hover:border-slate-400 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all duration-150 flex items-center justify-between cursor-pointer disabled:opacity-50"
             >
               <span className="flex items-center gap-2">
                 {actionLoading === 'pull' ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-700" />
                 ) : (
-                  <DownloadCloud className="w-4 h-4" />
+                  <DownloadCloud className="w-4 h-4 text-sky-700" />
                 )}
                 <span>{actionLoading === 'pull' ? t('server_sync.restoring') : t('server_sync.pull_button')}</span>
               </span>
-              <span className="text-[10px] font-mono text-blue-100 bg-white/15 px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-mono text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full">
                 {t('server_sync.pull_badge')}
               </span>
             </button>
@@ -333,15 +333,11 @@ export default function SyncButtons({
       <div className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-3.5 w-full">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-            <div
-              className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
-                serverOnline
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                  : 'bg-rose-50 border-rose-200 text-rose-700'
+            <Cloud
+              className={`w-6 h-6 shrink-0 ${
+                serverOnline ? 'text-sky-700' : 'text-rose-600'
               }`}
-            >
-              <Cloud className="w-5 h-5" />
-            </div>
+            />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="text-sm font-bold text-slate-900">
@@ -371,12 +367,12 @@ export default function SyncButtons({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => handleSaveToServer(false)}
               disabled={actionLoading !== null}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50 min-h-[40px]"
+              className="flex items-center justify-center gap-2 px-4.5 py-2.5 rounded-full bg-sky-800 hover:bg-sky-900 text-white border border-sky-900 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.10),inset_0_1px_0_rgba(255,255,255,0.12)] hover:shadow-[0_3px_8px_-2px_rgba(15,23,42,0.14)] active:translate-y-px active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 min-h-[40px]"
             >
               {actionLoading === 'push' ? (
                 <Loader2 className="w-4 h-4 animate-spin shrink-0" />
@@ -390,12 +386,12 @@ export default function SyncButtons({
               type="button"
               onClick={() => handleRestoreFromServer(false)}
               disabled={actionLoading !== null}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50 min-h-[40px]"
+              className="flex items-center justify-center gap-2 px-4.5 py-2.5 rounded-full bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-950 border border-slate-300/95 hover:border-slate-400 text-xs font-semibold shadow-[0_1px_2px_rgba(15,23,42,0.05),inset_0_1px_0_rgba(255,255,255,0.9)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.08)] active:bg-slate-100 active:scale-[0.99] transition-all duration-150 cursor-pointer disabled:opacity-50 min-h-[40px]"
             >
               {actionLoading === 'pull' ? (
-                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 animate-spin shrink-0 text-sky-700" />
               ) : (
-                <DownloadCloud className="w-4 h-4 shrink-0" />
+                <DownloadCloud className="w-4 h-4 shrink-0 text-sky-700" />
               )}
               <span>{actionLoading === 'pull' ? t('server_sync.restoring') : t('server_sync.pull_button')}</span>
             </button>
@@ -404,11 +400,11 @@ export default function SyncButtons({
               type="button"
               onClick={checkServerStatusOnce}
               disabled={actionLoading !== null}
-              className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 transition cursor-pointer flex items-center justify-center min-h-[40px]"
+              className="w-10 h-10 rounded-full border border-slate-200/95 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-sky-800 shadow-[0_6px_16px_-3px_rgba(15,23,42,0.12),0_2px_6px_-1px_rgba(15,23,42,0.06),inset_0_1px_1px_rgba(255,255,255,0.92)] hover:-translate-y-0.5 active:translate-y-0.5 active:scale-95 transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0"
               title={t('server_sync.check_tooltip')}
               aria-label={t('server_sync.check_tooltip')}
             >
-              <RefreshCw className={`w-4 h-4 ${actionLoading === 'check' ? 'animate-spin text-emerald-600' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${actionLoading === 'check' ? 'animate-spin text-sky-700' : ''}`} />
             </button>
           </div>
         </div>

@@ -5,7 +5,7 @@ import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { evaluateComponentWearAndLifecycle } from '../../../../utils/componentHealthScore';
 
 export interface EntrepotDetailsItem {
-  id?: string;
+  id?: string | number;
   id_warehouse_item?: string;
   code?: string;
   ref?: string;
@@ -221,7 +221,7 @@ export function EntrepotDetailsModal({ selectedDetails, onClose, t }: EntrepotDe
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigator.clipboard?.writeText(selectedDetails.id || '')}
+                  onClick={() => navigator.clipboard?.writeText(String(selectedDetails.id || ''))}
                   className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold cursor-pointer border border-slate-300"
                 >
                   <Copy className="w-3 h-3" />

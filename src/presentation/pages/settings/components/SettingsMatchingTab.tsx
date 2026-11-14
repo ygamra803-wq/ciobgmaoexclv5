@@ -49,14 +49,14 @@ export default function SettingsMatchingTab({
     <SettingsSectionCard
       title="Audit & Vérification des Données (Appairage)"
       description="Détection automatique des éléments (machines, zones, utilisateurs, articles) présents dans l'historique mais manquants dans les fiches officielles."
-      icon={<ShieldAlert className="w-4 h-4" />}
+      icon={<ShieldAlert />}
       headerRight={
         <div className="flex flex-col sm:flex-row items-center gap-2.5">
           <div className="relative">
             <select
               value={auditTarget}
               onChange={(e) => setAuditTarget(e.target.value)}
-              className="appearance-none bg-white border border-slate-400 rounded-lg pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 transition cursor-pointer"
+              className="appearance-none bg-white border border-slate-200 rounded-xl pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 transition cursor-pointer"
             >
               <option value="machines">Machines (Parc)</option>
               <option value="articles">Articles &amp; PDR (Stock)</option>
@@ -85,9 +85,9 @@ export default function SettingsMatchingTab({
       }
     >
       {discoveredItems.length === 0 ? (
-        <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 space-y-2 max-w-full">
-          <Check className="w-8 h-8 text-emerald-600 mx-auto bg-emerald-50 p-1.5 rounded-full border border-emerald-200" />
-          <h4 className="text-sm font-bold text-slate-900">
+        <div className="p-8 text-center bg-slate-50/70 rounded-2xl border border-slate-200/80 space-y-2 max-w-full">
+          <Check className="w-8 h-8 text-emerald-600 mx-auto" />
+          <h4 className="text-sm font-extrabold text-slate-900">
             Tout est parfaitement apparié !
           </h4>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
@@ -96,7 +96,7 @@ export default function SettingsMatchingTab({
         </div>
       ) : (
         <div className="space-y-4 w-full max-w-full overflow-hidden">
-          <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/50 text-xs text-amber-900 flex items-start gap-2.5 leading-relaxed">
+          <div className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50/50 text-xs text-amber-900 flex items-start gap-2.5 leading-relaxed">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold">Écart de base détecté :</span> Certains éléments de type &laquo; {getAuditLabel()} &raquo; apparaissent dans vos mouvements mais ne figurent pas dans la liste officielle.
@@ -110,12 +110,12 @@ export default function SettingsMatchingTab({
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-400 shadow-2xs overflow-hidden max-w-full">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden max-w-full">
             <div className="max-h-[60vh] overflow-y-auto overflow-x-auto">
               <table className="min-w-[650px] w-full text-left text-xs whitespace-nowrap border-collapse">
-                <thead className="bg-slate-100 text-[11px] font-bold text-slate-800 uppercase tracking-wider border-b border-slate-400 select-none">
+                <thead className="bg-slate-50 text-[11px] font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 select-none">
                   <tr>
-                    <th className="py-2.5 px-3 text-center w-12 text-slate-600 font-mono text-[10px] bg-slate-200/60 border-r border-slate-300 shrink-0">
+                    <th className="py-2.5 px-3 text-center w-12 text-slate-500 font-mono text-[10px] shrink-0">
                       N°
                     </th>
                     <th className="px-3.5 py-2.5">Élément / Utilisateur détecté</th>
@@ -135,28 +135,28 @@ export default function SettingsMatchingTab({
                     return (
                       <tr
                         key={dm.code}
-                        className="hover:bg-slate-50/80 transition text-slate-700 border-b border-slate-100"
+                        className="hover:bg-slate-50/80 transition text-slate-700"
                       >
-                        <td className="py-2.5 px-3 text-center font-mono text-[10.5px] font-bold text-slate-600 bg-slate-50/50 border-r border-slate-200/60 select-none">
+                        <td className="py-2.5 px-3 text-center font-mono text-[10.5px] font-bold text-slate-500 bg-slate-50/40 select-none">
                           {rowIndex}
                         </td>
                         <td className="px-3.5 py-2.5">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                            <span className="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                               {dm.code}
                             </span>
                             {auditTarget === 'utilisateurs' && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-slate-100 text-slate-700 border-slate-200">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border bg-slate-100 text-slate-700 border-slate-200">
                                 {dm.inferredRole}
                               </span>
                             )}
                             {auditTarget === 'articles' && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-slate-100 text-slate-700 border-slate-200">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border bg-slate-100 text-slate-700 border-slate-200">
                                 PDR Stock
                               </span>
                             )}
                             {(auditTarget === 'correctif' || auditTarget === 'preventif') && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold border bg-amber-50 text-amber-800 border-amber-200">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold border bg-amber-50 text-amber-800 border-amber-200">
                                 Liaison orpheline
                               </span>
                             )}
@@ -174,17 +174,17 @@ export default function SettingsMatchingTab({
                         </td>
                         <td className="px-3.5 py-2.5">
                           {auditTarget === 'utilisateurs' ? (
-                            <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <span className="text-[11px] font-mono font-bold bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
                               ➔ {proposedId}
                             </span>
                           ) : (
-                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <span className="text-[10px] font-semibold bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
                               Créer la fiche ({getAuditLabel()})
                             </span>
                           )}
                         </td>
                         <td className="px-3.5 py-2.5 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => {
                                 setRelinkData({
@@ -274,10 +274,10 @@ export default function SettingsMatchingTab({
             </div>
 
             {/* Table Footer Card with Page Size Selector & Pagination */}
-            <div className="bg-slate-50/70 px-4 py-3 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-slate-50/70 px-4 py-3 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-600">Lignes par page :</span>
-                <div className="flex bg-slate-200/70 rounded-lg p-0.5 border border-slate-300/60">
+                <div className="flex items-center gap-1 bg-slate-100/90 rounded-xl p-1 border border-slate-200/90">
                   {[25, 50, 100, 200, 0].map((size) => (
                     <button
                       key={size}
@@ -286,10 +286,10 @@ export default function SettingsMatchingTab({
                         setAuditPageSize(size);
                         setAuditCurrentPage(1);
                       }}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer border ${
                         auditPageSize === size
-                          ? 'bg-sky-50 text-slate-950 shadow-2xs border border-slate-900'
-                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50 border border-transparent'
+                          ? 'bg-white text-slate-950 border-slate-200 shadow-2xs'
+                          : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-white/60 border-transparent'
                       }`}
                     >
                       {size === 0 ? 'Tout' : size}

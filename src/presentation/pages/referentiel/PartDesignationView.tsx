@@ -35,6 +35,28 @@ import {
   type MaterialPolicyTag,
 } from '../../../domain/corrective/needRequestService';
 import { getGroupId, getGroupRecordId } from '../../../domain/stock/pdrHierarchyService';
+import type {
+  IPartDesignation,
+  IPartGroup,
+  IPartType,
+  IWarehouseItem,
+} from '../../../types/domain';
+
+interface PartDesignationViewProps {
+  partDesignations?: IPartDesignation[];
+  partTypes?: IPartType[];
+  partGroups?: IPartGroup[];
+  warehouseItems?: IWarehouseItem[];
+  partDesignationTypeFilter?: string;
+  setPartDesignationTypeFilter?: (val: string) => void;
+  onAddPartDesignation: (item: Partial<IPartDesignation>) => void;
+  onUpdatePartDesignation: (id: string | number, item: Partial<IPartDesignation>) => void;
+  onDeletePartDesignation: (id: string | number) => void;
+  onNavigateToPartGroups?: (groupId?: string) => void;
+  onNavigateToPartTypes?: (typeId?: string) => void;
+  onNavigateToEntrepotByPart?: (ref?: string, typeId?: string) => void;
+  _onNavigateToQuickSortie?: (item?: IPartDesignation) => void;
+}
 
 export default function PartDesignationView({
   partDesignations = [],
@@ -50,7 +72,7 @@ export default function PartDesignationView({
   onNavigateToPartTypes,
   onNavigateToEntrepotByPart,
   _onNavigateToQuickSortie,
-}: any) {
+}: PartDesignationViewProps) {
   const { t } = useI18n();
   const canCreateStock = usePermission('stock.create');
   const canEditStock = usePermission('stock.edit');
@@ -59,19 +81,19 @@ export default function PartDesignationView({
   const [partGroupFilter, setPartGroupFilter] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
-  const [toEdit, setToEdit] = useState<any>(null);
-  const [toDelete, setToDelete] = useState<any>(null);
-  const [activeActionMenuId, setActiveActionMenuId] = useState<any>(null);
+  const [toEdit, setToEdit] = useState<IPartDesignation | null>(null);
+  const [toDelete, setToDelete] = useState<IPartDesignation | null>(null);
+  const [activeActionMenuId, setActiveActionMenuId] = useState<string | number | null>(null);
   const [sortField, setSortField] = useState('ref');
   const [sortOrder, setSortOrder] = useState('asc');
   const [showSortMenu, setShowSortMenu] = useState(false);
-  const sortMenuRef = useRef<any>(null);
+  const sortMenuRef = useRef<HTMLDivElement | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
   const partGroupMap = useMemo(() => {
-    const map: Record<string, any> = {};
-    (partGroups || []).forEach((g: any) => {
+    const map: Record<string, IPartGroup> = {};
+    (partGroups || []).forEach((g: IPartGroup) => {
       const k1 = getGroupRecordId(g).toUpperCase();
       const k2 = String(g.code || '').trim().toUpperCase();
       if (k1) map[k1] = g;
@@ -81,11 +103,12 @@ export default function PartDesignationView({
   }, [partGroups]);
 
   useEffect(() => {
-    const handleClickOutside = (event: any) => {
-      if (!event.target.closest('.action-menu-container')) {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('.action-menu-container')) {
         setActiveActionMenuId(null);
       }
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
+      if (sortMenuRef.current && target && !sortMenuRef.current.contains(target)) {
         setShowSortMenu(false);
       }
     };
@@ -111,9 +134,9 @@ export default function PartDesignationView({
 
   // Filter
   const filtered = useMemo(() => {
-    return partDesignations.filter((d: any) => {
+    return partDesignations.filter((d: IPartDesignation) => {
       const q = search.toLowerCase();
-      const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
+      const typeObj = partTypes.find((tItem: IPartType) => tItem.id_type === d.id_type);
       const effectiveGroupId = (getGroupId(d) || getGroupId(typeObj)).toUpperCase();
 
       const matchSearch =
@@ -211,12 +234,12 @@ export default function PartDesignationView({
       'Stock Actuel',
       'Emplacement',
     ];
-    const rows = filtered.map((d: any) => {
+    const rows = filtered.map((d: IPartDesignation) => {
       const dKey = d.ref || d.id_part || d.id_diag || d.id;
-      const typeObj = partTypes.find((t: any) => t.id_type === d.id_type);
+      const typeObj = partTypes.find((tItem: IPartType) => tItem.id_type === d.id_type);
       const grpId = getGroupId(d) || getGroupId(typeObj);
       const matchingItems = warehouseItems.filter(
-        (w: any) =>
+        (w: IWarehouseItem) =>
           (w.nature === 'PART' || w.nature === 'COMPOSANT') &&
           (w.id_warehouse_item === dKey ||
             w.ref === dKey ||
@@ -225,7 +248,7 @@ export default function PartDesignationView({
             w.designation === d.designation)
       );
       const totalStock = matchingItems.reduce(
-        (sum: number, w: any) => sum + (Number(w.stockActuel ?? w.quantite ?? 1) || 0),
+        (sum: number, w: IWarehouseItem) => sum + (Number(w.stockActuel ?? w.quantite ?? 1) || 0),
         0
       );
       return [
@@ -253,12 +276,12 @@ export default function PartDesignationView({
     document.body.removeChild(link);
   };
 
-  const handleSubmit = (e: any) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canCreateStock) return;
     if (!form.ref || !form.designation || !form.id_type) return;
     const cleanRef = form.ref.trim().toUpperCase();
-    const matchedTypeObj = partTypes.find((t: any) => t.id_type === form.id_type);
+    const matchedTypeObj = partTypes.find((tItem: IPartType) => tItem.id_type === form.id_type);
     const effectiveGroup = form.id_group || getGroupId(matchedTypeObj) || undefined;
     onAddPartDesignation({
       ...form,
@@ -313,7 +336,7 @@ export default function PartDesignationView({
         colLetter: 'B',
         icon: PartInfoIcon,
         sortable: true,
-        render: (item: any) => (
+        render: (item: IPartDesignation) => (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <PartInfoIcon className="w-4 h-4 text-blue-600 shrink-0 animate-pulse-slow" />
@@ -364,8 +387,8 @@ export default function PartDesignationView({
         colLetter: 'C',
         icon: LayersIcon,
         sortable: true,
-        render: (item: any) => {
-          const typeObj = partTypes.find((t: any) => t.id_type === item.id_type);
+        render: (item: IPartDesignation) => {
+          const typeObj = partTypes.find((tItem: IPartType) => tItem.id_type === item.id_type);
           const rawGroupKey = String(
             item.id_group || item.id_groupe || typeObj?.id_group || typeObj?.id_groupe || ''
           )
@@ -763,7 +786,7 @@ export default function PartDesignationView({
                   value: 'ALL',
                   label: `Tous les Groupes (${partGroups.length})`,
                 },
-                ...partGroups.map((g: any) => ({
+                ...partGroups.map((g: IPartGroup) => ({
                   value: String(g.id_group || g.id_groupe || g.code || ''),
                   label: `${g.code || g.id_group} — ${g.libelle}`,
                 })),
@@ -803,17 +826,17 @@ export default function PartDesignationView({
                   badgeColor: 'bg-slate-100 text-slate-700 font-bold',
                 },
                 ...partTypes
-                  .filter((t: any) => {
+                  .filter((tItem: IPartType) => {
                     if (partGroupFilter === 'ALL') return true;
-                    const gId = String(t.id_group || t.id_groupe || '').trim().toUpperCase();
+                    const gId = String(tItem.id_group || tItem.id_groupe || '').trim().toUpperCase();
                     if (partGroupFilter === 'UNASSIGNED') return !gId;
                     return gId === String(partGroupFilter).trim().toUpperCase();
                   })
-                  .map((t: any) => {
-                    const count = partDesignations.filter((d: any) => d.id_type === t.id_type).length;
+                  .map((tItem: IPartType) => {
+                    const count = partDesignations.filter((d: IPartDesignation) => d.id_type === tItem.id_type).length;
                     return {
-                      value: t.id_type,
-                      label: `${t.id_type} - ${t.libelle}`,
+                      value: String(tItem.id_type || ''),
+                      label: `${tItem.id_type} - ${tItem.libelle}`,
                       badge: `${count}`,
                       badgeColor: 'bg-amber-50 text-amber-800 font-bold',
                     };
@@ -1253,10 +1276,10 @@ export default function PartDesignationView({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!canEditStock) return;
-                const matchedTypeObj = partTypes.find((t: any) => t.id_type === toEdit.id_type);
+                const matchedTypeObj = partTypes.find((tItem: IPartType) => tItem.id_type === toEdit.id_type);
                 const effectiveGroup =
                   toEdit.id_group || matchedTypeObj?.id_group || matchedTypeObj?.id_groupe || undefined;
-                onUpdatePartDesignation(toEdit.id || toEdit.ref || toEdit.id_part, {
+                onUpdatePartDesignation(toEdit.id || toEdit.ref || toEdit.id_part || '', {
                   ...toEdit,
                   id_group: effectiveGroup,
                   id_groupe: effectiveGroup,
@@ -1288,9 +1311,9 @@ export default function PartDesignationView({
                   onChange={(e) => setToEdit({ ...toEdit, id_type: e.target.value })}
                   className="w-full mt-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-teal-500 cursor-pointer"
                 >
-                  {partTypes.map((t: any) => (
-                    <option key={t.id_type} value={t.id_type}>
-                      {t.id_type} - {t.libelle}
+                  {partTypes.map((tItem: IPartType) => (
+                    <option key={tItem.id_type} value={tItem.id_type}>
+                      {tItem.id_type} - {tItem.libelle}
                     </option>
                   ))}
                 </select>

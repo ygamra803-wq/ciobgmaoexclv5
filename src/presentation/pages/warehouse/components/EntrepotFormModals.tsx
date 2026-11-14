@@ -11,7 +11,7 @@ export interface EntrepotFormModalsProps {
   onCloseAddModal: () => void;
   addForm: Record<string, any>;
   setAddForm: React.Dispatch<React.SetStateAction<any>>;
-  onSubmitAdd: (e: React.FormEvent) => void;
+  onSubmitAdd: (e: React.FormEvent<HTMLFormElement>) => void;
   onAddNatureSwitch: (newNature: string) => void;
   onAddFamilyChange: (newFam: string) => void;
   onAddFamilyPrefixChange: (newPrefix: string) => void;
@@ -24,7 +24,7 @@ export interface EntrepotFormModalsProps {
   onCloseEditModal: () => void;
   editForm: Record<string, any>;
   setEditForm: React.Dispatch<React.SetStateAction<any>>;
-  onSubmitEdit: (e: React.FormEvent) => void;
+  onSubmitEdit: (e: React.FormEvent<HTMLFormElement>) => void;
 
   families: any[];
   templates: any[];

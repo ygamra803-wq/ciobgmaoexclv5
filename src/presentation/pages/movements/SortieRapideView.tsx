@@ -4,41 +4,11 @@ import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import Action3DButton from '../../components/common/Action3DButton';
 import {
-  FileSpreadsheet,
-  Check,
-  AlertTriangle,
-  RotateCcw,
-  Package,
-  Wrench,
-  Clock,
-  TrendingDown,
-  TrendingUp,
-  Puzzle,
-  MapPin,
-  Users,
-  Boxes,
-  HelpCircle,
-  X,
-  ChevronDown,
-  Crown,
-  UserCheck,
-  ShoppingCart,
-  Activity,
-  Sparkles,
-  ShieldAlert,
-  Inbox,
-  CornerDownRight,
-  ShieldCheck,
-  Hammer,
-  Truck,
-  Gauge,
-  Layers,
-  Calculator,
-  Receipt,
-  Columns2,
-  Maximize2,
+  FileSpreadsheet, Check, AlertTriangle, RotateCcw, Package, Wrench, Clock, TrendingDown,
+  TrendingUp, Puzzle, MapPin, Users, Boxes, HelpCircle, X, ChevronDown, Crown, UserCheck,
+  ShoppingCart, Activity, Sparkles, ShieldAlert, Inbox, CornerDownRight, ShieldCheck,
+  Hammer, Truck, Gauge, Layers, Calculator, Receipt, Columns2, Maximize2,
 } from 'lucide-react';
-
 import MouvementsJournalTable from '../warehouse/MouvementsJournalTable';
 import SortieEntreeIcon from '../../components/common/SortieEntreeIcon';
 import AnimatedPage from '../../components/common/AnimatedPage';
@@ -48,39 +18,17 @@ import { applyReplacementMovementToLedger } from '../../../core/domain';
 import { useAuth } from '../../../context/AuthContext';
 import { usePermission } from '../../components/common/PermissionGate';
 import { useGmaoStore } from '../../../store/useGmaoStore';
-import {
-  isTechnicianRole,
-  matchesTechnicianRecord,
-  getTechnicianBadgeLabel,
-  getTechnicianDisplayName,
-} from '../../../core/security/technicianScope';
-import {
-  reconcileFieldClaim,
-  computeReservedStockMap,
-} from '../../../core/security/validationReconciliation';
-import {
-  WizardShell,
-  useWizardFeature,
-  type WizardProfile,
-} from '../../components/common/wizard';
-
+import { isTechnicianRole, matchesTechnicianRecord, getTechnicianBadgeLabel, getTechnicianDisplayName } from '../../../core/security/technicianScope';
+import { reconcileFieldClaim, computeReservedStockMap } from '../../../core/security/validationReconciliation';
+import { WizardShell, useWizardFeature, type WizardProfile } from '../../components/common/wizard';
 import { CustomSelect, FormContainerWrapper } from './components/MovementSelect';
-import {
-  SortieSuccessAlertModal,
-  SortieValidationAlertModal,
-  SortieDemandReviewModal,
-  UnifiedArticleSearchModal,
-  MovementFormulasPreviewModal,
-} from './components/SortieModals';
-import {
-  PendingOrdersSubTab,
-  ValidationTerrainQueueSubTab,
-  TechSortieDemandsPanel,
-} from './components/SortieSubTabs';
+import { SortieSuccessAlertModal, SortieValidationAlertModal, SortieDemandReviewModal, UnifiedArticleSearchModal, MovementFormulasPreviewModal } from './components/SortieModals';
+import { PendingOrdersSubTab, ValidationTerrainQueueSubTab, TechSortieDemandsPanel } from './components/SortieSubTabs';
 import { SortieInterneContextSection } from './components/SortieInterneContextSection';
 import { EntreeInterneContextSection } from './components/EntreeInterneContextSection';
 import { MovementArticlesSection } from './components/MovementArticlesSection';
 import { ExternalMovementContextSections } from './components/ExternalMovementContextSections';
+import { MovementFlowSelectorSection, buildUnifiedMovementSearchCatalog, filterMovementCatalogResults, findSupervisorForZoneHelper } from './components/MovementFlowSelectorSection';
 
 export default function SortieRapideView({
   mouvements = [],
@@ -509,164 +457,6 @@ export default function SortieRapideView({
     );
   };
 
-  // Helper to smartly normalize action/intervention type
-  const getSmartActionType = (m) => {
-    if (!m) return 'CORRECTIVE';
-    const raw = String(m.action_id || '').trim().toUpperCase();
-    if (!raw || raw === 'MACHINE' || raw === 'CORRECTIVE') {
-      return 'CORRECTIVE';
-    }
-    if (raw === 'PREVENTIVE' || raw === 'PREV') return 'PREVENTIVE';
-    if (raw === 'AMELIORATIVE' || raw === 'AMEL') return 'AMELIORATIVE';
-    if (raw === 'USAGE' || raw === 'PERSONNEL') return 'USAGE';
-    if (raw === 'REAPPRO' || raw === 'REAPPROVISIONNEMENT') return 'REAPPRO';
-    if (raw === 'RETOUR' || raw === 'RETOUR_ATELIER') return 'RETOUR';
-    if (raw === 'REPARATION_EXTERNE' || raw === 'REPARATION') return 'REPARATION_EXTERNE';
-    if (raw === 'ETALONNAGE_CONTROLE' || raw === 'ETALONNAGE' || raw === 'CONTROLE') return 'ETALONNAGE_CONTROLE';
-    if (raw === 'GARANTIE_ECHANGE' || raw === 'GARANTIE' || raw === 'ECHANGE') return 'GARANTIE_ECHANGE';
-    if (raw === 'INVENTAIRE') return 'INVENTAIRE';
-    if (raw === 'ACHAT_DIRECT') return 'ACHAT_DIRECT';
-    return raw;
-  };
-
-  // Helper to render action/intervention type badge matching form cards styling
-  // eslint-disable-next-line no-unused-vars
-  const renderActionBadge = (m) => {
-    const act = getSmartActionType(m);
-
-    if (act === 'CORRECTIVE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
-            <Wrench className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-rose-950">Corrective</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-rose-100 text-rose-700 font-bold">
-            CURATIF
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'PREVENTIVE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-            <Clock className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-blue-950">Préventive</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-blue-100 text-blue-700 font-bold">
-            PLANIFIÉ
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'AMELIORATIVE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-            <Sparkles className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-emerald-950">Amélioration</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-emerald-100 text-emerald-700 font-bold">
-            PROJET
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'USAGE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
-            <Users className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-purple-950">Usage Perso</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-purple-100 text-purple-700 font-bold">
-            INTERVENANT
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'REAPPRO') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-teal-50 border border-teal-200 text-teal-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-teal-100 flex items-center justify-center text-teal-600 shrink-0">
-            <Inbox className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-teal-950">Réappro</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-teal-100 text-teal-700 font-bold">
-            ENTRÉE
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'RETOUR') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-cyan-50 border border-cyan-200 text-cyan-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-cyan-100 flex items-center justify-center text-cyan-600 shrink-0">
-            <RotateCcw className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-cyan-950">Retour Atelier</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-cyan-100 text-cyan-700 font-bold">
-            STOCK
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'REPARATION_EXTERNE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-purple-100 flex items-center justify-center text-purple-600 shrink-0">
-            <Truck className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-purple-950">Rép. Externe</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-purple-100 text-purple-700 font-bold">
-            SOUS-TRAITANCE
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'ETALONNAGE_CONTROLE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-            <Gauge className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-blue-950">Étalonnage</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-blue-100 text-blue-700 font-bold">
-            MÉTROLOGIE
-          </span>
-        </div>
-      );
-    }
-
-    if (act === 'GARANTIE_ECHANGE') {
-      return (
-        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 shadow-2xs">
-          <div className="w-4 h-4 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-            <ShieldCheck className="w-2.5 h-2.5 stroke-[2.5]" />
-          </div>
-          <span className="text-[10.5px] font-bold whitespace-nowrap text-emerald-950">Garantie</span>
-          <span className="text-[8.5px] font-mono px-1 py-0.2 rounded bg-emerald-100 text-emerald-700 font-bold">
-            ÉCHANGE
-          </span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
-        <span className="text-[10.5px] font-bold">{act}</span>
-      </div>
-    );
-  };
-
   // Helper flags
   const isSortieInterne = form.type === 'Sortie Interne';
   const isEntreeInterne = form.type === 'Entrée Interne';
@@ -827,36 +617,8 @@ export default function SortieRapideView({
   }, [operations]);
 
   // Helper to smartly find responsable assigned to a specific zone
-  const findSupervisorForZone = (zoneId) => {
-    if (!zoneId) return responsablesList[0] || null;
-
-    const hasTpl = (s, tplId) => {
-      if (Array.isArray(s.templates) && s.templates.some((t) => (typeof t === 'string' ? t : t?.id) === tplId)) return true;
-      if (Array.isArray(s.template_ids) && s.template_ids.includes(tplId)) return true;
-      if (typeof s.template_id === 'string' && s.template_id.includes(tplId)) return true;
-      return false;
-    };
-
-    const zoneMatches = (s) =>
-      (s.zones && (s.zones.includes(zoneId) || s.zones.includes('ALL'))) ||
-      s.id_zone === zoneId ||
-      s.id_zone === 'ALL' ||
-      (typeof s.id_zone === 'string' && s.id_zone.split(',').map((x) => x.trim()).includes(zoneId));
-
-    // 1. Check Responsable Zone (RZN) matching this zone
-    const rzn = responsablesList.find((s) => hasTpl(s, 'RZN') && zoneMatches(s));
-    if (rzn) return rzn;
-
-    // 2. Check Responsable Maintenance (RMT)
-    const rmt = responsablesList.find((s) => hasTpl(s, 'RMT') && zoneMatches(s));
-    if (rmt) return rmt;
-
-    // 3. Direct match on zones or id_zone
-    const directMatch = responsablesList.find((s) => zoneMatches(s));
-    if (directMatch) return directMatch;
-
-    return responsablesList[0] || null;
-  };
+  const findSupervisorForZone = (zoneId: string) =>
+    findSupervisorForZoneHelper(zoneId, responsablesList);
 
   // Auto-populate responsable when Zone changes for Corrective, Preventive and Améliorative
   useEffect(() => {
@@ -885,77 +647,16 @@ export default function SortieRapideView({
   const [targetItemIndex, setTargetItemIndex] = useState(0);
 
   // Unified items list for search modal (Merging PDR Stock + Warehouse Digital Twin Items)
-  const unifiedSearchCatalog = useMemo(() => {
-    const catalog = [];
-
-    // 1. Stock PDR Items (Active only)
-    stockItems.forEach((s) => {
-      if (!s || s.is_active === false || s.actif === false || s.statut === 'ARCHIVE') return;
-      catalog.push({
-        id: `PDR-${s.id || s.ref}`,
-        source: 'STOCK_PDR',
-        ref: s.ref,
-        code: s.ref,
-        designation: s.designation,
-        category: 'PDR Consommable',
-        badge: 'Stock PDR',
-        badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-        stockActuel: s.stockActuel ?? s.stockInitial ?? 0,
-        emplacement: s.emplacement || 'Magasin Central',
-        type: s.id_type || 'PDR',
-        unit: 'pcs',
-        raw: s,
-      });
-    });
-
-    // 2. Warehouse Digital Twin Items (Parties & Composants, Active only)
-    warehouseItems.forEach((w) => {
-      if (!w || w.is_active === false || w.actif === false || w.statut === 'ARCHIVE' || w.etat === 'ARCHIVE') return;
-      const isPartie = w.category === 'PARTIE' || w.nature === 'PARTIE';
-      const codeStr = w.id_warehouse_item || w.code || w.ref || `EXT-${w.id}`;
-      catalog.push({
-        id: `WH-${w.id || w.id_warehouse_item || w.code}`,
-        source: isPartie ? 'WAREHOUSE_PARTIE' : 'WAREHOUSE_COMPOSANT',
-        ref: codeStr,
-        code: codeStr,
-        designation: w.designation || w.nom || '',
-        category: isPartie ? 'PARTIE (Machine Twin)' : 'COMPOSANT (Stock Twin)',
-        badge: isPartie ? 'Entrepôt: PARTIE' : 'Entrepôt: COMPOSANT',
-        badgeColor: isPartie
-          ? 'bg-purple-50 text-purple-800 border-purple-200'
-          : 'bg-blue-50 text-blue-800 border-blue-200',
-        stockActuel: w.quantite ?? w.stockActuel ?? 1,
-        emplacement: w.emplacement || w.rattachement_val || 'Entrepôt',
-        type: isPartie ? w.id_family || 'Machine' : w.id_type || 'Composant',
-        unit: w.unite || 'pcs',
-        etat: w.etat || 'Fonctionnel',
-        raw: w,
-      });
-    });
-
-    return catalog;
-  }, [stockItems, warehouseItems]);
+  const unifiedSearchCatalog = useMemo(
+    () => buildUnifiedMovementSearchCatalog(stockItems, warehouseItems),
+    [stockItems, warehouseItems]
+  );
 
   // Filtered Search Results
-  const filteredCatalogResults = useMemo(() => {
-    return unifiedSearchCatalog.filter((item) => {
-      // Tab filter
-      if (searchActiveTab !== 'ALL' && item.source !== searchActiveTab) {
-        return false;
-      }
-
-      // Query filter
-      if (!searchQuery) return true;
-      const q = searchQuery.toLowerCase().trim();
-      return (
-        String(item.ref || '').toLowerCase().includes(q) ||
-        String(item.designation || '').toLowerCase().includes(q) ||
-        String(item.category || '').toLowerCase().includes(q) ||
-        String(item.emplacement || '').toLowerCase().includes(q) ||
-        String(item.type || '').toLowerCase().includes(q)
-      );
-    });
-  }, [unifiedSearchCatalog, searchActiveTab, searchQuery]);
+  const filteredCatalogResults = useMemo(
+    () => filterMovementCatalogResults(unifiedSearchCatalog, searchActiveTab, searchQuery),
+    [unifiedSearchCatalog, searchActiveTab, searchQuery]
+  );
 
   // Active Pending Orders (Commandes en attente de livraison)
   const pendingOrders = useMemo(() => {
@@ -1848,511 +1549,22 @@ export default function SortieRapideView({
 
           {(() => {
             const step1FluxSection = (
-              <div className="space-y-4">
-            {/* 1. FLOW TYPE SELECTOR (5 Operational Flows categorized under 3 Philosophies) */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                Type de Flux Industriel (5 Types)
-              </label>
-
-              <div className="grid grid-cols-2 gap-1.5">
-                {/* 1. Sortie Interne */}
-                <button
-                  type="button"
-                  onClick={() => handleTypeChange('Sortie Interne')}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                    isSortieInterne
-                      ? 'bg-rose-50 border-rose-400 text-rose-950 font-bold ring-2 ring-rose-500/20 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
-                      <span>Sortie Interne</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-rose-200 text-rose-800 font-bold">INTERNE</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Stock/Entrepôt → Machine/Zone</div>
-                </button>
-
-                {/* 2. Entrée Interne */}
-                <button
-                  type="button"
-                  onClick={() => handleTypeChange('Entrée Interne')}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                    isEntreeInterne
-                      ? 'bg-cyan-50 border-cyan-400 text-cyan-950 font-bold ring-2 ring-cyan-500/20 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-cyan-600" />
-                      <span>Entrée Interne</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-200 text-cyan-800 font-bold">INTERNE</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Machine/Atelier → Stock/Entrepôt</div>
-                </button>
-
-                {/* 3. Bon de Sortie (Réparation Externe) */}
-                <button
-                  type="button"
-                  onClick={() => handleTypeChange('Bon de Sortie')}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                    isBonSortie
-                      ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Bon de Sortie</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-purple-200 text-purple-800 font-bold">EXTERNE</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Entrepôt → Réparation Externe (Truck)</div>
-                </button>
-
-                {/* 4. Entrée Externe */}
-                <button
-                  type="button"
-                  onClick={() => handleTypeChange('Entrée Externe')}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer ${
-                    isEntreeExterne
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold ring-2 ring-emerald-500/20 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <Inbox className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Entrée Externe</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 font-bold">EXTERNE</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Fournisseur/Retour Réparation → Stock</div>
-                </button>
-
-                {/* 5. COMMANDE / Demandes d'Achat */}
-                <button
-                  type="button"
-                  onClick={() => handleTypeChange('COMMANDE')}
-                  className={`p-2.5 rounded-xl border text-left transition cursor-pointer col-span-2 ${
-                    isCommandeFlow
-                      ? 'bg-amber-50 border-amber-400 text-amber-950 font-bold ring-2 ring-amber-500/20 shadow-2xs'
-                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold flex items-center gap-1.5">
-                      <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Demande d'Achat & Approvisionnement (COMMANDE)</span>
-                    </span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 font-bold">ACHAT</span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">Demande d'achat de PDR, Composants ou Parties en attente</div>
-                </button>
-              </div>
-            </div>
-
-            {/* 2. DYNAMIC ITEM SOURCE SELECTOR FOR SORTIE INTERNE */}
-            {isSortieInterne && (
-              <div className="p-3 bg-slate-50/90 rounded-xl border border-slate-200 space-y-2">
-                <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block flex items-center gap-1.5">
-                  <Boxes className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Source de l'Article à Sortir :</span>
-                </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'STOCK_PDR' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'STOCK_PDR' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'STOCK_PDR'
-                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold ring-2 ring-emerald-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-emerald-50/40 hover:border-emerald-200 hover:text-emerald-900'
-                    }`}
-                  >
-                    <Package className={`w-3.5 h-3.5 ${form.item_source === 'STOCK_PDR' ? 'text-emerald-600' : 'text-emerald-600/80'}`} />
-                    <span>PDR (Stock)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_PARTIE' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_PARTIE' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_PARTIE'
-                        ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-purple-50/40 hover:border-purple-200 hover:text-purple-900'
-                    }`}
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_PARTIE' ? 'text-purple-600' : 'text-purple-600/80'}`} />
-                    <span>PARTIE (Entrepôt)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_COMPOSANT' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_COMPOSANT' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_COMPOSANT'
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200 hover:text-indigo-900'
-                    }`}
-                  >
-                    <Puzzle className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_COMPOSANT' ? 'text-indigo-600' : 'text-indigo-600/80'}`} />
-                    <span>COMPOSANT</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 3. DYNAMIC DESTINATION SELECTOR FOR ENTRÉE INTERNE */}
-            {isEntreeInterne && (
-              <div className="p-3 bg-cyan-50/50 rounded-xl border border-cyan-200 space-y-2">
-                <label className="text-[10.5px] font-bold text-cyan-950 uppercase tracking-wider block flex items-center gap-1.5">
-                  <RotateCcw className="w-3.5 h-3.5 text-cyan-700" />
-                  <span>Destination de l'Entrée / Remise :</span>
-                </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'STOCK_PDR', item_source: 'STOCK_PDR' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'STOCK_PDR' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'STOCK_PDR'
-                        ? 'bg-cyan-50 border-cyan-400 text-cyan-950 font-bold ring-2 ring-cyan-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-cyan-50/40 hover:border-cyan-200 hover:text-cyan-900'
-                    }`}
-                  >
-                    <Package className={`w-3.5 h-3.5 ${form.destination_type === 'STOCK_PDR' ? 'text-cyan-600' : 'text-cyan-600/80'}`} />
-                    <span>Magasin PDR</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'WAREHOUSE_PARTIE', item_source: 'WAREHOUSE_PARTIE' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_PARTIE' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'WAREHOUSE_PARTIE'
-                        ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-purple-50/40 hover:border-purple-200 hover:text-purple-900'
-                    }`}
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${form.destination_type === 'WAREHOUSE_PARTIE' ? 'text-purple-600' : 'text-purple-600/80'}`} />
-                    <span>Entrepôt: PARTIE</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'WAREHOUSE_COMPOSANT', item_source: 'WAREHOUSE_COMPOSANT' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_COMPOSANT' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'WAREHOUSE_COMPOSANT'
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200 hover:text-indigo-900'
-                    }`}
-                  >
-                    <Puzzle className={`w-3.5 h-3.5 ${form.destination_type === 'WAREHOUSE_COMPOSANT' ? 'text-indigo-600' : 'text-indigo-600/80'}`} />
-                    <span>Entrepôt: COMPOSANT</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 4. DYNAMIC SOURCE SELECTOR FOR BON DE SORTIE (Parts & Components strictly, with exception PDR Haute Valeur) */}
-            {isBonSortie && (
-              <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10.5px] font-bold text-purple-950 uppercase tracking-wider block flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-purple-700" />
-                    <span>Source Matériel (Entrepôt Sortant) :</span>
-                  </label>
-                  <span className="text-[10px] text-purple-700 font-semibold italic">
-                    Priorité : PARTIE & COMPOSANT
-                  </span>
-                </div>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_PARTIE' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_PARTIE' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_PARTIE'
-                        ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-purple-50/40 hover:border-purple-200 hover:text-purple-900'
-                    }`}
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_PARTIE' ? 'text-purple-600' : 'text-purple-600/80'}`} />
-                    <span className="truncate">PARTIE (Organe)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_COMPOSANT' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_COMPOSANT' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_COMPOSANT'
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200 hover:text-indigo-900'
-                    }`}
-                  >
-                    <Puzzle className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_COMPOSANT' ? 'text-indigo-600' : 'text-indigo-600/80'}`} />
-                    <span className="truncate">COMPOSANT (Moteur...)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'STOCK_PDR' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'STOCK_PDR' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'STOCK_PDR'
-                        ? 'bg-amber-50 border-amber-400 text-amber-950 font-bold ring-2 ring-amber-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-amber-50/40 hover:border-amber-200 hover:text-amber-900'
-                    }`}
-                    title="Exception PDR de haute valeur (Carte électronique, automate)"
-                  >
-                    <Package className={`w-3.5 h-3.5 ${form.item_source === 'STOCK_PDR' ? 'text-amber-600' : 'text-amber-600/80'}`} />
-                    <span className="truncate">PDR (Exception)</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 5. DYNAMIC TARGET SELECTOR FOR DEMANDE D'ACHAT (PDR, Components, Parts) */}
-            {isCommandeFlow && (
-              <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200 space-y-2">
-                <label className="text-[10.5px] font-bold text-amber-950 uppercase tracking-wider block flex items-center gap-1.5">
-                  <ShoppingCart className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Catégorie de la Demande d'Achat :</span>
-                </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'STOCK_PDR' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'STOCK_PDR' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'STOCK_PDR'
-                        ? 'bg-amber-50 border-amber-400 text-amber-950 font-bold ring-2 ring-amber-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-amber-50/40 hover:border-amber-200 hover:text-amber-900'
-                    }`}
-                  >
-                    <Package className={`w-3.5 h-3.5 ${form.item_source === 'STOCK_PDR' ? 'text-amber-600' : 'text-amber-600/80'}`} />
-                    <span>PDR (Stock)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_PARTIE' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_PARTIE' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_PARTIE'
-                        ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-purple-50/40 hover:border-purple-200 hover:text-purple-900'
-                    }`}
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_PARTIE' ? 'text-purple-600' : 'text-purple-600/80'}`} />
-                    <span>PARTIE (Entrepôt)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, item_source: 'WAREHOUSE_COMPOSANT' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_COMPOSANT' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.item_source === 'WAREHOUSE_COMPOSANT'
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200 hover:text-indigo-900'
-                    }`}
-                  >
-                    <Puzzle className={`w-3.5 h-3.5 ${form.item_source === 'WAREHOUSE_COMPOSANT' ? 'text-indigo-600' : 'text-indigo-600/80'}`} />
-                    <span>COMPOSANT</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* 6. DYNAMIC CATEGORY & RETURN TRACKER SELECTOR FOR ENTRÉE EXTERNE (PDR, Components, Parts) */}
-            {isEntreeExterne && (
-              <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-200 space-y-2.5">
-                <label className="text-[10.5px] font-bold text-emerald-950 uppercase tracking-wider block flex items-center gap-1.5">
-                  <Inbox className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Catégorie de Réception / Destination :</span>
-                </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'STOCK_PDR', item_source: 'STOCK_PDR' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'STOCK_PDR' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'STOCK_PDR'
-                        ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold ring-2 ring-emerald-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-emerald-50/40 hover:border-emerald-200 hover:text-emerald-900'
-                    }`}
-                  >
-                    <Package className={`w-3.5 h-3.5 ${form.destination_type === 'STOCK_PDR' ? 'text-emerald-600' : 'text-emerald-600/80'}`} />
-                    <span>PDR (Stock)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'WAREHOUSE_PARTIE', item_source: 'WAREHOUSE_PARTIE' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_PARTIE' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'WAREHOUSE_PARTIE'
-                        ? 'bg-purple-50 border-purple-400 text-purple-950 font-bold ring-2 ring-purple-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-purple-50/40 hover:border-purple-200 hover:text-purple-900'
-                    }`}
-                  >
-                    <Layers className={`w-3.5 h-3.5 ${form.destination_type === 'WAREHOUSE_PARTIE' ? 'text-purple-600' : 'text-purple-600/80'}`} />
-                    <span>PARTIE (Entrepôt)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setForm({ ...form, destination_type: 'WAREHOUSE_COMPOSANT', item_source: 'WAREHOUSE_COMPOSANT' });
-                      setMouvementItems(mouvementItems.map((i) => ({ ...i, source: 'WAREHOUSE_COMPOSANT' })));
-                    }}
-                    className={`py-2 px-2 rounded-xl text-xs font-bold transition border cursor-pointer flex items-center justify-center gap-1.5 ${
-                      form.destination_type === 'WAREHOUSE_COMPOSANT'
-                        ? 'bg-indigo-50 border-indigo-400 text-indigo-950 font-bold ring-2 ring-indigo-500/20 shadow-2xs'
-                        : 'bg-white/90 text-slate-700 border-slate-200 hover:bg-indigo-50/40 hover:border-indigo-200 hover:text-indigo-900'
-                    }`}
-                  >
-                    <Puzzle className={`w-3.5 h-3.5 ${form.destination_type === 'WAREHOUSE_COMPOSANT' ? 'text-indigo-600' : 'text-indigo-600/80'}`} />
-                    <span>COMPOSANT</span>
-                  </button>
-                </div>
-
-                {/* Return Tracker Bar from Bon de Sortie (Repairs) and Demandes d'Achat (Orders) */}
-                {(activeExternalRepairs.length > 0 || pendingOrders.length > 0) && (
-                  <div className="pt-2 border-t border-emerald-200/70 space-y-1.5">
-                    <div className="text-[10px] font-bold text-emerald-900 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <RotateCcw className="w-3 h-3 text-emerald-700" />
-                        <span>Traçabilité des Retours & Commandes en Attente :</span>
-                      </span>
-                      <span className="font-mono text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                        {activeExternalRepairs.length + pendingOrders.length} en attente
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
-                      {/* Active Repairs in Bon de Sortie */}
-                      {activeExternalRepairs.map((rep, idx) => (
-                        <button
-                          key={`track-rep-${rep.id ?? ''}-${rep.code_bon ?? ''}-${idx}`}
-                          type="button"
-                          onClick={() => handleReceiveRepairReturn(rep)}
-                          className="px-2 py-1 rounded-lg bg-white hover:bg-purple-50 border border-purple-200 text-purple-950 text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                          title="Réceptionner le retour de cet équipement réparé"
-                        >
-                          <Truck className="w-3 h-3 text-purple-600 shrink-0" />
-                          <span className="font-mono font-bold text-[10px] text-purple-800">{rep.code_bon}</span>
-                          <span className="truncate max-w-[100px]">{rep.ref}</span>
-                          <span className="text-[9px] text-purple-500 font-mono">({rep.quantite} pcs)</span>
-                        </button>
-                      ))}
-
-                      {/* Pending Orders from Demandes d'Achat */}
-                      {pendingOrders.map((ord, idx) => (
-                        <button
-                          key={`track-ord-${ord.id ?? ''}-${ord.code_bon ?? ''}-${idx}`}
-                          type="button"
-                          onClick={() => handleFulfillOrder(ord)}
-                          className="px-2 py-1 rounded-lg bg-white hover:bg-amber-50 border border-amber-200 text-amber-950 text-[10.5px] font-semibold flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                          title="Réceptionner cette commande livrée par le fournisseur"
-                        >
-                          <ShoppingCart className="w-3 h-3 text-amber-600 shrink-0" />
-                          <span className="font-mono font-bold text-[10px] text-amber-800">{ord.num_commande || ord.code_bon}</span>
-                          <span className="truncate max-w-[100px]">{ord.ref}</span>
-                          <span className="text-[9px] text-amber-500 font-mono">({ord.quantite} pcs)</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 4. DATE, HEURE & OT/CMD REFERENCE */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Date
-                </label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="w-full h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-medium text-slate-800"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                  <span>Heure</span>
-                  <span className="text-[9.5px] text-indigo-600 font-mono font-medium flex items-center gap-0.5">
-                    <Clock className="w-2.5 h-2.5" /> Auto
-                  </span>
-                </label>
-                <input
-                  type="time"
-                  value={form.heure || ''}
-                  onChange={(e) => setForm({ ...form, heure: e.target.value })}
-                  className="w-full h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-800"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  N° OT / Commande / Réf
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ex: OT-2026-042"
-                  value={form.num_commande}
-                  onChange={(e) => setForm({ ...form, num_commande: e.target.value })}
-                  className="w-full h-8 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono text-slate-800"
-                />
-              </div>
-            </div>
-              </div>
+              <MovementFlowSelectorSection
+                form={form}
+                setForm={setForm}
+                mouvementItems={mouvementItems}
+                setMouvementItems={setMouvementItems}
+                isSortieInterne={isSortieInterne}
+                isEntreeInterne={isEntreeInterne}
+                isBonSortie={isBonSortie}
+                isEntreeExterne={isEntreeExterne}
+                isCommandeFlow={isCommandeFlow}
+                handleTypeChange={handleTypeChange}
+                activeExternalRepairs={activeExternalRepairs}
+                pendingOrders={pendingOrders}
+                handleReceiveRepairReturn={handleReceiveRepairReturn}
+                handleFulfillOrder={handleFulfillOrder}
+              />
             );
 
             const step2ArticlesSection = (
@@ -2738,43 +1950,22 @@ export default function SortieRapideView({
         )}
       </AnimatePresence>
 
-      {/* V3+V4 MODAL: MAGASINIER / ADMIN SORTIE DEMAND REVIEW & BON RECONCILIATION */}
       <SortieDemandReviewModal
-        reviewDemand={reviewDemand}
-        reconciliation={reviewDemandReconciliation}
-        reviewCodeBonMagasin={reviewCodeBonMagasin}
-        setReviewCodeBonMagasin={setReviewCodeBonMagasin}
-        reviewMergeMovementId={reviewMergeMovementId}
-        setReviewMergeMovementId={setReviewMergeMovementId}
-        reviewDemandItems={reviewDemandItems}
-        setReviewDemandItems={setReviewDemandItems}
-        reviewDemandNote={reviewDemandNote}
-        setReviewDemandNote={setReviewDemandNote}
-        onClose={() => setReviewDemand(null)}
-        onDecision={handleReviewDemandDecision}
+        reviewDemand={reviewDemand} reconciliation={reviewDemandReconciliation}
+        reviewCodeBonMagasin={reviewCodeBonMagasin} setReviewCodeBonMagasin={setReviewCodeBonMagasin}
+        reviewMergeMovementId={reviewMergeMovementId} setReviewMergeMovementId={setReviewMergeMovementId}
+        reviewDemandItems={reviewDemandItems} setReviewDemandItems={setReviewDemandItems}
+        reviewDemandNote={reviewDemandNote} setReviewDemandNote={setReviewDemandNote}
+        onClose={() => setReviewDemand(null)} onDecision={handleReviewDemandDecision}
       />
-
-      {/* UNIFIED ARTICLE & WAREHOUSE ITEM SEARCH MODAL */}
       <UnifiedArticleSearchModal
-        open={isArticleSearchOpen}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        searchActiveTab={searchActiveTab}
-        stockCount={stockItems.length}
-        warehouseItems={warehouseItems}
-        filteredCatalogResults={filteredCatalogResults}
-        highlightMatch={highlightMatch}
-        onSelectCatalogItem={handleSelectCatalogItem}
-        onClose={() => setIsArticleSearchOpen(false)}
-        onOpenAddArticle={onOpenAddArticle}
-        onOpenAddMachine={onOpenAddMachine}
+        open={isArticleSearchOpen} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+        searchActiveTab={searchActiveTab} stockCount={stockItems.length} warehouseItems={warehouseItems}
+        filteredCatalogResults={filteredCatalogResults} highlightMatch={highlightMatch}
+        onSelectCatalogItem={handleSelectCatalogItem} onClose={() => setIsArticleSearchOpen(false)}
+        onOpenAddArticle={onOpenAddArticle} onOpenAddMachine={onOpenAddMachine}
       />
-
-      {/* Excel Formulas Preview Modal */}
-      <MovementFormulasPreviewModal
-        open={showFormulasModal}
-        onClose={() => setShowFormulasModal(false)}
-      />
+      <MovementFormulasPreviewModal open={showFormulasModal} onClose={() => setShowFormulasModal(false)} />
     </AnimatedPage>
   );
 }

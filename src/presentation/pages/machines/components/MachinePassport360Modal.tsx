@@ -16,13 +16,28 @@ import { resolveMachineHierarchyContext } from '../../../../utils/assetHierarchy
 import { buildUnifiedMachineNexusElements } from '../../../../core/domain';
 import { computeMachineHealthPassport } from '../../../../application/services/MachineHealthPassportService';
 import { IMeterReading } from '../../../../types/meter';
+import type {
+  IBlueprint,
+  IGeneralSystemType,
+  IMachine,
+  IMachineFamily,
+  IMachineTemplate,
+  ITechnician,
+  IZone,
+} from '../../../../types/domain';
+import type { PreventiveExecutionRecord as PreventiveExecutionItem } from '../../../../types/preventive';
+import type {
+  CorrectiveInterventionItem,
+  MachineElement as MachineElementLedgerItem,
+  PreventiveTaskItem,
+} from '../../../../types/store';
 
 interface MachinePassport360ModalProps {
-  machine: any | null;
+  machine: IMachine | null;
   onClose: () => void;
   onNavigateToPreventive?: (machineCode: string) => void;
-  onNavigateToQuickSortie?: (machine: any) => void;
-  onOpenQrSticker?: (machine: any) => void;
+  onNavigateToQuickSortie?: (machine: IMachine) => void;
+  onOpenQrSticker?: (machine: IMachine) => void;
 }
 
 export default function MachinePassport360Modal({
@@ -90,7 +105,7 @@ export default function MachinePassport360Modal({
     return meterReadings
       .filter(
         (r) =>
-          String(r.machineId || (r as any).id_machine || '')
+          String(r.machineId || (r as IMeterReading & { id_machine?: string }).id_machine || '')
             .trim()
             .toUpperCase() === machineCodeUpper
       )
@@ -106,14 +121,14 @@ export default function MachinePassport360Modal({
     if (!machineCodeUpper) return [];
     return (correctiveInterventions || [])
       .filter(
-        (ci: any) =>
+        (ci: CorrectiveInterventionItem) =>
           String(ci.code_machine || ci.id_machine_registered || '')
             .trim()
             .toUpperCase() === machineCodeUpper
       )
-      .sort((a: any, b: any) => {
-        const dateA = new Date(a.date_cloture || a.date_demande || 0).getTime();
-        const dateB = new Date(b.date_cloture || b.date_demande || 0).getTime();
+      .sort((a: CorrectiveInterventionItem, b: CorrectiveInterventionItem) => {
+        const dateA = new Date(String(a.date_cloture || a.date_demande || 0)).getTime();
+        const dateB = new Date(String(b.date_cloture || b.date_demande || 0)).getTime();
         return dateB - dateA;
       });
   }, [correctiveInterventions, machineCodeUpper]);
@@ -122,8 +137,8 @@ export default function MachinePassport360Modal({
   const machineTasks = useMemo(() => {
     if (!machineCodeUpper) return [];
     return (preventiveTasks || []).filter(
-      (t: any) =>
-        String(t.id_machine || t.code_machine || '')
+      (tItem: PreventiveTaskItem) =>
+        String(tItem.id_machine || tItem.code_machine || '')
           .trim()
           .toUpperCase() === machineCodeUpper
     );
@@ -134,14 +149,14 @@ export default function MachinePassport360Modal({
     if (!machineCodeUpper) return [];
     return (preventiveExecutions || [])
       .filter(
-        (ex: any) =>
+        (ex: PreventiveExecutionItem) =>
           String(ex.machineCode || ex.id_machine || '')
             .trim()
             .toUpperCase() === machineCodeUpper
       )
       .sort(
-        (a: any, b: any) =>
-          new Date(b.executedAt || 0).getTime() - new Date(a.executedAt || 0).getTime()
+        (a: PreventiveExecutionItem, b: PreventiveExecutionItem) =>
+          new Date(String(b.executedAt || 0)).getTime() - new Date(String(a.executedAt || 0)).getTime()
       );
   }, [preventiveExecutions, machineCodeUpper]);
 
@@ -159,7 +174,7 @@ export default function MachinePassport360Modal({
   const blueprint = useMemo(() => {
     if (!machine) return undefined;
     return (blueprints || []).find(
-      (bp: any) =>
+      (bp: IBlueprint) =>
         bp.id_blueprint === machine.id_blueprint ||
         (machine.id_templates && bp.id_templates === machine.id_templates)
     );
@@ -174,24 +189,24 @@ export default function MachinePassport360Modal({
 
   const assetClass = getMachineAssetClass(machine);
   const sysTypeObj = generalSystemTypes.find(
-    (t: any) => t.id === machine.id_general_system_type
+    (tItem: IGeneralSystemType) => tItem.id === machine.id_general_system_type
   );
   const zoneRef = machine.id_zone_default || machine.id_zone || machine.zone || '';
   const zoneObj = (zones || []).find(
-    (z: any) =>
+    (z: IZone) =>
       z.id_zone === zoneRef ||
       z.code_zone === zoneRef ||
       z.libelle === zoneRef
   );
   const familyObj = (families || []).find(
-    (f: any) => f.id_family === machine.id_family
+    (f: IMachineFamily) => f.id_family === machine.id_family
   );
   const templateObj = (templates || []).find(
-    (t: any) => t.id_templates === machine.id_templates
+    (tItem: IMachineTemplate) => tItem.id_templates === machine.id_templates
   );
   const techObj = (technicians || []).find(
-    (t: any) =>
-      t.id_technician === machine.technician || t.nom === machine.technician
+    (tItem: ITechnician) =>
+      tItem.id_technician === machine.technician || tItem.nom === machine.technician
   );
 
   // Current counter value & unit
@@ -597,37 +612,37 @@ export default function MachinePassport360Modal({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {machineElements.map((el: any) => (
-                    <div key={el.id_element || el.id} className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs space-y-1.5">
+                  {machineElements.map((el: MachineElementLedgerItem) => (
+                    <div key={String(el.id_element || el.id)} className="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-bold text-slate-900 text-xs truncate">
-                          {el.designation || el.nom_element || el.ref_element}
+                          {String(el.designation || el.nom_element || el.ref_element || '')}
                         </span>
                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 shrink-0">
-                          {el.element_type || el.nature || 'PDR'}
+                          {String(el.element_type || el.nature || 'PDR')}
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center justify-between gap-2">
                         <span>
                           Réf / Code :{' '}
                           <span className="font-mono font-semibold text-slate-800">
-                            {el.ref_element || el.ref || el.code_element || '—'}
+                            {String(el.ref_element || el.ref || el.code_element || '—')}
                           </span>
                         </span>
-                        {el.qte_montee && (
+                        {Boolean(el.qte_montee) && (
                           <span className="font-mono font-bold text-emerald-700">
-                            Qté: {el.qte_montee} {el.unite || 'U'}
+                            Qté: {String(el.qte_montee)} {String(el.unite || 'U')}
                           </span>
                         )}
                       </div>
-                      {el.emplacement_machine && (
+                      {Boolean(el.emplacement_machine) && (
                         <div className="text-[10.5px] text-slate-500">
-                          Position : <span className="font-medium text-slate-700">{el.emplacement_machine}</span>
+                          Position : <span className="font-medium text-slate-700">{String(el.emplacement_machine)}</span>
                         </div>
                       )}
-                      {(el.remarques || el.observations) && (
+                      {Boolean(el.remarques || el.observations) && (
                         <div className="text-[10.5px] text-slate-600 bg-slate-50 p-2 rounded-xl">
-                          {el.remarques || el.observations}
+                          {String(el.remarques || el.observations)}
                         </div>
                       )}
                     </div>
@@ -650,14 +665,14 @@ export default function MachinePassport360Modal({
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-2xs">
-                  {machineCorrective.map((ci: any) => (
-                    <div key={ci.id} className="p-3.5 hover:bg-slate-50 transition space-y-1.5">
+                  {machineCorrective.map((ci: CorrectiveInterventionItem) => (
+                    <div key={String(ci.id)} className="p-3.5 hover:bg-slate-50 transition space-y-1.5">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-mono font-bold text-xs text-indigo-700">
-                            {ci.num_bt || ci.id}
+                            {String(ci.num_bt || ci.id)}
                           </span>
-                          <span className="font-bold text-slate-900">{ci.panne || ci.anomalie || 'Dépannage'}</span>
+                          <span className="font-bold text-slate-900">{String(ci.panne || ci.anomalie || 'Dépannage')}</span>
                         </div>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           ci.statut === 'CLOTURE'
@@ -666,18 +681,18 @@ export default function MachinePassport360Modal({
                             ? 'bg-amber-100 text-amber-800'
                             : 'bg-slate-100 text-slate-700'
                         }`}>
-                          {ci.statut || 'EN_COURS'}
+                          {String(ci.statut || 'EN_COURS')}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-4 text-[11px] text-slate-500 flex-wrap">
-                        <span>Date : <span className="font-semibold text-slate-700">{ci.date_cloture || ci.date_demande || '—'}</span></span>
-                        <span>Technicien : <span className="font-semibold text-slate-700">{ci.technicien || ci.intervenant || '—'}</span></span>
-                        {ci.duree_arret_heures && (
-                          <span className="text-amber-700 font-semibold">Arrêt : {ci.duree_arret_heures}h</span>
+                        <span>Date : <span className="font-semibold text-slate-700">{String(ci.date_cloture || ci.date_demande || '—')}</span></span>
+                        <span>Technicien : <span className="font-semibold text-slate-700">{String(ci.technicien || ci.intervenant || '—')}</span></span>
+                        {Boolean(ci.duree_arret_heures) && (
+                          <span className="text-amber-700 font-semibold">Arrêt : {String(ci.duree_arret_heures)}h</span>
                         )}
-                        {ci.cout_total && (
-                          <span className="text-emerald-700 font-bold font-mono">Coût : {ci.cout_total} DH</span>
+                        {Boolean(ci.cout_total) && (
+                          <span className="text-emerald-700 font-bold font-mono">Coût : {String(ci.cout_total)} DH</span>
                         )}
                       </div>
                     </div>
@@ -705,20 +720,20 @@ export default function MachinePassport360Modal({
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-2xs">
-                  {machineExecutions.map((ex: any) => (
-                    <div key={ex.id} className="p-3.5 hover:bg-slate-50 transition space-y-1">
+                  {machineExecutions.map((ex: PreventiveExecutionItem) => (
+                    <div key={String(ex.id)} className="p-3.5 hover:bg-slate-50 transition space-y-1">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-slate-900 text-xs">
-                          {ex.taskTitle || ex.taskCode || ex.action_code || 'Visite Préventive'}
+                          {String(ex.taskTitle || ex.taskCode || ex.action_code || 'Visite Préventive')}
                         </span>
                         <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {ex.periodMonth || ex.executedAt?.slice(0, 10)}
+                          {String(ex.periodMonth || String(ex.executedAt || '').slice(0, 10))}
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                        <span>Réalisé par : <span className="font-semibold text-slate-700">{ex.technicianName || ex.technicien || '—'}</span></span>
-                        {ex.duree_reelle && <span>Durée : {ex.duree_reelle}</span>}
-                        {ex.anomalie_detectee && (
+                        <span>Réalisé par : <span className="font-semibold text-slate-700">{String(ex.technicianName || ex.technicien || '—')}</span></span>
+                        {Boolean(ex.duree_reelle) && <span>Durée : {String(ex.duree_reelle)}</span>}
+                        {Boolean(ex.anomalie_detectee) && (
                           <span className="text-rose-600 font-bold flex items-center gap-1">
                             <AlertTriangle className="w-3.5 h-3.5" /> Anomalie constatée
                           </span>

@@ -490,21 +490,21 @@ table.border-collapse tbody tr:not(:last-child) > td {
 }
 
 .settings-excel-ui table thead tr > th {
-  background-color: #f1f5f9;
-  border-bottom: 1px solid #94a3b8;
-  color: #1e293b;
+  background-color: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  color: #334155;
 }
 
 .settings-excel-ui table thead tr > th:not(:last-child) {
-  border-right: 1px solid #cbd5e1 !important;
+  border-right: 1px solid #f1f5f9 !important;
 }
 
 .settings-excel-ui table tbody tr > td:not(:last-child) {
-  border-right: 1px solid #e2e8f0 !important;
+  border-right: 1px solid #f1f5f9 !important;
 }
 
 .settings-excel-ui table tbody tr:hover > td {
-  background-color: rgba(240, 249, 255, 0.7);
+  background-color: rgba(241, 245, 249, 0.75);
 }
 
 

@@ -1,6 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import AnimatedPage from '../../components/common/AnimatedPage';
-import { Settings as SettingsIcon } from 'lucide-react';
+import PageHeaderIcon from '../../components/common/PageHeaderIcon';
+import Action3DButton from '../../components/common/Action3DButton';
+import { AutoBackupService } from '../../../core/backup/AutoBackupService';
+import {
+  Settings as SettingsIcon,
+  Download,
+  Database,
+  FileSpreadsheet,
+} from 'lucide-react';
 
 import initialPdrGroups from '../../../data/stock/seedPdrGroups.json';
 import initialStock from '../../../data/stock/seedStockItems.json';
@@ -74,6 +83,7 @@ import {
   AuditUserModal,
   AuditArticleModal,
   AuditRelinkModal,
+  BulkRelinkModal,
   type AuditZoneRecord,
   type AuditTechnicianRecord,
   type AuditOperationRecord,
@@ -115,28 +125,14 @@ interface SettingsAuthContextShape {
   setupMasterPin?: (pin: string) => Promise<boolean>;
 }
 
-export interface DiscoveredAuditItem {
-  code: string;
-  count: number;
-  sourceList: string;
-  sample?: string;
-  inferredRole?: 'CHEF' | 'OPERATEUR' | 'TECHNICIEN';
-  entityType: 'machine' | 'article' | 'zone' | 'user';
-}
+import {
+  computeDiscoveredAuditItems,
+  getNextUserIdFromCatalog,
+  getNextZoneIdFromCatalog,
+  type DiscoveredAuditItem,
+} from './components/settingsAuditDiscovery';
 
-interface DiscoveredCandidateAccumulator {
-  count: number;
-  sources: Set<string>;
-  sample: string;
-}
-
-interface DiscoveredUserAccumulator {
-  count: number;
-  techCount: number;
-  opCount: number;
-  demandeurCount: number;
-  sources: Set<string>;
-}
+export type { DiscoveredAuditItem };
 
 interface BackupSnapshotSummary {
   id: string;
@@ -503,349 +499,22 @@ export default function SettingsView({
   });
 
   // Sequential ID Generator Helpers for audit manual registration
-  const getNextUserId = (type: string) => {
-    if (type === 'TECHNICIEN') {
-      const nums = technicians
-        .map((t: ITechnician) => {
-          const m = String(t.id_technician || '').match(/TECH-(\d+)/i);
-          return m ? parseInt(m[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      const max = nums.length > 0 ? Math.max(...nums) : 0;
-      return `TECH-${String(max + 1).padStart(2, '0')}`;
-    } else if (type === 'OPERATEUR') {
-      const nums = operations
-        .filter((o: IOperation) => o.type_profil === 'OPERATEUR')
-        .map((o: IOperation) => {
-          const m = String(o.id_operation || '').match(/OP-(\d+)/i);
-          return m ? parseInt(m[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      const max = nums.length > 0 ? Math.max(...nums) : 0;
-      return `OP-${String(max + 1).padStart(2, '0')}`;
-    } else if (type === 'CHEF') {
-      const nums = operations
-        .filter((o: IOperation) => o.type_profil === 'CHEF')
-        .map((o: IOperation) => {
-          const m = String(o.id_operation || '').match(/CHEF-(\d+)/i);
-          return m ? parseInt(m[1], 10) : 0;
-        })
-        .filter((n: number) => !isNaN(n));
-      const max = nums.length > 0 ? Math.max(...nums) : 0;
-      return `CHEF-${String(max + 1).padStart(2, '0')}`;
-    }
-    return '';
-  };
-
-  const getNextZoneId = () => {
-    const nums = zones
-      .map((z: IZone) => {
-        const m = String(z.id_zone || '').match(/ZONE-(\d+)/i);
-        return m ? parseInt(m[1], 10) : 0;
-      })
-      .filter((n: number) => !isNaN(n));
-    const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return `ZONE-${String(max + 1).padStart(2, '0')}`;
-  };
+  const getNextUserId = (type: string) => getNextUserIdFromCatalog(type, technicians, operations);
+  const getNextZoneId = () => getNextZoneIdFromCatalog(zones);
 
   // AUDIT & VERIFICATION ENGINE (Multi-Entity Strict Relational Matching)
   const discoveredItems = useMemo<DiscoveredAuditItem[]>(() => {
-    const candidates: Record<string, DiscoveredCandidateAccumulator> = {};
-
-    if (auditTarget === 'machines') {
-      const registeredIds = new Set(
-        (machines || [])
-          .map((m: IMachine) => String(m.id_machine_registered || '').toLowerCase().trim())
-          .filter(Boolean)
-      );
-
-      (mouvements || []).forEach((m: IMouvement, idx: number) => {
-        const code = String(m.id_machine_registered || '').trim();
-        if (code && !registeredIds.has(code.toLowerCase())) {
-          if (!candidates[code]) {
-            candidates[code] = { count: 0, sources: new Set<string>(), sample: `Mouvement #${idx + 1}` };
-          }
-          candidates[code].count += 1;
-          candidates[code].sources.add('Mouvements');
-        }
-      });
-
-      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
-        const code = String(ci.id_machine || ci.machine_id || '').trim();
-        if (code && !registeredIds.has(code.toLowerCase())) {
-          if (!candidates[code]) {
-            candidates[code] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Correctif (${ci.id || ci.code_bon || 'BT'})`,
-            };
-          }
-          candidates[code].count += 1;
-          candidates[code].sources.add('Correctif Hub');
-        }
-      });
-
-      (preventiveTasks || []).forEach((pt: PreventiveTaskItem) => {
-        const code = String(pt.machine_id || pt.id_machine || '').trim();
-        if (code && !registeredIds.has(code.toLowerCase())) {
-          if (!candidates[code]) {
-            candidates[code] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Préventif (${pt.id || pt.code || 'Tâche'})`,
-            };
-          }
-          candidates[code].count += 1;
-          candidates[code].sources.add('Planning Préventif');
-        }
-      });
-
-      const mchRegex = /\b([A-Z]{2,4}-\d{2,3}|[A-Z]{2,4}-\d{1,2})\b/gi;
-      const scanTexts = (text: string | undefined, sourceLabel: string) => {
-        if (!text) return;
-        let match: RegExpExecArray | null;
-        mchRegex.lastIndex = 0;
-        while ((match = mchRegex.exec(text)) !== null) {
-          const code = match[1].toUpperCase();
-          if (
-            [
-              'B1', 'R1', 'R2', 'R3', 'R4', 'R5', 'R6',
-              'A1', 'A2', 'A3', 'A4', 'A5', 'A6',
-              'REF', 'TPL', 'FAM', 'ZONE', 'TECH', 'CHEF', 'OP', 'MCH', 'PDR', 'STOCK',
-            ].includes(code)
-          ) {
-            continue;
-          }
-
-          if (!registeredIds.has(code.toLowerCase())) {
-            if (!candidates[code]) {
-              candidates[code] = { count: 0, sources: new Set<string>(), sample: sourceLabel };
-            }
-            candidates[code].count += 1;
-            candidates[code].sources.add(sourceLabel);
-          }
-        }
-      };
-
-      (mouvements || []).forEach((m: IMouvement, idx: number) => {
-        scanTexts(m.commentaire, `Commentaire Mvt #${idx + 1}`);
-      });
-
-      return Object.entries(candidates)
-        .map(([code, meta]) => ({
-          code,
-          count: meta.count,
-          sourceList: Array.from(meta.sources).join(', '),
-          sample: meta.sample,
-          entityType: 'machine' as const,
-        }))
-        .sort((a, b) => b.count - a.count);
-    } else if (auditTarget === 'articles') {
-      const registeredRefs = new Set(
-        (rawStock || [])
-          .map((s: IStockItem) => String(s.ref || '').toUpperCase().trim())
-          .filter(Boolean)
-      );
-
-      (mouvements || []).forEach((m: IMouvement, idx: number) => {
-        const ref = String(m.ref || '').trim();
-        if (ref && !registeredRefs.has(ref.toUpperCase())) {
-          if (!candidates[ref]) {
-            candidates[ref] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Mvt #${idx + 1} (${m.type || 'Mvt'} ${m.quantite || 1})`,
-            };
-          }
-          candidates[ref].count += 1;
-          candidates[ref].sources.add('Journal Mouvements');
-        }
-      });
-
-      return Object.entries(candidates)
-        .map(([code, meta]) => ({
-          code,
-          count: meta.count,
-          sourceList: Array.from(meta.sources).join(', '),
-          sample: meta.sample,
-          entityType: 'article' as const,
-        }))
-        .sort((a, b) => b.count - a.count);
-    } else if (auditTarget === 'zones') {
-      const registeredZones = new Set(
-        [
-          ...(zones || []).map((z: IZone) => String(z.id_zone || '').toLowerCase().trim()),
-          ...(zones || []).map((z: IZone) => String(z.libelle || '').toLowerCase().trim()),
-          ...(zones || []).map((z: IZone) => String(z.nom || '').toLowerCase().trim()),
-        ].filter(Boolean)
-      );
-
-      (mouvements || []).forEach((m: IMouvement, idx: number) => {
-        const code = String(m.id_zone || '').trim();
-        if (code && !registeredZones.has(code.toLowerCase())) {
-          if (!candidates[code]) {
-            candidates[code] = { count: 0, sources: new Set<string>(), sample: `Mouvement #${idx + 1}` };
-          }
-          candidates[code].count += 1;
-          candidates[code].sources.add('Mouvements');
-        }
-      });
-
-      (machines || []).forEach((m: IMachine) => {
-        const code = String(m.id_zone_default || m.id_zone || '').trim();
-        if (code && !registeredZones.has(code.toLowerCase())) {
-          if (!candidates[code]) {
-            candidates[code] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Machine ${m.id_machine_registered}`,
-            };
-          }
-          candidates[code].count += 1;
-          candidates[code].sources.add('Parc Machines');
-        }
-      });
-
-      return Object.entries(candidates)
-        .map(([code, meta]) => ({
-          code,
-          count: meta.count,
-          sourceList: Array.from(meta.sources).join(', '),
-          sample: meta.sample,
-          entityType: 'zone' as const,
-        }))
-        .sort((a, b) => b.count - a.count);
-    } else if (auditTarget === 'utilisateurs') {
-      const registeredNames = new Set(
-        [
-          ...(technicians || []).map((t: ITechnician) => String(t.nom || '').toLowerCase().trim()),
-          ...(technicians || []).map((t: ITechnician) => String(t.id_technician || '').toLowerCase().trim()),
-          ...(operations || []).map((o: IOperation) => String(o.nom || '').toLowerCase().trim()),
-          ...(operations || []).map((o: IOperation) => String(o.id_operation || '').toLowerCase().trim()),
-        ].filter(Boolean)
-      );
-
-      const userMap: Record<string, DiscoveredUserAccumulator> = {};
-      const addCandidate = (rawName: string | undefined, sourceField: string) => {
-        if (!rawName) return;
-        const name = String(rawName).trim();
-        if (!name) return;
-        if (registeredNames.has(name.toLowerCase())) return;
-        if (/^(OP-|CHEF-|TECH-)/i.test(name)) return;
-
-        if (!userMap[name]) {
-          userMap[name] = {
-            count: 0,
-            techCount: 0,
-            opCount: 0,
-            demandeurCount: 0,
-            sources: new Set<string>(),
-          };
-        }
-        userMap[name].count += 1;
-        userMap[name].sources.add(sourceField);
-        if (sourceField === 'Technicien') userMap[name].techCount += 1;
-        if (sourceField === 'Opération/Chef') userMap[name].opCount += 1;
-        if (sourceField === 'Demandeur') userMap[name].demandeurCount += 1;
-      };
-
-      (mouvements || []).forEach((m: IMouvement) => {
-        if (m.technicien) addCandidate(m.technicien, 'Technicien');
-        if (m.operation) addCandidate(m.operation, 'Opération/Chef');
-        if (m.demandeur) addCandidate(String(m.demandeur), 'Demandeur');
-      });
-
-      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
-        if (ci.technicien_id || ci.technicien)
-          addCandidate(String(ci.technicien_id || ci.technicien), 'Technicien');
-        if (ci.demandeur) addCandidate(ci.demandeur, 'Demandeur');
-      });
-
-      (machines || []).forEach((m: IMachine) => {
-        if (m.technician) addCandidate(m.technician, 'Parc Machine');
-      });
-
-      return Object.entries(userMap)
-        .map(([name, meta]) => {
-          let inferredRole: 'CHEF' | 'OPERATEUR' | 'TECHNICIEN';
-          if (/\bchef\b/i.test(name) || /\bsuperviseur\b/i.test(name)) {
-            inferredRole = 'CHEF';
-          } else if (/\bop/i.test(name) || /\bopér/i.test(name) || meta.opCount > meta.techCount) {
-            inferredRole = 'OPERATEUR';
-          } else {
-            inferredRole = 'TECHNICIEN';
-          }
-          const sourceList = Array.from(meta.sources).join(', ');
-          return {
-            code: name,
-            count: meta.count,
-            inferredRole,
-            sourceList,
-            entityType: 'user' as const,
-          };
-        })
-        .sort((a, b) => b.count - a.count);
-    } else if (auditTarget === 'correctif') {
-      const registeredMachines = new Set(
-        (machines || [])
-          .map((m: IMachine) => String(m.id_machine_registered || '').toUpperCase().trim())
-          .filter(Boolean)
-      );
-      (correctiveInterventions || []).forEach((ci: CorrectiveInterventionItem) => {
-        const mKey = String(ci.id_machine || ci.machine_id || '').trim();
-        if (mKey && !registeredMachines.has(mKey.toUpperCase())) {
-          if (!candidates[mKey]) {
-            candidates[mKey] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Intervention ${ci.id || ci.code_bon || 'Sans ID'}`,
-            };
-          }
-          candidates[mKey].count += 1;
-          candidates[mKey].sources.add('Bons de Travail');
-        }
-      });
-      return Object.entries(candidates)
-        .map(([code, meta]) => ({
-          code,
-          count: meta.count,
-          sourceList: Array.from(meta.sources).join(', '),
-          sample: meta.sample,
-          entityType: 'machine' as const,
-        }))
-        .sort((a, b) => b.count - a.count);
-    } else if (auditTarget === 'preventif') {
-      const registeredMachines = new Set(
-        (machines || [])
-          .map((m: IMachine) => String(m.id_machine_registered || '').toUpperCase().trim())
-          .filter(Boolean)
-      );
-      (preventiveTasks || []).forEach((pt: PreventiveTaskItem) => {
-        const mKey = String(pt.machine_id || pt.id_machine || '').trim();
-        if (mKey && !registeredMachines.has(mKey.toUpperCase())) {
-          if (!candidates[mKey]) {
-            candidates[mKey] = {
-              count: 0,
-              sources: new Set<string>(),
-              sample: `Tâche ${pt.id || pt.code || 'Sans ID'}`,
-            };
-          }
-          candidates[mKey].count += 1;
-          candidates[mKey].sources.add('Tâches Préventives');
-        }
-      });
-      return Object.entries(candidates)
-        .map(([code, meta]) => ({
-          code,
-          count: meta.count,
-          sourceList: Array.from(meta.sources).join(', '),
-          sample: meta.sample,
-          entityType: 'machine' as const,
-        }))
-        .sort((a, b) => b.count - a.count);
-    }
-
-    return [];
+    return computeDiscoveredAuditItems({
+      auditTarget,
+      mouvements,
+      rawStock,
+      machines,
+      zones,
+      technicians,
+      operations,
+      correctiveInterventions,
+      preventiveTasks,
+    });
   }, [
     auditTarget,
     mouvements,
@@ -1950,30 +1619,57 @@ export default function SettingsView({
   };
 
   return (
-    <AnimatedPage className="space-y-5 settings-excel-ui">
-      {/* Header Banner (Light Excel UI Ribbon Header) */}
-      <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.06)] flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-800 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.75)] flex items-center justify-center text-sky-700 shrink-0">
-              <SettingsIcon className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
-                <span>{headerCopy.title}</span>
-                <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                  {headerCopy.subTitle}
-                </span>
-              </h1>
-              <p className="text-xs text-slate-600 mt-0.5">{headerCopy.desc}</p>
-            </div>
+    <AnimatedPage className="space-y-5 pb-10 settings-excel-ui">
+      {/* Executive Header Card (Shared BDR Light GMAO + Industrial Steel-Blue Theme) */}
+      <div className="bg-white px-5 py-4 md:px-6 md:py-5 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden group/header">
+        <div className="absolute -top-12 -right-12 w-48 h-48 bg-sky-600/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-sky-600/10 transition-colors duration-500" />
+        <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
+          <PageHeaderIcon icon={SettingsIcon} colorClass="text-sky-700" />
+          <div className="min-w-0">
+            <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight truncate">
+              {headerCopy.title}
+            </h1>
+            <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-snug">
+              {headerCopy.desc}
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-400 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-600" />
-            {headerCopy.badge}
-          </span>
+        <div className="flex items-center gap-2.5 shrink-0 relative">
+          <Action3DButton
+            variant="circle"
+            color="sky"
+            icon={Download}
+            onClick={() => {
+              const ok = AutoBackupService.exportFullBackupJSON();
+              showToast?.(
+                ok ? 'Snapshot JSON opérationnel téléchargé.' : "Erreur lors de l'export Snapshot.",
+                ok ? 'success' : 'error'
+              );
+            }}
+            title="Exporter Snapshot JSON complet"
+            ariaLabel="Exporter Snapshot JSON complet"
+            className="shadow-[0_8px_20px_-4px_rgba(15,23,42,0.14),0_3px_8px_-2px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]"
+          />
+          <Action3DButton
+            variant="circle"
+            color="slate"
+            icon={Database}
+            onClick={() => setShowBackupManagerModal(true)}
+            title="Gestionnaire des sauvegardes et restauration"
+            ariaLabel="Gestionnaire des sauvegardes et restauration"
+            className="shadow-[0_8px_20px_-4px_rgba(15,23,42,0.14),0_3px_8px_-2px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]"
+          />
+          {onExportExcel && (
+            <Action3DButton
+              variant="circle"
+              color="emerald"
+              icon={FileSpreadsheet}
+              onClick={onExportExcel}
+              title="Exporter Classeur Miroir Excel (.xlsx)"
+              ariaLabel="Exporter Classeur Miroir Excel"
+              className="shadow-[0_8px_20px_-4px_rgba(16,185,129,0.22),0_3px_8px_-2px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.95)]"
+            />
+          )}
         </div>
       </div>
 
@@ -1986,8 +1682,16 @@ export default function SettingsView({
       />
 
       {/* Modular Tab Panels */}
-      <div className="bg-white rounded-xl border border-slate-400 shadow-[0_1px_2px_rgba(15,23,42,0.06)] p-4 sm:p-6 w-full max-w-full overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.08),0_4px_12px_-2px_rgba(15,23,42,0.04)] p-5 sm:p-7 w-full max-w-full overflow-hidden">
         <SettingsPageHeader tabId={activeTab} />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          >
 
         {activeTab === 'overview' && allowedTabIds.includes('overview') && (
           <SettingsOverviewTab
@@ -2197,6 +1901,8 @@ export default function SettingsView({
         {activeTab === 'appearance' && <AppearanceLayoutSelector showToast={showToast} />}
 
         {activeTab === 'currency' && <SettingsCurrencyTab showToast={showToast} />}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Modular Audit & Relink Modals */}
@@ -2248,74 +1954,12 @@ export default function SettingsView({
         handleExecuteRelink={handleExecuteRelink}
       />
 
-      {bulkRelinkModal.isOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
-          onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
-        >
-          <div
-            className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-md overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 text-slate-900 flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-slate-900">
-                  Réassigner en masse ({bulkRelinkModal.entityType === 'preventive' ? 'Tâches Préventives' : 'Interventions Correctives'})
-                </h4>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Sélectionnez la machine active cible pour rattacher les éléments orphelins
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
-                className="text-slate-400 hover:text-slate-700 text-xs font-bold px-2 py-1 rounded-lg hover:bg-slate-200/60 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-            <form onSubmit={handleConfirmBulkRelink} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Machine Active Cible
-                </label>
-                <select
-                  required
-                  value={bulkRelinkModal.targetMachineId}
-                  onChange={(e) =>
-                    setBulkRelinkModal((prev) => ({ ...prev, targetMachineId: e.target.value }))
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-400 text-xs font-semibold text-slate-800 bg-white focus:border-sky-600 focus:ring-2 focus:ring-sky-100 outline-none"
-                >
-                  {filterActiveMachines(machines).map((m: IMachine) => {
-                    const mId = String(m.id_machine_registered || m.id || m.code || '');
-                    return (
-                      <option key={mId} value={mId}>
-                        {mId} — {m.designation || m.nom || 'Machine'}
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setBulkRelinkModal((prev) => ({ ...prev, isOpen: false }))}
-                  className="px-4 py-2 rounded-lg bg-slate-100 border border-slate-400 text-slate-800 hover:bg-slate-200 text-xs font-bold transition cursor-pointer"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 border border-slate-900 text-white text-xs font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)] transition cursor-pointer"
-                >
-                  Confirmer la réassignation
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <BulkRelinkModal
+        modalState={bulkRelinkModal}
+        setModalState={setBulkRelinkModal}
+        machines={machines}
+        onConfirm={handleConfirmBulkRelink}
+      />
 
       {showBackupManagerModal && (
         <BackupManagerModal

@@ -193,9 +193,9 @@ const SETTINGS_TABS_LIST: SettingsTabItem[] = [
 ];
 
 /**
- * Top navigation tab bar for SettingsView.
- * Styled in mature Light Excel UI: Industrial Slate surfaces, crisp dark borders on active cell,
- * and subtle sky-blue active wash.
+ * Mature Light UI Excel navigation tabs for SettingsView.
+ * Pure unboxed icons, hairline slate borders, quiet inactive sheet tabs,
+ * and crisp elevated white active sheets with restrained industrial steel-blue accent.
  */
 export default function SettingsNavTabs({
   activeTab,
@@ -227,40 +227,36 @@ export default function SettingsNavTabs({
         key={tab.id}
         type="button"
         onClick={() => setActiveTab(tab.id)}
-        className={`group relative flex items-center gap-2.5 px-3 py-2.5 min-h-[48px] rounded-lg border text-left transition-all cursor-pointer select-none ${
+        className={`group relative flex items-center gap-3 px-3.5 py-2.5 min-h-[54px] rounded-xl border text-left transition-all duration-150 cursor-pointer select-none ${
           isActive
-            ? 'bg-sky-50/90 border-slate-900 text-slate-950 shadow-[2px_2px_0px_0px_rgba(15,23,42,0.85)]'
-            : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-600'
-        }`}
+            ? 'bg-white border-sky-700/70 ring-1 ring-sky-700/15 text-slate-950 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.08),0_1px_2px_rgba(15,23,42,0.04)]'
+            : 'bg-slate-50/75 hover:bg-white border-slate-200/90 hover:border-slate-300 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.02)] hover:shadow-[0_2px_6px_-1px_rgba(15,23,42,0.06)]'
+        } active:scale-[0.99]`}
       >
-        <div
-          className={`w-8 h-8 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-            isActive
-              ? 'bg-sky-100 text-sky-900 border-slate-800 shadow-2xs'
-              : 'bg-slate-100 text-slate-700 border-slate-300 group-hover:bg-slate-200/80 group-hover:border-slate-500 group-hover:text-slate-900'
+        <Icon
+          className={`w-[18px] h-[18px] shrink-0 transition-colors duration-150 ${
+            isActive ? 'text-sky-700' : 'text-slate-400 group-hover:text-slate-700'
           }`}
-        >
-          <Icon className="w-4 h-4" />
-        </div>
+        />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-1.5">
             <span
-              className={`text-xs font-bold truncate ${
-                isActive ? 'text-slate-950' : 'text-slate-800'
+              className={`text-xs font-bold truncate transition-colors ${
+                isActive ? 'text-slate-950' : 'text-slate-700 group-hover:text-slate-950'
               }`}
             >
               {tab.title[langKey]}
             </span>
             {tab.id === 'matching' && discoveredItemsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-400 shrink-0">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-sky-800 text-white shrink-0">
                 {discoveredItemsCount}
               </span>
             )}
           </div>
           <div
-            className={`text-[11px] truncate mt-0.5 ${
-              isActive ? 'text-sky-900 font-semibold' : 'text-slate-500'
+            className={`text-[11px] truncate mt-0.5 transition-colors ${
+              isActive ? 'text-sky-800 font-medium' : 'text-slate-500'
             }`}
           >
             {tab.sub[langKey]}
@@ -271,41 +267,40 @@ export default function SettingsNavTabs({
   };
 
   return (
-    <div
-      className="space-y-3 bg-slate-100/80 p-3 rounded-xl border border-slate-300"
-      data-testid="settings-nav-tabs"
-    >
+    <div className="space-y-3.5" data-testid="settings-nav-tabs">
       {factoryTabs.length > 0 && (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
-            <Sliders className="w-3.5 h-3.5 text-sky-700" />
-            <span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <Sliders className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
               {language === 'ar'
                 ? 'إعدادات تشغيل المصنع اليومية'
                 : language === 'en'
                   ? 'Daily Factory Operations'
                   : 'Exploitation Usine & Quotidien'}
             </span>
+            <div className="h-px flex-1 bg-slate-200/80" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
             {factoryTabs.map(renderTabButton)}
           </div>
         </div>
       )}
 
       {advancedTabs.length > 0 && (
-        <div className="space-y-1.5 pt-2 border-t border-slate-300/80">
-          <div className="flex items-center gap-1.5 px-1 text-[11px] font-bold uppercase tracking-wider text-slate-700">
-            <Wrench className="w-3.5 h-3.5 text-slate-700" />
-            <span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 px-1">
+            <Wrench className="w-3.5 h-3.5 text-sky-700 shrink-0" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
               {language === 'ar'
                 ? 'أدوات الصيانة المتقدمة والنظام'
                 : language === 'en'
                   ? 'Advanced System & Maintenance Tools'
                   : 'Maintenance Avancée & Diagnostic Système'}
             </span>
+            <div className="h-px flex-1 bg-slate-200/80" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
             {advancedTabs.map(renderTabButton)}
           </div>
         </div>

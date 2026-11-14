@@ -15,12 +15,13 @@ import {
   Link2,
 } from 'lucide-react';
 import SyncButtons from '../../../components/common/SyncButtons';
+import Action3DButton from '../../../components/common/Action3DButton';
 import {
   networkConfigService,
   type NetworkHostInfo,
   type NetworkNodeMode,
 } from '../../../../services/networkConfigService';
-import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+import { SettingsSectionCard, SETTINGS_BUTTON_STYLES, SETTINGS_INPUT_CLASS } from './settingsUi';
 
 /**
  * Shared Network Folder, Auto-Write Mirroring, LAN Host / Client Mode & Polling Interval Configuration.
@@ -153,15 +154,15 @@ export default function SettingsDirectoryTab({
       {/* 1. Explicit Server Sync Card (gmao_state.json) */}
       <SyncButtons showToast={showToast} />
 
-      {/* 2. Multi-Station LAN & Mobile Field Architecture (Light Industrial Card) */}
+      {/* 2. Multi-Station LAN & Mobile Field Architecture */}
       <SettingsSectionCard
         title="Architecture Multi-Postes LAN & Terminaux Mobiles (Wi-Fi Usine)"
         description="Connectez les tablettes/smartphones des techniciens et les PC secondaires au serveur hôte de l'usine sur le réseau local, sans cloud externe."
-        icon={<Server className="w-4 h-4" />}
+        icon={<Server />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${
                 sseConnected
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   : 'bg-amber-50 text-amber-700 border-amber-200'
@@ -190,23 +191,19 @@ export default function SettingsDirectoryTab({
               <button
                 type="button"
                 onClick={() => handleSwitchNodeMode('HOST')}
-                className={`p-3.5 rounded-lg border text-left transition cursor-pointer flex items-start gap-3 ${
+                className={`p-4 rounded-xl border text-left transition-all duration-150 cursor-pointer flex items-start gap-3 ${
                   nodeMode === 'HOST'
-                    ? 'bg-sky-50/90 border-slate-900 text-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,0.85)]'
-                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-600'
+                    ? 'bg-white border-sky-700/75 text-slate-950 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.08)] ring-1 ring-sky-700/15'
+                    : 'bg-slate-50/75 border-slate-200/90 text-slate-700 hover:bg-white hover:border-slate-300'
                 }`}
               >
-                <div
-                  className={`p-2 rounded-md border shrink-0 ${
-                    nodeMode === 'HOST'
-                      ? 'bg-sky-600 text-white border-slate-900'
-                      : 'bg-slate-100 text-slate-700 border-slate-300'
+                <Server
+                  className={`w-5 h-5 shrink-0 mt-0.5 ${
+                    nodeMode === 'HOST' ? 'text-sky-700' : 'text-slate-400'
                   }`}
-                >
-                  <Server className="w-4 h-4" />
-                </div>
+                />
                 <div>
-                  <div className="text-xs font-bold flex items-center gap-1.5">
+                  <div className="text-xs font-extrabold flex items-center gap-1.5">
                     <span>Poste Hôte Principal (Serveur)</span>
                     {nodeMode === 'HOST' && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-sky-700 shrink-0" />
@@ -221,23 +218,19 @@ export default function SettingsDirectoryTab({
               <button
                 type="button"
                 onClick={() => handleSwitchNodeMode('LAN_CLIENT')}
-                className={`p-3.5 rounded-lg border text-left transition cursor-pointer flex items-start gap-3 ${
+                className={`p-4 rounded-xl border text-left transition-all duration-150 cursor-pointer flex items-start gap-3 ${
                   nodeMode === 'LAN_CLIENT'
-                    ? 'bg-sky-50/90 border-slate-900 text-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,0.85)]'
-                    : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-600'
+                    ? 'bg-white border-sky-700/75 text-slate-950 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.08)] ring-1 ring-sky-700/15'
+                    : 'bg-slate-50/75 border-slate-200/90 text-slate-700 hover:bg-white hover:border-slate-300'
                 }`}
               >
-                <div
-                  className={`p-2 rounded-md border shrink-0 ${
-                    nodeMode === 'LAN_CLIENT'
-                      ? 'bg-sky-600 text-white border-slate-900'
-                      : 'bg-slate-100 text-slate-700 border-slate-300'
+                <Globe
+                  className={`w-5 h-5 shrink-0 mt-0.5 ${
+                    nodeMode === 'LAN_CLIENT' ? 'text-sky-700' : 'text-slate-400'
                   }`}
-                >
-                  <Globe className="w-4 h-4" />
-                </div>
+                />
                 <div>
-                  <div className="text-xs font-bold flex items-center gap-1.5">
+                  <div className="text-xs font-extrabold flex items-center gap-1.5">
                     <span>Poste Client / Terminal LAN</span>
                     {nodeMode === 'LAN_CLIENT' && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-sky-700 shrink-0" />
@@ -252,14 +245,14 @@ export default function SettingsDirectoryTab({
 
             {/* Detected Network Interfaces & URLs */}
             {nodeMode === 'HOST' ? (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Wifi className="w-4 h-4 text-emerald-600" />
                     <span>Interfaces Réseau IPv4 Détectées sur l&apos;Hôte</span>
                   </div>
                   {hostInfo?.hostname && (
-                    <span className="text-[11px] font-mono text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    <span className="text-[11px] font-mono text-slate-600 bg-white px-2.5 py-0.5 rounded-full border border-slate-200">
                       Machine : {hostInfo.hostname} (v{hostInfo.version || 1})
                     </span>
                   )}
@@ -272,10 +265,10 @@ export default function SettingsDirectoryTab({
                         key={`${iface.name}-${iface.address}`}
                         type="button"
                         onClick={() => handleSaveCustomIp(iface.address)}
-                        className={`px-2.5 py-1 rounded-md text-xs font-mono border transition cursor-pointer flex items-center gap-1.5 ${
+                        className={`px-3 py-1.5 rounded-full text-xs font-mono border transition-all cursor-pointer flex items-center gap-1.5 ${
                           effectiveLanIp === iface.address
-                            ? 'bg-sky-50 border-slate-900 text-slate-900 font-bold shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
-                            : 'bg-white border-slate-300 text-slate-700 hover:border-slate-600'
+                            ? 'bg-white border-sky-700/75 text-slate-950 font-bold ring-1 ring-sky-700/15 shadow-2xs'
+                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
                         }`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -302,34 +295,35 @@ export default function SettingsDirectoryTab({
                       value={customIpInput}
                       onChange={(e) => handleSaveCustomIp(e.target.value)}
                       placeholder={hostInfo?.primaryIp || 'Ex: 192.168.1.50'}
-                      className="w-full px-3 py-2 rounded-lg bg-white border border-slate-400 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                      className={`${SETTINGS_INPUT_CLASS} bg-white font-mono`}
                     />
                   </div>
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
                       Lien Direct Mobile Terrain (QR)
                     </label>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <input
                         type="text"
                         readOnly
                         value={mobileLanUrl}
-                        className="w-full px-3 py-2 rounded-lg bg-white border border-slate-300 text-xs font-mono text-sky-800 font-semibold select-all"
+                        className={`${SETTINGS_INPUT_CLASS} bg-white font-mono text-sky-900 select-all`}
                       />
-                      <button
-                        type="button"
+                      <Action3DButton
+                        variant="circle"
+                        color="sky"
+                        icon={Copy}
                         onClick={() => handleCopyUrl(mobileLanUrl, 'Mobile Terrain')}
-                        className="p-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-400 transition cursor-pointer shrink-0"
                         title="Copier le lien Mobile"
-                      >
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
+                        ariaLabel="Copier le lien Mobile"
+                        className="!w-9 !h-9"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-300 space-y-3">
+              <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 space-y-3">
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                   <Globe className="w-4 h-4 text-sky-700" />
                   <span>Connexion au Serveur Hôte Distant (LAN)</span>
@@ -347,7 +341,7 @@ export default function SettingsDirectoryTab({
                     value={remoteHostInput}
                     onChange={(e) => setRemoteHostInput(e.target.value)}
                     placeholder="http://192.168.1.50:3000"
-                    className="flex-1 px-3.5 py-2 rounded-lg bg-white border border-slate-400 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
+                    className={`${SETTINGS_INPUT_CLASS} flex-1 bg-white font-mono`}
                   />
                   <button
                     type="button"
@@ -362,8 +356,8 @@ export default function SettingsDirectoryTab({
           </div>
 
           {/* Right Column: Offline SVG QR Code Generator for Field Technicians */}
-          <div className="lg:col-span-5 bg-slate-50 rounded-xl p-4 border border-slate-300 flex flex-col sm:flex-row items-center gap-4">
-            <div className="bg-white p-3 rounded-lg shadow-2xs border border-slate-400 shrink-0">
+          <div className="lg:col-span-5 bg-slate-50/70 rounded-2xl p-4 border border-slate-200/80 flex flex-col sm:flex-row items-center gap-4">
+            <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-200 shrink-0">
               <svg
                 viewBox={`0 0 ${qrMatrix.length} ${qrMatrix.length}`}
                 className="w-28 h-28"
@@ -389,7 +383,7 @@ export default function SettingsDirectoryTab({
             </div>
 
             <div className="space-y-2.5 text-center sm:text-left min-w-0 flex-1">
-              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-900">
+              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900">
                 <QrCode className="w-4 h-4 text-sky-700" />
                 <span>Accès Rapide Techniciens (Wi-Fi Local)</span>
               </div>
@@ -397,34 +391,34 @@ export default function SettingsDirectoryTab({
                 Connectez le smartphone ou la tablette au Wi-Fi de l&apos;usine pour ouvrir directement l&apos;interface terrain <b className="text-slate-900">Mobile GMAO</b>.
               </p>
 
-              <div className="flex items-center justify-center sm:justify-start gap-1.5">
+              <div className="flex items-center justify-center sm:justify-start gap-2">
                 <button
                   type="button"
                   onClick={() => setQrTargetMode('mobile')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border ${
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border ${
                     qrTargetMode === 'mobile'
-                      ? 'bg-sky-600 text-white border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      ? 'bg-white text-slate-950 border-sky-700/75 ring-1 ring-sky-700/15 shadow-[0_1px_3px_rgba(15,23,42,0.08)]'
+                      : 'bg-white/70 text-slate-600 border-slate-200 hover:bg-white hover:border-slate-300'
                   }`}
                 >
-                  <Smartphone className="w-3 h-3" />
+                  <Smartphone className={`w-3 h-3 ${qrTargetMode === 'mobile' ? 'text-sky-700' : 'text-slate-400'}`} />
                   <span>Vue Mobile (#mobile)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setQrTargetMode('desktop')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition cursor-pointer flex items-center gap-1 border ${
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-150 cursor-pointer flex items-center gap-1.5 border ${
                     qrTargetMode === 'desktop'
-                      ? 'bg-sky-600 text-white border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
-                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                      ? 'bg-white text-slate-950 border-sky-700/75 ring-1 ring-sky-700/15 shadow-[0_1px_3px_rgba(15,23,42,0.08)]'
+                      : 'bg-white/70 text-slate-600 border-slate-200 hover:bg-white hover:border-slate-300'
                   }`}
                 >
-                  <Server className="w-3 h-3" />
+                  <Server className={`w-3 h-3 ${qrTargetMode === 'desktop' ? 'text-sky-700' : 'text-slate-400'}`} />
                   <span>Vue PC Complète</span>
                 </button>
               </div>
 
-              <div className="text-[11px] font-mono text-sky-800 font-semibold truncate bg-white px-2.5 py-1.5 rounded-lg border border-slate-300">
+              <div className="text-[11px] font-mono text-sky-900 font-semibold truncate bg-white px-3 py-1.5 rounded-xl border border-slate-200">
                 {activeQrUrl}
               </div>
             </div>
@@ -436,15 +430,15 @@ export default function SettingsDirectoryTab({
       <SettingsSectionCard
         title="Liaison du Fichier Miroir Excel (.xlsx) & Synchronisation"
         description="Associez un fichier Excel local via l'API File System du navigateur ou définissez la cadence de rafraîchissement multi-postes."
-        icon={<FolderSync className="w-4 h-4" />}
+        icon={<FolderSync />}
         headerRight={
           linkedFileName ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
               <CheckCircle2 className="w-3.5 h-3.5" />
               Fichier lié : <span className="font-mono">{linkedFileName}</span>
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
               Aucun fichier local lié en direct
             </span>
           )
@@ -470,13 +464,13 @@ export default function SettingsDirectoryTab({
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
               Référence du Dossier Partagé Usine (Indicatif / Documentation Équipe)
             </label>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col sm:flex-row gap-2.5">
               <input
                 type="text"
                 placeholder="Ex: \\SERVEUR-USINE\GMAO_Partage\ ou Z:\Maintenance_2026\"
                 value={sharedFolderPath}
                 onChange={(e) => setSharedFolderPath(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-400 rounded-lg px-3.5 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-sky-600 focus:bg-white transition"
+                className={`${SETTINGS_INPUT_CLASS} flex-1 font-mono`}
               />
               {onDirectLink && (
                 <button
@@ -499,7 +493,7 @@ export default function SettingsDirectoryTab({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            <div className="p-4 rounded-xl border border-slate-300 bg-slate-50/70 space-y-2">
+            <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-2">
               <label className="flex items-center justify-between cursor-pointer">
                 <span className="text-xs font-bold text-slate-800">
                   Écriture Miroir Excel Automatique
@@ -508,7 +502,7 @@ export default function SettingsDirectoryTab({
                   type="checkbox"
                   checked={autoWriteExcel}
                   onChange={(e) => setAutoWriteExcel(e.target.checked)}
-                  className="rounded border-slate-400 text-sky-600 focus:ring-sky-500 w-4 h-4 cursor-pointer"
+                  className="rounded border-slate-300 text-sky-700 focus:ring-sky-600 w-4 h-4 cursor-pointer"
                 />
               </label>
               <p className="text-[11px] text-slate-500 leading-relaxed">
@@ -516,16 +510,16 @@ export default function SettingsDirectoryTab({
               </p>
             </div>
 
-            <div className="p-4 rounded-xl border border-slate-300 bg-slate-50/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <div className="p-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-sky-700" />
                   Fréquence de Synchronisation LAN
                 </span>
                 <select
                   value={pollingInterval}
                   onChange={(e) => setPollingInterval(e.target.value)}
-                  className="bg-white border border-slate-400 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-600"
+                  className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100"
                 >
                   <option value="5s">Temps Réel (5 sec)</option>
                   <option value="10s">Rapide (10 sec)</option>

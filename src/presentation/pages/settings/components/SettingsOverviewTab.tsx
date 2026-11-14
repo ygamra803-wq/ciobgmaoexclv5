@@ -114,6 +114,15 @@ export default function SettingsOverviewTab({
   const effectiveQuotaMB = ceilingMB;
   const effectivePercent = Math.min(100, Number(((totalUsedMB / effectiveQuotaMB) * 100).toFixed(2)));
 
+  const metricTiles = [
+    { label: 'Articles PDR', count: effectiveRawStockCount, icon: Database },
+    { label: 'Mouvements', count: effectiveMouvementsCount, icon: Layers },
+    { label: 'Machines', count: effectiveMachinesCount, icon: Wrench },
+    { label: 'Zones', count: effectiveZonesCount, icon: MapPin },
+    { label: 'Intervenants', count: effectiveTechniciansCount, icon: Users },
+    { label: 'Tâches Prév.', count: effectivePreventiveCount, icon: Calendar },
+  ];
+
   return (
     <div className="space-y-6">
       {/* 1. Storage Engine & Volume Metrics */}
@@ -121,9 +130,9 @@ export default function SettingsOverviewTab({
         <SettingsSectionCard
           title="Moteur de Stockage Hybride (L1 + L2 IndexedDB)"
           description="Allocation dynamique de la mémoire locale et protection contre l'éviction navigateur."
-          icon={<HardDrive className="w-4 h-4" />}
+          icon={<HardDrive />}
           headerRight={
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80">
               <Sparkles className="w-3 h-3" />
               Capacité Étendue ({ceilingMB >= 1024 ? `${ceilingMB / 1024} Go` : `${ceilingMB} Mo`})
             </span>
@@ -139,21 +148,21 @@ export default function SettingsOverviewTab({
                 </span>
                 <span
                   className={`font-mono ${
-                    effectivePercent > 80 ? 'text-rose-600' : 'text-sky-700'
+                    effectivePercent > 80 ? 'text-rose-600' : 'text-sky-800'
                   }`}
                 >
                   {effectivePercent}% sur{' '}
                   {ceilingMB >= 1024 ? `${ceilingMB / 1024} Go` : `${ceilingMB} Mo`}
                 </span>
               </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-300">
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200/80">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     effectivePercent > 80
                       ? 'bg-rose-500'
                       : effectivePercent > 50
                         ? 'bg-amber-500'
-                        : 'bg-sky-600'
+                        : 'bg-sky-700'
                   }`}
                   style={{ width: `${Math.max(2, Math.min(100, effectivePercent))}%` }}
                 />
@@ -161,23 +170,23 @@ export default function SettingsOverviewTab({
             </div>
 
             {/* Tier Selector */}
-            <div className="bg-slate-50 rounded-lg p-3 border border-slate-300 space-y-2">
-              <div className="flex items-center justify-between">
+            <div className="bg-slate-50/70 rounded-2xl p-3.5 border border-slate-200/80 space-y-2.5">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
                   Plafond d&apos;Allocation Stockage (IndexedDB L2)
                 </span>
                 {idbInfo.isPersisted ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-300">
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                     <Lock className="w-2.5 h-2.5" /> Stockage Persistant Verrouillé
                   </span>
                 ) : (
                   <span className="text-[10px] font-mono text-slate-500">
-                     Quota Navigateur :{' '}
+                    Quota Navigateur :{' '}
                     {idbInfo.quotaMB > 0 ? `${Math.round(idbInfo.quotaMB)} Mo dispo` : 'Auto'}
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { label: '50 Mo', val: 50 },
                   { label: '250 Mo', val: 250 },
@@ -189,10 +198,10 @@ export default function SettingsOverviewTab({
                     type="button"
                     disabled={requestingPersist}
                     onClick={() => handleCeilingChange(tier.val)}
-                    className={`py-1.5 px-2 rounded-md text-xs font-bold transition border cursor-pointer ${
+                    className={`py-2 px-2.5 rounded-xl text-xs font-semibold transition-all duration-150 border cursor-pointer ${
                       ceilingMB === tier.val
-                        ? 'bg-sky-600 text-white border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,0.85)]'
-                        : 'bg-white text-slate-700 border-slate-300 hover:border-slate-700 hover:bg-sky-50/50'
+                        ? 'bg-white text-slate-950 border-sky-700/75 ring-1 ring-sky-700/15 shadow-[0_1px_3px_rgba(15,23,42,0.08)]'
+                        : 'bg-white/70 text-slate-600 border-slate-200/90 hover:bg-white hover:border-slate-300 hover:text-slate-900'
                     }`}
                   >
                     {tier.label}
@@ -202,16 +211,16 @@ export default function SettingsOverviewTab({
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-300">
+              <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
                 <div className="text-[11px] text-slate-500 font-medium">L1 Cache Rapide</div>
-                <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
+                <div className="text-sm font-bold text-slate-800 mt-1 flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>localStorage ({effectiveStorageKb} KB)</span>
                 </div>
               </div>
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-300">
+              <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80">
                 <div className="text-[11px] text-slate-500 font-medium">L2 Base Massive</div>
-                <div className="text-sm font-bold text-slate-800 mt-0.5 flex items-center gap-1.5">
+                <div className="text-sm font-bold text-slate-800 mt-1 flex items-center gap-2">
                   <Database className="w-4 h-4 text-sky-700 shrink-0" />
                   <span>IndexedDB ({idbInfo.activeTier})</span>
                 </div>
@@ -223,80 +232,26 @@ export default function SettingsOverviewTab({
         <SettingsSectionCard
           title="Volumétrie des Référentiels & Données (SSOT)"
           description="Décompte en temps réel des enregistrements actifs stockés dans la base locale."
-          icon={<Layers className="w-4 h-4" />}
+          icon={<Layers />}
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <Database className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectiveRawStockCount}
+            {metricTiles.map((tile) => {
+              const TileIcon = tile.icon;
+              return (
+                <div
+                  key={tile.label}
+                  className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:border-slate-300 hover:bg-white transition-all duration-150 flex items-center gap-3.5"
+                >
+                  <TileIcon className="w-5 h-5 text-sky-700 shrink-0" />
+                  <div>
+                    <div className="text-lg font-black text-slate-900 font-mono leading-none">
+                      {tile.count}
+                    </div>
+                    <div className="text-[11px] text-slate-500 font-semibold mt-1">{tile.label}</div>
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Articles PDR</div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <Layers className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectiveMouvementsCount}
-                </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Mouvements</div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <Wrench className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectiveMachinesCount}
-                </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Machines</div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <MapPin className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectiveZonesCount}
-                </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Zones</div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <Users className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectiveTechniciansCount}
-                </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Intervenants</div>
-              </div>
-            </div>
-
-            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-300 flex items-center gap-3">
-              <div className="p-2 rounded-md bg-white text-slate-800 border border-slate-400 shadow-2xs">
-                <Calendar className="w-4 h-4 text-sky-700" />
-              </div>
-              <div>
-                <div className="text-lg font-extrabold text-slate-900 font-mono leading-none">
-                  {effectivePreventiveCount}
-                </div>
-                <div className="text-[11px] text-slate-600 font-semibold mt-1">Tâches Prév.</div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </SettingsSectionCard>
       </div>
@@ -306,7 +261,7 @@ export default function SettingsOverviewTab({
         testId="a3-operational-snapshot-card"
         title="Sauvegarde Opérationnelle Instantanée (Snapshot JSON Complet)"
         description="Téléchargez une copie complète de toutes les tables de l'usine (Machines, Stock PDR, Mouvements, Bons de Travail, Préventif, Entrepôt) en un clic avant toute opération majeure."
-        icon={<ShieldAlert className="w-4 h-4" />}
+        icon={<ShieldAlert />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2.5">
             <button
@@ -340,7 +295,7 @@ export default function SettingsOverviewTab({
           </div>
         }
       >
-        <div className="text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+        <div className="text-xs text-slate-600 flex flex-wrap items-center justify-between gap-2 bg-slate-50/70 px-4 py-3 rounded-xl border border-slate-200/80">
           <span>
             Format d&apos;archive standardisé compatible avec la restauration locale et le serveur LAN.
           </span>
@@ -354,7 +309,7 @@ export default function SettingsOverviewTab({
       <SettingsSectionCard
         title="Générateur de Classeur Miroir Excel (.xlsx)"
         description="Exportez un classeur Excel structuré (15 feuilles reliées par formules natives) pour l'archivage externe ou l'audit comptable."
-        icon={<FileSpreadsheet className="w-4 h-4" />}
+        icon={<FileSpreadsheet />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2.5">
             <button
@@ -377,7 +332,7 @@ export default function SettingsOverviewTab({
           </div>
         }
       >
-        <div className="text-xs text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-200/80">
+        <div className="text-xs text-slate-600 bg-slate-50/70 px-4 py-3 rounded-xl border border-slate-200/80">
           Note d&apos;architecture : Le fichier Excel est un miroir d&apos;import/export et de sauvegarde ; la source de vérité (SSOT) demeure la base transactionnelle de l&apos;application.
         </div>
       </SettingsSectionCard>

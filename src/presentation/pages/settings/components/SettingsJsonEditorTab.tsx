@@ -12,7 +12,6 @@ import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
  * Raw JSON Database Inspector & Editor Tab.
- * Styled as a clean industrial code inspector inside a warning-toned SettingsSectionCard.
  */
 export default function SettingsJsonEditorTab({
   jsonTarget,
@@ -41,14 +40,14 @@ export default function SettingsJsonEditorTab({
         tone="warning"
         title="Inspecteur & Éditeur JSON Brut (Maintenance Avancée SSOT)"
         description="Outil d'inspection et de correction directe des collections JSON stockées dans le magasin central. Toute écriture met à jour immédiatement la source de vérité (DataGateway)."
-        icon={<FileSpreadsheet className="w-4 h-4" />}
+        icon={<FileSpreadsheet />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <select
                 value={jsonTarget}
                 onChange={(e) => setJsonTarget(e.target.value)}
-                className="appearance-none bg-white border border-slate-400 rounded-lg pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 transition cursor-pointer"
+                className="appearance-none bg-white border border-slate-200 rounded-xl pl-3.5 pr-9 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 transition cursor-pointer"
               >
                 <optgroup label="1. Stock PDR & Mouvements">
                   <option value="rawStock">Articles &amp; Stock PDR (rawStock)</option>
@@ -90,7 +89,7 @@ export default function SettingsJsonEditorTab({
                 className={SETTINGS_BUTTON_STYLES.secondary}
                 title="Télécharger cette collection au format .json"
               >
-                <Download className="w-4 h-4 text-slate-600" />
+                <Download className="w-4 h-4 text-slate-500" />
                 <span>Exporter .json</span>
               </button>
             )}
@@ -120,7 +119,7 @@ export default function SettingsJsonEditorTab({
         }
       >
         <div className="space-y-4">
-          <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200/90 text-xs text-amber-900 flex items-start gap-2.5">
+          <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold">Précaution d&apos;intégrité :</span> Modifiez uniquement les champs dont vous maîtrisez le schéma relationnel. Exportez un Snapshot JSON depuis la <b>Vue d&apos;ensemble</b> avant toute modification manuelle.
@@ -128,15 +127,15 @@ export default function SettingsJsonEditorTab({
           </div>
 
           {jsonError && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-mono font-bold flex items-center gap-2">
+            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-mono font-bold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>Erreur de syntaxe JSON : {jsonError}</span>
             </div>
           )}
 
           {jsonTarget === 'users' && (
-            <div className="p-3.5 bg-sky-50 border border-sky-300 rounded-lg text-slate-900 text-xs font-bold flex items-center gap-2">
-              <Lock className="w-4 h-4 text-sky-700 shrink-0" />
+            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl text-slate-900 text-xs font-bold flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
               <span>
                 Sécurité : Les comptes et mots de passe sont chiffrés dans le coffre-fort AES-256 (onglet{' '}
                 <b>Sécurité &amp; Comptes</b>). Cet aperçu est en lecture seule.
@@ -144,15 +143,15 @@ export default function SettingsJsonEditorTab({
             </div>
           )}
 
-          <div className="rounded-lg border border-slate-400 overflow-hidden bg-white shadow-2xs">
-            <div className="bg-slate-100 px-4 py-2.5 border-b border-slate-300 flex items-center justify-between">
+          <div className="rounded-2xl border border-slate-200 overflow-hidden bg-white shadow-xs">
+            <div className="bg-slate-50/80 px-4 py-2.5 border-b border-slate-200/80 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-slate-700">Collection Active :</span>
-                <span className="px-2 py-0.5 rounded bg-white border border-slate-400 text-xs font-mono font-bold text-sky-800">
+                <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-xs font-mono font-bold text-sky-800">
                   {jsonTarget}.json
                 </span>
                 {isJsonModified && (
-                  <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">
                     Modifié (non sauvegardé)
                   </span>
                 )}
@@ -179,7 +178,7 @@ export default function SettingsJsonEditorTab({
                 handleChangeText(e.target.value);
               }}
               spellCheck={false}
-              className={`w-full h-[460px] p-4 bg-slate-50 text-slate-800 font-mono text-xs leading-relaxed focus:outline-none focus:bg-white resize-y ${
+              className={`w-full h-[460px] p-4 bg-slate-50/40 text-slate-800 font-mono text-xs leading-relaxed focus:outline-none focus:bg-white resize-y ${
                 jsonTarget === 'users' ? 'opacity-75 cursor-not-allowed' : ''
               }`}
             />
