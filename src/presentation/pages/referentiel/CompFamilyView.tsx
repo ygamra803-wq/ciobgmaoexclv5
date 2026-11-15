@@ -519,7 +519,7 @@ export default function CompFamilyView({
             <button
               onClick={handleExportExcel}
               className="h-8 px-3 rounded-xl border border-emerald-200/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title={t('common.export_excel_title', 'Exporter le tableau vers Excel / CSV')}
+              title={`${t('common.export_excel_title', 'Exporter le tableau vers Excel / CSV')} — Type B : Export externe (non réimportable)`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
               <span>{t('components.family.export_excel', 'Export Excel')}</span>

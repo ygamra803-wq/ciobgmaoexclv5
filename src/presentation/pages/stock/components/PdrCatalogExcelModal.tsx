@@ -12,13 +12,19 @@ import {
 } from 'lucide-react';
 import type { IStockItem, PdrGroup, StockType } from '../../../../types/domain';
 import {
-  downloadPdrCatalogWorkbook,
   parsePdrCatalogWorkbookBuffer,
-  validateAndReconcilePdrCatalogImport,
-  applyPdrCatalogImportToStore,
   type PdrCatalogImportMode,
   type PdrCatalogImportReport,
 } from '../../../../services/pdrHierarchyExcelService';
+import {
+  exportRefPdrBundle,
+  validateAndCommitRefPdrBundle,
+} from '../../../../services/import/unifiedImportPipeline';
+import {
+  downloadTypeAExcelWorkbook,
+  parseTypeAExcelWorkbook,
+} from '../../../../services/import/typeAExcelBridge';
+import type { RefPdrBundleInput } from '../../../../services/import/types/unifiedImportTypes';
 import { useAuth } from '../../../../context/AuthContext';
 
 interface PdrCatalogExcelModalProps {
@@ -37,11 +43,13 @@ export default function PdrCatalogExcelModal({
   pdrGroups = [],
   types = [],
   rawStock = [],
-  mouvements = [],
+  mouvements: _mouvements = [],
   canEditStock,
 }: PdrCatalogExcelModalProps) {
   const { user } = (useAuth() || {}) as any;
   const actorRole = String(user?.role || 'ADMIN').trim().toUpperCase();
+  const actorId = String(user?.id || user?.username || 'ADMIN');
+  const actorName = String(user?.name || user?.username || 'Stock Modal Pipeline');
   const isAdmin = actorRole === 'ADMIN';
 
   const [mode, setMode] = useState<PdrCatalogImportMode>('MERGE');
@@ -60,19 +68,17 @@ export default function PdrCatalogExcelModal({
 
   const handleExportLiveCatalog = () => {
     try {
-      const fileName = downloadPdrCatalogWorkbook({
-        pdrGroups,
-        types,
-        rawStock,
-      });
+      const bundle = exportRefPdrBundle();
+      const fileName = `CIOB_REF_PDR_${new Date().toISOString().slice(0, 10)}_TypeA.xlsx`;
+      downloadTypeAExcelWorkbook(fileName, 'REF_PDR', bundle);
       setStatusMessage({
         type: 'success',
-        text: `Catalogue PDR exporté avec succès (${fileName}) : ${pdrGroups.length} groupe(s), ${types.length} type(s), ${rawStock.length} article(s).`,
+        text: `Catalogue PDR Type A exporté avec succès (${fileName}) : ${pdrGroups.length} groupe(s), ${types.length} type(s), ${rawStock.length} article(s).`,
       });
     } catch (err: any) {
       setStatusMessage({
         type: 'error',
-        text: `Erreur lors de l'export Excel : ${err?.message || 'Erreur inconnue'}`,
+        text: `Erreur lors de l'export Type A (.xlsx) : ${err?.message || 'Erreur inconnue'}`,
       });
     }
   };
@@ -95,67 +101,137 @@ export default function PdrCatalogExcelModal({
 
     try {
       const buffer = await file.arrayBuffer();
-      const rawSheets = parsePdrCatalogWorkbookBuffer(buffer);
-      const validationReport = validateAndReconcilePdrCatalogImport(rawSheets, {
+      const parsedTypeA = parseTypeAExcelWorkbook(buffer);
+      let refPdrPayload: RefPdrBundleInput;
+
+      if (parsedTypeA.ok) {
+        if (parsedTypeA.bundleType !== 'REF_PDR') {
+          setReport(null);
+          setStatusMessage({
+            type: 'error',
+            text: `Classeur refusé : ce fichier Type A correspond à '${parsedTypeA.bundleType}' et non à 'REF_PDR'.`,
+          });
+          return;
+        }
+        refPdrPayload = parsedTypeA.payload as RefPdrBundleInput;
+      } else {
+        const rawSheets = parsePdrCatalogWorkbookBuffer(buffer);
+        refPdrPayload = {
+          bundleType: 'REF_PDR',
+          groups: (rawSheets.groups || []).map((g: any) => ({
+            code_group: String(g.code || '').trim(),
+            libelle: String(g.libelle || ''),
+            description: g.description != null ? String(g.description) : undefined,
+            domaine_technique: g.domaine_technique != null ? String(g.domaine_technique) : undefined,
+            default_policy_tags: g.default_policy_tags,
+            sort_order: typeof g.sort_order === 'number' ? g.sort_order : undefined,
+            is_active: typeof g.is_active === 'boolean' ? g.is_active : undefined,
+          })),
+          types: (rawSheets.types || []).map((t: any) => ({
+            code_type: String(t.code_type || '').trim(),
+            code_group: String(t.group_code || '').trim(),
+            libelle: String(t.libelle || ''),
+            domaine_technique: t.domaine_technique != null ? String(t.domaine_technique) : undefined,
+            is_active: typeof t.is_active === 'boolean' ? t.is_active : undefined,
+          })),
+          items: (rawSheets.items || []).map((it: any) => ({
+            ref: String(it.ref || '').trim(),
+            designation: String(it.designation || ''),
+            code_type: String(it.type_code_or_id || '').trim(),
+            code_group: String(it.group_code || '').trim(),
+            unite_mesure: it.unite_mesure != null ? String(it.unite_mesure) : undefined,
+            criticite: it.criticite != null ? String(it.criticite) : undefined,
+            ref_constructeur: it.ref_constructeur != null ? String(it.ref_constructeur) : undefined,
+            code_equivalents: it.code_equivalents != null ? String(it.code_equivalents) : undefined,
+            delai_appro_jours: typeof it.delai_appro_jours === 'number' ? it.delai_appro_jours : undefined,
+            domaine_technique: it.domaine_technique != null ? String(it.domaine_technique) : undefined,
+            seuil: typeof it.seuil === 'number' ? it.seuil : undefined,
+            emplacement: it.emplacement != null ? String(it.emplacement) : undefined,
+            stockInitial: typeof it.stockInitial === 'number' ? it.stockInitial : null,
+            prix_unitaire: typeof it.prix_unitaire === 'number' ? it.prix_unitaire : undefined,
+            policy_tags: it.policy_tags,
+          })),
+        };
+      }
+
+      const pipelineReport = validateAndCommitRefPdrBundle(refPdrPayload, {
         mode,
+        origin: 'EXCEL',
+        dryRun: false,
         actorRole,
-        hasStockEditPermission: canEditStock || isAdmin,
-        existingGroups: pdrGroups,
-        existingTypes: types,
-        existingStock: rawStock,
-        existingMouvements: mouvements,
+        actorId,
+        actorName,
       });
 
-      setReport(validationReport);
+      const stageGroups = pipelineReport.accepted.find((a) => a.stage === '04_PDR_GROUPS');
+      const stageTypes = pipelineReport.accepted.find((a) => a.stage === '04_PDR_TYPES');
+      const stageItems = pipelineReport.accepted.find((a) => a.stage === '04_PDR_ITEMS');
 
-      const totalMutated = validationReport.created.total + validationReport.updated.total;
+      const createdTotal =
+        (stageGroups?.created || 0) + (stageTypes?.created || 0) + (stageItems?.created || 0);
+      const updatedTotal =
+        (stageGroups?.updated || 0) + (stageTypes?.updated || 0) + (stageItems?.updated || 0);
+      const skippedTotal =
+        (stageGroups?.unchanged || 0) +
+        (stageTypes?.unchanged || 0) +
+        (stageItems?.unchanged || 0);
 
-      if (validationReport.errors.length > 0 && totalMutated === 0) {
+      const modalReport: PdrCatalogImportReport = {
+        success: pipelineReport.success && pipelineReport.committed,
+        mode,
+        created: {
+          groups: stageGroups?.created || 0,
+          types: stageTypes?.created || 0,
+          items: stageItems?.created || 0,
+          total: createdTotal,
+        },
+        updated: {
+          groups: stageGroups?.updated || 0,
+          types: stageTypes?.updated || 0,
+          items: stageItems?.updated || 0,
+          total: updatedTotal,
+        },
+        skipped: {
+          groups: stageGroups?.unchanged || 0,
+          types: stageTypes?.unchanged || 0,
+          items: stageItems?.unchanged || 0,
+          total: skippedTotal,
+        },
+        errors: pipelineReport.rejected.map((r) => ({
+          sheet: (r.stage === '04_PDR_GROUPS'
+            ? 'PDR_GROUPS'
+            : r.stage === '04_PDR_TYPES'
+            ? 'PDR_TYPES'
+            : 'PDR_ITEMS') as any,
+          row: r.row,
+          field: r.identifier,
+          message: `[${r.code}] ${r.message}`,
+        })),
+        nextGroups: pipelineReport.staging?.nextGroups ?? pdrGroups,
+        nextTypes: pipelineReport.staging?.nextTypes ?? types,
+        nextStock: pipelineReport.staging?.nextStock ?? rawStock,
+        nextDesignations: pipelineReport.staging?.nextDesignations ?? [],
+      };
+      setReport(modalReport);
+
+      if (!pipelineReport.success || !pipelineReport.committed) {
         setStatusMessage({
           type: 'error',
-          text: `Échec de l'import : ${validationReport.errors.length} erreur(s) bloquante(s). Aucune modification appliquée.`,
+          text: `Import atomique rejeté via UnifiedImportPipeline : ${pipelineReport.rejected.length} erreur(s) bloquante(s). Aucune modification appliquée.`,
         });
         return;
       }
 
-      if (validationReport.errors.length === 0 && totalMutated > 0) {
-        applyPdrCatalogImportToStore(validationReport);
-        setApplied(true);
-        setStatusMessage({
-          type: 'success',
-          text: `Import ${mode} réussi : ${validationReport.created.total} créé(s), ${validationReport.updated.total} mis à jour (0 erreur).`,
-        });
-      } else if (validationReport.errors.length > 0 && totalMutated > 0) {
-        setStatusMessage({
-          type: 'warning',
-          text: `Validation partielle : ${totalMutated} ligne(s) valide(s) et ${validationReport.errors.length} erreur(s) détectée(s). Vérifiez le rapport ci-dessous avant d'appliquer les lignes valides.`,
-        });
-      } else {
-        setStatusMessage({
-          type: 'warning',
-          text: 'Aucune ligne valide à importer dans le classeur sélectionné.',
-        });
-      }
+      setApplied(true);
+      setStatusMessage({
+        type: 'success',
+        text: `Import Type A (${mode}) validé et engagé via UnifiedImportPipeline : ${createdTotal} créé(s), ${updatedTotal} mis à jour (0 erreur).`,
+      });
     } catch (err: any) {
       setReport(null);
       setStatusMessage({
         type: 'error',
         text: `Impossible de lire le fichier Excel (.xlsx) : ${err?.message || 'Format invalide'}`,
-      });
-    }
-  };
-
-  const handleApplyPartialReport = () => {
-    if (!report) return;
-    const totalMutated = report.created.total + report.updated.total;
-    if (totalMutated === 0) return;
-
-    const ok = applyPdrCatalogImportToStore(report);
-    if (ok) {
-      setApplied(true);
-      setStatusMessage({
-        type: 'success',
-        text: `Lignes valides appliquées au catalogue PDR : ${report.created.total} créé(s), ${report.updated.total} mis à jour (${report.errors.length} ligne(s) en erreur ignorée(s)).`,
       });
     }
   };
@@ -222,11 +298,11 @@ export default function PdrCatalogExcelModal({
             <div className="space-y-1">
               <div className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-600" />
-                <span>1. Exporter le catalogue PDR actif (.xlsx)</span>
+                <span>1. Exporter le catalogue PDR actif (.xlsx — Type A Round-Trip)</span>
               </div>
               <p className="text-xs text-slate-600">
                 Exporte l&apos;état réel du magasin ({pdrGroups.length} groupes, {types.length} types,{' '}
-                {rawStock.length} articles) dans un classeur à 3 feuilles compatible Round-Trip.
+                {rawStock.length} articles) dans un classeur officiel Type A (<code className="font-mono">README_TYPE_A</code> + 3 feuilles).
               </p>
             </div>
             <button
@@ -236,7 +312,7 @@ export default function PdrCatalogExcelModal({
               className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-2 transition shadow-xs cursor-pointer shrink-0"
             >
               <Download className="w-4 h-4" />
-              <span>Exporter catalogue PDR (Groupes / Types / Articles)</span>
+              <span>Exporter catalogue PDR (.XLSX Type A)</span>
             </button>
           </div>
 
@@ -398,17 +474,6 @@ export default function PdrCatalogExcelModal({
                 </div>
               )}
 
-              {!applied && (report.created.total + report.updated.total > 0) && report.errors.length > 0 && (
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="button"
-                    onClick={handleApplyPartialReport}
-                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition cursor-pointer"
-                  >
-                    Appliquer uniquement les {report.created.total + report.updated.total} ligne(s) valide(s)
-                  </button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -416,7 +481,7 @@ export default function PdrCatalogExcelModal({
         {/* Footer */}
         <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <span className="text-[11px] text-slate-500">
-            Contrat <span className="font-mono font-bold text-slate-700">PDR-EXCEL-HIERARCHY-P0</span> • Groupes ➔ Types ➔ Articles (SKU)
+            Contrat <span className="font-mono font-bold text-slate-700">UnifiedImportPipeline (REF_PDR)</span> • Validation atomique tout-ou-rien
           </span>
           <button
             type="button"

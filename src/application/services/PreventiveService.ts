@@ -260,10 +260,12 @@ export class PreventiveService {
     return result;
   }
 
+  /** @deprecated Guarded FK-checked delegation (Type A catalog belongs in PM_CATALOG). */
   static importFromExcel(file: File) {
     return TaskService.importFromExcel(file);
   }
 
+  /** @deprecated Legacy /data/preventive/*.json backdoor blocked (throws LEGACY_BACKDOOR_BLOCKED). */
   static loadFromPublicJson() {
     return TaskService.loadFromPublicJson();
   }

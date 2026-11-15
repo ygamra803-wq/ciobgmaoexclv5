@@ -642,21 +642,37 @@ export default function SettingsInjectionTab({
           </div>
         }
       >
-        <div className="mb-3.5 px-3.5 py-2.5 rounded-xl bg-sky-50/80 border border-sky-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-2">
-          <span>
-            <b>Contrat Type A (Round-Trip .JSON &amp; .XLSX) :</b> Modèles officiels{' '}
-            <code className="font-mono">REF_PARC</code>,{' '}
-            <code className="font-mono">REF_PERSONNEL</code>,{' '}
-            <code className="font-mono">ASSETS_MACHINES</code>,{' '}
-            <code className="font-mono">REF_PDR</code>,{' '}
-            <code className="font-mono">PM_CATALOG</code>,{' '}
-            <code className="font-mono">ENTREPOT_BOM</code> &amp;{' '}
-            <code className="font-mono">CM_CATALOG</code> (onglet verrouillé{' '}
-            <code className="font-mono">README_TYPE_A</code>).
-          </span>
-          <span className="font-mono text-[10px] text-slate-500">
-            Type B (Exports tableaux/mouvements) = Consultation externe uniquement
-          </span>
+        <div
+          data-testid="ingestion-order-banner"
+          className="mb-3.5 px-3.5 py-3 rounded-xl bg-sky-50/85 border border-sky-200/90 text-[11px] text-slate-800 space-y-2"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-extrabold text-sky-950">
+              Ordre d&apos;ingestion recommandé (Initialisation Usine · Contrat Type A .JSON &amp; .XLSX) :
+            </span>
+            <span className="font-mono text-[10px] text-slate-500">
+              Type B (Exports tableaux/mouvements) = Consultation externe uniquement
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1 font-mono text-[10.5px] font-bold text-slate-900">
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">1. REF_PARC</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">2. REF_PERSONNEL</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">3. ASSETS_MACHINES</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">4. REF_PDR</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">5. ENTREPOT_BOM</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">6. PM_CATALOG</span>
+            <span className="text-sky-700">➔</span>
+            <span className="px-2 py-0.5 rounded bg-white border border-sky-200">7. CM_CATALOG</span>
+          </div>
+          <p className="text-[11px] text-slate-700">
+            <b>Règle fermée :</b> Les mouvements de stock (<code className="font-mono">Sortie / Entrée / Ajustement</code>),{' '}
+            <code className="font-mono">Sortie rapide</code>, les Bons de Travail (<code className="font-mono">BT</code>) et les exécutions terrain ne sont <b>jamais</b> importés comme paquets catalogue : ils sont créés uniquement depuis les écrans opérationnels.
+          </p>
         </div>
 
         {effectiveMode === 'REPLACE_CATALOG' && (

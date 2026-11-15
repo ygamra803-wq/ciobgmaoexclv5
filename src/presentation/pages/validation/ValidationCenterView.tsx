@@ -893,8 +893,8 @@ export default function ValidationCenterView({
               variant="circle"
               color="emerald"
               icon={FileSpreadsheet}
-              title="Exporter la file de validation vers Excel (.xlsx)"
-              ariaLabel="Exporter File (.xlsx)"
+              title="Exporter la file de validation vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
+              ariaLabel="Exporter File (.xlsx — Type B)"
               data-testid="vc-export-excel-btn"
               onClick={handleExportValidationQueueExcel}
             />

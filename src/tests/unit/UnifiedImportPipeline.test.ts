@@ -38,6 +38,7 @@ import {
 import { useGmaoStore } from '../../store/useGmaoStore';
 import { executeGuardedGlobalFileImport } from '../../hooks/useAppExcelOperations';
 import PreventiveService from '../../application/services/PreventiveService';
+import { TaskService } from '../../application/services/preventive/TaskService';
 import { ExecutionService } from '../../application/services/preventive/ExecutionService';
 
 function collectProductionFiles(dir: string): string[] {
@@ -1430,6 +1431,87 @@ describe('UnifiedImportPipeline & Backdoor Closure (7 Official Bundles + DEMO_BU
       expect(
         blockedReplace.rejected.filter((r) => r.code === 'REFERENCED_BY_ACTIVE_RECORDS').length
       ).toBe(2);
+    });
+  });
+
+  describe('11. INGEST-GOV-P9 — Gouvernance finale, blocage backdoors legacy et ordre causal', () => {
+    it('blocks TaskService.loadFromPublicJson() legacy backdoor and rejects GLOBAL/orphan machines in TaskService', async () => {
+      await expect(TaskService.loadFromPublicJson()).rejects.toThrow(/LEGACY_BACKDOOR_BLOCKED/);
+
+      expect(() =>
+        TaskService.injectRealData([
+          { id_task: 'T-BAD-1', id_machine: 'GLOBAL', composant: 'Palier', action_code: 'C' },
+        ])
+      ).toThrow(/INTEGRITY_ERROR/);
+
+      const wbTypeA = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wbTypeA,
+        XLSX.utils.json_to_sheet([{ contract: 'TYPE_A_BUNDLE_ROUND_TRIP', bundleType: 'PM_CATALOG' }]),
+        'README_TYPE_A'
+      );
+      const bufTypeA = XLSX.write(wbTypeA, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+      const fileTypeA = { arrayBuffer: async () => bufTypeA };
+      await expect(TaskService.importFromExcel(fileTypeA)).rejects.toThrow(/TYPE_A_REDIRECT/);
+
+      const wbOrphan = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wbOrphan,
+        XLSX.utils.json_to_sheet([{ id_machine: 'UNKNOWN-M99', Composant: 'Broche', Action: 'C' }]),
+        'Plan'
+      );
+      const bufOrphan = XLSX.write(wbOrphan, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+      const fileOrphan = { arrayBuffer: async () => bufOrphan };
+      await expect(TaskService.importFromExcel(fileOrphan)).rejects.toThrow(/introuvable ou archivée/);
+    });
+
+    it('enforces governed UI closures in TabPlanBuilder, SettingsJsonEditorTab, PdrCatalogExcelModal, NexusView, and SettingsInjectionTab', () => {
+      const tabPlanBuilder = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/preventive/components/TabPlanBuilder.tsx'),
+        'utf-8'
+      );
+      expect(tabPlanBuilder).not.toContain('loadFromPublicJson');
+      expect(tabPlanBuilder).not.toContain('Pack Usine JSON');
+      expect(tabPlanBuilder).not.toContain('importFromExcel');
+
+      const settingsJsonTab = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/settings/components/SettingsJsonEditorTab.tsx'),
+        'utf-8'
+      );
+      expect(settingsJsonTab).toContain('readOnly={true}');
+      expect(settingsJsonTab).not.toContain('Appliquer et Sauvegarder JSON');
+      expect(settingsJsonTab).toContain('Type B');
+
+      const settingsView = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/settings/SettingsView.tsx'),
+        'utf-8'
+      );
+      expect(settingsView).toContain('RAW_JSON_OVERWRITE_BLOCKED');
+
+      const pdrModal = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/stock/components/PdrCatalogExcelModal.tsx'),
+        'utf-8'
+      );
+      expect(pdrModal).toContain('validateAndCommitRefPdrBundle');
+      expect(pdrModal).toContain('exportRefPdrBundle');
+      expect(pdrModal).toContain('downloadTypeAExcelWorkbook');
+      expect(pdrModal).not.toContain('handleApplyPartialReport');
+
+      const nexusView = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/system/NexusView.tsx'),
+        'utf-8'
+      );
+      expect(nexusView).toContain('README_TYPE_A');
+      expect(nexusView).toContain('NEXUS_BOM_EXCEL_IMPORT');
+      expect(nexusView).toContain('Exporter BOM (.xlsx — Type B)');
+
+      const settingsInjectionTab = fs.readFileSync(
+        path.resolve(__dirname, '../../presentation/pages/settings/components/SettingsInjectionTab.tsx'),
+        'utf-8'
+      );
+      expect(settingsInjectionTab).toContain('ingestion-order-banner');
+      expect(settingsInjectionTab).toContain('1. REF_PARC');
+      expect(settingsInjectionTab).toContain('7. CM_CATALOG');
     });
   });
 });

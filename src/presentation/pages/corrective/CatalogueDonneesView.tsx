@@ -245,8 +245,8 @@ export default function CatalogueDonneesView({
               color="emerald"
               icon={FileSpreadsheet}
               onClick={handleExportExcel}
-              title={t('corrective.catalogue.export_excel', 'Exporter le Référentiel GMAO (.xlsx)')}
-              ariaLabel="Exporter Excel"
+              title={`${t('corrective.catalogue.export_excel', 'Exporter le Référentiel GMAO (.xlsx)')} — Type B : Export externe (non réimportable ; pour Round-Trip utilisez Paramètres ➔ CM_CATALOG / REF_PERSONNEL)`}
+              ariaLabel="Exporter Excel (Type B)"
             />
 
             {/* 3D Circular Return to Corrective Hub Button */}

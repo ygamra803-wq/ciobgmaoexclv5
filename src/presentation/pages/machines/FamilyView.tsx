@@ -306,10 +306,10 @@ export default function FamilyView({
             <button
               onClick={handleExportExcel}
               className="h-8 px-3 rounded-xl border border-emerald-200/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title={t('common.filters.export_excel')}
+              title="Export externe Type B (consultation uniquement — pour Round-Trip utilisez Paramètres ➔ REF_PARC)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{t('common.filters.export_excel')}</span>
+              <span>{t('common.filters.export_excel')} (Type B)</span>
             </button>
 
             {/* Circular Reset Button */}

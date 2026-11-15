@@ -13,6 +13,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
 import { NexusModals, downloadNexusTemplateExcel, exportNexusBomExcel } from './components/NexusModals';
+import { DataGateway } from '../../../application/DataGateway';
 import type {
   IBlueprint, ICompTemplate, IMachine, IMachineFamily, IMachineTemplate,
   IMouvement, IPartDesignation, IPartType, IStockItem, ITechnician, IWarehouseItem, IZone,
@@ -901,6 +902,13 @@ export default function NexusView({
       try {
         const buffer = evt.target?.result;
         const wb = XLSX.read(buffer, { type: 'array' });
+        if (wb.SheetNames.some((n) => n.trim().toUpperCase() === 'README_TYPE_A')) {
+          showToast?.(
+            'Ce classeur officiel Type A doit être importé via Paramètres ➔ Ingestion Structurée (Mode B).',
+            'error'
+          );
+          return;
+        }
         const sheetName =
           wb.SheetNames.find((n) => n.toUpperCase().includes('BOM') || n.toUpperCase().includes('REGISTRE')) ||
           wb.SheetNames[0];
@@ -1050,8 +1058,22 @@ export default function NexusView({
           }
         });
 
+        if (addedCount + updatedCount > 0) {
+          DataGateway.appendAuditEvent({
+            actionType: 'NEXUS_BOM_EXCEL_IMPORT',
+            entityType: 'MACHINE',
+            entityId: activeMachine?.id_machine_registered || 'MULTI',
+            actorId: String(user?.id || user?.username || 'ADMIN'),
+            actorName: String(user?.name || user?.username || 'Nexus BOM'),
+            actorRole: String(user?.role || 'ADMIN'),
+            before: { ledgerCount: machineElementsLedger.length },
+            after: { addedCount, updatedCount, skippedCount },
+            meta: { fileName: file.name },
+          });
+        }
+
         showToast?.(
-          `Import Excel BOM terminé : ${addedCount} ajouté(s), ${updatedCount} mis à jour${
+          `Import Excel BOM (As-Built machine active) terminé : ${addedCount} ajouté(s), ${updatedCount} mis à jour${
             skippedCount > 0 ? `, ${skippedCount} ignoré(s)` : ''
           }.`,
           addedCount + updatedCount > 0 ? 'success' : 'warning'
@@ -1178,10 +1200,11 @@ export default function NexusView({
           <button
             type="button"
             onClick={handleExportBOMExcel}
+            title="Type B : Export externe de la nomenclature As-Built (consultation uniquement — non réimportable dans UnifiedImportPipeline)"
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs transition active:scale-95 cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Exporter BOM (.xlsx)</span>
+            <span>Exporter BOM (.xlsx — Type B)</span>
           </button>
 
           {canManageNexus && activeMachine && (

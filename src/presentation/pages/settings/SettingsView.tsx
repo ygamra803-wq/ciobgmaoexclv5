@@ -601,115 +601,10 @@ export default function SettingsView({
   }, [originalJsonText, activeTab]);
 
   const handleSaveJSON = () => {
-    if (!canManageSettings) {
-      showToast?.('Accès refusé : privilèges Administrateur requis pour modifier la base JSON.', 'error');
-      return;
-    }
-    try {
-      const parsed: unknown = JSON.parse(jsonText);
-      if (!Array.isArray(parsed)) {
-        throw new Error("La structure doit être un tableau JSON d'objets.");
-      }
-
-      const store = useGmaoStore.getState();
-
-      if (jsonTarget === 'rawStock') {
-        const parsedStock = parsed as IStockItem[];
-        const calcMap = new Map(
-          StockCalculationService.calculateAllStocks(parsedStock, mouvements).map((c) => [
-            String(c.ref || '').trim().toUpperCase(),
-            c,
-          ])
-        );
-        const recalculatedStock: IStockItem[] = parsedStock.map((art: IStockItem) => {
-          const k = String(art?.ref || '').trim().toUpperCase();
-          const c = calcMap.get(k);
-          if (!c) return art;
-          return {
-            ...art,
-            entrees: c.entrees,
-            sorties: c.sorties,
-            stockActuel: c.stockActuel,
-            alerte: c.alerte,
-          };
-        });
-        const initMap = new Map<string, number>();
-        recalculatedStock.forEach((art: IStockItem) => {
-          if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
-        });
-        stockIndex.rebuild(mouvements, initMap);
-        setRawStock?.(recalculatedStock);
-        storageService.saveArticles(recalculatedStock);
-      } else if (jsonTarget === 'mouvements') {
-        const parsedMvts = parsed as IMouvement[];
-        const calcMap = new Map(
-          StockCalculationService.calculateAllStocks(rawStock, parsedMvts).map((c) => [
-            String(c.ref || '').trim().toUpperCase(),
-            c,
-          ])
-        );
-        const recalculatedStock: IStockItem[] = (rawStock || []).map((art: IStockItem) => {
-          const k = String(art?.ref || '').trim().toUpperCase();
-          const c = calcMap.get(k);
-          if (!c) return art;
-          return {
-            ...art,
-            entrees: c.entrees,
-            sorties: c.sorties,
-            stockActuel: c.stockActuel,
-            alerte: c.alerte,
-          };
-        });
-        const initMap = new Map<string, number>();
-        recalculatedStock.forEach((art: IStockItem) => {
-          if (art?.ref) initMap.set(String(art.ref).trim().toUpperCase(), Number(art.stockInitial) || 0);
-        });
-        stockIndex.rebuild(parsedMvts, initMap);
-        setMouvements?.(parsedMvts);
-        if (setRawStock) setRawStock(recalculatedStock);
-        storageService.saveArticles(recalculatedStock);
-      } else if (jsonTarget === 'machines') {
-        if (setMachines) setMachines(parsed as IMachine[]);
-        else store.setMachines(parsed as IMachine[]);
-      } else if (jsonTarget === 'preventiveTasks' || jsonTarget === 'preventive') {
-        if (setPreventiveTasks) setPreventiveTasks(parsed as PreventiveTaskItem[]);
-        else store.setPreventiveTasks(parsed as PreventiveTaskItem[]);
-      } else if (jsonTarget === 'correctiveInterventions') {
-        if (setCorrectiveInterventions) setCorrectiveInterventions(parsed as CorrectiveInterventionItem[]);
-        else store.setCorrectiveInterventions(parsed as CorrectiveInterventionItem[]);
-      } else if (jsonTarget === 'warehouseItems') {
-        store.setWarehouseItems(parsed as IWarehouseItem[]);
-      } else if (jsonTarget === 'sortiesExterne') {
-        store.setSortiesExterne(parsed as SortieExterneItem[]);
-      } else if (jsonTarget === 'machineElementsLedger') {
-        if (setMachineElementsLedger) setMachineElementsLedger(parsed as MachineElement[]);
-        else store.setMachineElementsLedger(parsed as MachineElement[]);
-      } else if (jsonTarget === 'families') {
-        if (setFamilies) setFamilies(parsed as IMachineFamily[]);
-        else store.setFamilies(parsed as IMachineFamily[]);
-      } else if (jsonTarget === 'templates') {
-        if (setTemplates) setTemplates(parsed as IMachineTemplate[]);
-        else store.setTemplates(parsed as IMachineTemplate[]);
-      } else if (jsonTarget === 'zones') {
-        if (setZones) setZones(parsed as IZone[]);
-        else store.setZones(parsed as IZone[]);
-      } else if (jsonTarget === 'technicians') {
-        if (setTechnicians) setTechnicians(parsed as ITechnician[]);
-        else store.setTechnicians(parsed as ITechnician[]);
-      } else if (jsonTarget === 'operations') {
-        if (setOperations) setOperations(parsed as IOperation[]);
-        else store.setOperations(parsed as IOperation[]);
-      } else if (jsonTarget === 'types') {
-        if (setTypes) setTypes(parsed as StockType[]);
-        else store.setTypes(parsed as StockType[]);
-      }
-
-      setJsonError(null);
-      showToast?.('Modification appliquée et synchronisée avec succès !', 'success');
-    } catch (err: unknown) {
-      setJsonError(getErrorMessage(err));
-      showToast?.('Erreur de validation du JSON.', 'error');
-    }
+    const blockedMsg =
+      'RAW_JSON_OVERWRITE_BLOCKED : Écriture JSON brute désactivée. Utilisez Paramètres ➔ Ingestion Structurée (Mode B — Type A) ou le Centre de Sauvegarde pour les snapshots.';
+    setJsonError(blockedMsg);
+    showToast?.(blockedMsg, 'error');
   };
 
   const handleDownloadJSON = () => {
@@ -718,49 +613,29 @@ export default function SettingsView({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `gmao_config_${jsonTarget}_${new Date().toISOString().split('T')[0]}.json`;
+      link.download = `gmao_typeB_${jsonTarget}_${new Date().toISOString().split('T')[0]}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast?.('Fichier JSON téléchargé avec succès.', 'success');
+      showToast?.('Export JSON (Type B — consultation externe, non réimportable) téléchargé.', 'success');
     } catch {
       showToast?.('Erreur lors du téléchargement.', 'error');
     }
   };
 
   const handleUploadJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event: ProgressEvent<FileReader>) => {
-      try {
-        const result = event.target?.result;
-        const text = typeof result === 'string' ? result : '';
-        const parsed: unknown = JSON.parse(text);
-        if (!Array.isArray(parsed)) {
-          showToast?.("Avertissement : Le fichier importé n'est pas un tableau d'objets.", 'info');
-        }
-        setJsonText(JSON.stringify(parsed, null, 2));
-        setJsonError(null);
-        showToast?.(
-          "Fichier chargé dans l'éditeur. Veuillez l'enregistrer pour appliquer.",
-          'success'
-        );
-      } catch (err: unknown) {
-        setJsonError(`JSON invalide : ${getErrorMessage(err)}`);
-        showToast?.('Le fichier importé contient un JSON invalide.', 'error');
-      }
-    };
-    reader.readAsText(file);
     e.target.value = '';
+    const blockedMsg =
+      'RAW_JSON_OVERWRITE_BLOCKED : Import JSON brut désactivé. Utilisez Paramètres ➔ Ingestion Structurée (Type A).';
+    setJsonError(blockedMsg);
+    showToast?.(blockedMsg, 'error');
   };
 
   const handleCancelEdits = () => {
     setJsonText(originalJsonText);
     setJsonError(null);
-    showToast?.("Modification annulée. Retour aux données d'origine.", 'info');
+    showToast?.("Retour à l'état SSOT d'origine.", 'info');
   };
 
   // Directory details

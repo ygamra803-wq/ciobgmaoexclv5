@@ -393,7 +393,7 @@ export default function ShiftWeeklyReportView({
               variant="circle"
               color="emerald"
               icon={FileSpreadsheet}
-              title="Exporter le rapport d'exploitation vers Excel (.xlsx)"
+              title="Exporter le rapport d'exploitation vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
               ariaLabel="Excel (.xlsx)"
               onClick={handleExportExcel}
             />
@@ -591,28 +591,28 @@ export default function ShiftWeeklyReportView({
                   type="button"
                   onClick={handleExportExcel}
                   className="h-8 px-3 rounded-xl border border-emerald-200/80 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                  title="Exporter le rapport multi-feuilles vers Excel (.xlsx)"
+                  title="Exporter le rapport multi-feuilles vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Export Excel (.xlsx)</span>
+                  <span>Export Excel (.xlsx — Type B)</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleExportCsv}
                   className="h-8 px-3 rounded-xl border border-cyan-200/80 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                  title="Exporter la synthèse en CSV"
+                  title="Exporter la synthèse en CSV — Type B : Export externe (non réimportable)"
                 >
                   <Download className="w-3.5 h-3.5 text-cyan-600" />
-                  <span>CSV</span>
+                  <span>CSV (Type B)</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleExportJson}
                   className="h-8 px-3 rounded-xl border border-indigo-200/80 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                  title="Exporter la synthèse en JSON"
+                  title="Exporter la synthèse en JSON — Type B : Export externe (non réimportable)"
                 >
                   <Download className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>JSON</span>
+                  <span>JSON (Type B)</span>
                 </button>
               </>
             )}

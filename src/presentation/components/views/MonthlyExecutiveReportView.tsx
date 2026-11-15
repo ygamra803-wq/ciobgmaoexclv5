@@ -375,7 +375,7 @@ export default function MonthlyExecutiveReportView({
               variant="circle"
               color="emerald"
               icon={FileSpreadsheet}
-              title="Exporter le rapport mensuel vers Excel (6 feuilles)"
+              title="Exporter le rapport mensuel vers Excel (6 feuilles) — Type B : Export externe (non réimportable)"
               ariaLabel="Excel Mensuel (6 Feuilles)"
               onClick={handleExportExcel}
             />

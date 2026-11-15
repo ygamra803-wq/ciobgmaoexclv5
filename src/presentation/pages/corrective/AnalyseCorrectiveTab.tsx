@@ -617,10 +617,10 @@ export default function AnalyseCorrectiveTab({
             type="button"
             onClick={handleExportParetoExcel}
             className="h-8 px-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-            title="Exporter les tables Pareto vers Excel (.xlsx)"
+            title="Exporter les tables Pareto vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="hidden sm:inline">Export Pareto Excel</span>
+            <span className="hidden sm:inline">Export Pareto (Type B)</span>
           </button>
         </div>
       </div>

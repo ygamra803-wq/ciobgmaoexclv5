@@ -590,10 +590,10 @@ export default function MachinesRegisteredView({
               type="button"
               onClick={handleExportFilteredMachines}
               className="h-8 px-3 rounded-xl border border-emerald-300/90 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Exporter la liste filtrée vers un classeur Excel (.xlsx)"
+              title="Exporter la liste filtrée vers Excel (.xlsx) — Type B : Export externe (non réimportable ; pour Round-Trip utilisez Paramètres ➔ ASSETS_MACHINES)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="hidden sm:inline">Export Excel</span>
+              <span className="hidden sm:inline">Export Excel (Type B)</span>
             </button>
 
             {/* Quick Reset Button (Circular Iconic) */}

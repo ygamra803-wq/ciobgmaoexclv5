@@ -1,45 +1,30 @@
 import {
   FileSpreadsheet,
-  Save,
   ChevronDown,
   Lock,
-  CheckCircle2,
   AlertTriangle,
   Download,
-  RotateCcw,
 } from 'lucide-react';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 
 /**
- * Raw JSON Database Inspector & Editor Tab.
+ * Raw JSON Database Inspector (Read-Only SSOT View + Type B External Export — INGEST-GOV-P9).
  */
 export default function SettingsJsonEditorTab({
   jsonTarget,
   setJsonTarget,
   jsonText,
-  setJsonText,
   jsonContent,
-  setJsonContent,
-  jsonError,
-  setJsonError,
-  handleSaveJSON,
   handleDownloadJSON,
-  handleCancelEdits,
-  isJsonModified,
 }: any) {
   const effectiveText = jsonText !== undefined ? jsonText : (jsonContent ?? '');
-  const handleChangeText = (val: string) => {
-    if (setJsonText) setJsonText(val);
-    if (setJsonContent) setJsonContent(val);
-    if (setJsonError) setJsonError(null);
-  };
 
   return (
     <div className="space-y-6">
       <SettingsSectionCard
         tone="warning"
-        title="Inspecteur & Éditeur JSON Brut (Maintenance Avancée SSOT)"
-        description="Outil d'inspection et de correction directe des collections JSON stockées dans le magasin central. Toute écriture met à jour immédiatement la source de vérité (DataGateway)."
+        title="Inspecteur JSON SSOT (Lecture Seule & Export Type B)"
+        description="Consultation technique des collections stockées dans DataGateway. L'écriture JSON brute est désactivée : utilisez Mode B (Type A) pour les catalogues/actifs, Centre de Sauvegarde pour les snapshots, ou les écrans opérationnels pour les transactions."
         icon={<FileSpreadsheet />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2">
@@ -87,32 +72,10 @@ export default function SettingsJsonEditorTab({
                 type="button"
                 onClick={handleDownloadJSON}
                 className={SETTINGS_BUTTON_STYLES.secondary}
-                title="Télécharger cette collection au format .json"
+                title="Export externe Type B (.json — consultation uniquement, non réimportable via UnifiedImportPipeline)"
               >
                 <Download className="w-4 h-4 text-slate-500" />
-                <span>Exporter .json</span>
-              </button>
-            )}
-
-            {isJsonModified && handleCancelEdits && (
-              <button
-                type="button"
-                onClick={handleCancelEdits}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-                <span>Annuler</span>
-              </button>
-            )}
-
-            {jsonTarget !== 'users' && (
-              <button
-                type="button"
-                onClick={handleSaveJSON}
-                className={SETTINGS_BUTTON_STYLES.primary}
-              >
-                <Save className="w-4 h-4" />
-                <span>Appliquer et Sauvegarder JSON</span>
+                <span>Exporter .json (Type B)</span>
               </button>
             )}
           </div>
@@ -122,16 +85,9 @@ export default function SettingsJsonEditorTab({
           <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Précaution d&apos;intégrité :</span> Modifiez uniquement les champs dont vous maîtrisez le schéma relationnel. Exportez un Snapshot JSON depuis la <b>Vue d&apos;ensemble</b> avant toute modification manuelle.
+              <span className="font-bold">Gouvernance INGEST-GOV-P9 :</span> L&apos;édition JSON directe de la base est verrouillée en lecture seule afin de préserver les clés étrangères, l&apos;invariant stock (<code className="font-mono">StockCalculationService</code>) et la piste d&apos;audit. Pour importer ou mettre à jour des référentiels/machines, utilisez l&apos;onglet <b>Injection &amp; Mode Démo ➔ Mode B (Type A)</b>.
             </div>
           </div>
-
-          {jsonError && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs font-mono font-bold flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>Erreur de syntaxe JSON : {jsonError}</span>
-            </div>
-          )}
 
           {jsonTarget === 'users' && (
             <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl text-slate-900 text-xs font-bold flex items-center gap-2">
@@ -150,37 +106,17 @@ export default function SettingsJsonEditorTab({
                 <span className="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-xs font-mono font-bold text-sky-800">
                   {jsonTarget}.json
                 </span>
-                {isJsonModified && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-bold">
-                    Modifié (non sauvegardé)
-                  </span>
-                )}
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
-                {jsonTarget === 'users' ? (
-                  <>
-                    <Lock className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Lecture seule</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Édition autorisée</span>
-                  </>
-                )}
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Lecture seule (SSOT verrouillé)</span>
               </div>
             </div>
             <textarea
               value={effectiveText}
-              readOnly={jsonTarget === 'users'}
-              onChange={(e) => {
-                if (jsonTarget === 'users') return;
-                handleChangeText(e.target.value);
-              }}
+              readOnly={true}
               spellCheck={false}
-              className={`w-full h-[460px] p-4 bg-slate-50/40 text-slate-800 font-mono text-xs leading-relaxed focus:outline-none focus:bg-white resize-y ${
-                jsonTarget === 'users' ? 'opacity-75 cursor-not-allowed' : ''
-              }`}
+              className="w-full h-[460px] p-4 bg-slate-50/40 text-slate-800 font-mono text-xs leading-relaxed focus:outline-none resize-y opacity-90 cursor-default"
             />
           </div>
         </div>

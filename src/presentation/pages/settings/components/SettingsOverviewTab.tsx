@@ -307,10 +307,10 @@ export default function SettingsOverviewTab({
         </div>
       </SettingsSectionCard>
 
-      {/* 3. Twin Excel Workbook Exporter */}
+      {/* 3. Twin Excel Workbook Exporter (Type B External Mirror) */}
       <SettingsSectionCard
-        title="Générateur de Classeur Miroir Excel (.xlsx)"
-        description="Exportez un classeur Excel structuré (15 feuilles reliées par formules natives) pour l'archivage externe ou l'audit comptable."
+        title="Générateur de Classeur Miroir Excel (.xlsx — Type B)"
+        description="Exportez un classeur Excel structuré (15 feuilles reliées par formules natives) pour la consultation externe ou l'audit comptable (non réimportable — utilisez Mode B Type A pour importer)."
         icon={<FileSpreadsheet />}
         headerRight={
           <div className="flex flex-wrap items-center gap-2.5">
@@ -318,24 +318,26 @@ export default function SettingsOverviewTab({
               type="button"
               onClick={onDownloadBlankTemplate}
               className={SETTINGS_BUTTON_STYLES.secondary}
+              title="Type B : Gabarit miroir multi-feuilles (consultation externe uniquement, non réimportable)"
             >
               <FileSpreadsheet className="w-4 h-4 text-slate-500" />
-              <span>Télécharger Modèle Vide</span>
+              <span>Modèle Miroir Vide (Type B)</span>
             </button>
 
             <button
               type="button"
               onClick={onExportExcel}
               className={SETTINGS_BUTTON_STYLES.primary}
+              title="Type B : Classeur miroir complet (consultation externe uniquement, non réimportable)"
             >
               <Download className="w-4 h-4" />
-              <span>Exporter Classeur Actuel (.xlsx)</span>
+              <span>Exporter Classeur Actuel (.xlsx — Type B)</span>
             </button>
           </div>
         }
       >
         <div className="text-xs text-slate-600 bg-slate-50/70 px-4 py-3 rounded-xl border border-slate-200/80">
-          Note d&apos;architecture : Le fichier Excel est un miroir d&apos;import/export et de sauvegarde ; la source de vérité (SSOT) demeure la base transactionnelle de l&apos;application.
+          Note d&apos;architecture : Le classeur miroir est strictement <b>Type B</b> (sortant) ; pour importer ou mettre à jour des catalogues/machines, utilisez l&apos;onglet <b>Injection &amp; Mode Démo ➔ Mode B (Type A)</b>.
         </div>
       </SettingsSectionCard>
     </div>

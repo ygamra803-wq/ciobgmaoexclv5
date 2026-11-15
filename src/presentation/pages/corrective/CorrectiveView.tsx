@@ -342,14 +342,14 @@ export default function CorrectiveView({
               />
             )}
 
-            {/* 3D Circular Exporter Excel Button */}
+            {/* 3D Circular Exporter Excel Button (Type B) */}
             <Action3DButton
               variant="circle"
               color="emerald"
               icon={FileSpreadsheet}
               onClick={handleExportAllCorrective}
-              title={t('corrective.buttons.export_excel')}
-              ariaLabel="Exporter Excel"
+              title={`${t('corrective.buttons.export_excel')} — Type B : Export externe (non réimportable)`}
+              ariaLabel="Exporter Excel (Type B)"
             />
 
             {/* 3D Circular Reset Seed Button */}

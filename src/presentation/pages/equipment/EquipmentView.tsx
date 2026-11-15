@@ -1461,7 +1461,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                   title="Exporter la liste filtrée vers Excel (.xlsx) — Type B : Export externe (non réimportable ; pour Round-Trip utilisez Paramètres ➔ ASSETS_MACHINES)"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Export Excel</span>
+                  <span>Export Excel (Type B)</span>
                 </button>
 
                 {/* Circular Reset Button */}

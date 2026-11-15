@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   CheckCircle2,
   Plus,
@@ -6,9 +6,6 @@ import {
   RotateCcw,
   Sparkles,
   Clock,
-  FileSpreadsheet,
-  Download,
-  Loader2,
   Wand2,
   LayoutList,
   Factory,
@@ -17,8 +14,6 @@ import {
 } from 'lucide-react';
 import Action3DButton from '../../../components/common/Action3DButton';
 import PageHeaderIcon from '../../../components/common/PageHeaderIcon';
-import PreventiveService from '../../../../application/services/PreventiveService';
-import { Logger } from '../../../../core/logger/LoggerService';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
 import { rankStockItemsByMachineBom } from '../../../../core/domain';
 import { isWarehousePart } from '../../../../core/domain/EntrepotItem';
@@ -51,11 +46,6 @@ export default function TabPlanBuilder({
     return d.toISOString().split('T')[0];
   });
   const [planDescription, setPlanDescription] = useState('');
-
-  // Import states
-  const [isImporting, setIsImporting] = useState(false);
-  const [importStatus, setImportStatus] = useState<any>(null);
-  const excelFileInputRef = useRef<any>(null);
 
   // NOUVELLES FONCTIONNALITÉS INDUSTRIELLES
   // 1. Mode de calcul récurrence (Fixed vs Floating)
@@ -468,70 +458,8 @@ export default function TabPlanBuilder({
     executeGeneratePlan();
   };
 
-  // Import Excel Handler
-  const handleExcelFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsImporting(true);
-    setImportStatus({ type: 'loading', message: 'Lecture et injection du fichier Excel...' });
-
-    try {
-      const importedTasks = await PreventiveService.importFromExcel(file);
-      if (Array.isArray(importedTasks)) {
-        useGmaoStore.getState().setPreventiveTasks(importedTasks);
-      }
-      setImportStatus({
-        type: 'success',
-        message: `Succès ! ${importedTasks.length} tâches injectées directement dans le planning (localStorage).`,
-      });
-      setTimeout(() => {
-        setIsImporting(false);
-        setImportStatus(null);
-        if (e.target) e.target.value = '';
-        if (onNavigateToMainView) {
-          onNavigateToMainView();
-        }
-      }, 1500);
-    } catch (err: any) {
-      Logger.error('Erreur import Excel:', err);
-      setImportStatus({
-        type: 'error',
-        message: `Erreur d'import Excel: ${err?.message || 'Fichier invalide'}`,
-      });
-      setIsImporting(false);
-    }
-  };
-
-  // Load Factory Public JSON (1175 tasks across 6 files)
-  const handleLoadPublicJson = async () => {
-    setIsImporting(true);
-    setImportStatus({ type: 'loading', message: "Chargement des 6 fichiers JSON d'usine (/data/preventive/)..." });
-
-    try {
-      const loaded = await PreventiveService.loadFromPublicJson();
-      if (Array.isArray(loaded) && loaded.length > 0) {
-        useGmaoStore.getState().setPreventiveTasks(loaded);
-      }
-      setImportStatus({
-        type: 'success',
-        message: `Succès ! ${loaded.length} tâches chargées depuis les fichiers JSON publics.`,
-      });
-      setTimeout(() => {
-        setIsImporting(false);
-        setImportStatus(null);
-        if (onNavigateToMainView) {
-          onNavigateToMainView();
-        }
-      }, 1400);
-    } catch (err: any) {
-      Logger.error('Erreur chargement JSON:', err);
-      setImportStatus({
-        type: 'error',
-        message: `Erreur: ${err?.message || 'Impossible de charger les fichiers JSON'}`,
-      });
-      setIsImporting(false);
-    }
-  };
+  // INGEST-GOV-P9: Legacy direct Excel & /public/data/preventive/*.json injection removed from TabPlanBuilder.
+  // Level 2 Actions/Guides come from Paramètres -> PM_CATALOG (Type A), and machine-level imports use TaskImportModal (FK-checked).
 
   // SHARED SECTION 1: ÉQUIPEMENT & AFFECTATION
   const step1EquipementSection = (
@@ -1052,14 +980,6 @@ export default function TabPlanBuilder({
 
   return (
     <div className="space-y-5">
-      {/* Hidden file input for Excel */}
-      <input
-        type="file"
-        ref={excelFileInputRef}
-        onChange={handleExcelFileChange}
-        accept=".xlsx, .xls, .csv"
-        className="hidden"
-      />
 
       {/* 3D TACTILE SUB-BANNER HEADER */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/gen">
@@ -1121,27 +1041,6 @@ export default function TabPlanBuilder({
             <span>Durée : <strong className="text-emerald-700 font-mono">{totalMinutes} min ({ (totalMinutes / 60).toFixed(1) }h)</strong></span>
           </div>
 
-          {/* 3D Action: Importer Planning Excel */}
-          <Action3DButton
-            variant="pill"
-            color="emerald"
-            icon={isImporting ? Loader2 : FileSpreadsheet}
-            label={isImporting ? 'Import...' : 'Importer Excel'}
-            disabled={isImporting}
-            onClick={() => excelFileInputRef.current?.click()}
-            title="Importer directement une matrice ou planning depuis un fichier Excel (.xlsx / .xls)"
-          />
-
-          {/* 3D Action: Pack Usine JSON */}
-          <Action3DButton
-            variant="circle"
-            color="teal"
-            icon={Download}
-            disabled={isImporting}
-            onClick={handleLoadPublicJson}
-            title="Recharger le pack de données d'usine (1175 tâches) depuis /public/data/preventive/*.json"
-          />
-
           {/* 3D Action: Reset Form */}
           <Action3DButton
             variant="circle"
@@ -1152,23 +1051,6 @@ export default function TabPlanBuilder({
           />
         </div>
       </div>
-
-      {/* Message de statut d'import */}
-      {importStatus && (
-        <div
-          className={`p-3.5 rounded-xl text-xs font-bold flex items-center gap-2.5 transition-all animate-in fade-in duration-200 ${
-            importStatus.type === 'loading'
-              ? 'bg-amber-50 text-amber-800 border border-amber-200'
-              : importStatus.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border border-rose-200'
-          }`}
-        >
-          {importStatus.type === 'loading' && <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />}
-          {importStatus.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
-          <span>{importStatus.message}</span>
-        </div>
-      )}
 
       {/* MODE ASSISTANT WIZARD vs FORMULAIRE PRINCIPAL DE CONCEPTION (Grid 3 colonnes) */}
       {isWizardMode ? (

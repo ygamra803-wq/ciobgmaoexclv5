@@ -1023,7 +1023,7 @@ export default function FinanceView({
             variant="circle"
             color="emerald"
             icon={FileSpreadsheet}
-            title="Exporter la synthèse financière multi-feuilles vers Excel (.xlsx)"
+            title="Exporter la synthèse financière multi-feuilles vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
             ariaLabel="Exporter Synthèse (.xlsx)"
             onClick={handleExportExcel}
           />

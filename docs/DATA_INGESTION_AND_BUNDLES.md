@@ -1,7 +1,7 @@
-# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0` .. `INGEST-P8`)
+# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0` .. `INGEST-GOV-P9`)
 
 > **Status:** Authoritative Engineering Contract (v5.0.2)
-> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Export Taxonomy (`Type A Round-Trip` vs `Type B External`), Official JSON & `.XLSX` Bundle Templates (`README_TYPE_A`), Closed Import/Seed Backdoors (`INGEST-P6`), and `UnifiedImportPipeline` (`REF_PARC`, `REF_PERSONNEL`, `ASSETS_MACHINES`, `REF_PDR`, `PM_CATALOG`, `ENTREPOT_BOM`, `CM_CATALOG` & `DEMO_BUNDLE`).
+> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Export Taxonomy (`Type A Round-Trip` vs `Type B External`), Official JSON & `.XLSX` Bundle Templates (`README_TYPE_A`), Closed Import/Seed Backdoors (`INGEST-P6` & `INGEST-GOV-P9`), `UnifiedImportPipeline` (`REF_PARC`, `REF_PERSONNEL`, `ASSETS_MACHINES`, `REF_PDR`, `PM_CATALOG`, `ENTREPOT_BOM`, `CM_CATALOG` & `DEMO_BUNDLE`), and Real-Day Operational Workflow (`INGEST-GOV-P9`).
 
 ---
 
@@ -183,6 +183,51 @@
 | **Pipeline Types & Contracts** | `src/services/import/types/unifiedImportTypes.ts` | `ImportReport`, `ImportIssue`, `RefParcBundleInput`, `RefPersonnelBundleInput`, `AssetsMachinesBundleInput`, `RefPdrBundleInput`, `PmCatalogBundleInput`, `EntrepotBomBundleInput`, `CmCatalogBundleInput`, `DemoBundleInput` |
 | **Core Pipeline Engine** | `src/services/import/unifiedImportPipeline.ts` | `validateAndCommit*Bundle`, `validateAndCommitDemoBundle`, `runUnifiedImportPipeline`, `registerPipelineCommitListener`, `export*Bundle`, `get*OfficialTemplate` |
 | **PDR Catalog Validator** | `src/services/pdr/pdrExcelValidator.ts` | `validateAndReconcilePdrCatalogImport`, `applyPdrCatalogImportToStore` |
-| **Settings UI Integration (`P1.1`..`P8`)** | `src/presentation/pages/settings/components/SettingsInjectionTab.tsx` | Official `.json`/`.xlsx` templates (7 cards), Dry-Run (`dryRun: true`), `MERGE` / ADMIN `REPLACE_CATALOG`, Type A Round-Trip exports, and `REF_PERSONNEL` auth hint |
-| **Unit Test Suite** | `src/tests/unit/UnifiedImportPipeline.test.ts` | Unit tests covering SSOT backdoor isolation, official JSON & `.xlsx` Type A round-trips, Type B rejection, `REPLACE_CATALOG` RBAC, commit sync hooks, and all 7 bundles |
+| **Settings UI Integration (`P1.1`..`P9`)** | `src/presentation/pages/settings/components/SettingsInjectionTab.tsx` | Official `.json`/`.xlsx` templates (7 cards), Causal Order Governance Banner (`INGEST-GOV-P9`), Dry-Run (`dryRun: true`), `MERGE` / ADMIN `REPLACE_CATALOG`, Type A Round-Trip exports, and `REF_PERSONNEL` auth hint |
+| **Unit Test Suite** | `src/tests/unit/UnifiedImportPipeline.test.ts` | Unit tests covering SSOT backdoor isolation, official JSON & `.xlsx` Type A round-trips, Type B rejection, `REPLACE_CATALOG` RBAC, commit sync hooks, `INGEST-GOV-P9` legacy closures, and all 7 bundles |
+
+---
+
+## 9. Operational Data Entry (Not Bundles) & Real-Day Factory Workflow (`INGEST-GOV-P9`)
+
+### 9.1 Closed Rule: Operational Transactions Are Never Catalog Bundles
+The following operational records **MUST NEVER** be added as `UnifiedImportPipeline` bulk bundles (`STOCK_MOVEMENTS`, `CM_HISTORY`, or bulk live `warehouseItems` are permanently closed):
+1. **Stock Movements (`Sortie`, `Entrée`, `Ajustement`) & `Sortie rapide`:**
+   - Created exclusively in the live **Stock / Sortie rapide** UI workflows through Maker-Checker (`sortieDemands` / `ValidationCenterView`), calculated solely by `StockCalculationService` and `IncrementalStockIndex`.
+2. **Preventive Machine Tasks & Dated Executions (`preventiveTasks`, `preventiveExecutions`):**
+   - Level 2 PM catalogs (`PM_ACTIONS`, `PM_GUIDES`) enter via **`PM_CATALOG`**.
+   - Machine-specific assignments are created from the Preventive Hub (`TabPlanBuilder` / `TabExecution` / `PreventiveService.bulkImportTasks` against active registered machines) and executed with dated records (`ExecutionService` / `MeterService`).
+3. **Corrective Work Orders & Execution History (`correctiveInterventions`, `bonsTravail`, `demandes`):**
+   - Level 2 fault categories & standard actions enter via **`CM_CATALOG`**.
+   - Interventions (`DEMANDE ➔ BT_PLANIFIE / EN_COURS / EN_ATTENTE_PDR ➔ CLOTURE`) flow exclusively through `WorkOrderStateMachine` and Maker-Checker validation.
+4. **Physical Warehouse Units & Machine-Mounted Components (`warehouseItems`, `machineElementsLedger`):**
+   - Level 2 classifications enter via **`ENTREPOT_BOM`**.
+   - Physical serialized units and live machine mounting/dismounting occur in **Entrepôt** & **Nexus As-Built** (with active `PRODUCTION` machine FK guards and audit logging).
+5. **Cognitive Digital Twin (`blueprints`):**
+   - Automatically learned inside the application from preventive and corrective history (`BlueprintService`). Never imported in Level 2 catalogs.
+
+### 9.2 Real-Day Commissioning Flow ("Jour de Mise en Service Réel")
+1. **Initialize Clean Factory (Mode A `EMPTY`):** Start from `0` records (`START_MODE = 'empty'`, `clearAllForRealFactory`).
+2. **Import 7 Official Type A Bundles in Strict Causal Order (`Settings ➔ Injection Structurée`):**
+   `1. REF_PARC` ➔ `2. REF_PERSONNEL` ➔ `3. ASSETS_MACHINES` ➔ `4. REF_PDR` ➔ `5. ENTREPOT_BOM` ➔ `6. PM_CATALOG` ➔ `7. CM_CATALOG`
+   *(Always download official `.template.json` / `.xlsx (README_TYPE_A)`, run `Vérifier (dryRun)`, inspect `accepted / rejected`, then `Importer MERGE`.)*
+3. **Activate Auth Accounts:** Open **Utilisateurs & Accès** to assign PINs/passwords to imported personnel (`REF_PERSONNEL` intentionally never carries auth secrets).
+4. **Daily Operations From Guarded Screens:** Execute stock movements, PM plans/executions, corrective work orders, warehouse serial tracking, and Maker-Checker validations directly in the application screens. Export **Type B** reports externally as needed without ever feeding them back into `UnifiedImportPipeline`.
+
+---
+
+## 10. Complete Import / Export Governance Audit (`INGEST-GOV-P9`)
+
+| Surface / Function | Classification | Enforcement / Behavior |
+| :--- | :--- | :--- |
+| `SettingsInjectionTab` (`REF_PARC`, `REF_PERSONNEL`, `ASSETS_MACHINES`, `REF_PDR`, `PM_CATALOG`, `ENTREPOT_BOM`, `CM_CATALOG`) | **Type A (`UnifiedImportPipeline`)** | Official `.json` & `.xlsx (README_TYPE_A)` templates, `dryRun`, `MERGE`, ADMIN-only `REPLACE_CATALOG`, Type A Round-Trip exports, and 7-step causal order banner. |
+| `useAppExcelOperations.executeGuardedGlobalFileImport` / `Header` global import | **Type A (`UnifiedImportPipeline`)** | Accepts only recognized Type A JSON bundles and `README_TYPE_A` `.xlsx` workbooks (`runUnifiedImportPipeline`); blocks Type B `.xlsx` (`TYPE_B_EXCEL_BLOCKED`) and raw JSON (`UNRECOGNIZED_JSON_BLOCKED`). |
+| `PdrCatalogExcelModal` (`StockView` ➔ Import/Export Catalogue PDR) | **Type A (`UnifiedImportPipeline`)** | Routed atomically through `validateAndCommitRefPdrBundle` (`REF_PDR`); exports canonical Type A `README_TYPE_A` `.xlsx` via `exportRefPdrBundle()`; partial dirty writes removed. |
+| `DataGateway.loadDemoData` / `loadDemoSection` / `initRealStock` | **Type A (`UnifiedImportPipeline`)** | Validates demo bundles (`validateAndCommitDemoBundle`) and initial catalog setup strictly through pipeline rules; `DataGateway.ts` is the sole module importing `src/data/*.json`. |
+| `Header` 3 Master Workbooks (`Topology`, `Inventory`, `Movements`), Twin Workbook & `handleDirectFileLink` | **Type B (External Read-Only)** | Strictly outbound consultation/mirror exports explicitly tagged `Type B (non réimportable)`. `handleDirectFileLink` never overwrites SSOT store. |
+| Screen Exports (`MachinesRegisteredView`, `FamilyView`, `EquipmentView`, `StockView`/`IndustrialFilterCard`, `MouvementsJournalTable`, `UtilisateursView`, `CorrectiveView` tabs, `Preventive` tabs/history, `FinanceView`, `ValidationCenterView`, `ShiftWeeklyReportView`, `MonthlyExecutiveReportView`, `Referentiel/*`, `NexusView` export, `SettingsOverviewTab` Type B mirror, `SettingsJsonEditorTab` JSON export, `SettingsBackupAuditTab` CSV/snapshot exports) | **Type B (External Read-Only)** | Explicitly labeled `Type B` across button tooltips/titles and filenames; never re-imported into `UnifiedImportPipeline`. |
+| `AutoBackupService` / `BackupManagerModal` / `SettingsOverviewTab` Snapshots & `serverSyncService` | **Internal Only** | Checksummed SSOT snapshot restore and LAN host synchronization governed by RBAC & `ALLOWED_ENTITIES`. |
+| `TaskImportModal` (`PreventiveService.bulkImportTasks`) & `NexusView.handleImportBOMExcel` | **Internal Only (Guarded Screen Ops)** | Machine-level operational forms: enforce active registered machine FKs (`ASSETS_MACHINES`), block `README_TYPE_A` workbooks with redirect to `Settings`, protect execution history, and record `DataGateway.appendAuditEvent`. |
+| `TaskService.loadFromPublicJson`, `TabPlanBuilder` legacy Excel/`Pack Usine JSON`, `SettingsView`/`SettingsJsonEditorTab` raw JSON save/upload | **Closed Legacy** | Permanently blocked (`LEGACY_BACKDOOR_BLOCKED` / `RAW_JSON_OVERWRITE_BLOCKED`), UI mutation controls removed (`SettingsJsonEditorTab` locked read-only), and `'GLOBAL'`/`'AFM'` machine fallbacks eliminated. |
+
 

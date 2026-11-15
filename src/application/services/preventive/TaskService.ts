@@ -205,13 +205,19 @@ export class TaskService {
   }
 
   /**
-   * Nettoyage et injection de données réelles d'usine avec normalisation
+   * Nettoyage et injection de données normalisées (usage interne après validation FK machine)
    */
   static injectRealData(tasksArray) {
     if (!Array.isArray(tasksArray)) return [];
 
     const sanitized = tasksArray.map((t, idx) => {
-      const cleanMach = String(t.id_machine || 'MACH').trim().toUpperCase().replace(/[^a-zA-Z0-9]/g, '');
+      const rawMachine = String(t?.id_machine || '').trim().toUpperCase();
+      if (!rawMachine || rawMachine === 'GLOBAL') {
+        throw new Error(
+          `INTEGRITY_ERROR : Tâche préventive ligne ${idx + 1} sans id_machine enregistré valide (GLOBAL interdit).`
+        );
+      }
+      const cleanMach = rawMachine.replace(/[^a-zA-Z0-9]/g, '');
       const cleanComp = String(t.composant || 'COMP').trim().replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
       const taskSeq = String(idx + 1).padStart(4, '0');
       const actCode = (t.action_code || 'C').toUpperCase();
@@ -226,9 +232,9 @@ export class TaskService {
         ...t,
         id: t.id || `ID-PREV-${cleanMach}-${cleanComp}-${freq.slice(0, 3).toUpperCase()}-${taskSeq}-${idx + 1}`,
         code: t.code || `PREV-${cleanMach}-${cleanComp}-${taskSeq.slice(-3)}`,
-        id_machine: String(t.id_machine || 'GLOBAL').trim().toUpperCase(),
-        nom_machine: t.nom_machine || `Machine ${t.id_machine || 'GLOBAL'}`,
-        id_zone: t.id_zone || 'AFM',
+        id_machine: rawMachine,
+        nom_machine: t.nom_machine || `Machine ${rawMachine}`,
+        id_zone: String(t.id_zone || '').trim(),
         composant: t.composant || 'Machine entière',
         action_code: actCode,
         frequence: freq,
@@ -248,139 +254,95 @@ export class TaskService {
   }
 
   /**
-   * Import et parsing intelligent depuis fichier Excel
+   * Import depuis fichier Excel avec contrôle FK strict sur ASSETS_MACHINES actives (INGEST-GOV-P9)
    */
   static async importFromExcel(file) {
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type: 'array' });
-    const tasks = [];
+    if (workbook.SheetNames.some((n) => n.trim().toUpperCase() === 'README_TYPE_A')) {
+      throw new Error(
+        'TYPE_A_REDIRECT : Ce classeur officiel Type A doit être importé via Paramètres ➔ Ingestion Structurée (Mode B).'
+      );
+    }
+
+    const storedMachines = loadCollection<any[]>(STORAGE_KEYS.MACHINES, {
+      allowDemoFallback: false,
+      demoSeed: [],
+    });
+    const activeMachines = (Array.isArray(storedMachines) ? storedMachines : []).filter(
+      (m) => m && m.is_active !== false && String(m.status || '').toUpperCase() !== 'ARCHIVEE'
+    );
+    const machineMap = new Map<string, { id: string; designation: string; id_zone: string }>();
+    activeMachines.forEach((m) => {
+      const code = String(m.id_machine_registered || '').trim().toUpperCase();
+      if (code) {
+        machineMap.set(code, {
+          id: m.id_machine_registered,
+          designation: String(m.designation || m.id_machine_registered),
+          id_zone: String(m.id_zone_default || ''),
+        });
+      }
+    });
+
+    const parsedTasks: any[] = [];
+    const fkErrors: string[] = [];
 
     workbook.SheetNames.forEach((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
       if (!sheet) return;
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-
-      rows.forEach((row, idx) => {
-        const machRaw =
-          row['Machine'] ||
-          row['Code Machine'] ||
-          row['id_machine'] ||
-          row['MACHINE'] ||
-          row['machine'] ||
-          row['Équipement'] ||
-          sheetName;
-        const id_machine = String(machRaw || '').trim().toUpperCase();
-        if (!id_machine || id_machine === 'TOTAL' || id_machine === 'MACHINE') return;
-
-        const composant = String(
-          row['Composant'] ||
-          row['Organe'] ||
-          row['COMPOSANT'] ||
-          row['Element'] ||
-          row['Élément'] ||
-          'Machine entière'
-        ).trim();
-
-        const actionRaw = String(
-          row['Action'] ||
-          row['Code Action'] ||
-          row['ACTION'] ||
-          row['Action Code'] ||
-          'C'
-        ).trim().toUpperCase();
-        const action_code = actionRaw.charAt(0) || 'C';
-
-        const freq = String(
-          row['Frequence'] ||
-          row['Fréquence'] ||
-          row['FREQUENCE'] ||
-          row['Périodicité'] ||
-          'Mensuel'
-        ).trim();
-
-        const zone = String(
-          row['Zone'] ||
-          row['id_zone'] ||
-          row['ZONE'] ||
-          row['Section'] ||
-          'AFM'
-        ).trim();
-
-        const planning = {};
-        for (let s = 1; s <= 52; s++) {
-          const keyS = `S${s}`;
-          const val =
-            row[keyS] !== undefined
-              ? row[keyS]
-              : row[s] !== undefined
-              ? row[s]
-              : row[`Semaine ${s}`] || '';
-          if (val && String(val).trim() !== '' && String(val).trim() !== '0') {
-            const vStr = String(val).trim().toUpperCase();
-            planning[keyS] =
-              vStr === '1' || vStr === 'X' || vStr === 'TRUE' ? action_code : vStr;
-          }
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+      rows.forEach((row, rowIdx) => {
+        const rawMachine = String(
+          row['id_machine'] || row['Code Machine'] || row['Machine ID'] || row['Machine'] || ''
+        )
+          .trim()
+          .toUpperCase();
+        if (!rawMachine || rawMachine === 'GLOBAL') {
+          fkErrors.push(`${sheetName}#${rowIdx + 2} : id_machine obligatoire et non GLOBAL.`);
+          return;
         }
-
-        const seq = String(idx + 1).padStart(4, '0');
-        const cleanMach = id_machine.replace(/[^a-zA-Z0-9]/g, '');
-        const cleanComp = composant.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
-
-        tasks.push({
-          id: row['id'] || row['ID'] || `ID-PREV-${cleanMach}-${cleanComp}-${seq}`,
-          id_plan: String(row['id_plan'] || `ID-PLAN-${id_machine}-2025-001`).trim(),
-          code: row['code'] || `PREV-${id_machine}-${cleanComp}-${seq.slice(-3)}`,
-          ref: String(row['Ref'] || row['Référence'] || `Plan-2025-${zone}-${id_machine}`).trim(),
-          id_machine: id_machine,
-          nom_machine: String(row['Nom Machine'] || row['nom_machine'] || `${id_machine} - ${zone}`).trim(),
-          id_zone: zone,
-          section: `Sections: ${zone}`,
-          composant: composant,
-          action_code: action_code,
-          frequence: freq,
-          planning: Object.keys(planning).length > 0 ? planning : { S1: action_code },
-          duree_estimee: '15 min',
-          responsable: String(row['Responsable'] || 'Technicien').trim(),
-          etat: String(row['Etat'] || 'À faire').trim(),
-          priorite: String(row['Priorite'] || 'Normale').trim(),
+        const matched = machineMap.get(rawMachine);
+        if (!matched) {
+          fkErrors.push(
+            `${sheetName}#${rowIdx + 2} : machine "${rawMachine}" introuvable ou archivée dans ASSETS_MACHINES.`
+          );
+          return;
+        }
+        parsedTasks.push({
+          ...row,
+          id_machine: matched.id,
+          nom_machine: String(row['nom_machine'] || matched.designation),
+          id_zone: String(row['id_zone'] || matched.id_zone),
+          composant: String(row['Composant'] || row['composant'] || 'Machine entière').trim(),
+          action_code: String(row['Action'] || row['action_code'] || 'C').trim().toUpperCase(),
+          frequence: String(row['Frequence'] || row['frequence'] || 'Mensuel').trim(),
+          priorite: String(row['Priorite'] || row['priorite'] || 'Normale').trim(),
           created_at: new Date().toISOString(),
         });
       });
     });
 
-    return this.injectRealData(tasks);
+    if (fkErrors.length > 0) {
+      throw new Error(
+        `Import préventif Excel rejeté (${fkErrors.length} erreur(s) FK) : ${fkErrors.slice(0, 3).join(' | ')}`
+      );
+    }
+    if (parsedTasks.length === 0) {
+      throw new Error('Aucune tâche préventive valide détectée dans le classeur Excel.');
+    }
+
+    const existing = this.getTasks();
+    return this.injectRealData([...parsedTasks, ...(Array.isArray(existing) ? existing : [])]);
   }
 
   /**
-   * Charger les jeux de données d'usine pré-configurés
+   * Backdoor historique /data/preventive/*.json fermée définitivement (INGEST-GOV-P9)
    */
   static async loadFromPublicJson() {
-    const files = [
-      '/data/preventive/Part1_AFM_Repoussage_SAT.json',
-      '/data/preventive/Part2_PRH_Injection.json',
-      '/data/preventive/Part3_Detourage_Polissage.json',
-      '/data/preventive/Part4_FIN3_Divers.json',
-      '/data/preventive/Part5_FIN1_FIN2.json',
-      '/data/preventive/Part6_AutoCuivre.json',
-    ];
-    let allTasks = [];
-    for (const url of files) {
-      try {
-        const res = await fetch(url);
-        if (res.ok) {
-          const json = await res.json();
-          if (Array.isArray(json)) {
-            allTasks = allTasks.concat(json);
-          }
-        }
-      } catch (err) {
-        Logger.warn(`Could not load ${url}:`, err);
-      }
-    }
-    if (allTasks.length > 0) {
-      return this.injectRealData(allTasks);
-    }
-    return allTasks;
+    Logger.warn('[TaskService] Blocked legacy loadFromPublicJson() backdoor call.');
+    throw new Error(
+      'LEGACY_BACKDOOR_BLOCKED : Le chargement direct des fichiers publics /data/preventive/*.json est désactivé. Utilisez Mode C (Démo) ou Mode B (PM_CATALOG Type A + TaskImportModal FK vérifiée).'
+    );
   }
 }
 

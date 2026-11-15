@@ -368,10 +368,10 @@ export default function ReferentielPannesTravauxTab({
               <button
                 onClick={handleExportExcel}
                 className="h-9 px-3.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 font-bold text-xs transition flex items-center gap-2 cursor-pointer shadow-2xs active:scale-95"
-                title={t('corrective.catalogue.export_excel', 'Exporter le Référentiel (.xlsx)')}
+                title="Type B : Export externe du Référentiel (.xlsx — non réimportable ; pour Round-Trip utilisez Paramètres ➔ CM_CATALOG)"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-                <span>{t('corrective.catalogue.export_excel', 'Export Référentiel (.xlsx)')}</span>
+                <span>{t('corrective.catalogue.export_excel', 'Export Référentiel (.xlsx)')} (Type B)</span>
               </button>
             </div>
           </div>
