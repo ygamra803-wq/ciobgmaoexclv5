@@ -6,11 +6,14 @@ import reactiveEngine from '../../services/reactiveCalculationEngine';
 import {
   exportAssetsMachinesBundle,
   exportRefParcBundle,
+  exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
   getRefParcOfficialTemplate,
+  getRefPersonnelOfficialTemplate,
   runUnifiedImportPipeline,
   validateAndCommitAssetsMachinesBundle,
   validateAndCommitRefParcBundle,
+  validateAndCommitRefPersonnelBundle,
 } from '../../services/import/unifiedImportPipeline';
 import { useGmaoStore } from '../../store/useGmaoStore';
 
@@ -33,7 +36,7 @@ function collectProductionFiles(dir: string): string[] {
   return results;
 }
 
-describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)', () => {
+describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL & ASSETS_MACHINES)', () => {
   beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -447,6 +450,142 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
       expect(machinesReport.success).toBe(true);
       expect(machinesReport.rejected).toHaveLength(0);
       expect(useGmaoStore.getState().machines).toHaveLength(2);
+    });
+  });
+
+  describe('4. REF_PERSONNEL Bundle (02_PERSONNEL — Technicians & Operations)', () => {
+    beforeEach(() => {
+      runUnifiedImportPipeline(getRefParcOfficialTemplate(), { mode: 'MERGE' });
+    });
+
+    it('validates and commits the official REF_PERSONNEL.template.json after REF_PARC.template.json with zero auth secrets', () => {
+      const personnelTemplate = getRefPersonnelOfficialTemplate();
+      const report = runUnifiedImportPipeline(personnelTemplate, { mode: 'MERGE' });
+
+      expect(report.success).toBe(true);
+      expect(report.committed).toBe(true);
+      expect(report.rejected).toHaveLength(0);
+
+      const state = useGmaoStore.getState();
+      expect(state.technicians).toHaveLength(1);
+      expect(state.operations).toHaveLength(1);
+      expect(state.users).toHaveLength(2);
+      // Verify zero passwordHash or auth account pollution
+      expect(state.users.every((u: any) => !('passwordHash' in u))).toBe(true);
+    });
+
+    it('rejects technicians or operations referencing a non-existent code_zone (BROKEN_FK)', () => {
+      const report = validateAndCommitRefPersonnelBundle({
+        technicians: [
+          {
+            code_technician: 'TECH-GHOST',
+            nom: 'Karim Ghost',
+            code_zone: 'Z-INCONNUE',
+            type_profil: 'TECHNICIEN',
+            specialite: 'ELECTRIQUE',
+          },
+        ],
+        operations: [
+          {
+            code_operation: 'OP-GHOST',
+            nom: 'Said Ghost',
+            code_zone: 'Z-INCONNUE',
+          },
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected).toHaveLength(2);
+      expect(report.rejected.every((r) => r.code === 'BROKEN_FK')).toBe(true);
+      expect(useGmaoStore.getState().technicians).toHaveLength(0);
+    });
+
+    it('rejects duplicate code_technician (DUPLICATE_KEY) and forbidden auth fields (passwordHash/password -> FORBIDDEN_BUNDLE_FIELD)', () => {
+      const report = validateAndCommitRefPersonnelBundle({
+        technicians: [
+          {
+            code_technician: 'TECH-DUP',
+            nom: 'Youssef 1',
+            code_zone: 'Z-ATELIER-01',
+          },
+          {
+            code_technician: 'TECH-DUP',
+            nom: 'Youssef 2',
+            code_zone: 'Z-ATELIER-01',
+            passwordHash: 'sha256-secret-leak',
+          } as any,
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected.map((r) => r.code)).toContain('DUPLICATE_KEY');
+      expect(report.rejected.map((r) => r.code)).toContain('FORBIDDEN_BUNDLE_FIELD');
+    });
+
+    it('guards REPLACE_CATALOG when an existing technician is referenced by an active BT or PM task (REFERENCED_BY_ACTIVE_RECORDS)', () => {
+      runUnifiedImportPipeline(getRefPersonnelOfficialTemplate(), { mode: 'MERGE' });
+
+      const replaceReport = validateAndCommitRefPersonnelBundle(
+        {
+          technicians: [
+            {
+              code_technician: 'TECH-02',
+              nom: 'Hicham Benali',
+              code_zone: 'Z-ATELIER-01',
+              type_profil: 'TECHNICIEN',
+              specialite: 'MECANIQUE',
+            },
+          ],
+          operations: [],
+        },
+        {
+          mode: 'REPLACE_CATALOG',
+          actorRole: 'ADMIN',
+          existingCorrectiveInterventions: [
+            {
+              id: 'BT-99',
+              num_bt: 'BT-2026-099',
+              id_technician: 'TECH-01',
+              statut: 'EN_COURS',
+            } as any,
+          ],
+          existingPreventiveTasks: [
+            {
+              id_task: 'PM-01',
+              id_technician: 'TECH-01',
+              machine: 'CNC-01',
+            } as any,
+          ],
+        }
+      );
+
+      expect(replaceReport.success).toBe(false);
+      expect(replaceReport.committed).toBe(false);
+      expect(replaceReport.rejected).toHaveLength(1);
+      expect(replaceReport.rejected[0].code).toBe('REFERENCED_BY_ACTIVE_RECORDS');
+      expect(replaceReport.rejected[0].identifier).toBe('TECH-01');
+      expect(replaceReport.rejected[0].referencedCount).toBe(2);
+      expect(replaceReport.rejected[0].referenceBreakdown).toEqual({
+        machines: 0,
+        preventiveTasks: 1,
+        correctiveInterventions: 1,
+        mouvements: 0,
+      });
+    });
+
+    it('exports REF_PERSONNEL with canonical code_technician and code_operation and round-trips via MERGE', () => {
+      runUnifiedImportPipeline(getRefPersonnelOfficialTemplate(), { mode: 'MERGE' });
+
+      const exported = exportRefPersonnelBundle();
+      expect(exported.bundleType).toBe('REF_PERSONNEL');
+      expect(exported.technicians.map((t) => t.code_technician)).toEqual(['TECH-01']);
+      expect(exported.operations?.map((o) => o.code_operation)).toEqual(['RESP-01']);
+
+      const reimport = runUnifiedImportPipeline(exported, { mode: 'MERGE' });
+      expect(reimport.success).toBe(true);
+      expect(reimport.rejected).toHaveLength(0);
     });
   });
 });

@@ -5,15 +5,17 @@ import type {
   IMachineFamily,
   IMachineTemplate,
   IMouvement,
+  IOperation,
   ITechnician,
   IUserRecord,
   IWarehouseItem,
   IZone,
   MachineStatus,
+  ProfileType,
 } from '../../../types/domain';
 import type { CorrectiveInterventionItem, PreventiveTaskItem } from '../../../types/store';
 
-export type PipelineBundleType = 'REF_PARC' | 'ASSETS_MACHINES';
+export type PipelineBundleType = 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES';
 
 export type ImportSourceOrigin = 'EXCEL' | 'JSON_BUNDLE' | 'DEMO_BUNDLE';
 
@@ -23,6 +25,7 @@ export type ImportCommitPolicy = 'ATOMIC' | 'STAGE_ISOLATED';
 
 export type PipelineStageId =
   | '01_ZONES'
+  | '02_PERSONNEL'
   | '03_FAMILIES'
   | '03_TEMPLATES'
   | '03_GENERAL_SYSTEM_TYPES'
@@ -138,7 +141,47 @@ export interface RefParcStagingResult {
 }
 
 // ============================================================================
-// 2. ASSETS_MACHINES BUNDLE SCHEMAS (Level 1 Live Assets Layer)
+// 2. REF_PERSONNEL BUNDLE SCHEMAS (Level 2 Operational Personnel Layer)
+// ============================================================================
+
+export interface RefPersonnelTechnicianRow {
+  code_technician: string;
+  nom: string;
+  prenom?: string;
+  code_zone?: string | null;
+  specialite?: string;
+  is_active?: boolean;
+  statut?: string;
+  [key: string]: unknown;
+}
+
+export interface RefPersonnelOperationRow {
+  code_operation: string;
+  nom: string;
+  prenom?: string;
+  code_zone?: string | null;
+  type_profil?: ProfileType | string;
+  specialite?: string;
+  is_active?: boolean;
+  statut?: string;
+  [key: string]: unknown;
+}
+
+export interface RefPersonnelBundleInput {
+  bundleType?: 'REF_PERSONNEL';
+  technicians?: RefPersonnelTechnicianRow[];
+  operations?: RefPersonnelOperationRow[];
+  [key: string]: unknown;
+}
+
+export interface RefPersonnelStagingResult {
+  nextTechnicians: ITechnician[];
+  nextOperations: IOperation[];
+  nextUsers: IUserRecord[];
+}
+
+// ============================================================================
+// 3. ASSETS_MACHINES BUNDLE SCHEMAS (Level 1 Live Assets Layer)
 // ============================================================================
 
 export interface AssetsMachineRow {
@@ -172,7 +215,7 @@ export interface AssetsMachinesStagingResult {
 }
 
 // ============================================================================
-// 3. PIPELINE OPTIONS & CONTEXT
+// 4. PIPELINE OPTIONS & CONTEXT
 // ============================================================================
 
 export interface UnifiedImportOptions {
@@ -192,6 +235,7 @@ export interface UnifiedImportOptions {
   existingGeneralSystemTypes?: IGeneralSystemType[];
   existingMachines?: IMachine[];
   existingTechnicians?: ITechnician[];
+  existingOperations?: IOperation[];
   existingUsers?: IUserRecord[];
   existingMouvements?: IMouvement[];
   existingPreventiveTasks?: PreventiveTaskItem[];

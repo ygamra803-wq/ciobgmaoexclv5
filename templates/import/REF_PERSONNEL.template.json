@@ -1,0 +1,23 @@
+{
+  "bundleType": "REF_PERSONNEL",
+  "_contract": "TYPE_A_BUNDLE_ROUND_TRIP — Modèle officiel REF_PERSONNEL (Niveau 2 : 02_PERSONNEL — Techniciens & Responsables d'opérations). Aucun mot de passe, PIN ou compte d'authentification n'est autorisé dans ce paquet.",
+  "technicians": [
+    {
+      "code_technician": "TECH-01",
+      "nom": "Rachid El Mansouri (Exemple)",
+      "code_zone": "Z-ATELIER-01",
+      "specialite": "Électromécanique & CNC",
+      "is_active": true
+    }
+  ],
+  "operations": [
+    {
+      "code_operation": "RESP-01",
+      "nom": "Ismail Benali (Exemple)",
+      "code_zone": "ALL",
+      "type_profil": "RESPONSABLE",
+      "specialite": "Supervision Maintenance & Magasin PDR",
+      "is_active": true
+    }
+  ]
+}
