@@ -25,32 +25,6 @@ import type {
 } from '../../types/domain';
 import type { CorrectiveInterventionItem, SortieExterneItem } from '../../types/store';
 
-import initialPdrGroups from '../../data/stock/seedPdrGroups.json';
-import initialStockSeed from '../../data/stock/seedStockItems.json';
-import initialStockTypes from '../../data/stock/seedStockTypes.json';
-import initialFamilies from '../../data/machines/seedFamilies.json';
-import initialTemplates from '../../data/machines/seedTemplates.json';
-import initialMachines from '../../data/machines/seedMachines.json';
-import initialGeneralSystemTypes from '../../data/machines/seedGeneralSystemTypes.json';
-import initialZones from '../../data/machines/seedZones.json';
-import initialMachineBomLedger from '../../data/machines/seedMachineBomLedger.json';
-import initialWarehouseItems from '../../data/warehouse/seedWarehouseItems.json';
-import initialCompGroups from '../../data/warehouse/seedCompGroups.json';
-import initialCompFamilies from '../../data/warehouse/seedCompFamilies.json';
-import initialCompTemplates from '../../data/warehouse/seedCompTemplates.json';
-import initialEntrepotComponents from '../../data/warehouse/seedEntrepotComponents.json';
-import initialPartGroups from '../../data/warehouse/seedPartGroups.json';
-import initialPartTypes from '../../data/warehouse/seedPartTypes.json';
-import initialPartDesignations from '../../data/warehouse/seedPartDesignations.json';
-import seedUsers from '../../data/users/seedUsers.json';
-import initialMouvements from '../../data/movements/seedMouvements.json';
-import initialActions from '../../data/preventive/seedPreventiveActions.json';
-import initialGuides from '../../data/preventive/seedPreventiveGuides.json';
-import initialActionsByPanne from '../../data/corrective/seedActionsByPanne.json';
-import initialPanneCategories from '../../data/corrective/seedPanneByCategory.json';
-import initialTravauxAFaire from '../../data/corrective/seedTravailAFaire.json';
-import initialIntervenants from '../../data/corrective/seedIntervenants.json';
-
 export const ACTIVE_LIVE_KEY = STORAGE_KEYS.CORRECTIVE_ACTIVE_LIVE;
 export const PENDING_DELETED_IDS_KEY = 'gmao_pending_deleted_ids_v1';
 
@@ -335,30 +309,20 @@ export function deriveOperations(users: IUserRecord[]): IOperation[] {
 
 export function getInitialStock() {
   const types = loadCollection(STORAGE_KEYS.STOCK_TYPES, {
-    allowDemoFallback: true,
-    demoSeed: initialStockTypes,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const rawStock = loadCollection(STORAGE_KEYS.RAW_STOCK, {
-    allowDemoFallback: true,
-    demoSeed: initialStockSeed,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
-  const demoDesignations = (initialStockSeed as Array<Partial<IStockItem> & { id_diag?: string }>).map((s) => ({
-    id: s.id,
-    ref: s.ref || '',
-    designation: s.designation || '',
-    id_type: s.id_type,
-    type: s.type,
-    stockInitial: s.stockInitial,
-    seuil: s.seuil,
-    emplacement: s.emplacement,
-  }));
   const designations = loadCollection(STORAGE_KEYS.DESIGNATIONS, {
-    allowDemoFallback: true,
-    demoSeed: demoDesignations,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const pdrGroups = loadCollection(STORAGE_KEYS.PDR_GROUPS, {
-    allowDemoFallback: true,
-    demoSeed: initialPdrGroups,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   return { types, rawStock, designations, pdrGroups };
 }
@@ -383,29 +347,29 @@ export function normalizeMachinesList(list: IMachine[] = []): IMachine[] {
 
 export function getInitialMachines() {
   const families = loadCollection(STORAGE_KEYS.FAMILIES, {
-    allowDemoFallback: true,
-    demoSeed: initialFamilies,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const templates = loadCollection(STORAGE_KEYS.TEMPLATES, {
-    allowDemoFallback: true,
-    demoSeed: initialTemplates,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const blueprints = loadCollection(STORAGE_KEYS.BLUEPRINTS, {
     allowDemoFallback: false,
     demoSeed: [],
   });
   const loadedMachines = loadCollection<IMachine>(STORAGE_KEYS.MACHINES, {
-    allowDemoFallback: true,
-    demoSeed: initialMachines as IMachine[],
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const machines = normalizeMachinesList(loadedMachines);
   const generalSystemTypes = loadCollection(STORAGE_KEYS.GENERAL_SYSTEM_TYPES, {
-    allowDemoFallback: true,
-    demoSeed: initialGeneralSystemTypes,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const loadedZones = loadCollection<IZone>(STORAGE_KEYS.ZONES, {
-    allowDemoFallback: true,
-    demoSeed: initialZones as IZone[],
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const zones = loadedZones.map((z) => ({
     ...z,
@@ -413,44 +377,44 @@ export function getInitialMachines() {
     id_zone: z.id_zone || z.code_zone || z.code,
   }));
   const machineElementsLedger = loadCollection(STORAGE_KEYS.MACHINE_BOM, {
-    allowDemoFallback: true,
-    demoSeed: initialMachineBomLedger,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   return { families, templates, blueprints, machines, generalSystemTypes, zones, machineElementsLedger };
 }
 
 export function getInitialWarehouse() {
   const compGroups = loadCollection(STORAGE_KEYS.COMP_GROUPS, {
-    allowDemoFallback: true,
-    demoSeed: initialCompGroups,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const warehouseItems = loadCollection(STORAGE_KEYS.WAREHOUSE_ITEMS, {
-    allowDemoFallback: true,
-    demoSeed: initialWarehouseItems,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const entrepotComponents = loadCollection(STORAGE_KEYS.ENTREPOT_COMPONENTS, {
-    allowDemoFallback: true,
-    demoSeed: initialEntrepotComponents,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const compFamilies = loadCollection(STORAGE_KEYS.COMP_FAMILIES, {
-    allowDemoFallback: true,
-    demoSeed: initialCompFamilies,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const compTemplates = loadCollection(STORAGE_KEYS.COMP_TEMPLATES, {
-    allowDemoFallback: true,
-    demoSeed: initialCompTemplates,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const partGroups = loadCollection(STORAGE_KEYS.PART_GROUPS, {
-    allowDemoFallback: true,
-    demoSeed: initialPartGroups,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const partTypes = loadCollection(STORAGE_KEYS.PART_TYPES, {
-    allowDemoFallback: true,
-    demoSeed: initialPartTypes,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const partDesignations = loadCollection(STORAGE_KEYS.PART_DESIGNATIONS, {
-    allowDemoFallback: true,
-    demoSeed: initialPartDesignations,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   return {
     compGroups,
@@ -466,8 +430,8 @@ export function getInitialWarehouse() {
 
 export function getInitialPersonnel() {
   const users = loadCollection(STORAGE_KEYS.PERSONNEL, {
-    allowDemoFallback: true,
-    demoSeed: seedUsers,
+    allowDemoFallback: false,
+    demoSeed: [],
   }).filter(isRealPersonnelUser);
   return {
     users,
@@ -478,8 +442,8 @@ export function getInitialPersonnel() {
 
 export function getInitialMovements() {
   const mouvements = loadCollection(STORAGE_KEYS.MOUVEMENTS, {
-    allowDemoFallback: true,
-    demoSeed: initialMouvements,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const sortieDemands = loadCollection(STORAGE_KEYS.SORTIE_DEMANDS, {
     allowDemoFallback: false,
@@ -494,15 +458,15 @@ export function getInitialMovements() {
 
 export function getInitialPreventive() {
   const actions = loadCollection(STORAGE_KEYS.PREVENTIVE_ACTIONS, {
-    allowDemoFallback: true,
-    demoSeed: initialActions,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const guides = loadCollection(STORAGE_KEYS.PREVENTIVE_GUIDES, {
-    allowDemoFallback: true,
-    demoSeed: initialGuides,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const plans = loadCollection(STORAGE_KEYS.PREVENTIVE_PLANS, {
-    allowDemoFallback: true,
+    allowDemoFallback: false,
     demoSeed: [],
   });
   const tasks = loadCollection(STORAGE_KEYS.PREVENTIVE_TASKS, {
@@ -534,22 +498,22 @@ export function getInitialCorrective() {
     demoSeed: [],
   });
   const actionsByPanne = loadCollection(STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE, {
-    allowDemoFallback: true,
-    demoSeed: initialActionsByPanne,
+    allowDemoFallback: false,
+    demoSeed: {},
     emptyDefault: {},
   });
   const panneCategories = loadCollection(STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES, {
-    allowDemoFallback: true,
-    demoSeed: initialPanneCategories,
+    allowDemoFallback: false,
+    demoSeed: {},
     emptyDefault: {},
   });
   const travauxAFaire = loadCollection(STORAGE_KEYS.CORRECTIVE_TRAVAUX, {
-    allowDemoFallback: true,
-    demoSeed: initialTravauxAFaire,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const intervenants = loadCollection(STORAGE_KEYS.CORRECTIVE_INTERVENANTS, {
-    allowDemoFallback: true,
-    demoSeed: initialIntervenants,
+    allowDemoFallback: false,
+    demoSeed: [],
   });
   const workshopOrders = loadCollection<IWorkshopOrder>(STORAGE_KEYS.WORKSHOP_ORDERS, {
     allowDemoFallback: false,

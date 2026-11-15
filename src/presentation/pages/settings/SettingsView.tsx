@@ -11,17 +11,6 @@ import {
   FileSpreadsheet,
 } from 'lucide-react';
 
-import initialPdrGroups from '../../../data/stock/seedPdrGroups.json';
-import initialStock from '../../../data/stock/seedStockItems.json';
-import initialStockTypes from '../../../data/stock/seedStockTypes.json';
-import initialMouvements from '../../../data/movements/seedMouvements.json';
-import initialMachines from '../../../data/machines/seedMachines.json';
-import initialFamilies from '../../../data/machines/seedFamilies.json';
-import initialTemplates from '../../../data/machines/seedTemplates.json';
-import initialZones from '../../../data/zones/seedZones.json';
-import initialTechnicians from '../../../data/users/seedTechnicians.json';
-import initialOperations from '../../../data/users/seedOperations.json';
-import initialCorrectiveInterventions from '../../../data/corrective/seedCorrectiveInterventions.json';
 import { storageService } from '../../../utils/storageService';
 import { indexedDBService } from '../../../infrastructure/database/IndexedDBService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
@@ -828,18 +817,7 @@ export default function SettingsView({
       if (typeof onClearAllForRealFactory === 'function') {
         onClearAllForRealFactory();
       } else {
-        useGmaoStore.getState().setPdrGroups([]);
-        setRawStock?.([]);
-        setMouvements?.([]);
-        setMachines?.([]);
-        setFamilies?.([]);
-        setTemplates?.([]);
-        setZones?.([]);
-        setTechnicians?.([]);
-        setOperations?.([]);
-        setTypes?.([]);
-        if (setPreventiveTasks) setPreventiveTasks([]);
-        if (setCorrectiveInterventions) setCorrectiveInterventions([]);
+        await useGmaoStore.getState().handleClearAllForRealFactory();
       }
       setIsDemoMode(false);
       showToast?.('Base de données vidée (Mode Usine Réelle actif) !', 'info');
@@ -851,47 +829,21 @@ export default function SettingsView({
       showToast?.('Accès refusé : privilèges Administrateur requis.', 'error');
       return;
     }
+    const labels: Record<string, string> = {
+      stock: 'Groupes PDR, Types, Stock & Désignations',
+      parc: 'Parc Machines, Familles, Modèles & Plans',
+      entrepot: 'Entrepôt, Organes & Pièces Détachées',
+      zones: 'Zones & Équipes Techniques',
+      mouvements: 'Mouvements & Sorties Externes',
+      preventive: 'Planning & Référentiel Préventif',
+      corrective: 'Interventions Correctives & Catalogue Pannes',
+    };
     if (typeof onLoadDemoSection === 'function') {
       onLoadDemoSection(group);
-      const labels: Record<string, string> = {
-        stock: 'Groupes PDR, Types, Stock & Désignations',
-        parc: 'Parc Machines, Familles, Modèles & Plans',
-        entrepot: 'Entrepôt, Organes & Pièces Détachées',
-        zones: 'Zones & Équipes Techniques',
-        mouvements: 'Mouvements & Sorties Externes',
-        preventive: 'Planning & Référentiel Préventif',
-        corrective: 'Interventions Correctives & Catalogue Pannes',
-      };
-      showToast?.(`Données Démo injectées avec succès pour : ${labels[group] || group}.`, 'success');
-      return;
+    } else {
+      useGmaoStore.getState().handleLoadDemoSection(group);
     }
-
-    if (group === 'stock') {
-      useGmaoStore.getState().setPdrGroups(initialPdrGroups as unknown as PdrGroup[]);
-      setTypes?.(initialStockTypes as StockType[]);
-      setRawStock?.(initialStock as IStockItem[]);
-      showToast?.(`${initialStock.length} articles injectés dans le stock avec quantités.`, 'success');
-    } else if (group === 'parc') {
-      setMachines?.(initialMachines as IMachine[]);
-      setFamilies?.(initialFamilies as IMachineFamily[]);
-      setTemplates?.(initialTemplates as IMachineTemplate[]);
-      showToast?.(`Parc machine initialisé avec succès (${initialMachines.length} machines).`, 'success');
-    } else if (group === 'zones') {
-      setZones?.(initialZones as IZone[]);
-      setTechnicians?.(initialTechnicians as ITechnician[]);
-      setOperations?.(initialOperations as IOperation[]);
-      showToast?.('Zones et équipes initialisées avec succès.', 'success');
-    } else if (group === 'mouvements') {
-      setMouvements?.(initialMouvements as unknown as IMouvement[]);
-      showToast?.(`${initialMouvements.length} mouvements historiques injectés.`, 'success');
-    } else if (group === 'corrective') {
-      if (typeof onResetCorrective === 'function') {
-        onResetCorrective();
-      } else if (typeof onBulkImportCorrective === 'function') {
-        onBulkImportCorrective(initialCorrectiveInterventions as CorrectiveInterventionItem[]);
-      }
-      showToast?.(`${initialCorrectiveInterventions.length} interventions correctives injectées.`, 'success');
-    }
+    showToast?.(`Données Démo injectées avec succès pour : ${labels[group] || group}.`, 'success');
   };
 
   const handleClearGroup = (group: string) => {
@@ -905,8 +857,10 @@ export default function SettingsView({
     }
     if (typeof onClearDemoSection === 'function') {
       onClearDemoSection(group);
-      showToast?.(`La section "${group}" a été vidée avec succès.`, 'info');
+    } else {
+      useGmaoStore.getState().handleClearDemoSection(group);
     }
+    showToast?.(`La section "${group}" a été vidée avec succès.`, 'info');
   };
 
   const handleToggleDemoMode = (nextActive: boolean, targetSection = 'all') => {
@@ -940,11 +894,7 @@ export default function SettingsView({
     if (typeof onLoadDemoData === 'function') {
       onLoadDemoData();
     } else {
-      handleInjectGroup('stock');
-      handleInjectGroup('parc');
-      handleInjectGroup('zones');
-      handleInjectGroup('mouvements');
-      handleInjectGroup('corrective');
+      useGmaoStore.getState().handleLoadDemoData();
     }
     setIsDemoMode(true);
     showToast?.("Injection globale de toute l'usine (Données Démo SSOT) terminée avec succès.", 'success');
@@ -1737,14 +1687,14 @@ export default function SettingsView({
         {activeTab === 'injection' && allowedTabIds.includes('injection') && (
           <SettingsInjectionTab
             handleInjectAll={handleInjectAll}
-            initialStock={initialStock}
+            initialStock={rawStock}
             handleInjectGroup={handleInjectGroup}
             handleClearGroup={handleClearGroup}
-            initialMachines={initialMachines}
-            initialZones={initialZones}
-            initialTechnicians={initialTechnicians}
-            initialMouvements={initialMouvements}
-            initialCorrectiveInterventions={initialCorrectiveInterventions}
+            initialMachines={machines}
+            initialZones={zones}
+            initialTechnicians={technicians}
+            initialMouvements={mouvements}
+            initialCorrectiveInterventions={correctiveInterventions}
             warehouseCount={warehouseItems.length}
             preventiveCount={preventiveTasks.length}
             isDemoMode={isDemoMode}

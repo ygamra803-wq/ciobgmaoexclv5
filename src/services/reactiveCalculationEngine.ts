@@ -7,10 +7,7 @@
 import { HyperFormula } from 'hyperformula';
 import { Logger } from '../core/logger/LoggerService';
 import { safeNum, calculateStockStatus } from '../utils/formulaEngine';
-import { INITIAL_STOCK_LOOKUP } from '../utils/baselineStock';
 import { stockIndexStore } from '../application/StockIndexStore';
-import { storageService } from '../utils/storageService';
-import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 
 class ReactiveCalculationEngine {
   hf: any;
@@ -92,9 +89,6 @@ class ReactiveCalculationEngine {
         if (!item) return null;
         const itemRef = String(item.ref || item.Ref || `ART-${idx + 1}`).trim();
         const itemRefKey = itemRef.toLowerCase();
-        const itemDesigKey = String(item.designation || item.Designation || '')
-          .trim()
-          .toLowerCase();
 
         // Direct O(1) indexed lookups
         let totals = { entrees: 0, sorties: 0, commandes: 0 };
@@ -131,21 +125,6 @@ class ReactiveCalculationEngine {
           !isNaN(Number(item.stockInitial))
         ) {
           stockInitial = Number(item.stockInitial);
-        } else {
-          let isEmptyStartMode = false;
-          try {
-            const rawMode = storageService.getItem(STORAGE_KEYS.START_MODE);
-            isEmptyStartMode =
-              String(rawMode || '').replace(/^"|"$/g, '') === 'empty';
-          } catch {}
-          if (!isEmptyStartMode) {
-            const baseline =
-              INITIAL_STOCK_LOOKUP.get(itemRefKey) ||
-              (itemDesigKey ? INITIAL_STOCK_LOOKUP.get(itemDesigKey) : null);
-            if (baseline && baseline.qty > 0) {
-              stockInitial = baseline.qty;
-            }
-          }
         }
 
         const seuil = safeNum(item.seuil, 3);

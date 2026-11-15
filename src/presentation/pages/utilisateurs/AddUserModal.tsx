@@ -5,7 +5,7 @@ import UserCodePicker from '../../components/common/UserCodePicker';
 import {
   RESPONSABLE_TEMPLATES,
   formatTemplateLabels,
-} from '../../../data/responsableTemplates';
+} from '../../../domain/users/responsableTemplates';
 
 export default function AddUserModal({
   isOpen,

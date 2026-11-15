@@ -3,11 +3,10 @@ import { Logger } from '../../../core/logger/LoggerService';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
-import initialTasks from '../../../data/preventive/seedPreventiveTasks.json';
 import { ExecutionService } from './ExecutionService';
 
 export const STORAGE_KEY_TASKS = STORAGE_KEYS.PREVENTIVE_TASKS;
-export const INITIAL_TASKS = Array.isArray(initialTasks) ? initialTasks : [];
+export const INITIAL_TASKS: any[] = [];
 
 export function computeNextDueDate(dateRealisation: string, frequence?: string): string {
   try {

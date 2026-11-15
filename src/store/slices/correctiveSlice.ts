@@ -314,19 +314,22 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     },
 
     handleResetCorrectiveActions: async () => {
-      const baseline = await loadBaselineCorrectiveData();
-      get().setCorrectiveActionsByPanne(baseline.actionsByPanne || {});
-      get().setCorrectivePanneCategories(baseline.panneCategories || {});
-      get().setCorrectiveTravauxAFaire(baseline.travauxAFaire || []);
+      DataGateway.loadDemoSection('corrective', {
+        setCorrectiveActionsByPanne: (val) => get().setCorrectiveActionsByPanne(val),
+        setCorrectivePanneCategories: (val) => get().setCorrectivePanneCategories(val),
+        setCorrectiveTravauxAFaire: (val) => get().setCorrectiveTravauxAFaire(val),
+      });
     },
 
     handleForceSyncCorrectiveSeed: async () => {
+      DataGateway.loadDemoSection('corrective', {
+        setCorrectiveInterventions: (val) => get().setCorrectiveInterventions(val),
+        setCorrectiveActionsByPanne: (val) => get().setCorrectiveActionsByPanne(val),
+        setCorrectivePanneCategories: (val) => get().setCorrectivePanneCategories(val),
+        setCorrectiveTravauxAFaire: (val) => get().setCorrectiveTravauxAFaire(val),
+        setCorrectiveIntervenants: (val) => get().setCorrectiveIntervenants(val),
+      });
       const baseline = await loadBaselineCorrectiveData();
-      get().setCorrectiveInterventions(baseline.interventions || []);
-      get().setCorrectiveActionsByPanne(baseline.actionsByPanne || {});
-      get().setCorrectivePanneCategories(baseline.panneCategories || {});
-      get().setCorrectiveTravauxAFaire(baseline.travauxAFaire || []);
-      get().setCorrectiveIntervenants(baseline.intervenants || []);
       return {
         interventionsCount: (baseline.interventions || []).length,
         pannesCount: Object.values(baseline.panneCategories || {}).reduce<number>(
@@ -996,8 +999,10 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     },
 
     handleResetCorrectiveToSeed: async () => {
+      DataGateway.loadDemoSection('corrective', {
+        setCorrectiveInterventions: (val) => get().setCorrectiveInterventions(val),
+      });
       const baseline = await loadBaselineCorrectiveData();
-      get().setCorrectiveInterventions(baseline.interventions || []);
       return {
         cancelled: false,
         restoredCount: (baseline.interventions || []).length,

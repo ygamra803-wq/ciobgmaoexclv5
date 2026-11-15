@@ -43,7 +43,7 @@ import {
   normalizeTemplateIds,
   getTemplatesForUser,
   formatTemplateLabels,
-} from '../../../data/responsableTemplates';
+} from '../../../domain/users/responsableTemplates';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { usePermission } from '../../components/common/PermissionGate';

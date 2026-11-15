@@ -12,13 +12,11 @@ import { Logger } from '../../core/logger/LoggerService';
 import { storageService } from '../../utils/storageService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../infrastructure/persistence/migrateStorage';
-import initialSorties from '../../data/movements/seedSortiesExternes.json';
 import type { SortieExterneItem, SortieMountedPayload } from '../../types/store';
 
 const STORAGE_KEY = STORAGE_KEYS.SORTIE_EXTERNE;
 
-export const INITIAL_SORTIES_BOBINAGE: SortieExterneItem[] =
-  initialSorties as unknown as SortieExterneItem[];
+export const INITIAL_SORTIES_BOBINAGE: SortieExterneItem[] = [];
 
 export interface SortieWarehouseItemLike {
   id?: string | number;
@@ -373,11 +371,9 @@ export class SortieExterneService {
     return [];
   }
 
-  /** Restores baseline seed archive orders when explicitly requested by admin. */
+  /** Returns currently persisted external/workshop orders without direct seed file injection. */
   static resetToBaseline(): SortieExterneItem[] {
-    const baseline = Array.isArray(INITIAL_SORTIES_BOBINAGE) ? [...INITIAL_SORTIES_BOBINAGE] : [];
-    this.saveSorties(baseline);
-    return baseline;
+    return this.getSorties();
   }
 
   /**

@@ -73,7 +73,7 @@ import seedGeneralSystemTypes from '../data/machines/seedGeneralSystemTypes.json
 import seedFamilies from '../data/machines/seedFamilies.json';
 import seedTemplates from '../data/machines/seedTemplates.json';
 import seedBlueprints from '../data/machines/seedBlueprints.json';
-import seedZones from '../data/machines/seedZones.json';
+import seedZones from '../data/zones/seedZones.json';
 import seedMachineBomLedger from '../data/machines/seedMachineBomLedger.json';
 
 import seedPdrGroups from '../data/stock/seedPdrGroups.json';
@@ -915,13 +915,14 @@ export const DataGateway = {
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, true);
     storageService.setItem(STORAGE_KEYS.START_MODE, 'demo');
 
-    // 2. Write all seeds to canonical STORAGE_KEYS only (Groups -> Types -> Items -> Mouvements)
-    this.saveMachines(seedMachines);
-    this.saveGeneralSystemTypes(seedGeneralSystemTypes);
+    // 2. Write all seeds to canonical STORAGE_KEYS in strict dependency order:
+    // Zones -> Families -> Templates -> GeneralSystemTypes -> Machines -> Blueprints -> MachineBom
+    this.saveZones(seedZones);
     this.saveFamilies(seedFamilies);
     this.saveTemplates(seedTemplates);
+    this.saveGeneralSystemTypes(seedGeneralSystemTypes);
+    this.saveMachines(seedMachines);
     this.saveBlueprints(seedBlueprints);
-    this.saveZones(seedZones);
     this.saveMachineBom(seedMachineBomLedger);
 
     this.savePdrGroups(typedPdrGroups);
@@ -1582,16 +1583,16 @@ export const DataGateway = {
 
       case 'parc':
       case 'machines':
-        this.saveMachines(seedMachines);
-        this.saveGeneralSystemTypes(seedGeneralSystemTypes);
         this.saveFamilies(seedFamilies);
         this.saveTemplates(seedTemplates);
+        this.saveGeneralSystemTypes(seedGeneralSystemTypes);
+        this.saveMachines(seedMachines);
         this.saveBlueprints(seedBlueprints);
         this.saveMachineBom(seedMachineBomLedger);
-        if (setters.setMachines) setters.setMachines(seedMachines);
-        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
         if (setters.setFamilies) setters.setFamilies(seedFamilies);
         if (setters.setTemplates) setters.setTemplates(seedTemplates);
+        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
+        if (setters.setMachines) setters.setMachines(seedMachines);
         if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
         if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
         break;
