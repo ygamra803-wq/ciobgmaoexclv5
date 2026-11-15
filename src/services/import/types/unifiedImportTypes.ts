@@ -1,5 +1,10 @@
 import type {
   AssetClass,
+  ComponentDefaultRepairMode,
+  ICompFamily,
+  ICompGroup,
+  ICompTemplate,
+  IEntrepotComponent,
   IGeneralSystemType,
   IMachine,
   IMachineFamily,
@@ -7,6 +12,8 @@ import type {
   IMouvement,
   IOperation,
   IPartDesignation,
+  IPartGroup,
+  IPartType,
   IStockItem,
   ITechnician,
   IUserRecord,
@@ -22,6 +29,7 @@ import type {
   CorrectiveInterventionItem,
   IPreventiveActionCatalogItem,
   IPreventiveGuideCatalogItem,
+  MachineElement,
   PreventiveTaskItem,
 } from '../../../types/store';
 import type { PreventiveExecutionRecord } from '../../../types/preventive';
@@ -32,6 +40,8 @@ export type PipelineBundleType =
   | 'ASSETS_MACHINES'
   | 'REF_PDR'
   | 'PM_CATALOG'
+  | 'ENTREPOT_BOM'
+  | 'CM_CATALOG'
   | 'DEMO_BUNDLE';
 
 export type ImportSourceOrigin = 'EXCEL' | 'JSON_BUNDLE' | 'DEMO_BUNDLE';
@@ -51,7 +61,15 @@ export type PipelineStageId =
   | '04_PDR_TYPES'
   | '04_PDR_ITEMS'
   | '05_PM_ACTIONS'
-  | '05_PM_GUIDES';
+  | '05_PM_GUIDES'
+  | '06_COMP_GROUPS'
+  | '06_COMP_FAMILIES'
+  | '06_COMP_TEMPLATES'
+  | '06_PART_GROUPS'
+  | '06_PART_TYPES'
+  | '06_PART_DESIGNATIONS'
+  | '07_PANNE_CATEGORIES'
+  | '07_PANNE_ACTIONS';
 
 export type ImportIssueCode =
   | 'MISSING_REQUIRED'
@@ -361,7 +379,139 @@ export interface PmCatalogStagingResult {
 }
 
 // ============================================================================
-// 6. DEMO_BUNDLE SCHEMAS (Unified Multi-Stage Demo Hydration — Mode C)
+// 6. ENTREPOT_BOM BUNDLE SCHEMAS (Level 2 Components & Parts BOM Layer — 06_ENTREPOT_BOM)
+// ============================================================================
+
+export interface EntrepotBomCompGroupRow {
+  code_comp_group: string;
+  code?: string;
+  libelle: string;
+  ref?: string;
+  description?: string;
+  domaine_technique?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomCompFamilyRow {
+  code_comp_family: string;
+  code_comp_group: string;
+  code?: string;
+  libelle: string;
+  type?: string;
+  ref?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomCompTemplateRow {
+  code_comp_template: string;
+  code_comp_family: string;
+  code_comp_group?: string;
+  code?: string;
+  ref?: string;
+  libelle: string;
+  type?: string;
+  mode_reparation_defaut?: ComponentDefaultRepairMode | string;
+  tension_nominale?: string;
+  courant_nominal_a?: number | string;
+  indice_protection?: string;
+  type_fixation?: string;
+  specs?: Record<string, unknown>;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomPartGroupRow {
+  code_part_group: string;
+  code?: string;
+  libelle: string;
+  description?: string;
+  domaine_technique?: string;
+  default_policy_tags?: string | MaterialPolicyTag[];
+  sort_order?: number;
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomPartTypeRow {
+  code_part_type: string;
+  code_part_group: string;
+  libelle: string;
+  description?: string;
+  domaine_technique?: string;
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomPartDesignationRow {
+  ref: string;
+  code_part_type: string;
+  code_part_group?: string;
+  designation: string;
+  libelle?: string;
+  id_diag?: string;
+  seuil?: number;
+  emplacement?: string;
+  matiere_nuance?: string;
+  ref_plan?: string;
+  dimensions_brut?: string;
+  traitement_thermique?: string;
+  policy_tags?: string | MaterialPolicyTag[];
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomBundleInput {
+  bundleType?: 'ENTREPOT_BOM';
+  compGroups?: EntrepotBomCompGroupRow[];
+  compFamilies?: EntrepotBomCompFamilyRow[];
+  compTemplates?: EntrepotBomCompTemplateRow[];
+  partGroups?: EntrepotBomPartGroupRow[];
+  partTypes?: EntrepotBomPartTypeRow[];
+  partDesignations?: EntrepotBomPartDesignationRow[];
+  [key: string]: unknown;
+}
+
+export interface EntrepotBomStagingResult {
+  nextCompGroups: ICompGroup[];
+  nextCompFamilies: ICompFamily[];
+  nextCompTemplates: ICompTemplate[];
+  nextPartGroups: IPartGroup[];
+  nextPartTypes: IPartType[];
+  nextPartDesignations: IPartDesignation[];
+}
+
+// ============================================================================
+// 7. CM_CATALOG BUNDLE SCHEMAS (Level 2 Fault & Action Catalog — 07_CM_CATALOG)
+// ============================================================================
+
+export interface CmCatalogCategoryRow {
+  code_category: string;
+  libelle?: string;
+  [key: string]: unknown;
+}
+
+export interface CmCatalogFaultRow {
+  code_fault: string;
+  code_category: string;
+  panne: string;
+  actions?: string[];
+  [key: string]: unknown;
+}
+
+export interface CmCatalogBundleInput {
+  bundleType?: 'CM_CATALOG';
+  categories?: CmCatalogCategoryRow[];
+  faults?: CmCatalogFaultRow[];
+  [key: string]: unknown;
+}
+
+export interface CmCatalogStagingResult {
+  nextPanneCategories: Record<string, string[]>;
+  nextActionsByPanne: Record<string, string[]>;
+}
+
+// ============================================================================
+// 8. DEMO_BUNDLE SCHEMAS (Unified Multi-Stage Demo Hydration — Mode C)
 // ============================================================================
 
 export interface DemoBundleInput {
@@ -371,6 +521,8 @@ export interface DemoBundleInput {
   assetsMachines: AssetsMachinesBundleInput;
   refPdr: RefPdrBundleInput;
   pmCatalog: PmCatalogBundleInput;
+  entrepotBom?: EntrepotBomBundleInput;
+  cmCatalog?: CmCatalogBundleInput;
 }
 
 export interface DemoBundleStagingResult {
@@ -388,10 +540,18 @@ export interface DemoBundleStagingResult {
   nextDesignations: IPartDesignation[];
   nextActions: IPreventiveActionCatalogItem[];
   nextGuides: IPreventiveGuideCatalogItem[];
+  nextCompGroups?: ICompGroup[];
+  nextCompFamilies?: ICompFamily[];
+  nextCompTemplates?: ICompTemplate[];
+  nextPartGroups?: IPartGroup[];
+  nextPartTypes?: IPartType[];
+  nextPartDesignations?: IPartDesignation[];
+  nextPanneCategories?: Record<string, string[]>;
+  nextActionsByPanne?: Record<string, string[]>;
 }
 
 // ============================================================================
-// 7. PIPELINE OPTIONS & CONTEXT
+// 9. PIPELINE OPTIONS & CONTEXT
 // ============================================================================
 
 export interface UnifiedImportOptions {
@@ -424,5 +584,15 @@ export interface UnifiedImportOptions {
   existingPreventiveExecutions?: PreventiveExecutionRecord[];
   existingCorrectiveInterventions?: CorrectiveInterventionItem[];
   existingWarehouseItems?: IWarehouseItem[];
+  existingCompGroups?: ICompGroup[];
+  existingCompFamilies?: ICompFamily[];
+  existingCompTemplates?: ICompTemplate[];
+  existingPartGroups?: IPartGroup[];
+  existingPartTypes?: IPartType[];
+  existingPartDesignations?: IPartDesignation[];
+  existingEntrepotComponents?: IEntrepotComponent[];
+  existingMachineElementsLedger?: MachineElement[];
+  existingPanneCategories?: Record<string, string[]>;
+  existingActionsByPanne?: Record<string, string[]>;
 }
 

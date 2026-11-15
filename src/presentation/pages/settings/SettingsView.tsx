@@ -1704,6 +1704,10 @@ export default function SettingsView({
             showToast={showToast}
             handleSaveSettings={handleSaveSettings}
             handleResetToZero={handleResetToZero}
+            currentUser={currentUser}
+            onNavigateToUsers={
+              onNavigateToTab ? () => onNavigateToTab('utilisateurs') : undefined
+            }
           />
         )}
 

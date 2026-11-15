@@ -1,27 +1,40 @@
 import fs from 'fs';
 import path from 'path';
+import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DataGateway } from '../../application/DataGateway';
 import reactiveEngine from '../../services/reactiveCalculationEngine';
 import {
   exportAssetsMachinesBundle,
+  exportCmCatalogBundle,
+  exportEntrepotBomBundle,
   exportPmCatalogBundle,
   exportRefParcBundle,
   exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
+  getCmCatalogOfficialTemplate,
+  getEntrepotBomOfficialTemplate,
   getPmCatalogOfficialTemplate,
   getRefParcOfficialTemplate,
   getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
+  registerPipelineCommitListener,
   runUnifiedImportPipeline,
   validateAndCommitAssetsMachinesBundle,
+  validateAndCommitCmCatalogBundle,
   validateAndCommitDemoBundle,
+  validateAndCommitEntrepotBomBundle,
   validateAndCommitPmCatalogBundle,
   validateAndCommitRefParcBundle,
   validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
 } from '../../services/import/unifiedImportPipeline';
+import {
+  buildTypeAExcelWorkbookBuffer,
+  parseTypeAExcelWorkbook,
+  TYPE_A_README_SHEET,
+} from '../../services/import/typeAExcelBridge';
 import { useGmaoStore } from '../../store/useGmaoStore';
 import { executeGuardedGlobalFileImport } from '../../hooks/useAppExcelOperations';
 import PreventiveService from '../../application/services/PreventiveService';
@@ -46,7 +59,7 @@ function collectProductionFiles(dir: string): string[] {
   return results;
 }
 
-describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)', () => {
+describe('UnifiedImportPipeline & Backdoor Closure (7 Official Bundles + DEMO_BUNDLE)', () => {
   beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -807,7 +820,7 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
   });
 
   describe('7. INGEST-P5 — Unified DemoBundle & loadDemoData Referential Integrity', () => {
-    it('validates and commits the official DEMO_BUNDLE across all 5 layers with zero rejected records', () => {
+    it('validates and commits the official DEMO_BUNDLE across all 7 structured layers with zero rejected records', () => {
       const demoBundle = DataGateway.getOfficialDemoBundle();
       const report = validateAndCommitDemoBundle(demoBundle, { mode: 'MERGE' });
 
@@ -816,7 +829,7 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
       expect(report.committed).toBe(true);
       expect(report.rejected).toHaveLength(0);
 
-      // Verify all 11 pipeline stages were accepted in causal order
+      // Verify all 20 pipeline stages across 7 layers were accepted in causal order
       const stages = report.accepted.map((a) => a.stage);
       expect(stages).toEqual([
         '01_ZONES',
@@ -831,6 +844,14 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
         '04_PDR_ITEMS',
         '05_PM_ACTIONS',
         '05_PM_GUIDES',
+        '06_COMP_GROUPS',
+        '06_COMP_FAMILIES',
+        '06_COMP_TEMPLATES',
+        '06_PART_GROUPS',
+        '06_PART_TYPES',
+        '06_PART_DESIGNATIONS',
+        '07_PANNE_CATEGORIES',
+        '07_PANNE_ACTIONS',
       ]);
 
       // Verify legacy zone labels on demo machines and technicians were normalized to canonical code_zone
@@ -989,6 +1010,426 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
           { actorRole: 'ADMIN' }
         )
       ).toThrow(/REFERENCED_BY_ACTIVE_RECORDS/);
+    });
+  });
+
+  describe('9. INGEST-P7 — Type A Excel (.xlsx) Bridge, Global Type A Routing, REPLACE_CATALOG RBAC & Commit Sync Hook', () => {
+    it('supports full Type A .xlsx round-trip across all 5 bundles (REF_PARC -> REF_PERSONNEL -> ASSETS_MACHINES -> REF_PDR -> PM_CATALOG) with origin=EXCEL', () => {
+      const parcXlsx = buildTypeAExcelWorkbookBuffer('REF_PARC', getRefParcOfficialTemplate());
+      const parsedParc = parseTypeAExcelWorkbook(parcXlsx);
+      expect(parsedParc.ok).toBe(true);
+      expect(parsedParc.sheetNames[0]).toBe(TYPE_A_README_SHEET);
+      const parcReport = runUnifiedImportPipeline(parsedParc.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: false,
+      });
+      expect(parcReport.success).toBe(true);
+      expect(parcReport.origin).toBe('EXCEL');
+      expect(useGmaoStore.getState().zones.length).toBeGreaterThan(0);
+
+      const persXlsx = buildTypeAExcelWorkbookBuffer(
+        'REF_PERSONNEL',
+        getRefPersonnelOfficialTemplate()
+      );
+      const parsedPers = parseTypeAExcelWorkbook(persXlsx);
+      expect(parsedPers.ok).toBe(true);
+      const persReport = runUnifiedImportPipeline(parsedPers.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: false,
+      });
+      expect(persReport.success).toBe(true);
+      expect(useGmaoStore.getState().technicians.length).toBeGreaterThan(0);
+
+      const machinesXlsx = buildTypeAExcelWorkbookBuffer(
+        'ASSETS_MACHINES',
+        getAssetsMachinesOfficialTemplate()
+      );
+      const parsedMachines = parseTypeAExcelWorkbook(machinesXlsx);
+      expect(parsedMachines.ok).toBe(true);
+      const machinesReport = runUnifiedImportPipeline(parsedMachines.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: false,
+      });
+      expect(machinesReport.success).toBe(true);
+      expect(useGmaoStore.getState().machines.length).toBeGreaterThan(0);
+
+      const pdrXlsx = buildTypeAExcelWorkbookBuffer('REF_PDR', getRefPdrOfficialTemplate());
+      const parsedPdr = parseTypeAExcelWorkbook(pdrXlsx);
+      expect(parsedPdr.ok).toBe(true);
+      const pdrReport = runUnifiedImportPipeline(parsedPdr.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: false,
+      });
+      expect(pdrReport.success).toBe(true);
+      expect(useGmaoStore.getState().rawStock.length).toBeGreaterThan(0);
+
+      const pmXlsx = buildTypeAExcelWorkbookBuffer('PM_CATALOG', getPmCatalogOfficialTemplate());
+      const parsedPm = parseTypeAExcelWorkbook(pmXlsx);
+      expect(parsedPm.ok).toBe(true);
+      const pmReport = runUnifiedImportPipeline(parsedPm.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: false,
+      });
+      expect(pmReport.success).toBe(true);
+      expect(useGmaoStore.getState().preventiveActions.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().preventiveGuides.length).toBeGreaterThan(0);
+
+      // Re-export live state via Type A Excel Round-Trip and verify idempotent dryRun
+      const exportedPmXlsx = buildTypeAExcelWorkbookBuffer('PM_CATALOG', exportPmCatalogBundle());
+      const reparsedPm = parseTypeAExcelWorkbook(exportedPmXlsx);
+      expect(reparsedPm.ok).toBe(true);
+      const dryPmReport = runUnifiedImportPipeline(reparsedPm.payload, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: true,
+      });
+      expect(dryPmReport.success).toBe(true);
+      expect(dryPmReport.accepted[0].unchanged).toBeGreaterThan(0);
+    });
+
+    it('rejects Type B Excel workbooks without README_TYPE_A while committing authenticated Type A .xlsx via executeGuardedGlobalFileImport', () => {
+      // Build an arbitrary Type B workbook (no README_TYPE_A)
+      const wbTypeB = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(
+        wbTypeB,
+        XLSX.utils.json_to_sheet([{ Ref: 'ORPHAN-1', Stock: 50 }]),
+        'Stock_Actuel'
+      );
+      XLSX.utils.book_append_sheet(
+        wbTypeB,
+        XLSX.utils.json_to_sheet([{ ID: 'MVT-1', Qty: 10 }]),
+        'Mouvements'
+      );
+      const typeBBytes = XLSX.write(wbTypeB, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+
+      const parsedTypeB = parseTypeAExcelWorkbook(typeBBytes);
+      expect(parsedTypeB.ok).toBe(false);
+      expect(parsedTypeB.code).toBe('TYPE_B_OR_UNRECOGNIZED_EXCEL');
+
+      const globalTypeBResult = executeGuardedGlobalFileImport('GMAO_Export_TypeB.xlsx', {
+        kind: 'XLSX',
+        buffer: typeBBytes,
+        sheetNames: ['Stock_Actuel', 'Mouvements'],
+      });
+      expect(globalTypeBResult.accepted).toBe(false);
+      expect(globalTypeBResult.code).toBe('TYPE_B_EXCEL_BLOCKED');
+      expect(useGmaoStore.getState().rawStock).toHaveLength(0);
+
+      // Now pass an authentic Type A REF_PARC .xlsx workbook through global guarded import
+      const parcTypeABytes = buildTypeAExcelWorkbookBuffer(
+        'REF_PARC',
+        getRefParcOfficialTemplate()
+      );
+      const globalTypeAResult = executeGuardedGlobalFileImport(
+        'REF_PARC.template.xlsx',
+        {
+          kind: 'XLSX',
+          buffer: parcTypeABytes,
+        },
+        { actorRole: 'ADMIN' }
+      );
+      expect(globalTypeAResult.accepted).toBe(true);
+      expect(globalTypeAResult.code).toBe('TYPE_A_PIPELINE_COMMITTED');
+      expect(globalTypeAResult.report?.origin).toBe('EXCEL');
+      expect(useGmaoStore.getState().zones.length).toBeGreaterThan(0);
+    });
+
+    it('enforces ADMIN RBAC on REPLACE_CATALOG and triggers commit sync notifications on non-dryRun commits', () => {
+      const events: Array<{ bundleType: string; mode: string; origin: string }> = [];
+      const unsubscribe = registerPipelineCommitListener((info) => {
+        events.push({ bundleType: info.bundleType, mode: info.mode, origin: info.origin });
+      });
+
+      try {
+        // Non-ADMIN denied on REPLACE_CATALOG
+        const denied = validateAndCommitRefParcBundle(getRefParcOfficialTemplate(), {
+          mode: 'REPLACE_CATALOG',
+          actorRole: 'MAGASINIER',
+          dryRun: false,
+        });
+        expect(denied.success).toBe(false);
+        expect(denied.committed).toBe(false);
+        expect(denied.rejected.some((r) => r.code === 'RBAC_DENIED')).toBe(true);
+        expect(events).toHaveLength(0);
+
+        // Dry-run does not notify commit sync listener
+        const dryOk = validateAndCommitRefParcBundle(getRefParcOfficialTemplate(), {
+          mode: 'REPLACE_CATALOG',
+          actorRole: 'ADMIN',
+          dryRun: true,
+        });
+        expect(dryOk.success).toBe(true);
+        expect(dryOk.committed).toBe(false);
+        expect(events).toHaveLength(0);
+
+        // Actual ADMIN commit notifies sync listener and stamps gmao_local_modified_at
+        const committedOk = validateAndCommitRefParcBundle(getRefParcOfficialTemplate(), {
+          mode: 'REPLACE_CATALOG',
+          actorRole: 'ADMIN',
+          origin: 'EXCEL',
+          dryRun: false,
+        });
+        expect(committedOk.success).toBe(true);
+        expect(committedOk.committed).toBe(true);
+        expect(events).toEqual([
+          { bundleType: 'REF_PARC', mode: 'REPLACE_CATALOG', origin: 'EXCEL' },
+        ]);
+        expect(localStorage.getItem('gmao_local_modified_at')).toBeTruthy();
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
+  describe('10. INGEST-P8 — ENTREPOT_BOM (6-Stage Level 2) & CM_CATALOG (2-Stage Fault Catalog)', () => {
+    it('supports full ENTREPOT_BOM JSON and Type A .xlsx round-trip while rejecting broken FKs, mismatches, negative seuil, and forbidden live fields', () => {
+      const template = getEntrepotBomOfficialTemplate();
+      const jsonReport = validateAndCommitEntrepotBomBundle(template, {
+        mode: 'MERGE',
+        origin: 'JSON_BUNDLE',
+        dryRun: false,
+        actorRole: 'ADMIN',
+      });
+
+      expect(jsonReport.success).toBe(true);
+      expect(jsonReport.committed).toBe(true);
+      expect(useGmaoStore.getState().compGroups.length).toBeGreaterThanOrEqual(2);
+      expect(useGmaoStore.getState().compFamilies.length).toBeGreaterThanOrEqual(2);
+      expect(useGmaoStore.getState().compTemplates.length).toBeGreaterThanOrEqual(1);
+      expect(useGmaoStore.getState().partGroups.length).toBeGreaterThanOrEqual(2);
+      expect(useGmaoStore.getState().partTypes.length).toBeGreaterThanOrEqual(2);
+      expect(useGmaoStore.getState().partDesignations.length).toBeGreaterThanOrEqual(2);
+
+      // Export live catalog and verify Type A .xlsx round-trip idempotency including specs JSON
+      const exported = exportEntrepotBomBundle();
+      const xlsxBytes = buildTypeAExcelWorkbookBuffer('ENTREPOT_BOM', exported);
+      const parsedXlsx = parseTypeAExcelWorkbook(xlsxBytes);
+      expect(parsedXlsx.ok).toBe(true);
+      expect(parsedXlsx.bundleType).toBe('ENTREPOT_BOM');
+
+      const dryXlsxReport = runUnifiedImportPipeline(parsedXlsx.payload!, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: true,
+      });
+      expect(dryXlsxReport.success).toBe(true);
+      expect(dryXlsxReport.accepted.some((a) => a.stage === '06_COMP_TEMPLATES' && a.unchanged > 0)).toBe(true);
+      expect(dryXlsxReport.staging.nextCompTemplates[0].specs).toEqual(
+        template.compTemplates![0].specs
+      );
+
+      // Broken FK, family/group mismatch, duplicate key, negative seuil, and forbidden physical instance fields
+      const badReport = validateAndCommitEntrepotBomBundle(
+        {
+          bundleType: 'ENTREPOT_BOM',
+          warehouseItems: [{ id: 'WH-LIVE-1' }],
+          compGroups: [
+            { code_comp_group: 'GRP-MOTEUR-001', libelle: 'Moteurs' },
+            { code_comp_group: 'GRP-MOTEUR-001', libelle: 'Doublon' },
+          ],
+          compFamilies: [
+            { code_comp_family: 'FAM-BAD', code_comp_group: 'GRP-UNKNOWN', libelle: 'Orphan' },
+          ],
+          compTemplates: [
+            {
+              code_comp_template: 'TPL-BAD',
+              code_comp_family: 'FAM-MOT-3PH-001',
+              code_comp_group: 'GRP-REDUCTEUR-001',
+              libelle: 'Mismatch Group',
+            },
+          ],
+          partGroups: [{ code_part_group: 'GRP-PRT-MEC', libelle: 'Mécanique' }],
+          partTypes: [
+            { code_part_type: 'TYPE-BAD', code_part_group: 'GRP-MISSING', libelle: 'Orphan' },
+          ],
+          partDesignations: [
+            {
+              ref: 'PART-BAD',
+              code_part_type: 'TYPE-MEC',
+              code_part_group: 'GRP-PRT-FIX',
+              designation: 'Seuil négatif & mismatch',
+              seuil: -3,
+            },
+          ],
+        },
+        { dryRun: true }
+      );
+
+      expect(badReport.success).toBe(false);
+      expect(badReport.rejected.some((r) => r.code === 'FORBIDDEN_BUNDLE_FIELD')).toBe(true);
+      expect(badReport.rejected.some((r) => r.code === 'DUPLICATE_KEY')).toBe(true);
+      expect(badReport.rejected.some((r) => r.code === 'BROKEN_FK')).toBe(true);
+      expect(badReport.rejected.some((r) => r.code === 'TEMPLATE_FAMILY_MISMATCH')).toBe(true);
+    });
+
+    it('enforces ADMIN RBAC and REFERENCED_BY_ACTIVE_RECORDS on ENTREPOT_BOM REPLACE_CATALOG', () => {
+      const template = getEntrepotBomOfficialTemplate();
+      validateAndCommitEntrepotBomBundle(template, { dryRun: false, actorRole: 'ADMIN' });
+
+      const denied = validateAndCommitEntrepotBomBundle(template, {
+        mode: 'REPLACE_CATALOG',
+        actorRole: 'TECHNICIEN',
+        dryRun: false,
+      });
+      expect(denied.success).toBe(false);
+      expect(denied.rejected.some((r) => r.code === 'RBAC_DENIED')).toBe(true);
+
+      // Replacing catalog by dropping MEC-01 & TPL-MOT-3PH-40KW-1430-001 must be blocked when active warehouse/BOM ledger rows reference them
+      const slimmed = {
+        bundleType: 'ENTREPOT_BOM' as const,
+        compGroups: template.compGroups,
+        compFamilies: template.compFamilies,
+        compTemplates: [
+          {
+            code_comp_template: 'TPL-RED-COAX-OTHER',
+            code_comp_family: 'FAM-RED-COAX-001',
+            code_comp_group: 'GRP-REDUCTEUR-001',
+            libelle: 'Réducteur Coaxial Standard',
+          },
+        ],
+        partGroups: template.partGroups,
+        partTypes: template.partTypes,
+        partDesignations: template.partDesignations!.filter((p) => p.ref !== 'MEC-01'),
+      };
+
+      const blockedReport = validateAndCommitEntrepotBomBundle(slimmed, {
+        mode: 'REPLACE_CATALOG',
+        actorRole: 'ADMIN',
+        dryRun: true,
+        existingWarehouseItems: [
+          {
+            id: 'WH-001',
+            id_templates: 'TPL-MOT-3PH-40KW-1430-001',
+          } as any,
+        ],
+        existingMachineElementsLedger: [
+          {
+            id: 'ME-001',
+            id_machine: 'CNC-01',
+            ref: 'MEC-01',
+            designation: 'Courroie Plate',
+            category: 'PART',
+            quantite: 1,
+          } as any,
+        ],
+      });
+
+      expect(blockedReport.success).toBe(false);
+      const refIssues = blockedReport.rejected.filter(
+        (r) => r.code === 'REFERENCED_BY_ACTIVE_RECORDS'
+      );
+      expect(refIssues.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('supports full CM_CATALOG JSON & Type A .xlsx round-trip and enforces FK, forbidden live BT fields, and REPLACE_CATALOG active guards', () => {
+      const cmXlsx = buildTypeAExcelWorkbookBuffer(
+        'CM_CATALOG',
+        getCmCatalogOfficialTemplate()
+      );
+      const globalResult = executeGuardedGlobalFileImport(
+        'CM_CATALOG.template.xlsx',
+        { kind: 'XLSX', buffer: cmXlsx },
+        { actorRole: 'ADMIN' }
+      );
+      expect(globalResult.accepted).toBe(true);
+      expect(globalResult.code).toBe('TYPE_A_PIPELINE_COMMITTED');
+      expect(globalResult.report?.origin).toBe('EXCEL');
+      expect(Object.keys(useGmaoStore.getState().correctivePanneCategories)).toEqual([
+        'M',
+        'E',
+        'H',
+        'P',
+      ]);
+      expect(
+        useGmaoStore.getState().correctiveActionsByPanne[
+          'Vibrations anormales palier / roulement'
+        ]?.length
+      ).toBe(3);
+
+      // Round-trip export -> Excel -> dryRun
+      const exported = exportCmCatalogBundle();
+      const reparsed = parseTypeAExcelWorkbook(
+        buildTypeAExcelWorkbookBuffer('CM_CATALOG', exported)
+      );
+      expect(reparsed.ok).toBe(true);
+      const dryReport = validateAndCommitCmCatalogBundle(reparsed.payload as any, {
+        mode: 'MERGE',
+        origin: 'EXCEL',
+        dryRun: true,
+      });
+      expect(dryReport.success).toBe(true);
+      expect(dryReport.accepted.find((a) => a.entity === 'CM_FAULTS')?.unchanged).toBe(4);
+
+      // Forbidden live BT/password fields + broken category + duplicate fault
+      const invalidCm = validateAndCommitCmCatalogBundle(
+        {
+          bundleType: 'CM_CATALOG',
+          correctiveInterventions: [{ id: 'BT-1' }],
+          categories: [{ code_category: 'M', libelle: 'Mécanique' }],
+          faults: [
+            {
+              code_fault: 'PANNE-X-01',
+              code_category: 'Z_UNKNOWN',
+              panne: 'Panne inconnue',
+              actions: ['Action 1'],
+            },
+            {
+              code_fault: 'PANNE-M-DUP',
+              code_category: 'M',
+              panne: 'Fuite joint',
+            },
+            {
+              code_fault: 'PANNE-M-DUP',
+              code_category: 'M',
+              panne: 'Fuite joint',
+            },
+          ],
+        },
+        { dryRun: true }
+      );
+
+      expect(invalidCm.success).toBe(false);
+      expect(invalidCm.rejected.some((r) => r.code === 'FORBIDDEN_BUNDLE_FIELD')).toBe(true);
+      expect(invalidCm.rejected.some((r) => r.code === 'BROKEN_FK')).toBe(true);
+      expect(invalidCm.rejected.some((r) => r.code === 'DUPLICATE_KEY')).toBe(true);
+
+      // REPLACE_CATALOG active reference check against existing corrective interventions
+      const blockedReplace = validateAndCommitCmCatalogBundle(
+        {
+          bundleType: 'CM_CATALOG',
+          categories: [{ code_category: 'M', libelle: 'Mécanique' }],
+          faults: [
+            {
+              code_fault: 'PANNE-M-99',
+              code_category: 'M',
+              panne: 'Autre panne uniquement',
+              actions: ['Contrôle'],
+            },
+          ],
+        },
+        {
+          mode: 'REPLACE_CATALOG',
+          actorRole: 'ADMIN',
+          dryRun: true,
+          existingCorrectiveInterventions: [
+            {
+              id: 'BT-ACTIVE-01',
+              type_panne: 'E',
+              anomalie: 'Vibrations anormales palier / roulement',
+            } as any,
+          ],
+        }
+      );
+
+      expect(blockedReplace.success).toBe(false);
+      expect(
+        blockedReplace.rejected.filter((r) => r.code === 'REFERENCED_BY_ACTIVE_RECORDS').length
+      ).toBe(2);
     });
   });
 });

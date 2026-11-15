@@ -4,6 +4,7 @@ import { storageService } from '../utils/storageService';
 import { Logger } from '../core/logger/LoggerService';
 import { excelEngineService } from '../services/excelEngineService';
 import { runUnifiedImportPipeline } from '../services/import/unifiedImportPipeline';
+import { parseTypeAExcelWorkbook } from '../services/import/typeAExcelBridge';
 import type { ImportReport, PipelineBundleType } from '../services/import/types/unifiedImportTypes';
 import type {
   IBlueprint,
@@ -99,6 +100,8 @@ const SUPPORTED_TYPE_A_BUNDLES = new Set<PipelineBundleType>([
   'ASSETS_MACHINES',
   'REF_PDR',
   'PM_CATALOG',
+  'ENTREPOT_BOM',
+  'CM_CATALOG',
   'DEMO_BUNDLE',
 ]);
 
@@ -114,17 +117,59 @@ export interface GuardedGlobalImportResult {
 }
 
 /**
- * Guarded global file import router (`INGEST-P6`):
- * - Accepts ONLY recognized Type A JSON bundles and routes them strictly through `runUnifiedImportPipeline`.
- * - Rejects raw `.xlsx` operational workbooks and non-Type-A JSON overwrites (`Type B` external exports
+ * Guarded global file import router (`INGEST-P6` / `INGEST-P7`):
+ * - Accepts ONLY recognized Type A JSON bundles or official Type A `.xlsx` workbooks (`README_TYPE_A` + `TYPE_A_BUNDLE_ROUND_TRIP`)
+ *   and routes them strictly through `runUnifiedImportPipeline`.
+ * - Rejects raw `.xlsx` Type B operational workbooks and non-Type-A JSON overwrites (`Type B` external exports
  *   never mutate live `rawStock`, `mouvements`, `machines`, `preventiveTasks`, or `correctiveInterventions`).
  */
 export function executeGuardedGlobalFileImport(
   fileName: string,
-  input: { kind: 'JSON'; payload: unknown } | { kind: 'XLSX'; sheetNames?: string[] },
+  input:
+    | { kind: 'JSON'; payload: unknown }
+    | { kind: 'XLSX'; buffer?: ArrayBuffer | Uint8Array; sheetNames?: string[] },
   options: { actorRole?: string; actorId?: string; actorName?: string } = {}
 ): GuardedGlobalImportResult {
   if (input.kind === 'XLSX') {
+    if (input.buffer) {
+      const parsedXlsx = parseTypeAExcelWorkbook(input.buffer);
+      if (parsedXlsx.ok) {
+        const report = runUnifiedImportPipeline(parsedXlsx.payload, {
+          mode: 'MERGE',
+          origin: 'EXCEL',
+          dryRun: false,
+          actorRole: options.actorRole || 'ADMIN',
+          actorId: options.actorId || 'ADMIN',
+          actorName: options.actorName || `Import Excel Type A (${fileName})`,
+        });
+        if (report.success && report.committed) {
+          return {
+            accepted: true,
+            code: 'TYPE_A_PIPELINE_COMMITTED',
+            message: `Classeur Excel Type A (${report.bundleType}) validé et engagé via UnifiedImportPipeline.`,
+            report,
+          };
+        }
+        const firstReject = report.rejected[0];
+        return {
+          accepted: false,
+          code: 'TYPE_A_PIPELINE_REJECTED',
+          message: `Classeur Excel Type A (${report.bundleType}) rejeté (${report.rejected.length} erreur(s)) : ${
+            firstReject ? `[${firstReject.code}] ${firstReject.message}` : 'Validation échouée'
+          }`,
+          report,
+        };
+      }
+
+      if (parsedXlsx.code === 'SCHEMA_MISMATCH') {
+        return {
+          accepted: false,
+          code: 'TYPE_A_PIPELINE_REJECTED',
+          message: `Classeur "${fileName}" invalide : ${parsedXlsx.message}`,
+        };
+      }
+    }
+
     const sheetsHint =
       Array.isArray(input.sheetNames) && input.sheetNames.length > 0
         ? ` (feuilles détectées : ${input.sheetNames.slice(0, 4).join(', ')})`
@@ -132,7 +177,7 @@ export function executeGuardedGlobalFileImport(
     return {
       accepted: false,
       code: 'TYPE_B_EXCEL_BLOCKED',
-      message: `Import direct de "${fileName}" bloqué${sheetsHint} : les classeurs Excel opérationnels (Type B) ne peuvent plus écraser les tables en direct. Utilisez Paramètres ➔ Ingestion Structurée (Type A).`,
+      message: `Import direct de "${fileName}" bloqué${sheetsHint} : les classeurs Excel opérationnels (Type B) ne peuvent plus écraser les tables en direct. Utilisez Paramètres ➔ Ingestion Structurée (Type A JSON ou XLSX officiel).`,
     };
   }
 
@@ -148,7 +193,7 @@ export function executeGuardedGlobalFileImport(
     return {
       accepted: false,
       code: 'UNRECOGNIZED_JSON_BLOCKED',
-      message: `Import direct de "${fileName}" bloqué : seul un paquet officiel Type A (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR, PM_CATALOG) est autorisé. Pour restaurer un Snapshot, utilisez le Centre de Sauvegarde.`,
+      message: `Import direct de "${fileName}" bloqué : seul un paquet officiel Type A (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR, PM_CATALOG, ENTREPOT_BOM, CM_CATALOG) est autorisé. Pour restaurer un Snapshot, utilisez le Centre de Sauvegarde.`,
     };
   }
 
@@ -610,25 +655,36 @@ export function useAppExcelOperations({
             return;
           }
 
-          // Excel workbooks (.xlsx/.xls) are Type B unless routed via official Type A bridge (P7)
+          // Excel workbooks (.xlsx/.xls): accept ONLY authenticated Type A templates/exports (README_TYPE_A); block Type B
+          const buffer = resultPayload instanceof ArrayBuffer ? resultPayload : new ArrayBuffer(0);
           let sheetNames: string[] = [];
           try {
-            const buffer = resultPayload instanceof ArrayBuffer ? resultPayload : new ArrayBuffer(0);
             const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
             sheetNames = workbook.SheetNames || [];
           } catch {
             sheetNames = [];
           }
 
-          const blockedRes = executeGuardedGlobalFileImport(file.name, {
+          const xlsxRes = executeGuardedGlobalFileImport(file.name, {
             kind: 'XLSX',
+            buffer,
             sheetNames,
           });
-          showToast(blockedRes.message, 'error');
-          Logger.warn('[ExcelOperations] Legacy raw Excel overwrite blocked (INGEST-P6)', {
-            file: file.name,
-            sheetNames,
-          });
+          if (xlsxRes.accepted) {
+            const backupDate = createAutomaticBackup('Import Type A Excel : ' + file.name);
+            showToast(`${xlsxRes.message} (Backup : ${backupDate})`, 'success');
+            Logger.info('[ExcelOperations] Guarded Type A Excel import committed (INGEST-P7)', {
+              file: file.name,
+              bundleType: xlsxRes.report?.bundleType,
+            });
+          } else {
+            showToast(xlsxRes.message, 'error');
+            Logger.warn('[ExcelOperations] Excel import blocked/rejected', {
+              file: file.name,
+              code: xlsxRes.code,
+              sheetNames,
+            });
+          }
         } catch (err: unknown) {
           const { aborted, crossOrigin } = isFileAccessBlockedError(err);
           if (aborted) return;

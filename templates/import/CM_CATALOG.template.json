@@ -1,0 +1,63 @@
+{
+  "bundleType": "CM_CATALOG",
+  "categories": [
+    {
+      "code_category": "M",
+      "libelle": "Mécanique"
+    },
+    {
+      "code_category": "E",
+      "libelle": "Électrique"
+    },
+    {
+      "code_category": "H",
+      "libelle": "Hydraulique"
+    },
+    {
+      "code_category": "P",
+      "libelle": "Pneumatique"
+    }
+  ],
+  "faults": [
+    {
+      "code_fault": "PANNE-M-01",
+      "code_category": "M",
+      "panne": "Vibrations anormales palier / roulement",
+      "actions": [
+        "Contrôle de l état des roulements et mesure vibratoire",
+        "Remplacement des roulements AV/AR (SKF)",
+        "Vérification de l alignement des poulies et tension courroies"
+      ]
+    },
+    {
+      "code_fault": "PANNE-E-01",
+      "code_category": "E",
+      "panne": "Déclenchement relais thermique / disjoncteur moteur",
+      "actions": [
+        "Mesure de la résistance d isolement bobinage au mégohmmètre",
+        "Vérification de l équilibrage des courants des 3 phases",
+        "Remplacement du relais thermique ou contacteur usé"
+      ]
+    },
+    {
+      "code_fault": "PANNE-H-01",
+      "code_category": "H",
+      "panne": "Chute de pression groupe hydraulique",
+      "actions": [
+        "Contrôle niveau d huile dans le réservoir central",
+        "Nettoyage ou remplacement de la cartouche filtrante",
+        "Réglage du limiteur de pression principal"
+      ]
+    },
+    {
+      "code_fault": "PANNE-P-01",
+      "code_category": "P",
+      "panne": "Fuite d air comprimé raccord / tuyau Festo",
+      "actions": [
+        "Localisation fuite au détecteur à bulles / écoute",
+        "Coupe propre du tube Festo Ø8 ou Ø10 et réenclenchement",
+        "Remplacement du raccord rapide instantané"
+      ]
+    }
+  ]
+}

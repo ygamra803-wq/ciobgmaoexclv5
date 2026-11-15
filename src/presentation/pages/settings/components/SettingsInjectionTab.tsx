@@ -18,30 +18,93 @@ import {
   Download,
   ShieldCheck,
   XCircle,
+  KeyRound,
+  ArrowRight,
 } from 'lucide-react';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+import { confirmAction } from '../../../../utils/confirmAction';
 import {
   exportAssetsMachinesBundle,
+  exportCmCatalogBundle,
+  exportEntrepotBomBundle,
   exportPmCatalogBundle,
   exportRefParcBundle,
   exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
+  getCmCatalogOfficialTemplate,
+  getEntrepotBomOfficialTemplate,
   getPmCatalogOfficialTemplate,
   getRefParcOfficialTemplate,
   getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
   validateAndCommitAssetsMachinesBundle,
+  validateAndCommitCmCatalogBundle,
+  validateAndCommitEntrepotBomBundle,
   validateAndCommitPmCatalogBundle,
   validateAndCommitRefParcBundle,
   validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
 } from '../../../../services/import/unifiedImportPipeline';
-import type { ImportReport } from '../../../../services/import/types/unifiedImportTypes';
+import {
+  downloadTypeAExcelWorkbook,
+  parseTypeAExcelWorkbook,
+  type TypeAExcelBundleKind,
+} from '../../../../services/import/typeAExcelBridge';
+import type {
+  ImportMode,
+  ImportReport,
+  ImportSourceOrigin,
+} from '../../../../services/import/types/unifiedImportTypes';
+
+const BUNDLE_META: Record<
+  TypeAExcelBundleKind,
+  {
+    jsonFilename: string;
+    xlsxFilename: string;
+    exportPrefix: string;
+  }
+> = {
+  REF_PARC: {
+    jsonFilename: 'REF_PARC.template.json',
+    xlsxFilename: 'REF_PARC.template.xlsx',
+    exportPrefix: 'CIOB_REF_PARC',
+  },
+  REF_PERSONNEL: {
+    jsonFilename: 'REF_PERSONNEL.template.json',
+    xlsxFilename: 'REF_PERSONNEL.template.xlsx',
+    exportPrefix: 'CIOB_REF_PERSONNEL',
+  },
+  ASSETS_MACHINES: {
+    jsonFilename: 'ASSETS_MACHINES.template.json',
+    xlsxFilename: 'ASSETS_MACHINES.template.xlsx',
+    exportPrefix: 'CIOB_ASSETS_MACHINES',
+  },
+  REF_PDR: {
+    jsonFilename: 'REF_PDR.template.json',
+    xlsxFilename: 'REF_PDR.template.xlsx',
+    exportPrefix: 'CIOB_REF_PDR',
+  },
+  PM_CATALOG: {
+    jsonFilename: 'PM_CATALOG.template.json',
+    xlsxFilename: 'PM_CATALOG.template.xlsx',
+    exportPrefix: 'CIOB_PM_CATALOG',
+  },
+  ENTREPOT_BOM: {
+    jsonFilename: 'ENTREPOT_BOM.template.json',
+    xlsxFilename: 'ENTREPOT_BOM.template.xlsx',
+    exportPrefix: 'CIOB_ENTREPOT_BOM',
+  },
+  CM_CATALOG: {
+    jsonFilename: 'CM_CATALOG.template.json',
+    xlsxFilename: 'CM_CATALOG.template.xlsx',
+    exportPrefix: 'CIOB_CM_CATALOG',
+  },
+};
 
 /**
  * Data Injection Hub:
- * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)
+ * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: JSON & Excel Type A)
  * 2) Mode C — Demo Dataset Control via DataGateway
  * 3) Mode A — Empty Factory Reset (`START_MODE = 'empty'`)
  */
@@ -64,23 +127,58 @@ export default function SettingsInjectionTab({
   showToast,
   handleSaveSettings,
   handleResetToZero,
+  currentUser,
+  onNavigateToUsers,
 }: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
 
-  // P1 / P1.1 / P2 / P3 / P4: Structured Pipeline State (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)
-  const [refParcJsonText, setRefParcJsonText] = useState('');
-  const [refPersonnelJsonText, setRefPersonnelJsonText] = useState('');
-  const [assetsMachinesJsonText, setAssetsMachinesJsonText] = useState('');
-  const [refPdrJsonText, setRefPdrJsonText] = useState('');
-  const [pmCatalogJsonText, setPmCatalogJsonText] = useState('');
+  const actorRole = String(currentUser?.role || '').trim().toUpperCase();
+  const isAdmin = actorRole === 'ADMIN';
+  const [importMode, setImportMode] = useState<ImportMode>('MERGE');
+  const effectiveMode: ImportMode =
+    importMode === 'REPLACE_CATALOG' && isAdmin ? 'REPLACE_CATALOG' : 'MERGE';
+
+  // P1..P8: Structured Pipeline State (7 official Level 2 & Level 1 Type A bundles)
+  const [bundleTextByKind, setBundleTextByKind] = useState<Record<TypeAExcelBundleKind, string>>({
+    REF_PARC: '',
+    REF_PERSONNEL: '',
+    ASSETS_MACHINES: '',
+    REF_PDR: '',
+    PM_CATALOG: '',
+    ENTREPOT_BOM: '',
+    CM_CATALOG: '',
+  });
+  const [originByKind, setOriginByKind] = useState<
+    Record<TypeAExcelBundleKind, ImportSourceOrigin>
+  >({
+    REF_PARC: 'JSON_BUNDLE',
+    REF_PERSONNEL: 'JSON_BUNDLE',
+    ASSETS_MACHINES: 'JSON_BUNDLE',
+    REF_PDR: 'JSON_BUNDLE',
+    PM_CATALOG: 'JSON_BUNDLE',
+    ENTREPOT_BOM: 'JSON_BUNDLE',
+    CM_CATALOG: 'JSON_BUNDLE',
+  });
   const [lastImportReport, setLastImportReport] = useState<ImportReport<any> | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [showPersonnelAuthHint, setShowPersonnelAuthHint] = useState(false);
 
   const refParcFileInputRef = useRef<HTMLInputElement | null>(null);
   const refPersonnelFileInputRef = useRef<HTMLInputElement | null>(null);
   const assetsMachinesFileInputRef = useRef<HTMLInputElement | null>(null);
   const refPdrFileInputRef = useRef<HTMLInputElement | null>(null);
   const pmCatalogFileInputRef = useRef<HTMLInputElement | null>(null);
+  const entrepotBomFileInputRef = useRef<HTMLInputElement | null>(null);
+  const cmCatalogFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const setCardText = (
+    kind: TypeAExcelBundleKind,
+    text: string,
+    origin: ImportSourceOrigin = 'JSON_BUNDLE'
+  ) => {
+    setBundleTextByKind((prev) => ({ ...prev, [kind]: text }));
+    setOriginByKind((prev) => ({ ...prev, [kind]: origin }));
+  };
 
   const downloadJsonFile = (filename: string, payload: unknown) => {
     const json = JSON.stringify(payload, null, 2);
@@ -95,229 +193,201 @@ export default function SettingsInjectionTab({
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadRefParcTemplate = () => {
-    const template = getRefParcOfficialTemplate();
-    setRefParcJsonText(JSON.stringify(template, null, 2));
-    downloadJsonFile('REF_PARC.template.json', template);
+  const getTemplatePayload = (kind: TypeAExcelBundleKind) => {
+    switch (kind) {
+      case 'REF_PARC':
+        return getRefParcOfficialTemplate();
+      case 'REF_PERSONNEL':
+        return getRefPersonnelOfficialTemplate();
+      case 'ASSETS_MACHINES':
+        return getAssetsMachinesOfficialTemplate();
+      case 'REF_PDR':
+        return getRefPdrOfficialTemplate();
+      case 'PM_CATALOG':
+        return getPmCatalogOfficialTemplate();
+      case 'ENTREPOT_BOM':
+        return getEntrepotBomOfficialTemplate();
+      case 'CM_CATALOG':
+        return getCmCatalogOfficialTemplate();
+    }
+  };
+
+  const getExportPayload = (kind: TypeAExcelBundleKind) => {
+    switch (kind) {
+      case 'REF_PARC':
+        return exportRefParcBundle();
+      case 'REF_PERSONNEL':
+        return exportRefPersonnelBundle();
+      case 'ASSETS_MACHINES':
+        return exportAssetsMachinesBundle();
+      case 'REF_PDR':
+        return exportRefPdrBundle();
+      case 'PM_CATALOG':
+        return exportPmCatalogBundle();
+      case 'ENTREPOT_BOM':
+        return exportEntrepotBomBundle();
+      case 'CM_CATALOG':
+        return exportCmCatalogBundle();
+    }
+  };
+
+  const handleDownloadTemplateJson = (kind: TypeAExcelBundleKind) => {
+    const template = getTemplatePayload(kind);
+    setCardText(kind, JSON.stringify(template, null, 2), 'JSON_BUNDLE');
+    downloadJsonFile(BUNDLE_META[kind].jsonFilename, template);
     showToast?.(
-      'Modèle officiel REF_PARC.template.json téléchargé (Contrat Type A).',
+      `Modèle officiel ${BUNDLE_META[kind].jsonFilename} téléchargé (Contrat Type A).`,
       'success'
     );
   };
 
-  const handleDownloadRefPersonnelTemplate = () => {
-    const template = getRefPersonnelOfficialTemplate();
-    setRefPersonnelJsonText(JSON.stringify(template, null, 2));
-    downloadJsonFile('REF_PERSONNEL.template.json', template);
+  const handleDownloadTemplateXlsx = (kind: TypeAExcelBundleKind) => {
+    const template = getTemplatePayload(kind);
+    setCardText(kind, JSON.stringify(template, null, 2), 'EXCEL');
+    downloadTypeAExcelWorkbook(BUNDLE_META[kind].xlsxFilename, kind, template);
     showToast?.(
-      'Modèle officiel REF_PERSONNEL.template.json téléchargé (Contrat Type A).',
+      `Modèle officiel Excel ${BUNDLE_META[kind].xlsxFilename} téléchargé (Contrat Type A).`,
       'success'
     );
   };
 
-  const handleDownloadAssetsMachinesTemplate = () => {
-    const template = getAssetsMachinesOfficialTemplate();
-    setAssetsMachinesJsonText(JSON.stringify(template, null, 2));
-    downloadJsonFile('ASSETS_MACHINES.template.json', template);
-    showToast?.(
-      'Modèle officiel ASSETS_MACHINES.template.json téléchargé (Contrat Type A).',
-      'success'
-    );
+  const handleExportBundleJson = (kind: TypeAExcelBundleKind) => {
+    const bundle = getExportPayload(kind);
+    const dateTag = new Date().toISOString().slice(0, 10);
+    setCardText(kind, JSON.stringify(bundle, null, 2), 'JSON_BUNDLE');
+    downloadJsonFile(`${BUNDLE_META[kind].exportPrefix}_${dateTag}.json`, bundle);
+    showToast?.(`Paquet ${kind} (Type A Round-Trip .JSON) exporté avec succès.`, 'success');
   };
 
-  const handleDownloadRefPdrTemplate = () => {
-    const template = getRefPdrOfficialTemplate();
-    setRefPdrJsonText(JSON.stringify(template, null, 2));
-    downloadJsonFile('REF_PDR.template.json', template);
-    showToast?.(
-      'Modèle officiel REF_PDR.template.json téléchargé (Contrat Type A).',
-      'success'
-    );
-  };
-
-  const handleDownloadPmCatalogTemplate = () => {
-    const template = getPmCatalogOfficialTemplate();
-    setPmCatalogJsonText(JSON.stringify(template, null, 2));
-    downloadJsonFile('PM_CATALOG.template.json', template);
-    showToast?.(
-      'Modèle officiel PM_CATALOG.template.json téléchargé (Contrat Type A).',
-      'success'
-    );
-  };
-
-  const handleExportRefParc = () => {
-    const bundle = exportRefParcBundle();
-    setRefParcJsonText(JSON.stringify(bundle, null, 2));
-    downloadJsonFile(`CIOB_REF_PARC_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.(
-      'Paquet REF_PARC (Type A Round-Trip) exporté avec succès (code_zone, code_family, code_template).',
-      'success'
-    );
-  };
-
-  const handleExportRefPersonnel = () => {
-    const bundle = exportRefPersonnelBundle();
-    setRefPersonnelJsonText(JSON.stringify(bundle, null, 2));
-    downloadJsonFile(`CIOB_REF_PERSONNEL_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.(
-      'Paquet REF_PERSONNEL (Type A Round-Trip) exporté avec succès (code_technician, code_operation).',
-      'success'
-    );
-  };
-
-  const handleExportAssetsMachines = () => {
-    const bundle = exportAssetsMachinesBundle();
-    setAssetsMachinesJsonText(JSON.stringify(bundle, null, 2));
-    downloadJsonFile(`CIOB_ASSETS_MACHINES_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.(
-      'Paquet ASSETS_MACHINES (Type A Round-Trip) exporté avec succès (code_machine, code_zone).',
-      'success'
-    );
-  };
-
-  const handleExportRefPdr = () => {
-    const bundle = exportRefPdrBundle();
-    setRefPdrJsonText(JSON.stringify(bundle, null, 2));
-    downloadJsonFile(`CIOB_REF_PDR_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.(
-      'Paquet REF_PDR (Type A Round-Trip) exporté avec succès (code_group, code_type, ref).',
-      'success'
-    );
-  };
-
-  const handleExportPmCatalog = () => {
-    const bundle = exportPmCatalogBundle();
-    setPmCatalogJsonText(JSON.stringify(bundle, null, 2));
-    downloadJsonFile(`CIOB_PM_CATALOG_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.(
-      'Paquet PM_CATALOG (Type A Round-Trip) exporté avec succès (code_action, code_guide).',
-      'success'
-    );
+  const handleExportBundleXlsx = (kind: TypeAExcelBundleKind) => {
+    const bundle = getExportPayload(kind);
+    const dateTag = new Date().toISOString().slice(0, 10);
+    setCardText(kind, JSON.stringify(bundle, null, 2), 'EXCEL');
+    downloadTypeAExcelWorkbook(`${BUNDLE_META[kind].exportPrefix}_${dateTag}_TypeA.xlsx`, kind, bundle);
+    showToast?.(`Classeur ${kind} (Type A Round-Trip .XLSX) exporté avec succès.`, 'success');
   };
 
   const handleFileLoad = (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR' | 'PM_CATALOG'
+    target: TypeAExcelBundleKind
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const lowerName = file.name.toLowerCase();
+    const isExcel = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
     const reader = new FileReader();
+
     reader.onload = () => {
-      const content = typeof reader.result === 'string' ? reader.result : '';
-      if (target === 'REF_PARC') {
-        setRefParcJsonText(content);
-      } else if (target === 'REF_PERSONNEL') {
-        setRefPersonnelJsonText(content);
-      } else if (target === 'ASSETS_MACHINES') {
-        setAssetsMachinesJsonText(content);
-      } else if (target === 'REF_PDR') {
-        setRefPdrJsonText(content);
-      } else {
-        setPmCatalogJsonText(content);
+      if (isExcel) {
+        const buffer = reader.result instanceof ArrayBuffer ? reader.result : new ArrayBuffer(0);
+        const parsedXlsx = parseTypeAExcelWorkbook(buffer);
+        if (!parsedXlsx.ok) {
+          setParseError(parsedXlsx.message);
+          showToast?.(parsedXlsx.message, 'error');
+          return;
+        }
+        if (parsedXlsx.bundleType !== target) {
+          const mismatchMsg = `Le classeur Excel sélectionné correspond au paquet '${parsedXlsx.bundleType}' et non à '${target}'. Veuillez l'importer dans la carte correspondante.`;
+          setParseError(mismatchMsg);
+          showToast?.(mismatchMsg, 'error');
+          return;
+        }
+        setCardText(target, JSON.stringify(parsedXlsx.payload, null, 2), 'EXCEL');
+        setParseError(null);
+        showToast?.(
+          `Classeur Type A (${target}) chargé avec succès. Lancez « Vérifier (dryRun) » puis « Importer ».`,
+          'info'
+        );
+        return;
       }
+
+      const content = typeof reader.result === 'string' ? reader.result : '';
+      setCardText(target, content, 'JSON_BUNDLE');
       setParseError(null);
     };
-    reader.readAsText(file);
+
+    if (isExcel) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
     e.target.value = '';
   };
 
-  const handleRunRefParcPipeline = (dryRun: boolean) => {
+  const handleRunPipeline = async (kind: TypeAExcelBundleKind, dryRun: boolean) => {
     setParseError(null);
-    if (!refParcJsonText.trim()) {
-      setParseError('Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PARC.');
-      return;
-    }
-    try {
-      const parsed = JSON.parse(refParcJsonText);
-      const report = validateAndCommitRefParcBundle(parsed, {
-        mode: 'MERGE',
-        origin: 'JSON_BUNDLE',
-        dryRun,
-      });
-      setLastImportReport(report);
-      if (report.success) {
-        showToast?.(
-          dryRun
-            ? 'Validation REF_PARC (dryRun) réussie : 0 erreur bloquante.'
-            : 'Import MERGE REF_PARC engagé dans DataGateway avec succès.',
-          'success'
-        );
-      } else {
-        showToast?.(
-          `Échec validation REF_PARC : ${report.rejected.length} rejet(s) détecté(s).`,
-          'error'
-        );
-      }
-    } catch (err: any) {
-      setParseError(`JSON REF_PARC invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
-    }
-  };
-
-  const handleRunRefPersonnelPipeline = (dryRun: boolean) => {
-    setParseError(null);
-    if (!refPersonnelJsonText.trim()) {
+    const rawText = bundleTextByKind[kind] || '';
+    if (!rawText.trim()) {
       setParseError(
-        'Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PERSONNEL.'
+        `Veuillez charger un fichier (.json ou .xlsx Type A) ou coller le contenu du paquet ${kind}.`
       );
       return;
     }
-    try {
-      const parsed = JSON.parse(refPersonnelJsonText);
-      const report = validateAndCommitRefPersonnelBundle(parsed, {
-        mode: 'MERGE',
-        origin: 'JSON_BUNDLE',
-        dryRun,
-      });
-      setLastImportReport(report);
-      if (report.success) {
-        showToast?.(
-          dryRun
-            ? 'Validation REF_PERSONNEL (dryRun) réussie : 0 erreur bloquante.'
-            : 'Import MERGE REF_PERSONNEL engagé dans DataGateway avec succès.',
-          'success'
-        );
-      } else {
-        showToast?.(
-          `Échec validation REF_PERSONNEL : ${report.rejected.length} rejet(s) détecté(s).`,
-          'error'
-        );
-      }
-    } catch (err: any) {
-      setParseError(`JSON REF_PERSONNEL invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
-    }
-  };
 
-  const handleRunAssetsMachinesPipeline = (dryRun: boolean) => {
-    setParseError(null);
-    if (!assetsMachinesJsonText.trim()) {
-      setParseError(
-        'Veuillez charger un fichier JSON ou coller le contenu du paquet ASSETS_MACHINES.'
-      );
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (err: any) {
+      setParseError(`JSON ${kind} invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
       return;
     }
-    try {
-      const parsed = JSON.parse(assetsMachinesJsonText);
-      const report = validateAndCommitAssetsMachinesBundle(parsed, {
-        mode: 'MERGE',
-        origin: 'JSON_BUNDLE',
-        dryRun,
+
+    if (!dryRun && effectiveMode === 'REPLACE_CATALOG') {
+      const confirmed = await confirmAction({
+        title: `Confirmation REPLACE_CATALOG — ${kind}`,
+        message: `Attention : le mode REPLACE_CATALOG remplace l'intégralité du catalogue '${kind}' (protégé par les références actives REFERENCED_BY_ACTIVE_RECORDS). Voulez-vous continuer ?`,
+        confirmText: 'Confirmer le remplacement',
+        cancelText: 'Annuler',
+        variant: 'danger',
+        isDestructive: true,
       });
-      setLastImportReport(report);
-      if (report.success) {
-        showToast?.(
-          dryRun
-            ? 'Validation ASSETS_MACHINES (dryRun) réussie : 0 erreur bloquante.'
-            : 'Import MERGE ASSETS_MACHINES engagé dans DataGateway avec succès.',
-          'success'
-        );
-      } else {
-        showToast?.(
-          `Échec validation ASSETS_MACHINES : ${report.rejected.length} rejet(s) détecté(s).`,
-          'error'
-        );
+      if (!confirmed) return;
+    }
+
+    const opts = {
+      mode: effectiveMode,
+      origin: originByKind[kind] || 'JSON_BUNDLE',
+      dryRun,
+      actorRole: effectiveMode === 'REPLACE_CATALOG' ? actorRole : actorRole || 'ADMIN',
+      actorId: String(currentUser?.id || currentUser?.username || 'ADMIN'),
+      actorName: String(currentUser?.name || currentUser?.username || 'Settings Pipeline UI'),
+    };
+
+    let report: ImportReport<any>;
+    if (kind === 'REF_PARC') {
+      report = validateAndCommitRefParcBundle(parsed, opts);
+    } else if (kind === 'REF_PERSONNEL') {
+      report = validateAndCommitRefPersonnelBundle(parsed, opts);
+    } else if (kind === 'ASSETS_MACHINES') {
+      report = validateAndCommitAssetsMachinesBundle(parsed, opts);
+    } else if (kind === 'REF_PDR') {
+      report = validateAndCommitRefPdrBundle(parsed, opts);
+    } else if (kind === 'PM_CATALOG') {
+      report = validateAndCommitPmCatalogBundle(parsed, opts);
+    } else if (kind === 'ENTREPOT_BOM') {
+      report = validateAndCommitEntrepotBomBundle(parsed, opts);
+    } else {
+      report = validateAndCommitCmCatalogBundle(parsed, opts);
+    }
+
+    setLastImportReport(report);
+
+    if (report.success) {
+      if (kind === 'REF_PERSONNEL' && !dryRun && report.committed) {
+        setShowPersonnelAuthHint(true);
       }
-    } catch (err: any) {
-      setParseError(`JSON ASSETS_MACHINES invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
+      showToast?.(
+        dryRun
+          ? `Validation ${kind} (dryRun — ${effectiveMode}) réussie : 0 erreur bloquante.`
+          : `Import ${effectiveMode} ${kind} engagé dans DataGateway avec succès.`,
+        'success'
+      );
+    } else {
+      showToast?.(
+        `Échec validation ${kind} : ${report.rejected.length} rejet(s) détecté(s).`,
+        'error'
+      );
     }
   };
 
@@ -413,568 +483,350 @@ export default function SettingsInjectionTab({
     },
   ];
 
+  const bundleCardsConfig: Array<{
+    kind: TypeAExcelBundleKind;
+    title: string;
+    badge: string;
+    badgeClass: string;
+    subtitle: React.ReactNode;
+    placeholder: string;
+    inputRef: React.RefObject<HTMLInputElement | null>;
+    testIdSlug: string;
+    fullSpan?: boolean;
+  }> = [
+    {
+      kind: 'REF_PARC',
+      title: '1. Paquet Référentiel Parc (REF_PARC — Niveau 2)',
+      badge: 'ZONES ➔ FAMILIES ➔ TEMPLATES',
+      badgeClass: 'bg-sky-100 text-sky-800',
+      subtitle: (
+        <>
+          Clés stables : <code className="font-mono">code_zone</code>,{' '}
+          <code className="font-mono">code_family</code>,{' '}
+          <code className="font-mono">code_template</code>,{' '}
+          <code className="font-mono">code_system_type</code>.
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"REF_PARC","zones":[...],"families":[...],"templates":[...],"generalSystemTypes":[...]}',
+      inputRef: refParcFileInputRef,
+      testIdSlug: 'ref-parc',
+    },
+    {
+      kind: 'REF_PERSONNEL',
+      title: '2. Paquet Équipes & Intervenants (REF_PERSONNEL — Niveau 2)',
+      badge: '02_PERSONNEL',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
+      subtitle: (
+        <>
+          Clés stables : <code className="font-mono">code_technician</code>,{' '}
+          <code className="font-mono">code_operation</code>,{' '}
+          <code className="font-mono">code_zone</code> (Zéro compte de connexion / secret).
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"REF_PERSONNEL","technicians":[{"code_technician":"TECH-01","nom":"...","code_zone":"Z-ATELIER-01","specialite":"ELECTRIQUE"}],"operations":[...]}',
+      inputRef: refPersonnelFileInputRef,
+      testIdSlug: 'ref-personnel',
+    },
+    {
+      kind: 'ASSETS_MACHINES',
+      title: '3. Paquet Machines Enregistrées (ASSETS_MACHINES — Niveau 1)',
+      badge: '03_MACHINES',
+      badgeClass: 'bg-indigo-100 text-indigo-800',
+      subtitle: (
+        <>
+          Validation <code className="font-mono">PRODUCTION</code> vs{' '}
+          <code className="font-mono">SYSTEM_GENERAL</code>, normalisation{' '}
+          <code className="font-mono">code_zone</code> et hiérarchie{' '}
+          <code className="font-mono">parent_code_machine</code>.
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"ASSETS_MACHINES","machines":[{"code_machine":"CNC-01","designation":"...","code_zone":"Z-ATELIER-01","asset_class":"PRODUCTION","code_family":"...","code_template":"..."}]}',
+      inputRef: assetsMachinesFileInputRef,
+      testIdSlug: 'assets-machines',
+    },
+    {
+      kind: 'REF_PDR',
+      title: '4. Paquet Catalogue Stock PDR (REF_PDR — Niveau 2)',
+      badge: '04_PDR (GROUPS ➔ TYPES ➔ ITEMS)',
+      badgeClass: 'bg-amber-100 text-amber-800',
+      subtitle: (
+        <>
+          Clés stables : <code className="font-mono">code_group</code>,{' '}
+          <code className="font-mono">code_type</code>, <code className="font-mono">ref</code>{' '}
+          (Catalogue pur — zéro mouvement de stock).
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"REF_PDR","groups":[{"code_group":"ROUL","libelle":"..."}],"types":[{"code_type":"TYP-ROUL-BILLE","code_group":"ROUL","libelle":"..."}],"items":[{"ref":"SKF-6205-2RS","designation":"...","code_type":"TYP-ROUL-BILLE","code_group":"ROUL"}]}',
+      inputRef: refPdrFileInputRef,
+      testIdSlug: 'ref-pdr',
+    },
+    {
+      kind: 'PM_CATALOG',
+      title: '5. Paquet Catalogue Préventif (PM_CATALOG — Niveau 2 Uniquement)',
+      badge: '05_PM_ACTIONS ➔ 05_PM_GUIDES',
+      badgeClass: 'bg-purple-100 text-purple-800',
+      subtitle: (
+        <>
+          Clés stables : <code className="font-mono">code_action</code>,{' '}
+          <code className="font-mono">code_guide</code> (Catalogue standardisé — aucune tâche machine ni exécution).
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"PM_CATALOG","actions":[{"code_action":"C","libelle":"Contrôle"}],"guides":[{"code_guide":"GUIDE-ROULEMENT-CG","composant_nom":"Roulement","actions_liees":["C"]}]}',
+      inputRef: pmCatalogFileInputRef,
+      testIdSlug: 'pm-catalog',
+    },
+    {
+      kind: 'ENTREPOT_BOM',
+      title: '6. Paquet Référentiels Organes & Pièces (ENTREPOT_BOM — Niveau 2)',
+      badge: 'COMP (3) + PART (3)',
+      badgeClass: 'bg-teal-100 text-teal-800',
+      subtitle: (
+        <>
+          Classification <code className="font-mono">code_comp_group/family/template</code> &amp;{' '}
+          <code className="font-mono">code_part_group/type/ref</code> (Zéro instance entrepôt ni BOM machine).
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"ENTREPOT_BOM","compGroups":[...],"compFamilies":[...],"compTemplates":[...],"partGroups":[...],"partTypes":[...],"partDesignations":[...]}',
+      inputRef: entrepotBomFileInputRef,
+      testIdSlug: 'entrepot-bom',
+    },
+    {
+      kind: 'CM_CATALOG',
+      title: '7. Paquet Catalogue Pannes & Actions (CM_CATALOG — Niveau 2)',
+      badge: '07_CATEGORIES ➔ 07_FAULTS',
+      badgeClass: 'bg-rose-100 text-rose-800',
+      subtitle: (
+        <>
+          Clés stables : <code className="font-mono">code_category</code>,{' '}
+          <code className="font-mono">code_fault</code>, matrice d&apos;actions standardisées (Zéro BT ni demande).
+        </>
+      ),
+      placeholder:
+        '{"bundleType":"CM_CATALOG","categories":[{"code_category":"M","libelle":"Mécanique"}],"faults":[{"code_fault":"PANNE-M-01","code_category":"M","panne":"...","actions":["..."]}]}',
+      inputRef: cmCatalogFileInputRef,
+      testIdSlug: 'cm-catalog',
+      fullSpan: true,
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG) */}
+      {/* 0. Mode B — UnifiedImportPipeline (JSON & Official Type A Excel .xlsx) */}
       <SettingsSectionCard
-        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)"
-        description="Téléchargez le modèle officiel, remplissez vos lignes, puis validez (dryRun) ou importez (MERGE). Seuls les modèles officiels et les exports Round-Trip (Type A) sont réimportables ; les exports externes d'écrans (Type B) ne sont pas des contrats d'import."
+        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : JSON & Excel .XLSX)"
+        description="Téléchargez le modèle officiel (.json ou .xlsx), remplissez vos lignes, validez (dryRun), puis importez (MERGE ou REPLACE_CATALOG réservé ADMIN). Les exports externes d'écrans (Type B) ne sont jamais réimportables."
         icon={<ShieldCheck />}
+        headerRight={
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+            <span className="text-[11px] font-bold text-slate-700">Mode d&apos;import :</span>
+            <select
+              value={effectiveMode}
+              onChange={(e) =>
+                setImportMode(e.target.value === 'REPLACE_CATALOG' ? 'REPLACE_CATALOG' : 'MERGE')
+              }
+              data-testid="select-import-mode"
+              className="text-xs font-extrabold text-slate-900 bg-transparent focus:outline-none cursor-pointer"
+              title="MERGE fusionne sans suppression ; REPLACE_CATALOG (ADMIN uniquement) remplace le catalogue en bloquant toute suppression référencée."
+            >
+              <option value="MERGE">MERGE (Fusion sécurisée)</option>
+              <option value="REPLACE_CATALOG" disabled={!isAdmin}>
+                REPLACE_CATALOG {isAdmin ? '(ADMIN — Remplacement)' : '(Réservé ADMIN)'}
+              </option>
+            </select>
+          </div>
+        }
       >
         <div className="mb-3.5 px-3.5 py-2.5 rounded-xl bg-sky-50/80 border border-sky-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-2">
           <span>
-            <b>Contrat Type A (Round-Trip) :</b> Modèles officiels{' '}
+            <b>Contrat Type A (Round-Trip .JSON &amp; .XLSX) :</b> Modèles officiels{' '}
             <code className="font-mono">REF_PARC</code>,{' '}
             <code className="font-mono">REF_PERSONNEL</code>,{' '}
             <code className="font-mono">ASSETS_MACHINES</code>,{' '}
-            <code className="font-mono">REF_PDR</code> &amp;{' '}
-            <code className="font-mono">PM_CATALOG</code> + exports issus de cette carte.
+            <code className="font-mono">REF_PDR</code>,{' '}
+            <code className="font-mono">PM_CATALOG</code>,{' '}
+            <code className="font-mono">ENTREPOT_BOM</code> &amp;{' '}
+            <code className="font-mono">CM_CATALOG</code> (onglet verrouillé{' '}
+            <code className="font-mono">README_TYPE_A</code>).
           </span>
           <span className="font-mono text-[10px] text-slate-500">
             Type B (Exports tableaux/mouvements) = Consultation externe uniquement
           </span>
         </div>
 
+        {effectiveMode === 'REPLACE_CATALOG' && (
+          <div
+            data-testid="replace-catalog-warning"
+            className="mb-3.5 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-semibold text-rose-900 flex items-center gap-2"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-700" />
+            <span>
+              <b>Mode REPLACE_CATALOG actif (ADMIN) :</b> les éléments absents du paquet seront supprimés du catalogue s&apos;ils ne sont liés à aucun enregistrement actif (sinon blocage{' '}
+              <code className="font-mono">REFERENCED_BY_ACTIVE_RECORDS</code>). Exécutez{' '}
+              <b>Vérifier (dryRun)</b> avant d&apos;importer.
+            </span>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Card 1: REF_PARC */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  1. Paquet Référentiel Parc (REF_PARC — Niveau 2)
-                </h4>
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-sky-100 text-sky-800">
-                  ZONES ➔ FAMILIES ➔ TEMPLATES
-                </span>
+          {bundleCardsConfig.map((card) => (
+            <div
+              key={card.kind}
+              className={`${
+                card.fullSpan ? 'lg:col-span-2 ' : ''
+              }p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3`}
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-xs font-extrabold text-slate-900">{card.title}</h4>
+                  <span
+                    className={`px-2 py-0.5 text-[10px] font-mono font-bold rounded ${card.badgeClass}`}
+                  >
+                    {card.badge}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 mt-1">{card.subtitle}</p>
+                <textarea
+                  value={bundleTextByKind[card.kind]}
+                  onChange={(e) => setCardText(card.kind, e.target.value, 'JSON_BUNDLE')}
+                  rows={4}
+                  placeholder={card.placeholder}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
+                />
               </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                Clés stables : <code className="font-mono">code_zone</code>,{' '}
-                <code className="font-mono">code_family</code>,{' '}
-                <code className="font-mono">code_template</code>,{' '}
-                <code className="font-mono">code_system_type</code>.
-              </p>
-              <textarea
-                value={refParcJsonText}
-                onChange={(e) => setRefParcJsonText(e.target.value)}
-                rows={4}
-                placeholder='{"bundleType":"REF_PARC","zones":[...],"families":[...],"templates":[...],"generalSystemTypes":[...]}'
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
-              />
-            </div>
 
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
-              <input
-                ref={refParcFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileLoad(e, 'REF_PARC')}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={handleDownloadRefParcTemplate}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-template-ref-parc"
-                title="Télécharger le modèle officiel REF_PARC.template.json"
-              >
-                <Download className="w-3.5 h-3.5 text-sky-700" />
-                <span>Télécharger le modèle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => refParcFileInputRef.current?.click()}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Charger JSON</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunRefParcPipeline(true)}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-dryrun-ref-parc"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
-                <span>Vérifier (dryRun)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunRefParcPipeline(false)}
-                className={SETTINGS_BUTTON_STYLES.primary}
-                data-testid="btn-merge-ref-parc"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Importer (MERGE)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleExportRefParc}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-export-ref-parc"
-                title="Exporter le référentiel actuel au format Paquet Round-Trip (Type A)"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter (Round-Trip Type A)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 2: REF_PERSONNEL */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  2. Paquet Équipes &amp; Intervenants (REF_PERSONNEL — Niveau 2)
-                </h4>
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-emerald-100 text-emerald-800">
-                  02_PERSONNEL
-                </span>
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+                <input
+                  ref={card.inputRef}
+                  type="file"
+                  accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onChange={(e) => handleFileLoad(e, card.kind)}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplateJson(card.kind)}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-template-${card.testIdSlug}`}
+                  title={`Télécharger le modèle officiel ${BUNDLE_META[card.kind].jsonFilename}`}
+                >
+                  <Download className="w-3.5 h-3.5 text-sky-700" />
+                  <span>Modèle .JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadTemplateXlsx(card.kind)}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-template-xlsx-${card.testIdSlug}`}
+                  title={`Télécharger le modèle officiel Excel ${BUNDLE_META[card.kind].xlsxFilename} (Type A)`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Modèle .XLSX</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => card.inputRef.current?.click()}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-load-${card.testIdSlug}`}
+                  title="Charger un fichier .json ou un classeur officiel Type A (.xlsx)"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Charger (.JSON / .XLSX)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunPipeline(card.kind, true)}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-dryrun-${card.testIdSlug}`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
+                  <span>Vérifier (dryRun)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleRunPipeline(card.kind, false)}
+                  className={
+                    effectiveMode === 'REPLACE_CATALOG'
+                      ? SETTINGS_BUTTON_STYLES.dangerSoft
+                      : SETTINGS_BUTTON_STYLES.primary
+                  }
+                  data-testid={`btn-merge-${card.testIdSlug}`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>
+                    {effectiveMode === 'REPLACE_CATALOG'
+                      ? 'Remplacer (REPLACE_CATALOG)'
+                      : 'Importer (MERGE)'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportBundleJson(card.kind)}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-export-${card.testIdSlug}`}
+                  title="Exporter au format Paquet Round-Trip .JSON (Type A)"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Export .JSON (Type A)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExportBundleXlsx(card.kind)}
+                  className={SETTINGS_BUTTON_STYLES.secondary}
+                  data-testid={`btn-export-xlsx-${card.testIdSlug}`}
+                  title="Exporter au format Classeur Round-Trip .XLSX (Type A)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Export .XLSX (Type A)</span>
+                </button>
               </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                Clés stables : <code className="font-mono">code_technician</code>,{' '}
-                <code className="font-mono">code_operation</code>,{' '}
-                <code className="font-mono">code_zone</code> (Zéro compte de connexion / secret).
-              </p>
-              <textarea
-                value={refPersonnelJsonText}
-                onChange={(e) => setRefPersonnelJsonText(e.target.value)}
-                rows={4}
-                placeholder='{"bundleType":"REF_PERSONNEL","technicians":[{"code_technician":"TECH-01","nom":"...","code_zone":"DETOURAG","type_profil":"TECHNICIEN","specialite":"ELECTRIQUE"}],"operations":[...]}'
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
-              />
             </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
-              <input
-                ref={refPersonnelFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileLoad(e, 'REF_PERSONNEL')}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={handleDownloadRefPersonnelTemplate}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-template-ref-personnel"
-                title="Télécharger le modèle officiel REF_PERSONNEL.template.json"
-              >
-                <Download className="w-3.5 h-3.5 text-sky-700" />
-                <span>Télécharger le modèle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => refPersonnelFileInputRef.current?.click()}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Charger JSON</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunRefPersonnelPipeline(true)}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-dryrun-ref-personnel"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
-                <span>Vérifier (dryRun)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunRefPersonnelPipeline(false)}
-                className={SETTINGS_BUTTON_STYLES.primary}
-                data-testid="btn-merge-ref-personnel"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Importer (MERGE)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleExportRefPersonnel}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-export-ref-personnel"
-                title="Exporter les équipes actuelles au format Paquet Round-Trip (Type A)"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter (Round-Trip Type A)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 3: ASSETS_MACHINES */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  3. Paquet Machines Enregistrées (ASSETS_MACHINES — Niveau 1)
-                </h4>
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-indigo-100 text-indigo-800">
-                  03_MACHINES
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                Validation <code className="font-mono">PRODUCTION</code> vs{' '}
-                <code className="font-mono">SYSTEM_GENERAL</code>, normalisation{' '}
-                <code className="font-mono">code_zone</code> et hiérarchie{' '}
-                <code className="font-mono">parent_code_machine</code>.
-              </p>
-              <textarea
-                value={assetsMachinesJsonText}
-                onChange={(e) => setAssetsMachinesJsonText(e.target.value)}
-                rows={4}
-                placeholder='{"bundleType":"ASSETS_MACHINES","machines":[{"code_machine":"CNC-01","designation":"...","code_zone":"DETOURAG","asset_class":"PRODUCTION","code_family":"...","code_template":"..."}]}'
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
-              <input
-                ref={assetsMachinesFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileLoad(e, 'ASSETS_MACHINES')}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={handleDownloadAssetsMachinesTemplate}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-template-assets-machines"
-                title="Télécharger le modèle officiel ASSETS_MACHINES.template.json"
-              >
-                <Download className="w-3.5 h-3.5 text-sky-700" />
-                <span>Télécharger le modèle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => assetsMachinesFileInputRef.current?.click()}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Charger JSON</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunAssetsMachinesPipeline(true)}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-dryrun-assets-machines"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
-                <span>Vérifier (dryRun)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunAssetsMachinesPipeline(false)}
-                className={SETTINGS_BUTTON_STYLES.primary}
-                data-testid="btn-merge-assets-machines"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Importer (MERGE)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleExportAssetsMachines}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-export-assets-machines"
-                title="Exporter le parc machines actuel au format Paquet Round-Trip (Type A)"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter (Round-Trip Type A)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 4: REF_PDR */}
-          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  4. Paquet Catalogue Stock PDR (REF_PDR — Niveau 2)
-                </h4>
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-100 text-amber-800">
-                  04_PDR (GROUPS ➔ TYPES ➔ ITEMS)
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                Clés stables : <code className="font-mono">code_group</code>,{' '}
-                <code className="font-mono">code_type</code>,{' '}
-                <code className="font-mono">ref</code> (Catalogue pur — zéro mouvement de stock).
-              </p>
-              <textarea
-                value={refPdrJsonText}
-                onChange={(e) => setRefPdrJsonText(e.target.value)}
-                rows={4}
-                placeholder='{"bundleType":"REF_PDR","groups":[{"code_group":"ROUL","libelle":"..."}],"types":[{"code_type":"TYP-ROUL-BILLE","code_group":"ROUL","libelle":"..."}],"items":[{"ref":"SKF-6205-2RS","designation":"...","code_type":"TYP-ROUL-BILLE","code_group":"ROUL"}]}'
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
-              <input
-                ref={refPdrFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileLoad(e, 'REF_PDR')}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={handleDownloadRefPdrTemplate}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-template-ref-pdr"
-                title="Télécharger le modèle officiel REF_PDR.template.json"
-              >
-                <Download className="w-3.5 h-3.5 text-sky-700" />
-                <span>Télécharger le modèle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => refPdrFileInputRef.current?.click()}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Charger JSON</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setParseError(null);
-                  if (!refPdrJsonText.trim()) {
-                    setParseError(
-                      'Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PDR.'
-                    );
-                    return;
-                  }
-                  try {
-                    const parsed = JSON.parse(refPdrJsonText);
-                    const report = validateAndCommitRefPdrBundle(parsed, {
-                      mode: 'MERGE',
-                      origin: 'JSON_BUNDLE',
-                      dryRun: true,
-                    });
-                    setLastImportReport(report);
-                    if (report.success) {
-                      showToast?.(
-                        'Validation REF_PDR (dryRun) réussie : 0 erreur bloquante.',
-                        'success'
-                      );
-                    } else {
-                      showToast?.(
-                        `Échec validation REF_PDR : ${report.rejected.length} rejet(s) détecté(s).`,
-                        'error'
-                      );
-                    }
-                  } catch (err: any) {
-                    setParseError(
-                      `JSON REF_PDR invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
-                    );
-                  }
-                }}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-dryrun-ref-pdr"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
-                <span>Vérifier (dryRun)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setParseError(null);
-                  if (!refPdrJsonText.trim()) {
-                    setParseError(
-                      'Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PDR.'
-                    );
-                    return;
-                  }
-                  try {
-                    const parsed = JSON.parse(refPdrJsonText);
-                    const report = validateAndCommitRefPdrBundle(parsed, {
-                      mode: 'MERGE',
-                      origin: 'JSON_BUNDLE',
-                      dryRun: false,
-                    });
-                    setLastImportReport(report);
-                    if (report.success) {
-                      showToast?.(
-                        'Import MERGE REF_PDR engagé dans DataGateway avec succès.',
-                        'success'
-                      );
-                    } else {
-                      showToast?.(
-                        `Échec validation REF_PDR : ${report.rejected.length} rejet(s) détecté(s).`,
-                        'error'
-                      );
-                    }
-                  } catch (err: any) {
-                    setParseError(
-                      `JSON REF_PDR invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
-                    );
-                  }
-                }}
-                className={SETTINGS_BUTTON_STYLES.primary}
-                data-testid="btn-merge-ref-pdr"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Importer (MERGE)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleExportRefPdr}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-export-ref-pdr"
-                title="Exporter le catalogue PDR actuel au format Paquet Round-Trip (Type A)"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter (Round-Trip Type A)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Card 5: PM_CATALOG */}
-          <div className="lg:col-span-2 p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
-            <div>
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="text-xs font-extrabold text-slate-900">
-                  5. Paquet Catalogue Préventif (PM_CATALOG — Niveau 2 Uniquement)
-                </h4>
-                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-100 text-purple-800">
-                  05_PM_ACTIONS ➔ 05_PM_GUIDES
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-600 mt-1">
-                Clés stables : <code className="font-mono">code_action</code>,{' '}
-                <code className="font-mono">code_guide</code> (Catalogue standardisé — aucune tâche machine ni exécution).
-              </p>
-              <textarea
-                value={pmCatalogJsonText}
-                onChange={(e) => setPmCatalogJsonText(e.target.value)}
-                rows={4}
-                placeholder='{"bundleType":"PM_CATALOG","actions":[{"code_action":"C","libelle":"Contrôle"}],"guides":[{"code_guide":"GUIDE-ROULEMENT-CG","composant_nom":"Roulement","actions_liees":["C"]}]}'
-                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
-              <input
-                ref={pmCatalogFileInputRef}
-                type="file"
-                accept=".json,application/json"
-                onChange={(e) => handleFileLoad(e, 'PM_CATALOG')}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={handleDownloadPmCatalogTemplate}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-template-pm-catalog"
-                title="Télécharger le modèle officiel PM_CATALOG.template.json"
-              >
-                <Download className="w-3.5 h-3.5 text-sky-700" />
-                <span>Télécharger le modèle</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => pmCatalogFileInputRef.current?.click()}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>Charger JSON</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setParseError(null);
-                  if (!pmCatalogJsonText.trim()) {
-                    setParseError(
-                      'Veuillez charger un fichier JSON ou coller le contenu du paquet PM_CATALOG.'
-                    );
-                    return;
-                  }
-                  try {
-                    const parsed = JSON.parse(pmCatalogJsonText);
-                    const report = validateAndCommitPmCatalogBundle(parsed, {
-                      mode: 'MERGE',
-                      origin: 'JSON_BUNDLE',
-                      dryRun: true,
-                    });
-                    setLastImportReport(report);
-                    if (report.success) {
-                      showToast?.(
-                        'Validation PM_CATALOG (dryRun) réussie : 0 erreur bloquante.',
-                        'success'
-                      );
-                    } else {
-                      showToast?.(
-                        `Échec validation PM_CATALOG : ${report.rejected.length} rejet(s) détecté(s).`,
-                        'error'
-                      );
-                    }
-                  } catch (err: any) {
-                    setParseError(
-                      `JSON PM_CATALOG invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
-                    );
-                  }
-                }}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-dryrun-pm-catalog"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
-                <span>Vérifier (dryRun)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setParseError(null);
-                  if (!pmCatalogJsonText.trim()) {
-                    setParseError(
-                      'Veuillez charger un fichier JSON ou coller le contenu du paquet PM_CATALOG.'
-                    );
-                    return;
-                  }
-                  try {
-                    const parsed = JSON.parse(pmCatalogJsonText);
-                    const report = validateAndCommitPmCatalogBundle(parsed, {
-                      mode: 'MERGE',
-                      origin: 'JSON_BUNDLE',
-                      dryRun: false,
-                    });
-                    setLastImportReport(report);
-                    if (report.success) {
-                      showToast?.(
-                        'Import MERGE PM_CATALOG engagé dans DataGateway avec succès.',
-                        'success'
-                      );
-                    } else {
-                      showToast?.(
-                        `Échec validation PM_CATALOG : ${report.rejected.length} rejet(s) détecté(s).`,
-                        'error'
-                      );
-                    }
-                  } catch (err: any) {
-                    setParseError(
-                      `JSON PM_CATALOG invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
-                    );
-                  }
-                }}
-                className={SETTINGS_BUTTON_STYLES.primary}
-                data-testid="btn-merge-pm-catalog"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Importer (MERGE)</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleExportPmCatalog}
-                className={SETTINGS_BUTTON_STYLES.secondary}
-                data-testid="btn-export-pm-catalog"
-                title="Exporter le catalogue préventif actuel au format Paquet Round-Trip (Type A)"
-              >
-                <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter (Round-Trip Type A)</span>
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
+
+        {showPersonnelAuthHint && (
+          <div
+            data-testid="personnel-auth-hint"
+            className="mt-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-3"
+          >
+            <div className="flex items-start gap-2.5">
+              <KeyRound className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-extrabold">
+                  Rappel Sécurité Auth — Équipes engagées sans identifiants de connexion
+                </div>
+                <p className="text-[11px] text-amber-900 mt-0.5">
+                  Les techniciens et responsables importés via <code className="font-mono">REF_PERSONNEL</code> n&apos;ont aucun PIN ni mot de passe par sécurité. Si certains intervenants doivent se connecter à l&apos;application, activez leurs accès dans <b>Utilisateurs &amp; Accès</b>.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {typeof onNavigateToUsers === 'function' && (
+                <button
+                  type="button"
+                  onClick={onNavigateToUsers}
+                  data-testid="btn-goto-users-after-personnel"
+                  className={SETTINGS_BUTTON_STYLES.primary}
+                >
+                  <span>Ouvrir Utilisateurs &amp; Accès</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowPersonnelAuthHint(false)}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <span>Masquer</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {parseError && (
           <div className="mt-3 px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800 flex items-center gap-2">
@@ -1000,7 +852,8 @@ export default function SettingsInjectionTab({
                   <XCircle className="w-4 h-4 text-rose-700" />
                 )}
                 <span className="text-xs font-extrabold text-slate-900">
-                  Rapport {lastImportReport.bundleType} —{' '}
+                  Rapport {lastImportReport.bundleType} ({lastImportReport.mode} ·{' '}
+                  {lastImportReport.origin}) —{' '}
                   {lastImportReport.dryRun
                     ? 'Simulation (dryRun)'
                     : lastImportReport.committed

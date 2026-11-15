@@ -1,0 +1,120 @@
+{
+  "bundleType": "ENTREPOT_BOM",
+  "compGroups": [
+    {
+      "code_comp_group": "GRP-MOTEUR-001",
+      "code": "MOTEUR",
+      "libelle": "Moteurs & Actionneurs Électriques",
+      "description": "Groupe parent des moteurs industriels (triphasé, monophasé, asynchrone, servo).",
+      "domaine_technique": "ELECTRIQUE"
+    },
+    {
+      "code_comp_group": "GRP-REDUCTEUR-001",
+      "code": "REDUCTEUR",
+      "libelle": "Réducteurs & Boîtes Mécaniques",
+      "description": "Groupe des réducteurs à engrenages coaxiaux, orthogonaux et pendulaires.",
+      "domaine_technique": "MECANIQUE"
+    }
+  ],
+  "compFamilies": [
+    {
+      "code_comp_family": "FAM-MOT-3PH-001",
+      "code_comp_group": "GRP-MOTEUR-001",
+      "code": "MOT-3PH",
+      "libelle": "Moteur Triphasé",
+      "type": "Moteur Triphasé",
+      "description": "Moteurs industriels triphasés 380V / 400V."
+    },
+    {
+      "code_comp_family": "FAM-RED-COAX-001",
+      "code_comp_group": "GRP-REDUCTEUR-001",
+      "code": "RED-COAX",
+      "libelle": "Réducteur Coaxial",
+      "type": "Réducteur Coaxial",
+      "description": "Réducteurs mécaniques à train d'engrenages coaxial."
+    }
+  ],
+  "compTemplates": [
+    {
+      "code_comp_template": "TPL-MOT-3PH-40KW-1430-001",
+      "code_comp_family": "FAM-MOT-3PH-001",
+      "code_comp_group": "GRP-MOTEUR-001",
+      "code": "MOT-3PH-40KW-1430",
+      "ref": "Siemens 1LA7083-4AA",
+      "libelle": "Moteur Triphasé 4.0KW 1430 tr/min",
+      "type": "Moteur Triphasé",
+      "mode_reparation_defaut": "EXTERNE_BOBINAGE",
+      "tension_nominale": "380V / 400V",
+      "courant_nominal_a": 8.8,
+      "indice_protection": "IP55",
+      "type_fixation": "B3 Pattes",
+      "specs": {
+        "puissance": "4.0KW",
+        "vitesse": "1430 tr/min",
+        "alimentation": "Triphasé 380V"
+      }
+    }
+  ],
+  "partGroups": [
+    {
+      "code_part_group": "GRP-PRT-MEC",
+      "code": "MEC-TRANS",
+      "libelle": "Organes Mécaniques & Transmission",
+      "description": "Paliers, accouplements, arbres, poulies et pignons d'entrepôt.",
+      "domaine_technique": "MECANIQUE",
+      "default_policy_tags": ["REPAIRABLE", "REPLACING"],
+      "sort_order": 1,
+      "is_active": true
+    },
+    {
+      "code_part_group": "GRP-PRT-FIX",
+      "code": "FIX-ASSEM",
+      "libelle": "Fixation, Visserie & Assemblage",
+      "description": "Éléments de fixation structurelle, goujons et brides d'assemblage.",
+      "domaine_technique": "MECANIQUE",
+      "default_policy_tags": ["REPLACING"],
+      "sort_order": 2,
+      "is_active": true
+    }
+  ],
+  "partTypes": [
+    {
+      "code_part_type": "TYPE-MEC",
+      "code_part_group": "GRP-PRT-MEC",
+      "libelle": "Organes Mécaniques & Transmission",
+      "domaine_technique": "MECANIQUE"
+    },
+    {
+      "code_part_type": "TYPE-FIX",
+      "code_part_group": "GRP-PRT-FIX",
+      "libelle": "Fixation & Visserie Industrielle",
+      "domaine_technique": "MECANIQUE"
+    }
+  ],
+  "partDesignations": [
+    {
+      "ref": "MEC-01",
+      "code_part_type": "TYPE-MEC",
+      "code_part_group": "GRP-PRT-MEC",
+      "designation": "Courroie Plate Thermocollée 1200x50 Spéciale",
+      "seuil": 5,
+      "emplacement": "E-MAG-RAYON-B02",
+      "matiere_nuance": "Polyuréthane Armé Kevlar",
+      "ref_plan": "PLN-MEC-204-B",
+      "dimensions_brut": "1250 x 50 x 4 mm",
+      "policy_tags": ["REPLACING", "REPAIRABLE"]
+    },
+    {
+      "ref": "FIX-01",
+      "code_part_type": "TYPE-FIX",
+      "code_part_group": "GRP-PRT-FIX",
+      "designation": "Cheville Filetée Haute Résistance 12x100",
+      "seuil": 10,
+      "emplacement": "E-MAG-RAYON-C01",
+      "matiere_nuance": "Acier 42CrMo4 (Cl. 10.9)",
+      "ref_plan": "PLN-FIX-101-A",
+      "dimensions_brut": "Ø16 x 120 mm",
+      "policy_tags": ["REPLACING", "MODIFYING"]
+    }
+  ]
+}

@@ -18,8 +18,12 @@ import {
 import type { GmaoStoreSetters } from '../types/store';
 import type { IAuditEvent, AuditSnapshot } from '../types/audit';
 import {
+  exportCmCatalogBundle,
+  exportEntrepotBomBundle,
   validateAndCommitAssetsMachinesBundle,
+  validateAndCommitCmCatalogBundle,
   validateAndCommitDemoBundle,
+  validateAndCommitEntrepotBomBundle,
   validateAndCommitPmCatalogBundle,
   validateAndCommitRefParcBundle,
   validateAndCommitRefPdrBundle,
@@ -952,6 +956,18 @@ export const DataGateway = {
         actions: seedPreventiveActions as unknown as PmCatalogActionRow[],
         guides: seedPreventiveGuides as unknown as PmCatalogGuideRow[],
       },
+      entrepotBom: exportEntrepotBomBundle({
+        compGroups: seedCompGroups,
+        compFamilies: seedCompFamilies,
+        compTemplates: seedCompTemplates,
+        partGroups: seedPartGroups as IPartGroup[],
+        partTypes: seedPartTypes,
+        partDesignations: seedPartDesignations as IPartDesignation[],
+      }),
+      cmCatalog: exportCmCatalogBundle({
+        panneCategories: seedPanneByCategory,
+        actionsByPanne: seedActionsByPanne,
+      }),
     };
   },
 
@@ -1004,6 +1020,14 @@ export const DataGateway = {
       nextDesignations: derivedDesignations,
       nextActions: validatedPreventiveActions,
       nextGuides: validatedPreventiveGuides,
+      nextCompGroups: validatedCompGroups,
+      nextCompFamilies: validatedCompFamilies,
+      nextCompTemplates: validatedCompTemplates,
+      nextPartGroups: validatedPartGroups,
+      nextPartTypes: validatedPartTypes,
+      nextPartDesignations: validatedPartDesignations,
+      nextPanneCategories: validatedPanneCategories,
+      nextActionsByPanne: validatedActionsByPanne,
     } = pipelineReport.staging;
 
     // Reconcile movement balances (entrees, sorties, stockActuel) on stagedStockItems from seedStockItems
@@ -1077,9 +1101,18 @@ export const DataGateway = {
     this.savePreventiveExecutions([]);
     this.saveMeterReadings([]);
 
+    const finalCompGroups = validatedCompGroups ?? seedCompGroups;
+    const finalCompFamilies = validatedCompFamilies ?? seedCompFamilies;
+    const finalCompTemplates = validatedCompTemplates ?? formattedCompTemplates;
+    const finalPartGroups = validatedPartGroups ?? (seedPartGroups as IPartGroup[]);
+    const finalPartTypes = validatedPartTypes ?? seedPartTypes;
+    const finalPartDesignations = validatedPartDesignations ?? (seedPartDesignations as IPartDesignation[]);
+    const finalPanneCategories = validatedPanneCategories ?? seedPanneByCategory;
+    const finalActionsByPanne = validatedActionsByPanne ?? seedActionsByPanne;
+
     this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: nextMachines });
-    this.saveCorrectiveActionsByPanne(seedActionsByPanne);
-    this.saveCorrectivePanneCategories(seedPanneByCategory);
+    this.saveCorrectiveActionsByPanne(finalActionsByPanne);
+    this.saveCorrectivePanneCategories(finalPanneCategories);
     this.saveCorrectiveTravaux(seedTravailAFaire);
     this.saveCorrectiveIntervenants(seedIntervenants);
     this.saveWorkshopOrders([]);
@@ -1098,12 +1131,12 @@ export const DataGateway = {
 
     this.saveWarehouseItems(seedWarehouseItems);
     this.saveEntrepotComponents(seedEntrepotComponents);
-    this.saveCompGroups(seedCompGroups);
-    this.saveCompFamilies(seedCompFamilies);
-    this.saveCompTemplates(formattedCompTemplates);
-    this.savePartGroups(seedPartGroups);
-    this.savePartTypes(seedPartTypes);
-    this.savePartDesignations(seedPartDesignations);
+    this.saveCompGroups(finalCompGroups);
+    this.saveCompFamilies(finalCompFamilies);
+    this.saveCompTemplates(finalCompTemplates);
+    this.savePartGroups(finalPartGroups);
+    this.savePartTypes(finalPartTypes);
+    this.savePartDesignations(finalPartDesignations);
 
     this.saveSortiesExterne(seedSortiesExternes);
     this.saveFinancialBudget(DEMO_FISCAL_BUDGET, 'DEMO_SEED');
@@ -1134,8 +1167,8 @@ export const DataGateway = {
     if (setters.setMeterReadings) setters.setMeterReadings([]);
 
     if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(seedCorrectiveInterventions);
-    if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(seedActionsByPanne);
-    if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(seedPanneByCategory);
+    if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(finalActionsByPanne);
+    if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(finalPanneCategories);
     if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(seedTravailAFaire);
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
     if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
@@ -1146,12 +1179,12 @@ export const DataGateway = {
 
     if (setters.setWarehouseItems) setters.setWarehouseItems(seedWarehouseItems);
     if (setters.setEntrepotComponents) setters.setEntrepotComponents(seedEntrepotComponents);
-    if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
-    if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
-    if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
-    if (setters.setPartGroups) setters.setPartGroups(seedPartGroups as IPartGroup[]);
-    if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
-    if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations as IPartDesignation[]);
+    if (setters.setCompGroups) setters.setCompGroups(finalCompGroups);
+    if (setters.setCompFamilies) setters.setCompFamilies(finalCompFamilies);
+    if (setters.setCompTemplates) setters.setCompTemplates(finalCompTemplates);
+    if (setters.setPartGroups) setters.setPartGroups(finalPartGroups);
+    if (setters.setPartTypes) setters.setPartTypes(finalPartTypes);
+    if (setters.setPartDesignations) setters.setPartDesignations(finalPartDesignations);
 
     if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
     this.saveAuditEvents([]);
@@ -1791,24 +1824,52 @@ export const DataGateway = {
       }
 
       case 'entrepot':
-      case 'warehouse':
+      case 'warehouse': {
+        const bomReport = validateAndCommitEntrepotBomBundle(demoBundle.entrepotBom!, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingCompGroups: [],
+          existingCompFamilies: [],
+          existingCompTemplates: [],
+          existingPartGroups: [],
+          existingPartTypes: [],
+          existingPartDesignations: [],
+          existingWarehouseItems: [],
+          existingEntrepotComponents: [],
+          existingMachineElementsLedger: [],
+        });
+        if (!bomReport.success || bomReport.rejected.length > 0) {
+          throw new Error(
+            `Échec validation section entrepôt (ENTREPOT_BOM) : ${bomReport.rejected[0]?.message || 'Erreur inconnue'}`
+          );
+        }
+        const {
+          nextCompGroups,
+          nextCompFamilies,
+          nextCompTemplates,
+          nextPartGroups,
+          nextPartTypes,
+          nextPartDesignations,
+        } = bomReport.staging;
         this.saveWarehouseItems(seedWarehouseItems);
         this.saveEntrepotComponents(seedEntrepotComponents);
-        this.saveCompGroups(seedCompGroups);
-        this.saveCompFamilies(seedCompFamilies);
-        this.saveCompTemplates(formattedCompTemplates);
-        this.savePartGroups(seedPartGroups);
-        this.savePartTypes(seedPartTypes);
-        this.savePartDesignations(seedPartDesignations);
+        this.saveCompGroups(nextCompGroups);
+        this.saveCompFamilies(nextCompFamilies);
+        this.saveCompTemplates(nextCompTemplates);
+        this.savePartGroups(nextPartGroups);
+        this.savePartTypes(nextPartTypes);
+        this.savePartDesignations(nextPartDesignations);
         if (setters.setWarehouseItems) setters.setWarehouseItems(seedWarehouseItems);
         if (setters.setEntrepotComponents) setters.setEntrepotComponents(seedEntrepotComponents);
-        if (setters.setCompGroups) setters.setCompGroups(seedCompGroups);
-        if (setters.setCompFamilies) setters.setCompFamilies(seedCompFamilies);
-        if (setters.setCompTemplates) setters.setCompTemplates(formattedCompTemplates);
-        if (setters.setPartGroups) setters.setPartGroups(seedPartGroups as IPartGroup[]);
-        if (setters.setPartTypes) setters.setPartTypes(seedPartTypes);
-        if (setters.setPartDesignations) setters.setPartDesignations(seedPartDesignations as IPartDesignation[]);
+        if (setters.setCompGroups) setters.setCompGroups(nextCompGroups);
+        if (setters.setCompFamilies) setters.setCompFamilies(nextCompFamilies);
+        if (setters.setCompTemplates) setters.setCompTemplates(nextCompTemplates);
+        if (setters.setPartGroups) setters.setPartGroups(nextPartGroups);
+        if (setters.setPartTypes) setters.setPartTypes(nextPartTypes);
+        if (setters.setPartDesignations) setters.setPartDesignations(nextPartDesignations);
         break;
+      }
 
       case 'zones':
       case 'users': {
@@ -1919,18 +1980,33 @@ export const DataGateway = {
         break;
       }
 
-      case 'corrective':
+      case 'corrective': {
+        const cmReport = validateAndCommitCmCatalogBundle(demoBundle.cmCatalog!, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingPanneCategories: {},
+          existingActionsByPanne: {},
+          existingCorrectiveInterventions: [],
+        });
+        if (!cmReport.success || cmReport.rejected.length > 0) {
+          throw new Error(
+            `Échec validation section correctif (CM_CATALOG) : ${cmReport.rejected[0]?.message || 'Erreur inconnue'}`
+          );
+        }
+        const { nextPanneCategories, nextActionsByPanne } = cmReport.staging;
         this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: seedMachines });
-        this.saveCorrectiveActionsByPanne(seedActionsByPanne);
-        this.saveCorrectivePanneCategories(seedPanneByCategory);
+        this.saveCorrectiveActionsByPanne(nextActionsByPanne);
+        this.saveCorrectivePanneCategories(nextPanneCategories);
         this.saveCorrectiveTravaux(seedTravailAFaire);
         this.saveCorrectiveIntervenants(seedIntervenants);
         if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(seedCorrectiveInterventions);
-        if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(seedActionsByPanne);
-        if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(seedPanneByCategory);
+        if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(nextActionsByPanne);
+        if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(nextPanneCategories);
         if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(seedTravailAFaire);
         if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
         break;
+      }
 
       default:
         break;
