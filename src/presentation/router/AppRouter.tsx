@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import ErrorBoundary from '../components/common/ErrorBoundary';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
+import { RouteLoader } from '../components/common/loaders';
 import usePageOrchestrator from '../components/common/usePageOrchestrator';
 
 const DashboardView = lazy(() => import('../pages/dashboard/DashboardView'));
@@ -100,13 +100,13 @@ export default function AppRouter({
                       transition={{ duration: 0.16, ease: 'easeOut' }}
                       className="w-full min-w-0"
                     >
-                      <LoadingSkeleton currentTab={currentTab} />
+                      <RouteLoader currentTab={currentTab} />
                     </motion.div>
                   ) : (
-                    <Suspense fallback={<LoadingSkeleton currentTab={currentTab} />}>
+                    <Suspense fallback={<RouteLoader currentTab={currentTab} />}>
                       <div
                         key={`view-${currentTab}`}
-                        className="w-full min-w-0"
+                        className="w-full min-w-0 neural-fade-in"
                       >
                       {currentTab === 'dashboard' && (
                         <ErrorBoundary sectionName="Tableau de Bord Operations">

@@ -1,0 +1,946 @@
+
+Gemini 4 Hydrogen
+Ran for 1m 7s
+
+Action history
+يتكون نظام التحميل وشاشة البداية في هذا التطبيق من طبقتين متكاملتين:
+شاشة الإقلاع / السبلاش سكرين (NeuralLoader): تظهر عند فتح التطبيق لأول مرة (mode="fullscreen")، وتعرض أيقونة المفاعل العصبي داخل مكعب زجاجي طافٍ محاط بـ 12 عقدة عصبية، 5 مدارات، شبكة SVG تفاعلية، خطوط بيانات متدفقة، وشريط تقدم مرحلي.
+أيقونة العلامة المائية لتحميل الصفحات (NeuralWatermark + RouteLoader): تظهر عند التنقل بين الصفحات (app/loading.tsx أو Suspense)، وتجمع بين هيكل عظمي شفاف بنسبة 40% (Skeleton بتأثير Shimmer) في الخلفية ومكعب العلامة المائية الزجاجي (BrainCircuit) مع مدارات ضوئية دوارة في المنتصف.
+🤖 أولاً: التوجيه الجاهز للوكيل (Agent Prompt)
+انسخ هذا النص وأعطه للوكيل في تطبيقك الآخر ليبني ويربط النظام بالكامل تلقائياً:
+توجيه للوكيل:
+أريد إضافة نظام Splash Screen وPage Loading Watermark في هذا التطبيق وفق البنية التالية:
+متغيرات الزجاج والتموج (globals.css / tailwind.config): تأكد من وجود المتغيرات --glass-bg، --glass-border، --shadow-glass (بألوان مختلفة للـ :root والـ .dark)، بالإضافة إلى keyframe الـ shimmer الخاص بالـ Skeleton، وملف neural-loader.css للأنيميشن.
+مكون العلامة المائية (NeuralWatermark.tsx): مكعب زجاجي في المنتصف (w-28 h-28 rounded-3xl) يعتمد على backdrop-blur-xl وأيقونة من lucide-react (مثل BrainCircuit) مع هالة ضوئية خلفية (blur-[60px]) و3 مدارات دائرية متعاكسة الدوران بنقاط مضيئة، ويغطي مساحة المحتوى بـ z-40 ليبقى أسفل الـ Sidebar (z-50).
+مكون تحميل المسارات (RouteLoader.tsx) و app/loading.tsx: يدمج في الخلفية هيكل صفحة (PageSkeleton) بشفافية opacity-40 مع تأثير shimmer، وفوقه مكون <NeuralWatermark />. اربطه في app/loading.tsx وفي حدود Suspense.
+شاشة السبلاش سكرين (NeuralLoader.tsx): شاشة إقلاع كاملة (fixed inset-0 z-[100]) تحتوي على مركز عصبي طافٍ بأيقونة تتبدل حسب المرحلة، 12 عقدة متصلة بشبكة SVG ترسل نبضات ضوئية بينها، 5 حلقات مدارية، خلفية شبكة وخط مسح ضوئي، وشريط تقدم مع نقاط مراحل (25%, 50%, 75%).
+إدارة حالة الإقلاع: أنشئ غلاف عميل (AppBootGuard) يعرض <NeuralLoader mode="fullscreen" onComplete={...} /> عند بداية التشغيل ثم يكشف التطبيق بتلاشي ناعم (fade-in)، مع مراعاة استخدام الألوان الدلالية (hsl(var(--primary))) ليعمل في الوضعين الفاتح والداكن تلقائياً.
+💻 ثانياً: الأكواد الكاملة جاهزة للنسخ
+1. متغيرات CSS والأنيميشن (src/styles/neural-loader.css)
+قم باستيراد هذا الملف داخل globals.css عبر @import "../styles/neural-loader.css";، وتأكد من تعريف --glass-bg، --glass-border، و --shadow-glass في globals.css (أو استخدم @theme في Tailwind v4):
+CSS
+/* =========================================================
+   متغيرات الزجاج (توضع داخل :root و .dark في globals.css)
+   ========================================================= */
+/*
+:root {
+  --glass-bg: hsl(0 0% 100% / 0.65);
+  --glass-border: hsl(210 20% 88% / 0.5);
+  --shadow-glass: 0 8px 30px hsl(220 50% 20% / 0.08);
+}
+.dark {
+  --glass-bg: hsl(0 0% 100% / 0.05);
+  --glass-border: hsl(var(--primary) / 0.2);
+  --shadow-glass: 0 8px 32px 0 hsl(var(--primary) / 0.1);
+}
+*/
+
+/* =========================================================
+   أنيميشن شاشة البداية والعلامة المائية (neural-loader.css)
+   ========================================================= */
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes gridPulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.4; }
+}
+
+@keyframes glowShift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(10%, 10%); }
+}
+
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dataStream {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(calc(100vh + 100px)); opacity: 0; }
+}
+
+@keyframes scanline {
+  0% { top: 0%; }
+  100% { top: 100%; }
+}
+
+@keyframes scannerSweep {
+  0% { left: -30%; }
+  100% { left: 130%; }
+}
+ملاحظة لـ tailwind.config.ts: أضف glass-bg و glass-border في colors، و glass: 'var(--shadow-glass)' في boxShadow (أو استبدلها في المكونات بـ bg-[var(--glass-bg)] border-[var(--glass-border)] shadow-[var(--shadow-glass)] لتعمل فوراً دون تعديل ملف الإعدادات).
+2. أيقونة العلامة المائية لتحميل الصفحات (src/components/ui/loaders/NeuralWatermark.tsx)
+Tsx
+"use client";
+
+import { BrainCircuit } from "lucide-react";
+
+export function NeuralWatermark() {
+  return (
+    // الحاوية الخارجية: تغطي منطقة المحتوى بتمويه خفيف لإبراز الهيكل العظمي خلفها
+    // z-40 يبقيها خلف الشريط الجانبي (z-50)
+    <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/10 backdrop-blur-[2px]">
+      {/* منطقة المفاعل المركزية */}
+      <div className="relative">
+        {/* 1. الهالة الضوئية الخلفية */}
+        <div className="absolute inset-0 bg-primary/20 blur-[60px] rounded-full animate-pulse" />
+
+        {/* 2. المدارات الدوارة */}
+        {/* مدار خارجي بطيء */}
+        <div className="absolute inset-[-40px] rounded-full border border-primary/5 animate-[spin_10s_linear_infinite]" />
+
+        {/* مدار متوسط بنقطة مضيئة */}
+        <div className="absolute inset-[-20px] rounded-full animate-[spin_3s_linear_infinite]">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 bg-primary rounded-full shadow-[0_0_10px_hsl(var(--primary))]" />
+        </div>
+
+        {/* مدار عكسي بنقطة ثانوية */}
+        <div className="absolute inset-[-20px] rounded-full animate-[spin_4s_linear_infinite_reverse]">
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-primary/60 rounded-full blur-[1px]" />
+        </div>
+
+        {/* 3. المكعب الزجاجي المركزي */}
+        <div className="relative w-28 h-28 flex items-center justify-center">
+          <div
+            className="absolute inset-0 backdrop-blur-xl rounded-3xl border"
+            style={{
+              background: "var(--glass-bg)",
+              borderColor: "var(--glass-border)",
+              boxShadow: "var(--shadow-glass)",
+            }}
+          />
+
+          {/* 4. الأيقونة النابضة في المنتصف */}
+          <BrainCircuit className="relative z-10 w-12 h-12 text-primary/90 animate-pulse [animation-duration:3000ms]" />
+        </div>
+      </div>
+    </div>
+  );
+}
+3. مكون الـ Skeleton بتأثير Shimmer + مغلف تحميل الصفحات (RouteLoader.tsx & loading.tsx)
+أ. src/components/ui/skeleton.tsx:
+Tsx
+import { cn } from "@/lib/utils";
+
+interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+  shimmer?: boolean;
+}
+
+export function Skeleton({ className, shimmer = true, ...props }: SkeletonProps) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-md bg-muted/50",
+        shimmer &&
+          "after:absolute after:inset-0 after:-translate-x-full after:animate-[shimmer_2s_infinite] after:bg-gradient-to-r after:from-transparent after:via-white/10 dark:after:via-white/5 after:to-transparent",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+ب. src/components/common/RouteLoader.tsx:
+Tsx
+import { Skeleton } from "@/components/ui/skeleton";
+import { NeuralWatermark } from "@/components/ui/loaders/NeuralWatermark";
+
+function DefaultPageSkeleton() {
+  return (
+    <div className="space-y-6 w-full animate-in fade-in duration-500 p-4 sm:p-6">
+      <div className="flex flex-col items-center justify-center gap-4 text-center mb-2">
+        <Skeleton className="h-16 w-16 rounded-full" />
+        <div className="space-y-2 flex flex-col items-center">
+          <Skeleton className="h-10 w-72" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+        </div>
+      </div>
+
+      <div className="relative my-4 h-px w-full bg-border/20 max-w-4xl mx-auto" />
+
+      <div className="mx-auto max-w-lg rounded-2xl border border-primary/30 p-2 backdrop-blur-md">
+        <Skeleton className="h-11 w-full" />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pt-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="rounded-xl border bg-card/80 p-4 space-y-4 flex flex-col h-48">
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+              <Skeleton className="h-6 w-20 rounded-full" />
+            </div>
+            <div className="space-y-2 py-2 flex-grow">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-[85%]" />
+            </div>
+            <Skeleton className="h-9 w-full rounded-md" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function RouteLoader() {
+  return (
+    <div className="relative w-full h-full min-h-[500px]">
+      {/* الخلفية: الهيكل العظمي بشفافية 40% */}
+      <div className="opacity-40">
+        <DefaultPageSkeleton />
+      </div>
+
+      {/* الأمام: أيقونة العلامة المائية */}
+      <NeuralWatermark />
+    </div>
+  );
+}
+ج. src/app/loading.tsx:
+Tsx
+import { RouteLoader } from "@/components/common/RouteLoader";
+
+export default function Loading() {
+  return <RouteLoader />;
+}
+4. شاشة البداية وأيقونة السبلاش سكرين (src/components/ui/loaders/NeuralLoader.tsx)
+يمكنك تعديل مصفوفة stages والنصوص (مثل عنوان التطبيق والوصف) لتناسب اسم تطبيقك الآخر:
+Tsx
+"use client";
+
+import { useEffect, useState, useMemo, memo } from "react";
+import { BrainCircuit, Cpu, Zap, Activity, CheckCircle2, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const CONFIG = {
+  nodes: {
+    count: 12,
+    radius: 160,
+    size: 14,
+    inactiveOpacity: 0.25,
+  },
+  network: {
+    lineWidth: 2,
+    glowIntensity: 15,
+    pulseSpeed: 2000,
+    connectionThreshold: 200,
+  },
+  rings: {
+    count: 5,
+    speeds: [25, 20, 15, 12, 10],
+    opacities: [0.03, 0.06, 0.09, 0.12, 0.15],
+  },
+  particles: {
+    count: 25,
+    maxSize: 3,
+    minSize: 1,
+  },
+  progress: {
+    milestones: [25, 50, 75],
+    smoothInterval: 150,
+  },
+} as const;
+
+interface NeuralLoaderProps {
+  mode?: "fullscreen" | "section";
+  appName?: string;
+  appAccent?: string;
+  tagline?: string;
+  version?: string;
+  onComplete?: () => void;
+}
+
+interface LoadingStage {
+  text: string;
+  progress: number;
+  duration: number;
+  icon: typeof BrainCircuit;
+}
+
+interface NodePosition {
+  x: number;
+  y: number;
+  angle: number;
+}
+
+interface NeuralPulse {
+  id: number;
+  fromNode: number;
+  toNode: number;
+  progress: number;
+}
+
+const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: number }) => {
+  const [particles, setParticles] = useState<
+    Array<{ left: string; top: string; size: number; duration: number; delay: number }>
+  >([]);
+
+  useEffect(() => {
+    setParticles(
+      Array.from({ length: count }, () => ({
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        size: CONFIG.particles.minSize + Math.random() * (CONFIG.particles.maxSize - CONFIG.particles.minSize),
+        duration: 4 + Math.random() * 6,
+        delay: Math.random() * 4,
+      }))
+    );
+  }, [count]);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map((particle, i) => (
+        <div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            left: particle.left,
+            top: particle.top,
+            width: `${particle.size}px`,
+            height: `${particle.size}px`,
+            background: "radial-gradient(circle, hsl(var(--primary)), transparent)",
+            boxShadow: `0 0 ${particle.size * 8}px hsl(var(--primary) / 0.6)`,
+            animation: `float ${particle.duration}s ease-in-out infinite, pulse ${particle.duration * 0.7}s ease-in-out infinite`,
+            animationDelay: `${particle.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+});
+EnhancedParticles.displayName = "EnhancedParticles";
+
+const EnhancedNeuralGrid = memo(() => (
+  <div className="absolute inset-0 opacity-25">
+    <div
+      className="absolute inset-0"
+      style={{
+        backgroundImage: `
+          linear-gradient(hsl(var(--primary) / 0.12) 2px, transparent 2px),
+          linear-gradient(90deg, hsl(var(--primary) / 0.12) 2px, transparent 2px)
+        `,
+        backgroundSize: "60px 60px",
+        maskImage: "radial-gradient(ellipse 85% 70% at 50% 50%, black 10%, transparent 70%)",
+        WebkitMaskImage: "radial-gradient(ellipse 85% 70% at 50% 50%, black 10%, transparent 70%)",
+        animation: "gridPulse 4s ease-in-out infinite",
+      }}
+    />
+    <div
+      className="absolute inset-0"
+      style={{
+        backgroundImage: `
+          radial-gradient(circle at 30% 40%, hsl(var(--primary) / 0.2) 0%, transparent 50%),
+          radial-gradient(circle at 70% 60%, hsl(var(--primary) / 0.15) 0%, transparent 50%)
+        `,
+        animation: "glowShift 6s ease-in-out infinite alternate",
+      }}
+    />
+    <div
+      className="absolute inset-0 opacity-30"
+      style={{
+        backgroundImage: `
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 40px,
+            hsl(var(--primary) / 0.08) 40px,
+            hsl(var(--primary) / 0.08) 42px
+          )
+        `,
+      }}
+    />
+  </div>
+));
+EnhancedNeuralGrid.displayName = "EnhancedNeuralGrid";
+
+const EnhancedDataStreams = memo(() => {
+  const [streams, setStreams] = useState<Array<{ left: string; duration: number; delay: number }>>([]);
+
+  useEffect(() => {
+    setStreams(
+      Array.from({ length: 12 }, (_, i) => ({
+        left: `${5 + i * 8}%`,
+        duration: 2.5 + Math.random() * 3,
+        delay: Math.random() * 3,
+      }))
+    );
+  }, []);
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-15">
+      {streams.map((stream, i) => (
+        <div
+          key={i}
+          className="absolute top-0 w-[2px] h-32"
+          style={{
+            left: stream.left,
+            background: "linear-gradient(to bottom, transparent, hsl(var(--primary) / 0.8), hsl(var(--primary) / 0.6), transparent)",
+            boxShadow: "0 0 10px hsl(var(--primary) / 0.5)",
+            animation: `dataStream ${stream.duration}s linear infinite`,
+            animationDelay: `${stream.delay}s`,
+            filter: "blur(1px)",
+          }}
+        />
+      ))}
+    </div>
+  );
+});
+EnhancedDataStreams.displayName = "EnhancedDataStreams";
+
+const EnhancedScannerLine = memo(() => (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
+    <div
+      className="w-full h-[3px] relative"
+      style={{
+        background: "linear-gradient(to bottom, transparent, hsl(var(--primary)), transparent)",
+        boxShadow: "0 0 20px hsl(var(--primary) / 0.6)",
+        animation: "scanline 5s linear infinite",
+        filter: "blur(2px)",
+      }}
+    />
+  </div>
+));
+EnhancedScannerLine.displayName = "EnhancedScannerLine";
+
+const EnhancedOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
+  <>
+    {Array.from({ length: CONFIG.rings.count }).map((_, i) => (
+      <div
+        key={i}
+        className="absolute rounded-full transition-all duration-1000"
+        style={{
+          inset: `-${40 + i * 12}px`,
+          opacity: CONFIG.rings.opacities[i],
+          border: `2px solid hsl(var(--primary) / ${isComplete ? 0.4 : 0.2})`,
+          boxShadow: `
+            0 0 ${15 + i * 5}px hsl(var(--primary) / 0.3),
+            inset 0 0 ${10 + i * 3}px hsl(var(--primary) / 0.15)
+          `,
+          animation: `
+            spin ${CONFIG.rings.speeds[i]}s linear infinite ${i % 2 === 0 ? "" : "reverse"},
+            ringPulse ${CONFIG.rings.speeds[i] * 0.5}s ease-in-out infinite
+          `,
+          animationDelay: `${i * 0.2}s`,
+        }}
+      />
+    ))}
+  </>
+));
+EnhancedOrbitRings.displayName = "EnhancedOrbitRings";
+
+const EnhancedNeuralNode = memo(
+  ({ position, isActive }: { position: NodePosition; isActive: boolean }) => (
+    <div
+      className="absolute"
+      style={{
+        top: `calc(50% + ${position.y}px)`,
+        left: `calc(50% + ${position.x}px)`,
+        transform: "translate(-50%, -50%)",
+      }}
+    >
+      {isActive && (
+        <>
+          <div
+            className="absolute inset-[-30px] rounded-full animate-ping"
+            style={{
+              background: "radial-gradient(circle, hsl(var(--primary) / 0.4), transparent 70%)",
+              animationDuration: "2s",
+            }}
+          />
+          <div
+            className="absolute inset-[-15px] rounded-full"
+            style={{
+              background: "radial-gradient(circle, hsl(var(--primary) / 0.5), transparent 60%)",
+              animation: "pulse 1.5s ease-in-out infinite",
+              animationDelay: "0.3s",
+            }}
+          />
+        </>
+      )}
+
+      <div
+        className="absolute inset-[-8px] rounded-full border-2 transition-all duration-500"
+        style={{
+          borderColor: isActive ? "hsl(var(--primary) / 0.7)" : "transparent",
+          boxShadow: isActive ? "0 0 15px hsl(var(--primary) / 0.6)" : "none",
+          animation: isActive ? "rotate 3s linear infinite" : "none",
+        }}
+      />
+
+      <div
+        className="relative rounded-full transition-all duration-500"
+        style={{
+          width: `${CONFIG.nodes.size}px`,
+          height: `${CONFIG.nodes.size}px`,
+          background: isActive
+            ? "radial-gradient(circle, hsl(var(--primary)), hsl(var(--primary) / 0.8))"
+            : "radial-gradient(circle, hsl(var(--primary) / 0.5), hsl(var(--primary) / 0.3))",
+          boxShadow: isActive
+            ? "0 0 20px hsl(var(--primary)), 0 0 40px hsl(var(--primary) / 0.6), inset 0 0 10px hsl(var(--primary) / 0.8)"
+            : "0 0 5px hsl(var(--primary) / 0.3)",
+          opacity: isActive ? 1 : CONFIG.nodes.inactiveOpacity,
+          transform: isActive ? "scale(1.4)" : "scale(1)",
+          border: `2px solid hsl(var(--primary) / ${isActive ? 0.8 : 0.3})`,
+        }}
+      >
+        <div
+          className="absolute inset-[3px] rounded-full"
+          style={{
+            background: `hsl(var(--primary) / ${isActive ? 0.9 : 0.4})`,
+            boxShadow: isActive ? "0 0 10px hsl(var(--primary))" : "none",
+            animation: isActive ? "pulse 1s ease-in-out infinite" : "none",
+          }}
+        />
+        <div
+          className="absolute inset-[5px] rounded-full bg-white"
+          style={{
+            boxShadow: "0 0 5px white",
+            animation: isActive ? "pulse 0.8s ease-in-out infinite" : "none",
+          }}
+        />
+      </div>
+
+      {isActive && (
+        <>
+          <div
+            className="absolute inset-[-12px] border-2 rounded-full animate-ping"
+            style={{ borderColor: "hsl(var(--primary) / 0.4)", animationDuration: "2s" }}
+          />
+          <div
+            className="absolute inset-[-20px] opacity-50"
+            style={{
+              background: "conic-gradient(from 0deg, transparent 0deg, hsl(var(--primary) / 0.5) 45deg, transparent 90deg)",
+              borderRadius: "50%",
+              animation: "rotate 2s linear infinite",
+              filter: "blur(3px)",
+            }}
+          />
+        </>
+      )}
+    </div>
+  )
+);
+EnhancedNeuralNode.displayName = "EnhancedNeuralNode";
+
+const NeuralNetwork = memo(
+  ({
+    nodePositions,
+    activeNodes,
+    pulses,
+  }: {
+    nodePositions: NodePosition[];
+    activeNodes: Set<number>;
+    pulses: NeuralPulse[];
+  }) => {
+    const connections = useMemo(() => {
+      const conns: Array<{ from: number; to: number }> = [];
+      for (let i = 0; i < nodePositions.length; i++) {
+        for (let j = i + 1; j < nodePositions.length; j++) {
+          const dx = nodePositions[i].x - nodePositions[j].x;
+          const dy = nodePositions[i].y - nodePositions[j].y;
+          if (Math.sqrt(dx * dx + dy * dy) < CONFIG.network.connectionThreshold) {
+            conns.push({ from: i, to: j });
+          }
+        }
+      }
+      return conns;
+    }, [nodePositions]);
+
+    return (
+      <svg
+        className="absolute inset-0 pointer-events-none"
+        style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "600px", height: "600px" }}
+      >
+        <defs>
+          <linearGradient id="connectionGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+            <stop offset="20%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+            <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="0.9" />
+            <stop offset="80%" stopColor="hsl(var(--primary))" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+          </linearGradient>
+          <radialGradient id="pulseGradient">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="1" />
+            <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
+          </radialGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {connections.map(({ from, to }, idx) => {
+          const isActive = activeNodes.has(from) || activeNodes.has(to);
+          const bothActive = activeNodes.has(from) && activeNodes.has(to);
+          const opacity = bothActive ? 0.8 : isActive ? 0.5 : 0.2;
+          const strokeWidth = bothActive ? CONFIG.network.lineWidth * 1.5 : CONFIG.network.lineWidth;
+
+          return (
+            <g key={idx}>
+              {isActive && (
+                <line
+                  x1={300 + nodePositions[from].x}
+                  y1={300 + nodePositions[from].y}
+                  x2={300 + nodePositions[to].x}
+                  y2={300 + nodePositions[to].y}
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={strokeWidth + 3}
+                  opacity={opacity * 0.3}
+                  filter="url(#glow)"
+                  className="animate-pulse"
+                />
+              )}
+              <line
+                x1={300 + nodePositions[from].x}
+                y1={300 + nodePositions[from].y}
+                x2={300 + nodePositions[to].x}
+                y2={300 + nodePositions[to].y}
+                stroke="url(#connectionGradient)"
+                strokeWidth={strokeWidth}
+                opacity={opacity}
+                strokeLinecap="round"
+                style={{
+                  transition: "all 0.5s ease-out",
+                  filter: `drop-shadow(0 0 ${CONFIG.network.glowIntensity}px hsl(var(--primary) / 0.4))`,
+                }}
+              />
+            </g>
+          );
+        })}
+
+        {pulses.map((pulse) => {
+          if (pulse.fromNode >= nodePositions.length || pulse.toNode >= nodePositions.length) return null;
+          const from = nodePositions[pulse.fromNode];
+          const to = nodePositions[pulse.toNode];
+          const x = 300 + from.x + (to.x - from.x) * pulse.progress;
+          const y = 300 + from.y + (to.y - from.y) * pulse.progress;
+
+          return (
+            <g key={pulse.id}>
+              <circle cx={x} cy={y} r={12} fill="url(#pulseGradient)" opacity={0.6} className="animate-ping" />
+              <circle cx={x} cy={y} r={4} fill="hsl(var(--primary))" filter="url(#glow)">
+                <animate attributeName="r" values="3;6;3" dur="0.8s" repeatCount="indefinite" />
+              </circle>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+);
+NeuralNetwork.displayName = "NeuralNetwork";
+
+export function NeuralLoader({
+  mode = "fullscreen",
+  appName = "NEURAL",
+  appAccent = "CORE",
+  tagline = "Intelligent System Architecture",
+  version = "System v1.0 • Build 2026",
+  onComplete,
+}: NeuralLoaderProps) {
+  const [progress, setProgress] = useState(0);
+  const [activeNodes, setActiveNodes] = useState<Set<number>>(new Set());
+  const [stageIndex, setStageIndex] = useState(0);
+  const [isComplete, setIsComplete] = useState(false);
+  const [pulses, setPulses] = useState<NeuralPulse[]>([]);
+  const [nodePositions, setNodePositions] = useState<NodePosition[]>([]);
+
+  const isFull = mode === "fullscreen";
+  const durationMultiplier = isFull ? 1 : 0.4;
+
+  const stages: LoadingStage[] = useMemo(
+    () => [
+      { text: "Initializing Neural Core...", progress: 0, duration: 1500 * durationMultiplier, icon: BrainCircuit },
+      { text: "Loading Protocols...", progress: 25, duration: 1800 * durationMultiplier, icon: Zap },
+      { text: "Syncing Modules...", progress: 50, duration: 1500 * durationMultiplier, icon: Cpu },
+      { text: "Calibrating Engine...", progress: 75, duration: 1500 * durationMultiplier, icon: Activity },
+      { text: "System Ready.", progress: 100, duration: 800 * durationMultiplier, icon: CheckCircle2 },
+    ],
+    [durationMultiplier]
+  );
+
+  useEffect(() => {
+    setNodePositions(
+      Array.from({ length: CONFIG.nodes.count }, (_, i) => {
+        const angle = i * (360 / CONFIG.nodes.count) * (Math.PI / 180);
+        return {
+          x: Math.cos(angle) * CONFIG.nodes.radius,
+          y: Math.sin(angle) * CONFIG.nodes.radius,
+          angle: i * (360 / CONFIG.nodes.count),
+        };
+      })
+    );
+  }, []);
+
+  useEffect(() => {
+    if (isComplete) return;
+    const targetProgress = stages[stageIndex].progress;
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= targetProgress) return prev;
+        const increment = (targetProgress - prev) * 0.08;
+        return Math.min(prev + Math.max(increment, 0.5), targetProgress);
+      });
+    }, CONFIG.progress.smoothInterval);
+    return () => clearInterval(interval);
+  }, [stageIndex, isComplete, stages]);
+
+  useEffect(() => {
+    if (isComplete) return;
+    const timer = setTimeout(() => {
+      if (stageIndex < stages.length - 1) {
+        setStageIndex((prev) => prev + 1);
+      } else {
+        setIsComplete(true);
+        if (onComplete) setTimeout(onComplete, 500);
+      }
+    }, stages[stageIndex].duration);
+    return () => clearTimeout(timer);
+  }, [stageIndex, isComplete, stages, onComplete]);
+
+  useEffect(() => {
+    if (isComplete) {
+      setActiveNodes(new Set(Array.from({ length: CONFIG.nodes.count }, (_, i) => i)));
+      return;
+    }
+    const interval = setInterval(() => {
+      setActiveNodes((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.size < CONFIG.nodes.count) {
+          let newNode;
+          do {
+            newNode = Math.floor(Math.random() * CONFIG.nodes.count);
+          } while (newSet.has(newNode));
+          newSet.add(newNode);
+        }
+        if (Math.random() > 0.65 && newSet.size > 4) {
+          const nodes = Array.from(newSet);
+          newSet.delete(nodes[Math.floor(Math.random() * nodes.length)]);
+        }
+        return newSet;
+      });
+    }, 400);
+    return () => clearInterval(interval);
+  }, [isComplete]);
+
+  useEffect(() => {
+    if (isComplete || nodePositions.length === 0) return;
+    const interval = setInterval(() => {
+      const arr = Array.from(activeNodes);
+      if (arr.length < 2) return;
+      const fromNode = arr[Math.floor(Math.random() * arr.length)];
+      let toNode;
+      do {
+        toNode = arr[Math.floor(Math.random() * arr.length)];
+      } while (toNode === fromNode);
+
+      const newPulse: NeuralPulse = { id: Date.now() + Math.random(), fromNode, toNode, progress: 0 };
+      setPulses((prev) => [...prev, newPulse]);
+
+      const pulseInterval = setInterval(() => {
+        setPulses((prev) =>
+          prev.map((p) => (p.id === newPulse.id ? { ...p, progress: Math.min(p.progress + 0.05, 1) } : p))
+        );
+      }, 50);
+
+      setTimeout(() => {
+        clearInterval(pulseInterval);
+        setPulses((prev) => prev.filter((p) => p.id !== newPulse.id));
+      }, CONFIG.network.pulseSpeed);
+    }, 800);
+    return () => clearInterval(interval);
+  }, [activeNodes, isComplete, nodePositions.length]);
+
+  const CurrentIcon = stages[stageIndex].icon;
+
+  if (nodePositions.length === 0) {
+    return (
+      <div
+        className={cn(
+          isFull ? "fixed inset-0 z-[100]" : "relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-primary/10",
+          "bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center overflow-hidden"
+        )}
+      >
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Initializing Loader...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        isFull ? "fixed inset-0 z-[100]" : "relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-primary/10",
+        "bg-background/80 backdrop-blur-sm text-foreground flex flex-col items-center justify-center overflow-hidden",
+        isComplete && "animate-out fade-out duration-500"
+      )}
+    >
+      <EnhancedNeuralGrid />
+      <EnhancedParticles />
+      <EnhancedDataStreams />
+      <EnhancedScannerLine />
+
+      {/* المركز العصبي والأيقونة الرئيسية للسبلاش سكرين */}
+      <div className={cn("relative z-10 mb-20", !isFull && "scale-75")} style={{ animation: "float 6s ease-in-out infinite" }}>
+        {isFull && (
+          <>
+            <div
+              className="absolute inset-[-80px] blur-[100px] rounded-full animate-pulse"
+              style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.3), transparent 70%)", animationDuration: "3s" }}
+            />
+            <div
+              className="absolute inset-[-50px] blur-[60px] rounded-full animate-pulse"
+              style={{ background: "radial-gradient(circle, hsl(var(--primary) / 0.2), transparent 70%)", animationDuration: "2.5s", animationDelay: "0.5s" }}
+            />
+          </>
+        )}
+
+        <EnhancedOrbitRings isComplete={isComplete} />
+        <NeuralNetwork nodePositions={nodePositions} activeNodes={activeNodes} pulses={pulses} />
+
+        <div
+          className="relative bg-gradient-to-br from-background/90 to-background/60 backdrop-blur-xl p-10 rounded-3xl border-2 border-primary/30 transition-all duration-700 z-20"
+          style={{ boxShadow: "0 0 60px hsl(var(--primary) / 0.4), inset 0 0 40px hsl(var(--primary) / 0.1)" }}
+        >
+          <CurrentIcon
+            className={cn("h-24 w-24 text-primary transition-all duration-700", isComplete ? "scale-110" : "animate-pulse")}
+            style={{ filter: "drop-shadow(0 0 25px hsl(var(--primary)))" }}
+          />
+          <div
+            className="absolute inset-0 border-2 border-primary/40 rounded-3xl animate-ping"
+            style={{ animationDuration: "3s", boxShadow: "0 0 20px hsl(var(--primary) / 0.3)" }}
+          />
+        </div>
+
+        {nodePositions.map((pos, i) => (
+          <EnhancedNeuralNode key={i} position={pos} isActive={activeNodes.has(i)} />
+        ))}
+      </div>
+
+      {/* العنوان وشريط التقدم */}
+      <div className="z-10 flex flex-col items-center gap-6 w-full max-w-md px-6">
+        {isFull && (
+          <div className="text-center">
+            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-primary to-foreground bg-clip-text text-transparent mb-2">
+              {appName} <span className="text-primary">{appAccent}</span>
+            </h1>
+            <p className="text-xs text-muted-foreground uppercase tracking-[0.3em]">{tagline}</p>
+          </div>
+        )}
+
+        <div className="h-8 flex items-center justify-center w-full">
+          <p key={stageIndex} className="text-sm font-mono text-primary/90 text-center animate-in slide-in-from-bottom-2 fade-in duration-500">
+            <span className="text-primary/60">&gt;</span> {stages[stageIndex].text}
+            <span className="inline-block w-1 h-4 ml-1 bg-primary animate-pulse" />
+          </p>
+        </div>
+
+        <div className="w-full space-y-3">
+          <div className="relative w-full h-2 bg-primary/10 rounded-full overflow-hidden backdrop-blur-sm border border-primary/10">
+            <div
+              className="absolute inset-0 blur-sm transition-all duration-500"
+              style={{ background: "linear-gradient(to right, transparent, hsl(var(--primary) / 0.4), transparent)", width: `${progress}%` }}
+            />
+            <div
+              className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, hsl(var(--primary) / 0.8), hsl(var(--primary)), hsl(var(--primary) / 0.8))",
+                boxShadow: "0 0 20px hsl(var(--primary) / 0.6)",
+              }}
+            >
+              <div
+                className="absolute inset-0"
+                style={{ background: "linear-gradient(to right, transparent, white, transparent)", opacity: 0.3, animation: "scannerSweep 2s ease-in-out infinite" }}
+              />
+            </div>
+
+            {CONFIG.progress.milestones.map((milestone) => (
+              <div
+                key={milestone}
+                className="absolute top-1/2 -translate-y-1/2 transition-all duration-500"
+                style={{ left: `${milestone}%`, transform: "translate(-50%, -50%)" }}
+              >
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{
+                    background: progress >= milestone ? "hsl(var(--primary))" : "rgb(100, 100, 100)",
+                    boxShadow: progress >= milestone ? "0 0 10px hsl(var(--primary))" : "none",
+                    transform: progress >= milestone ? "scale(1.3)" : "scale(1)",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-muted-foreground font-mono">{Math.round(progress)}%</span>
+            <span className={cn("text-muted-foreground font-mono transition-all duration-300", isComplete && "text-primary font-semibold")}>
+              {isComplete ? "✓ READY" : "SYSTEM BOOTING..."}
+            </span>
+          </div>
+        </div>
+
+        {isFull && (
+          <div className="absolute bottom-8 text-[10px] text-muted-foreground uppercase tracking-[0.2em] opacity-50 z-10">
+            {version}
+          </div>
+        )}
+      </div>
+
+      {isComplete && <div className="absolute inset-0 bg-primary/10 animate-in fade-in duration-500 pointer-events-none" />}
+    </div>
+  );
+}
+5. ربط السبلاش سكرين في واجهة التطبيق (AppBootGuard.tsx)
+Tsx
+"use client";
+
+import { useState, ReactNode } from "react";
+import { NeuralLoader } from "@/components/ui/loaders/NeuralLoader";
+
+export function AppBootGuard({ children }: { children: ReactNode }) {
+  const [isBooting, setIsBooting] = useState(true);
+
+  if (isBooting) {
+    return (
+      <NeuralLoader
+        mode="fullscreen"
+        appName="MY"
+        appAccent="APP"
+        tagline="Smart Platform"
+        onComplete={() => setIsBooting(false)}
+      />
+    );
+  }
+
+  return <div className="animate-in fade-in duration-500">{children}</div>;
+}
+ثم تضعه في layout.tsx ليحيط بـ {children}، مع التأكد من وجود <Suspense fallback={<RouteLoader />}> حول المحتوى الداخلي لعرض العلامة المائية أثناء تحميل المكونات.
+Make changes, add new features, ask for anything
+

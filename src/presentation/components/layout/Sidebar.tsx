@@ -14,6 +14,8 @@ export default function Sidebar({
   handleImportFile,
   handleExportExcel,
   onLogout,
+  desktopSidebarCollapsed = false,
+  onToggleDesktopSidebar,
 }) {
   const [sidebarStyle, setSidebarStyle] = useState(() => {
     return storageService.getItem('gmao_sidebar_style') || 'floating';
@@ -46,6 +48,8 @@ export default function Sidebar({
       {/* The original full rich sidebar: permanently fixed on desktop (270px) in standard mode, or mobile drawer in floating mode */}
       <MobileSidebarDrawer
         isFixedDesktop={isFixedDesktop}
+        desktopSidebarCollapsed={desktopSidebarCollapsed}
+        onToggleDesktopSidebar={onToggleDesktopSidebar}
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         mobileMenuOpen={mobileMenuOpen}

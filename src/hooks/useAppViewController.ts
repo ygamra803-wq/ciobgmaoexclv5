@@ -6,10 +6,15 @@ export interface ToastState {
 }
 
 export function useAppViewController() {
+  const [showIntroSplash, setShowIntroSplash] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleIntroSplashComplete = useCallback(() => {
+    setShowIntroSplash(false);
+  }, []);
 
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
@@ -23,6 +28,9 @@ export function useAppViewController() {
   }, []);
 
   return {
+    showIntroSplash,
+    setShowIntroSplash,
+    handleIntroSplashComplete,
     showSplash,
     setShowSplash,
     handleSplashComplete,

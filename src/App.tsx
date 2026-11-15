@@ -11,6 +11,7 @@ import { useAppModals } from './hooks/useAppModals';
 import { useAppEntityActions } from './hooks/useAppEntityActions';
 
 import { SplashScreen, LoginScreen, RequirePasswordChange } from './presentation/pages/auth';
+import { NeuralLoader } from './presentation/components/common/loaders';
 import OfflineIndicator from './presentation/components/common/OfflineIndicator';
 import ErrorBoundary from './presentation/components/common/ErrorBoundary';
 import RuntimeErrorModal from './presentation/components/common/RuntimeErrorModal';
@@ -43,6 +44,8 @@ export default function App() {
 
   // App Controller containing splash screen, toast notifications, active tab persistence, and mobile drawer states
   const {
+    showIntroSplash,
+    handleIntroSplashComplete,
     showSplash,
     handleSplashComplete,
     toast,
@@ -441,6 +444,19 @@ export default function App() {
     setters: gmaoState,
     showToast,
   });
+
+  if (showIntroSplash) {
+    return (
+      <NeuralLoader
+        mode="fullscreen"
+        appName="CIOB"
+        appAccent="GMAO NEXUS"
+        tagline="Maintenance Industrielle & Jumeau Numérique"
+        version="CIOB GMAO Nexus v5.0 • Architecture SSOT"
+        onComplete={handleIntroSplashComplete}
+      />
+    );
+  }
 
   if (showSplash) {
     return <SplashScreen onComplete={handleSplashComplete} />;

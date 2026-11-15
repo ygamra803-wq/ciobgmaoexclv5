@@ -1,0 +1,144 @@
+/* =========================================================================
+   CIOB GMAO NEXUS — GLASS TOKENS & NEURAL LOADER ANIMATION ENGINE
+   Adapts dynamically to Light (#FAFAF9) / Dark (.dark) & [data-accent="*"]
+   ========================================================================= */
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(203, 213, 225, 0.78);
+  --shadow-glass: 0 16px 40px rgba(15, 23, 42, 0.08),
+    0 0 28px rgba(var(--color-accent-rgb, 5, 150, 105), 0.14);
+}
+
+.dark {
+  --glass-bg: rgba(15, 23, 42, 0.68);
+  --glass-border: rgba(var(--color-accent-rgb, 16, 185, 129), 0.28);
+  --shadow-glass: 0 16px 44px rgba(0, 0, 0, 0.48),
+    0 0 32px rgba(var(--color-accent-rgb, 16, 185, 129), 0.2);
+}
+
+@keyframes neuralShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes neuralFloat {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes neuralGridPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes neuralGlowShift {
+  0% {
+    transform: translate(0%, 0%);
+  }
+  100% {
+    transform: translate(6%, 6%);
+  }
+}
+
+@keyframes neuralRingPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.025);
+  }
+}
+
+@keyframes neuralRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes neuralDataStream {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 120px));
+    opacity: 0;
+  }
+}
+
+@keyframes neuralScanline {
+  0% {
+    top: -4%;
+  }
+  100% {
+    top: 104%;
+  }
+}
+
+@keyframes neuralScannerSweep {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 135%;
+  }
+}
+
+@keyframes neuralFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes neuralStageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.neural-fade-in {
+  animation: neuralFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.neural-stage-enter {
+  animation: neuralStageSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .neural-reduced-static {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -57,6 +57,22 @@ export default function MainLayout({
     return storageService.getItem(STORAGE_KEYS.SIDEBAR_BEHAVIOR) || 'push';
   });
 
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(() => {
+    return storageService.getItem('gmao_desktop_sidebar_collapsed') === 'true';
+  });
+
+  const toggleDesktopSidebar = useCallback(() => {
+    setDesktopSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        storageService.setItem('gmao_desktop_sidebar_collapsed', String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const handleAppearanceChanged = (e) => {
       if (e?.detail?.theme !== undefined && typeof document !== 'undefined') {
@@ -323,7 +339,9 @@ export default function MainLayout({
 
   const mainContentSpacingClass = useMemo(() => {
     if (sidebarStyle === 'standard') {
-      return 'lg:ml-[270px] p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
+      return desktopSidebarCollapsed
+        ? 'p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6 transition-[margin,padding] duration-200 ease-in-out'
+        : 'lg:ml-[270px] p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6 transition-[margin,padding] duration-200 ease-in-out';
     }
     if (sidebarStyle === 'floating') {
       if (sidebarBehavior === 'push') {
@@ -333,7 +351,7 @@ export default function MainLayout({
       return 'p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
     }
     return 'p-2.5 sm:p-4 lg:p-6 pb-24 lg:pb-6';
-  }, [sidebarStyle, sidebarBehavior]);
+  }, [sidebarStyle, sidebarBehavior, desktopSidebarCollapsed]);
 
 
   return (
@@ -435,6 +453,8 @@ export default function MainLayout({
         onOpenShortcuts={() => setShortcutsModalOpen(true)}
         onLogout={handleLogout}
         showToast={showToast}
+        desktopSidebarCollapsed={desktopSidebarCollapsed}
+        onToggleDesktopSidebar={toggleDesktopSidebar}
       />
 
       {/* Content Layout */}
@@ -450,6 +470,8 @@ export default function MainLayout({
           handleImportFile={handleImportFile}
           handleExportExcel={handleExportExcel}
           onLogout={handleLogout}
+          desktopSidebarCollapsed={desktopSidebarCollapsed}
+          onToggleDesktopSidebar={toggleDesktopSidebar}
         />
 
         {/* Main Page Content - Full width layout with responsive touch-friendly padding */}

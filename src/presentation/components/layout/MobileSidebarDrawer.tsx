@@ -12,7 +12,6 @@ import {
   Users,
   GitBranch,
   BookOpen,
-  X,
   Database,
   Factory,
   Warehouse,
@@ -30,6 +29,9 @@ import {
   Upload,
   Landmark,
   ShieldAlert,
+  ShieldCheck,
+  Clock,
+  PanelLeftClose,
 } from 'lucide-react';
 import { HubIcon } from '../common/icons/HubIcon';
 import { CategoryIcon } from '../common/icons/CategoryIcon';
@@ -43,6 +45,8 @@ import { useTranslation } from '../../../i18n/I18nContext';
 
 export default function MobileSidebarDrawer({
   isFixedDesktop = false,
+  desktopSidebarCollapsed = false,
+  onToggleDesktopSidebar,
   currentTab,
   setCurrentTab,
   mobileMenuOpen,
@@ -188,14 +192,16 @@ export default function MobileSidebarDrawer({
         />
       )}
 
-      {/* Sidebar Container - Exact Rich Original Design (Fixed on Desktop if isFixedDesktop, Drawer on Mobile) */}
+      {/* Sidebar Container - Exact Rich Original Design (Fixed/Collapsible on Desktop if isFixedDesktop, Drawer on Mobile) */}
       <aside
         role={isFixedDesktop ? 'navigation' : 'dialog'}
         aria-modal={isFixedDesktop ? undefined : 'true'}
         aria-label="Menu principal de navigation"
         className={`fixed top-0 bottom-0 left-0 z-40 w-[270px] flex flex-col transition-all duration-200 ease-in-out select-none ${
           isFixedDesktop
-            ? (mobileMenuOpen ? 'translate-x-0' : 'max-lg:-translate-x-full lg:translate-x-0')
+            ? desktopSidebarCollapsed
+              ? (mobileMenuOpen ? 'translate-x-0' : '-translate-x-full')
+              : (mobileMenuOpen ? 'translate-x-0' : 'max-lg:-translate-x-full lg:translate-x-0')
             : (mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:hidden')
         } ${
           isDark
@@ -303,15 +309,33 @@ export default function MobileSidebarDrawer({
             </div>
           </div>
           <button
-            onClick={() => setMobileMenuOpen(false)}
-            className={`p-1.5 rounded-lg lg:hidden cursor-pointer ${
+            type="button"
+            onClick={() => {
+              if (mobileMenuOpen) {
+                setMobileMenuOpen(false);
+              } else if (isFixedDesktop && onToggleDesktopSidebar) {
+                onToggleDesktopSidebar();
+              }
+            }}
+            className={`${
+              isFixedDesktop && onToggleDesktopSidebar ? 'flex' : 'flex lg:hidden'
+            } group w-8 h-8 rounded-full border items-center justify-center transition-all duration-200 cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden ${
               isDark
-                ? 'text-slate-400 hover:text-white hover:bg-slate-800'
-                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                ? 'bg-slate-800/80 hover:bg-slate-700/90 border-slate-700/90 hover:border-slate-600 text-slate-300 hover:text-white shadow-2xs'
+                : 'bg-slate-50/95 hover:bg-slate-100 border-slate-200/90 hover:border-slate-300 text-slate-500 hover:text-slate-900 shadow-2xs hover:shadow-xs'
             }`}
-            aria-label={t('common.close', 'Fermer le menu')}
+            title={
+              isFixedDesktop
+                ? t('nav.collapse_sidebar', 'Réduire le menu latéral')
+                : t('common.close', 'Fermer le menu')
+            }
+            aria-label={
+              isFixedDesktop
+                ? t('nav.collapse_sidebar', 'Réduire le menu latéral')
+                : t('common.close', 'Fermer le menu')
+            }
           >
-            <X className="w-5 h-5" />
+            <PanelLeftClose className="w-4 h-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
           </button>
         </div>
 
@@ -332,7 +356,7 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Centre de Validation Centralisé (Maker-Checker — Non-Technicians Only) */}
+            {/* Centre de Validation Centralisé (L2 — Neutral icon matching ValidationCenterView header) */}
             {!isTechUser && canAccess('validation_center') && (
               <button
                 data-testid="sidebar-validation-center-btn"
@@ -340,8 +364,16 @@ export default function MobileSidebarDrawer({
                 className={getTabClass('validation_center', true)}
               >
                 <span className="flex items-center gap-2">
-                  <BadgeCheck
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-rose-400' : 'text-rose-600'}`}
+                  <ShieldCheck
+                    className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                      isTabRouteActive('validation_center')
+                        ? isDark
+                          ? 'text-slate-900'
+                          : 'text-white'
+                        : isDark
+                          ? 'text-slate-400'
+                          : 'text-slate-500'
+                    }`}
                   />
                   <span>{t('nav.subtabs.validation_center_short', 'Centre de Validation')}</span>
                 </span>
@@ -358,15 +390,23 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Rapport de Vacation / Hebdo (Vue Exploitation) */}
+            {/* Rapport de Vacation / Hebdo (L2 — Clock icon matching ShiftWeeklyReportView header) */}
             {!isTechUser && canAccess('shift_weekly_report') && (
               <button
                 onClick={() => navTo('shift_weekly_report')}
                 className={getTabClass('shift_weekly_report', true)}
               >
                 <span className="flex items-center gap-2">
-                  <FileBarChart2
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                  <Clock
+                    className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                      isTabRouteActive('shift_weekly_report')
+                        ? isDark
+                          ? 'text-slate-900'
+                          : 'text-white'
+                        : isDark
+                          ? 'text-slate-400'
+                          : 'text-slate-500'
+                    }`}
                   />
                   <span>{t('nav.subtabs.shift_weekly_report', 'Rapport Vacation / Hebdo')}</span>
                 </span>
@@ -374,7 +414,7 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Rapport Mensuel Exécutif (Direction) */}
+            {/* Rapport Mensuel Exécutif (L2 — Neutral icon matching MonthlyExecutiveReportView header) */}
             {canAccess('executive_report') && (
               <button
                 onClick={() => navTo('executive_report')}
@@ -382,7 +422,15 @@ export default function MobileSidebarDrawer({
               >
                 <span className="flex items-center gap-2">
                   <FileBarChart2
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                    className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
+                      isTabRouteActive('executive_report')
+                        ? isDark
+                          ? 'text-slate-900'
+                          : 'text-white'
+                        : isDark
+                          ? 'text-slate-400'
+                          : 'text-slate-500'
+                    }`}
                   />
                   <span>{t('nav.subtabs.executive_report', 'Rapport Mensuel Exécutif')}</span>
                 </span>
@@ -390,7 +438,7 @@ export default function MobileSidebarDrawer({
               </button>
             )}
 
-            {/* Pilotage des Coûts & Budgets Maintenance (Page Dédiée) */}
+            {/* Pilotage des Coûts & Budgets Maintenance (Special Level-1 Page kept in place) */}
             {canAccess('finance') && (
               <button
                 onClick={() => navTo('finance')}
@@ -398,7 +446,7 @@ export default function MobileSidebarDrawer({
               >
                 <span className="flex items-center gap-2">
                   <Landmark
-                    className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
+                    className={`w-4 h-4 shrink-0 ${isDark ? 'text-emerald-400' : 'text-emerald-600'}`}
                   />
                   <span>{t('nav.finance', 'Pilotage Coûts & Budgets')}</span>
                 </span>
@@ -417,8 +465,7 @@ export default function MobileSidebarDrawer({
             canAccess('types') ||
             canAccess('designations')) && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Database className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.stock_articles', 'Stock & Articles')}</span>
               </div>
               <div className="space-y-1">
@@ -427,7 +474,7 @@ export default function MobileSidebarDrawer({
                   <button onClick={() => navTo('stock')} className={getTabClass('stock')}>
                     <span className="flex items-center gap-2.5">
                       <Package
-                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-sky-400' : 'text-sky-600'}`}
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-cyan-400' : 'text-cyan-600'}`}
                       />
                       <span>{t('nav.subtabs.stock', 'Stock (Articles)')}</span>
                     </span>
@@ -439,7 +486,27 @@ export default function MobileSidebarDrawer({
                 {canAccess('sortie') && (
                   <button onClick={() => navTo('sortie')} className={getTabClass('sortie', true)}>
                     <span className="flex items-center gap-2">
-                      <SortieEntreeIcon className="w-3.5 h-3.5 shrink-0" />
+                      <SortieEntreeIcon
+                        className="w-3.5 h-3.5 shrink-0 sidebar-l2-icon"
+                        downColor={
+                          isTabRouteActive('sortie')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }
+                        upColor={
+                          isTabRouteActive('sortie')
+                            ? isDark
+                              ? 'text-slate-900'
+                              : 'text-white'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                        }
+                      />
                       <span>{t('nav.subtabs.sortie', 'Sortie & Entrée Rapide')}</span>
                     </span>
                     <span className="flex items-center gap-1">
@@ -538,8 +605,7 @@ export default function MobileSidebarDrawer({
             canAccess('templates') ||
             canAccess('blueprints')) && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Factory className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.parc_machines', 'Parc Machines')}</span>
               </div>
               <div className="space-y-1">
@@ -631,8 +697,7 @@ export default function MobileSidebarDrawer({
           {/* GROUPE: MAINTENANCE PRÉVENTIVE */}
           {(canAccess('preventive') || canAccess('preventive_referentiel')) && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.maintenance_preventive', 'Maintenance & Préventif')}</span>
               </div>
               <div className="space-y-1">
@@ -690,8 +755,7 @@ export default function MobileSidebarDrawer({
           {/* GROUPE: MAINTENANCE CORRECTIVE */}
           {(canAccess('corrective') || canAccess('corrective_referentiel')) && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Wrench className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.maintenance_corrective', 'Maintenance Corrective')}</span>
               </div>
               <div className="space-y-1">
@@ -748,8 +812,7 @@ export default function MobileSidebarDrawer({
           {/* GROUPE 3: GROUPE ENTREPÔT (COMPONENTS & PARTS) */}
           {canAccess('entrepot') && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <Warehouse className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.groupe_entrepot', 'Groupe Entrepôt')}</span>
               </div>
               <div className="space-y-1">
@@ -920,8 +983,7 @@ export default function MobileSidebarDrawer({
           {/* GROUPE 4: ZONES & ÉQUIPES */}
           {(canAccess('zones') || canAccess('utilisateurs') || canAccess('equipment')) && (
             <div>
-              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0 sidebar-group-icon" />
+              <div className="px-3 mb-1.5 text-[10px] font-bold tracking-[0.08em] text-slate-400 uppercase">
                 <span>{t('nav.groups.zones_equipes', 'Zones & Équipes')}</span>
               </div>
               <div className="space-y-1">
@@ -938,7 +1000,7 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Utilisateurs */}
+                {/* Utilisateurs (Special Level-1 Page kept in place) */}
                 {canAccess('utilisateurs') && (
                   <button
                     onClick={() => navTo('utilisateurs')}
@@ -946,15 +1008,7 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <Users
-                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
-                          isTabRouteActive('utilisateurs')
-                            ? isDark
-                              ? 'text-slate-900'
-                              : 'text-white'
-                            : isDark
-                              ? 'text-slate-400'
-                              : 'text-slate-500'
-                        }`}
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-violet-400' : 'text-violet-600'}`}
                       />
                       <span>{t('nav.subtabs.utilisateurs', 'Utilisateurs (Membres)')}</span>
                     </span>
@@ -964,7 +1018,7 @@ export default function MobileSidebarDrawer({
                   </button>
                 )}
 
-                {/* Équipements (Système Général) */}
+                {/* Équipements Système Général (Special Level-1 Page kept in place) */}
                 {canAccess('equipment') && (
                   <button
                     onClick={() => navTo('equipment')}
@@ -972,15 +1026,7 @@ export default function MobileSidebarDrawer({
                   >
                     <span className="flex items-center gap-2">
                       <ShieldAlert
-                        className={`w-3.5 h-3.5 shrink-0 sidebar-l2-icon ${
-                          isTabRouteActive('equipment')
-                            ? isDark
-                              ? 'text-slate-900'
-                              : 'text-white'
-                            : isDark
-                              ? 'text-amber-400'
-                              : 'text-amber-600'
-                        }`}
+                        className={`w-4 h-4 shrink-0 ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
                       />
                       <span>{t('nav.subtabs.equipment', 'Équipements (Système Général)')}</span>
                     </span>
@@ -1114,7 +1160,15 @@ export default function MobileSidebarDrawer({
               title={t('nav.settings', 'Paramètres du système')}
             >
               <Settings
-                className={`w-4 h-4 shrink-0 ${currentTab === 'settings' ? (isDark ? 'text-slate-900' : 'text-white') : 'text-slate-400'}`}
+                className={`w-4 h-4 shrink-0 ${
+                  currentTab === 'settings'
+                    ? isDark
+                      ? 'text-sky-600'
+                      : 'text-sky-400'
+                    : isDark
+                      ? 'text-sky-400'
+                      : 'text-sky-600'
+                }`}
               />
               <span>{t('nav.subtabs.settings', 'Paramètres')}</span>
             </button>

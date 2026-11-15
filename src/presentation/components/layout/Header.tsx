@@ -20,6 +20,7 @@ import {
   LogOut,
   ShieldCheck,
   Lock,
+  PanelLeftOpen,
 } from 'lucide-react';
 import PWAInstallButton from '../common/PWAInstallButton';
 import LanguageSwitcher from '../common/LanguageSwitcher';
@@ -81,6 +82,8 @@ export default function Header({
   onOpenShortcuts,
   onLogout,
   showToast,
+  desktopSidebarCollapsed = false,
+  onToggleDesktopSidebar,
 }: any) {
   const { t } = useTranslation();
   const [topologyMenuOpen, setTopologyMenuOpen] = useState(false);
@@ -570,16 +573,18 @@ export default function Header({
   return (
     <header
       role="banner"
-      className={`sticky select-none transition-all ${
+      className={`sticky select-none transition-all duration-200 ${
         isStandardFixed
-          ? 'top-0 z-30 w-full lg:w-[calc(100%-270px)] lg:ml-[270px] bg-white/95 backdrop-blur-md border-b border-zinc-200/90 shadow-2xs my-0 rounded-none h-16 flex items-center'
+          ? desktopSidebarCollapsed
+            ? 'top-0 z-30 w-full ml-0 bg-white/95 backdrop-blur-md border-b border-zinc-200/90 shadow-2xs my-0 rounded-none h-16 flex items-center'
+            : 'top-0 z-30 w-full lg:w-[calc(100%-270px)] lg:ml-[270px] bg-white/95 backdrop-blur-md border-b border-zinc-200/90 shadow-2xs my-0 rounded-none h-16 flex items-center'
           : 'top-2 sm:top-3 z-30 w-[calc(100%-0.75rem)] sm:w-[calc(100%-1.25rem)] lg:w-[calc(100%-2rem)] xl:w-[calc(100%-2.5rem)] 2xl:w-[calc(100%-3rem)] max-w-[2200px] mx-auto rounded-[22px] sm:rounded-full bg-white/95 backdrop-blur-xl border border-zinc-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] my-2 sm:my-3 overflow-visible'
       }`}
     >
       <div className={`flex items-center justify-between gap-1.5 sm:gap-2.5 w-full min-w-0 ${isStandardFixed ? 'px-4 sm:px-6 py-0' : 'px-2.5 sm:px-4 py-1.5 sm:py-2'}`}>
         {/* Left: Brand Capsule & Breadcrumbs (Clean & De-duplicated in Fixed Mode) */}
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink">
-          {/* Menu Drawer Button: visible exclusively on mobile/tablet (drawer); hidden on desktop where sidebar (fixed or floating dock) is already active */}
+          {/* Menu Drawer Button: visible exclusively on mobile/tablet (drawer); hidden on desktop */}
           <button
             onClick={() => setMobileMenuOpen(true)}
             className="flex lg:hidden w-8 h-8 rounded-full bg-white border border-zinc-200/90 items-center justify-center text-zinc-700 hover:text-black hover:border-zinc-300 shadow-xs hover:shadow-md cursor-pointer transition-all shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
@@ -590,8 +595,21 @@ export default function Header({
             <Menu size={15} />
           </button>
 
-          {/* Brand Capsule Pill: Only shown in Floating Mode (In Fixed mode, sidebar already has the brand logo & title) */}
-          {!isStandardFixed && (
+          {/* Desktop Reopen Sidebar Circular Pill (Only shown in Standard Fixed mode when collapsed) */}
+          {isStandardFixed && desktopSidebarCollapsed && onToggleDesktopSidebar && (
+            <button
+              type="button"
+              onClick={onToggleDesktopSidebar}
+              className="hidden lg:flex w-8 h-8 rounded-full bg-white/95 hover:bg-emerald-50/80 border border-zinc-200/90 hover:border-emerald-300 items-center justify-center text-zinc-600 hover:text-emerald-700 shadow-2xs hover:shadow-sm cursor-pointer transition-all duration-200 shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
+              aria-label={t('nav.open_sidebar', 'Déplier le menu latéral')}
+              title={t('nav.open_sidebar', 'Déplier le menu latéral')}
+            >
+              <PanelLeftOpen className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </button>
+          )}
+
+          {/* Brand Capsule Pill: Shown in Floating Mode or when Standard Sidebar is collapsed on Desktop */}
+          {(!isStandardFixed || desktopSidebarCollapsed) && (
             <button
               onClick={() => setCurrentTab('dashboard')}
               className="flex items-center gap-2 px-1.5 xl:px-2.5 py-1 rounded-full bg-white border border-zinc-200/90 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-emerald-300 hover:shadow-[0_4px_14px_rgba(16,185,129,0.12)] transition-all cursor-pointer shrink-0 group focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
