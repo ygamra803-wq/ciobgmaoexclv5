@@ -17,6 +17,24 @@ import {
 } from '../domain/finance/entities/FinancialBudget';
 import type { GmaoStoreSetters } from '../types/store';
 import type { IAuditEvent, AuditSnapshot } from '../types/audit';
+import { validateAndCommitDemoBundle } from '../services/import/unifiedImportPipeline';
+import type {
+  AssetsMachineRow,
+  DemoBundleInput,
+  DemoBundleStagingResult,
+  ImportReport,
+  PmCatalogActionRow,
+  PmCatalogGuideRow,
+  RefParcFamilyRow,
+  RefParcGeneralSystemTypeRow,
+  RefParcTemplateRow,
+  RefParcZoneRow,
+  RefPdrGroupRow,
+  RefPdrItemRow,
+  RefPdrTypeRow,
+  RefPersonnelOperationRow,
+  RefPersonnelTechnicianRow,
+} from '../services/import/types/unifiedImportTypes';
 
 /** Normalizes arbitrary audit snapshot values into a frozen object record or null before persisting. */
 function freezeAuditSnapshot(val: unknown): AuditSnapshot {
@@ -874,33 +892,121 @@ export const DataGateway = {
   },
 
   /**
+   * Builds the canonical multi-stage `DEMO_BUNDLE` (`REF_PARC -> REF_PERSONNEL -> ASSETS_MACHINES -> REF_PDR -> PM_CATALOG`)
+   * from the official factory demo seeds owned exclusively by `DataGateway`.
+   */
+  getOfficialDemoBundle(): DemoBundleInput & { bundleType: 'DEMO_BUNDLE' } {
+    return {
+      bundleType: 'DEMO_BUNDLE',
+      refParc: {
+        bundleType: 'REF_PARC',
+        zones: seedZones as unknown as RefParcZoneRow[],
+        families: seedFamilies as unknown as RefParcFamilyRow[],
+        templates: seedTemplates as unknown as RefParcTemplateRow[],
+        generalSystemTypes: seedGeneralSystemTypes as unknown as RefParcGeneralSystemTypeRow[],
+      },
+      refPersonnel: {
+        bundleType: 'REF_PERSONNEL',
+        technicians: seedTechnicians as unknown as RefPersonnelTechnicianRow[],
+        operations: seedOperations as unknown as RefPersonnelOperationRow[],
+      },
+      assetsMachines: {
+        bundleType: 'ASSETS_MACHINES',
+        machines: seedMachines as unknown as AssetsMachineRow[],
+      },
+      refPdr: {
+        bundleType: 'REF_PDR',
+        groups: seedPdrGroups as unknown as RefPdrGroupRow[],
+        types: seedStockTypes as unknown as RefPdrTypeRow[],
+        items: seedStockItems as unknown as RefPdrItemRow[],
+      },
+      pmCatalog: {
+        bundleType: 'PM_CATALOG',
+        actions: seedPreventiveActions as unknown as PmCatalogActionRow[],
+        guides: seedPreventiveGuides as unknown as PmCatalogGuideRow[],
+      },
+    };
+  },
+
+  /**
    * Explicitly loads all documented factory demo seeds into canonical `STORAGE_KEYS`
-   * and synchronizes React state setters (`GmaoStoreSetters`).
+   * after validating all Level 2 & Level 1 catalogs/assets (`REF_PARC -> REF_PERSONNEL -> ASSETS_MACHINES -> REF_PDR -> PM_CATALOG`)
+   * through `UnifiedImportPipeline` (`validateAndCommitDemoBundle`).
    * Sets `DEMO_MODE = true` and `START_MODE = 'demo'`.
    *
    * @param setters - Optional store setter callbacks to update live React state in-place.
-   * @returns Summary counts of loaded seed entities (`machinesCount`, `stockCount`, `preventiveCount`, `correctiveCount`, `movementsCount`).
+   * @returns Summary counts of loaded seed entities and the unified `pipelineReport`.
    */
-  loadDemoData(setters: GmaoStoreSetters = {}) {
-    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
-    const typedStockTypes = seedStockTypes as unknown as IType[];
-    const typedStockItems = seedStockItems as unknown as IStockItem[];
-    const typedMovements = seedMouvements as unknown as IMouvement[];
+  loadDemoData(setters: GmaoStoreSetters = {}): {
+    machinesCount: number;
+    stockCount: number;
+    preventiveCount: number;
+    correctiveCount: number;
+    movementsCount: number;
+    pipelineReport: ImportReport<DemoBundleStagingResult>;
+  } {
+    // 1. Validate & stage all 5 structured catalog/asset bundles via UnifiedImportPipeline
+    const demoBundle = this.getOfficialDemoBundle();
+    const pipelineReport = validateAndCommitDemoBundle(demoBundle, {
+      mode: 'MERGE',
+      origin: 'DEMO_BUNDLE',
+      dryRun: true,
+      strictPdrCheck: false,
+    });
 
-    const derivedDesignations: IPartDesignation[] = seedStockItems.map((s) => {
-      const rec = s as Record<string, unknown>;
+    if (!pipelineReport.success || pipelineReport.rejected.length > 0) {
+      const details = pipelineReport.rejected
+        .slice(0, 5)
+        .map((r) => `[${r.stage}] ${r.identifier || r.entity}: ${r.message}`)
+        .join(' | ');
+      throw new Error(`Échec de validation du paquet démo (DEMO_BUNDLE) : ${details}`);
+    }
+
+    const {
+      nextZones,
+      nextFamilies,
+      nextTemplates,
+      nextGeneralSystemTypes,
+      nextTechnicians,
+      nextOperations,
+      nextUsers,
+      nextMachines,
+      nextGroups: typedPdrGroups,
+      nextTypes: typedStockTypes,
+      nextStock: stagedStockItems,
+      nextDesignations: derivedDesignations,
+      nextActions: validatedPreventiveActions,
+      nextGuides: validatedPreventiveGuides,
+    } = pipelineReport.staging;
+
+    // Reconcile movement balances (entrees, sorties, stockActuel) on stagedStockItems from seedStockItems
+    const seedBalanceByRef = new Map<
+      string,
+      { entrees: number; sorties: number; stockActuel: number }
+    >();
+    for (const s of seedStockItems) {
+      const key = String(s.ref || '').trim().toUpperCase();
+      if (key) {
+        seedBalanceByRef.set(key, {
+          entrees: Number(s.entrees) || 0,
+          sorties: Number(s.sorties) || 0,
+          stockActuel: Number(s.stockActuel) || 0,
+        });
+      }
+    }
+
+    const typedStockItems: IStockItem[] = stagedStockItems.map((item) => {
+      const bal = seedBalanceByRef.get(String(item.ref || '').trim().toUpperCase());
+      if (!bal) return item;
       return {
-        id: (rec.id as string | number | undefined) || s.ref,
-        ref: s.ref,
-        designation: s.designation,
-        id_group: (rec.id_group as string | null | undefined) || null,
-        id_type: (rec.id_type as string | undefined) || s.type,
-        type: s.type,
-        stockInitial: s.stockInitial,
-        seuil: s.seuil,
-        emplacement: s.emplacement,
+        ...item,
+        entrees: bal.entrees,
+        sorties: bal.sorties,
+        stockActuel: bal.stockActuel,
       };
     });
+
+    const typedMovements = seedMouvements as unknown as IMouvement[];
 
     const formattedCompTemplates = seedCompTemplates.map((t, idx) => {
       const rec = t as Record<string, unknown>;
@@ -911,20 +1017,22 @@ export const DataGateway = {
       };
     });
 
-    // 1. Set DEMO_MODE and START_MODE flags explicitly via storageService SSOT
+    // 2. Set DEMO_MODE and START_MODE flags explicitly via storageService SSOT
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, true);
     storageService.setItem(STORAGE_KEYS.START_MODE, 'demo');
 
-    // 2. Write all seeds to canonical STORAGE_KEYS in strict dependency order:
-    // Zones -> Families -> Templates -> GeneralSystemTypes -> Machines -> Blueprints -> MachineBom
-    this.saveZones(seedZones);
-    this.saveFamilies(seedFamilies);
-    this.saveTemplates(seedTemplates);
-    this.saveGeneralSystemTypes(seedGeneralSystemTypes);
-    this.saveMachines(seedMachines);
+    // 3. Write all validated bundles & operational fixtures to canonical STORAGE_KEYS in strict dependency order:
+    // REF_PARC (Zones -> Families -> Templates -> GeneralSystemTypes) -> REF_PERSONNEL -> ASSETS_MACHINES -> Blueprints -> MachineBom
+    this.saveZones(nextZones);
+    this.saveFamilies(nextFamilies);
+    this.saveTemplates(nextTemplates);
+    this.saveGeneralSystemTypes(nextGeneralSystemTypes);
+    this.savePersonnel(nextUsers, nextTechnicians, nextOperations);
+    this.saveMachines(nextMachines);
     this.saveBlueprints(seedBlueprints);
     this.saveMachineBom(seedMachineBomLedger);
 
+    // REF_PDR (Groups -> Types -> Items -> Designations) -> Movements
     this.savePdrGroups(typedPdrGroups);
     this.saveStockTypes(typedStockTypes);
     this.saveStock(typedStockItems);
@@ -932,29 +1040,29 @@ export const DataGateway = {
     this.saveMouvements(typedMovements);
     this.saveSortieDemands([]);
     this.saveReplenishmentOrders([]);
-    movementRepository.bulkReplace(typedMovements, buildInitialStockMap(seedStockItems));
+    movementRepository.bulkReplace(typedMovements, buildInitialStockMap(typedStockItems));
 
-    this.savePreventiveTasks(seedPreventiveTasks, { machines: seedMachines });
-    this.savePreventiveActions(seedPreventiveActions);
-    this.savePreventiveGuides(seedPreventiveGuides);
+    // PM_CATALOG (Actions -> Guides) -> Preventive Tasks
+    this.savePreventiveActions(validatedPreventiveActions);
+    this.savePreventiveGuides(validatedPreventiveGuides);
+    this.savePreventiveTasks(seedPreventiveTasks, { machines: nextMachines });
     this.savePreventivePlans([]);
     this.savePreventiveExecutions([]);
     this.saveMeterReadings([]);
 
-    this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: seedMachines });
+    this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: nextMachines });
     this.saveCorrectiveActionsByPanne(seedActionsByPanne);
     this.saveCorrectivePanneCategories(seedPanneByCategory);
     this.saveCorrectiveTravaux(seedTravailAFaire);
     this.saveCorrectiveIntervenants(seedIntervenants);
     this.saveWorkshopOrders([]);
 
-    this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
     try {
       const authSvc = new AuthService();
-      authSvc.syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+      authSvc.syncTechnicianAccountsFromPersonnel(nextTechnicians, {
         activateByDefault: true,
       });
-      authSvc.syncOperationAccountsFromPersonnel(seedOperations, {
+      authSvc.syncOperationAccountsFromPersonnel(nextOperations, {
         activateByDefault: true,
       });
     } catch {
@@ -974,13 +1082,13 @@ export const DataGateway = {
     this.saveFinancialBudget(DEMO_FISCAL_BUDGET, 'DEMO_SEED');
     this.saveAuditEvents([]);
 
-    // 3. Update React state setters if provided
-    if (setters.setMachines) setters.setMachines(seedMachines);
-    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
-    if (setters.setFamilies) setters.setFamilies(seedFamilies);
-    if (setters.setTemplates) setters.setTemplates(seedTemplates);
+    // 4. Update React state setters if provided (preserving exact setter invocation order)
+    if (setters.setMachines) setters.setMachines(nextMachines);
+    if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(nextGeneralSystemTypes);
+    if (setters.setFamilies) setters.setFamilies(nextFamilies);
+    if (setters.setTemplates) setters.setTemplates(nextTemplates);
     if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
-    if (setters.setZones) setters.setZones(seedZones);
+    if (setters.setZones) setters.setZones(nextZones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
 
     if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
@@ -992,8 +1100,8 @@ export const DataGateway = {
     if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
     if (setters.setPreventiveTasks) setters.setPreventiveTasks(seedPreventiveTasks);
-    if (setters.setPreventiveActions) setters.setPreventiveActions(seedPreventiveActions);
-    if (setters.setPreventiveGuides) setters.setPreventiveGuides(seedPreventiveGuides);
+    if (setters.setPreventiveActions) setters.setPreventiveActions(validatedPreventiveActions);
+    if (setters.setPreventiveGuides) setters.setPreventiveGuides(validatedPreventiveGuides);
     if (setters.setPreventivePlans) setters.setPreventivePlans([]);
     if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
     if (setters.setMeterReadings) setters.setMeterReadings([]);
@@ -1005,9 +1113,9 @@ export const DataGateway = {
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
     if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
 
-    if (setters.setUsers) setters.setUsers(seedUsers);
-    if (setters.setTechnicians) setters.setTechnicians(seedTechnicians);
-    if (setters.setOperations) setters.setOperations(seedOperations);
+    if (setters.setUsers) setters.setUsers(nextUsers);
+    if (setters.setTechnicians) setters.setTechnicians(nextTechnicians);
+    if (setters.setOperations) setters.setOperations(nextOperations);
 
     if (setters.setWarehouseItems) setters.setWarehouseItems(seedWarehouseItems);
     if (setters.setEntrepotComponents) setters.setEntrepotComponents(seedEntrepotComponents);
@@ -1023,11 +1131,12 @@ export const DataGateway = {
     if (setters.setAuditEvents) setters.setAuditEvents([]);
 
     return {
-      machinesCount: seedMachines.length,
-      stockCount: seedStockItems.length,
+      machinesCount: nextMachines.length,
+      stockCount: typedStockItems.length,
       preventiveCount: seedPreventiveTasks.length,
       correctiveCount: seedCorrectiveInterventions.length,
-      movementsCount: seedMouvements.length,
+      movementsCount: typedMovements.length,
+      pipelineReport,
     };
   },
 

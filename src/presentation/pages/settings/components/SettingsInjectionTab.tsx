@@ -22,14 +22,17 @@ import {
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 import {
   exportAssetsMachinesBundle,
+  exportPmCatalogBundle,
   exportRefParcBundle,
   exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
+  getPmCatalogOfficialTemplate,
   getRefParcOfficialTemplate,
   getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
   validateAndCommitAssetsMachinesBundle,
+  validateAndCommitPmCatalogBundle,
   validateAndCommitRefParcBundle,
   validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
@@ -38,7 +41,7 @@ import type { ImportReport } from '../../../../services/import/types/unifiedImpo
 
 /**
  * Data Injection Hub:
- * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)
+ * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)
  * 2) Mode C — Demo Dataset Control via DataGateway
  * 3) Mode A — Empty Factory Reset (`START_MODE = 'empty'`)
  */
@@ -64,11 +67,12 @@ export default function SettingsInjectionTab({
 }: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
 
-  // P1 / P1.1 / P2 / P3: Structured Pipeline State (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)
+  // P1 / P1.1 / P2 / P3 / P4: Structured Pipeline State (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)
   const [refParcJsonText, setRefParcJsonText] = useState('');
   const [refPersonnelJsonText, setRefPersonnelJsonText] = useState('');
   const [assetsMachinesJsonText, setAssetsMachinesJsonText] = useState('');
   const [refPdrJsonText, setRefPdrJsonText] = useState('');
+  const [pmCatalogJsonText, setPmCatalogJsonText] = useState('');
   const [lastImportReport, setLastImportReport] = useState<ImportReport<any> | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
@@ -76,6 +80,7 @@ export default function SettingsInjectionTab({
   const refPersonnelFileInputRef = useRef<HTMLInputElement | null>(null);
   const assetsMachinesFileInputRef = useRef<HTMLInputElement | null>(null);
   const refPdrFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pmCatalogFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const downloadJsonFile = (filename: string, payload: unknown) => {
     const json = JSON.stringify(payload, null, 2);
@@ -130,6 +135,16 @@ export default function SettingsInjectionTab({
     );
   };
 
+  const handleDownloadPmCatalogTemplate = () => {
+    const template = getPmCatalogOfficialTemplate();
+    setPmCatalogJsonText(JSON.stringify(template, null, 2));
+    downloadJsonFile('PM_CATALOG.template.json', template);
+    showToast?.(
+      'Modèle officiel PM_CATALOG.template.json téléchargé (Contrat Type A).',
+      'success'
+    );
+  };
+
   const handleExportRefParc = () => {
     const bundle = exportRefParcBundle();
     setRefParcJsonText(JSON.stringify(bundle, null, 2));
@@ -170,9 +185,19 @@ export default function SettingsInjectionTab({
     );
   };
 
+  const handleExportPmCatalog = () => {
+    const bundle = exportPmCatalogBundle();
+    setPmCatalogJsonText(JSON.stringify(bundle, null, 2));
+    downloadJsonFile(`CIOB_PM_CATALOG_${new Date().toISOString().slice(0, 10)}.json`, bundle);
+    showToast?.(
+      'Paquet PM_CATALOG (Type A Round-Trip) exporté avec succès (code_action, code_guide).',
+      'success'
+    );
+  };
+
   const handleFileLoad = (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR'
+    target: 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR' | 'PM_CATALOG'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -185,8 +210,10 @@ export default function SettingsInjectionTab({
         setRefPersonnelJsonText(content);
       } else if (target === 'ASSETS_MACHINES') {
         setAssetsMachinesJsonText(content);
-      } else {
+      } else if (target === 'REF_PDR') {
         setRefPdrJsonText(content);
+      } else {
+        setPmCatalogJsonText(content);
       }
       setParseError(null);
     };
@@ -388,22 +415,23 @@ export default function SettingsInjectionTab({
 
   return (
     <div className="space-y-6">
-      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR) */}
+      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG) */}
       <SettingsSectionCard
-        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)"
+        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)"
         description="Téléchargez le modèle officiel, remplissez vos lignes, puis validez (dryRun) ou importez (MERGE). Seuls les modèles officiels et les exports Round-Trip (Type A) sont réimportables ; les exports externes d'écrans (Type B) ne sont pas des contrats d'import."
         icon={<ShieldCheck />}
       >
         <div className="mb-3.5 px-3.5 py-2.5 rounded-xl bg-sky-50/80 border border-sky-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-2">
           <span>
             <b>Contrat Type A (Round-Trip) :</b> Modèles officiels{' '}
-            <code className="font-mono">REF_PARC.template.json</code>,{' '}
-            <code className="font-mono">REF_PERSONNEL.template.json</code>,{' '}
-            <code className="font-mono">ASSETS_MACHINES.template.json</code> &amp;{' '}
-            <code className="font-mono">REF_PDR.template.json</code> + exports issus de cette carte.
+            <code className="font-mono">REF_PARC</code>,{' '}
+            <code className="font-mono">REF_PERSONNEL</code>,{' '}
+            <code className="font-mono">ASSETS_MACHINES</code>,{' '}
+            <code className="font-mono">REF_PDR</code> &amp;{' '}
+            <code className="font-mono">PM_CATALOG</code> + exports issus de cette carte.
           </span>
           <span className="font-mono text-[10px] text-slate-500">
-            Type B (Exports tableaux/impression) = Consultation externe uniquement
+            Type B (Exports tableaux/mouvements) = Consultation externe uniquement
           </span>
         </div>
 
@@ -795,6 +823,151 @@ export default function SettingsInjectionTab({
                 className={SETTINGS_BUTTON_STYLES.secondary}
                 data-testid="btn-export-ref-pdr"
                 title="Exporter le catalogue PDR actuel au format Paquet Round-Trip (Type A)"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Exporter (Round-Trip Type A)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 5: PM_CATALOG */}
+          <div className="lg:col-span-2 p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-extrabold text-slate-900">
+                  5. Paquet Catalogue Préventif (PM_CATALOG — Niveau 2 Uniquement)
+                </h4>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-purple-100 text-purple-800">
+                  05_PM_ACTIONS ➔ 05_PM_GUIDES
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">
+                Clés stables : <code className="font-mono">code_action</code>,{' '}
+                <code className="font-mono">code_guide</code> (Catalogue standardisé — aucune tâche machine ni exécution).
+              </p>
+              <textarea
+                value={pmCatalogJsonText}
+                onChange={(e) => setPmCatalogJsonText(e.target.value)}
+                rows={4}
+                placeholder='{"bundleType":"PM_CATALOG","actions":[{"code_action":"C","libelle":"Contrôle"}],"guides":[{"code_guide":"GUIDE-ROULEMENT-CG","composant_nom":"Roulement","actions_liees":["C"]}]}'
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+              <input
+                ref={pmCatalogFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => handleFileLoad(e, 'PM_CATALOG')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handleDownloadPmCatalogTemplate}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-template-pm-catalog"
+                title="Télécharger le modèle officiel PM_CATALOG.template.json"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-700" />
+                <span>Télécharger le modèle</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => pmCatalogFileInputRef.current?.click()}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Charger JSON</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setParseError(null);
+                  if (!pmCatalogJsonText.trim()) {
+                    setParseError(
+                      'Veuillez charger un fichier JSON ou coller le contenu du paquet PM_CATALOG.'
+                    );
+                    return;
+                  }
+                  try {
+                    const parsed = JSON.parse(pmCatalogJsonText);
+                    const report = validateAndCommitPmCatalogBundle(parsed, {
+                      mode: 'MERGE',
+                      origin: 'JSON_BUNDLE',
+                      dryRun: true,
+                    });
+                    setLastImportReport(report);
+                    if (report.success) {
+                      showToast?.(
+                        'Validation PM_CATALOG (dryRun) réussie : 0 erreur bloquante.',
+                        'success'
+                      );
+                    } else {
+                      showToast?.(
+                        `Échec validation PM_CATALOG : ${report.rejected.length} rejet(s) détecté(s).`,
+                        'error'
+                      );
+                    }
+                  } catch (err: any) {
+                    setParseError(
+                      `JSON PM_CATALOG invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
+                    );
+                  }
+                }}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-dryrun-pm-catalog"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
+                <span>Vérifier (dryRun)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setParseError(null);
+                  if (!pmCatalogJsonText.trim()) {
+                    setParseError(
+                      'Veuillez charger un fichier JSON ou coller le contenu du paquet PM_CATALOG.'
+                    );
+                    return;
+                  }
+                  try {
+                    const parsed = JSON.parse(pmCatalogJsonText);
+                    const report = validateAndCommitPmCatalogBundle(parsed, {
+                      mode: 'MERGE',
+                      origin: 'JSON_BUNDLE',
+                      dryRun: false,
+                    });
+                    setLastImportReport(report);
+                    if (report.success) {
+                      showToast?.(
+                        'Import MERGE PM_CATALOG engagé dans DataGateway avec succès.',
+                        'success'
+                      );
+                    } else {
+                      showToast?.(
+                        `Échec validation PM_CATALOG : ${report.rejected.length} rejet(s) détecté(s).`,
+                        'error'
+                      );
+                    }
+                  } catch (err: any) {
+                    setParseError(
+                      `JSON PM_CATALOG invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
+                    );
+                  }
+                }}
+                className={SETTINGS_BUTTON_STYLES.primary}
+                data-testid="btn-merge-pm-catalog"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Importer (MERGE)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPmCatalog}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-export-pm-catalog"
+                title="Exporter le catalogue préventif actuel au format Paquet Round-Trip (Type A)"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-700" />
                 <span>Exporter (Round-Trip Type A)</span>

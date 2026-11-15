@@ -1,0 +1,78 @@
+{
+  "bundleType": "PM_CATALOG",
+  "actions": [
+    {
+      "code_action": "C",
+      "libelle": "Contrôle",
+      "ref": "ISO-17359-C",
+      "description": "Contrôle visuel, auscultation vibratoire et relevé de température.",
+      "type_maintenance": "Préventif",
+      "frequence_defaut": "1M",
+      "duree_standard": "15 min",
+      "outils": "Stéthoscope mécanique, Thermomètre infrarouge",
+      "couleur": "blue",
+      "icone": "Eye",
+      "is_active": true
+    },
+    {
+      "code_action": "G",
+      "libelle": "Graissage",
+      "ref": "DIN-51825-G",
+      "description": "Graissage périodique des roulements et paliers avec la graisse prescrite.",
+      "type_maintenance": "Préventif",
+      "frequence_defaut": "1M",
+      "duree_standard": "10 min",
+      "outils": "Pompe à graisse manuelle graduée",
+      "couleur": "amber",
+      "icone": "Droplet",
+      "is_active": true
+    },
+    {
+      "code_action": "N",
+      "libelle": "Nettoyage",
+      "ref": "STD-CLEAN-01",
+      "description": "Nettoyage approfondi, dépoussiérage et soufflage basse pression.",
+      "type_maintenance": "Préventif",
+      "frequence_defaut": "1S",
+      "duree_standard": "20 min",
+      "outils": "Soufflette régulée, Chiffons non pelucheux",
+      "couleur": "emerald",
+      "icone": "Sparkles",
+      "is_active": true
+    }
+  ],
+  "guides": [
+    {
+      "code_guide": "GUIDE-ROULEMENT-CG",
+      "composant_nom": "Roulement",
+      "famille": "Mécanique / Paliers",
+      "ref": "Manuel-SKF-Roulement",
+      "actions_liees": ["C", "G"],
+      "pieces_rechange": [
+        {
+          "ref": "SKF-6205-2RS",
+          "designation": "Roulement à billes 6205-2RS",
+          "quantite": 1,
+          "unite": "PCS"
+        }
+      ],
+      "fiches_actions": {
+        "C": {
+          "titre": "Contrôle jeu axial et température",
+          "description": "Vérifier l'absence de bruit anormal et mesurer la température du palier (< 70°C).",
+          "duree": "5 min",
+          "outils": "Stéthoscope de mécanicien, Thermomètre infrarouge"
+        },
+        "G": {
+          "titre": "Graissage périodique des roulements",
+          "description": "Injecter la quantité prescrite de graisse haute performance sans excès.",
+          "duree": "10 min",
+          "outils": "Pompe à graisse manuelle"
+        }
+      },
+      "consignes_securite": "Consignation LOTO obligatoire avant accès aux organes en rotation.",
+      "criticite": "Haute",
+      "is_active": true
+    }
+  ]
+}

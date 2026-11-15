@@ -3,7 +3,8 @@ import type { GmaoStoreState } from '../types/store';
 import type { IAuditEvent } from '../types/audit';
 import { DataGateway } from '../application/DataGateway';
 import { movementRepository } from '../application/MovementRepository';
-import { migrateStorageOnce } from '../infrastructure/persistence/migrateStorage';
+import { loadCollection, migrateStorageOnce } from '../infrastructure/persistence/migrateStorage';
+import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import {
   buildInitialStockMapFromList,
   normalizeMachinesList,
@@ -203,7 +204,10 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
     // ==========================================
     // Append-Only Enterprise Audit Ledger (AUDIT-LEDGER-P0)
     // ==========================================
-    auditEvents: DataGateway.getAuditEvents(),
+    auditEvents: loadCollection<IAuditEvent[]>(STORAGE_KEYS.AUDIT_EVENTS, {
+      allowDemoFallback: false,
+      demoSeed: [],
+    }),
 
     appendAuditEvent: (payload) => {
       const actor = resolveActiveActorContext();

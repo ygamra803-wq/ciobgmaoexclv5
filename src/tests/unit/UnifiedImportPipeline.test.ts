@@ -5,15 +5,19 @@ import { DataGateway } from '../../application/DataGateway';
 import reactiveEngine from '../../services/reactiveCalculationEngine';
 import {
   exportAssetsMachinesBundle,
+  exportPmCatalogBundle,
   exportRefParcBundle,
   exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
+  getPmCatalogOfficialTemplate,
   getRefParcOfficialTemplate,
   getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
   runUnifiedImportPipeline,
   validateAndCommitAssetsMachinesBundle,
+  validateAndCommitDemoBundle,
+  validateAndCommitPmCatalogBundle,
   validateAndCommitRefParcBundle,
   validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
@@ -39,7 +43,7 @@ function collectProductionFiles(dir: string): string[] {
   return results;
 }
 
-describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)', () => {
+describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR & PM_CATALOG)', () => {
   beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -684,6 +688,207 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
       const reimport = runUnifiedImportPipeline(exported, { mode: 'MERGE' });
       expect(reimport.success).toBe(true);
       expect(reimport.rejected).toHaveLength(0);
+    });
+  });
+
+  describe('6. PM_CATALOG Bundle (05_PM_ACTIONS -> 05_PM_GUIDES — Level 2 Only)', () => {
+    it('validates and commits the official PM_CATALOG.template.json after REF_PDR with 0 rejected and 0 tasks created', () => {
+      runUnifiedImportPipeline(getRefPdrOfficialTemplate(), { mode: 'MERGE' });
+      const pmTemplate = getPmCatalogOfficialTemplate();
+      const report = runUnifiedImportPipeline(pmTemplate, { mode: 'MERGE' });
+
+      expect(report.success).toBe(true);
+      expect(report.committed).toBe(true);
+      expect(report.rejected).toHaveLength(0);
+
+      const state = useGmaoStore.getState();
+      expect(state.preventiveActions).toHaveLength(3);
+      expect(state.preventiveGuides).toHaveLength(1);
+      expect(state.preventiveTasks).toHaveLength(0);
+      expect(state.preventiveExecutions).toHaveLength(0);
+    });
+
+    it('rejects a guide referencing an unknown code_action (BROKEN_FK) with zero store writes', () => {
+      const report = validateAndCommitPmCatalogBundle({
+        actions: [{ code_action: 'C', libelle: 'Contrôle' }],
+        guides: [
+          {
+            code_guide: 'GUIDE-TEST',
+            composant_nom: 'Moteur',
+            actions_liees: ['C', 'UNKNOWN_ACT'],
+          },
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected.some((r) => r.code === 'BROKEN_FK' && r.stage === '05_PM_GUIDES')).toBe(true);
+      expect(useGmaoStore.getState().preventiveActions).toHaveLength(0);
+      expect(useGmaoStore.getState().preventiveGuides).toHaveLength(0);
+    });
+
+    it('rejects a guide referencing a missing PDR ref when REF_PDR catalog is loaded (BROKEN_FK)', () => {
+      runUnifiedImportPipeline(getRefPdrOfficialTemplate(), { mode: 'MERGE' });
+
+      const report = validateAndCommitPmCatalogBundle({
+        actions: [{ code_action: 'C', libelle: 'Contrôle' }],
+        guides: [
+          {
+            code_guide: 'GUIDE-MISSING-PDR',
+            composant_nom: 'Palier',
+            actions_liees: ['C'],
+            pieces_rechange: [{ ref: 'PDR-INEXISTANTE', quantite: 1 }],
+          },
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected[0].code).toBe('BROKEN_FK');
+      expect(report.rejected[0].identifier).toBe('PDR-INEXISTANTE');
+    });
+
+    it('rejects duplicate code_action / code_guide (DUPLICATE_KEY) and forbidden machine/task fields (FORBIDDEN_BUNDLE_FIELD)', () => {
+      const dupReport = validateAndCommitPmCatalogBundle({
+        actions: [
+          { code_action: 'C', libelle: 'Contrôle 1' },
+          { code_action: 'c', libelle: 'Contrôle 2' },
+        ],
+        guides: [],
+      });
+      expect(dupReport.success).toBe(false);
+      expect(dupReport.rejected.map((r) => r.code)).toContain('DUPLICATE_KEY');
+
+      const forbiddenReport = validateAndCommitPmCatalogBundle({
+        actions: [{ code_action: 'C', libelle: 'Contrôle' }],
+        guides: [],
+        preventiveTasks: [{ id: 'T-01', action_code: 'C' }],
+      } as any);
+      expect(forbiddenReport.success).toBe(false);
+      expect(forbiddenReport.rejected.map((r) => r.code)).toContain('FORBIDDEN_BUNDLE_FIELD');
+    });
+
+    it('guards REPLACE_CATALOG when an existing action is referenced by preventiveTasks (REFERENCED_BY_ACTIVE_RECORDS)', () => {
+      runUnifiedImportPipeline(getPmCatalogOfficialTemplate(), { mode: 'MERGE' });
+      useGmaoStore.getState().setPreventiveTasks([
+        { id: 'PM-T1', action_code: 'G', titre: 'Graissage hebdo' },
+      ]);
+
+      const blocked = validateAndCommitPmCatalogBundle(
+        {
+          actions: [{ code_action: 'C', libelle: 'Contrôle seul' }],
+          guides: [],
+        },
+        { mode: 'REPLACE_CATALOG', actorRole: 'ADMIN' }
+      );
+
+      expect(blocked.success).toBe(false);
+      expect(blocked.committed).toBe(false);
+      expect(blocked.rejected[0].code).toBe('REFERENCED_BY_ACTIVE_RECORDS');
+      expect(blocked.rejected[0].identifier).toBe('G');
+    });
+
+    it('exports PM_CATALOG with canonical code_action and code_guide and round-trips via MERGE', () => {
+      runUnifiedImportPipeline(getRefPdrOfficialTemplate(), { mode: 'MERGE' });
+      runUnifiedImportPipeline(getPmCatalogOfficialTemplate(), { mode: 'MERGE' });
+
+      const exported = exportPmCatalogBundle();
+      expect(exported.bundleType).toBe('PM_CATALOG');
+      expect(exported.actions.map((a) => a.code_action)).toEqual(['C', 'G', 'N']);
+      expect(exported.guides.map((g) => g.code_guide)).toEqual(['GUIDE-ROULEMENT-CG']);
+
+      const reimport = runUnifiedImportPipeline(exported, { mode: 'MERGE' });
+      expect(reimport.success).toBe(true);
+      expect(reimport.rejected).toHaveLength(0);
+    });
+  });
+
+  describe('7. INGEST-P5 — Unified DemoBundle & loadDemoData Referential Integrity', () => {
+    it('validates and commits the official DEMO_BUNDLE across all 5 layers with zero rejected records', () => {
+      const demoBundle = DataGateway.getOfficialDemoBundle();
+      const report = validateAndCommitDemoBundle(demoBundle, { mode: 'MERGE' });
+
+      expect(report.bundleType).toBe('DEMO_BUNDLE');
+      expect(report.success).toBe(true);
+      expect(report.committed).toBe(true);
+      expect(report.rejected).toHaveLength(0);
+
+      // Verify all 11 pipeline stages were accepted in causal order
+      const stages = report.accepted.map((a) => a.stage);
+      expect(stages).toEqual([
+        '01_ZONES',
+        '03_FAMILIES',
+        '03_TEMPLATES',
+        '03_GENERAL_SYSTEM_TYPES',
+        '02_PERSONNEL',
+        '02_PERSONNEL',
+        '03_MACHINES',
+        '04_PDR_GROUPS',
+        '04_PDR_TYPES',
+        '04_PDR_ITEMS',
+        '05_PM_ACTIONS',
+        '05_PM_GUIDES',
+      ]);
+
+      // Verify legacy zone labels on demo machines and technicians were normalized to canonical code_zone
+      const pce01 = useGmaoStore
+        .getState()
+        .machines.find((m) => m.id_machine_registered === 'PCE-01');
+      expect(pce01?.id_zone_default).toBe('PCE');
+      expect(pce01?.id_family).toBe('FAM-MEC');
+      expect(pce01?.id_templates).toBe('TPL-MACHINE');
+
+      const tech02 = useGmaoStore
+        .getState()
+        .technicians.find((t) => t.id_technician === 'TECH-02');
+      expect(tech02?.id_zone).toBe('POLISSAG');
+    });
+
+    it('routes DataGateway.loadDemoData through UnifiedImportPipeline and keeps Mode A empty after clearAllForRealFactory', async () => {
+      const res = DataGateway.loadDemoData(useGmaoStore.getState());
+      expect(res.pipelineReport.success).toBe(true);
+      expect(res.pipelineReport.rejected).toHaveLength(0);
+      expect(res.machinesCount).toBeGreaterThan(300);
+      expect(res.stockCount).toBe(28);
+
+      // Verify generalSystemTypes preserve canonical SYS-* IDs
+      expect(useGmaoStore.getState().generalSystemTypes.map((t) => t.id)).toEqual([
+        'SYS-AIR',
+        'SYS-SEC',
+        'SYS-EAU',
+        'SYS-ECL',
+        'SYS-ASC',
+      ]);
+
+      // Clear all for real factory (Mode A)
+      await DataGateway.clearAllForRealFactory(useGmaoStore.getState());
+      expect(useGmaoStore.getState().zones).toHaveLength(0);
+      expect(useGmaoStore.getState().machines).toHaveLength(0);
+      expect(useGmaoStore.getState().rawStock).toHaveLength(0);
+      expect(useGmaoStore.getState().preventiveActions).toHaveLength(0);
+      expect(useGmaoStore.getState().preventiveGuides).toHaveLength(0);
+    });
+
+    it('aborts DEMO_BUNDLE atomically if a machine references an unknown family (BROKEN_FK)', () => {
+      const brokenBundle = DataGateway.getOfficialDemoBundle();
+      brokenBundle.assetsMachines.machines = [
+        {
+          code_machine: 'BROKEN-M1',
+          designation: 'Machine Orpheline',
+          code_zone: 'DETOURAG',
+          asset_class: 'PRODUCTION',
+          code_family: 'FAM-INEXISTANTE',
+          code_template: 'TPL-MACHINE',
+        },
+      ];
+
+      const report = runUnifiedImportPipeline(brokenBundle, { mode: 'MERGE' });
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected.some((r) => r.code === 'BROKEN_FK' && r.stage === '03_MACHINES')).toBe(
+        true
+      );
+      expect(useGmaoStore.getState().machines).toHaveLength(0);
     });
   });
 });

@@ -63,5 +63,10 @@
     "id_family": "FAM-TOUR",
     "libelle": "Tour",
     "code": "TOUR"
+  },
+  {
+    "id_family": "FAM-MEC",
+    "libelle": "Mécanique Générale",
+    "code": "MEC"
   }
 ]

@@ -18,9 +18,21 @@ import type {
   ProfileType,
   StockType,
 } from '../../../types/domain';
-import type { CorrectiveInterventionItem, PreventiveTaskItem } from '../../../types/store';
+import type {
+  CorrectiveInterventionItem,
+  IPreventiveActionCatalogItem,
+  IPreventiveGuideCatalogItem,
+  PreventiveTaskItem,
+} from '../../../types/store';
+import type { PreventiveExecutionRecord } from '../../../types/preventive';
 
-export type PipelineBundleType = 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR';
+export type PipelineBundleType =
+  | 'REF_PARC'
+  | 'REF_PERSONNEL'
+  | 'ASSETS_MACHINES'
+  | 'REF_PDR'
+  | 'PM_CATALOG'
+  | 'DEMO_BUNDLE';
 
 export type ImportSourceOrigin = 'EXCEL' | 'JSON_BUNDLE' | 'DEMO_BUNDLE';
 
@@ -37,7 +49,9 @@ export type PipelineStageId =
   | '03_MACHINES'
   | '04_PDR_GROUPS'
   | '04_PDR_TYPES'
-  | '04_PDR_ITEMS';
+  | '04_PDR_ITEMS'
+  | '05_PM_ACTIONS'
+  | '05_PM_GUIDES';
 
 export type ImportIssueCode =
   | 'MISSING_REQUIRED'
@@ -285,7 +299,99 @@ export interface RefPdrStagingResult {
 }
 
 // ============================================================================
-// 5. PIPELINE OPTIONS & CONTEXT
+// 5. PM_CATALOG BUNDLE SCHEMAS (Level 2 Preventive Catalog Layer — 05_PM_CATALOG)
+// ============================================================================
+
+export interface PmCatalogActionRow {
+  code_action: string;
+  code?: string;
+  libelle: string;
+  ref?: string;
+  description?: string;
+  type_maintenance?: string;
+  frequence_defaut?: string;
+  duree_standard?: string | number;
+  duree_estimee_min?: number;
+  outils?: string | string[];
+  couleur?: string;
+  icone?: string;
+  symbole?: string;
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PmCatalogGuidePieceRow {
+  ref?: string;
+  reference?: string;
+  designation?: string;
+  quantite?: number;
+  unite?: string;
+  prix_unitaire?: number;
+  [key: string]: unknown;
+}
+
+export interface PmCatalogGuideRow {
+  code_guide: string;
+  code?: string;
+  composant_nom: string;
+  famille?: string;
+  ref?: string;
+  actions_liees: string[];
+  pieces_rechange?: PmCatalogGuidePieceRow[];
+  fiches_actions?: Record<string, Record<string, unknown>>;
+  consignes_securite?: string | string[];
+  criticite?: string;
+  periodicite_suggeree?: string;
+  outillage_requis?: string[];
+  points_de_controle?: string[];
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export interface PmCatalogBundleInput {
+  bundleType?: 'PM_CATALOG';
+  actions?: PmCatalogActionRow[];
+  guides?: PmCatalogGuideRow[];
+  [key: string]: unknown;
+}
+
+export interface PmCatalogStagingResult {
+  nextActions: IPreventiveActionCatalogItem[];
+  nextGuides: IPreventiveGuideCatalogItem[];
+}
+
+// ============================================================================
+// 6. DEMO_BUNDLE SCHEMAS (Unified Multi-Stage Demo Hydration — Mode C)
+// ============================================================================
+
+export interface DemoBundleInput {
+  bundleType?: 'DEMO_BUNDLE';
+  refParc: RefParcBundleInput;
+  refPersonnel: RefPersonnelBundleInput;
+  assetsMachines: AssetsMachinesBundleInput;
+  refPdr: RefPdrBundleInput;
+  pmCatalog: PmCatalogBundleInput;
+}
+
+export interface DemoBundleStagingResult {
+  nextZones: IZone[];
+  nextFamilies: IMachineFamily[];
+  nextTemplates: IMachineTemplate[];
+  nextGeneralSystemTypes: IGeneralSystemType[];
+  nextTechnicians: ITechnician[];
+  nextOperations: IOperation[];
+  nextUsers: IUserRecord[];
+  nextMachines: IMachine[];
+  nextGroups: PdrGroup[];
+  nextTypes: StockType[];
+  nextStock: IStockItem[];
+  nextDesignations: IPartDesignation[];
+  nextActions: IPreventiveActionCatalogItem[];
+  nextGuides: IPreventiveGuideCatalogItem[];
+}
+
+// ============================================================================
+// 7. PIPELINE OPTIONS & CONTEXT
 // ============================================================================
 
 export interface UnifiedImportOptions {
@@ -297,6 +403,7 @@ export interface UnifiedImportOptions {
   actorId?: string;
   actorName?: string;
   strictTechnicianCheck?: boolean;
+  strictPdrCheck?: boolean;
 
   // Optional injected state snapshots (defaults to live useGmaoStore state)
   existingZones?: IZone[];
@@ -311,7 +418,10 @@ export interface UnifiedImportOptions {
   existingStockTypes?: StockType[];
   existingStock?: IStockItem[];
   existingMouvements?: IMouvement[];
+  existingPreventiveActions?: IPreventiveActionCatalogItem[];
+  existingPreventiveGuides?: IPreventiveGuideCatalogItem[];
   existingPreventiveTasks?: PreventiveTaskItem[];
+  existingPreventiveExecutions?: PreventiveExecutionRecord[];
   existingCorrectiveInterventions?: CorrectiveInterventionItem[];
   existingWarehouseItems?: IWarehouseItem[];
 }

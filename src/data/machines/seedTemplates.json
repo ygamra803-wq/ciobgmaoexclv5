@@ -298,5 +298,11 @@
     "libelle": "Riveteuse",
     "id_family": "FAM-RIVE",
     "famille_lib": "Rivetage"
+  },
+  {
+    "id_templates": "TPL-MACHINE",
+    "libelle": "Machine Standard",
+    "id_family": "FAM-MEC",
+    "famille_lib": "Mécanique Générale"
   }
 ]
