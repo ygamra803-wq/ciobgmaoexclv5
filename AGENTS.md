@@ -10,9 +10,10 @@
 1. **Single Source of Truth (SSOT):**
    - Application state lives in `src/store/useGmaoStore.ts`, persisted exclusively via `src/application/DataGateway.ts` and canonical `STORAGE_KEYS` (`src/infrastructure/persistence/storageKeys.ts`).
    - **Excel is NOT the internal SSOT:** Excel (`excelEngineService.ts` / `excelMirrorService.ts`) is strictly for import, export, and host-side mirror backup.
-2. **Zero Silent Seed Reinjection:**
+2. **Zero Silent Seed Reinjection & Unified Ingestion Gateway:**
    - Empty collections (`0` records) are valid factory states. Never auto-inject demo seeds when storage is empty or short.
-   - Demo data loads **exclusively** via explicit user action (`DataGateway.loadDemoData` / `loadDemoSection`). When `START_MODE === 'empty'`, all counters and tables remain `0` across reloads (`F5`).
+   - Demo data loads **exclusively** via explicit user action (`DataGateway.loadDemoData` / `loadDemoSection`), and **no production module outside `src/application/DataGateway.ts` may import `src/data/*.json`**.
+   - Structured catalog and asset ingestion (`REF_PARC`, `ASSETS_MACHINES`) must pass through `src/services/import/unifiedImportPipeline.ts` (`docs/DATA_INGESTION_AND_BUNDLES.md`). When `START_MODE === 'empty'`, all counters and tables remain `0` across reloads (`F5`).
 3. **Stock Math Invariant:**
    - `stockActuel = stockInitial + entrées − sorties` computed exclusively via `src/application/IncrementalStockIndex.ts` and `src/domain/pdr/services/StockCalculationService.ts` (re-exported via `src/core/domain/services/StockCalculationService.ts`).
    - Do **not** modify `IncrementalStockIndex` or `StockCalculationService` unless a numeric bug is proven with a failing test case. Never combine direct stock mutation with a `Sortie` movement (prevents double deduction).
@@ -44,5 +45,6 @@
 | **Implemented Capabilities & Code Pointers** | [`CAPABILITIES_AND_STRENGTHS.md`](./CAPABILITIES_AND_STRENGTHS.md) | Read when verifying existing features, services, or automated test coverage. |
 | **Architecture & ADR Decisions** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Read when reviewing system boundaries, 3-Tier Asset/Blueprint architecture, or ADRs (`ADR-01` to `ADR-10`). |
 | **Canonical Storage Keys & FK Schema** | [`docs/DATA_SSOT.md`](./docs/DATA_SSOT.md) | Read when touching persistence, `STORAGE_KEYS`, migrations, or entity relationships. |
+| **Layered Data Ingestion & Bundles (`REF_PARC` / `ASSETS`)** | [`docs/DATA_INGESTION_AND_BUNDLES.md`](./docs/DATA_INGESTION_AND_BUNDLES.md) | Read when working on `UnifiedImportPipeline`, bundle schemas, or seed boundaries. |
 | **Documentation Map** | [`DOCS_INDEX.md`](./DOCS_INDEX.md) | Read when looking up the exact documentation file for a specific module or screen. |
 | **Specific UI Screen Specs** | `docs/*_VIEW.md` | Open **only** the single `*_VIEW.md` matching the screen you are actively editing. |

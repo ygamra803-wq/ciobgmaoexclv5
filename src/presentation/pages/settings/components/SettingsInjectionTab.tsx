@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Sliders,
   Layers,
@@ -14,11 +14,25 @@ import {
   CheckCircle2,
   Database,
   AlertTriangle,
+  Upload,
+  Download,
+  ShieldCheck,
+  XCircle,
 } from 'lucide-react';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+import {
+  exportAssetsMachinesBundle,
+  exportRefParcBundle,
+  validateAndCommitAssetsMachinesBundle,
+  validateAndCommitRefParcBundle,
+} from '../../../../services/import/unifiedImportPipeline';
+import type { ImportReport } from '../../../../services/import/types/unifiedImportTypes';
 
 /**
- * Data Injection Hub: Seed factory baseline data, reset datasets, toggle demo mode.
+ * Data Injection Hub:
+ * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC & ASSETS_MACHINES)
+ * 2) Mode C — Demo Dataset Control via DataGateway
+ * 3) Mode A — Empty Factory Reset (`START_MODE = 'empty'`)
  */
 export default function SettingsInjectionTab({
   handleInjectAll,
@@ -41,6 +55,128 @@ export default function SettingsInjectionTab({
   handleResetToZero,
 }: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
+
+  // P1: Structured Pipeline State (REF_PARC & ASSETS_MACHINES)
+  const [refParcJsonText, setRefParcJsonText] = useState('');
+  const [assetsMachinesJsonText, setAssetsMachinesJsonText] = useState('');
+  const [lastImportReport, setLastImportReport] = useState<ImportReport<any> | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const refParcFileInputRef = useRef<HTMLInputElement | null>(null);
+  const assetsMachinesFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const downloadJsonFile = (filename: string, payload: unknown) => {
+    const json = JSON.stringify(payload, null, 2);
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportRefParc = () => {
+    const bundle = exportRefParcBundle();
+    setRefParcJsonText(JSON.stringify(bundle, null, 2));
+    downloadJsonFile(`CIOB_REF_PARC_${new Date().toISOString().slice(0, 10)}.json`, bundle);
+    showToast?.('Paquet REF_PARC exporté avec succès (code_zone, code_family, code_template).', 'success');
+  };
+
+  const handleExportAssetsMachines = () => {
+    const bundle = exportAssetsMachinesBundle();
+    setAssetsMachinesJsonText(JSON.stringify(bundle, null, 2));
+    downloadJsonFile(`CIOB_ASSETS_MACHINES_${new Date().toISOString().slice(0, 10)}.json`, bundle);
+    showToast?.('Paquet ASSETS_MACHINES exporté avec succès (code_machine, code_zone).', 'success');
+  };
+
+  const handleFileLoad = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: 'REF_PARC' | 'ASSETS_MACHINES'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = typeof reader.result === 'string' ? reader.result : '';
+      if (target === 'REF_PARC') {
+        setRefParcJsonText(content);
+      } else {
+        setAssetsMachinesJsonText(content);
+      }
+      setParseError(null);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleRunRefParcPipeline = (dryRun: boolean) => {
+    setParseError(null);
+    if (!refParcJsonText.trim()) {
+      setParseError('Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PARC.');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(refParcJsonText);
+      const report = validateAndCommitRefParcBundle(parsed, {
+        mode: 'MERGE',
+        origin: 'JSON_BUNDLE',
+        dryRun,
+      });
+      setLastImportReport(report);
+      if (report.success) {
+        showToast?.(
+          dryRun
+            ? 'Validation REF_PARC (dryRun) réussie : 0 erreur bloquante.'
+            : 'Import MERGE REF_PARC engagé dans DataGateway avec succès.',
+          'success'
+        );
+      } else {
+        showToast?.(
+          `Échec validation REF_PARC : ${report.rejected.length} rejet(s) détecté(s).`,
+          'error'
+        );
+      }
+    } catch (err: any) {
+      setParseError(`JSON REF_PARC invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
+    }
+  };
+
+  const handleRunAssetsMachinesPipeline = (dryRun: boolean) => {
+    setParseError(null);
+    if (!assetsMachinesJsonText.trim()) {
+      setParseError(
+        'Veuillez charger un fichier JSON ou coller le contenu du paquet ASSETS_MACHINES.'
+      );
+      return;
+    }
+    try {
+      const parsed = JSON.parse(assetsMachinesJsonText);
+      const report = validateAndCommitAssetsMachinesBundle(parsed, {
+        mode: 'MERGE',
+        origin: 'JSON_BUNDLE',
+        dryRun,
+      });
+      setLastImportReport(report);
+      if (report.success) {
+        showToast?.(
+          dryRun
+            ? 'Validation ASSETS_MACHINES (dryRun) réussie : 0 erreur bloquante.'
+            : 'Import MERGE ASSETS_MACHINES engagé dans DataGateway avec succès.',
+          'success'
+        );
+      } else {
+        showToast?.(
+          `Échec validation ASSETS_MACHINES : ${report.rejected.length} rejet(s) détecté(s).`,
+          'error'
+        );
+      }
+    } catch (err: any) {
+      setParseError(`JSON ASSETS_MACHINES invalide : ${err?.message || 'Erreur de syntaxe JSON'}`);
+    }
+  };
 
   const sectionLabels: Record<string, string> = {
     all: 'Toute l’Usine (Tous les Tableaux)',
@@ -136,6 +272,245 @@ export default function SettingsInjectionTab({
 
   return (
     <div className="space-y-6">
+      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC & ASSETS_MACHINES) */}
+      <SettingsSectionCard
+        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — REF_PARC & ASSETS_MACHINES)"
+        description="Validez (dryRun) ou importez (MERGE) vos référentiels et machines enregistrées dans l'ordre strict des dépendances (01_ZONES ➔ 03_FAMILIES ➔ 03_TEMPLATES ➔ 03_GENERAL_SYSTEM_TYPES ➔ 03_MACHINES)."
+        icon={<ShieldCheck />}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Card 1: REF_PARC */}
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-extrabold text-slate-900">
+                  1. Paquet Référentiel Parc (REF_PARC — Niveau 2)
+                </h4>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-sky-100 text-sky-800">
+                  ZONES ➔ FAMILIES ➔ TEMPLATES
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">
+                Clés stables : <code className="font-mono">code_zone</code>,{' '}
+                <code className="font-mono">code_family</code>,{' '}
+                <code className="font-mono">code_template</code>,{' '}
+                <code className="font-mono">code_system_type</code>.
+              </p>
+              <textarea
+                value={refParcJsonText}
+                onChange={(e) => setRefParcJsonText(e.target.value)}
+                rows={4}
+                placeholder='{"bundleType":"REF_PARC","zones":[...],"families":[...],"templates":[...],"generalSystemTypes":[...]}'
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+              <input
+                ref={refParcFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => handleFileLoad(e, 'REF_PARC')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => refParcFileInputRef.current?.click()}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Charger JSON</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRunRefParcPipeline(true)}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-dryrun-ref-parc"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
+                <span>Vérifier (dryRun)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRunRefParcPipeline(false)}
+                className={SETTINGS_BUTTON_STYLES.primary}
+                data-testid="btn-merge-ref-parc"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Importer (MERGE)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportRefParc}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-export-ref-parc"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Exporter</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 2: ASSETS_MACHINES */}
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-extrabold text-slate-900">
+                  2. Paquet Machines Enregistrées (ASSETS_MACHINES — Niveau 1)
+                </h4>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-indigo-100 text-indigo-800">
+                  03_MACHINES
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">
+                Validation <code className="font-mono">PRODUCTION</code> vs{' '}
+                <code className="font-mono">SYSTEM_GENERAL</code>, normalisation{' '}
+                <code className="font-mono">code_zone</code> et hiérarchie{' '}
+                <code className="font-mono">parent_code_machine</code>.
+              </p>
+              <textarea
+                value={assetsMachinesJsonText}
+                onChange={(e) => setAssetsMachinesJsonText(e.target.value)}
+                rows={4}
+                placeholder='{"bundleType":"ASSETS_MACHINES","machines":[{"code_machine":"CNC-01","designation":"...","code_zone":"DETOURAG","asset_class":"PRODUCTION","code_family":"...","code_template":"..."}]}'
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+              <input
+                ref={assetsMachinesFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => handleFileLoad(e, 'ASSETS_MACHINES')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => assetsMachinesFileInputRef.current?.click()}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Charger JSON</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRunAssetsMachinesPipeline(true)}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-dryrun-assets-machines"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
+                <span>Vérifier (dryRun)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRunAssetsMachinesPipeline(false)}
+                className={SETTINGS_BUTTON_STYLES.primary}
+                data-testid="btn-merge-assets-machines"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Importer (MERGE)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportAssetsMachines}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-export-assets-machines"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Exporter</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {parseError && (
+          <div className="mt-3 px-4 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800 flex items-center gap-2">
+            <XCircle className="w-4 h-4 shrink-0" />
+            <span>{parseError}</span>
+          </div>
+        )}
+
+        {lastImportReport && (
+          <div
+            data-testid="unified-import-report"
+            className={`mt-4 p-4 rounded-2xl border ${
+              lastImportReport.success
+                ? 'bg-emerald-50/60 border-emerald-200'
+                : 'bg-rose-50/60 border-rose-200'
+            }`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200/80">
+              <div className="flex items-center gap-2">
+                {lastImportReport.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-rose-700" />
+                )}
+                <span className="text-xs font-extrabold text-slate-900">
+                  Rapport {lastImportReport.bundleType} —{' '}
+                  {lastImportReport.dryRun
+                    ? 'Simulation (dryRun)'
+                    : lastImportReport.committed
+                    ? 'Engagé dans DataGateway'
+                    : 'Annulé (0 écriture)'}
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-slate-600">
+                Rejets: {lastImportReport.rejected.length} | Avertissements:{' '}
+                {lastImportReport.warnings.length} | {lastImportReport.durationMs} ms
+              </span>
+            </div>
+
+            {lastImportReport.accepted.length > 0 && (
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {lastImportReport.accepted.map((acc) => (
+                  <span
+                    key={`${acc.stage}-${acc.entity}`}
+                    className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700"
+                  >
+                    <b>{acc.entity}</b>: +{acc.created} créés, ~{acc.updated} maj, ={acc.unchanged}{' '}
+                    inchangés
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {lastImportReport.warnings.length > 0 && (
+              <div className="mt-3 space-y-1">
+                <div className="text-[11px] font-bold text-amber-900">
+                  Avertissements de compatibilité ({lastImportReport.warnings.length}) :
+                </div>
+                {lastImportReport.warnings.map((w, idx) => (
+                  <div
+                    key={`warn-${idx}`}
+                    className="text-[11px] font-mono text-amber-900 bg-amber-100/70 px-2.5 py-1 rounded-lg"
+                  >
+                    [{w.code}] ({w.stage}) {w.message}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {lastImportReport.rejected.length > 0 && (
+              <div className="mt-3 space-y-1">
+                <div className="text-[11px] font-bold text-rose-900">
+                  Erreurs bloquantes ({lastImportReport.rejected.length}) :
+                </div>
+                {lastImportReport.rejected.map((r, idx) => (
+                  <div
+                    key={`rej-${idx}`}
+                    className="text-[11px] font-mono text-rose-900 bg-rose-100/70 px-2.5 py-1 rounded-lg"
+                  >
+                    [{r.code}] ({r.stage} — Ligne {r.row}) {r.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </SettingsSectionCard>
+
       {/* 1. Global & Targeted Demo Mode Control (tone="warning") */}
       <SettingsSectionCard
         tone="warning"
