@@ -3,6 +3,11 @@ import { GuideService } from './preventive/GuideService';
 import { PlanService } from './preventive/PlanService';
 import { TaskService } from './preventive/TaskService';
 import { ExecutionService } from './preventive/ExecutionService';
+import DataGateway from '../DataGateway';
+import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { loadCollection } from '../../infrastructure/persistence/migrateStorage';
+import { filterActiveMachines } from '../../utils/activeMachines';
+import type { IMachine } from '../../types/domain';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
 import type { IPreventiveActionCatalogItem, IPreventiveGuideCatalogItem } from '../../types/store';
 
@@ -165,9 +170,94 @@ export class PreventiveService {
     return TaskService.deleteTask(id);
   }
 
-  static bulkImportTasks(tasksArray: PreventiveRecord[], replace = false) {
-    const current = replace ? [] : this.getTasks();
-    return TaskService.injectRealData([...tasksArray, ...current]);
+  static bulkImportTasks(
+    tasksArray: PreventiveRecord[],
+    replace = false,
+    options: { actorRole?: string; actorId?: string; actorName?: string } = {}
+  ) {
+    if (!Array.isArray(tasksArray) || tasksArray.length === 0) {
+      throw new Error('Aucune tâche préventive valide fournie.');
+    }
+
+    const existingTasks = this.getTasks();
+    if (replace) {
+      const actorRole = String(options.actorRole || 'ADMIN').trim().toUpperCase();
+      if (actorRole !== 'ADMIN') {
+        throw new Error('RBAC_DENIED : Seul un administrateur peut remplacer le planning préventif.');
+      }
+      const existingExecutions = ExecutionService.getExecutions();
+      if (existingExecutions.length > 0) {
+        throw new Error(
+          `REFERENCED_BY_ACTIVE_RECORDS : Impossible d'écraser le planning (${existingExecutions.length} exécution(s) historique(s) existante(s)). Utilisez le mode Fusionner.`
+        );
+      }
+    }
+
+    const storedMachines = loadCollection<IMachine[]>(STORAGE_KEYS.MACHINES, {
+      allowDemoFallback: false,
+      demoSeed: [],
+    });
+    const activeMachines = filterActiveMachines(storedMachines);
+    const machineMap = new Map<string, { id: string; designation: string; id_zone: string }>();
+    activeMachines.forEach((m) => {
+      const code = String(m.id_machine_registered || '').trim().toUpperCase();
+      if (code) {
+        machineMap.set(code, {
+          id: m.id_machine_registered,
+          designation: String(m.designation || m.id_machine_registered),
+          id_zone: String(m.id_zone_default || ''),
+        });
+      }
+    });
+
+    const normalizedTasks: PreventiveRecord[] = [];
+    const errors: string[] = [];
+    tasksArray.forEach((rawTask, idx) => {
+      const rowNum = idx + 1;
+      const rawMachine = String(
+        rawTask?.id_machine ?? rawTask?.code_machine ?? rawTask?.machine ?? ''
+      )
+        .trim()
+        .toUpperCase();
+      if (!rawMachine || rawMachine === 'GLOBAL') {
+        errors.push(`Ligne ${rowNum} : code machine (id_machine) obligatoire et non GLOBAL.`);
+        return;
+      }
+      const matchedMachine = machineMap.get(rawMachine);
+      if (!matchedMachine) {
+        errors.push(
+          `Ligne ${rowNum} : machine "${rawMachine}" introuvable ou archivée dans ASSETS_MACHINES.`
+        );
+        return;
+      }
+      normalizedTasks.push({
+        ...rawTask,
+        id_machine: matchedMachine.id,
+        nom_machine: rawTask.nom_machine || matchedMachine.designation,
+        id_zone: matchedMachine.id_zone || rawTask.id_zone,
+      });
+    });
+
+    if (errors.length > 0) {
+      throw new Error(
+        `Import préventif rejeté (${errors.length} erreur(s) FK) : ${errors.slice(0, 3).join(' | ')}`
+      );
+    }
+
+    const current = replace ? [] : existingTasks;
+    const result = TaskService.injectRealData([...normalizedTasks, ...current]);
+    DataGateway.appendAuditEvent({
+      actionType: 'PM_TASKS_BULK_IMPORT',
+      entityType: 'PREVENTIVE_TASK',
+      entityId: 'BULK_IMPORT',
+      actorId: options.actorId || 'ADMIN',
+      actorName: options.actorName || 'Import Plan Préventif',
+      actorRole: options.actorRole || 'ADMIN',
+      before: { tasksCount: existingTasks.length, replace },
+      after: { tasksCount: result.length, importedCount: normalizedTasks.length },
+      meta: { source: 'TaskImportModal' },
+    });
+    return result;
   }
 
   static importFromExcel(file: File) {

@@ -17,7 +17,14 @@ import {
 } from '../domain/finance/entities/FinancialBudget';
 import type { GmaoStoreSetters } from '../types/store';
 import type { IAuditEvent, AuditSnapshot } from '../types/audit';
-import { validateAndCommitDemoBundle } from '../services/import/unifiedImportPipeline';
+import {
+  validateAndCommitAssetsMachinesBundle,
+  validateAndCommitDemoBundle,
+  validateAndCommitPmCatalogBundle,
+  validateAndCommitRefParcBundle,
+  validateAndCommitRefPdrBundle,
+  validateAndCommitRefPersonnelBundle,
+} from '../services/import/unifiedImportPipeline';
 import type {
   AssetsMachineRow,
   DemoBundleInput,
@@ -876,19 +883,39 @@ export const DataGateway = {
   // 8. EXPLICIT DEMO DATA LOADER & FACTORY CLEAR
   // ==========================================
   /**
-   * Explicitly loads canonical real-factory PDR stock catalog into store and storage.
+   * Explicitly loads canonical factory PDR stock catalog into store and storage
+   * through `UnifiedImportPipeline` (`validateAndCommitRefPdrBundle`), rejecting broken FK hierarchies.
    */
   initRealStock(setters: GmaoStoreSetters = {}) {
-    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
-    const typedStockTypes = seedStockTypes as unknown as IType[];
-    const typedStockItems = seedStockItems as unknown as IStockItem[];
-    this.savePdrGroups(typedPdrGroups);
-    this.saveStockTypes(typedStockTypes);
-    this.saveStock(typedStockItems);
-    if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
-    if (setters.setTypes) setters.setTypes(typedStockTypes);
-    if (setters.setRawStock) setters.setRawStock(typedStockItems);
-    return { stockCount: seedStockItems.length };
+    const demoBundle = this.getOfficialDemoBundle();
+    const pdrReport = validateAndCommitRefPdrBundle(demoBundle.refPdr, {
+      mode: 'MERGE',
+      origin: 'DEMO_BUNDLE',
+      dryRun: true,
+      existingPdrGroups: [],
+      existingStockTypes: [],
+      existingStock: [],
+      existingMouvements: [],
+    });
+
+    if (!pdrReport.success || pdrReport.rejected.length > 0) {
+      const details = pdrReport.rejected
+        .slice(0, 3)
+        .map((r) => `[${r.stage}] ${r.identifier || r.entity}: ${r.message}`)
+        .join(' | ');
+      throw new Error(`Échec de validation REF_PDR (initRealStock) : ${details}`);
+    }
+
+    const { nextGroups, nextTypes, nextStock, nextDesignations } = pdrReport.staging;
+    this.savePdrGroups(nextGroups);
+    this.saveStockTypes(nextTypes);
+    this.saveStock(nextStock);
+    this.saveDesignations(nextDesignations);
+    if (setters.setPdrGroups) setters.setPdrGroups(nextGroups);
+    if (setters.setTypes) setters.setTypes(nextTypes);
+    if (setters.setRawStock) setters.setRawStock(nextStock);
+    if (setters.setDesignations) setters.setDesignations(nextDesignations);
+    return { stockCount: nextStock.length, pipelineReport: pdrReport };
   },
 
   /**
@@ -1643,25 +1670,8 @@ export const DataGateway = {
       return this.loadDemoData(setters);
     }
 
-    const typedPdrGroups = seedPdrGroups as unknown as PdrGroup[];
-    const typedStockTypes = seedStockTypes as unknown as IType[];
-    const typedStockItems = seedStockItems as unknown as IStockItem[];
+    const demoBundle = this.getOfficialDemoBundle();
     const typedMovements = seedMouvements as unknown as IMouvement[];
-
-    const derivedDesignations: IPartDesignation[] = seedStockItems.map((s) => {
-      const rec = s as Record<string, unknown>;
-      return {
-        id: (rec.id as string | number | undefined) || s.ref,
-        ref: s.ref,
-        designation: s.designation,
-        id_group: (rec.id_group as string | null | undefined) || null,
-        id_type: (rec.id_type as string | undefined) || s.type,
-        type: s.type,
-        stockInitial: s.stockInitial,
-        seuil: s.seuil,
-        emplacement: s.emplacement,
-      };
-    });
 
     const formattedCompTemplates = seedCompTemplates.map((t, idx) => {
       const rec = t as Record<string, unknown>;
@@ -1673,38 +1683,112 @@ export const DataGateway = {
     });
 
     switch (section) {
-      case 'stock':
-        this.savePdrGroups(typedPdrGroups);
-        this.saveStockTypes(typedStockTypes);
-        this.saveStock(typedStockItems);
-        this.saveDesignations(derivedDesignations);
+      case 'stock': {
+        const pdrReport = validateAndCommitRefPdrBundle(demoBundle.refPdr, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingPdrGroups: [],
+          existingStockTypes: [],
+          existingStock: [],
+          existingMouvements: [],
+        });
+        if (!pdrReport.success || pdrReport.rejected.length > 0) {
+          throw new Error(
+            `Échec validation section stock (REF_PDR) : ${pdrReport.rejected[0]?.message || 'Erreur inconnue'}`
+          );
+        }
+        const { nextGroups, nextTypes, nextStock, nextDesignations } = pdrReport.staging;
+        this.savePdrGroups(nextGroups);
+        this.saveStockTypes(nextTypes);
+        this.saveStock(nextStock);
+        this.saveDesignations(nextDesignations);
         movementRepository.bulkReplace(
           (Array.isArray(storageService.getItem(STORAGE_KEYS.MOUVEMENTS))
             ? storageService.getItem(STORAGE_KEYS.MOUVEMENTS)
             : []) as IMouvement[],
-          buildInitialStockMap(seedStockItems)
+          buildInitialStockMap(nextStock)
         );
-        if (setters.setPdrGroups) setters.setPdrGroups(typedPdrGroups);
-        if (setters.setTypes) setters.setTypes(typedStockTypes);
-        if (setters.setRawStock) setters.setRawStock(typedStockItems);
-        if (setters.setDesignations) setters.setDesignations(derivedDesignations);
+        if (setters.setPdrGroups) setters.setPdrGroups(nextGroups);
+        if (setters.setTypes) setters.setTypes(nextTypes);
+        if (setters.setRawStock) setters.setRawStock(nextStock);
+        if (setters.setDesignations) setters.setDesignations(nextDesignations);
         break;
+      }
 
       case 'parc':
-      case 'machines':
-        this.saveFamilies(seedFamilies);
-        this.saveTemplates(seedTemplates);
-        this.saveGeneralSystemTypes(seedGeneralSystemTypes);
-        this.saveMachines(seedMachines);
+      case 'machines': {
+        const parcReport = validateAndCommitRefParcBundle(demoBundle.refParc, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingZones: [],
+          existingFamilies: [],
+          existingTemplates: [],
+          existingGeneralSystemTypes: [],
+          existingMachines: [],
+          existingTechnicians: [],
+        });
+        const personnelReport = validateAndCommitRefPersonnelBundle(demoBundle.refPersonnel, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingZones: parcReport.staging.nextZones,
+          existingTechnicians: [],
+          existingOperations: [],
+          existingUsers: [],
+          existingMachines: [],
+          existingPreventiveTasks: [],
+          existingCorrectiveInterventions: [],
+          existingMouvements: [],
+        });
+        const machinesReport = validateAndCommitAssetsMachinesBundle(demoBundle.assetsMachines, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingZones: parcReport.staging.nextZones,
+          existingFamilies: parcReport.staging.nextFamilies,
+          existingTemplates: parcReport.staging.nextTemplates,
+          existingGeneralSystemTypes: parcReport.staging.nextGeneralSystemTypes,
+          existingTechnicians: personnelReport.staging.nextTechnicians,
+          existingUsers: personnelReport.staging.nextUsers,
+          existingMachines: [],
+          existingPreventiveTasks: [],
+          existingCorrectiveInterventions: [],
+          existingMouvements: [],
+          existingWarehouseItems: [],
+        });
+        if (
+          !parcReport.success ||
+          !machinesReport.success ||
+          parcReport.rejected.length > 0 ||
+          machinesReport.rejected.length > 0
+        ) {
+          const firstErr = parcReport.rejected[0] || machinesReport.rejected[0];
+          throw new Error(`Échec validation section parc : ${firstErr?.message || 'Erreur inconnue'}`);
+        }
+        const { nextZones, nextFamilies, nextTemplates, nextGeneralSystemTypes } = parcReport.staging;
+        const { nextMachines } = machinesReport.staging;
+        const rawExistingZones = storageService.getItem(STORAGE_KEYS.ZONES);
+        const currentZones = Array.isArray(rawExistingZones) ? rawExistingZones : [];
+        if (currentZones.length === 0) {
+          this.saveZones(nextZones);
+          if (setters.setZones) setters.setZones(nextZones);
+        }
+        this.saveFamilies(nextFamilies);
+        this.saveTemplates(nextTemplates);
+        this.saveGeneralSystemTypes(nextGeneralSystemTypes);
+        this.saveMachines(nextMachines);
         this.saveBlueprints(seedBlueprints);
         this.saveMachineBom(seedMachineBomLedger);
-        if (setters.setFamilies) setters.setFamilies(seedFamilies);
-        if (setters.setTemplates) setters.setTemplates(seedTemplates);
-        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(seedGeneralSystemTypes);
-        if (setters.setMachines) setters.setMachines(seedMachines);
+        if (setters.setFamilies) setters.setFamilies(nextFamilies);
+        if (setters.setTemplates) setters.setTemplates(nextTemplates);
+        if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(nextGeneralSystemTypes);
+        if (setters.setMachines) setters.setMachines(nextMachines);
         if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
         if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
         break;
+      }
 
       case 'entrepot':
       case 'warehouse':
@@ -1727,25 +1811,64 @@ export const DataGateway = {
         break;
 
       case 'zones':
-      case 'users':
-        this.saveZones(seedZones);
-        this.savePersonnel(seedUsers, seedTechnicians, seedOperations);
+      case 'users': {
+        const parcReport = validateAndCommitRefParcBundle(
+          { bundleType: 'REF_PARC', zones: demoBundle.refParc.zones },
+          {
+            mode: 'MERGE',
+            origin: 'DEMO_BUNDLE',
+            dryRun: true,
+            existingZones: [],
+            existingFamilies: [],
+            existingTemplates: [],
+            existingGeneralSystemTypes: [],
+            existingMachines: [],
+            existingTechnicians: [],
+          }
+        );
+        const personnelReport = validateAndCommitRefPersonnelBundle(demoBundle.refPersonnel, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          existingZones: parcReport.staging.nextZones,
+          existingTechnicians: [],
+          existingOperations: [],
+          existingUsers: [],
+          existingMachines: [],
+          existingPreventiveTasks: [],
+          existingCorrectiveInterventions: [],
+          existingMouvements: [],
+        });
+        if (
+          !parcReport.success ||
+          !personnelReport.success ||
+          parcReport.rejected.length > 0 ||
+          personnelReport.rejected.length > 0
+        ) {
+          const firstErr = parcReport.rejected[0] || personnelReport.rejected[0];
+          throw new Error(`Échec validation section zones/équipes : ${firstErr?.message || 'Erreur inconnue'}`);
+        }
+        const { nextZones } = parcReport.staging;
+        const { nextUsers, nextTechnicians, nextOperations } = personnelReport.staging;
+        this.saveZones(nextZones);
+        this.savePersonnel(nextUsers, nextTechnicians, nextOperations);
         try {
           const authSvc = new AuthService();
-          authSvc.syncTechnicianAccountsFromPersonnel(seedTechnicians, {
+          authSvc.syncTechnicianAccountsFromPersonnel(nextTechnicians, {
             activateByDefault: true,
           });
-          authSvc.syncOperationAccountsFromPersonnel(seedOperations, {
+          authSvc.syncOperationAccountsFromPersonnel(nextOperations, {
             activateByDefault: true,
           });
         } catch {
           /* ignore */
         }
-        if (setters.setZones) setters.setZones(seedZones);
-        if (setters.setUsers) setters.setUsers(seedUsers);
-        if (setters.setTechnicians) setters.setTechnicians(seedTechnicians);
-        if (setters.setOperations) setters.setOperations(seedOperations);
+        if (setters.setZones) setters.setZones(nextZones);
+        if (setters.setUsers) setters.setUsers(nextUsers);
+        if (setters.setTechnicians) setters.setTechnicians(nextTechnicians);
+        if (setters.setOperations) setters.setOperations(nextOperations);
         break;
+      }
 
       case 'mouvements':
       case 'movements':
@@ -1759,18 +1882,42 @@ export const DataGateway = {
         if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
         break;
 
-      case 'preventive':
-        this.savePreventiveTasks(seedPreventiveTasks, { machines: seedMachines });
-        this.savePreventiveActions(seedPreventiveActions);
-        this.savePreventiveGuides(seedPreventiveGuides);
+      case 'preventive': {
+        const rawExistingStock = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
+        const existingStockArr = Array.isArray(rawExistingStock) ? rawExistingStock : [];
+        const pmReport = validateAndCommitPmCatalogBundle(demoBundle.pmCatalog, {
+          mode: 'MERGE',
+          origin: 'DEMO_BUNDLE',
+          dryRun: true,
+          strictPdrCheck: false,
+          existingPreventiveActions: [],
+          existingPreventiveGuides: [],
+          existingStock: existingStockArr,
+          existingPreventiveTasks: [],
+          existingPreventiveExecutions: [],
+        });
+        if (!pmReport.success || pmReport.rejected.length > 0) {
+          throw new Error(
+            `Échec validation section préventif (PM_CATALOG) : ${pmReport.rejected[0]?.message || 'Erreur inconnue'}`
+          );
+        }
+        const { nextActions, nextGuides } = pmReport.staging;
+        const rawExistingMachines = storageService.getItem(STORAGE_KEYS.MACHINES);
+        const machineCtx = Array.isArray(rawExistingMachines) ? rawExistingMachines : [];
+        this.savePreventiveTasks(seedPreventiveTasks, {
+          machines: machineCtx.length > 0 ? machineCtx : seedMachines,
+        });
+        this.savePreventiveActions(nextActions);
+        this.savePreventiveGuides(nextGuides);
         this.savePreventivePlans([]);
         this.savePreventiveExecutions([]);
         if (setters.setPreventiveTasks) setters.setPreventiveTasks(seedPreventiveTasks);
-        if (setters.setPreventiveActions) setters.setPreventiveActions(seedPreventiveActions);
-        if (setters.setPreventiveGuides) setters.setPreventiveGuides(seedPreventiveGuides);
+        if (setters.setPreventiveActions) setters.setPreventiveActions(nextActions);
+        if (setters.setPreventiveGuides) setters.setPreventiveGuides(nextGuides);
         if (setters.setPreventivePlans) setters.setPreventivePlans([]);
         if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
         break;
+      }
 
       case 'corrective':
         this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: seedMachines });

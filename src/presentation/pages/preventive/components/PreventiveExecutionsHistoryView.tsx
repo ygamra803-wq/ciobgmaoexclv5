@@ -405,10 +405,10 @@ export default function PreventiveExecutionsHistoryView({
             type="button"
             onClick={handleExportExcel}
             className="h-8 px-3 rounded-xl border border-emerald-300/90 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-            title="Exporter l'historique des exécutions préventives vers Excel (.xlsx)"
+            title="Exporter l'historique des exécutions préventives vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-            <span>{language === 'ar' ? 'تصدير Excel' : 'Exporter Excel (.xlsx)'}</span>
+            <span>{language === 'ar' ? 'تصدير Excel (Type B)' : 'Exporter Excel (.xlsx — Type B)'}</span>
           </button>
         </div>
 

@@ -1114,10 +1114,10 @@ export default function TabMainView({
               type="button"
               onClick={handleExportCSV}
               className="h-8 px-3 rounded-xl border border-emerald-300/90 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Exporter la matrice vers un fichier CSV / Excel"
+              title="Type B : Export externe de la matrice préventive (consultation uniquement, non réimportable)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span className="hidden md:inline">{t('common.filters.export_excel', 'Export Excel')}</span>
+              <span className="hidden md:inline">{t('common.filters.export_excel', 'Export Excel')} (Type B)</span>
             </button>
 
             {/* Print Planning */}

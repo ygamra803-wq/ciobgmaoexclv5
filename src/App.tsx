@@ -207,20 +207,8 @@ export default function App() {
     }
   }, [machines]);
 
-  // Load real stock if empty ONLY when not in explicit empty factory mode
-  useEffect(() => {
-    const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
-    const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
-    const isDemoActive = demoFlag === true || demoFlag === 'true';
-    if (
-      rawStock &&
-      rawStock.length === 0 &&
-      startMode !== 'empty' &&
-      isDemoActive
-    ) {
-      DataGateway.initRealStock({ setRawStock: gmaoState.setRawStock });
-    }
-  }, [rawStock, gmaoState.setRawStock]);
+  // Zero Silent Seed Reinjection (INGEST-P6): Mode C hydration occurs strictly via explicit user invocation
+  // (`DataGateway.loadDemoData` / `loadDemoSection`), never via silent useEffect on empty collections.
 
   useEffect(() => {
     backupDataRef.current = {

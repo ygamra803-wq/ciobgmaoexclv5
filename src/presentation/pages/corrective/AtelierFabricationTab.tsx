@@ -702,10 +702,10 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
               type="button"
               onClick={handleExportFilteredExcel}
               className="h-8 px-3 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Exporter les Bons d'Atelier filtrés vers Excel (.xlsx)"
+              title="Exporter les Bons d'Atelier filtrés vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">Export Excel</span>
+              <span className="hidden sm:inline">Export Excel (Type B)</span>
             </button>
 
             {hasActiveFilters && (

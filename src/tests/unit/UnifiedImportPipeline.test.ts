@@ -23,6 +23,9 @@ import {
   validateAndCommitRefPersonnelBundle,
 } from '../../services/import/unifiedImportPipeline';
 import { useGmaoStore } from '../../store/useGmaoStore';
+import { executeGuardedGlobalFileImport } from '../../hooks/useAppExcelOperations';
+import PreventiveService from '../../application/services/PreventiveService';
+import { ExecutionService } from '../../application/services/preventive/ExecutionService';
 
 function collectProductionFiles(dir: string): string[] {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -889,6 +892,103 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASS
         true
       );
       expect(useGmaoStore.getState().machines).toHaveLength(0);
+    });
+  });
+
+  describe('8. INGEST-P6 — Closed Legacy Import Backdoors & Guarded Gateways', () => {
+    it('blocks raw .xlsx Type B workbooks and arbitrary JSON overwrites in global file import while routing Type A JSON through UnifiedImportPipeline', () => {
+      const xlsxBlocked = executeGuardedGlobalFileImport('GMAO_Topology_Master.xlsx', {
+        kind: 'XLSX',
+        sheetNames: ['Stock_Actuel', 'Mouvements', 'Machines_Registered'],
+      });
+      expect(xlsxBlocked.accepted).toBe(false);
+      expect(xlsxBlocked.code).toBe('TYPE_B_EXCEL_BLOCKED');
+
+      const rawJsonBlocked = executeGuardedGlobalFileImport('legacy_backup.json', {
+        kind: 'JSON',
+        payload: {
+          Stock_Actuel: [{ ref: 'ORPHAN-1', stockInitial: 99 }],
+          Mouvements: [{ id: 'MVT-BAD', quantite: 10 }],
+        },
+      });
+      expect(rawJsonBlocked.accepted).toBe(false);
+      expect(rawJsonBlocked.code).toBe('UNRECOGNIZED_JSON_BLOCKED');
+      expect(useGmaoStore.getState().rawStock).toHaveLength(0);
+
+      // Valid Type A JSON bundle passes strictly through UnifiedImportPipeline
+      const typeAAccepted = executeGuardedGlobalFileImport(
+        'REF_PARC.template.json',
+        {
+          kind: 'JSON',
+          payload: getRefParcOfficialTemplate(),
+        },
+        { actorRole: 'ADMIN' }
+      );
+      expect(typeAAccepted.accepted).toBe(true);
+      expect(typeAAccepted.code).toBe('TYPE_A_PIPELINE_COMMITTED');
+      expect(useGmaoStore.getState().zones.length).toBeGreaterThan(0);
+    });
+
+    it('routes DataGateway.initRealStock and loadDemoSection (zones, parc, stock, preventive) through UnifiedImportPipeline validation', () => {
+      const stockInit = DataGateway.initRealStock(useGmaoStore.getState());
+      expect(stockInit.stockCount).toBe(28);
+      expect(stockInit.pipelineReport.success).toBe(true);
+      expect(useGmaoStore.getState().pdrGroups.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().types.length).toBeGreaterThan(0);
+
+      DataGateway.loadDemoSection('zones', useGmaoStore.getState());
+      const tech02 = useGmaoStore
+        .getState()
+        .technicians.find((t) => t.id_technician === 'TECH-02');
+      expect(tech02?.id_zone).toBe('POLISSAG');
+
+      DataGateway.loadDemoSection('parc', useGmaoStore.getState());
+      const pce01 = useGmaoStore
+        .getState()
+        .machines.find((m) => m.id_machine_registered === 'PCE-01');
+      expect(pce01?.id_zone_default).toBe('PCE');
+
+      DataGateway.loadDemoSection('preventive', useGmaoStore.getState());
+      expect(useGmaoStore.getState().preventiveActions.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().preventiveGuides.length).toBeGreaterThan(0);
+    });
+
+    it('guards PreventiveService.bulkImportTasks against orphan/GLOBAL machines and blocks replace when executions exist', () => {
+      runUnifiedImportPipeline(getRefParcOfficialTemplate(), { mode: 'MERGE' });
+      runUnifiedImportPipeline(getAssetsMachinesOfficialTemplate(), { mode: 'MERGE' });
+
+      expect(() =>
+        PreventiveService.bulkImportTasks([
+          { id_machine: 'UNKNOWN-999', composant: 'Pompe', action_code: 'C' },
+        ])
+      ).toThrow(/introuvable ou archivée/);
+
+      expect(() =>
+        PreventiveService.bulkImportTasks([
+          { id_machine: 'GLOBAL', composant: 'Pompe', action_code: 'C' },
+        ])
+      ).toThrow(/obligatoire et non GLOBAL/);
+
+      const activeMachineId = useGmaoStore.getState().machines[0].id_machine_registered;
+      const imported = PreventiveService.bulkImportTasks([
+        { id_machine: activeMachineId, composant: 'Moteur', action_code: 'C' },
+      ]);
+      expect(imported).toHaveLength(1);
+      expect(imported[0].id_machine).toBe(activeMachineId);
+
+      // Record an execution and verify replace=true is strictly blocked
+      ExecutionService.recordExecution(imported[0], {
+        date_realisation: '2026-11-15',
+        executorName: 'Admin',
+        actorRole: 'ADMIN',
+      });
+      expect(() =>
+        PreventiveService.bulkImportTasks(
+          [{ id_machine: activeMachineId, composant: 'Moteur', action_code: 'C' }],
+          true,
+          { actorRole: 'ADMIN' }
+        )
+      ).toThrow(/REFERENCED_BY_ACTIVE_RECORDS/);
     });
   });
 });

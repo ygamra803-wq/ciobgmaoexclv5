@@ -1061,10 +1061,10 @@ export default function MobileSidebarDrawer({
                     ? 'bg-slate-800/80 border-slate-700 text-emerald-400 hover:bg-slate-700'
                     : 'bg-white border-slate-200 text-emerald-700 hover:bg-emerald-50'
                 }`}
-                title={t('header.export_excel', 'Exporter les données au format Excel')}
+                title={t('header.export_excel', 'Export externe Type B (consultation Excel — non réimportable)')}
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>{t('common.filters.export_excel', 'Export Excel')}</span>
+                <span>{t('common.filters.export_excel', 'Export Excel (Type B)')}</span>
               </button>
             )}
             {fileInputRef && canImportData && (
@@ -1078,10 +1078,10 @@ export default function MobileSidebarDrawer({
                     ? 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700'
                     : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
                 }`}
-                title={t('header.import_excel', 'Importer un fichier Excel ou JSON')}
+                title={t('header.import_excel', 'Importer un paquet JSON officiel (Type A)')}
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>{t('header.import_excel', 'Import Excel')}</span>
+                <span>{t('header.import_excel', 'Import (Type A)')}</span>
               </button>
             )}
           </div>

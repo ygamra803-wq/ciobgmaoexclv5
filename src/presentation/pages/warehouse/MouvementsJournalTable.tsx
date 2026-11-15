@@ -523,9 +523,10 @@ export default function MouvementsJournalTable({
               type="button"
               onClick={handleExportFilteredMovements}
               className="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Type B : Export externe du journal des mouvements (consultation uniquement, non réimportable)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
-              <span>Exporter Excel</span>
+              <span>Exporter Excel (Type B)</span>
             </button>
 
             {(tableFilterType !== 'ALL' ||

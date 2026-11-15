@@ -298,13 +298,13 @@ export default function IndustrialFilterCard({
         <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
           {headerActions}
 
-          {/* Optional Excel Export */}
+          {/* Optional Excel Export (Type B — External Consultation Only) */}
           {onExportExcel && (
             <button
               type="button"
               onClick={onExportExcel}
               className={`h-8 px-3 rounded-xl border ${theme.btnBorder} ${theme.btnBg} ${theme.btnText} text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95`}
-              title={effectiveExportLabel}
+              title={`${effectiveExportLabel} — Type B : Export externe (consultation uniquement, non réimportable)`}
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
               <span className="hidden sm:inline">{effectiveExportLabel}</span>

@@ -551,10 +551,10 @@ export default function MonthlyDayMatrixView({
               type="button"
               onClick={handleExportExcel}
               className="h-8 px-3 rounded-xl border border-emerald-300/90 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-              title="Exporter le planning mensuel au format Excel"
+              title="Exporter le planning mensuel au format Excel — Type B : Export externe (non réimportable)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Export Excel</span>
+              <span>Export Excel (Type B)</span>
             </button>
 
             {/* View Switcher */}

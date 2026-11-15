@@ -1458,7 +1458,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                   onClick={handleExportExcel}
                   disabled={filteredEquipments.length === 0}
                   className="h-8 px-3 rounded-xl border border-emerald-200/80 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-40 text-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
-                  title="Exporter la liste filtrée vers Excel (.xlsx)"
+                  title="Exporter la liste filtrée vers Excel (.xlsx) — Type B : Export externe (non réimportable ; pour Round-Trip utilisez Paramètres ➔ ASSETS_MACHINES)"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Export Excel</span>

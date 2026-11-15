@@ -903,8 +903,8 @@ export default function Header({
               <button
                 onClick={onDirectLink}
                 className="w-8 h-8 rounded-full bg-accent-subtle hover:bg-accent-100 border border-accent-subtle flex items-center justify-center text-accent-main transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:outline-hidden"
-                title={t('header.link_excel', 'Lier un fichier Excel (.xlsx)')}
-                aria-label="Lier directement un fichier Excel .xlsx"
+                title={t('header.link_excel', 'Lier un classeur miroir sortant (.xlsx — Type B)')}
+                aria-label="Lier un classeur miroir sortant Excel .xlsx (Type B)"
               >
                 <Link size={15} className="text-accent-main shrink-0" aria-hidden="true" />
               </button>
@@ -972,8 +972,8 @@ export default function Header({
               <button
                 onClick={() => setTopologyMenuOpen((prev) => !prev)}
                 className="h-8 flex items-center gap-1 px-2 sm:px-2.5 rounded-full bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-[0_2px_8px_rgba(0,0,0,0.18)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden group"
-                title={t('header.export_excel', 'Exporter Excel & 3-Workbook Topology')}
-                aria-label="Menu d'exportation Excel et topologie industrielle"
+                title={t('header.export_excel', 'Export externe Type B (Consultation Excel — non réimportable)')}
+                aria-label="Menu d'exportation Excel externe (Type B)"
                 aria-expanded={topologyMenuOpen}
               >
                 <Download size={14} className="text-emerald-400 group-hover:scale-110 transition-transform shrink-0" aria-hidden="true" />
@@ -984,11 +984,11 @@ export default function Header({
               {topologyMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-200/90 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3.5 py-1.5 border-b border-slate-100 mb-1">
-                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 font-mono">
-                      3-Workbook Topology Hub
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700 font-mono">
+                      Type B — Export Externe (Non Réimportable)
                     </div>
                     <div className="text-xs font-bold text-slate-800">
-                      {t('header.topology_hub_subtitle', 'Exportation des données industrielles')}
+                      {t('header.topology_hub_subtitle', 'Rapports & consultation externe')}
                     </div>
                   </div>
 
@@ -1004,10 +1004,10 @@ export default function Header({
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs font-bold text-slate-900 group-hover:text-emerald-800">
-                        {t('header.workbook_full_title', 'Modèle Complet GMAO (.xlsx)')}
+                        {t('header.workbook_full_title', 'Classeur Complet GMAO (.xlsx — Type B)')}
                       </div>
                       <div className="text-[10px] text-slate-500 font-medium">
-                        {t('header.workbook_full_desc', 'Classeur maître avec formules vivantes et KPIs')}
+                        {t('header.workbook_full_desc', 'Consultation & KPIs externes (ne pas réimporter)')}
                       </div>
                     </div>
                   </button>
@@ -1076,13 +1076,13 @@ export default function Header({
             </div>
           )}
 
-          {/* Import JSON/Excel Button - Only in Floating Mode & RBAC Guarded (Fixed sidebar already has Import button) */}
+          {/* Import Paquet Type A Button - Only in Floating Mode & RBAC Guarded */}
           {!isStandardFixed && canImportData && (
             <button
               onClick={() => fileInputRef.current?.click()}
               className="hidden sm:flex w-8 h-8 rounded-full bg-white border border-zinc-200 items-center justify-center text-zinc-600 hover:text-black hover:border-zinc-300 transition shadow-[0_2px_6px_rgba(0,0,0,0.04)] hover:shadow-md cursor-pointer shrink-0 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-hidden"
-              title={t('header.import_excel', 'Importer JSON / Excel')}
-              aria-label="Importer un fichier de données JSON ou Excel"
+              title={t('header.import_excel', 'Importer un paquet JSON officiel (Type A — UnifiedImportPipeline)')}
+              aria-label="Importer un paquet JSON officiel Type A"
             >
               <Upload size={15} aria-hidden="true" />
             </button>

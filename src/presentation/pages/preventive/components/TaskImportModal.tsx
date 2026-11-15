@@ -50,7 +50,7 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
       }
 
       const updated = PreventiveService.bulkImportTasks(parsed, mode === 'replace');
-      setStatusMsg(`Succès ! ${parsed.length} tâches importées avec succès.`);
+      setStatusMsg(`Succès ! ${parsed.length} tâche(s) vérifiée(s) et importée(s) avec succès.`);
       setTimeout(() => {
         onImportSuccess(updated);
         onClose();
@@ -71,10 +71,10 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-800">
-                استيراد مهام الصيانة الوقائية (Import Tâches)
+                استيراد مهام الصيانة الوقائية (Import Tâches Machine — FK vérifiée)
               </h3>
               <p className="text-xs text-slate-500">
-                Collez un tableau JSON ou sélectionnez un fichier .json / .js
+                Chaque tâche doit référencer une machine active enregistrée (ASSETS_MACHINES). Pour le catalogue Actions/Guides (Niveau 2), utilisez Paramètres ➔ PM_CATALOG (Type A).
               </p>
             </div>
           </div>
@@ -88,6 +88,10 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
 
         {/* Body */}
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
+          <div className="px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+            <b>Contrôle d&apos;intégrité actif :</b> Toute ligne sans <code className="font-mono">id_machine</code> actif dans le parc enregistré est rejetée ; l&apos;écrasement global est bloqué si des exécutions historiques existent.
+          </div>
+
           {/* File Upload zone */}
           <div className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl p-4 text-center transition cursor-pointer bg-slate-50/50 hover:bg-indigo-50/30 relative">
             <input

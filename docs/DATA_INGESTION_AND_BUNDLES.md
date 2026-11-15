@@ -1,7 +1,7 @@
-# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0` / `CLOSE-INGEST-P1.1` / `INGEST-P2` / `INGEST-P3` / `INGEST-P4`)
+# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0` .. `INGEST-P6`)
 
 > **Status:** Authoritative Engineering Contract (v5.0.2)
-> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Export Taxonomy (`Type A Round-Trip` vs `Type B External`), Official Bundle Templates, Closed Seed Backdoors, and `UnifiedImportPipeline` (`REF_PARC`, `REF_PERSONNEL`, `ASSETS_MACHINES`, `REF_PDR` & `PM_CATALOG`).
+> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Export Taxonomy (`Type A Round-Trip` vs `Type B External`), Official Bundle Templates, Closed Import/Seed Backdoors (`INGEST-P6`), and `UnifiedImportPipeline` (`REF_PARC`, `REF_PERSONNEL`, `ASSETS_MACHINES`, `REF_PDR`, `PM_CATALOG` & `DEMO_BUNDLE`).
 
 ---
 
@@ -126,9 +126,13 @@
 
 ---
 
-## 6. Closed Seed Backdoors (Single Seed Gateway)
+## 6. Closed Seed & Legacy Import Backdoors (`INGEST-P6`)
 
-`src/application/DataGateway.ts` is the **sole** production module permitted to import `src/data/*.json` (enforced by automated unit test).
+1. **Single Seed Gateway:** `src/application/DataGateway.ts` is the **sole** production module permitted to import `src/data/*.json` (enforced by automated unit test).
+2. **Zero Silent Bootstrap Injection:** `App.tsx` never auto-injects `initRealStock` or any demo catalog on empty collections. `DataGateway.initRealStock` and `DataGateway.loadDemoSection` (`stock`, `zones`, `parc`, `preventive`) validate and normalize exclusively through `UnifiedImportPipeline`.
+3. **Guarded Global File Import (`useAppExcelOperations`):** `executeGuardedGlobalFileImport` / `handleImportFile` accepts **only** recognized Type A JSON bundles (`runUnifiedImportPipeline` `MERGE`) and blocks raw `.xlsx` Type B workbooks (`TYPE_B_EXCEL_BLOCKED`) or non-Type-A JSON overwrites (`UNRECOGNIZED_JSON_BLOCKED`). `handleDirectFileLink` operates strictly in **outbound Type B mirror mode** (never overwrites `rawStock`, `machines`, or `mouvements`).
+4. **Task Import Guard (`PreventiveService.bulkImportTasks`):** Machine-level task imports via `TaskImportModal` require valid active registered machines (`ASSETS_MACHINES`), block `replace = true` when historical `PreventiveExecution` records exist (`REFERENCED_BY_ACTIVE_RECORDS`), and append an audit event (`PM_TASKS_BULK_IMPORT`).
+5. **Explicit Type B Screen Labeling:** Header 3-Workbook exports, `IndustrialFilterCard`, `MobileSidebarDrawer`, and operational table exports explicitly state `Type B` (external consultation, non-reimportable).
 
 ---
 

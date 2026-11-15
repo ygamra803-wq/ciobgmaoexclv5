@@ -1,10 +1,10 @@
 import { useState, useCallback, type ChangeEvent, type RefObject } from 'react';
 import * as XLSX from 'xlsx';
-import { validateImportedData } from '../utils/validation';
-import { sanitizeObject } from '../utils/sanitize';
 import { storageService } from '../utils/storageService';
 import { Logger } from '../core/logger/LoggerService';
 import { excelEngineService } from '../services/excelEngineService';
+import { runUnifiedImportPipeline } from '../services/import/unifiedImportPipeline';
+import type { ImportReport, PipelineBundleType } from '../services/import/types/unifiedImportTypes';
 import type {
   IBlueprint,
   ICompFamily,
@@ -93,32 +93,95 @@ export interface UseAppExcelOperationsParams {
   fileInputRef: RefObject<HTMLInputElement | null>;
 }
 
-interface ImportedExcelPayload {
-  Stock_Actuel?: IStockItem[];
-  Mouvements?: IMouvement[];
-  Mouvement?: IMouvement[];
-  Machines_Registered?: IMachine[];
-  Machines?: IMachine[];
-  Warehouse_Items?: IWarehouseItem[];
-  Families?: IMachineFamily[];
-  Templates?: IMachineTemplate[];
-  Blueprints?: IBlueprint[];
-  Zones?: IZone[];
-  Technicians?: ITechnician[];
-  Operations?: IOperation[];
-  Comp_Groups?: ICompGroup[];
-  Comp_Families?: ICompFamily[];
-  Comp_Templates?: ICompTemplate[];
-  Part_Types?: IPartType[];
-  Part_Designations?: IPartDesignation[];
-  Machine_BOM_Ledger?: MachineElement[];
-  Elements_Machines?: MachineElement[];
-  BOM?: MachineElement[];
-  Sortie_Externe?: SortieExterneItem[];
-  Preventive_S1_S52?: PreventiveTaskItem[];
-  Bons_Travail?: CorrectiveInterventionItem[];
-  Demandes_Intervention?: CorrectiveInterventionItem[];
-  [key: string]: unknown;
+const SUPPORTED_TYPE_A_BUNDLES = new Set<PipelineBundleType>([
+  'REF_PARC',
+  'REF_PERSONNEL',
+  'ASSETS_MACHINES',
+  'REF_PDR',
+  'PM_CATALOG',
+  'DEMO_BUNDLE',
+]);
+
+export interface GuardedGlobalImportResult {
+  accepted: boolean;
+  code:
+    | 'TYPE_A_PIPELINE_COMMITTED'
+    | 'TYPE_A_PIPELINE_REJECTED'
+    | 'TYPE_B_EXCEL_BLOCKED'
+    | 'UNRECOGNIZED_JSON_BLOCKED';
+  message: string;
+  report?: ImportReport<unknown>;
+}
+
+/**
+ * Guarded global file import router (`INGEST-P6`):
+ * - Accepts ONLY recognized Type A JSON bundles and routes them strictly through `runUnifiedImportPipeline`.
+ * - Rejects raw `.xlsx` operational workbooks and non-Type-A JSON overwrites (`Type B` external exports
+ *   never mutate live `rawStock`, `mouvements`, `machines`, `preventiveTasks`, or `correctiveInterventions`).
+ */
+export function executeGuardedGlobalFileImport(
+  fileName: string,
+  input: { kind: 'JSON'; payload: unknown } | { kind: 'XLSX'; sheetNames?: string[] },
+  options: { actorRole?: string; actorId?: string; actorName?: string } = {}
+): GuardedGlobalImportResult {
+  if (input.kind === 'XLSX') {
+    const sheetsHint =
+      Array.isArray(input.sheetNames) && input.sheetNames.length > 0
+        ? ` (feuilles détectées : ${input.sheetNames.slice(0, 4).join(', ')})`
+        : '';
+    return {
+      accepted: false,
+      code: 'TYPE_B_EXCEL_BLOCKED',
+      message: `Import direct de "${fileName}" bloqué${sheetsHint} : les classeurs Excel opérationnels (Type B) ne peuvent plus écraser les tables en direct. Utilisez Paramètres ➔ Ingestion Structurée (Type A).`,
+    };
+  }
+
+  const payloadObj =
+    input.payload && typeof input.payload === 'object' && !Array.isArray(input.payload)
+      ? (input.payload as Record<string, unknown>)
+      : null;
+  const bundleTypeRaw = payloadObj
+    ? String(payloadObj.bundleType || '').trim().toUpperCase()
+    : '';
+
+  if (!SUPPORTED_TYPE_A_BUNDLES.has(bundleTypeRaw as PipelineBundleType)) {
+    return {
+      accepted: false,
+      code: 'UNRECOGNIZED_JSON_BLOCKED',
+      message: `Import direct de "${fileName}" bloqué : seul un paquet officiel Type A (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES, REF_PDR, PM_CATALOG) est autorisé. Pour restaurer un Snapshot, utilisez le Centre de Sauvegarde.`,
+    };
+  }
+
+  const report = runUnifiedImportPipeline(
+    payloadObj as Parameters<typeof runUnifiedImportPipeline>[0],
+    {
+      mode: 'MERGE',
+      origin: 'JSON_BUNDLE',
+      dryRun: false,
+      actorRole: options.actorRole || 'ADMIN',
+      actorId: options.actorId || 'ADMIN',
+      actorName: options.actorName || `Import Global (${fileName})`,
+    }
+  );
+
+  if (report.success && report.committed) {
+    return {
+      accepted: true,
+      code: 'TYPE_A_PIPELINE_COMMITTED',
+      message: `Paquet Type A (${report.bundleType}) validé et engagé via UnifiedImportPipeline.`,
+      report,
+    };
+  }
+
+  const firstReject = report.rejected[0];
+  return {
+    accepted: false,
+    code: 'TYPE_A_PIPELINE_REJECTED',
+    message: `Paquet ${report.bundleType} rejeté (${report.rejected.length} erreur(s)) : ${
+      firstReject ? `[${firstReject.code}] ${firstReject.message}` : 'Validation échouée'
+    }`,
+    report,
+  };
 }
 
 function isFileAccessBlockedError(err: unknown): { aborted: boolean; crossOrigin: boolean } {
@@ -143,41 +206,22 @@ export function useAppExcelOperations({
 }: UseAppExcelOperationsParams) {
   const {
     rawStock,
-    setRawStock,
     mouvements,
-    setMouvements,
     machines,
-    setMachines,
     warehouseItems,
-    setWarehouseItems,
     families,
-    setFamilies,
     templates,
-    setTemplates,
     blueprints,
-    setBlueprints,
     zones,
-    setZones,
     technicians,
-    setTechnicians,
     operations,
-    setOperations,
     types,
     compGroups,
-    setCompGroups,
     compFamilies,
-    setCompFamilies,
     compTemplates,
-    setCompTemplates,
     partTypes,
-    setPartTypes,
     partDesignations,
-    setPartDesignations,
     machineElementsLedger,
-    setMachineElementsLedger,
-    setSortiesExterne,
-    setPreventiveTasks,
-    setCorrectiveInterventions,
   } = state;
 
   const [linkedFileHandle, setLinkedFileHandle] = useState<FileSystemFileHandleLike | null>(null);
@@ -494,21 +538,21 @@ export function useAppExcelOperations({
     state.preventiveTasks,
   ]);
 
-  // EXCEL EXPORT HANDLER WITH LIVE FORMULAS & FALLBACK
+  // EXCEL EXPORT HANDLER WITH LIVE FORMULAS & FALLBACK (Type B External Consultation)
   const handleExportExcel = useCallback(async () => {
     try {
-      showToast('Génération du classeur Excel avec formules vivantes...', 'info');
+      showToast('Génération du classeur Excel (Type B — Consultation externe)...', 'info');
       await excelEngineService.downloadGmaoExcel(getFullDataset(), 'GMAO_Master_Live');
-      showToast('Export Excel interactif (Formules & Styles) téléchargé avec succès !', 'success');
+      showToast('Export Excel externe (Type B — non réimportable) téléchargé avec succès !', 'success');
     } catch (err) {
       Logger.warn('[ExcelOperations] ExcelJS export fallback to XLSX:', err);
       const wb = buildWorkbook();
       XLSX.writeFile(wb, `GMAO_Light_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      showToast('Export Excel standard généré et téléchargé.', 'success');
+      showToast('Export Excel externe (Type B — non réimportable) généré et téléchargé.', 'success');
     }
   }, [buildWorkbook, getFullDataset, showToast]);
 
-  // FILE IMPORT HANDLER WITH AUTOMATIC DATED BACKUP
+  // GUARDED FILE IMPORT HANDLER (INGEST-P6): Type A JSON bundles -> UnifiedImportPipeline ; Type B Excel/raw overwrite blocked
   const handleImportFile = useCallback(
     async (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -519,154 +563,72 @@ export function useAppExcelOperations({
         return;
       }
 
-      const validExtensions = ['.json', '.xlsx'];
+      const validExtensions = ['.json', '.xlsx', '.xls'];
       const validMimeTypes = [
         'application/json',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
       ];
-      const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      const dotIdx = file.name.lastIndexOf('.');
+      const fileExt = dotIdx >= 0 ? file.name.substring(dotIdx).toLowerCase() : '';
 
       if (!validExtensions.includes(fileExt) || (file.type && !validMimeTypes.includes(file.type))) {
-        showToast('Format de fichier non supporté. Seuls JSON et XLSX.', 'error');
+        showToast('Format de fichier non supporté. Seuls JSON (Type A) et XLSX.', 'error');
         return;
       }
 
-      const backupDate = createAutomaticBackup('Importation : ' + file.name);
-      showToast('Lecture et importation du fichier en cours...', 'info');
       const reader = new FileReader();
-
       reader.onerror = () => {
         showToast('Erreur de lecture du fichier sélectionné.', 'error');
       };
 
       reader.onload = async (evt: ProgressEvent<FileReader>) => {
-        setOperationProgress({ active: true, percent: 30, status: 'Traitement du fichier...' });
+        setOperationProgress({ active: true, percent: 40, status: 'Vérification du contrat Type A/B...' });
         try {
           const resultPayload = evt.target?.result;
-          let importedData: ImportedExcelPayload = {};
-          if (file.name.endsWith('.json')) {
-            importedData = JSON.parse(typeof resultPayload === 'string' ? resultPayload : '{}') as ImportedExcelPayload;
-          } else {
-            try {
-              importedData = (await excelEngineService.parseWorkbookFile(file)) as ImportedExcelPayload;
-            } catch (engineErr) {
-              Logger.warn('[ExcelOperations] ExcelJS parse error, falling back to XLSX:', engineErr);
-              const buffer = resultPayload instanceof ArrayBuffer ? resultPayload : new ArrayBuffer(0);
-              const data = new Uint8Array(buffer);
-              const workbook = XLSX.read(data, { type: 'array' });
 
-              if (workbook.SheetNames.includes('Stock_Actuel')) {
-                importedData.Stock_Actuel = XLSX.utils.sheet_to_json(workbook.Sheets['Stock_Actuel']);
-              }
-              if (workbook.SheetNames.includes('Mouvements')) {
-                importedData.Mouvements = XLSX.utils.sheet_to_json(workbook.Sheets['Mouvements']);
-              }
-              if (workbook.SheetNames.includes('Machines_Registered')) {
-                importedData.Machines_Registered = XLSX.utils.sheet_to_json(
-                  workbook.Sheets['Machines_Registered']
-                );
-              }
-              if (workbook.SheetNames.includes('Warehouse_Items')) {
-                importedData.Warehouse_Items = XLSX.utils.sheet_to_json(
-                  workbook.Sheets['Warehouse_Items']
-                );
-              } else if (workbook.SheetNames.includes('Entrepot')) {
-                importedData.Warehouse_Items = XLSX.utils.sheet_to_json(workbook.Sheets['Entrepot']);
-              }
-              if (workbook.SheetNames.includes('Comp_Groups')) {
-                importedData.Comp_Groups = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Groups']);
-              }
-              if (workbook.SheetNames.includes('Comp_Families')) {
-                importedData.Comp_Families = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Families']);
-              }
-              if (workbook.SheetNames.includes('Comp_Templates')) {
-                importedData.Comp_Templates = XLSX.utils.sheet_to_json(workbook.Sheets['Comp_Templates']);
-              }
-              if (workbook.SheetNames.includes('Part_Types')) {
-                importedData.Part_Types = XLSX.utils.sheet_to_json(workbook.Sheets['Part_Types']);
-              }
-              if (workbook.SheetNames.includes('Part_Designations')) {
-                importedData.Part_Designations = XLSX.utils.sheet_to_json(workbook.Sheets['Part_Designations']);
-              }
+          if (fileExt === '.json') {
+            const parsedJson = JSON.parse(typeof resultPayload === 'string' ? resultPayload : '{}');
+            const backupDate = createAutomaticBackup('Import Type A : ' + file.name);
+            const res = executeGuardedGlobalFileImport(file.name, {
+              kind: 'JSON',
+              payload: parsedJson,
+            });
+            if (res.accepted) {
+              showToast(`${res.message} (Backup : ${backupDate})`, 'success');
+              Logger.info('[ExcelOperations] Guarded Type A JSON import committed', {
+                file: file.name,
+                bundleType: res.report?.bundleType,
+              });
+            } else {
+              showToast(res.message, 'error');
+              Logger.warn('[ExcelOperations] Guarded JSON import rejected', {
+                file: file.name,
+                code: res.code,
+              });
             }
-          }
-
-          const rawMouvements = importedData.Mouvements || importedData.Mouvement || [];
-
-          const validation = validateImportedData({
-            ...importedData,
-            Mouvement: rawMouvements,
-          });
-
-          if (!validation.valid) {
-            const errorMsgs = [];
-            if (validation.errors.stock.length > 0)
-              errorMsgs.push('Erreurs Stock: ' + validation.errors.stock.length);
-            if (validation.errors.movements.length > 0)
-              errorMsgs.push('Erreurs Mouvements: ' + validation.errors.movements.length);
-            if (validation.errors.general.length > 0) errorMsgs.push(...validation.errors.general);
-
-            showToast('Import échoué: données invalides. ' + errorMsgs.join(', '), 'error');
-            Logger.error('[ExcelOperations] Validation failed on import', validation.errors);
             return;
           }
 
-          if (importedData.Stock_Actuel && importedData.Stock_Actuel.length > 0)
-            setRawStock(sanitizeObject(importedData.Stock_Actuel));
-          if (rawMouvements && rawMouvements.length > 0)
-            setMouvements(sanitizeObject(rawMouvements));
-          if (importedData.Machines_Registered && importedData.Machines_Registered.length > 0)
-            setMachines(sanitizeObject(importedData.Machines_Registered));
-          if (importedData.Warehouse_Items && importedData.Warehouse_Items.length > 0)
-            setWarehouseItems(sanitizeObject(importedData.Warehouse_Items));
-          if (importedData.Families && importedData.Families.length > 0)
-            setFamilies(sanitizeObject(importedData.Families));
-          if (importedData.Templates && importedData.Templates.length > 0)
-            setTemplates(sanitizeObject(importedData.Templates));
-          if (importedData.Blueprints && importedData.Blueprints.length > 0)
-            setBlueprints(sanitizeObject(importedData.Blueprints));
-          if (importedData.Zones && importedData.Zones.length > 0)
-            setZones(sanitizeObject(importedData.Zones));
-          if (importedData.Technicians && importedData.Technicians.length > 0)
-            setTechnicians(sanitizeObject(importedData.Technicians));
-          if (importedData.Operations && importedData.Operations.length > 0)
-            setOperations(sanitizeObject(importedData.Operations));
-          if (importedData.Comp_Groups && importedData.Comp_Groups.length > 0 && typeof setCompGroups === 'function')
-            setCompGroups(sanitizeObject(importedData.Comp_Groups));
-          if (importedData.Comp_Families && importedData.Comp_Families.length > 0)
-            setCompFamilies(sanitizeObject(importedData.Comp_Families));
-          if (importedData.Comp_Templates && importedData.Comp_Templates.length > 0)
-            setCompTemplates(sanitizeObject(importedData.Comp_Templates));
-          if (importedData.Part_Types && importedData.Part_Types.length > 0)
-            setPartTypes(sanitizeObject(importedData.Part_Types));
-          if (importedData.Part_Designations && importedData.Part_Designations.length > 0)
-            setPartDesignations(sanitizeObject(importedData.Part_Designations));
-
-          // Nomenclature & Pièces montées (Machine BOM Ledger)
-          const bomData = importedData.Machine_BOM_Ledger || importedData.Elements_Machines || importedData.BOM;
-          if (bomData && Array.isArray(bomData) && bomData.length > 0 && typeof setMachineElementsLedger === 'function') {
-            setMachineElementsLedger(sanitizeObject(bomData));
+          // Excel workbooks (.xlsx/.xls) are Type B unless routed via official Type A bridge (P7)
+          let sheetNames: string[] = [];
+          try {
+            const buffer = resultPayload instanceof ArrayBuffer ? resultPayload : new ArrayBuffer(0);
+            const workbook = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+            sheetNames = workbook.SheetNames || [];
+          } catch {
+            sheetNames = [];
           }
 
-          // Entités opérationnelles avancées (Sorties Ext., Préventif, Correctif)
-          if (importedData.Sortie_Externe && importedData.Sortie_Externe.length > 0 && typeof setSortiesExterne === 'function') {
-            setSortiesExterne(sanitizeObject(importedData.Sortie_Externe));
-          }
-          if (importedData.Preventive_S1_S52 && importedData.Preventive_S1_S52.length > 0 && typeof setPreventiveTasks === 'function') {
-            setPreventiveTasks(sanitizeObject(importedData.Preventive_S1_S52));
-          }
-          if ((importedData.Bons_Travail && importedData.Bons_Travail.length > 0 || importedData.Demandes_Intervention && importedData.Demandes_Intervention.length > 0) && typeof setCorrectiveInterventions === 'function') {
-            const mergedCorrectif = [
-              ...(importedData.Demandes_Intervention || []),
-              ...(importedData.Bons_Travail || []),
-            ];
-            if (mergedCorrectif.length > 0) {
-              setCorrectiveInterventions(sanitizeObject(mergedCorrectif));
-            }
-          }
-
-          showToast('Import réussi مع استخراج ذكي! (Backup بتاريخ ' + backupDate + ')', 'success');
-          Logger.info('[ExcelOperations] File imported successfully with smart parser', { file: file.name });
+          const blockedRes = executeGuardedGlobalFileImport(file.name, {
+            kind: 'XLSX',
+            sheetNames,
+          });
+          showToast(blockedRes.message, 'error');
+          Logger.warn('[ExcelOperations] Legacy raw Excel overwrite blocked (INGEST-P6)', {
+            file: file.name,
+            sheetNames,
+          });
         } catch (err: unknown) {
           const { aborted, crossOrigin } = isFileAccessBlockedError(err);
           if (aborted) return;
@@ -675,48 +637,29 @@ export function useAppExcelOperations({
             fileInputRef.current?.click();
             return;
           }
-          showToast('Erreur lors de la lecture du fichier.', 'error');
-          Logger.error('[ExcelOperations] Import error:', err);
+          showToast('Erreur lors de la lecture ou de la validation JSON du fichier.', 'error');
+          Logger.error('[ExcelOperations] Guarded import error:', err);
         } finally {
           setOperationProgress({ active: false, percent: 100, status: '' });
         }
       };
 
-      if (file.name.endsWith('.json')) {
+      if (fileExt === '.json') {
         reader.readAsText(file);
       } else {
         reader.readAsArrayBuffer(file);
       }
     },
-    [
-      createAutomaticBackup,
-      showToast,
-      setRawStock,
-      setMouvements,
-      setMachines,
-      setWarehouseItems,
-      setFamilies,
-      setTemplates,
-      setBlueprints,
-      setZones,
-      setTechnicians,
-      setOperations,
-      setCompGroups,
-      setCompFamilies,
-      setCompTemplates,
-      setPartTypes,
-      setPartDesignations,
-    ]
+    [createAutomaticBackup, fileInputRef, showToast]
   );
 
-  // DIRECT FILE SYSTEM ACCESS API LINK
+  // DIRECT FILE SYSTEM ACCESS API LINK (Outbound Mirror Only — INGEST-P6: no raw overwrite of live tables)
   const handleDirectFileLink = useCallback(async () => {
     if (!('showOpenFilePicker' in window)) {
       showToast(
-        "Liaison directe disponible sur Chrome/Edge. Basculement vers l'import classique.",
+        "Liaison miroir directe disponible sur Chrome/Edge. Pour importer des données, utilisez Paramètres ➔ Ingestion Structurée (Type A).",
         'info'
       );
-      fileInputRef.current?.click();
       return;
     }
 
@@ -728,13 +671,12 @@ export function useAppExcelOperations({
         }) => Promise<FileSystemFileHandleLike[]>;
       };
       if (!winWithPicker.showOpenFilePicker) {
-        fileInputRef.current?.click();
         return;
       }
       const [handle] = await winWithPicker.showOpenFilePicker({
         types: [
           {
-            description: 'Fichiers Excel GMAO (.xlsx)',
+            description: 'Classeur Miroir Sortant Excel (.xlsx — Type B)',
             accept: {
               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': [
                 '.xlsx',
@@ -747,58 +689,23 @@ export function useAppExcelOperations({
       });
 
       const file = await handle.getFile();
-      const backupDate = createAutomaticBackup(`Avant Liaison Directe : ${file.name}`);
-
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: true });
-
-      const importedData: ImportedExcelPayload = {};
-      if (workbook.SheetNames.includes('Stock_Actuel')) {
-        importedData.Stock_Actuel = XLSX.utils.sheet_to_json(workbook.Sheets['Stock_Actuel']);
-      }
-      if (workbook.SheetNames.includes('Machines_Registered')) {
-        importedData.Machines = XLSX.utils.sheet_to_json(workbook.Sheets['Machines_Registered']);
-      }
-      if (workbook.SheetNames.includes('Mouvements')) {
-        importedData.Mouvement = XLSX.utils.sheet_to_json(workbook.Sheets['Mouvements']);
-      }
-
-      const validation = validateImportedData(importedData);
-      if (!validation.valid && (validation.errors.stock.length > 0 || validation.errors.movements.length > 0)) {
-        showToast(
-          `⚠️ Données liées avec des avertissements (${validation.errors.stock.length} erreurs stock, ${validation.errors.movements.length} erreurs mouvements)`,
-          'warning'
-        );
-      }
-
-      if (importedData.Stock_Actuel && importedData.Stock_Actuel.length > 0) {
-        setRawStock(importedData.Stock_Actuel.map(sanitizeObject));
-      }
-      if (importedData.Machines && importedData.Machines.length > 0) {
-        setMachines(importedData.Machines.map(sanitizeObject));
-      }
-      if (importedData.Mouvement && importedData.Mouvement.length > 0) {
-        setMouvements(importedData.Mouvement.map(sanitizeObject));
-      }
-
       setLinkedFileHandle(handle);
       setLinkedFileName(file.name);
       showToast(
-        `🔗 Fichier "${file.name}" lié en direct ! (Backup sauvegardé : ${backupDate})`,
-        'success'
+        `🔗 "${file.name}" lié en mode Miroir Sortant uniquement (Type B — lecture/écrasement direct du stock et du parc désactivé).`,
+        'info'
       );
     } catch (err: unknown) {
       const { aborted, crossOrigin } = isFileAccessBlockedError(err);
       if (aborted) return;
       if (crossOrigin) {
-        showToast("Liaison bloquée par le navigateur (iframe). Basculement vers l'import classique.", 'info');
-        fileInputRef.current?.click();
+        showToast("Liaison directe bloquée par le navigateur (iframe).", 'info');
         return;
       }
       Logger.error('[ExcelOperations] Direct link error:', err);
       showToast("Erreur lors de l'accès au fichier sélectionné.", 'error');
     }
-  }, [createAutomaticBackup, fileInputRef, setMachines, setMouvements, setRawStock, showToast]);
+  }, [showToast]);
 
   // DIRECT FILE SYSTEM SAVE HANDLER WITH LIVE FORMULAS
   const handleDirectSave = useCallback(async () => {
@@ -849,7 +756,7 @@ export function useAppExcelOperations({
     }
   }, [showToast]);
 
-  // 3-WORKBOOK INDUSTRIAL TOPOLOGY DEDICATED EXPORTERS
+  // 3-WORKBOOK INDUSTRIAL TOPOLOGY DEDICATED EXPORTERS (Type B — Consultation / Archive, non réimportable)
   // 1. Master Topology & Assets (Topology.xlsx)
   const exportMasterTopologyWorkbook = useCallback(() => {
     try {
@@ -866,7 +773,7 @@ export function useAppExcelOperations({
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(machines || []), 'Machines_Registered');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(machineElementsLedger || []), 'Machine_BOM_Ledger');
       XLSX.writeFile(wb, 'GMAO_Topology_Master.xlsx');
-      showToast?.('Classeur 1: GMAO_Topology_Master.xlsx exporté avec succès !', 'success');
+      showToast?.('Classeur 1 (Type B — Export externe, non réimportable) : GMAO_Topology_Master.xlsx exporté !', 'success');
     } catch {
       showToast?.("Erreur lors de l'export du classeur de topologie.", 'error');
     }
@@ -884,7 +791,7 @@ export function useAppExcelOperations({
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partTypes || []), 'Part_Types');
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(partDesignations || []), 'Part_Designations');
       XLSX.writeFile(wb, 'GMAO_Inventory_Materials.xlsx');
-      showToast?.('Classeur 2: GMAO_Inventory_Materials.xlsx exporté avec succès !', 'success');
+      showToast?.('Classeur 2 (Type B — Export externe, non réimportable) : GMAO_Inventory_Materials.xlsx exporté !', 'success');
     } catch {
       showToast?.("Erreur lors de l'export du classeur d'inventaire.", 'error');
     }
@@ -899,7 +806,7 @@ export function useAppExcelOperations({
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.sortiesExterne), 'Sortie_Externe');
       }
       XLSX.writeFile(wb, 'GMAO_Movements_Unified.xlsx');
-      showToast?.('Classeur 3: GMAO_Movements_Unified.xlsx exporté avec succès !', 'success');
+      showToast?.('Classeur 3 (Type B — Export externe, non réimportable) : GMAO_Movements_Unified.xlsx exporté !', 'success');
     } catch {
       showToast?.("Erreur lors de l'export du classeur de mouvements.", 'error');
     }

@@ -1127,10 +1127,10 @@ export default function SettingsInjectionTab({
         </div>
       </SettingsSectionCard>
 
-      {/* 2. Granular Per-Module Injection Grid */}
+      {/* 2. Granular Per-Module Demo Injection Grid (Mode C) */}
       <SettingsSectionCard
-        title="Injection ou Purge Granulaire par Module"
-        description="Chargez ou videz individuellement chaque référentiel métier (Stock PDR, Parc Machines, Entrepôt, Préventif, Correctif, Mouvements, Équipes)."
+        title="Mode C — Injection ou Purge Granulaire des Jeux d'Essai Démo"
+        description="Chargez ou videz individuellement les données de démonstration (validées via UnifiedImportPipeline). Pour vos données réelles d'usine, utilisez uniquement la section Mode B (Contrat Type A) ci-dessus."
         icon={<Sliders />}
         headerRight={
           <button
@@ -1219,10 +1219,10 @@ export default function SettingsInjectionTab({
                   }
                 }}
                 className={SETTINGS_BUTTON_STYLES.secondary}
-                title="Télécharger le modèle Excel vierge pour préparer vos données réelles"
+                title="Gabarit miroir multi-feuilles (Type B — consultation externe uniquement ; pour l'import structuré, utilisez les modèles Type A ci-dessus)"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Gabarit Vierge (.XLSX)</span>
+                <span>Classeur Miroir (.XLSX — Type B)</span>
               </button>
 
               <button
