@@ -6,6 +6,8 @@ import reactiveEngine from '../../services/reactiveCalculationEngine';
 import {
   exportAssetsMachinesBundle,
   exportRefParcBundle,
+  getAssetsMachinesOfficialTemplate,
+  getRefParcOfficialTemplate,
   runUnifiedImportPipeline,
   validateAndCommitAssetsMachinesBundle,
   validateAndCommitRefParcBundle,
@@ -429,6 +431,22 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
 
       expect(reimportParc.success).toBe(true);
       expect(reimportMachines.success).toBe(true);
+    });
+
+    it('validates and commits the official templates (REF_PARC.template.json -> ASSETS_MACHINES.template.json) with zero errors', async () => {
+      await DataGateway.clearAllForRealFactory(useGmaoStore.getState());
+
+      const parcTemplate = getRefParcOfficialTemplate();
+      const machinesTemplate = getAssetsMachinesOfficialTemplate();
+
+      const parcReport = runUnifiedImportPipeline(parcTemplate, { mode: 'MERGE' });
+      expect(parcReport.success).toBe(true);
+      expect(parcReport.rejected).toHaveLength(0);
+
+      const machinesReport = runUnifiedImportPipeline(machinesTemplate, { mode: 'MERGE' });
+      expect(machinesReport.success).toBe(true);
+      expect(machinesReport.rejected).toHaveLength(0);
+      expect(useGmaoStore.getState().machines).toHaveLength(2);
     });
   });
 });

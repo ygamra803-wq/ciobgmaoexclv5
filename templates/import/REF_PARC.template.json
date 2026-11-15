@@ -1,0 +1,38 @@
+{
+  "bundleType": "REF_PARC",
+  "_contract": "TYPE_A_BUNDLE_ROUND_TRIP — Modèle officiel REF_PARC (Niveau 2 : ZONES -> FAMILIES -> TEMPLATES -> GENERAL_SYSTEM_TYPES). Remplissez les tableaux ci-dessous puis validez via UnifiedImportPipeline.",
+  "zones": [
+    {
+      "code_zone": "Z-ATELIER-01",
+      "libelle": "Atelier Principal (Exemple)",
+      "description": "Zone géographique physique de production",
+      "is_active": true
+    }
+  ],
+  "families": [
+    {
+      "code_family": "FAM-CNC",
+      "libelle": "Centres d'usinage CNC",
+      "description": "Famille d'équipements d'usinage à commande numérique"
+    }
+  ],
+  "templates": [
+    {
+      "code_template": "TPL-CNC-3AX",
+      "code_family": "FAM-CNC",
+      "libelle": "Centre d'usinage 3 axes standard",
+      "constructeur": "Constructeur Exemple",
+      "puissance": "15 kW",
+      "vitesse": "18000 tr/min",
+      "description": "Modèle constructeur rattaché à code_family = FAM-CNC"
+    }
+  ],
+  "generalSystemTypes": [
+    {
+      "code_system_type": "SYS-AIR",
+      "id_system_type": "SYS-AIR",
+      "libelle": "Réseau Air Comprimé & Utilités",
+      "is_active": true
+    }
+  ]
+}

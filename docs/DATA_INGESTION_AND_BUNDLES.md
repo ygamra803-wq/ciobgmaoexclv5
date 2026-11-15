@@ -1,7 +1,7 @@
-# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0`)
+# 📦 DATA_INGESTION_AND_BUNDLES.md — Layered Data Ingestion & Bundle Contract (`DOC-IMPORT-P0` / `CLOSE-INGEST-P1.1`)
 
 > **Status:** Authoritative Engineering Contract (v5.0.2)
-> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Closed Seed Backdoors, and `UnifiedImportPipeline` (`REF_PARC` & `ASSETS_MACHINES`).
+> **Scope:** Modes `A EMPTY` / `B IMPORT` / `C DEMO`, Export Taxonomy (`Type A Round-Trip` vs `Type B External`), Official Bundle Templates, Closed Seed Backdoors, and `UnifiedImportPipeline` (`REF_PARC` & `ASSETS_MACHINES`).
 
 ---
 
@@ -15,7 +15,23 @@
 
 ---
 
-## 2. Three-Level Data Topology (References vs Live Assets vs Cognitive Blueprint)
+## 2. Two Export Contracts — Never Conflate (`Type A` vs `Type B`)
+
+| Export Class | Name | Re-importable via `UnifiedImportPipeline`? | Purpose & Schema |
+| :--- | :--- | :--- | :--- |
+| **Type A — Bundle Round-Trip** | Official Bundle / Template (`exportRefParcBundle`, `exportAssetsMachinesBundle`, `templates/import/*.template.json`) | **YES** (`dryRun` / `MERGE` / `REPLACE_CATALOG`) | Strict layered ingestion contract using canonical `code_*` keys (`code_zone`, `code_family`, `code_template`, `code_system_type`, `code_machine`). |
+| **Type B — External Export** | Screen / Reporting Export (`Export externe`) | **NO** — Never feed into `UnifiedImportPipeline` | Human-readable reports, print views, accounting extracts, or third-party CSV/XLSX tables. May contain display columns or omit canonical `code_*` keys. |
+
+### Official Templates = Structural Source of Truth
+- Official templates live in:
+  - `templates/import/REF_PARC.template.json`
+  - `templates/import/ASSETS_MACHINES.template.json`
+- **Field Workflow:** Download official template (`Télécharger le modèle`) ➔ Fill rows ➔ Validate (`Vérifier dryRun`) ➔ Commit (`Importer MERGE`).
+- **Validation Philosophy:** Because the official template locks the exact structure and column names, `UnifiedImportPipeline` never guesses what kind of file was uploaded — it validates **values, required fields, key uniqueness, and foreign-key referential integrity**.
+
+---
+
+## 3. Three-Level Data Topology (References vs Live Assets vs Cognitive Blueprint)
 
 1. **Level 2 — Reference Catalogs (Must Exist First):**
    - Geographical `ZONES` (`code_zone`), Equipment `FAMILIES` (`code_family`), Manufacturer `TEMPLATES` (`code_template` linked to `code_family`), and Utility `GENERAL_SYSTEM_TYPES` (`code_system_type`).
@@ -30,9 +46,9 @@
 
 ---
 
-## 3. Implemented Bundles (`REF_PARC` & `ASSETS_MACHINES`)
+## 4. Implemented Bundles (`REF_PARC` & `ASSETS_MACHINES`)
 
-### 3.1 `REF_PARC` Bundle (Level 2 Reference Layer)
+### 4.1 `REF_PARC` Bundle (Level 2 Reference Layer)
 - **Strict Stage Order:**
   `01_ZONES` ➔ `03_FAMILIES` ➔ `03_TEMPLATES` ➔ `03_GENERAL_SYSTEM_TYPES`
 - **Canonical Stable Keys:**
@@ -46,7 +62,7 @@
   - Rejects pseudo-zones (`DIVERS`, `SYSTEM_GENERAL`, `SYSTEME_GENERAL`, `TOUTES`) as physical zones (`SCHEMA_MISMATCH`).
   - Rejects root operational arrays (`machines`, `preventiveTasks`, `mouvements`, `blueprints`, `correctiveInterventions`, `warehouseItems`) with `FORBIDDEN_BUNDLE_FIELD`.
 
-### 3.2 `ASSETS_MACHINES` Bundle (Level 1 Physical Assets Layer)
+### 4.2 `ASSETS_MACHINES` Bundle (Level 1 Physical Assets Layer)
 - **Stage:** `03_MACHINES` (requires `REF_PARC` references to be present in live store).
 - **Canonical Stable Keys:**
   - `machines[]`: `{ code_machine, designation, code_zone, asset_class, code_family?, code_template?, code_system_type?, code_technician?, parent_code_machine?, asset_level?, status?, is_active?, serial_number?, commissioning_date? }`
@@ -58,7 +74,7 @@
 
 ---
 
-## 4. Mandatory Edge Cases Enforced in the Engine
+## 5. Mandatory Edge Cases Enforced in the Engine
 
 1. **Zone Normalization & Legacy Compatibility (`LEGACY_ZONE_NORMALIZED`):**
    - On `ZONES` import, `code_zone` is normalized to canonical `trim + uppercase` (e.g. `' detourag ' ➔ 'DETOURAG'`).
@@ -76,7 +92,7 @@
 
 ---
 
-## 5. Closed Seed Backdoors (Single Seed Gateway)
+## 6. Closed Seed Backdoors (Single Seed Gateway)
 
 `src/application/DataGateway.ts` is the **sole** production module permitted to import `src/data/*.json` (enforced by automated unit test):
 
@@ -88,19 +104,21 @@
 
 ---
 
-## 6. Code Pointers & Test Suite
+## 7. Code Pointers, Official Templates & Test Suite
 
-| Component | Path | Key Exports |
+| Component | Path | Key Exports / Role |
 | :--- | :--- | :--- |
+| **Official `REF_PARC` Template** | `templates/import/REF_PARC.template.json` | Canonical Type A template for `ZONES`, `FAMILIES`, `TEMPLATES`, `GENERAL_SYSTEM_TYPES` |
+| **Official `ASSETS_MACHINES` Template** | `templates/import/ASSETS_MACHINES.template.json` | Canonical Type A template for `PRODUCTION` & `SYSTEM_GENERAL` machines |
 | **Pipeline Types & Contracts** | `src/services/import/types/unifiedImportTypes.ts` | `ImportReport`, `ImportIssue`, `RefParcBundleInput`, `AssetsMachinesBundleInput` |
-| **Core Pipeline Engine** | `src/services/import/unifiedImportPipeline.ts` | `validateAndCommitRefParcBundle`, `validateAndCommitAssetsMachinesBundle`, `runUnifiedImportPipeline`, `exportRefParcBundle`, `exportAssetsMachinesBundle` |
-| **Settings UI Integration (`P1`)** | `src/presentation/pages/settings/components/SettingsInjectionTab.tsx` | Dry-Run (`dryRun: true`), `MERGE` import, and JSON bundle export for `REF_PARC` & `ASSETS_MACHINES` |
+| **Core Pipeline Engine** | `src/services/import/unifiedImportPipeline.ts` | `validateAndCommitRefParcBundle`, `validateAndCommitAssetsMachinesBundle`, `runUnifiedImportPipeline`, `exportRefParcBundle`, `exportAssetsMachinesBundle`, `getRefParcOfficialTemplate`, `getAssetsMachinesOfficialTemplate` |
+| **Settings UI Integration (`P1.1`)** | `src/presentation/pages/settings/components/SettingsInjectionTab.tsx` | Official template download (`Télécharger le modèle`), Dry-Run (`dryRun: true`), `MERGE` import, and Type A Round-Trip export |
 | **Hierarchy Sanitizer** | `src/utils/assetHierarchy.ts` | `sanitizeMachinesHierarchy`, `wouldCreateHierarchyCycle` |
-| **Unit Test Suite** | `src/tests/unit/UnifiedImportPipeline.test.ts` | 11 unit tests covering SSOT backdoor isolation, `REF_PARC`, `ASSETS_MACHINES`, `LEGACY_ZONE_NORMALIZED`, `CIRCULAR_HIERARCHY`, `REPLACE_CATALOG`, and round-trip export |
+| **Unit Test Suite** | `src/tests/unit/UnifiedImportPipeline.test.ts` | Unit tests covering SSOT backdoor isolation, official templates validation, `REF_PARC`, `ASSETS_MACHINES`, `LEGACY_ZONE_NORMALIZED`, `CIRCULAR_HIERARCHY`, `REPLACE_CATALOG`, and round-trip export |
 
 ---
 
-## 7. Roadmap — Explicitly Deferred to Subsequent Phases (`P2..P4`)
+## 8. Roadmap — Explicitly Deferred to Subsequent Phases (`P2..P4`)
 
 The following bundles are **not** part of the current `REF_PARC` + `ASSETS_MACHINES` engine scope and are scheduled next:
 1. **`P2` — `REF_PERSONNEL` & `REF_PDR` Wrapper:**

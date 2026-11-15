@@ -23,6 +23,8 @@ import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 import {
   exportAssetsMachinesBundle,
   exportRefParcBundle,
+  getAssetsMachinesOfficialTemplate,
+  getRefParcOfficialTemplate,
   validateAndCommitAssetsMachinesBundle,
   validateAndCommitRefParcBundle,
 } from '../../../../services/import/unifiedImportPipeline';
@@ -56,7 +58,7 @@ export default function SettingsInjectionTab({
 }: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
 
-  // P1: Structured Pipeline State (REF_PARC & ASSETS_MACHINES)
+  // P1 / P1.1: Structured Pipeline State (REF_PARC & ASSETS_MACHINES)
   const [refParcJsonText, setRefParcJsonText] = useState('');
   const [assetsMachinesJsonText, setAssetsMachinesJsonText] = useState('');
   const [lastImportReport, setLastImportReport] = useState<ImportReport<any> | null>(null);
@@ -78,18 +80,44 @@ export default function SettingsInjectionTab({
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadRefParcTemplate = () => {
+    const template = getRefParcOfficialTemplate();
+    setRefParcJsonText(JSON.stringify(template, null, 2));
+    downloadJsonFile('REF_PARC.template.json', template);
+    showToast?.(
+      'Modèle officiel REF_PARC.template.json téléchargé (Contrat Type A).',
+      'success'
+    );
+  };
+
+  const handleDownloadAssetsMachinesTemplate = () => {
+    const template = getAssetsMachinesOfficialTemplate();
+    setAssetsMachinesJsonText(JSON.stringify(template, null, 2));
+    downloadJsonFile('ASSETS_MACHINES.template.json', template);
+    showToast?.(
+      'Modèle officiel ASSETS_MACHINES.template.json téléchargé (Contrat Type A).',
+      'success'
+    );
+  };
+
   const handleExportRefParc = () => {
     const bundle = exportRefParcBundle();
     setRefParcJsonText(JSON.stringify(bundle, null, 2));
     downloadJsonFile(`CIOB_REF_PARC_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.('Paquet REF_PARC exporté avec succès (code_zone, code_family, code_template).', 'success');
+    showToast?.(
+      'Paquet REF_PARC (Type A Round-Trip) exporté avec succès (code_zone, code_family, code_template).',
+      'success'
+    );
   };
 
   const handleExportAssetsMachines = () => {
     const bundle = exportAssetsMachinesBundle();
     setAssetsMachinesJsonText(JSON.stringify(bundle, null, 2));
     downloadJsonFile(`CIOB_ASSETS_MACHINES_${new Date().toISOString().slice(0, 10)}.json`, bundle);
-    showToast?.('Paquet ASSETS_MACHINES exporté avec succès (code_machine, code_zone).', 'success');
+    showToast?.(
+      'Paquet ASSETS_MACHINES (Type A Round-Trip) exporté avec succès (code_machine, code_zone).',
+      'success'
+    );
   };
 
   const handleFileLoad = (
@@ -274,10 +302,21 @@ export default function SettingsInjectionTab({
     <div className="space-y-6">
       {/* 0. Mode B — UnifiedImportPipeline (REF_PARC & ASSETS_MACHINES) */}
       <SettingsSectionCard
-        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — REF_PARC & ASSETS_MACHINES)"
-        description="Validez (dryRun) ou importez (MERGE) vos référentiels et machines enregistrées dans l'ordre strict des dépendances (01_ZONES ➔ 03_FAMILIES ➔ 03_TEMPLATES ➔ 03_GENERAL_SYSTEM_TYPES ➔ 03_MACHINES)."
+        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC & ASSETS_MACHINES)"
+        description="Téléchargez le modèle officiel, remplissez vos lignes, puis validez (dryRun) ou importez (MERGE). Seuls les modèles officiels et les exports Round-Trip (Type A) sont réimportables ; les exports externes d'écrans (Type B) ne sont pas des contrats d'import."
         icon={<ShieldCheck />}
       >
+        <div className="mb-3.5 px-3.5 py-2.5 rounded-xl bg-sky-50/80 border border-sky-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-2">
+          <span>
+            <b>Contrat Type A (Round-Trip) :</b> Modèles officiels{' '}
+            <code className="font-mono">REF_PARC.template.json</code> &amp;{' '}
+            <code className="font-mono">ASSETS_MACHINES.template.json</code> + exports issus de cette carte.
+          </span>
+          <span className="font-mono text-[10px] text-slate-500">
+            Type B (Exports tableaux/impression) = Consultation externe uniquement
+          </span>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Card 1: REF_PARC */}
           <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
@@ -315,6 +354,16 @@ export default function SettingsInjectionTab({
               />
               <button
                 type="button"
+                onClick={handleDownloadRefParcTemplate}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-template-ref-parc"
+                title="Télécharger le modèle officiel REF_PARC.template.json"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-700" />
+                <span>Télécharger le modèle</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => refParcFileInputRef.current?.click()}
                 className={SETTINGS_BUTTON_STYLES.secondary}
               >
@@ -344,9 +393,10 @@ export default function SettingsInjectionTab({
                 onClick={handleExportRefParc}
                 className={SETTINGS_BUTTON_STYLES.secondary}
                 data-testid="btn-export-ref-parc"
+                title="Exporter le référentiel actuel au format Paquet Round-Trip (Type A)"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter</span>
+                <span>Exporter (Round-Trip Type A)</span>
               </button>
             </div>
           </div>
@@ -387,6 +437,16 @@ export default function SettingsInjectionTab({
               />
               <button
                 type="button"
+                onClick={handleDownloadAssetsMachinesTemplate}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-template-assets-machines"
+                title="Télécharger le modèle officiel ASSETS_MACHINES.template.json"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-700" />
+                <span>Télécharger le modèle</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => assetsMachinesFileInputRef.current?.click()}
                 className={SETTINGS_BUTTON_STYLES.secondary}
               >
@@ -416,9 +476,10 @@ export default function SettingsInjectionTab({
                 onClick={handleExportAssetsMachines}
                 className={SETTINGS_BUTTON_STYLES.secondary}
                 data-testid="btn-export-assets-machines"
+                title="Exporter le parc machines actuel au format Paquet Round-Trip (Type A)"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Exporter</span>
+                <span>Exporter (Round-Trip Type A)</span>
               </button>
             </div>
           </div>

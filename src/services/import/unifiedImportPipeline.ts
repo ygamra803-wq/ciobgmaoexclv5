@@ -11,6 +11,8 @@ import type {
   IZone,
 } from '../../types/domain';
 import { sanitizeMachinesHierarchy } from '../../utils/assetHierarchy';
+import refParcOfficialTemplate from '../../../templates/import/REF_PARC.template.json';
+import assetsMachinesOfficialTemplate from '../../../templates/import/ASSETS_MACHINES.template.json';
 import type {
   AcceptedStageRecord,
   AssetsMachineRow,
@@ -1808,3 +1810,20 @@ export function exportAssetsMachinesBundle(snapshot?: {
     }),
   };
 }
+
+/**
+ * Returns a fresh clone of the official `REF_PARC` template (`templates/import/REF_PARC.template.json`).
+ */
+export function getRefParcOfficialTemplate(): RefParcBundleInput & { bundleType: 'REF_PARC' } {
+  return JSON.parse(JSON.stringify(refParcOfficialTemplate));
+}
+
+/**
+ * Returns a fresh clone of the official `ASSETS_MACHINES` template (`templates/import/ASSETS_MACHINES.template.json`).
+ */
+export function getAssetsMachinesOfficialTemplate(): AssetsMachinesBundleInput & {
+  bundleType: 'ASSETS_MACHINES';
+} {
+  return JSON.parse(JSON.stringify(assetsMachinesOfficialTemplate));
+}
+
