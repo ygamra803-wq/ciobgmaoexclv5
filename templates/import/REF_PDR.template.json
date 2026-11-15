@@ -1,0 +1,54 @@
+{
+  "bundleType": "REF_PDR",
+  "_contract": "TYPE_A_BUNDLE_ROUND_TRIP — Modèle officiel REF_PDR (Niveau 2 : 04_PDR — Groupes PDR -> Types PDR -> Articles PDR). Aucun mouvement de stock (Sortie/Entrée) n'est autorisé dans ce paquet.",
+  "groups": [
+    {
+      "code_group": "ROUL",
+      "libelle": "Roulements & Paliers",
+      "description": "Roulements à billes, rouleaux et paliers auto-aligneurs",
+      "domaine_technique": "MECANIQUE",
+      "default_policy_tags": ["REPLACING"],
+      "sort_order": 10,
+      "is_active": true
+    }
+  ],
+  "types": [
+    {
+      "code_type": "TYP-ROUL-BILLE",
+      "code_group": "ROUL",
+      "libelle": "Roulements rigides à billes",
+      "domaine_technique": "MECANIQUE",
+      "is_active": true
+    }
+  ],
+  "items": [
+    {
+      "ref": "SKF-6205-2RS",
+      "designation": "Roulement rigide à billes 6205-2RS",
+      "code_type": "TYP-ROUL-BILLE",
+      "code_group": "ROUL",
+      "seuil": 4,
+      "emplacement": "Magasin PDR - A1",
+      "stockInitial": 10,
+      "prix_unitaire": 85,
+      "unite_mesure": "PCS",
+      "criticite": "A",
+      "ref_constructeur": "6205-2RSH",
+      "policy_tags": ["REPLACING"]
+    },
+    {
+      "ref": "SKF-6206-2RS",
+      "designation": "Roulement rigide à billes 6206-2RS",
+      "code_type": "TYP-ROUL-BILLE",
+      "code_group": "ROUL",
+      "seuil": 2,
+      "emplacement": "Magasin PDR - A2",
+      "stockInitial": 0,
+      "prix_unitaire": 110,
+      "unite_mesure": "PCS",
+      "criticite": "B",
+      "ref_constructeur": "6206-2RSH",
+      "policy_tags": ["REPLACING"]
+    }
+  ]
+}

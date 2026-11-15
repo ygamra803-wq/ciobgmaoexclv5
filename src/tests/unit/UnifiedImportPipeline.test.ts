@@ -6,13 +6,16 @@ import reactiveEngine from '../../services/reactiveCalculationEngine';
 import {
   exportAssetsMachinesBundle,
   exportRefParcBundle,
+  exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
   getRefParcOfficialTemplate,
+  getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
   runUnifiedImportPipeline,
   validateAndCommitAssetsMachinesBundle,
   validateAndCommitRefParcBundle,
+  validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
 } from '../../services/import/unifiedImportPipeline';
 import { useGmaoStore } from '../../store/useGmaoStore';
@@ -36,7 +39,7 @@ function collectProductionFiles(dir: string): string[] {
   return results;
 }
 
-describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL & ASSETS_MACHINES)', () => {
+describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)', () => {
   beforeEach(async () => {
     localStorage.clear();
     sessionStorage.clear();
@@ -582,6 +585,101 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC, REF_PERSONNEL & AS
       expect(exported.bundleType).toBe('REF_PERSONNEL');
       expect(exported.technicians.map((t) => t.code_technician)).toEqual(['TECH-01']);
       expect(exported.operations?.map((o) => o.code_operation)).toEqual(['RESP-01']);
+
+      const reimport = runUnifiedImportPipeline(exported, { mode: 'MERGE' });
+      expect(reimport.success).toBe(true);
+      expect(reimport.rejected).toHaveLength(0);
+    });
+  });
+
+  describe('5. REF_PDR Bundle (04_PDR — Groups -> Types -> Items wrapping pdrExcelValidator)', () => {
+    it('validates and commits the official REF_PDR.template.json with 0 rejected and zero movements created', () => {
+      const pdrTemplate = getRefPdrOfficialTemplate();
+      const report = runUnifiedImportPipeline(pdrTemplate, { mode: 'MERGE' });
+
+      expect(report.success).toBe(true);
+      expect(report.committed).toBe(true);
+      expect(report.rejected).toHaveLength(0);
+
+      const state = useGmaoStore.getState();
+      expect(state.pdrGroups).toHaveLength(1);
+      expect(state.types).toHaveLength(1);
+      expect(state.rawStock).toHaveLength(2);
+      expect(state.mouvements).toHaveLength(0); // Zero movements generated
+      expect(state.rawStock[0].stockInitial).toBe(10);
+      expect(state.rawStock[1].stockInitial).toBe(0);
+    });
+
+    it('rejects an item referencing a broken code_type (BROKEN_FK) with zero store writes', () => {
+      const report = validateAndCommitRefPdrBundle({
+        groups: [{ code_group: 'ROUL', libelle: 'Roulements' }],
+        types: [{ code_type: 'TYP-ROUL', code_group: 'ROUL', libelle: 'Roulements billes' }],
+        items: [
+          {
+            ref: 'SKF-9999',
+            designation: 'Roulement Orphelin',
+            code_type: 'TYP-INCONNU',
+            code_group: 'ROUL',
+          },
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected).toHaveLength(1);
+      expect(report.rejected[0].code).toBe('BROKEN_FK');
+      expect(report.rejected[0].stage).toBe('04_PDR_ITEMS');
+      expect(useGmaoStore.getState().rawStock).toHaveLength(0);
+    });
+
+    it('rejects duplicate ref (DUPLICATE_KEY) with zero store writes', () => {
+      const report = validateAndCommitRefPdrBundle({
+        groups: [{ code_group: 'ROUL', libelle: 'Roulements' }],
+        types: [{ code_type: 'TYP-ROUL', code_group: 'ROUL', libelle: 'Roulements billes' }],
+        items: [
+          {
+            ref: 'SKF-DUP',
+            designation: 'Roulement 1',
+            code_type: 'TYP-ROUL',
+            code_group: 'ROUL',
+          },
+          {
+            ref: 'SKF-DUP',
+            designation: 'Roulement 2',
+            code_type: 'TYP-ROUL',
+            code_group: 'ROUL',
+          },
+        ],
+      });
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected).toHaveLength(1);
+      expect(report.rejected[0].code).toBe('DUPLICATE_KEY');
+      expect(useGmaoStore.getState().rawStock).toHaveLength(0);
+    });
+
+    it('rejects forbidden mouvements or auth fields inside REF_PDR (FORBIDDEN_BUNDLE_FIELD)', () => {
+      const report = validateAndCommitRefPdrBundle({
+        groups: [{ code_group: 'ROUL', libelle: 'Roulements' }],
+        types: [{ code_type: 'TYP-ROUL', code_group: 'ROUL', libelle: 'Roulements billes' }],
+        items: [],
+        mouvements: [{ ref: 'SKF-6205', type: 'Entrée', quantite: 5 }],
+      } as any);
+
+      expect(report.success).toBe(false);
+      expect(report.committed).toBe(false);
+      expect(report.rejected.map((r) => r.code)).toContain('FORBIDDEN_BUNDLE_FIELD');
+    });
+
+    it('exports REF_PDR with canonical code_group, code_type, and ref and round-trips via MERGE', () => {
+      runUnifiedImportPipeline(getRefPdrOfficialTemplate(), { mode: 'MERGE' });
+
+      const exported = exportRefPdrBundle();
+      expect(exported.bundleType).toBe('REF_PDR');
+      expect(exported.groups.map((g) => g.code_group)).toEqual(['ROUL']);
+      expect(exported.types.map((t) => t.code_type)).toEqual(['TYP-ROUL-BILLE']);
+      expect(exported.items.map((i) => i.ref)).toEqual(['SKF-6205-2RS', 'SKF-6206-2RS']);
 
       const reimport = runUnifiedImportPipeline(exported, { mode: 'MERGE' });
       expect(reimport.success).toBe(true);

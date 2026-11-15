@@ -23,19 +23,22 @@ import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
 import {
   exportAssetsMachinesBundle,
   exportRefParcBundle,
+  exportRefPdrBundle,
   exportRefPersonnelBundle,
   getAssetsMachinesOfficialTemplate,
   getRefParcOfficialTemplate,
+  getRefPdrOfficialTemplate,
   getRefPersonnelOfficialTemplate,
   validateAndCommitAssetsMachinesBundle,
   validateAndCommitRefParcBundle,
+  validateAndCommitRefPdrBundle,
   validateAndCommitRefPersonnelBundle,
 } from '../../../../services/import/unifiedImportPipeline';
 import type { ImportReport } from '../../../../services/import/types/unifiedImportTypes';
 
 /**
  * Data Injection Hub:
- * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC, REF_PERSONNEL & ASSETS_MACHINES)
+ * 1) Mode B — Structured Bundle Ingestion & Reverse Export (UnifiedImportPipeline: REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)
  * 2) Mode C — Demo Dataset Control via DataGateway
  * 3) Mode A — Empty Factory Reset (`START_MODE = 'empty'`)
  */
@@ -61,16 +64,18 @@ export default function SettingsInjectionTab({
 }: any) {
   const [selectedDemoSection, setSelectedDemoSection] = useState('all');
 
-  // P1 / P1.1 / P2: Structured Pipeline State (REF_PARC, REF_PERSONNEL & ASSETS_MACHINES)
+  // P1 / P1.1 / P2 / P3: Structured Pipeline State (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)
   const [refParcJsonText, setRefParcJsonText] = useState('');
   const [refPersonnelJsonText, setRefPersonnelJsonText] = useState('');
   const [assetsMachinesJsonText, setAssetsMachinesJsonText] = useState('');
+  const [refPdrJsonText, setRefPdrJsonText] = useState('');
   const [lastImportReport, setLastImportReport] = useState<ImportReport<any> | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
 
   const refParcFileInputRef = useRef<HTMLInputElement | null>(null);
   const refPersonnelFileInputRef = useRef<HTMLInputElement | null>(null);
   const assetsMachinesFileInputRef = useRef<HTMLInputElement | null>(null);
+  const refPdrFileInputRef = useRef<HTMLInputElement | null>(null);
 
   const downloadJsonFile = (filename: string, payload: unknown) => {
     const json = JSON.stringify(payload, null, 2);
@@ -115,6 +120,16 @@ export default function SettingsInjectionTab({
     );
   };
 
+  const handleDownloadRefPdrTemplate = () => {
+    const template = getRefPdrOfficialTemplate();
+    setRefPdrJsonText(JSON.stringify(template, null, 2));
+    downloadJsonFile('REF_PDR.template.json', template);
+    showToast?.(
+      'Modèle officiel REF_PDR.template.json téléchargé (Contrat Type A).',
+      'success'
+    );
+  };
+
   const handleExportRefParc = () => {
     const bundle = exportRefParcBundle();
     setRefParcJsonText(JSON.stringify(bundle, null, 2));
@@ -145,9 +160,19 @@ export default function SettingsInjectionTab({
     );
   };
 
+  const handleExportRefPdr = () => {
+    const bundle = exportRefPdrBundle();
+    setRefPdrJsonText(JSON.stringify(bundle, null, 2));
+    downloadJsonFile(`CIOB_REF_PDR_${new Date().toISOString().slice(0, 10)}.json`, bundle);
+    showToast?.(
+      'Paquet REF_PDR (Type A Round-Trip) exporté avec succès (code_group, code_type, ref).',
+      'success'
+    );
+  };
+
   const handleFileLoad = (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES'
+    target: 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR'
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -158,8 +183,10 @@ export default function SettingsInjectionTab({
         setRefParcJsonText(content);
       } else if (target === 'REF_PERSONNEL') {
         setRefPersonnelJsonText(content);
-      } else {
+      } else if (target === 'ASSETS_MACHINES') {
         setAssetsMachinesJsonText(content);
+      } else {
+        setRefPdrJsonText(content);
       }
       setParseError(null);
     };
@@ -361,9 +388,9 @@ export default function SettingsInjectionTab({
 
   return (
     <div className="space-y-6">
-      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC, REF_PERSONNEL & ASSETS_MACHINES) */}
+      {/* 0. Mode B — UnifiedImportPipeline (REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR) */}
       <SettingsSectionCard
-        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC, REF_PERSONNEL & ASSETS_MACHINES)"
+        title="Pipeline d'Ingestion Structurée par Paquets (Mode B — Contrat Type A : REF_PARC, REF_PERSONNEL, ASSETS_MACHINES & REF_PDR)"
         description="Téléchargez le modèle officiel, remplissez vos lignes, puis validez (dryRun) ou importez (MERGE). Seuls les modèles officiels et les exports Round-Trip (Type A) sont réimportables ; les exports externes d'écrans (Type B) ne sont pas des contrats d'import."
         icon={<ShieldCheck />}
       >
@@ -371,15 +398,16 @@ export default function SettingsInjectionTab({
           <span>
             <b>Contrat Type A (Round-Trip) :</b> Modèles officiels{' '}
             <code className="font-mono">REF_PARC.template.json</code>,{' '}
-            <code className="font-mono">REF_PERSONNEL.template.json</code> &amp;{' '}
-            <code className="font-mono">ASSETS_MACHINES.template.json</code> + exports issus de cette carte.
+            <code className="font-mono">REF_PERSONNEL.template.json</code>,{' '}
+            <code className="font-mono">ASSETS_MACHINES.template.json</code> &amp;{' '}
+            <code className="font-mono">REF_PDR.template.json</code> + exports issus de cette carte.
           </span>
           <span className="font-mono text-[10px] text-slate-500">
             Type B (Exports tableaux/impression) = Consultation externe uniquement
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Card 1: REF_PARC */}
           <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
             <div>
@@ -621,6 +649,152 @@ export default function SettingsInjectionTab({
                 className={SETTINGS_BUTTON_STYLES.secondary}
                 data-testid="btn-export-assets-machines"
                 title="Exporter le parc machines actuel au format Paquet Round-Trip (Type A)"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-700" />
+                <span>Exporter (Round-Trip Type A)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Card 4: REF_PDR */}
+          <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50/70 flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between gap-2">
+                <h4 className="text-xs font-extrabold text-slate-900">
+                  4. Paquet Catalogue Stock PDR (REF_PDR — Niveau 2)
+                </h4>
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold rounded bg-amber-100 text-amber-800">
+                  04_PDR (GROUPS ➔ TYPES ➔ ITEMS)
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-600 mt-1">
+                Clés stables : <code className="font-mono">code_group</code>,{' '}
+                <code className="font-mono">code_type</code>,{' '}
+                <code className="font-mono">ref</code> (Catalogue pur — zéro mouvement de stock).
+              </p>
+              <textarea
+                value={refPdrJsonText}
+                onChange={(e) => setRefPdrJsonText(e.target.value)}
+                rows={4}
+                placeholder='{"bundleType":"REF_PDR","groups":[{"code_group":"ROUL","libelle":"..."}],"types":[{"code_type":"TYP-ROUL-BILLE","code_group":"ROUL","libelle":"..."}],"items":[{"ref":"SKF-6205-2RS","designation":"...","code_type":"TYP-ROUL-BILLE","code_group":"ROUL"}]}'
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white p-2.5 text-[11px] font-mono text-slate-800 focus:outline-none focus:border-sky-600"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200/80">
+              <input
+                ref={refPdrFileInputRef}
+                type="file"
+                accept=".json,application/json"
+                onChange={(e) => handleFileLoad(e, 'REF_PDR')}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={handleDownloadRefPdrTemplate}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-template-ref-pdr"
+                title="Télécharger le modèle officiel REF_PDR.template.json"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-700" />
+                <span>Télécharger le modèle</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => refPdrFileInputRef.current?.click()}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Charger JSON</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setParseError(null);
+                  if (!refPdrJsonText.trim()) {
+                    setParseError(
+                      'Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PDR.'
+                    );
+                    return;
+                  }
+                  try {
+                    const parsed = JSON.parse(refPdrJsonText);
+                    const report = validateAndCommitRefPdrBundle(parsed, {
+                      mode: 'MERGE',
+                      origin: 'JSON_BUNDLE',
+                      dryRun: true,
+                    });
+                    setLastImportReport(report);
+                    if (report.success) {
+                      showToast?.(
+                        'Validation REF_PDR (dryRun) réussie : 0 erreur bloquante.',
+                        'success'
+                      );
+                    } else {
+                      showToast?.(
+                        `Échec validation REF_PDR : ${report.rejected.length} rejet(s) détecté(s).`,
+                        'error'
+                      );
+                    }
+                  } catch (err: any) {
+                    setParseError(
+                      `JSON REF_PDR invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
+                    );
+                  }
+                }}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-dryrun-ref-pdr"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-sky-700" />
+                <span>Vérifier (dryRun)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setParseError(null);
+                  if (!refPdrJsonText.trim()) {
+                    setParseError(
+                      'Veuillez charger un fichier JSON ou coller le contenu du paquet REF_PDR.'
+                    );
+                    return;
+                  }
+                  try {
+                    const parsed = JSON.parse(refPdrJsonText);
+                    const report = validateAndCommitRefPdrBundle(parsed, {
+                      mode: 'MERGE',
+                      origin: 'JSON_BUNDLE',
+                      dryRun: false,
+                    });
+                    setLastImportReport(report);
+                    if (report.success) {
+                      showToast?.(
+                        'Import MERGE REF_PDR engagé dans DataGateway avec succès.',
+                        'success'
+                      );
+                    } else {
+                      showToast?.(
+                        `Échec validation REF_PDR : ${report.rejected.length} rejet(s) détecté(s).`,
+                        'error'
+                      );
+                    }
+                  } catch (err: any) {
+                    setParseError(
+                      `JSON REF_PDR invalide : ${err?.message || 'Erreur de syntaxe JSON'}`
+                    );
+                  }
+                }}
+                className={SETTINGS_BUTTON_STYLES.primary}
+                data-testid="btn-merge-ref-pdr"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Importer (MERGE)</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleExportRefPdr}
+                className={SETTINGS_BUTTON_STYLES.secondary}
+                data-testid="btn-export-ref-pdr"
+                title="Exporter le catalogue PDR actuel au format Paquet Round-Trip (Type A)"
               >
                 <Download className="w-3.5 h-3.5 text-emerald-700" />
                 <span>Exporter (Round-Trip Type A)</span>

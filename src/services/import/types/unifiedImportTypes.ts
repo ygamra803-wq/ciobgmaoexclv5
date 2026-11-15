@@ -6,16 +6,21 @@ import type {
   IMachineTemplate,
   IMouvement,
   IOperation,
+  IPartDesignation,
+  IStockItem,
   ITechnician,
   IUserRecord,
   IWarehouseItem,
   IZone,
   MachineStatus,
+  MaterialPolicyTag,
+  PdrGroup,
   ProfileType,
+  StockType,
 } from '../../../types/domain';
 import type { CorrectiveInterventionItem, PreventiveTaskItem } from '../../../types/store';
 
-export type PipelineBundleType = 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES';
+export type PipelineBundleType = 'REF_PARC' | 'REF_PERSONNEL' | 'ASSETS_MACHINES' | 'REF_PDR';
 
 export type ImportSourceOrigin = 'EXCEL' | 'JSON_BUNDLE' | 'DEMO_BUNDLE';
 
@@ -29,7 +34,10 @@ export type PipelineStageId =
   | '03_FAMILIES'
   | '03_TEMPLATES'
   | '03_GENERAL_SYSTEM_TYPES'
-  | '03_MACHINES';
+  | '03_MACHINES'
+  | '04_PDR_GROUPS'
+  | '04_PDR_TYPES'
+  | '04_PDR_ITEMS';
 
 export type ImportIssueCode =
   | 'MISSING_REQUIRED'
@@ -215,7 +223,69 @@ export interface AssetsMachinesStagingResult {
 }
 
 // ============================================================================
-// 4. PIPELINE OPTIONS & CONTEXT
+// 4. REF_PDR BUNDLE SCHEMAS (Level 2 PDR Catalog Layer — 04_PDR)
+// ============================================================================
+
+export interface RefPdrGroupRow {
+  code_group: string;
+  code?: string;
+  id?: string;
+  libelle: string;
+  description?: string;
+  domaine_technique?: string;
+  default_policy_tags?: string | MaterialPolicyTag[];
+  sort_order?: number;
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RefPdrTypeRow {
+  code_type: string;
+  code_group: string;
+  group_code?: string;
+  libelle: string;
+  domaine_technique?: string;
+  is_active?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RefPdrItemRow {
+  ref: string;
+  code_article?: string;
+  designation: string;
+  code_type: string;
+  code_group?: string;
+  seuil?: number;
+  emplacement?: string;
+  stockInitial?: number | null;
+  prix_unitaire?: number;
+  unite_mesure?: string;
+  criticite?: string;
+  ref_constructeur?: string;
+  code_equivalents?: string;
+  delai_appro_jours?: number;
+  domaine_technique?: string;
+  policy_tags?: string | MaterialPolicyTag[];
+  [key: string]: unknown;
+}
+
+export interface RefPdrBundleInput {
+  bundleType?: 'REF_PDR';
+  groups?: RefPdrGroupRow[];
+  types?: RefPdrTypeRow[];
+  items?: RefPdrItemRow[];
+  [key: string]: unknown;
+}
+
+export interface RefPdrStagingResult {
+  nextGroups: PdrGroup[];
+  nextTypes: StockType[];
+  nextStock: IStockItem[];
+  nextDesignations: IPartDesignation[];
+}
+
+// ============================================================================
+// 5. PIPELINE OPTIONS & CONTEXT
 // ============================================================================
 
 export interface UnifiedImportOptions {
@@ -237,8 +307,12 @@ export interface UnifiedImportOptions {
   existingTechnicians?: ITechnician[];
   existingOperations?: IOperation[];
   existingUsers?: IUserRecord[];
+  existingPdrGroups?: PdrGroup[];
+  existingStockTypes?: StockType[];
+  existingStock?: IStockItem[];
   existingMouvements?: IMouvement[];
   existingPreventiveTasks?: PreventiveTaskItem[];
   existingCorrectiveInterventions?: CorrectiveInterventionItem[];
   existingWarehouseItems?: IWarehouseItem[];
 }
+
