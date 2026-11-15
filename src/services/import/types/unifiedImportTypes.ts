@@ -5,19 +5,15 @@ import type {
   IMachineFamily,
   IMachineTemplate,
   IMouvement,
-  IPartDesignation,
-  IStockItem,
   ITechnician,
   IUserRecord,
   IWarehouseItem,
   IZone,
   MachineStatus,
-  PdrGroup,
-  StockType,
 } from '../../../types/domain';
 import type { CorrectiveInterventionItem, PreventiveTaskItem } from '../../../types/store';
 
-export type PipelineBundleType = 'REF_PARC' | 'ASSETS_MACHINES' | 'REF_PDR';
+export type PipelineBundleType = 'REF_PARC' | 'ASSETS_MACHINES';
 
 export type ImportSourceOrigin = 'EXCEL' | 'JSON_BUNDLE' | 'DEMO_BUNDLE';
 
@@ -27,12 +23,10 @@ export type ImportCommitPolicy = 'ATOMIC' | 'STAGE_ISOLATED';
 
 export type PipelineStageId =
   | '01_ZONES'
-  | '02_PERSONNEL'
   | '03_FAMILIES'
   | '03_TEMPLATES'
   | '03_GENERAL_SYSTEM_TYPES'
-  | '03_MACHINES'
-  | '04_PDR';
+  | '03_MACHINES';
 
 export type ImportIssueCode =
   | 'MISSING_REQUIRED'
@@ -42,8 +36,7 @@ export type ImportIssueCode =
   | 'CIRCULAR_HIERARCHY'
   | 'REFERENCED_BY_ACTIVE_RECORDS'
   | 'ARCHIVED_MACHINE_REF'
-  | 'NEGATIVE_STOCK_BALANCE'
-  | 'INVALID_FSM_STATE'
+  | 'LEGACY_ZONE_NORMALIZED'
   | 'RBAC_DENIED'
   | 'SCHEMA_MISMATCH'
   | 'FORBIDDEN_BUNDLE_FIELD';
@@ -56,6 +49,8 @@ export interface ImportIssue {
   code: ImportIssueCode;
   message: string;
   blocking: boolean;
+  referencedCount?: number;
+  referenceBreakdown?: Record<string, number>;
 }
 
 export interface AcceptedStageRecord {
@@ -177,26 +172,7 @@ export interface AssetsMachinesStagingResult {
 }
 
 // ============================================================================
-// 3. REF_PDR BUNDLE SCHEMAS (Level 2 Stock Catalog Layer via pdrExcelValidator)
-// ============================================================================
-
-export interface RefPdrBundleInput {
-  bundleType?: 'REF_PDR';
-  groups?: Array<Record<string, unknown>>;
-  types?: Array<Record<string, unknown>>;
-  items?: Array<Record<string, unknown>>;
-  [key: string]: unknown;
-}
-
-export interface RefPdrStagingResult {
-  nextGroups: PdrGroup[];
-  nextTypes: StockType[];
-  nextStock: IStockItem[];
-  nextDesignations: IPartDesignation[];
-}
-
-// ============================================================================
-// 4. PIPELINE OPTIONS & CONTEXT
+// 3. PIPELINE OPTIONS & CONTEXT
 // ============================================================================
 
 export interface UnifiedImportOptions {
@@ -217,9 +193,6 @@ export interface UnifiedImportOptions {
   existingMachines?: IMachine[];
   existingTechnicians?: ITechnician[];
   existingUsers?: IUserRecord[];
-  existingPdrGroups?: PdrGroup[];
-  existingStockTypes?: StockType[];
-  existingStock?: IStockItem[];
   existingMouvements?: IMouvement[];
   existingPreventiveTasks?: PreventiveTaskItem[];
   existingCorrectiveInterventions?: CorrectiveInterventionItem[];

@@ -9,12 +9,8 @@ import type {
   ITechnician,
   IUserRecord,
   IZone,
-  StockType,
 } from '../../types/domain';
-import {
-  applyPdrCatalogImportToStore,
-  validateAndReconcilePdrCatalogImport,
-} from '../pdr/pdrExcelValidator';
+import { sanitizeMachinesHierarchy } from '../../utils/assetHierarchy';
 import type {
   AcceptedStageRecord,
   AssetsMachineRow,
@@ -31,12 +27,10 @@ import type {
   RefParcStagingResult,
   RefParcTemplateRow,
   RefParcZoneRow,
-  RefPdrBundleInput,
-  RefPdrStagingResult,
   UnifiedImportOptions,
 } from './types/unifiedImportTypes';
 
-const FORBIDDEN_PSEUDO_ZONES = new Set(['DIVERS', 'SYSTEM_GENERAL', 'SYSTEME_GENERAL']);
+const FORBIDDEN_PSEUDO_ZONES = new Set(['DIVERS', 'SYSTEM_GENERAL', 'SYSTEME_GENERAL', 'TOUTES']);
 
 const FORBIDDEN_REF_PARC_ROOT_KEYS = [
   'machines',
@@ -67,29 +61,92 @@ function normKey(raw: unknown): string {
   return String(raw ?? '').trim().toUpperCase();
 }
 
+function foldAccentsKey(raw: unknown): string {
+  return String(raw ?? '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
 function cleanStr(raw: unknown): string {
   return String(raw ?? '').trim();
 }
 
-function buildZoneIndex(zones: IZone[]): Map<string, IZone> {
-  const map = new Map<string, IZone>();
+interface ZoneIndexLookup {
+  canonicalMap: Map<string, IZone>;
+  legacyFallbackMap: Map<string, IZone>;
+}
+
+function buildZoneIndex(zones: IZone[]): ZoneIndexLookup {
+  const canonicalMap = new Map<string, IZone>();
+  const legacyFallbackMap = new Map<string, IZone>();
+
   for (const z of zones) {
     if (!z) continue;
-    const canonicalCode = cleanStr(z.code_zone || z.code || z.id_zone);
-    if (!canonicalCode) continue;
+    const rawCanonical = cleanStr(z.code_zone || z.code || z.id_zone);
+    if (!rawCanonical) continue;
+    const canonicalCode = normKey(rawCanonical);
     const normalizedRecord: IZone = {
       ...z,
       code: canonicalCode,
       code_zone: canonicalCode,
-      id_zone: cleanStr(z.id_zone || canonicalCode),
-      libelle: cleanStr(z.libelle || z.nom || canonicalCode),
+      id_zone: canonicalCode,
+      libelle: cleanStr(z.libelle || z.nom || rawCanonical),
     };
-    map.set(normKey(canonicalCode), normalizedRecord);
-    if (z.id_zone) map.set(normKey(z.id_zone), normalizedRecord);
-    if (z.code) map.set(normKey(z.code), normalizedRecord);
-    if (z.libelle) map.set(normKey(z.libelle), normalizedRecord);
+    canonicalMap.set(canonicalCode, normalizedRecord);
+
+    if (z.id_zone) {
+      legacyFallbackMap.set(normKey(z.id_zone), normalizedRecord);
+      legacyFallbackMap.set(foldAccentsKey(z.id_zone), normalizedRecord);
+    }
+    if (z.code) {
+      legacyFallbackMap.set(normKey(z.code), normalizedRecord);
+      legacyFallbackMap.set(foldAccentsKey(z.code), normalizedRecord);
+    }
+    if (z.libelle) {
+      legacyFallbackMap.set(normKey(z.libelle), normalizedRecord);
+      legacyFallbackMap.set(foldAccentsKey(z.libelle), normalizedRecord);
+    }
+    if (z.nom) {
+      legacyFallbackMap.set(normKey(z.nom), normalizedRecord);
+      legacyFallbackMap.set(foldAccentsKey(z.nom), normalizedRecord);
+    }
   }
-  return map;
+
+  return { canonicalMap, legacyFallbackMap };
+}
+
+function resolveZoneWithCompatibility(
+  rawZoneInput: string,
+  lookup: ZoneIndexLookup
+): { zone: IZone | null; viaLegacyFallback: boolean; canonicalCode: string } {
+  const exactKey = normKey(rawZoneInput);
+  const direct = lookup.canonicalMap.get(exactKey);
+  if (direct) {
+    const canonicalCode = normKey(direct.code_zone || direct.code || direct.id_zone);
+    return {
+      zone: direct,
+      viaLegacyFallback: cleanStr(rawZoneInput) !== canonicalCode,
+      canonicalCode,
+    };
+  }
+
+  const fallback =
+    lookup.legacyFallbackMap.get(exactKey) ||
+    lookup.legacyFallbackMap.get(foldAccentsKey(rawZoneInput)) ||
+    null;
+
+  if (fallback) {
+    const canonicalCode = normKey(fallback.code_zone || fallback.code || fallback.id_zone);
+    return {
+      zone: fallback,
+      viaLegacyFallback: true,
+      canonicalCode,
+    };
+  }
+
+  return { zone: null, viaLegacyFallback: false, canonicalCode: '' };
 }
 
 function buildFamilyIndex(families: IMachineFamily[]): Map<string, IMachineFamily> {
@@ -175,9 +232,10 @@ function buildTechnicianIndex(
  * `01_ZONES -> 03_FAMILIES -> 03_TEMPLATES -> 03_GENERAL_SYSTEM_TYPES`.
  *
  * Enforces:
+ * - Canonical `code_zone` normalization (`trim + uppercase`).
  * - Zero implicit entity creation on missing foreign keys (`BROKEN_FK`).
  * - Forbidden operational/asset payloads rejected at bundle boundary (`FORBIDDEN_BUNDLE_FIELD`).
- * - `REPLACE_CATALOG` active-reference protection (`REFERENCED_BY_ACTIVE_RECORDS`).
+ * - `REPLACE_CATALOG` active-reference protection (`REFERENCED_BY_ACTIVE_RECORDS`) with link counts.
  * - Atomic commit gate (`rejected.length === 0 && !dryRun`).
  */
 export function validateAndCommitRefParcBundle(
@@ -277,20 +335,26 @@ export function validateAndCommitRefParcBundle(
   if (mode === 'MERGE' || rawZones.length === 0) {
     for (const z of existingZones) {
       if (!z) continue;
-      const code = cleanStr(z.code_zone || z.code || z.id_zone);
-      if (!code) continue;
-      const key = normKey(code);
+      const rawCode = cleanStr(z.code_zone || z.code || z.id_zone);
+      if (!rawCode) continue;
+      const canonicalKey = normKey(rawCode);
       const normalized: IZone = {
         ...z,
-        code,
-        code_zone: code,
-        id_zone: cleanStr(z.id_zone || code),
-        libelle: cleanStr(z.libelle || z.nom || code),
+        code: canonicalKey,
+        code_zone: canonicalKey,
+        id_zone: canonicalKey,
+        libelle: cleanStr(z.libelle || z.nom || rawCode),
       };
-      workingZonesMap.set(key, normalized);
-      aliasZoneToCanonical.set(key, key);
-      if (z.id_zone) aliasZoneToCanonical.set(normKey(z.id_zone), key);
-      if (z.libelle) aliasZoneToCanonical.set(normKey(z.libelle), key);
+      workingZonesMap.set(canonicalKey, normalized);
+      aliasZoneToCanonical.set(canonicalKey, canonicalKey);
+      if (z.id_zone) {
+        aliasZoneToCanonical.set(normKey(z.id_zone), canonicalKey);
+        aliasZoneToCanonical.set(foldAccentsKey(z.id_zone), canonicalKey);
+      }
+      if (z.libelle) {
+        aliasZoneToCanonical.set(normKey(z.libelle), canonicalKey);
+        aliasZoneToCanonical.set(foldAccentsKey(z.libelle), canonicalKey);
+      }
     }
   }
 
@@ -339,8 +403,11 @@ export function validateAndCommitRefParcBundle(
       return;
     }
 
-    const codeKey = normKey(rawCode);
-    if (FORBIDDEN_PSEUDO_ZONES.has(codeKey) || FORBIDDEN_PSEUDO_ZONES.has(normKey(rawLibelle))) {
+    const canonicalCode = normKey(rawCode);
+    if (
+      FORBIDDEN_PSEUDO_ZONES.has(canonicalCode) ||
+      FORBIDDEN_PSEUDO_ZONES.has(normKey(rawLibelle))
+    ) {
       rejected.push({
         stage: '01_ZONES',
         entity: 'ZONES',
@@ -353,27 +420,30 @@ export function validateAndCommitRefParcBundle(
       return;
     }
 
-    if (seenZoneCodes.has(codeKey)) {
+    if (seenZoneCodes.has(canonicalCode)) {
       rejected.push({
         stage: '01_ZONES',
         entity: 'ZONES',
         row: rowNum,
-        identifier: rawCode,
+        identifier: canonicalCode,
         code: 'DUPLICATE_KEY',
-        message: `Ligne ${rowNum} (ZONES) : doublon sur code_zone '${rawCode}'.`,
+        message: `Ligne ${rowNum} (ZONES) : doublon sur code_zone '${canonicalCode}'.`,
         blocking: true,
       });
       return;
     }
-    seenZoneCodes.add(codeKey);
+    seenZoneCodes.add(canonicalCode);
 
-    const existingCanonicalKey = aliasZoneToCanonical.get(codeKey) || codeKey;
+    const existingCanonicalKey =
+      aliasZoneToCanonical.get(canonicalCode) ||
+      aliasZoneToCanonical.get(foldAccentsKey(rawLibelle)) ||
+      canonicalCode;
     const prev = workingZonesMap.get(existingCanonicalKey);
     const nextRecord: IZone = {
       ...(prev || {}),
-      code: rawCode,
-      code_zone: rawCode,
-      id_zone: rawCode,
+      code: canonicalCode,
+      code_zone: canonicalCode,
+      id_zone: canonicalCode,
       libelle: rawLibelle,
       description: rawDesc || prev?.description || '',
       is_active: row.is_active !== undefined ? Boolean(row.is_active) : (prev?.is_active ?? true),
@@ -395,43 +465,60 @@ export function validateAndCommitRefParcBundle(
       zCreated++;
     }
 
-    workingZonesMap.set(codeKey, nextRecord);
-    aliasZoneToCanonical.set(codeKey, codeKey);
-    aliasZoneToCanonical.set(normKey(rawLibelle), codeKey);
+    workingZonesMap.set(canonicalCode, nextRecord);
+    aliasZoneToCanonical.set(canonicalCode, canonicalCode);
+    aliasZoneToCanonical.set(normKey(rawLibelle), canonicalCode);
+    aliasZoneToCanonical.set(foldAccentsKey(rawLibelle), canonicalCode);
   });
 
   if (mode === 'REPLACE_CATALOG' && rawZones.length > 0) {
+    const missingZonesRefs = new Map<string, { machines: number; technicians: number }>();
+
     for (const m of existingMachines) {
       const mZone = cleanStr(m.id_zone_default || m.id_zone || m.zone);
       if (!mZone) continue;
       const mZoneKey = normKey(mZone);
-      if (!aliasZoneToCanonical.has(mZoneKey) && !workingZonesMap.has(mZoneKey)) {
-        rejected.push({
-          stage: '01_ZONES',
-          entity: 'ZONES',
-          row: 0,
-          identifier: mZone,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la zone '${mZone}' en mode REPLACE_CATALOG : référencée par la machine '${m.id_machine_registered || m.id}'.`,
-          blocking: true,
-        });
+      const mZoneFolded = foldAccentsKey(mZone);
+      if (
+        !aliasZoneToCanonical.has(mZoneKey) &&
+        !aliasZoneToCanonical.has(mZoneFolded) &&
+        !workingZonesMap.has(mZoneKey)
+      ) {
+        const entry = missingZonesRefs.get(mZoneKey) || { machines: 0, technicians: 0 };
+        entry.machines += 1;
+        missingZonesRefs.set(mZoneKey, entry);
       }
     }
+
     for (const t of existingTechnicians) {
       const tZone = cleanStr(t.id_zone);
       if (!tZone) continue;
       const tZoneKey = normKey(tZone);
-      if (!aliasZoneToCanonical.has(tZoneKey) && !workingZonesMap.has(tZoneKey)) {
-        rejected.push({
-          stage: '01_ZONES',
-          entity: 'ZONES',
-          row: 0,
-          identifier: tZone,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la zone '${tZone}' en mode REPLACE_CATALOG : référencée par le technicien '${t.nom || t.id_technician}'.`,
-          blocking: true,
-        });
+      const tZoneFolded = foldAccentsKey(tZone);
+      if (
+        !aliasZoneToCanonical.has(tZoneKey) &&
+        !aliasZoneToCanonical.has(tZoneFolded) &&
+        !workingZonesMap.has(tZoneKey)
+      ) {
+        const entry = missingZonesRefs.get(tZoneKey) || { machines: 0, technicians: 0 };
+        entry.technicians += 1;
+        missingZonesRefs.set(tZoneKey, entry);
       }
+    }
+
+    for (const [zKey, counts] of missingZonesRefs.entries()) {
+      const total = counts.machines + counts.technicians;
+      rejected.push({
+        stage: '01_ZONES',
+        entity: 'ZONES',
+        row: 0,
+        identifier: zKey,
+        code: 'REFERENCED_BY_ACTIVE_RECORDS',
+        message: `Impossible de supprimer la zone '${zKey}' en mode REPLACE_CATALOG : ${total} lien(s) actif(s) (machines: ${counts.machines}, techniciens: ${counts.technicians}). Utilisez MERGE ou archivez d'abord.`,
+        blocking: true,
+        referencedCount: total,
+        referenceBreakdown: counts,
+      });
     }
   }
 
@@ -551,19 +638,26 @@ export function validateAndCommitRefParcBundle(
   });
 
   if (mode === 'REPLACE_CATALOG' && rawFamilies.length > 0) {
+    const missingFamilyRefs = new Map<string, number>();
     for (const m of existingMachines) {
       const mFam = cleanStr(m.id_family);
       if (mFam && !workingFamiliesMap.has(normKey(mFam))) {
-        rejected.push({
-          stage: '03_FAMILIES',
-          entity: 'FAMILIES',
-          row: 0,
-          identifier: mFam,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la famille '${mFam}' en mode REPLACE_CATALOG : référencée par la machine '${m.id_machine_registered || m.id}'.`,
-          blocking: true,
-        });
+        const key = normKey(mFam);
+        missingFamilyRefs.set(key, (missingFamilyRefs.get(key) || 0) + 1);
       }
+    }
+    for (const [fKey, count] of missingFamilyRefs.entries()) {
+      rejected.push({
+        stage: '03_FAMILIES',
+        entity: 'FAMILIES',
+        row: 0,
+        identifier: fKey,
+        code: 'REFERENCED_BY_ACTIVE_RECORDS',
+        message: `Impossible de supprimer la famille '${fKey}' en mode REPLACE_CATALOG : référencée par ${count} machine(s).`,
+        blocking: true,
+        referencedCount: count,
+        referenceBreakdown: { machines: count },
+      });
     }
   }
 
@@ -719,19 +813,26 @@ export function validateAndCommitRefParcBundle(
   });
 
   if (mode === 'REPLACE_CATALOG' && rawTemplates.length > 0) {
+    const missingTemplateRefs = new Map<string, number>();
     for (const m of existingMachines) {
       const mTpl = cleanStr(m.id_templates);
       if (mTpl && !workingTemplatesMap.has(normKey(mTpl))) {
-        rejected.push({
-          stage: '03_TEMPLATES',
-          entity: 'TEMPLATES',
-          row: 0,
-          identifier: mTpl,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer le modèle '${mTpl}' en mode REPLACE_CATALOG : référencé par la machine '${m.id_machine_registered || m.id}'.`,
-          blocking: true,
-        });
+        const key = normKey(mTpl);
+        missingTemplateRefs.set(key, (missingTemplateRefs.get(key) || 0) + 1);
       }
+    }
+    for (const [tKey, count] of missingTemplateRefs.entries()) {
+      rejected.push({
+        stage: '03_TEMPLATES',
+        entity: 'TEMPLATES',
+        row: 0,
+        identifier: tKey,
+        code: 'REFERENCED_BY_ACTIVE_RECORDS',
+        message: `Impossible de supprimer le modèle '${tKey}' en mode REPLACE_CATALOG : référencé par ${count} machine(s).`,
+        blocking: true,
+        referencedCount: count,
+        referenceBreakdown: { machines: count },
+      });
     }
   }
 
@@ -775,7 +876,12 @@ export function validateAndCommitRefParcBundle(
       sSkipped++;
       return;
     }
-    const rawCode = cleanStr(row.code_system_type ?? row.id_system_type ?? row.code ?? (row as Record<string, unknown>).id);
+    const rawCode = cleanStr(
+      row.code_system_type ??
+        row.id_system_type ??
+        row.code ??
+        (row as Record<string, unknown>).id
+    );
     const rawName = cleanStr(row.libelle ?? row.name ?? (row as Record<string, unknown>).nom);
 
     if (!rawCode && !rawName) {
@@ -843,19 +949,26 @@ export function validateAndCommitRefParcBundle(
   });
 
   if (mode === 'REPLACE_CATALOG' && rawSystemTypes.length > 0) {
+    const missingSysRefs = new Map<string, number>();
     for (const m of existingMachines) {
       const sysType = cleanStr(m.id_general_system_type);
       if (sysType && !workingSystemTypesMap.has(normKey(sysType))) {
-        rejected.push({
-          stage: '03_GENERAL_SYSTEM_TYPES',
-          entity: 'GENERAL_SYSTEM_TYPES',
-          row: 0,
-          identifier: sysType,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer le type système général '${sysType}' en mode REPLACE_CATALOG : référencé par l'équipement '${m.id_machine_registered || m.id}'.`,
-          blocking: true,
-        });
+        const key = normKey(sysType);
+        missingSysRefs.set(key, (missingSysRefs.get(key) || 0) + 1);
       }
+    }
+    for (const [sKey, count] of missingSysRefs.entries()) {
+      rejected.push({
+        stage: '03_GENERAL_SYSTEM_TYPES',
+        entity: 'GENERAL_SYSTEM_TYPES',
+        row: 0,
+        identifier: sKey,
+        code: 'REFERENCED_BY_ACTIVE_RECORDS',
+        message: `Impossible de supprimer le type système général '${sKey}' en mode REPLACE_CATALOG : référencé par ${count} équipement(s).`,
+        blocking: true,
+        referencedCount: count,
+        referenceBreakdown: { machines: count },
+      });
     }
   }
 
@@ -938,11 +1051,13 @@ export function validateAndCommitRefParcBundle(
  *
  * Enforces:
  * - Dependency Gate against live `ZONES`, `FAMILIES`, `TEMPLATES`, and `GENERAL_SYSTEM_TYPES`.
+ * - Zone resolution: canonical `code_zone` first; fallback to legacy `id_zone`/`libelle`
+ *   writes canonical `code_zone` onto the machine and records a `LEGACY_ZONE_NORMALIZED` warning.
  * - Strict branch validation for `PRODUCTION` (`code_family` + `code_template` matching family)
  *   vs `SYSTEM_GENERAL` (`code_system_type`).
  * - Forbidden Blueprint/PM/CM/Movement embedded payloads (`FORBIDDEN_BUNDLE_FIELD`).
- * - Parent line hierarchy cycle detection (`CIRCULAR_HIERARCHY`) without property inheritance.
- * - `REPLACE_CATALOG` active-reference protection against PM tasks, Corrective BTs, Movements, and Warehouse items.
+ * - Two-pass `parent_code_machine` validation + `sanitizeMachinesHierarchy` with zero property inheritance.
+ * - `REPLACE_CATALOG` active-reference protection (`REFERENCED_BY_ACTIVE_RECORDS`) with link counts.
  */
 export function validateAndCommitAssetsMachinesBundle(
   input: AssetsMachinesBundleInput,
@@ -1066,7 +1181,9 @@ export function validateAndCommitAssetsMachinesBundle(
         (row as Record<string, unknown>).id_machine_registered ??
         (row as Record<string, unknown>).id
     );
-    const rawDesig = cleanStr(row.designation ?? row.nom ?? (row as Record<string, unknown>).libelle);
+    const rawDesig = cleanStr(
+      row.designation ?? row.nom ?? (row as Record<string, unknown>).libelle
+    );
     const rawZone = cleanStr(
       row.code_zone ??
         (row as Record<string, unknown>).id_zone_default ??
@@ -1161,7 +1278,9 @@ export function validateAndCommitAssetsMachinesBundle(
       return;
     }
 
-    const resolvedZone = zoneLookup.get(normKey(rawZone));
+    const { zone: resolvedZone, viaLegacyFallback, canonicalCode: canonicalZone } =
+      resolveZoneWithCompatibility(rawZone, zoneLookup);
+
     if (!resolvedZone) {
       rejected.push({
         stage: '03_MACHINES',
@@ -1173,6 +1292,18 @@ export function validateAndCommitAssetsMachinesBundle(
         blocking: true,
       });
       return;
+    }
+
+    if (viaLegacyFallback) {
+      warnings.push({
+        stage: '03_MACHINES',
+        entity: 'MACHINES',
+        row: rowNum,
+        identifier: rawCode,
+        code: 'LEGACY_ZONE_NORMALIZED',
+        message: `Ligne ${rowNum} (MACHINES [${rawCode}]) : zone '${rawZone}' normalisée par compatibilité vers le code canonique '${canonicalZone}'.`,
+        blocking: false,
+      });
     }
 
     const rawAssetClass = cleanStr(row.asset_class || 'PRODUCTION').toUpperCase();
@@ -1195,9 +1326,7 @@ export function validateAndCommitAssetsMachinesBundle(
     let resolvedSystemTypeCode: string | null = null;
 
     if (assetClass === 'PRODUCTION') {
-      const rawFam = cleanStr(
-        row.code_family ?? (row as Record<string, unknown>).id_family
-      );
+      const rawFam = cleanStr(row.code_family ?? (row as Record<string, unknown>).id_family);
       const rawTpl = cleanStr(
         row.code_template ??
           (row as Record<string, unknown>).id_templates ??
@@ -1310,9 +1439,7 @@ export function validateAndCommitAssetsMachinesBundle(
     }
 
     // Optional Technician resolution
-    const rawTech = cleanStr(
-      row.code_technician ?? (row as Record<string, unknown>).technician
-    );
+    const rawTech = cleanStr(row.code_technician ?? (row as Record<string, unknown>).technician);
     let resolvedTech = '';
     if (rawTech) {
       const foundTech = techLookup.get(normKey(rawTech));
@@ -1354,12 +1481,9 @@ export function validateAndCommitAssetsMachinesBundle(
       normKey(rawStatus) === 'ARCHIVEE' ||
       normKey(rawStatus) === 'ARCHIVED' ||
       row.is_active === false;
-    const statusValue = isArchived
-      ? 'ARCHIVEE'
-      : rawStatus || prev?.status || 'En service';
+    const statusValue = isArchived ? 'ARCHIVEE' : rawStatus || prev?.status || 'En service';
 
-    const canonicalZone = cleanStr(resolvedZone.code_zone || resolvedZone.id_zone || resolvedZone.code);
-
+    // Strict non-inheritance rule: each machine owns its own canonical zone, family, template, and blueprint
     const nextMachine: IMachine = {
       ...(prev || {}),
       id_machine_registered: rawCode,
@@ -1369,13 +1493,17 @@ export function validateAndCommitAssetsMachinesBundle(
       nom: rawDesig,
       id_zone_default: canonicalZone,
       id_zone: canonicalZone,
+      zone: canonicalZone,
       asset_class: assetClass,
       id_family: resolvedFamilyCode,
       id_templates: resolvedTemplateCode,
       id_general_system_type: resolvedSystemTypeCode,
       technician: resolvedTech || prev?.technician || '',
-      parent_id: parentCode || null,
-      asset_level: cleanStr(row.asset_level || prev?.asset_level || 'MACHINE').toUpperCase() === 'LINE' ? 'LINE' : 'MACHINE',
+      parent_id: parentCode ? normKey(parentCode) : null,
+      asset_level:
+        cleanStr(row.asset_level || prev?.asset_level || 'MACHINE').toUpperCase() === 'LINE'
+          ? 'LINE'
+          : 'MACHINE',
       status: statusValue,
       statut: statusValue,
       is_active: !isArchived,
@@ -1452,69 +1580,76 @@ export function validateAndCommitAssetsMachinesBundle(
     }
   }
 
-  // REPLACE_CATALOG active-reference guard
+  // REPLACE_CATALOG active-reference guard with aggregated breakdown per deleted machine key
   if (mode === 'REPLACE_CATALOG') {
+    const deletedMachineRefs = new Map<
+      string,
+      {
+        preventiveTasks: number;
+        correctiveInterventions: number;
+        mouvements: number;
+        warehouseItems: number;
+      }
+    >();
+
+    const recordRef = (
+      rawMachineCode: string,
+      bucket:
+        | 'preventiveTasks'
+        | 'correctiveInterventions'
+        | 'mouvements'
+        | 'warehouseItems'
+    ) => {
+      const mKey = normKey(rawMachineCode);
+      if (!mKey || workingMachinesMap.has(mKey)) return;
+      const entry = deletedMachineRefs.get(mKey) || {
+        preventiveTasks: 0,
+        correctiveInterventions: 0,
+        mouvements: 0,
+        warehouseItems: 0,
+      };
+      entry[bucket] += 1;
+      deletedMachineRefs.set(mKey, entry);
+    };
+
     for (const task of existingPreventiveTasks) {
       const mCode = cleanStr(task.id_machine);
-      if (mCode && !workingMachinesMap.has(normKey(mCode))) {
-        rejected.push({
-          stage: '03_MACHINES',
-          entity: 'MACHINES',
-          row: 0,
-          identifier: mCode,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la machine '${mCode}' en mode REPLACE_CATALOG : référencée par une tâche préventive (${task.code || task.id}).`,
-          blocking: true,
-        });
-      }
+      if (mCode) recordRef(mCode, 'preventiveTasks');
     }
     for (const bt of existingCorrective) {
       const mCode = cleanStr(bt.code_machine);
-      if (mCode && !workingMachinesMap.has(normKey(mCode))) {
-        rejected.push({
-          stage: '03_MACHINES',
-          entity: 'MACHINES',
-          row: 0,
-          identifier: mCode,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la machine '${mCode}' en mode REPLACE_CATALOG : référencée par une intervention corrective (${bt.num_bt || bt.id}).`,
-          blocking: true,
-        });
-      }
+      if (mCode) recordRef(mCode, 'correctiveInterventions');
     }
     for (const mv of existingMouvements) {
-      const mCode = cleanStr(mv.id_machine_registered || (mv as Record<string, unknown>).machine);
-      if (
-        mCode &&
-        mCode !== 'Stock' &&
-        mCode !== 'Atelier' &&
-        mCode !== 'N/A' &&
-        !workingMachinesMap.has(normKey(mCode))
-      ) {
-        rejected.push({
-          stage: '03_MACHINES',
-          entity: 'MACHINES',
-          row: 0,
-          identifier: mCode,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la machine '${mCode}' en mode REPLACE_CATALOG : référencée par un mouvement de stock.`,
-          blocking: true,
-        });
+      const mCode = cleanStr(
+        mv.id_machine_registered || (mv as Record<string, unknown>).machine
+      );
+      if (mCode && mCode !== 'Stock' && mCode !== 'Atelier' && mCode !== 'N/A') {
+        recordRef(mCode, 'mouvements');
       }
     }
     for (const wh of existingWarehouseItems) {
       const mCode = cleanStr(wh.id_machine_registered || wh.id_machine);
-      if (mCode && !workingMachinesMap.has(normKey(mCode))) {
-        rejected.push({
-          stage: '03_MACHINES',
-          entity: 'MACHINES',
-          row: 0,
-          identifier: mCode,
-          code: 'REFERENCED_BY_ACTIVE_RECORDS',
-          message: `Impossible de supprimer la machine '${mCode}' en mode REPLACE_CATALOG : référencée par un organe d'entrepôt (${wh.code || wh.id_warehouse_item}).`,
-          blocking: true,
-        });
-      }
+      if (mCode) recordRef(mCode, 'warehouseItems');
+    }
+
+    for (const [mKey, breakdown] of deletedMachineRefs.entries()) {
+      const total =
+        breakdown.preventiveTasks +
+        breakdown.correctiveInterventions +
+        breakdown.mouvements +
+        breakdown.warehouseItems;
+      rejected.push({
+        stage: '03_MACHINES',
+        entity: 'MACHINES',
+        row: 0,
+        identifier: mKey,
+        code: 'REFERENCED_BY_ACTIVE_RECORDS',
+        message: `Impossible de supprimer la machine '${mKey}' en mode REPLACE_CATALOG : ${total} lien(s) opérationnel(s) actif(s) (PM: ${breakdown.preventiveTasks}, BT: ${breakdown.correctiveInterventions}, Mouvements: ${breakdown.mouvements}, Entrepôt: ${breakdown.warehouseItems}). Utilisez MERGE ou archivez la machine.`,
+        blocking: true,
+        referencedCount: total,
+        referenceBreakdown: breakdown,
+      });
     }
   }
 
@@ -1527,7 +1662,9 @@ export function validateAndCommitAssetsMachinesBundle(
     skipped: mSkipped,
   });
 
-  const nextMachines = Array.from(workingMachinesMap.values());
+  const rawNextMachines = Array.from(workingMachinesMap.values());
+  const nextMachines =
+    rejected.length === 0 ? sanitizeMachinesHierarchy(rawNextMachines) : rawNextMachines;
   const success = rejected.length === 0;
   let committed = false;
 
@@ -1569,116 +1706,12 @@ export function validateAndCommitAssetsMachinesBundle(
 }
 
 /**
- * Adapter wrapping the existing `pdrExcelValidator` (`Groups -> Types -> Items`)
- * into the unified `ImportReport<RefPdrStagingResult>` contract.
- */
-export function validateAndCommitRefPdrBundle(
-  input: RefPdrBundleInput,
-  options: UnifiedImportOptions = {}
-): ImportReport<RefPdrStagingResult> {
-  const startTime = Date.now();
-  const mode: ImportMode = options.mode === 'REPLACE_CATALOG' ? 'REPLACE_CATALOG' : 'MERGE';
-  const origin: ImportSourceOrigin = options.origin || 'JSON_BUNDLE';
-  const commitPolicy: ImportCommitPolicy = options.commitPolicy || 'ATOMIC';
-  const dryRun = Boolean(options.dryRun);
-  const actorRole = normKey(options.actorRole || 'ADMIN');
-
-  const store = useGmaoStore.getState();
-  const pdrReport = validateAndReconcilePdrCatalogImport(
-    {
-      groups: input?.groups || [],
-      types: input?.types || [],
-      items: input?.items || [],
-    },
-    {
-      mode,
-      actorRole,
-      existingGroups: options.existingPdrGroups ?? store.pdrGroups ?? [],
-      existingTypes: options.existingStockTypes ?? (store.types as StockType[]) ?? [],
-      existingStock: options.existingStock ?? store.rawStock ?? [],
-      existingMouvements: options.existingMouvements ?? store.mouvements ?? [],
-    }
-  );
-
-  const rejected: ImportIssue[] = pdrReport.errors.map((err) => ({
-    stage: '04_PDR',
-    entity: err.sheet,
-    row: err.row,
-    identifier: err.identifier,
-    code: err.message.includes('Accès refusé')
-      ? 'RBAC_DENIED'
-      : err.message.includes('introuvable')
-      ? 'BROKEN_FK'
-      : err.message.includes('Doublon')
-      ? 'DUPLICATE_KEY'
-      : 'MISSING_REQUIRED',
-    message: err.message,
-    blocking: true,
-  }));
-
-  const accepted: AcceptedStageRecord[] = [
-    {
-      stage: '04_PDR',
-      entity: 'PDR_GROUPS',
-      created: pdrReport.created.groups,
-      updated: pdrReport.updated.groups,
-      unchanged: 0,
-      skipped: pdrReport.skipped.groups,
-    },
-    {
-      stage: '04_PDR',
-      entity: 'PDR_TYPES',
-      created: pdrReport.created.types,
-      updated: pdrReport.updated.types,
-      unchanged: 0,
-      skipped: pdrReport.skipped.types,
-    },
-    {
-      stage: '04_PDR',
-      entity: 'PDR_ITEMS',
-      created: pdrReport.created.items,
-      updated: pdrReport.updated.items,
-      unchanged: 0,
-      skipped: pdrReport.skipped.items,
-    },
-  ];
-
-  const success = rejected.length === 0 && pdrReport.success;
-  let committed = false;
-
-  if (success && !dryRun) {
-    committed = applyPdrCatalogImportToStore(pdrReport);
-  }
-
-  return {
-    bundleType: 'REF_PDR',
-    success,
-    dryRun,
-    origin,
-    mode,
-    commitPolicy,
-    committed,
-    accepted,
-    rejected,
-    warnings: [],
-    durationMs: Date.now() - startTime,
-    staging: {
-      nextGroups: pdrReport.nextGroups,
-      nextTypes: pdrReport.nextTypes,
-      nextStock: pdrReport.nextStock,
-      nextDesignations: pdrReport.nextDesignations,
-    },
-  };
-}
-
-/**
- * Unified entry point dispatching `REF_PARC`, `ASSETS_MACHINES`, or `REF_PDR` bundles.
+ * Unified entry point dispatching `REF_PARC` or `ASSETS_MACHINES` bundles.
  */
 export function runUnifiedImportPipeline(
   bundle:
     | (RefParcBundleInput & { bundleType: 'REF_PARC' })
-    | (AssetsMachinesBundleInput & { bundleType: 'ASSETS_MACHINES' })
-    | (RefPdrBundleInput & { bundleType: 'REF_PDR' }),
+    | (AssetsMachinesBundleInput & { bundleType: 'ASSETS_MACHINES' }),
   options: UnifiedImportOptions = {}
 ): ImportReport<any> {
   if (bundle.bundleType === 'REF_PARC') {
@@ -1686,9 +1719,6 @@ export function runUnifiedImportPipeline(
   }
   if (bundle.bundleType === 'ASSETS_MACHINES') {
     return validateAndCommitAssetsMachinesBundle(bundle, options);
-  }
-  if (bundle.bundleType === 'REF_PDR') {
-    return validateAndCommitRefPdrBundle(bundle, options);
   }
   throw new Error(`Type de paquet non pris en charge : ${(bundle as any)?.bundleType}`);
 }
@@ -1701,7 +1731,9 @@ export function exportRefParcBundle(snapshot?: {
   families?: IMachineFamily[];
   templates?: IMachineTemplate[];
   generalSystemTypes?: IGeneralSystemType[];
-}): Required<Pick<RefParcBundleInput, 'bundleType' | 'zones' | 'families' | 'templates' | 'generalSystemTypes'>> {
+}): Required<
+  Pick<RefParcBundleInput, 'bundleType' | 'zones' | 'families' | 'templates' | 'generalSystemTypes'>
+> {
   const store = useGmaoStore.getState();
   const zones = snapshot?.zones ?? store.zones ?? [];
   const families = snapshot?.families ?? store.families ?? [];
@@ -1711,7 +1743,7 @@ export function exportRefParcBundle(snapshot?: {
   return {
     bundleType: 'REF_PARC',
     zones: zones.map((z) => ({
-      code_zone: cleanStr(z.code_zone || z.code || z.id_zone),
+      code_zone: normKey(z.code_zone || z.code || z.id_zone),
       libelle: cleanStr(z.libelle || z.nom || z.code_zone || z.id_zone),
       description: cleanStr(z.description),
       is_active: z.is_active !== false,
@@ -1758,7 +1790,7 @@ export function exportAssetsMachinesBundle(snapshot?: {
       return {
         code_machine: cleanStr(m.id_machine_registered || m.id || m.code),
         designation: cleanStr(m.designation || m.nom || m.libelle),
-        code_zone: cleanStr(m.id_zone_default || m.id_zone || m.zone),
+        code_zone: normKey(m.id_zone_default || m.id_zone || m.zone),
         asset_class: assetClass,
         code_family: assetClass === 'PRODUCTION' ? cleanStr(m.id_family) : null,
         code_template: assetClass === 'PRODUCTION' ? cleanStr(m.id_templates) : null,
@@ -1766,7 +1798,8 @@ export function exportAssetsMachinesBundle(snapshot?: {
           assetClass === 'SYSTEM_GENERAL' ? cleanStr(m.id_general_system_type) : null,
         code_technician: cleanStr(m.technician) || null,
         parent_code_machine: cleanStr(m.parent_id) || null,
-        asset_level: cleanStr(m.asset_level || 'MACHINE').toUpperCase() === 'LINE' ? 'LINE' : 'MACHINE',
+        asset_level:
+          cleanStr(m.asset_level || 'MACHINE').toUpperCase() === 'LINE' ? 'LINE' : 'MACHINE',
         status: cleanStr(m.status || m.statut || 'En service'),
         is_active: m.is_active !== false && normKey(m.status || m.statut) !== 'ARCHIVEE',
         serial_number: cleanStr(m.serial_number || m.numero_serie),

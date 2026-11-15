@@ -20,7 +20,11 @@ function collectProductionFiles(dir: string): string[] {
     if (e.isDirectory()) {
       if (e.name === 'tests' || e.name === '__tests__' || e.name === 'data') continue;
       results = results.concat(collectProductionFiles(full));
-    } else if (/\.(ts|tsx)$/.test(e.name) && !e.name.endsWith('.test.ts') && !e.name.endsWith('.test.tsx')) {
+    } else if (
+      /\.(ts|tsx)$/.test(e.name) &&
+      !e.name.endsWith('.test.ts') &&
+      !e.name.endsWith('.test.tsx')
+    ) {
       results.push(full);
     }
   }
@@ -52,7 +56,9 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
       expect(offenders).toEqual([]);
       expect(fs.existsSync(path.resolve(srcDir, 'data/machines/seedZones.json'))).toBe(false);
       expect(fs.existsSync(path.resolve(srcDir, 'data/responsableTemplates.ts'))).toBe(false);
-      expect(fs.existsSync(path.resolve(srcDir, 'domain/users/responsableTemplates.ts'))).toBe(true);
+      expect(fs.existsSync(path.resolve(srcDir, 'domain/users/responsableTemplates.ts'))).toBe(
+        true
+      );
     });
 
     it('never silently injects seed stockInitial when an imported item omits stockInitial', () => {
@@ -74,10 +80,10 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
   });
 
   describe('2. REF_PARC Bundle (ZONES -> FAMILIES -> TEMPLATES -> GENERAL_SYSTEM_TYPES)', () => {
-    it('validates and commits a clean REF_PARC bundle in dependency order', () => {
+    it('validates and commits a clean REF_PARC bundle in dependency order with normalized code_zone', () => {
       const report = validateAndCommitRefParcBundle({
         zones: [
-          { code_zone: 'Z-SCIAGE', libelle: 'Atelier Sciage', description: 'Découpe primaire' },
+          { code_zone: ' detourag ', libelle: 'Détourage', description: 'Atelier Détourage' },
           { code_zone: 'Z-UTILITY', libelle: 'Salle Compresseurs & Utilités' },
         ],
         families: [
@@ -92,9 +98,7 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
             constructeur: 'SCM',
           },
         ],
-        generalSystemTypes: [
-          { code_system_type: 'SYS-AIR', libelle: 'Air Comprimé' },
-        ],
+        generalSystemTypes: [{ code_system_type: 'SYS-AIR', libelle: 'Air Comprimé' }],
       });
 
       expect(report.success).toBe(true);
@@ -103,6 +107,8 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
 
       const state = useGmaoStore.getState();
       expect(state.zones).toHaveLength(2);
+      expect(state.zones[0].code_zone).toBe('DETOURAG');
+      expect(state.zones[0].id_zone).toBe('DETOURAG');
       expect(state.families).toHaveLength(2);
       expect(state.templates).toHaveLength(1);
       expect(state.templates[0].famille_lib).toBe("Centres d'usinage");
@@ -147,10 +153,11 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
     });
   });
 
-  describe('3. ASSETS_MACHINES Bundle (Dependency Gate & Hierarchy Validation)', () => {
+  describe('3. ASSETS_MACHINES Bundle (Dependency Gate, Zone Compatibility & Hierarchy Validation)', () => {
     beforeEach(() => {
       validateAndCommitRefParcBundle({
         zones: [
+          { code_zone: 'DETOURAG', libelle: 'Détourage' },
           { code_zone: 'Z-SCIAGE', libelle: 'Atelier Sciage' },
           { code_zone: 'Z-UTILITY', libelle: 'Utilités' },
         ],
@@ -201,6 +208,32 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
       expect(air?.id_general_system_type).toBe('SYS-AIR');
     });
 
+    it('normalizes legacy zone libelle ("Détourage") to canonical code_zone ("DETOURAG") and emits a LEGACY_ZONE_NORMALIZED warning', () => {
+      const report = validateAndCommitAssetsMachinesBundle({
+        machines: [
+          {
+            code_machine: 'DET-01',
+            designation: 'Détoureuse CNC 1',
+            code_zone: 'Détourage', // Legacy label instead of canonical DETOURAG
+            asset_class: 'PRODUCTION',
+            code_family: 'FAM-CNC',
+            code_template: 'TPL-CNC-3AX',
+          },
+        ],
+      });
+
+      expect(report.success).toBe(true);
+      expect(report.committed).toBe(true);
+      expect(report.warnings).toHaveLength(1);
+      expect(report.warnings[0].code).toBe('LEGACY_ZONE_NORMALIZED');
+
+      const det01 = useGmaoStore
+        .getState()
+        .machines.find((m) => m.id_machine_registered === 'DET-01');
+      expect(det01?.id_zone_default).toBe('DETOURAG');
+      expect(det01?.id_zone).toBe('DETOURAG');
+    });
+
     it('rejects broken zone FK, missing family, and template-family mismatch without committing', () => {
       const report = validateAndCommitAssetsMachinesBundle({
         machines: [
@@ -242,8 +275,8 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
       expect(useGmaoStore.getState().machines).toHaveLength(0);
     });
 
-    it('detects circular parent_code_machine hierarchy and blocks commit', () => {
-      const report = validateAndCommitAssetsMachinesBundle({
+    it('detects circular parent_code_machine hierarchy and blocks commit, while allowing valid child-before-parent order without inheriting zone/family', () => {
+      const cycleReport = validateAndCommitAssetsMachinesBundle({
         machines: [
           {
             code_machine: 'LINE-A',
@@ -267,12 +300,45 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
         ],
       });
 
-      expect(report.success).toBe(false);
-      expect(report.committed).toBe(false);
-      expect(report.rejected.some((r) => r.code === 'CIRCULAR_HIERARCHY')).toBe(true);
+      expect(cycleReport.success).toBe(false);
+      expect(cycleReport.committed).toBe(false);
+      expect(cycleReport.rejected.some((r) => r.code === 'CIRCULAR_HIERARCHY')).toBe(true);
+
+      // Valid child-before-parent order in same file without inheriting parent's zone or family
+      const validHierarchyReport = validateAndCommitAssetsMachinesBundle({
+        machines: [
+          {
+            code_machine: 'CHILD-PRESS-01',
+            designation: 'Presse Finition',
+            code_zone: 'DETOURAG',
+            asset_class: 'PRODUCTION',
+            code_family: 'FAM-PRESSE',
+            code_template: 'TPL-PRH-200T',
+            asset_level: 'MACHINE',
+            parent_code_machine: 'LINE-MASTER',
+          },
+          {
+            code_machine: 'LINE-MASTER',
+            designation: 'Ligne Principale Sciage',
+            code_zone: 'Z-SCIAGE',
+            asset_class: 'PRODUCTION',
+            code_family: 'FAM-CNC',
+            code_template: 'TPL-CNC-3AX',
+            asset_level: 'LINE',
+          },
+        ],
+      });
+
+      expect(validHierarchyReport.success).toBe(true);
+      const child = useGmaoStore
+        .getState()
+        .machines.find((m) => m.id_machine_registered === 'CHILD-PRESS-01');
+      expect(child?.parent_id).toBe('LINE-MASTER');
+      expect(child?.id_zone_default).toBe('DETOURAG'); // Preserves own zone, not parent's Z-SCIAGE
+      expect(child?.id_family).toBe('FAM-PRESSE'); // Preserves own family, not parent's FAM-CNC
     });
 
-    it('guards REPLACE_CATALOG when an existing machine is referenced by a corrective BT', () => {
+    it('guards REPLACE_CATALOG when an existing machine is referenced by corrective BTs or movements and reports reference counts', () => {
       validateAndCommitAssetsMachinesBundle({
         machines: [
           {
@@ -286,7 +352,7 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
         ],
       });
 
-      // Attempt REPLACE_CATALOG dropping CNC-01 while an active BT references it
+      // Attempt REPLACE_CATALOG dropping CNC-01 while an active BT and movement reference it
       const replaceReport = validateAndCommitAssetsMachinesBundle(
         {
           machines: [
@@ -303,14 +369,36 @@ describe('UnifiedImportPipeline & Backdoor Closure (REF_PARC & ASSETS_MACHINES)'
           mode: 'REPLACE_CATALOG',
           actorRole: 'ADMIN',
           existingCorrectiveInterventions: [
-            { id: 'BT-1', num_bt: 'BT-2026-001', code_machine: 'CNC-01', statut: 'EN_COURS' } as any,
+            {
+              id: 'BT-1',
+              num_bt: 'BT-2026-001',
+              code_machine: 'CNC-01',
+              statut: 'EN_COURS',
+            } as any,
+          ],
+          existingMouvements: [
+            {
+              id: 'MV-1',
+              type: 'Sortie',
+              id_machine_registered: 'CNC-01',
+              quantite: 2,
+            } as any,
           ],
         }
       );
 
       expect(replaceReport.success).toBe(false);
       expect(replaceReport.committed).toBe(false);
+      expect(replaceReport.rejected).toHaveLength(1);
       expect(replaceReport.rejected[0].code).toBe('REFERENCED_BY_ACTIVE_RECORDS');
+      expect(replaceReport.rejected[0].identifier).toBe('CNC-01');
+      expect(replaceReport.rejected[0].referencedCount).toBe(2);
+      expect(replaceReport.rejected[0].referenceBreakdown).toEqual({
+        preventiveTasks: 0,
+        correctiveInterventions: 1,
+        mouvements: 1,
+        warehouseItems: 0,
+      });
       expect(useGmaoStore.getState().machines[0].id_machine_registered).toBe('CNC-01');
     });
 
