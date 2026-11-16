@@ -47,6 +47,9 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     expect(container.textContent).toContain('CIOB');
     expect(container.textContent).toContain('GMAO NEXUS');
     expect(container.textContent).toContain('Passer l');
+    expect(container.textContent).not.toContain('%');
+    expect(container.textContent).not.toContain('Initialisation du Noyau');
+    expect(container.textContent).not.toContain('Connexion Modules');
 
     const skipButton = container.querySelector('button[type="button"]') as HTMLButtonElement;
     expect(skipButton).toBeTruthy();
