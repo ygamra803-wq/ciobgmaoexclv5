@@ -2,10 +2,7 @@ import { useState } from 'react';
 import {
   Calendar,
   CalendarPlus,
-  CalendarDays,
   Table2,
-  BarChart3,
-  Factory,
   X,
   Calculator,
   Clock,
@@ -16,8 +13,6 @@ import {
   Package,
   Sparkles,
   Plus,
-  RotateCcw,
-  Trash2,
   Gauge,
 } from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
@@ -28,10 +23,8 @@ import ErrorBoundary from '../../components/common/ErrorBoundary';
 import PreventiveService from '../../../application/services/PreventiveService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import TabMainView from './components/TabMainView';
-import PreventiveMetersView from './components/PreventiveMetersView';
 import TaskImportModal from './components/TaskImportModal';
 import { useI18n } from '../../../i18n/I18nContext';
-import { confirmAction } from '../../../utils/confirmAction';
 import { isComponentNature, isPartNature } from '../../../core/domain/EntrepotItem';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -40,8 +33,6 @@ import {
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
-import { storageService } from '../../../utils/storageService';
-import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
 export default function PreventiveView({
   tasks = [],
@@ -85,13 +76,13 @@ export default function PreventiveView({
     Boolean(user) && AuthorizationService.hasPermission(user, 'preventive.execute');
   const canManagePreventive =
     Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'preventive.manage');
-  const isExplicitDemoMode =
-    storageService.getItem(STORAGE_KEYS.DEMO_MODE, false) === true &&
-    storageService.getItem(STORAGE_KEYS.START_MODE, 'empty') !== 'empty';
+  void onResetToBaseline;
+  void onClearPreventiveForRealFactory;
+  void onDirectAdjustStock;
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [viewMode, setViewMode] = useState('matrix'); // 'matrix' | 'grouped' | 'calendar' | 'list' | 'analytics' | 'meters'
+  const [viewMode, setViewMode] = useState('matrix'); // 'monthly_grid' | 'matrix' | 'grouped' | 'calendar' | 'list' | 'executions' | 'meters' | 'analytics'
 
   const pendingPreventiveValidationCount = (executions || []).filter(
     (ex) => ex.validation_status === 'PENDING_VALIDATION'
@@ -123,45 +114,6 @@ export default function PreventiveView({
     );
     return target > 0 && curr >= target;
   }).length;
-
-  const handleRestoreBaseline = async () => {
-    if (!canManagePreventive || !isExplicitDemoMode) return;
-    if (
-      !(await confirmAction({
-        title: 'Restauration du planning de démonstration',
-        message:
-          'Restaurer le planning préventif de démonstration pour les machines actives du parc ?',
-        variant: 'warning',
-      }))
-    ) {
-      return;
-    }
-    if (onResetToBaseline) {
-      const result = await onResetToBaseline({ machines });
-      if (!result || result.cancelled) return;
-      showToast?.(
-        `Planning de démonstration restauré (${result.restoredCount || 0} tâches).` +
-          (result.orphanCountAfter
-            ? ` Attention: ${result.orphanCountAfter} orpheline(s) — nettoyez dans Paramètres > Intégrité.`
-            : ''),
-        result.orphanCountAfter ? 'warning' : 'success'
-      );
-      return;
-    }
-
-    const restored = PreventiveService.getTasks();
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('preventive_tasks_updated', { detail: restored }));
-    }
-    showToast?.(`Planning de démonstration restauré (${restored.length} tâches) !`, 'success');
-  };
-
-  const runClearRealFactory = async () => {
-    if (!canManagePreventive) return;
-    const result = await onClearPreventiveForRealFactory?.({ machines });
-    if (!result || result.cancelled) return;
-    showToast?.(`Préventif vidé (${result.clearedCount || 0} tâches).`, 'info');
-  };
 
   // ==========================================
   // MAIN VIEW HANDLERS (PRIMARY VIEW)
@@ -355,67 +307,9 @@ export default function PreventiveView({
             </div>
           </div>
 
-          {/* Right Column: 3D Circular Action Buttons */}
+          {/* Right Column: Essential Page-Level Action Buttons Only */}
           <div className="flex items-center gap-2 shrink-0 relative">
-            {/* 3D Switch Button: Horomètres & Compteurs (Conditionnel) */}
-            <Action3DButton
-              variant="circle"
-              color={viewMode === 'meters' ? 'indigo' : overdueCounterTasksCount > 0 ? 'rose' : 'slate'}
-              icon={Gauge}
-              onClick={() => setViewMode((prev) => (prev === 'meters' ? 'matrix' : 'meters'))}
-              title={
-                viewMode === 'meters'
-                  ? 'Revenir à la Matrice S1-S52'
-                  : 'Gestion des Horomètres & Compteurs' + (overdueCounterTasksCount > 0 ? ` (${overdueCounterTasksCount} seuils dépassés)` : '')
-              }
-              className={viewMode === 'meters' ? 'ring-2 ring-indigo-400/80' : overdueCounterTasksCount > 0 ? 'ring-2 ring-rose-400 animate-pulse' : ''}
-            />
-
-            {/* 3D Switch Button: Grouped by Machine */}
-            <Action3DButton
-              variant="circle"
-              color={viewMode === 'grouped' ? 'indigo' : 'slate'}
-              icon={Factory}
-              onClick={() => setViewMode((prev) => (prev === 'grouped' ? 'matrix' : 'grouped'))}
-              title={
-                viewMode === 'grouped'
-                  ? 'Basculer vers Matrice S1-S52'
-                  : 'Vue Synthétique Groupée par Machine'
-              }
-              className={viewMode === 'grouped' ? 'ring-2 ring-indigo-400/80' : ''}
-            />
-
-            {/* 3D Switch Button: Tables (Matrice / Liste) vs Calendar */}
-            <Action3DButton
-              variant="circle"
-              color={viewMode === 'calendar' ? 'teal' : 'slate'}
-              icon={viewMode === 'calendar' ? Table2 : CalendarDays}
-              onClick={() => setViewMode((prev) => (prev === 'calendar' ? 'matrix' : 'calendar'))}
-              title={
-                viewMode === 'calendar'
-                  ? 'Basculer vers Matrice S1-S52'
-                  : 'Basculer vers Calendrier Mensuel'
-              }
-              className={viewMode === 'calendar' ? 'ring-2 ring-teal-400/80' : ''}
-            />
-
-            {/* 3D Switch Button: Analytics / Statistiques & Coûts */}
-            {!isTechUser && (
-              <Action3DButton
-                variant="circle"
-                color={viewMode === 'analytics' ? 'purple' : 'slate'}
-                icon={BarChart3}
-                onClick={() => setViewMode((prev) => (prev === 'analytics' ? 'matrix' : 'analytics'))}
-                title={
-                  viewMode === 'analytics'
-                    ? 'Revenir aux Tableaux Préventifs'
-                    : 'Tableau de Bord & Statistiques (Santé & Coûts)'
-                }
-                className={viewMode === 'analytics' ? 'ring-2 ring-purple-400/80' : ''}
-              />
-            )}
-
-            {/* 3D Formula Circular Trigger Button */}
+            {/* 1. Formula Circular Trigger Button */}
             {!isTechUser && (
               <FormulasModalButton
                 onClick={() => setShowFormulasModal(true)}
@@ -423,53 +317,27 @@ export default function PreventiveView({
               />
             )}
 
-            {/* 3D Guide & Philosophy Circular Trigger Button */}
+            {/* 2. Guide & Philosophy Circular Trigger Button */}
             <Action3DButton
               variant="circle"
-              color="teal"
+              color="slate"
               icon={BookOpen}
               onClick={() => setShowGuideModal(true)}
               title="Philosophie & Manuel de la Maintenance Préventive"
-              className="ring-2 ring-teal-400/60"
             />
 
-            {/* 3D Reset Baseline Button — Explicit Demo Mode Only */}
-            {canManagePreventive && isExplicitDemoMode && (
-              <Action3DButton
-                variant="circle"
-                color="amber"
-                icon={RotateCcw}
-                onClick={handleRestoreBaseline}
-                title="Restaurer le planning préventif de démonstration"
-                className="ring-2 ring-amber-400/60"
-              />
-            )}
-
-            {/* 3D Clear for Real Factory Button */}
-            {canManagePreventive && onClearPreventiveForRealFactory && (
-              <Action3DButton
-                variant="circle"
-                color="rose"
-                icon={Trash2}
-                onClick={runClearRealFactory}
-                title="Clear for Real Factory (Vider les tâches pour usine réelle)"
-                className="ring-2 ring-rose-400/60"
-              />
-            )}
-
-            {/* 3D Import Tasks Button */}
+            {/* 3. Import Tasks Button */}
             {canManagePreventive && (
               <Action3DButton
                 variant="circle"
-                color="emerald"
+                color="slate"
                 icon={Upload}
                 onClick={() => setShowImportModal(true)}
                 title="Importer des tâches préventives (JSON / Fichier)"
-                className="ring-2 ring-emerald-400/60"
               />
             )}
 
-            {/* 3D Primary Add Plan / Action Button */}
+            {/* 4. Primary Add Plan / Concepteur Button */}
             {canManagePreventive && (
               <Action3DButton
                 variant="circle"
@@ -482,33 +350,6 @@ export default function PreventiveView({
             )}
           </div>
         </div>
-
-        {/* Empty State Demo Restore Banner (Demo Mode Only) */}
-        {canManagePreventive && isExplicitDemoMode && (!tasks || tasks.length === 0) && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                <RotateCcw className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-amber-900">
-                  Planning préventif vide (0 tâche active)
-                </h4>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  Vous pouvez restaurer instantanément le planning préventif de démonstration (S1–S52) associé aux machines actives du parc.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleRestoreBaseline}
-              className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-2 shrink-0 cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Restaurer le planning démo</span>
-            </button>
-          </div>
-        )}
 
         {/* Anti-Recurrence Predictive Suggestions from Corrective Nexus */}
         {canManagePreventive && preventiveRecommendations && preventiveRecommendations.length > 0 && (
@@ -603,44 +444,34 @@ export default function PreventiveView({
         {/* MAIN VIEW CONTENT                                                         */}
         {/* ========================================================================= */}
         <ErrorBoundary sectionName="Matrice & Planning Préventif">
-          {viewMode === 'meters' ? (
-            <PreventiveMetersView
-              machines={machines}
-              tasks={tasks}
-              meterReadings={meterReadings}
-              onRecordReading={onRecordReading || handleUpdateTaskCounter}
-              onBatchRecordReadings={onBatchRecordReadings}
-              onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
-              onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
-              user={user}
-              showToast={showToast}
-            />
-          ) : (
-            <TabMainView
-              tasks={tasks}
-              executions={executions}
-              machines={machines}
-              blueprints={blueprints}
-              zones={zones}
-              technicians={technicians}
-              actions={actions}
-              guides={guides}
-              stockItems={stockItems}
-              warehouseItems={warehouseItems}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
-              onReviewPreventiveExecution={canManagePreventive ? onReviewPreventiveExecution : null}
-              showToast={showToast}
-              onDeleteExecution={canManagePreventive ? onDeleteExecution : null}
-              onDeleteTask={canManagePreventive ? handleDeleteTask : null}
-              onUpdateTaskCounter={canExecutePreventive ? handleUpdateTaskCounter : null}
-              onUpdateTaskStatus={canExecutePreventive ? handleUpdateTaskStatus : null}
-              onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
-              onCreateCorrective={canExecutePreventive ? onCreateCorrective : null}
-              onNavigateToMachine={onNavigateToMachine}
-            />
-          )}
+          <TabMainView
+            tasks={tasks}
+            executions={executions}
+            machines={machines}
+            blueprints={blueprints}
+            zones={zones}
+            technicians={technicians}
+            actions={actions}
+            guides={guides}
+            stockItems={stockItems}
+            warehouseItems={warehouseItems}
+            meterReadings={meterReadings}
+            onRecordReading={onRecordReading || handleUpdateTaskCounter}
+            onBatchRecordReadings={onBatchRecordReadings}
+            overdueCounterTasksCount={overdueCounterTasksCount}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onMarkTaskDone={canExecutePreventive ? handleMarkTaskDone : null}
+            onReviewPreventiveExecution={canManagePreventive ? onReviewPreventiveExecution : null}
+            showToast={showToast}
+            onDeleteExecution={canManagePreventive ? onDeleteExecution : null}
+            onDeleteTask={canManagePreventive ? handleDeleteTask : null}
+            onUpdateTaskCounter={canExecutePreventive ? handleUpdateTaskCounter : null}
+            onUpdateTaskStatus={canExecutePreventive ? handleUpdateTaskStatus : null}
+            onNavigateToPlanBuilder={canManagePreventive ? onNavigateToReferentiel : null}
+            onCreateCorrective={canExecutePreventive ? onCreateCorrective : null}
+            onNavigateToMachine={onNavigateToMachine}
+          />
         </ErrorBoundary>
 
         {/* ========================================================================= */}

@@ -15,7 +15,6 @@ import {
   Search,
   DollarSign,
 } from 'lucide-react';
-import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 
 const MONTHS_FR = [
   'Janvier',
@@ -384,12 +383,6 @@ export default function MonthlyCalendarView({
                 Focus Semaine
               </button>
             </div>
-
-            {/* 3D Circular Switch Buttons on the RIGHT */}
-            <ViewSwitchButtonGroup
-              currentView="calendar"
-              onSwitchView={onSwitchView}
-            />
           </div>
         </div>
 

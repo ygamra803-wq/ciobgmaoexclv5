@@ -15,7 +15,6 @@ import {
   Search,
   Wrench,
 } from 'lucide-react';
-import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -208,12 +207,6 @@ export default function GroupedMachinesView({
               </>
             )}
           </button>
-
-          {/* 3D Circular Switch Buttons on the RIGHT */}
-          <ViewSwitchButtonGroup
-            currentView="grouped"
-            onSwitchView={onSwitchView}
-          />
         </div>
       </div>
 

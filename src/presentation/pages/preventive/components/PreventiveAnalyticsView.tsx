@@ -3,7 +3,6 @@ import {
   DollarSign,
   BarChart3,
 } from 'lucide-react';
-import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 
 /**
  * PreventiveAnalyticsView - Dedicated Component for Preventive KPIs & Distribution (Vue Analytique & Santé)
@@ -12,7 +11,6 @@ export default function PreventiveAnalyticsView({
   tasks = [],
   zones = [],
   actions = [],
-  onSwitchView = () => {},
 }: any) {
   const zoneList = Array.isArray(zones)
     ? zones.map((z) => (typeof z === 'string' ? z : z?.nom_zone || z?.id_zone || z?.code_zone || ''))
@@ -40,12 +38,6 @@ export default function PreventiveAnalyticsView({
             </p>
           </div>
         </div>
-
-        {/* 3D Circular Switch Buttons on the RIGHT */}
-        <ViewSwitchButtonGroup
-          currentView="analytics"
-          onSwitchView={onSwitchView}
-        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

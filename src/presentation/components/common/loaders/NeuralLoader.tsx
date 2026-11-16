@@ -1,34 +1,51 @@
-import { useEffect, useState, useMemo, useRef, useCallback, useId, memo } from 'react';
 import {
-  BrainCircuit,
-  Zap,
-  Activity,
-  CheckCircle2,
+  useEffect,
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useId,
+  memo,
+  type ComponentType,
+} from 'react';
+import {
+  LayoutDashboard,
+  Package,
+  Factory,
+  Calendar,
+  Wrench,
+  Warehouse,
+  MapPin,
+  Users,
+  GitBranch,
+  BookOpen,
+  Settings,
+  Clock,
+  Landmark,
+  FileBarChart2,
+  ShieldCheck,
   ArrowRight,
-  Layers,
   FileSpreadsheet,
 } from 'lucide-react';
+import SortieEntreeIcon from '../SortieEntreeIcon';
 
 const CONFIG = {
   nodes: {
-    count: 12,
-    radius: 148,
-    size: 12,
-    inactiveOpacity: 0.3,
+    count: 16,
+    radius: 156,
+    size: 10,
   },
   network: {
-    lineWidth: 1.65,
-    pulseSpeed: 1500,
-    connectionThreshold: 190,
+    lineWidth: 1.35,
+    pulseSpeed: 1300,
   },
   rings: {
-    count: 4,
-    speeds: [26, 19, 14, 10],
-    opacities: [0.1, 0.14, 0.18, 0.24],
+    radiiOffsets: [34, 56, 78],
+    speeds: [34, 26, 42],
   },
   particles: {
-    count: 18,
-    maxSize: 3.2,
+    count: 14,
+    maxSize: 3,
     minSize: 1.5,
   },
 } as const;
@@ -44,8 +61,12 @@ export interface NeuralLoaderProps {
 }
 
 interface ShowcasePhase {
+  id: string;
   duration: number;
-  icon: typeof BrainCircuit;
+  icon: ComponentType<any>;
+  colorHex: string;
+  tintRgba: string;
+  isDualMovement?: boolean;
 }
 
 interface NodePosition {
@@ -59,23 +80,146 @@ interface NeuralPulse {
   fromNode: number;
   toNode: number;
   progress: number;
+  tone: 'emerald' | 'blue';
 }
 
-const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: number }) => {
+/**
+ * Canonical 16-page icon sequence ordered exactly as specified,
+ * paired with authentic Light Excel UI PageHeaderIcon colors from the codebase:
+ *  1. dashboard            -> LayoutDashboard (blue-700   #1d4ed8)
+ *  2. stock article        -> Package         (cyan-700   #0e7490)
+ *  3. entri sortie rapide  -> SortieEntreeIcon(emerald-600 + rose-600)
+ *  4. machine registered   -> Factory         (emerald-700 #047857)
+ *  5. planning preventive  -> Calendar        (indigo-700 #4338ca)
+ *  6. corrective           -> Wrench          (amber-700  #b45309)
+ *  7. entrepot             -> Warehouse       (indigo-700 #4338ca)
+ *  8. zone                 -> MapPin          (purple-700 #7e22ce)
+ *  9. utilisateur          -> Users           (purple-700 #7e22ce)
+ * 10. nexus                -> GitBranch       (emerald-700 #047857)
+ * 11. guide                -> BookOpen        (amber-600  #d97706)
+ * 12. setting              -> Settings        (sky-700    #0369a1)
+ * 13. rapports vacation    -> Clock           (emerald-700 #047857)
+ * 14. pilotage             -> Landmark        (emerald-700 #047857)
+ * 15. rapports mensuel     -> FileBarChart2   (indigo-600 #4f46e5)
+ * 16. validation           -> ShieldCheck     (rose-600   #e11d48)
+ */
+const CANONICAL_SHOWCASE_ICONS: ReadonlyArray<Omit<ShowcasePhase, 'duration'>> = [
+  {
+    id: 'dashboard',
+    icon: LayoutDashboard,
+    colorHex: '#1d4ed8',
+    tintRgba: 'rgba(29, 78, 216, 0.14)',
+  },
+  {
+    id: 'stock_article',
+    icon: Package,
+    colorHex: '#0e7490',
+    tintRgba: 'rgba(14, 116, 144, 0.14)',
+  },
+  {
+    id: 'entree_sortie_rapide',
+    icon: SortieEntreeIcon,
+    colorHex: '#059669',
+    tintRgba: 'rgba(5, 150, 105, 0.14)',
+    isDualMovement: true,
+  },
+  {
+    id: 'machine_registered',
+    icon: Factory,
+    colorHex: '#047857',
+    tintRgba: 'rgba(4, 120, 87, 0.14)',
+  },
+  {
+    id: 'planning_preventive',
+    icon: Calendar,
+    colorHex: '#4338ca',
+    tintRgba: 'rgba(67, 56, 202, 0.14)',
+  },
+  {
+    id: 'corrective',
+    icon: Wrench,
+    colorHex: '#b45309',
+    tintRgba: 'rgba(180, 83, 9, 0.14)',
+  },
+  {
+    id: 'entrepot',
+    icon: Warehouse,
+    colorHex: '#4338ca',
+    tintRgba: 'rgba(67, 56, 202, 0.14)',
+  },
+  {
+    id: 'zone',
+    icon: MapPin,
+    colorHex: '#7e22ce',
+    tintRgba: 'rgba(126, 34, 206, 0.14)',
+  },
+  {
+    id: 'utilisateur',
+    icon: Users,
+    colorHex: '#7e22ce',
+    tintRgba: 'rgba(126, 34, 206, 0.14)',
+  },
+  {
+    id: 'nexus',
+    icon: GitBranch,
+    colorHex: '#047857',
+    tintRgba: 'rgba(4, 120, 87, 0.14)',
+  },
+  {
+    id: 'guide',
+    icon: BookOpen,
+    colorHex: '#d97706',
+    tintRgba: 'rgba(217, 119, 6, 0.14)',
+  },
+  {
+    id: 'setting',
+    icon: Settings,
+    colorHex: '#0369a1',
+    tintRgba: 'rgba(3, 105, 161, 0.14)',
+  },
+  {
+    id: 'rapports_vacation',
+    icon: Clock,
+    colorHex: '#047857',
+    tintRgba: 'rgba(4, 120, 87, 0.14)',
+  },
+  {
+    id: 'pilotage',
+    icon: Landmark,
+    colorHex: '#047857',
+    tintRgba: 'rgba(4, 120, 87, 0.14)',
+  },
+  {
+    id: 'rapports_mensuel',
+    icon: FileBarChart2,
+    colorHex: '#4f46e5',
+    tintRgba: 'rgba(79, 70, 229, 0.14)',
+  },
+  {
+    id: 'validation',
+    icon: ShieldCheck,
+    colorHex: '#e11d48',
+    tintRgba: 'rgba(225, 29, 72, 0.14)',
+  },
+];
+
+const LightExcelParticles = memo(({ count = CONFIG.particles.count }: { count?: number }) => {
   const particles = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => {
         const seedA = ((i * 37 + 13) % 97) / 97;
         const seedB = ((i * 53 + 29) % 89) / 89;
         const seedC = ((i * 19 + 7) % 43) / 43;
+        const isBlue = i % 3 === 0;
         return {
-          left: `${(seedA * 92 + 4).toFixed(2)}%`,
-          top: `${(seedB * 88 + 6).toFixed(2)}%`,
+          left: `${(seedA * 90 + 5).toFixed(2)}%`,
+          top: `${(seedB * 86 + 7).toFixed(2)}%`,
           size:
             CONFIG.particles.minSize +
             seedC * (CONFIG.particles.maxSize - CONFIG.particles.minSize),
-          duration: 4.5 + seedA * 4.5,
-          delay: seedB * 2.5,
+          duration: 5 + seedA * 4,
+          delay: seedB * 2.4,
+          isBlue,
         };
       }),
     [count]
@@ -86,15 +230,18 @@ const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: nu
       {particles.map((particle, i) => (
         <div
           key={i}
-          className="absolute rounded-full neural-reduced-static"
+          className="absolute rounded-full neural-reduced-static opacity-60"
           style={{
             left: particle.left,
             top: particle.top,
             width: `${particle.size}px`,
             height: `${particle.size}px`,
-            background:
-              'radial-gradient(circle, rgb(var(--color-accent-rgb, 5, 150, 105)), transparent)',
-            boxShadow: `0 0 ${particle.size * 5}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)`,
+            background: particle.isBlue
+              ? 'radial-gradient(circle, rgba(37, 99, 235, 0.7), transparent)'
+              : 'radial-gradient(circle, rgba(16, 124, 65, 0.75), transparent)',
+            boxShadow: particle.isBlue
+              ? `0 0 ${particle.size * 3.5}px rgba(37, 99, 235, 0.3)`
+              : `0 0 ${particle.size * 3.5}px rgba(5, 150, 105, 0.35)`,
             animation: `neuralFloat ${particle.duration}s ease-in-out infinite`,
             animationDelay: `${particle.delay}s`,
           }}
@@ -103,126 +250,133 @@ const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: nu
     </div>
   );
 });
-EnhancedParticles.displayName = 'EnhancedParticles';
+LightExcelParticles.displayName = 'LightExcelParticles';
 
-const EnhancedOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
+const LightExcelOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
   <>
-    {Array.from({ length: CONFIG.rings.count }).map((_, i) => (
-      <div
-        key={i}
-        className="absolute rounded-full transition-all duration-700 neural-reduced-static pointer-events-none"
-        style={{
-          inset: `-${34 + i * 14}px`,
-          opacity: isComplete
-            ? Math.min(CONFIG.rings.opacities[i] * 1.6, 0.45)
-            : CONFIG.rings.opacities[i],
-          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${
-            isComplete ? 0.55 : 0.35
-          })`,
-          boxShadow: `0 0 ${10 + i * 4}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.14)`,
-          animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
-            i % 2 === 0 ? '' : 'reverse'
-          }`,
-          animationDelay: `${i * 0.18}s`,
-        }}
-      />
-    ))}
+    {CONFIG.rings.radiiOffsets.map((offset, i) => {
+      const isBlueRing = i === 1;
+      const borderColor = isBlueRing
+        ? `rgba(37, 99, 235, ${isComplete ? 0.28 : 0.16})`
+        : `rgba(16, 124, 65, ${isComplete ? 0.34 : 0.18})`;
+
+      return (
+        <div
+          key={i}
+          className="absolute rounded-full transition-all duration-700 neural-reduced-static pointer-events-none"
+          style={{
+            inset: `-${offset}px`,
+            border: `1px ${i === 0 ? 'dashed' : 'solid'} ${borderColor}`,
+            animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
+              i % 2 === 1 ? 'reverse' : ''
+            }`,
+          }}
+        />
+      );
+    })}
   </>
 ));
-EnhancedOrbitRings.displayName = 'EnhancedOrbitRings';
+LightExcelOrbitRings.displayName = 'LightExcelOrbitRings';
 
-const EnhancedNeuralNode = memo(
-  ({ position, isActive }: { position: NodePosition; isActive: boolean }) => (
-    <div
-      className="absolute pointer-events-none"
-      style={{
-        top: `calc(50% + ${position.y}px)`,
-        left: `calc(50% + ${position.x}px)`,
-        transform: 'translate(-50%, -50%)',
-      }}
-    >
-      {isActive && (
-        <div
-          className="absolute inset-[-18px] rounded-full animate-ping neural-reduced-static"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.34), transparent 70%)',
-            animationDuration: '1.8s',
-          }}
-        />
-      )}
-
+const LightExcelNode = memo(
+  ({
+    position,
+    isVisited,
+    isCurrentStep,
+  }: {
+    position: NodePosition;
+    isVisited: boolean;
+    isCurrentStep: boolean;
+  }) => {
+    return (
       <div
-        className="absolute inset-[-6px] rounded-full border transition-all duration-500 neural-reduced-static"
+        className="absolute pointer-events-none"
         style={{
-          borderColor: isActive
-            ? 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.65)'
-            : 'transparent',
-          boxShadow: isActive
-            ? '0 0 10px rgba(var(--color-accent-rgb, 5, 150, 105), 0.4)'
-            : 'none',
-          animation: isActive ? 'neuralRotate 3s linear infinite' : 'none',
-        }}
-      />
-
-      <div
-        className="relative rounded-full transition-all duration-500"
-        style={{
-          width: `${CONFIG.nodes.size}px`,
-          height: `${CONFIG.nodes.size}px`,
-          background: isActive
-            ? 'radial-gradient(circle, var(--color-accent-500, #10b981), var(--color-accent-700, #047857))'
-            : 'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.45), rgba(var(--color-accent-rgb, 5, 150, 105), 0.2))',
-          boxShadow: isActive
-            ? '0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.7)'
-            : '0 0 4px rgba(var(--color-accent-rgb, 5, 150, 105), 0.22)',
-          opacity: isActive ? 1 : CONFIG.nodes.inactiveOpacity,
-          transform: isActive ? 'scale(1.25)' : 'scale(1)',
-          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${
-            isActive ? 0.9 : 0.35
-          })`,
+          top: `calc(50% + ${position.y}px)`,
+          left: `calc(50% + ${position.x}px)`,
+          transform: 'translate(-50%, -50%)',
         }}
       >
-        <div
-          className="absolute inset-[3px] rounded-full bg-white"
-          style={{
-            boxShadow: '0 0 4px rgba(255,255,255,0.9)',
-          }}
-        />
-      </div>
-    </div>
-  )
-);
-EnhancedNeuralNode.displayName = 'EnhancedNeuralNode';
+        {isCurrentStep && (
+          <div
+            className="absolute inset-[-11px] rounded-full animate-ping neural-reduced-static"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(16, 185, 129, 0.38), transparent 72%)',
+              animationDuration: '1.6s',
+            }}
+          />
+        )}
 
-const NeuralNetwork = memo(
+        <div
+          className="relative rounded-full transition-all duration-500 flex items-center justify-center"
+          style={{
+            width: isCurrentStep ? '13px' : `${CONFIG.nodes.size}px`,
+            height: isCurrentStep ? '13px' : `${CONFIG.nodes.size}px`,
+            backgroundColor: isCurrentStep
+              ? '#059669'
+              : isVisited
+                ? '#10b981'
+                : '#ffffff',
+            border: isCurrentStep
+              ? '2px solid #ffffff'
+              : isVisited
+                ? '1.5px solid #047857'
+                : '1.5px solid #cbd5e1',
+            boxShadow: isCurrentStep
+              ? '0 0 0 3px rgba(16, 185, 129, 0.25), 0 0 14px rgba(5, 150, 105, 0.55)'
+              : isVisited
+                ? '0 0 8px rgba(16, 185, 129, 0.35)'
+                : '0 1px 2px rgba(15, 23, 42, 0.08)',
+            transform: isCurrentStep ? 'scale(1.18)' : isVisited ? 'scale(1.04)' : 'scale(1)',
+          }}
+        >
+          <span
+            className="rounded-full transition-colors duration-300"
+            style={{
+              width: isCurrentStep ? '4px' : '3px',
+              height: isCurrentStep ? '4px' : '3px',
+              backgroundColor: isCurrentStep || isVisited ? '#ffffff' : '#94a3b8',
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+);
+LightExcelNode.displayName = 'LightExcelNode';
+
+const LightExcelConstellation = memo(
   ({
     nodePositions,
-    activeNodes,
+    visitedCount,
+    currentIndex,
     pulses,
   }: {
     nodePositions: NodePosition[];
-    activeNodes: Set<number>;
+    visitedCount: number;
+    currentIndex: number;
     pulses: NeuralPulse[];
   }) => {
     const uid = useId().replace(/:/g, '');
-    const connGradId = `ciob-conn-${uid}`;
-    const pulseGradId = `ciob-pulse-${uid}`;
-    const glowFilterId = `ciob-glow-${uid}`;
+    const activeGradId = `ciob-excel-active-${uid}`;
+    const pulseEmeraldId = `ciob-excel-pulse-emerald-${uid}`;
+    const pulseBlueId = `ciob-excel-pulse-blue-${uid}`;
 
+    // Clean architectural geometry:
+    // 1) Perimeter 16-gon linking adjacent module pins
+    // 2) Harmonic 4-step cross chords linking opposing quadrants cleanly
     const connections = useMemo(() => {
-      const conns: Array<{ from: number; to: number }> = [];
-      for (let i = 0; i < nodePositions.length; i++) {
-        for (let j = i + 1; j < nodePositions.length; j++) {
-          const dx = nodePositions[i].x - nodePositions[j].x;
-          const dy = nodePositions[i].y - nodePositions[j].y;
-          if (Math.sqrt(dx * dx + dy * dy) < CONFIG.network.connectionThreshold) {
-            conns.push({ from: i, to: j });
-          }
+      const conns: Array<{ from: number; to: number; kind: 'perimeter' | 'chord' }> = [];
+      const n = nodePositions.length;
+      for (let i = 0; i < n; i++) {
+        conns.push({ from: i, to: (i + 1) % n, kind: 'perimeter' });
+        if (i < n / 2) {
+          conns.push({ from: i, to: (i + 4) % n, kind: 'chord' });
         }
       }
       return conns;
-    }, [nodePositions]);
+    }, [nodePositions.length]);
 
     return (
       <svg
@@ -231,88 +385,70 @@ const NeuralNetwork = memo(
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '520px',
-          height: '520px',
+          width: '460px',
+          height: '460px',
         }}
       >
         <defs>
-          <linearGradient id={connGradId} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop
-              offset="0%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="0.06"
-            />
-            <stop
-              offset="50%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="0.82"
-            />
-            <stop
-              offset="100%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="0.06"
-            />
+          <linearGradient id={activeGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#059669" stopOpacity="0.85" />
+            <stop offset="50%" stopColor="#10b981" stopOpacity="0.9" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.8" />
           </linearGradient>
-          <radialGradient id={pulseGradId}>
-            <stop
-              offset="0%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="1"
-            />
-            <stop
-              offset="60%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="0.5"
-            />
-            <stop
-              offset="100%"
-              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
-              stopOpacity="0"
-            />
+
+          <radialGradient id={pulseEmeraldId}>
+            <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
+            <stop offset="65%" stopColor="#059669" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#059669" stopOpacity="0" />
           </radialGradient>
-          <filter id={glowFilterId}>
-            <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+
+          <radialGradient id={pulseBlueId}>
+            <stop offset="0%" stopColor="#60a5fa" stopOpacity="1" />
+            <stop offset="65%" stopColor="#2563eb" stopOpacity="0.45" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
+          </radialGradient>
         </defs>
 
-        {connections.map(({ from, to }, idx) => {
-          const isActive = activeNodes.has(from) || activeNodes.has(to);
-          const bothActive = activeNodes.has(from) && activeNodes.has(to);
-          const opacity = bothActive ? 0.72 : isActive ? 0.42 : 0.16;
-          const strokeWidth = bothActive
+        {connections.map(({ from, to, kind }, idx) => {
+          const touchesCurrent = from === currentIndex || to === currentIndex;
+          const bothVisited = from <= visitedCount && to <= visitedCount;
+          const isPerimeter = kind === 'perimeter';
+
+          const stroke = touchesCurrent
+            ? `url(#${activeGradId})`
+            : bothVisited && isPerimeter
+              ? '#10b981'
+              : '#94a3b8';
+
+          const opacity = touchesCurrent
+            ? 0.72
+            : bothVisited
+              ? isPerimeter
+                ? 0.36
+                : 0.16
+              : isPerimeter
+                ? 0.22
+                : 0.11;
+
+          const strokeWidth = touchesCurrent
             ? CONFIG.network.lineWidth * 1.3
-            : CONFIG.network.lineWidth;
+            : isPerimeter
+              ? CONFIG.network.lineWidth
+              : 1;
 
           return (
-            <g key={idx}>
-              {isActive && (
-                <line
-                  x1={260 + nodePositions[from].x}
-                  y1={260 + nodePositions[from].y}
-                  x2={260 + nodePositions[to].x}
-                  y2={260 + nodePositions[to].y}
-                  stroke="rgb(var(--color-accent-rgb, 5, 150, 105))"
-                  strokeWidth={strokeWidth + 2}
-                  opacity={opacity * 0.25}
-                  filter={`url(#${glowFilterId})`}
-                />
-              )}
-              <line
-                x1={260 + nodePositions[from].x}
-                y1={260 + nodePositions[from].y}
-                x2={260 + nodePositions[to].x}
-                y2={260 + nodePositions[to].y}
-                stroke={`url(#${connGradId})`}
-                strokeWidth={strokeWidth}
-                opacity={opacity}
-                strokeLinecap="round"
-                style={{ transition: 'opacity 0.4s ease-out' }}
-              />
-            </g>
+            <line
+              key={idx}
+              x1={230 + nodePositions[from].x}
+              y1={230 + nodePositions[from].y}
+              x2={230 + nodePositions[to].x}
+              y2={230 + nodePositions[to].y}
+              stroke={stroke}
+              strokeWidth={strokeWidth}
+              opacity={opacity}
+              strokeLinecap="round"
+              style={{ transition: 'opacity 0.35s ease-out, stroke 0.35s ease-out' }}
+            />
           );
         })}
 
@@ -322,18 +458,24 @@ const NeuralNetwork = memo(
           }
           const from = nodePositions[pulse.fromNode];
           const to = nodePositions[pulse.toNode];
-          const x = 260 + from.x + (to.x - from.x) * pulse.progress;
-          const y = 260 + from.y + (to.y - from.y) * pulse.progress;
+          const x = 230 + from.x + (to.x - from.x) * pulse.progress;
+          const y = 230 + from.y + (to.y - from.y) * pulse.progress;
+          const isBlue = pulse.tone === 'blue';
 
           return (
             <g key={pulse.id}>
-              <circle cx={x} cy={y} r={9} fill={`url(#${pulseGradId})`} opacity={0.55} />
               <circle
                 cx={x}
                 cy={y}
-                r={3.2}
-                fill="rgb(var(--color-accent-rgb, 5, 150, 105))"
-                filter={`url(#${glowFilterId})`}
+                r={7}
+                fill={`url(#${isBlue ? pulseBlueId : pulseEmeraldId})`}
+                opacity={0.65}
+              />
+              <circle
+                cx={x}
+                cy={y}
+                r={2.5}
+                fill={isBlue ? '#3b82f6' : '#10b981'}
               />
             </g>
           );
@@ -342,13 +484,41 @@ const NeuralNetwork = memo(
     );
   }
 );
-NeuralNetwork.displayName = 'NeuralNetwork';
+LightExcelConstellation.displayName = 'LightExcelConstellation';
+
+function renderPhaseIcon(
+  phase: ShowcasePhase,
+  animClass: string,
+  extraScale = false
+) {
+  const Icon = phase.icon;
+  if (phase.isDualMovement) {
+    return (
+      <Icon
+        downColor="text-emerald-600 dark:text-emerald-400"
+        upColor="text-rose-600 dark:text-rose-400"
+        className={`h-16 w-16 sm:h-20 sm:w-20 ${animClass} ${
+          extraScale ? 'scale-105' : ''
+        }`}
+      />
+    );
+  }
+  return (
+    <Icon
+      className={`h-16 w-16 sm:h-20 sm:w-20 ${animClass} ${
+        extraScale ? 'scale-105' : ''
+      }`}
+      style={{ color: phase.colorHex }}
+    />
+  );
+}
 
 /**
  * NeuralLoader
- * Pure visual brand showcase ("استعراض دخول") displayed before the operational
- * SSOT SplashScreen. Shares the exact industrial Excel-Twin background and visual
- * spirit of SplashScreen without fake progress bars or simulated loading messages.
+ * Mature Light Excel UI intro showcase displayed strictly before the operational
+ * SSOT SplashScreen. Reveals the 16 canonical Level-1 and special page icons in
+ * exact sequence with gradual crossfade transitions, authentic Light Excel UI
+ * semantic colors, and an Emerald/Steel-Blue architectural constellation.
  */
 export function NeuralLoader({
   mode = 'fullscreen',
@@ -360,23 +530,22 @@ export function NeuralLoader({
   onComplete,
 }: NeuralLoaderProps) {
   const isFull = mode === 'fullscreen';
-  const durationMultiplier = isFull ? 1 : 0.45;
+  // Unhurried showcase dwell in fullscreen (~460ms per icon) for clear gradual reveal
+  const stepDurationMs = isFull ? 460 : 75;
 
   const phases: ShowcasePhase[] = useMemo(
-    () => [
-      { duration: 580 * durationMultiplier, icon: BrainCircuit },
-      { duration: 640 * durationMultiplier, icon: Layers },
-      { duration: 600 * durationMultiplier, icon: Zap },
-      { duration: 540 * durationMultiplier, icon: Activity },
-      { duration: 340 * durationMultiplier, icon: CheckCircle2 },
-    ],
-    [durationMultiplier]
+    () =>
+      CANONICAL_SHOWCASE_ICONS.map((item) => ({
+        ...item,
+        duration: stepDurationMs,
+      })),
+    [stepDurationMs]
   );
 
   const nodePositions = useMemo<NodePosition[]>(
     () =>
       Array.from({ length: CONFIG.nodes.count }, (_, i) => {
-        const angleDeg = i * (360 / CONFIG.nodes.count);
+        const angleDeg = -90 + i * (360 / CONFIG.nodes.count);
         const angleRad = angleDeg * (Math.PI / 180);
         return {
           x: Math.cos(angleRad) * CONFIG.nodes.radius,
@@ -387,8 +556,8 @@ export function NeuralLoader({
     []
   );
 
-  const [activeNodes, setActiveNodes] = useState<Set<number>>(() => new Set([0, 3, 6, 9]));
   const [phaseIndex, setPhaseIndex] = useState(0);
+  const [prevPhaseIndex, setPrevPhaseIndex] = useState<number | null>(null);
   const [isComplete, setIsComplete] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [pulses, setPulses] = useState<NeuralPulse[]>([]);
@@ -427,7 +596,7 @@ export function NeuralLoader({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isFull, triggerFinish]);
 
-  // Visual showcase icon & orbital animation progression until completion
+  // Gradual sequential 16-page icon progression
   useEffect(() => {
     if (isComplete || isExiting) return;
     const currentPhase = phases[phaseIndex];
@@ -435,80 +604,48 @@ export function NeuralLoader({
 
     const timer = setTimeout(() => {
       if (phaseIndex < phases.length - 1) {
+        setPrevPhaseIndex(phaseIndex);
         setPhaseIndex((prev) => prev + 1);
       } else {
         setIsComplete(true);
         finishTimerRef.current = setTimeout(() => {
           triggerFinish();
-        }, 260);
+        }, isFull ? 380 : 250);
       }
     }, currentPhase.duration);
 
     return () => clearTimeout(timer);
-  }, [phaseIndex, isComplete, isExiting, phases, triggerFinish]);
+  }, [phaseIndex, isComplete, isExiting, phases, triggerFinish, isFull]);
 
-  // Dynamic neural node activation
-  useEffect(() => {
-    if (isComplete || isExiting) {
-      setActiveNodes(new Set(Array.from({ length: CONFIG.nodes.count }, (_, i) => i)));
-      return;
-    }
-
-    const interval = setInterval(() => {
-      setActiveNodes((prev) => {
-        const next = new Set(prev);
-        if (next.size < CONFIG.nodes.count) {
-          let candidate = 0;
-          for (let attempt = 0; attempt < 8; attempt++) {
-            const pick = Math.floor(Math.random() * CONFIG.nodes.count);
-            if (!next.has(pick)) {
-              candidate = pick;
-              break;
-            }
-          }
-          next.add(candidate);
-        }
-        if (Math.random() > 0.65 && next.size > 4) {
-          const arr = Array.from(next);
-          next.delete(arr[Math.floor(Math.random() * arr.length)]);
-        }
-        return next;
-      });
-    }, 340);
-
-    return () => clearInterval(interval);
-  }, [isComplete, isExiting]);
-
-  // Traveling neural pulses across active links
+  // Traveling Light Excel Emerald & Blue pulses along perimeter & chords
   useEffect(() => {
     if (isComplete || isExiting || nodePositions.length === 0) return;
     const pulseIntervals = new Set<ReturnType<typeof setInterval>>();
     const pulseTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
     const interval = setInterval(() => {
-      const arr = Array.from(activeNodes);
-      if (arr.length < 2) return;
-      const fromNode = arr[Math.floor(Math.random() * arr.length)];
-      let toNode = arr[Math.floor(Math.random() * arr.length)];
-      if (toNode === fromNode) {
-        toNode = arr[(arr.indexOf(fromNode) + 1) % arr.length];
-      }
+      const fromNode = phaseIndex % CONFIG.nodes.count;
+      const useChord = Math.random() > 0.45;
+      const toNode = useChord
+        ? (fromNode + 4) % CONFIG.nodes.count
+        : (fromNode + 1) % CONFIG.nodes.count;
 
       const newPulse: NeuralPulse = {
         id: Date.now() + Math.random(),
         fromNode,
         toNode,
         progress: 0,
+        tone: useChord ? 'blue' : 'emerald',
       };
-      setPulses((prev) => [...prev.slice(-6), newPulse]);
+      setPulses((prev) => [...prev.slice(-5), newPulse]);
 
       const stepTimer = setInterval(() => {
         setPulses((prev) =>
           prev.map((p) =>
-            p.id === newPulse.id ? { ...p, progress: Math.min(p.progress + 0.06, 1) } : p
+            p.id === newPulse.id ? { ...p, progress: Math.min(p.progress + 0.065, 1) } : p
           )
         );
-      }, 45);
+      }, 42);
       pulseIntervals.add(stepTimer);
 
       const cleanupTimer = setTimeout(() => {
@@ -518,16 +655,17 @@ export function NeuralLoader({
         setPulses((prev) => prev.filter((p) => p.id !== newPulse.id));
       }, CONFIG.network.pulseSpeed);
       pulseTimeouts.add(cleanupTimer);
-    }, 650);
+    }, 520);
 
     return () => {
       clearInterval(interval);
       pulseIntervals.forEach(clearInterval);
       pulseTimeouts.forEach(clearTimeout);
     };
-  }, [activeNodes, isComplete, isExiting, nodePositions.length]);
+  }, [phaseIndex, isComplete, isExiting, nodePositions.length]);
 
-  const CurrentIcon = phases[phaseIndex]?.icon ?? BrainCircuit;
+  const currentPhase = phases[phaseIndex] ?? phases[0];
+  const previousPhase = prevPhaseIndex !== null ? phases[prevPhaseIndex] : null;
 
   return (
     <div
@@ -546,7 +684,7 @@ export function NeuralLoader({
       <div className="absolute -top-32 -right-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <EnhancedParticles />
+      <LightExcelParticles />
 
       {/* Top Header Row — Matched to SplashScreen Architecture */}
       {isFull && (
@@ -578,72 +716,89 @@ export function NeuralLoader({
           className={`relative mb-12 sm:mb-14 ${
             !isFull ? 'scale-75' : 'scale-90 sm:scale-100'
           } neural-reduced-static`}
-          style={{ animation: 'neuralFloat 5.5s ease-in-out infinite' }}
+          style={{ animation: 'neuralFloat 6s ease-in-out infinite' }}
         >
           {isFull && (
             <>
+              {/* Soft Excel Emerald & Steel-Blue Ambient Halo */}
               <div
-                className="absolute inset-[-68px] blur-[80px] rounded-full animate-pulse neural-reduced-static pointer-events-none"
+                className="absolute inset-[-64px] blur-[72px] rounded-full pointer-events-none"
                 style={{
                   background:
-                    'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.22), transparent 70%)',
-                  animationDuration: '3s',
+                    'radial-gradient(circle, rgba(16, 185, 129, 0.16), rgba(37, 99, 235, 0.08) 58%, transparent 74%)',
                 }}
               />
+              {/* Subtle Adaptive Inner Glow Matching Current Module Icon */}
               <div
-                className="absolute inset-[-40px] blur-[48px] rounded-full animate-pulse neural-reduced-static pointer-events-none"
+                className="absolute inset-[-28px] blur-[34px] rounded-full transition-colors duration-500 pointer-events-none"
                 style={{
-                  background:
-                    'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.15), transparent 70%)',
-                  animationDuration: '2.4s',
-                  animationDelay: '0.4s',
+                  background: `radial-gradient(circle, ${currentPhase.tintRgba}, transparent 72%)`,
                 }}
               />
             </>
           )}
 
-          <EnhancedOrbitRings isComplete={isComplete} />
-          <NeuralNetwork
+          <LightExcelOrbitRings isComplete={isComplete} />
+          <LightExcelConstellation
             nodePositions={nodePositions}
-            activeNodes={activeNodes}
+            visitedCount={phaseIndex}
+            currentIndex={phaseIndex}
             pulses={pulses}
           />
 
-          {/* Industrial Glass Emblem Card with Top Emerald Stripe */}
+          {/* Mature Light Excel White Card Emblem with Signature Top Emerald Stripe */}
           <div
-            className="relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-8 sm:p-9 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl transition-all duration-700 z-20 overflow-hidden"
+            data-showcase-module={currentPhase.id}
+            className="relative w-32 h-32 sm:w-36 sm:h-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-xl flex items-center justify-center z-20 overflow-hidden transition-shadow duration-500"
             style={{
               boxShadow:
-                'var(--shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+                '0 20px 45px -12px rgba(15, 23, 42, 0.12), 0 6px 18px -4px rgba(16, 124, 65, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
             }}
           >
+            {/* Top Excel Banner Stripe (Identical to SplashScreen Card) */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-700" />
 
-            <CurrentIcon
-              className={`h-20 w-20 sm:h-22 sm:w-22 transition-all duration-500 ${
-                isComplete ? 'scale-110' : 'animate-pulse'
-              } neural-reduced-static`}
-              style={{
-                color: 'var(--color-accent-600, #059669)',
-                filter:
-                  'drop-shadow(0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.35))',
-              }}
-            />
+            {/* Subtle Spreadsheet Micro-Grid Inside Emblem */}
             <div
-              className="absolute inset-0 border rounded-3xl animate-ping opacity-25 neural-reduced-static pointer-events-none"
+              className="absolute inset-0 opacity-[0.04] pointer-events-none"
               style={{
-                borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.4)',
-                animationDuration: '3s',
+                backgroundImage:
+                  'linear-gradient(to right, #0f172a 1px, transparent 1px), linear-gradient(to bottom, #0f172a 1px, transparent 1px)',
+                backgroundSize: '14px 14px',
               }}
             />
+
+            {/* Two-Layer Crossfade Icon Stage for Smooth Gradual Reveal */}
+            <div className="relative w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center">
+              {previousPhase && previousPhase.id !== currentPhase.id && (
+                <div
+                  key={`exit-${previousPhase.id}`}
+                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                >
+                  {renderPhaseIcon(previousPhase, 'neural-icon-exit')}
+                </div>
+              )}
+
+              <div
+                key={`enter-${currentPhase.id}`}
+                className="absolute inset-0 flex items-center justify-center"
+              >
+                {renderPhaseIcon(currentPhase, 'neural-icon-enter', isComplete)}
+              </div>
+            </div>
           </div>
 
           {nodePositions.map((pos, i) => (
-            <EnhancedNeuralNode key={i} position={pos} isActive={activeNodes.has(i)} />
+            <LightExcelNode
+              key={i}
+              position={pos}
+              isVisited={i < phaseIndex}
+              isCurrentStep={i === phaseIndex}
+            />
           ))}
         </div>
 
-        {/* Clean Brand Title & Tagline (No Fake Progress Bar or Simulated Loading Strings) */}
+        {/* Clean Brand Title & Tagline */}
         {isFull && (
           <div className="space-y-1.5 px-6">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
