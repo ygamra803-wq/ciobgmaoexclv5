@@ -99,7 +99,7 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     );
   });
 
-  it('renders RouteLoader with 40% translucent skeleton layer and NeuralWatermark', () => {
+  it('renders RouteLoader with 40% translucent skeleton layer and live wm-* NeuralWatermark', () => {
     act(() => {
       root.render(<RouteLoader currentTab="dashboard" label="Chargement..." />);
     });
@@ -109,7 +109,24 @@ describe('Neural Intro Splash & Route Watermark System', () => {
 
     const statusNode = container.querySelector('[role="status"]');
     expect(statusNode).toBeTruthy();
+    expect(container.querySelector('.wm-aura')).toBeTruthy();
+    expect(container.querySelector('.wm-orbit-outer')).toBeTruthy();
+    expect(container.querySelector('.wm-orbit-fast')).toBeTruthy();
+    expect(container.querySelector('.wm-orbit-reverse')).toBeTruthy();
+    expect(container.querySelector('.wm-atom-primary')).toBeTruthy();
+    expect(container.querySelectorAll('.wm-atom-secondary').length).toBe(2);
+    expect(container.querySelector('.wm-glass-cube')).toBeTruthy();
+    expect(container.querySelector('.wm-icon-pulse')).toBeTruthy();
     expect(container.textContent).toContain('Chargement...');
+  });
+
+  it('renders RouteLoader default skeleton with wm-skeleton-shimmer when currentTab is omitted', () => {
+    act(() => {
+      root.render(<RouteLoader />);
+    });
+
+    expect(container.querySelector('.wm-skeleton-shimmer')).toBeTruthy();
+    expect(container.querySelector('.wm-glass-cube')).toBeTruthy();
   });
 
   it('renders standalone NeuralWatermark cleanly', () => {
@@ -118,6 +135,7 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     });
 
     expect(container.querySelector('[role="status"]')).toBeTruthy();
+    expect(container.querySelector('.wm-orbit-fast .wm-atom-primary')).toBeTruthy();
     expect(container.querySelector('svg')).toBeTruthy();
   });
 });

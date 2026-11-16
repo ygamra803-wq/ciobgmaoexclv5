@@ -73,6 +73,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
         setWorkshopOrders: get().setWorkshopOrders,
+        setNeedRequests: get().setNeedRequests,
         setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
@@ -116,6 +117,7 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
         setWorkshopOrders: get().setWorkshopOrders,
+        setNeedRequests: get().setNeedRequests,
         setAuditEvents: (events: IAuditEvent[]) => set({ auditEvents: events }),
       }),
 
@@ -158,6 +160,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setWorkshopOrders: get().setWorkshopOrders,
+        setNeedRequests: get().setNeedRequests,
       }),
 
     handleClearDemoSection: (sectionId: string) =>
@@ -199,6 +203,8 @@ export const useGmaoStore = create<GmaoStoreState>((set, get) => {
         setCorrectivePanneCategories: get().setCorrectivePanneCategories,
         setCorrectiveTravauxAFaire: get().setCorrectiveTravauxAFaire,
         setCorrectiveIntervenants: get().setCorrectiveIntervenants,
+        setWorkshopOrders: get().setWorkshopOrders,
+        setNeedRequests: get().setNeedRequests,
       }),
 
     // ==========================================

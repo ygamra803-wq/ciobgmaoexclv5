@@ -7,6 +7,8 @@ import { TaskService, computeNextDueDate } from '../../application/services/prev
 import { ExecutionService } from '../../application/services/preventive/ExecutionService';
 import { MeterService } from '../../application/services/meter/MeterService';
 import SortieExterneService from '../../application/services/SortieExterneService';
+import { storageService } from '../../utils/storageService';
+import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { safeId } from '../../utils/safeId';
 import type {
   GmaoStoreState,
@@ -638,13 +640,22 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleResetPreventiveToBaseline: async () => {
-      const seedTasks = Array.isArray(TaskService.getTasks()) ? TaskService.getTasks() : [];
-      const baselineActions = PreventiveService.getActions();
-      const baselineGuides = PreventiveService.getGuides();
-      get().setPreventiveActions(baselineActions);
-      get().setPreventiveGuides(baselineGuides);
-      get().setPreventiveTasks(seedTasks);
-      return { cancelled: false, restoredCount: seedTasks.length, orphanCountAfter: 0 };
+      const isDemoMode =
+        storageService.getItem(STORAGE_KEYS.DEMO_MODE, false) === true &&
+        storageService.getItem(STORAGE_KEYS.START_MODE, 'empty') !== 'empty';
+      if (!isDemoMode) {
+        return { cancelled: true, restoredCount: 0, orphanCountAfter: 0 };
+      }
+      await DataGateway.loadDemoSection('preventive', {
+        setPreventiveActions: get().setPreventiveActions,
+        setPreventiveGuides: get().setPreventiveGuides,
+        setPreventivePlans: get().setPreventivePlans,
+        setPreventiveTasks: get().setPreventiveTasks,
+        setPreventiveExecutions: get().setPreventiveExecutions,
+        setMeterReadings: get().setMeterReadings,
+      });
+      const restoredTasks = get().preventiveTasks || [];
+      return { cancelled: false, restoredCount: restoredTasks.length, orphanCountAfter: 0 };
     },
 
     handleClearPreventiveForRealFactory: async () => {

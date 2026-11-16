@@ -211,18 +211,22 @@ export default function ReferentielPannesTravauxTab({
     }
   };
 
-  const handleForceSync = () => {
+  const handleForceSync = async () => {
     setIsSyncing(true);
     try {
       if (typeof onForceSyncSeed === 'function') {
-        const res = onForceSyncSeed();
+        const res = await onForceSyncSeed();
         showToast?.(
-          t('corrective.catalogue.toast_sync_success_detailed', `Données réelles synchronisées avec succès : {{interventions}} Interventions, {{travaux}} Travaux, {{pannes}} Pannes, {{actions}} Actions !`, {
-            interventions: res?.interventionsCount ?? 0,
-            travaux: res?.travauxCount ?? (travauxAFaire || []).length,
-            pannes: res?.pannesCount ?? flatPannes.length,
-            actions: res?.actionsCount ?? Object.keys(actionsByPanne || {}).length
-          }),
+          t(
+            'corrective.catalogue.toast_sync_success_detailed',
+            `Référentiel CM_CATALOG synchronisé (mode MERGE) : {{pannes}} Pannes, {{travaux}} Travaux, {{actions}} Actions (Interventions BTs intactes : {{interventions}}) !`,
+            {
+              interventions: res?.interventionsCount ?? 0,
+              travaux: res?.travauxCount ?? (travauxAFaire || []).length,
+              pannes: res?.pannesCount ?? flatPannes.length,
+              actions: res?.actionsCount ?? Object.keys(actionsByPanne || {}).length,
+            }
+          ),
           'success'
         );
       } else {

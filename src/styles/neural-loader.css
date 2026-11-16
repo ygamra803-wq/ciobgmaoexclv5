@@ -1,20 +1,48 @@
 /* =========================================================================
-   CIOB GMAO NEXUS — GLASS TOKENS & NEURAL LOADER ANIMATION ENGINE
-   Adapts dynamically to Light (#FAFAF9) / Dark (.dark) & [data-accent="*"]
+   CIOB GMAO NEXUS — TRUE GLASSMORPHISM TOKENS & NEURAL LOADER ENGINE
+   Light UI Excel (Emerald #059669 + Blue #2563EB) & Dark (.dark)
    ========================================================================= */
 
 :root {
-  --glass-bg: rgba(255, 255, 255, 0.78);
-  --glass-border: rgba(203, 213, 225, 0.78);
-  --shadow-glass: 0 16px 40px rgba(15, 23, 42, 0.08),
-    0 0 28px rgba(var(--color-accent-rgb, 5, 150, 105), 0.14);
+  --glass-bg: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(236, 253, 245, 0.46) 50%,
+    rgba(239, 246, 255, 0.56) 100%
+  );
+  --glass-bg-card: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(240, 253, 244, 0.52) 55%,
+    rgba(239, 246, 255, 0.62) 100%
+  );
+  --glass-border: rgba(255, 255, 255, 0.75);
+  --glass-border-accent: rgba(16, 185, 129, 0.34);
+  --shadow-glass: 0 20px 50px rgba(15, 23, 42, 0.1),
+    0 8px 24px rgba(5, 150, 105, 0.14),
+    0 0 36px rgba(37, 99, 235, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 0.85);
 }
 
 .dark {
-  --glass-bg: rgba(15, 23, 42, 0.68);
-  --glass-border: rgba(var(--color-accent-rgb, 16, 185, 129), 0.28);
-  --shadow-glass: 0 16px 44px rgba(0, 0, 0, 0.48),
-    0 0 32px rgba(var(--color-accent-rgb, 16, 185, 129), 0.2);
+  --glass-bg: linear-gradient(
+    135deg,
+    rgba(15, 23, 42, 0.62) 0%,
+    rgba(6, 78, 59, 0.28) 50%,
+    rgba(30, 58, 138, 0.32) 100%
+  );
+  --glass-bg-card: linear-gradient(
+    145deg,
+    rgba(15, 23, 42, 0.72) 0%,
+    rgba(6, 78, 59, 0.24) 55%,
+    rgba(30, 58, 138, 0.28) 100%
+  );
+  --glass-border: rgba(255, 255, 255, 0.16);
+  --glass-border-accent: rgba(52, 211, 153, 0.32);
+  --shadow-glass: 0 20px 50px rgba(0, 0, 0, 0.52),
+    0 0 36px rgba(16, 185, 129, 0.22),
+    0 0 42px rgba(59, 130, 246, 0.18),
+    inset 0 1px 1px rgba(255, 255, 255, 0.16);
 }
 
 @keyframes neuralShimmer {
@@ -36,19 +64,19 @@
 @keyframes neuralGridPulse {
   0%,
   100% {
-    opacity: 0.35;
+    opacity: 0.45;
   }
   50% {
-    opacity: 0.6;
+    opacity: 0.75;
   }
 }
 
 @keyframes neuralGlowShift {
   0% {
-    transform: translate(0%, 0%);
+    transform: translate(0%, 0%) scale(1);
   }
   100% {
-    transform: translate(6%, 6%);
+    transform: translate(5%, 5%) scale(1.04);
   }
 }
 

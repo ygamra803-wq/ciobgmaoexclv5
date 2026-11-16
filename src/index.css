@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/neural-loader.css";
+@import "./styles/watermark.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

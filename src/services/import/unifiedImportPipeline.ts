@@ -1805,6 +1805,40 @@ export function validateAndCommitAssetsMachinesBundle(
         cleanStr(row.commissioning_date ?? (row as Record<string, unknown>).date_mise_en_service) ||
         prev?.date_mise_en_service ||
         '',
+      ...((row as Record<string, unknown>).compteur_actuel !== undefined ||
+      prev?.compteur_actuel !== undefined
+        ? {
+            compteur_actuel: Number(
+              (row as Record<string, unknown>).compteur_actuel ?? prev?.compteur_actuel ?? 0
+            ),
+          }
+        : {}),
+      ...((row as Record<string, unknown>).compteur_heures !== undefined ||
+      prev?.compteur_heures !== undefined
+        ? {
+            compteur_heures: Number(
+              (row as Record<string, unknown>).compteur_heures ?? prev?.compteur_heures ?? 0
+            ),
+          }
+        : {}),
+      ...((row as Record<string, unknown>).dernier_releve_compteur !== undefined ||
+      prev?.dernier_releve_compteur !== undefined
+        ? {
+            dernier_releve_compteur: Number(
+              (row as Record<string, unknown>).dernier_releve_compteur ??
+                prev?.dernier_releve_compteur ??
+                0
+            ),
+          }
+        : {}),
+      ...((row as Record<string, unknown>).unite_compteur !== undefined ||
+      prev?.unite_compteur !== undefined
+        ? {
+            unite_compteur: cleanStr(
+              (row as Record<string, unknown>).unite_compteur ?? prev?.unite_compteur ?? 'h'
+            ),
+          }
+        : {}),
     };
 
     if (prev) {

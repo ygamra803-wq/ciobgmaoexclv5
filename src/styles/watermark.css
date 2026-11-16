@@ -1,0 +1,146 @@
+/* =========================================================
+   Neural Watermark & Route Shimmer System
+   100% independent of Tailwind arbitrary animations & --primary
+   Works reliably across Tailwind v3 and v4 in Light & Dark modes
+   ========================================================= */
+
+:root {
+  --wm-hue: 210 70% 55%; /* Sea Blue (#3b82f6) */
+  --wm-color: hsl(210 70% 55%);
+  --wm-aura: hsl(210 70% 55% / 0.22);
+  --wm-ring-border: hsl(210 70% 55% / 0.14);
+  --wm-glass-bg: rgba(255, 255, 255, 0.7);
+  --wm-glass-border: rgba(203, 213, 225, 0.6);
+  --wm-glass-shadow: 0 8px 30px rgba(25, 42, 76, 0.08);
+  --wm-backdrop: hsl(220 13% 97% / 0.15);
+}
+
+.dark {
+  --wm-hue: 32 40% 58%; /* Lustrous Muted Gold (#bd9468) */
+  --wm-color: hsl(32 40% 58%);
+  --wm-aura: rgba(189, 148, 104, 0.22);
+  --wm-ring-border: rgba(189, 148, 104, 0.16);
+  --wm-glass-bg: rgba(255, 255, 255, 0.05);
+  --wm-glass-border: rgba(189, 148, 104, 0.25);
+  --wm-glass-shadow: 0 8px 32px rgba(189, 148, 104, 0.14);
+  --wm-backdrop: hsl(0 0% 8% / 0.22);
+}
+
+/* --- Explicit @keyframes --- */
+@keyframes wm-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes wm-pulse-aura {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@keyframes wm-pulse-icon {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 6px hsl(var(--wm-hue) / 0.28));
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 18px hsl(var(--wm-hue) / 0.58));
+  }
+}
+
+@keyframes wm-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* --- Orbit, Atom, Glass & Icon Classes --- */
+.wm-aura {
+  background: var(--wm-aura);
+  filter: blur(55px);
+  animation: wm-pulse-aura 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.wm-orbit-outer {
+  border: 1px solid var(--wm-ring-border);
+  animation: wm-spin 10s linear infinite;
+  will-change: transform;
+}
+
+.wm-orbit-fast {
+  animation: wm-spin 3s linear infinite;
+  will-change: transform;
+}
+
+.wm-orbit-reverse {
+  animation: wm-spin 4s linear infinite reverse;
+  will-change: transform;
+}
+
+.wm-atom-primary {
+  background-color: var(--wm-color);
+  box-shadow:
+    0 0 10px 2px var(--wm-color),
+    0 0 22px 4px hsl(var(--wm-hue) / 0.45);
+}
+
+.wm-atom-secondary {
+  background-color: hsl(var(--wm-hue) / 0.75);
+  box-shadow: 0 0 8px 1px hsl(var(--wm-hue) / 0.52);
+  filter: blur(0.4px);
+}
+
+.wm-glass-cube {
+  background: var(--wm-glass-bg);
+  border: 1px solid var(--wm-glass-border);
+  box-shadow: var(--wm-glass-shadow);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.wm-icon-pulse {
+  color: var(--wm-color);
+  animation: wm-pulse-icon 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.wm-skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  animation: wm-shimmer 2s infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+}
+
+.dark .wm-skeleton-shimmer::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.08),
+    transparent
+  );
+}

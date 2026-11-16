@@ -40,6 +40,8 @@ import {
   getTechnicianDisplayName,
 } from '../../../core/security/technicianScope';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
 export default function PreventiveView({
   tasks = [],
@@ -83,6 +85,9 @@ export default function PreventiveView({
     Boolean(user) && AuthorizationService.hasPermission(user, 'preventive.execute');
   const canManagePreventive =
     Boolean(user) && !isTechUser && AuthorizationService.hasPermission(user, 'preventive.manage');
+  const isExplicitDemoMode =
+    storageService.getItem(STORAGE_KEYS.DEMO_MODE, false) === true &&
+    storageService.getItem(STORAGE_KEYS.START_MODE, 'empty') !== 'empty';
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -120,12 +125,22 @@ export default function PreventiveView({
   }).length;
 
   const handleRestoreBaseline = async () => {
-    if (!canManagePreventive) return;
+    if (!canManagePreventive || !isExplicitDemoMode) return;
+    if (
+      !(await confirmAction({
+        title: 'Restauration du planning de démonstration',
+        message:
+          'Restaurer le planning préventif de démonstration pour les machines actives du parc ?',
+        variant: 'warning',
+      }))
+    ) {
+      return;
+    }
     if (onResetToBaseline) {
       const result = await onResetToBaseline({ machines });
       if (!result || result.cancelled) return;
       showToast?.(
-        `Planning d'usine restauré (${result.restoredCount || 1175} tâches).` +
+        `Planning de démonstration restauré (${result.restoredCount || 0} tâches).` +
           (result.orphanCountAfter
             ? ` Attention: ${result.orphanCountAfter} orpheline(s) — nettoyez dans Paramètres > Intégrité.`
             : ''),
@@ -134,20 +149,11 @@ export default function PreventiveView({
       return;
     }
 
-    if (
-      !(await confirmAction({
-        title: "Restauration du planning",
-        message: "Restaurer le planning d'usine de base (1 175 tâches) ?",
-        variant: "warning",
-      }))
-    ) {
-      return;
-    }
     const restored = PreventiveService.getTasks();
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('preventive_tasks_updated', { detail: restored }));
     }
-    showToast?.("Planning d'usine restauré (1 175 tâches) !", 'success');
+    showToast?.(`Planning de démonstration restauré (${restored.length} tâches) !`, 'success');
   };
 
   const runClearRealFactory = async () => {
@@ -427,14 +433,14 @@ export default function PreventiveView({
               className="ring-2 ring-teal-400/60"
             />
 
-            {/* 3D Reset Baseline Button */}
-            {canManagePreventive && (
+            {/* 3D Reset Baseline Button — Explicit Demo Mode Only */}
+            {canManagePreventive && isExplicitDemoMode && (
               <Action3DButton
                 variant="circle"
                 color="amber"
                 icon={RotateCcw}
                 onClick={handleRestoreBaseline}
-                title="Restaurer le planning d'usine de base (1 175 tâches)"
+                title="Restaurer le planning préventif de démonstration"
                 className="ring-2 ring-amber-400/60"
               />
             )}
@@ -477,8 +483,8 @@ export default function PreventiveView({
           </div>
         </div>
 
-        {/* Empty State Warning Banner (1-Click Restore 1,175 Tasks) */}
-        {canManagePreventive && (!tasks || tasks.length === 0) && (
+        {/* Empty State Demo Restore Banner (Demo Mode Only) */}
+        {canManagePreventive && isExplicitDemoMode && (!tasks || tasks.length === 0) && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
@@ -489,7 +495,7 @@ export default function PreventiveView({
                   Planning préventif vide (0 tâche active)
                 </h4>
                 <p className="text-xs text-amber-700 mt-0.5">
-                  Vous pouvez restaurer instantanément le planning d&apos;usine de référence contenant les 1 175 tâches préventives ISO (S1–S52).
+                  Vous pouvez restaurer instantanément le planning préventif de démonstration (S1–S52) associé aux machines actives du parc.
                 </p>
               </div>
             </div>
@@ -499,7 +505,7 @@ export default function PreventiveView({
               className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-2 shrink-0 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Restaurer 1 175 tâches d&apos;usine</span>
+              <span>Restaurer le planning démo</span>
             </button>
           </div>
         )}

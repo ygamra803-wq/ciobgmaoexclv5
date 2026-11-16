@@ -26,6 +26,7 @@ import {
   canStartWorkWithLoto,
 } from '../../domain/corrective/lotoService';
 import { storageService } from '../../utils/storageService';
+import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { loadBaselineCorrectiveData } from '../../utils/baselineCorrective';
 import { safeId } from '../../utils/safeId';
 import type {
@@ -314,7 +315,7 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     },
 
     handleResetCorrectiveActions: async () => {
-      DataGateway.loadDemoSection('corrective', {
+      DataGateway.syncCmCatalogBaseline({
         setCorrectiveActionsByPanne: (val) => get().setCorrectiveActionsByPanne(val),
         setCorrectivePanneCategories: (val) => get().setCorrectivePanneCategories(val),
         setCorrectiveTravauxAFaire: (val) => get().setCorrectiveTravauxAFaire(val),
@@ -322,24 +323,18 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     },
 
     handleForceSyncCorrectiveSeed: async () => {
-      DataGateway.loadDemoSection('corrective', {
-        setCorrectiveInterventions: (val) => get().setCorrectiveInterventions(val),
+      const synced = DataGateway.syncCmCatalogBaseline({
         setCorrectiveActionsByPanne: (val) => get().setCorrectiveActionsByPanne(val),
         setCorrectivePanneCategories: (val) => get().setCorrectivePanneCategories(val),
         setCorrectiveTravauxAFaire: (val) => get().setCorrectiveTravauxAFaire(val),
-        setCorrectiveIntervenants: (val) => get().setCorrectiveIntervenants(val),
       });
-      const baseline = await loadBaselineCorrectiveData();
       return {
-        interventionsCount: (baseline.interventions || []).length,
-        pannesCount: Object.values(baseline.panneCategories || {}).reduce<number>(
-          (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
-          0
-        ),
-        categoriesCount: Object.keys(baseline.panneCategories || {}).length,
-        travauxCount: (baseline.travauxAFaire || []).length,
-        actionsCount: Object.keys(baseline.actionsByPanne || {}).length,
-        intervenantsCount: (baseline.intervenants || []).length,
+        interventionsCount: synced.interventionsCount,
+        pannesCount: synced.pannesCount,
+        categoriesCount: synced.categoriesCount,
+        travauxCount: synced.travauxCount,
+        actionsCount: synced.actionsCount,
+        intervenantsCount: (get().correctiveIntervenants || []).length,
       };
     },
 
@@ -993,14 +988,28 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       }
     },
 
-    handleBulkImportCorrective: (importedItems: CorrectiveInterventionItem[]) => {
-      if (!Array.isArray(importedItems) || importedItems.length === 0) return;
-      get().setCorrectiveInterventions((prev) => [...importedItems, ...(prev || [])]);
+    handleBulkImportCorrective: (_importedItems: CorrectiveInterventionItem[]) => {
+      // Governance rule (AGENTS.md §1.2): Bulk BT/DI import is strictly forbidden.
+      // Level 2 Corrective Catalogs (CM_CATALOG) are imported via UnifiedImportPipeline.
+      return;
     },
 
     handleResetCorrectiveToSeed: async () => {
+      const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
+      const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+      const isExplicitDemoMode =
+        (demoFlag === true || demoFlag === 'true') && startMode !== 'empty';
+      if (!isExplicitDemoMode) {
+        return {
+          cancelled: true,
+          restoredCount: 0,
+          orphanCountAfter: 0,
+        };
+      }
       DataGateway.loadDemoSection('corrective', {
         setCorrectiveInterventions: (val) => get().setCorrectiveInterventions(val),
+        setWorkshopOrders: (val) => get().setWorkshopOrders(val),
+        setNeedRequests: (val) => get().setNeedRequests(val),
       });
       const baseline = await loadBaselineCorrectiveData();
       return {

@@ -3,16 +3,15 @@ import { BrainCircuit } from 'lucide-react';
 export interface NeuralWatermarkProps {
   /** Subtle optional operational status label beneath the glass cube */
   label?: string;
-  /** Optional variant: 'contained' stays inside route viewport beneath Header/Sidebar */
+  /** Optional variant: 'contained' fills route viewport, 'overlay' covers viewport */
   variant?: 'contained' | 'overlay';
   className?: string;
 }
 
 /**
  * NeuralWatermark
- * Glassmorphic centered loading watermark with ambient accent halo and 3 orbital rings.
- * Adapts automatically to Light (#FAFAF9) / Dark (.dark) and dynamic [data-accent="*"] tokens.
- * Positioned with z-20 inside the route container so Sticky Header (z-30) and Sidebar (z-40) stay accessible.
+ * Animated glassmorphic page-loading watermark driven by explicit CSS @keyframes
+ * in src/styles/watermark.css (Sea Blue in Light mode, Muted Gold in Dark mode).
  */
 export function NeuralWatermark({
   label,
@@ -25,81 +24,45 @@ export function NeuralWatermark({
       aria-live="polite"
       aria-label={label || 'Chargement de la vue en cours'}
       className={`${
-        variant === 'overlay' ? 'fixed inset-0 z-30' : 'absolute inset-0 z-20'
-      } flex items-start justify-center pt-[min(24vh,210px)] pointer-events-none select-none bg-[#FAFAF9]/20 dark:bg-slate-950/25 backdrop-blur-[2px] ${className}`.trim()}
+        variant === 'overlay' ? 'fixed inset-0 z-40' : 'absolute inset-0 z-40'
+      } flex items-start justify-center pt-[min(24vh,210px)] backdrop-blur-[2px] pointer-events-none select-none ${className}`.trim()}
+      style={{ backgroundColor: 'var(--wm-backdrop)' }}
     >
       <div className="sticky top-[min(32vh,250px)] flex flex-col items-center gap-4">
-        <div className="relative">
-          {/* 1. Ambient Radial Halo */}
-          <div
-            className="absolute inset-[-10px] rounded-full blur-[54px] animate-pulse neural-reduced-static"
-            style={{
-              backgroundColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.24)',
-            }}
-          />
+        {/* Explicit 112x112 reactor core ensures symmetric circular orbits */}
+        <div className="relative w-28 h-28 flex items-center justify-center">
+          {/* 1. Ambient Pulsing Aura */}
+          <div className="wm-aura absolute -inset-4 rounded-full" />
 
-          {/* 2. Orbital Rings */}
-          {/* Outer slow ring */}
-          <div
-            className="absolute inset-[-40px] rounded-full border animate-[spin_10s_linear_infinite] neural-reduced-static"
-            style={{
-              borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.14)',
-            }}
-          />
-
-          {/* Middle ring with luminous primary orbit dot */}
-          <div className="absolute inset-[-22px] rounded-full animate-[spin_3.2s_linear_infinite] neural-reduced-static">
-            <div
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full"
-              style={{
-                backgroundColor: 'var(--color-accent-500, #10b981)',
-                boxShadow: '0 0 12px var(--color-accent-500, #10b981)',
-              }}
-            />
+          {/* 2. Slow Outer Orbit + 3rd Secondary Atom */}
+          <div className="wm-orbit-outer absolute -inset-10 rounded-full">
+            <div className="wm-atom-secondary absolute top-1/2 -right-1 -translate-y-1/2 w-1.5 h-1.5 rounded-full" />
           </div>
 
-          {/* Inner counter-rotating ring with secondary trailing dot */}
-          <div className="absolute inset-[-22px] rounded-full animate-[spin_4.2s_linear_infinite_reverse] neural-reduced-static">
-            <div
-              className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full blur-[0.5px]"
-              style={{
-                backgroundColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.72)',
-              }}
-            />
+          {/* 3. Fast Middle Orbit + Primary Luminous Atom */}
+          <div className="wm-orbit-fast absolute -inset-5 rounded-full">
+            <div className="wm-atom-primary absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full" />
           </div>
 
-          {/* 3. Glassmorphic Cube Container */}
-          <div className="relative w-28 h-28 flex items-center justify-center">
-            <div
-              className="absolute inset-0 backdrop-blur-xl rounded-3xl border transition-colors duration-300"
-              style={{
-                background: 'var(--glass-bg)',
-                borderColor: 'var(--glass-border)',
-                boxShadow: 'var(--shadow-glass)',
-              }}
-            />
+          {/* 4. Counter-Rotating Reverse Orbit + Anti-Atom */}
+          <div className="wm-orbit-reverse absolute -inset-5 rounded-full">
+            <div className="wm-atom-secondary absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full" />
+          </div>
 
-            {/* Subtle inner top specular edge */}
-            <div className="absolute inset-[1px] rounded-[23px] bg-gradient-to-b from-white/50 dark:from-white/10 to-transparent pointer-events-none" />
-
-            {/* 4. Pulsing Core Icon */}
-            <BrainCircuit
-              className="relative z-10 w-12 h-12 animate-pulse [animation-duration:2800ms] neural-reduced-static"
-              style={{
-                color: 'var(--color-accent-600, #059669)',
-                filter:
-                  'drop-shadow(0 0 12px rgba(var(--color-accent-rgb, 5, 150, 105), 0.35))',
-              }}
-            />
+          {/* 5. Frosted Glass Cube */}
+          <div className="wm-glass-cube relative w-28 h-28 rounded-3xl flex items-center justify-center">
+            {/* 6. Pulsing Glowing Core Icon */}
+            <BrainCircuit className="wm-icon-pulse relative z-10 w-12 h-12" />
           </div>
         </div>
 
         {label && (
           <div
-            className="px-3.5 py-1 rounded-full border backdrop-blur-md text-[11px] font-mono font-semibold tracking-wide text-slate-700 dark:text-slate-200"
+            className="px-3.5 py-1 rounded-full text-[11px] font-mono font-semibold tracking-wide text-slate-700 dark:text-slate-200 backdrop-blur-md"
             style={{
-              background: 'var(--glass-bg)',
-              borderColor: 'var(--glass-border)',
+              backgroundColor: 'var(--wm-glass-bg)',
+              border: '1px solid var(--wm-glass-border)',
+              boxShadow: 'var(--wm-glass-shadow)',
             }}
           >
             {label}

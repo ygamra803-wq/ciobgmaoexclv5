@@ -1,4 +1,3 @@
-import { INITIAL_GUIDES } from './INITIAL_GUIDES';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
@@ -13,8 +12,8 @@ export const STORAGE_KEY_GUIDES = STORAGE_KEYS.PREVENTIVE_GUIDES;
 export class GuideService {
   static getGuides(): IPreventiveGuideCatalogItem[] {
     return loadCollection<IPreventiveGuideCatalogItem[]>(STORAGE_KEY_GUIDES, {
-      allowDemoFallback: true,
-      demoSeed: INITIAL_GUIDES as unknown as IPreventiveGuideCatalogItem[],
+      allowDemoFallback: false,
+      demoSeed: [],
     });
   }
 

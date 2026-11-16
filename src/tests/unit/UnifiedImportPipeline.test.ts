@@ -36,6 +36,8 @@ import {
   TYPE_A_README_SHEET,
 } from '../../services/import/typeAExcelBridge';
 import { useGmaoStore } from '../../store/useGmaoStore';
+import { storageService } from '../../utils/storageService';
+import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { executeGuardedGlobalFileImport } from '../../hooks/useAppExcelOperations';
 import PreventiveService from '../../application/services/PreventiveService';
 import { TaskService } from '../../application/services/preventive/TaskService';
@@ -873,7 +875,7 @@ describe('UnifiedImportPipeline & Backdoor Closure (7 Official Bundles + DEMO_BU
       const res = DataGateway.loadDemoData(useGmaoStore.getState());
       expect(res.pipelineReport.success).toBe(true);
       expect(res.pipelineReport.rejected).toHaveLength(0);
-      expect(res.machinesCount).toBeGreaterThan(300);
+      expect(res.machinesCount).toBe(28);
       expect(res.stockCount).toBe(28);
 
       // Verify generalSystemTypes preserve canonical SYS-* IDs
@@ -1514,4 +1516,152 @@ describe('UnifiedImportPipeline & Backdoor Closure (7 Official Bundles + DEMO_BU
       expect(settingsInjectionTab).toContain('7. CM_CATALOG');
     });
   });
+
+  describe('12. P9 — Data & Demo Governance Hardening (Zero Demo Pollution, Strict Section FK & Clean Purge)', () => {
+    it('syncCmCatalogBaseline and handleForceSyncCorrectiveSeed synchronize ONLY Level 2 CM_CATALOG without injecting demo BTs or overwriting live interventions', async () => {
+      await DataGateway.clearAllForRealFactory(useGmaoStore.getState());
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+
+      // Add a real factory intervention
+      const realDi = useGmaoStore.getState().handleAddDemandeIntervention({
+        id: 'DI-REAL-001',
+        code_machine: 'M-REAL-01',
+        type_panne: 'Mécanique',
+        anomalie: 'Vibration',
+      });
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(1);
+      expect(useGmaoStore.getState().correctiveInterventions[0].id).toBe(realDi.id);
+
+      // Sync CM catalog baseline via store action
+      const syncRes = await useGmaoStore.getState().handleForceSyncCorrectiveSeed();
+      expect(syncRes.pannesCount).toBeGreaterThan(0);
+      expect(syncRes.categoriesCount).toBeGreaterThan(0);
+      expect(syncRes.travauxCount).toBeGreaterThan(0);
+      expect(syncRes.actionsCount).toBeGreaterThan(0);
+
+      // Live corrective interventions MUST remain 100% untouched (no demo BTs injected!)
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(1);
+      expect(useGmaoStore.getState().correctiveInterventions[0].id).toBe('DI-REAL-001');
+    });
+
+    it('blocks handleResetCorrectiveToSeed in Real Factory Mode (START_MODE=empty / DEMO_MODE=false) and disables handleBulkImportCorrective', async () => {
+      await DataGateway.clearAllForRealFactory(useGmaoStore.getState());
+      expect(storageService.getItem(STORAGE_KEYS.DEMO_MODE)).toBe(false);
+      expect(storageService.getItem(STORAGE_KEYS.START_MODE)).toBe('empty');
+
+      const resetRes = await useGmaoStore.getState().handleResetCorrectiveToSeed();
+      expect(resetRes.cancelled).toBe(true);
+      expect(resetRes.restoredCount).toBe(0);
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+
+      // Bulk BT import must be a no-op
+      useGmaoStore.getState().handleBulkImportCorrective([
+        { id: 'BT-ILLEGAL-999', code_machine: 'M-01', statut: 'EN_COURS' } as any,
+      ]);
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+    });
+
+    it('enforces strict machine FK filtering in loadDemoSection(preventive | corrective) and cascades clean purge in clearDemoSection(parc | corrective | mouvements)', async () => {
+      await DataGateway.clearAllForRealFactory(useGmaoStore.getState());
+
+      // 1. Injecting preventive or corrective when 0 machines are registered loads ONLY Level 2 catalogs (0 orphan tasks/BTs)
+      DataGateway.loadDemoSection('preventive', useGmaoStore.getState());
+      expect(useGmaoStore.getState().preventiveActions.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().preventiveGuides.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().preventiveTasks).toHaveLength(0);
+
+      DataGateway.loadDemoSection('corrective', useGmaoStore.getState());
+      expect(Object.keys(useGmaoStore.getState().correctivePanneCategories).length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+
+      // 2. Now inject 'parc' (machines) followed by 'preventive' and 'corrective': valid tasks and BTs are loaded
+      DataGateway.loadDemoSection('parc', useGmaoStore.getState());
+      expect(useGmaoStore.getState().machines.length).toBeGreaterThan(0);
+
+      DataGateway.loadDemoSection('preventive', useGmaoStore.getState());
+      expect(useGmaoStore.getState().preventiveTasks.length).toBeGreaterThan(0);
+
+      DataGateway.loadDemoSection('corrective', useGmaoStore.getState());
+      expect(useGmaoStore.getState().correctiveInterventions.length).toBeGreaterThan(0);
+
+      // 3. Clearing 'parc' cascades to clear machine-bound preventiveTasks and correctiveInterventions (no orphans left behind)
+      DataGateway.clearDemoSection('parc', useGmaoStore.getState());
+      expect(useGmaoStore.getState().machines).toHaveLength(0);
+      expect(useGmaoStore.getState().preventiveTasks).toHaveLength(0);
+      expect(useGmaoStore.getState().correctiveInterventions).toHaveLength(0);
+
+      // 4. Stock + Movements section reconciliation and clear consistency
+      DataGateway.loadDemoSection('stock', useGmaoStore.getState());
+      DataGateway.loadDemoSection('mouvements', useGmaoStore.getState());
+      expect(useGmaoStore.getState().rawStock.length).toBeGreaterThan(0);
+      expect(useGmaoStore.getState().mouvements.length).toBeGreaterThan(0);
+
+      DataGateway.clearDemoSection('mouvements', useGmaoStore.getState());
+      expect(useGmaoStore.getState().mouvements).toHaveLength(0);
+      for (const art of useGmaoStore.getState().rawStock) {
+        expect(art.entrees).toBe(0);
+        expect(art.sorties).toBe(0);
+        expect(art.stockActuel).toBe(art.stockInitial);
+      }
+    });
+  });
+
+  describe('13. P10 — Pipeline-First Micro-Factory Showcase & Zero Static Seed Fallbacks', () => {
+    it('loads a 100% FK-linked 28-machine Showcase Factory (Production + LINE Parents + SYSTEM_GENERAL) with 0 orphan tasks, BTs, warehouse items, or movement machines', async () => {
+      const res = DataGateway.loadDemoData(useGmaoStore.getState());
+      expect(res.pipelineReport.success).toBe(true);
+      expect(res.pipelineReport.rejected).toHaveLength(0);
+
+      const state = useGmaoStore.getState();
+      expect(state.machines).toHaveLength(28);
+
+      // Verify 2 LINE parent assets and 4 SYSTEM_GENERAL assets are present
+      const lineMachines = state.machines.filter((m) => m.asset_level === 'LINE');
+      const sysGeneralMachines = state.machines.filter((m) => m.asset_class === 'SYSTEM_GENERAL');
+      expect(lineMachines.map((m) => m.id).sort()).toEqual(['LIN-DET-01', 'LIN-PCE-01']);
+      expect(sysGeneralMachines.map((m) => m.id).sort()).toEqual([
+        'CMP-AIR-01',
+        'GRP-SEC-01',
+        'ST-EAU-01',
+        'TGBT-ECL-01',
+      ]);
+
+      // Verify every single preventive task, corrective intervention, BOM ledger entry, and Sortie movement links to a registered Showcase Machine
+      const registeredSet = new Set(state.machines.map((m) => String(m.id).trim().toUpperCase()));
+      expect(state.preventiveTasks.length).toBe(40);
+      for (const t of state.preventiveTasks) {
+        expect(registeredSet.has(String(t.id_machine || '').trim().toUpperCase())).toBe(true);
+      }
+      // Verify counter/hybrid preventive tasks exist for Preventive Meters View showcase
+      const counterTasks = state.preventiveTasks.filter(
+        (t) => t.type_declencheur === 'COMPTEUR' || t.type_declencheur === 'HYBRIDE'
+      );
+      expect(counterTasks.length).toBeGreaterThanOrEqual(4);
+
+      for (const bt of state.correctiveInterventions) {
+        expect(registeredSet.has(String(bt.code_machine || '').trim().toUpperCase())).toBe(true);
+      }
+
+      for (const bom of state.machineElementsLedger) {
+        expect(
+          registeredSet.has(
+            String(bom.id_machine_registered || bom.id_machine || '').trim().toUpperCase()
+          )
+        ).toBe(true);
+      }
+
+      for (const mv of state.mouvements) {
+        if (mv.type === 'Sortie') {
+          expect(registeredSet.has(String(mv.machine || '').trim().toUpperCase())).toBe(true);
+        }
+      }
+
+      for (const wh of state.warehouseItems) {
+        if (wh.rattachement_type === 'MACHINE' && wh.id_machine) {
+          expect(registeredSet.has(String(wh.id_machine).trim().toUpperCase())).toBe(true);
+        }
+      }
+    });
+  });
 });
+

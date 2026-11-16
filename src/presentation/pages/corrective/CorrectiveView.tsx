@@ -31,6 +31,9 @@ import {
   getTechnicianBadgeLabel,
 } from '../../../core/security/technicianScope';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
+import { confirmAction } from '../../../utils/confirmAction';
 import { isWorkshopOrderActive } from '../../../domain/corrective/workshopOrderService';
 import { isNeedRequestActive } from '../../../domain/corrective/needRequestService';
 import { Package } from 'lucide-react';
@@ -112,6 +115,10 @@ export default function CorrectiveView({
   const isReadOnlyUser = AuthorizationService.isReadOnly(user);
   const canCreateDi = Boolean(user) && AuthorizationService.hasPermission(user, 'corrective.execute');
   const canManageCorrective = Boolean(user) && !isTechUser && !isReadOnlyUser;
+  const demoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
+  const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
+  const isExplicitDemoMode =
+    (demoFlag === true || demoFlag === 'true') && startMode !== 'empty';
 
   // Quick export all corrective interventions to Excel (.xlsx)
   const handleExportAllCorrective = () => {
@@ -352,27 +359,33 @@ export default function CorrectiveView({
               ariaLabel="Exporter Excel (Type B)"
             />
 
-            {/* 3D Circular Reset Seed Button */}
-            {canManageCorrective && (
+            {/* 3D Circular Reset Seed Button (Strictly visible & active in Explicit Demo Mode only) */}
+            {canManageCorrective && isExplicitDemoMode && (
               <Action3DButton
                 variant="circle"
                 color="slate"
                 icon={RefreshCw}
                 onClick={async () => {
+                  const confirmed = await confirmAction({
+                    title: 'Réinitialiser la Démo Corrective',
+                    message:
+                      'Voulez-vous restaurer les interventions correctives de démonstration ? Les modifications locales effectuées sur cette section démo seront réinitialisées.',
+                    variant: 'warning',
+                  });
+                  if (!confirmed) return;
                   const result = await onResetToSeed?.({ machines });
                   if (result?.cancelled) return;
-                  // Dictionaries only if interventions reset succeeded
                   await onResetActionsToSeed?.();
                   showToast?.(
-                    `Correctif réinitialisé (${result?.restoredCount ?? (result?.items || []).length} interventions).` +
+                    `Correctif Démo réinitialisé (${result?.restoredCount ?? (result?.items || []).length} interventions).` +
                       (result?.orphanCountAfter
                         ? ` ${result.orphanCountAfter} orpheline(s) possibles — Paramètres > Intégrité.`
                         : ''),
                     result?.orphanCountAfter ? 'warning' : 'success'
                   );
                 }}
-                title={t('corrective.buttons.reset_seed')}
-                ariaLabel="Réinitialiser données"
+                title={`${t('corrective.buttons.reset_seed')} (Mode Démo uniquement)`}
+                ariaLabel="Réinitialiser données Démo"
               />
             )}
           </div>

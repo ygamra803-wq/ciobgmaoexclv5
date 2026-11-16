@@ -5,7 +5,7 @@
     "type": "Entrée",
     "ref": "RLM-6205",
     "quantite": 4,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Réapprovisionnement roulements standards"
   },
@@ -15,7 +15,7 @@
     "type": "Sortie",
     "ref": "RLM-6205",
     "quantite": 2,
-    "machine": "calibratrice 01",
+    "machine": "DET-05",
     "intervenant": "Bilal",
     "motif": "Remplacement roulements arbre principal"
   },
@@ -25,7 +25,7 @@
     "type": "Sortie",
     "ref": "RLM-6206",
     "quantite": 2,
-    "machine": "Perceuse 01",
+    "machine": "DET-06",
     "intervenant": "Yacine",
     "motif": "Maintenance préventive broche"
   },
@@ -35,7 +35,7 @@
     "type": "Sortie",
     "ref": "RLM-22210",
     "quantite": 4,
-    "machine": "Déligneuse 01",
+    "machine": "DET-08",
     "intervenant": "kamel",
     "motif": "Remplacement roulements rouleau entraîneur"
   },
@@ -45,7 +45,7 @@
     "type": "Entrée",
     "ref": "RLM-30206",
     "quantite": 2,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Réception commande fournisseur"
   },
@@ -55,7 +55,7 @@
     "type": "Sortie",
     "ref": "paliers01",
     "quantite": 1,
-    "machine": "Tenonneuse 01",
+    "machine": "PCE-02",
     "intervenant": "kamel",
     "motif": "Remplacement palier tapis d'avance"
   },
@@ -65,7 +65,7 @@
     "type": "Entrée",
     "ref": "JNT-NBR-20",
     "quantite": 20,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Entrée lot joints toriques NBR"
   },
@@ -75,7 +75,7 @@
     "type": "Sortie",
     "ref": "JNT-NBR-20",
     "quantite": 5,
-    "machine": "Plaqueuse de chants 01",
+    "machine": "FRL-02",
     "intervenant": "Bilal",
     "motif": "Étanchéité circuit pneumatique"
   },
@@ -85,7 +85,7 @@
     "type": "Sortie",
     "ref": "JNT-NBR-50",
     "quantite": 4,
-    "machine": "cadrage 01",
+    "machine": "FRL-03",
     "intervenant": "Tarek",
     "motif": "Remplacement joints vérin serrage"
   },
@@ -95,7 +95,7 @@
     "type": "Entrée",
     "ref": "JNT-SPI-40",
     "quantite": 5,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Réapprovisionnement joints SPI"
   },
@@ -105,7 +105,7 @@
     "type": "Sortie",
     "ref": "JNT-SPI-40",
     "quantite": 2,
-    "machine": "Quatre faces 02",
+    "machine": "POA-01",
     "intervenant": "Yacine",
     "motif": "Étanchéité réducteur"
   },
@@ -115,7 +115,7 @@
     "type": "Sortie",
     "ref": "teflon01",
     "quantite": 4,
-    "machine": "atelier",
+    "machine": "POA-08",
     "intervenant": "Tarek",
     "motif": "Dotation atelier pneumatique"
   },
@@ -125,7 +125,7 @@
     "type": "Sortie",
     "ref": "Courroie21",
     "quantite": 2,
-    "machine": "mortaiseuse 01",
+    "machine": "SAT-01",
     "intervenant": "Bilal",
     "motif": "Remplacement courroie transmission"
   },
@@ -135,7 +135,7 @@
     "type": "Sortie",
     "ref": "Courroie28",
     "quantite": 1,
-    "machine": "Perceuse 02",
+    "machine": "SAT-16",
     "intervenant": "Bilal",
     "motif": "Intervention corrective courroie"
   },
@@ -145,7 +145,7 @@
     "type": "Sortie",
     "ref": "Courroie32",
     "quantite": 1,
-    "machine": "Déligneuse 01",
+    "machine": "PRH-01",
     "intervenant": "Yacine",
     "motif": "Remplacement courroie synchrone"
   },
@@ -155,7 +155,7 @@
     "type": "Entrée",
     "ref": "CRT-A50",
     "quantite": 6,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Entrée stock courroies A50"
   },
@@ -165,7 +165,7 @@
     "type": "Sortie",
     "ref": "CRT-A50",
     "quantite": 3,
-    "machine": "Tour à bois 02",
+    "machine": "RIV-01",
     "intervenant": "kamel",
     "motif": "Remplacement jeu de courroies"
   },
@@ -175,7 +175,7 @@
     "type": "Entrée",
     "ref": "CHN-08B1",
     "quantite": 2,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Réception chaînes 08B-1"
   },
@@ -185,7 +185,7 @@
     "type": "Sortie",
     "ref": "CHN-08B1",
     "quantite": 1,
-    "machine": "Tenonneuse 01",
+    "machine": "REP-01",
     "intervenant": "kamel",
     "motif": "Remplacement chaîne entraînement"
   },
@@ -195,7 +195,7 @@
     "type": "Sortie",
     "ref": "ACCP-HRC110",
     "quantite": 1,
-    "machine": "calibratrice 01",
+    "machine": "FEMB1-01",
     "intervenant": "Bilal",
     "motif": "Changement étoile accouplement moteur"
   },
@@ -205,7 +205,7 @@
     "type": "Sortie",
     "ref": "Raccord01",
     "quantite": 4,
-    "machine": "Perceuse 02",
+    "machine": "DET-01",
     "intervenant": "Bilal",
     "motif": "Réparation fuite air comprimé"
   },
@@ -215,7 +215,7 @@
     "type": "Sortie",
     "ref": "Raccord03",
     "quantite": 3,
-    "machine": "Quatre faces 02",
+    "machine": "DET-05",
     "intervenant": "Yacine",
     "motif": "Remplacement raccords coudés"
   },
@@ -225,7 +225,7 @@
     "type": "Sortie",
     "ref": "Distributeur05",
     "quantite": 4,
-    "machine": "Plaqueuse de chants 01",
+    "machine": "DET-06",
     "intervenant": "Yacine",
     "motif": "Remplacement bloc distributeurs 24V"
   },
@@ -235,7 +235,7 @@
     "type": "Sortie",
     "ref": "Vontouses03",
     "quantite": 4,
-    "machine": "cadrage 01",
+    "machine": "DET-08",
     "intervenant": "Tarek",
     "motif": "Remplacement ventouses usées"
   },
@@ -245,7 +245,7 @@
     "type": "Entrée",
     "ref": "FLT-HYD-10M",
     "quantite": 4,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Arrivage filtres hydrauliques"
   },
@@ -255,7 +255,7 @@
     "type": "Sortie",
     "ref": "FLT-HYD-10M",
     "quantite": 2,
-    "machine": "cadrage 01",
+    "machine": "PCE-02",
     "intervenant": "Tarek",
     "motif": "Entretien périodique groupe hydraulique"
   },
@@ -265,7 +265,7 @@
     "type": "Sortie",
     "ref": "Fin de course01",
     "quantite": 2,
-    "machine": "Perceuse 02",
+    "machine": "FRL-01",
     "intervenant": "Bilal",
     "motif": "Remplacement fin de course sécurité"
   },
@@ -275,7 +275,7 @@
     "type": "Entrée",
     "ref": "CAP-LJ12A3",
     "quantite": 6,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Réception détecteurs inductifs M12"
   },
@@ -285,7 +285,7 @@
     "type": "Sortie",
     "ref": "CAP-LJ12A3",
     "quantite": 3,
-    "machine": "Plaqueuse de chants 01",
+    "machine": "FRL-03",
     "intervenant": "Yacine",
     "motif": "Remplacement capteurs présence panneau"
   },
@@ -295,7 +295,7 @@
     "type": "Sortie",
     "ref": "Alimentation01",
     "quantite": 1,
-    "machine": "Déligneuse 01",
+    "machine": "FRL-04",
     "intervenant": "Yacine",
     "motif": "Remplacement alimentation 24V DC"
   },
@@ -305,7 +305,7 @@
     "type": "Sortie",
     "ref": "Radiateur01",
     "quantite": 1,
-    "machine": "Plaqueuse de chants 01",
+    "machine": "POA-01",
     "intervenant": "Yacine",
     "motif": "Remplacement ventilateur armoire électrique"
   },
@@ -315,7 +315,7 @@
     "type": "Entrée",
     "ref": "VIS-CHC-M8",
     "quantite": 5,
-    "machine": "N/A",
+    "machine": "-",
     "intervenant": "Magasinier",
     "motif": "Entrée boîtes vis CHC M8x30"
   },
@@ -325,7 +325,7 @@
     "type": "Sortie",
     "ref": "VIS-CHC-M8",
     "quantite": 2,
-    "machine": "atelier",
+    "machine": "SAT-01",
     "intervenant": "kamel",
     "motif": "Montage carters de protection"
   },
@@ -335,7 +335,7 @@
     "type": "Sortie",
     "ref": "Cheville01",
     "quantite": 8,
-    "machine": "atelier",
+    "machine": "SAT-16",
     "intervenant": "Tarek",
     "motif": "Ancrage bâti machine au sol"
   },
@@ -345,7 +345,7 @@
     "type": "Sortie",
     "ref": "Pastille01",
     "quantite": 14,
-    "machine": "Tour à bois 02",
+    "machine": "PRH-01",
     "intervenant": "Tarek",
     "motif": "Remplacement plaquettes porte-outils"
   },
@@ -355,7 +355,7 @@
     "type": "Sortie",
     "ref": "Foret01",
     "quantite": 3,
-    "machine": "Perceuse 01",
+    "machine": "FRA-01",
     "intervenant": "Bilal",
     "motif": "Remplacement forets usés Ø8.5"
   }

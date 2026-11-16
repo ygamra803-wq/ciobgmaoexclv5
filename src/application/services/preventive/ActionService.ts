@@ -1,4 +1,3 @@
-import { INITIAL_ACTIONS } from './INITIAL_ACTIONS';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
@@ -18,8 +17,8 @@ export interface ActionCatalogStorageAdapter {
 export class ActionService {
   static getActions(): IPreventiveActionCatalogItem[] {
     return loadCollection<IPreventiveActionCatalogItem[]>(STORAGE_KEY_ACTIONS, {
-      allowDemoFallback: true,
-      demoSeed: INITIAL_ACTIONS as unknown as IPreventiveActionCatalogItem[],
+      allowDemoFallback: false,
+      demoSeed: [],
     });
   }
 

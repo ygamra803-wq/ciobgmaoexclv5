@@ -214,9 +214,9 @@ const EnhancedOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
           opacity: isComplete ? Math.min(CONFIG.rings.opacities[i] * 1.8, 0.45) : CONFIG.rings.opacities[i],
           border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${isComplete ? 0.55 : 0.35})`,
           boxShadow: `0 0 ${12 + i * 4}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.16)`,
-          animation: `spin ${CONFIG.rings.speeds[i]}s linear infinite ${
+          animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
             i % 2 === 0 ? '' : 'reverse'
-          }, neuralRingPulse ${CONFIG.rings.speeds[i] * 0.5}s ease-in-out infinite`,
+          }`,
           animationDelay: `${i * 0.18}s`,
         }}
       />

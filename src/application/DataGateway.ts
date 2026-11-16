@@ -7,6 +7,7 @@ import { safeId } from '../utils/safeId';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 import { movementRepository } from './MovementRepository';
+import { StockCalculationService } from '../domain/pdr/services/StockCalculationService';
 import { sanitizeMachinesHierarchy } from '../utils/assetHierarchy';
 import {
   EMPTY_FISCAL_BUDGET,
@@ -399,7 +400,7 @@ export const DataGateway = {
     let clean = Array.isArray(list) ? list : [];
     let orphanCount = 0;
 
-    if (Array.isArray(machines) && machines.length > 0) {
+    if (Array.isArray(machines) && (machines.length > 0 || strict)) {
       const activeIds = dataIntegrityService.buildActiveMachineIdSet(machines);
       if (strict) {
         const kept = [];
@@ -471,7 +472,7 @@ export const DataGateway = {
     let clean = Array.isArray(list) ? list : [];
     let orphanCount = 0;
 
-    if (Array.isArray(machines) && machines.length > 0) {
+    if (Array.isArray(machines) && (machines.length > 0 || strict)) {
       const activeIds = dataIntegrityService.buildActiveMachineIdSet(machines);
       if (strict) {
         const kept = [];
@@ -1096,7 +1097,10 @@ export const DataGateway = {
     // PM_CATALOG (Actions -> Guides) -> Preventive Tasks
     this.savePreventiveActions(validatedPreventiveActions);
     this.savePreventiveGuides(validatedPreventiveGuides);
-    this.savePreventiveTasks(seedPreventiveTasks, { machines: nextMachines });
+    const { saved: validDemoTasks } = this.savePreventiveTasks(seedPreventiveTasks, {
+      machines: nextMachines,
+      strict: true,
+    });
     this.savePreventivePlans([]);
     this.savePreventiveExecutions([]);
     this.saveMeterReadings([]);
@@ -1110,12 +1114,19 @@ export const DataGateway = {
     const finalPanneCategories = validatedPanneCategories ?? seedPanneByCategory;
     const finalActionsByPanne = validatedActionsByPanne ?? seedActionsByPanne;
 
-    this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: nextMachines });
+    const { saved: validDemoCorrective } = this.saveCorrectiveInterventions(
+      seedCorrectiveInterventions,
+      {
+        machines: nextMachines,
+        strict: true,
+      }
+    );
     this.saveCorrectiveActionsByPanne(finalActionsByPanne);
     this.saveCorrectivePanneCategories(finalPanneCategories);
     this.saveCorrectiveTravaux(seedTravailAFaire);
     this.saveCorrectiveIntervenants(seedIntervenants);
     this.saveWorkshopOrders([]);
+    this.saveNeedRequests([]);
 
     try {
       const authSvc = new AuthService();
@@ -1159,19 +1170,20 @@ export const DataGateway = {
     if (setters.setSortieDemands) setters.setSortieDemands([]);
     if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
 
-    if (setters.setPreventiveTasks) setters.setPreventiveTasks(seedPreventiveTasks);
+    if (setters.setPreventiveTasks) setters.setPreventiveTasks(validDemoTasks);
     if (setters.setPreventiveActions) setters.setPreventiveActions(validatedPreventiveActions);
     if (setters.setPreventiveGuides) setters.setPreventiveGuides(validatedPreventiveGuides);
     if (setters.setPreventivePlans) setters.setPreventivePlans([]);
     if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
     if (setters.setMeterReadings) setters.setMeterReadings([]);
 
-    if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(seedCorrectiveInterventions);
+    if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(validDemoCorrective);
     if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(finalActionsByPanne);
     if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(finalPanneCategories);
     if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(seedTravailAFaire);
     if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
     if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
+    if (setters.setNeedRequests) setters.setNeedRequests([]);
 
     if (setters.setUsers) setters.setUsers(nextUsers);
     if (setters.setTechnicians) setters.setTechnicians(nextTechnicians);
@@ -1193,8 +1205,8 @@ export const DataGateway = {
     return {
       machinesCount: nextMachines.length,
       stockCount: typedStockItems.length,
-      preventiveCount: seedPreventiveTasks.length,
-      correctiveCount: seedCorrectiveInterventions.length,
+      preventiveCount: validDemoTasks.length,
+      correctiveCount: validDemoCorrective.length,
       movementsCount: typedMovements.length,
       pipelineReport,
     };
@@ -1698,6 +1710,97 @@ export const DataGateway = {
    * Loads factory demo seed data for a specific section (or 'all' for the entire factory).
    * Supported sections: 'all' | 'stock' | 'parc' | 'entrepot' | 'zones' | 'mouvements' | 'preventive' | 'corrective'
    */
+  /**
+   * Synchronizes ONLY Level 2 Corrective Maintenance Catalogs (`CM_CATALOG`: `panneCategories`,
+   * `actionsByPanne`, `travauxAFaire`) in non-destructive `MERGE` mode without touching live
+   * `correctiveInterventions` (`DI` / `BT`), `workshopOrders`, `needRequests`, or `intervenants`.
+   */
+  syncCmCatalogBaseline(setters: GmaoStoreSetters = {}) {
+    const demoBundle = this.getOfficialDemoBundle();
+    const rawCats = storageService.getItem(STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES);
+    const existingPanneCategories =
+      rawCats && typeof rawCats === 'object' && !Array.isArray(rawCats)
+        ? (rawCats as Record<string, string[]>)
+        : {};
+    const rawActions = storageService.getItem(STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE);
+    const existingActionsByPanne =
+      rawActions && typeof rawActions === 'object' && !Array.isArray(rawActions)
+        ? (rawActions as Record<string, string[]>)
+        : {};
+    const rawInterventions = storageService.getItem(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS);
+    const existingCorrectiveInterventions = Array.isArray(rawInterventions) ? rawInterventions : [];
+
+    const cmReport = validateAndCommitCmCatalogBundle(demoBundle.cmCatalog!, {
+      mode: 'MERGE',
+      origin: 'DEMO_BUNDLE',
+      dryRun: true,
+      existingPanneCategories,
+      existingActionsByPanne,
+      existingCorrectiveInterventions,
+    });
+    if (!cmReport.success || cmReport.rejected.length > 0) {
+      throw new Error(
+        `Échec synchronisation CM_CATALOG : ${cmReport.rejected[0]?.message || 'Erreur inconnue'}`
+      );
+    }
+
+    const { nextPanneCategories, nextActionsByPanne } = cmReport.staging;
+
+    // Non-destructive merge of standard Travaux à Faire with existing custom entries
+    const rawExistingTravaux = storageService.getItem(STORAGE_KEYS.CORRECTIVE_TRAVAUX);
+    const existingTravaux = Array.isArray(rawExistingTravaux) ? (rawExistingTravaux as string[]) : [];
+    const seenTravaux = new Set(existingTravaux.map((t) => String(t || '').trim().toUpperCase()));
+    const mergedTravaux = [...existingTravaux];
+    for (const seedTravail of seedTravailAFaire) {
+      const clean = String(seedTravail || '').trim();
+      if (clean && !seenTravaux.has(clean.toUpperCase())) {
+        seenTravaux.add(clean.toUpperCase());
+        mergedTravaux.push(clean);
+      }
+    }
+
+    this.saveCorrectiveActionsByPanne(nextActionsByPanne);
+    this.saveCorrectivePanneCategories(nextPanneCategories);
+    this.saveCorrectiveTravaux(mergedTravaux);
+
+    if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(nextActionsByPanne);
+    if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(nextPanneCategories);
+    if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(mergedTravaux);
+
+    const pannesCount = Object.values(nextPanneCategories).reduce<number>(
+      (acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0),
+      0
+    );
+    const categoriesCount = Object.keys(nextPanneCategories).length;
+    const actionsCount = Object.keys(nextActionsByPanne).length;
+
+    this.appendAuditEvent({
+      actionType: 'CM_CATALOG_BASELINE_SYNC',
+      entityType: 'CATALOG',
+      entityId: 'CM_CATALOG',
+      before: {
+        categoriesCount: Object.keys(existingPanneCategories).length,
+        actionsKeysCount: Object.keys(existingActionsByPanne).length,
+        travauxCount: existingTravaux.length,
+      },
+      after: {
+        categoriesCount,
+        pannesCount,
+        actionsCount,
+        travauxCount: mergedTravaux.length,
+      },
+      meta: { mode: 'MERGE', untouchedInterventionsCount: existingCorrectiveInterventions.length },
+    });
+
+    return {
+      interventionsCount: existingCorrectiveInterventions.length,
+      pannesCount,
+      categoriesCount,
+      travauxCount: mergedTravaux.length,
+      actionsCount,
+    };
+  },
+
   loadDemoSection(section = 'all', setters: GmaoStoreSetters = {}) {
     if (!section || section === 'all') {
       return this.loadDemoData(setters);
@@ -1706,17 +1809,28 @@ export const DataGateway = {
     const demoBundle = this.getOfficialDemoBundle();
     const typedMovements = seedMouvements as unknown as IMouvement[];
 
-    const formattedCompTemplates = seedCompTemplates.map((t, idx) => {
-      const rec = t as Record<string, unknown>;
-      return {
-        ...t,
-        id_templates:
-          t.id_templates || t.id_template || (rec.id_comp_template as string | undefined) || `TPL-${idx + 1}`,
-      };
-    });
+    const seedBalanceByRef = new Map<
+      string,
+      { entrees: number; sorties: number; stockActuel: number }
+    >();
+    for (const s of seedStockItems) {
+      const key = String(s.ref || '').trim().toUpperCase();
+      if (key) {
+        seedBalanceByRef.set(key, {
+          entrees: Number(s.entrees) || 0,
+          sorties: Number(s.sorties) || 0,
+          stockActuel: Number(s.stockActuel) || 0,
+        });
+      }
+    }
 
     switch (section) {
       case 'stock': {
+        const existingMvts = (
+          Array.isArray(storageService.getItem(STORAGE_KEYS.MOUVEMENTS))
+            ? storageService.getItem(STORAGE_KEYS.MOUVEMENTS)
+            : []
+        ) as IMouvement[];
         const pdrReport = validateAndCommitRefPdrBundle(demoBundle.refPdr, {
           mode: 'MERGE',
           origin: 'DEMO_BUNDLE',
@@ -1724,7 +1838,7 @@ export const DataGateway = {
           existingPdrGroups: [],
           existingStockTypes: [],
           existingStock: [],
-          existingMouvements: [],
+          existingMouvements: existingMvts,
         });
         if (!pdrReport.success || pdrReport.rejected.length > 0) {
           throw new Error(
@@ -1732,19 +1846,41 @@ export const DataGateway = {
           );
         }
         const { nextGroups, nextTypes, nextStock, nextDesignations } = pdrReport.staging;
+
+        // Reconcile stock balances with existing movements so stockActuel = stockInitial + entrees - sorties holds
+        const reconciledStock: IStockItem[] =
+          existingMvts.length > 0
+            ? nextStock.map((item) => {
+                if (existingMvts.length === typedMovements.length) {
+                  const bal = seedBalanceByRef.get(String(item.ref || '').trim().toUpperCase());
+                  if (bal) {
+                    return {
+                      ...item,
+                      entrees: bal.entrees,
+                      sorties: bal.sorties,
+                      stockActuel: bal.stockActuel,
+                    };
+                  }
+                }
+                const calc = StockCalculationService.calculateStockByRef(item, existingMvts);
+                return {
+                  ...item,
+                  entrees: calc.entrees,
+                  sorties: calc.sorties,
+                  stockActuel: calc.stockActuel,
+                  alerte: calc.alerte,
+                };
+              })
+            : nextStock;
+
         this.savePdrGroups(nextGroups);
         this.saveStockTypes(nextTypes);
-        this.saveStock(nextStock);
+        this.saveStock(reconciledStock);
         this.saveDesignations(nextDesignations);
-        movementRepository.bulkReplace(
-          (Array.isArray(storageService.getItem(STORAGE_KEYS.MOUVEMENTS))
-            ? storageService.getItem(STORAGE_KEYS.MOUVEMENTS)
-            : []) as IMouvement[],
-          buildInitialStockMap(nextStock)
-        );
+        movementRepository.bulkReplace(existingMvts, buildInitialStockMap(reconciledStock));
         if (setters.setPdrGroups) setters.setPdrGroups(nextGroups);
         if (setters.setTypes) setters.setTypes(nextTypes);
-        if (setters.setRawStock) setters.setRawStock(nextStock);
+        if (setters.setRawStock) setters.setRawStock(reconciledStock);
         if (setters.setDesignations) setters.setDesignations(nextDesignations);
         break;
       }
@@ -1932,16 +2068,43 @@ export const DataGateway = {
       }
 
       case 'mouvements':
-      case 'movements':
+      case 'movements': {
+        const rawExistingStock = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
+        const existingStockArr = (
+          Array.isArray(rawExistingStock) ? rawExistingStock : []
+        ) as IStockItem[];
         this.saveMouvements(typedMovements);
         this.saveSortiesExterne(seedSortiesExternes);
-        movementRepository.bulkReplace(
-          typedMovements,
-          buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
-        );
+        if (existingStockArr.length > 0) {
+          const reconciledStock: IStockItem[] = existingStockArr.map((item) => {
+            const bal = seedBalanceByRef.get(String(item.ref || '').trim().toUpperCase());
+            if (bal) {
+              return {
+                ...item,
+                entrees: bal.entrees,
+                sorties: bal.sorties,
+                stockActuel: bal.stockActuel,
+              };
+            }
+            const calc = StockCalculationService.calculateStockByRef(item, typedMovements);
+            return {
+              ...item,
+              entrees: calc.entrees,
+              sorties: calc.sorties,
+              stockActuel: calc.stockActuel,
+              alerte: calc.alerte,
+            };
+          });
+          this.saveStock(reconciledStock);
+          movementRepository.bulkReplace(typedMovements, buildInitialStockMap(reconciledStock));
+          if (setters.setRawStock) setters.setRawStock(reconciledStock);
+        } else {
+          movementRepository.bulkReplace(typedMovements, new Map());
+        }
         if (setters.setMouvements) setters.setMouvements(typedMovements);
         if (setters.setSortiesExterne) setters.setSortiesExterne(seedSortiesExternes);
         break;
+      }
 
       case 'preventive': {
         const rawExistingStock = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
@@ -1965,14 +2128,16 @@ export const DataGateway = {
         const { nextActions, nextGuides } = pmReport.staging;
         const rawExistingMachines = storageService.getItem(STORAGE_KEYS.MACHINES);
         const machineCtx = Array.isArray(rawExistingMachines) ? rawExistingMachines : [];
-        this.savePreventiveTasks(seedPreventiveTasks, {
-          machines: machineCtx.length > 0 ? machineCtx : seedMachines,
+        // Strict FK check against currently registered machines so zero orphan tasks are ever injected
+        const { saved: validTasks } = this.savePreventiveTasks(seedPreventiveTasks, {
+          machines: machineCtx,
+          strict: true,
         });
         this.savePreventiveActions(nextActions);
         this.savePreventiveGuides(nextGuides);
         this.savePreventivePlans([]);
         this.savePreventiveExecutions([]);
-        if (setters.setPreventiveTasks) setters.setPreventiveTasks(seedPreventiveTasks);
+        if (setters.setPreventiveTasks) setters.setPreventiveTasks(validTasks);
         if (setters.setPreventiveActions) setters.setPreventiveActions(nextActions);
         if (setters.setPreventiveGuides) setters.setPreventiveGuides(nextGuides);
         if (setters.setPreventivePlans) setters.setPreventivePlans([]);
@@ -1995,16 +2160,26 @@ export const DataGateway = {
           );
         }
         const { nextPanneCategories, nextActionsByPanne } = cmReport.staging;
-        this.saveCorrectiveInterventions(seedCorrectiveInterventions, { machines: seedMachines });
+        const rawExistingMachines = storageService.getItem(STORAGE_KEYS.MACHINES);
+        const machineCtx = Array.isArray(rawExistingMachines) ? rawExistingMachines : [];
+        // Strict FK check against currently registered machines so zero orphan BTs/DIs are ever injected
+        const { saved: validInterventions } = this.saveCorrectiveInterventions(
+          seedCorrectiveInterventions,
+          { machines: machineCtx, strict: true }
+        );
         this.saveCorrectiveActionsByPanne(nextActionsByPanne);
         this.saveCorrectivePanneCategories(nextPanneCategories);
         this.saveCorrectiveTravaux(seedTravailAFaire);
         this.saveCorrectiveIntervenants(seedIntervenants);
-        if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(seedCorrectiveInterventions);
+        this.saveWorkshopOrders([]);
+        this.saveNeedRequests([]);
+        if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions(validInterventions);
         if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne(nextActionsByPanne);
         if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories(nextPanneCategories);
         if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire(seedTravailAFaire);
         if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants(seedIntervenants);
+        if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
+        if (setters.setNeedRequests) setters.setNeedRequests([]);
         break;
       }
 
@@ -2016,7 +2191,8 @@ export const DataGateway = {
   },
 
   /**
-   * Clears data for a specific section (or 'all' for the entire factory).
+   * Clears data for a specific section (or 'all' for the entire factory) with full referential
+   * and mathematical consistency across dependent collections.
    */
   clearDemoSection(section = 'all', setters: GmaoStoreSetters = {}) {
     if (!section || section === 'all') {
@@ -2049,12 +2225,27 @@ export const DataGateway = {
         this.saveTemplates([]);
         this.saveBlueprints([]);
         this.saveMachineBom([]);
+        // Prevent dangling orphan tasks/BTs referencing deleted machines
+        this.savePreventiveTasks([]);
+        this.savePreventivePlans([]);
+        this.savePreventiveExecutions([]);
+        this.saveMeterReadings([]);
+        this.saveCorrectiveInterventions([]);
+        this.saveWorkshopOrders([]);
+        this.saveNeedRequests([]);
         if (setters.setMachines) setters.setMachines([]);
         if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes([]);
         if (setters.setFamilies) setters.setFamilies([]);
         if (setters.setTemplates) setters.setTemplates([]);
         if (setters.setBlueprints) setters.setBlueprints([]);
         if (setters.setMachineElementsLedger) setters.setMachineElementsLedger([]);
+        if (setters.setPreventiveTasks) setters.setPreventiveTasks([]);
+        if (setters.setPreventivePlans) setters.setPreventivePlans([]);
+        if (setters.setPreventiveExecutions) setters.setPreventiveExecutions([]);
+        if (setters.setMeterReadings) setters.setMeterReadings([]);
+        if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions([]);
+        if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
+        if (setters.setNeedRequests) setters.setNeedRequests([]);
         break;
 
       case 'entrepot':
@@ -2093,20 +2284,36 @@ export const DataGateway = {
         break;
 
       case 'mouvements':
-      case 'movements':
+      case 'movements': {
         this.saveMouvements([]);
         this.saveSortieDemands([]);
         this.saveReplenishmentOrders([]);
         this.saveSortiesExterne([]);
-        movementRepository.bulkReplace(
-          [],
-          buildInitialStockMap(storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [])
-        );
+        const rawExistingStock = storageService.getItem(STORAGE_KEYS.RAW_STOCK);
+        const existingStockArr = (
+          Array.isArray(rawExistingStock) ? rawExistingStock : []
+        ) as IStockItem[];
+        const resetStock: IStockItem[] = existingStockArr.map((item) => {
+          const calc = StockCalculationService.calculateStockByRef(item, []);
+          return {
+            ...item,
+            entrees: 0,
+            sorties: 0,
+            stockActuel: calc.stockActuel,
+            alerte: calc.alerte,
+          };
+        });
+        if (existingStockArr.length > 0) {
+          this.saveStock(resetStock);
+          if (setters.setRawStock) setters.setRawStock(resetStock);
+        }
+        movementRepository.bulkReplace([], buildInitialStockMap(resetStock));
         if (setters.setMouvements) setters.setMouvements([]);
         if (setters.setSortieDemands) setters.setSortieDemands([]);
         if (setters.setReplenishmentOrders) setters.setReplenishmentOrders([]);
         if (setters.setSortiesExterne) setters.setSortiesExterne([]);
         break;
+      }
 
       case 'preventive':
         this.purgeLegacyKeysFor(STORAGE_KEYS.PREVENTIVE_TASKS);
@@ -2144,20 +2351,49 @@ export const DataGateway = {
         break;
 
       case 'corrective':
+        this.purgeLegacyKeysFor(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS);
+        this.purgeLegacyKeysFor(STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE);
+        this.purgeLegacyKeysFor(STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES);
+        this.purgeLegacyKeysFor(STORAGE_KEYS.CORRECTIVE_TRAVAUX);
+        this.purgeLegacyKeysFor(STORAGE_KEYS.CORRECTIVE_INTERVENANTS);
         this.saveCorrectiveInterventions([]);
         this.saveCorrectiveActionsByPanne({});
         this.saveCorrectivePanneCategories({});
         this.saveCorrectiveTravaux([]);
         this.saveCorrectiveIntervenants([]);
+        this.saveWorkshopOrders([]);
+        this.saveNeedRequests([]);
         if (setters.setCorrectiveInterventions) setters.setCorrectiveInterventions([]);
         if (setters.setCorrectiveActionsByPanne) setters.setCorrectiveActionsByPanne({});
         if (setters.setCorrectivePanneCategories) setters.setCorrectivePanneCategories({});
         if (setters.setCorrectiveTravauxAFaire) setters.setCorrectiveTravauxAFaire([]);
         if (setters.setCorrectiveIntervenants) setters.setCorrectiveIntervenants([]);
+        if (setters.setWorkshopOrders) setters.setWorkshopOrders([]);
+        if (setters.setNeedRequests) setters.setNeedRequests([]);
+        indexedDBService.clear('interventions').catch(() => false);
         break;
 
       default:
         break;
+    }
+
+    // Reconcile DEMO_MODE / START_MODE if all core operational tables are now empty
+    const coreKeys = [
+      STORAGE_KEYS.RAW_STOCK,
+      STORAGE_KEYS.MACHINES,
+      STORAGE_KEYS.WAREHOUSE_ITEMS,
+      STORAGE_KEYS.ZONES,
+      STORAGE_KEYS.MOUVEMENTS,
+      STORAGE_KEYS.PREVENTIVE_TASKS,
+      STORAGE_KEYS.CORRECTIVE_INTERVENTIONS,
+    ];
+    const allEmpty = coreKeys.every((key) => {
+      const val = storageService.getItem(key);
+      return !Array.isArray(val) || val.length === 0;
+    });
+    if (allEmpty) {
+      storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
+      storageService.setItem(STORAGE_KEYS.START_MODE, 'empty');
     }
 
     return { section, cleared: true };

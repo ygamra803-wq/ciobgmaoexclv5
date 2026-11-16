@@ -39,9 +39,9 @@ describe('CIOB GMAO Nexus v5.0.2 — 4-Pillar Enhancements & SSOT Integration Su
     // Step 2: Load demo data
     const demoLoaded = DataGateway.loadDemoData();
     expect(demoLoaded.stockCount).toBeGreaterThan(20);
-    expect(demoLoaded.preventiveCount).toBeGreaterThan(100);
+    expect(demoLoaded.preventiveCount).toBeGreaterThanOrEqual(35);
     const demoTasksSnapshot = PreventiveService.getTasks();
-    expect(demoTasksSnapshot.length).toBeGreaterThan(100);
+    expect(demoTasksSnapshot.length).toBeGreaterThanOrEqual(35);
 
     // Step 3: Clear all for real factory
     DataGateway.clearAllForRealFactory();

@@ -102,13 +102,13 @@ export default function CatalogueDonneesView({
   const totalActionsKeysCount = Object.keys(actionsByPanne || {}).length;
   const totalIntervenantsCount = resolvedIntervenants.length;
 
-  const handleForceSync = () => {
+  const handleForceSync = async () => {
     setIsSyncing(true);
     try {
       if (typeof onForceSyncSeed === 'function') {
-        const res = onForceSyncSeed();
+        const res = await onForceSyncSeed();
         showToast?.(
-          `Données réelles synchronisées avec succès : ${res?.interventionsCount ?? res?.interventions?.length ?? (interventions || []).length} Interventions, ${res?.travauxCount ?? (travauxAFaire || []).length} Travaux, ${res?.pannesCount ?? totalPannesCount} Pannes !`,
+          `Référentiel CM_CATALOG synchronisé (mode MERGE) : ${res?.pannesCount ?? totalPannesCount} Pannes, ${res?.travauxCount ?? (travauxAFaire || []).length} Travaux, ${res?.actionsCount ?? totalActionsKeysCount} Actions (BTs intacts : ${res?.interventionsCount ?? (interventions || []).length}) !`,
           'success'
         );
       } else {
