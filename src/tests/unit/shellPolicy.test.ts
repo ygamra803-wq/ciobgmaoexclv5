@@ -2737,10 +2737,18 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
     }
     // Default password 'admin'/'admin' must be rejected unconditionally
     await expect(auth.login('admin', 'admin')).rejects.toThrow();
-    // Explicit strong password setup creates a valid PBKDF2 hash and authenticates cleanly
-    await auth.updateUserPassword('admin', 'Admin_S5_Strong_2026!');
-    const adminSession = await auth.login('admin', 'Admin_S5_Strong_2026!');
+    // Explicit strong license + password activation creates a valid PBKDF2 hash and authenticates cleanly via Dual-Key AND
+    await auth.activateLicenseAndAdmin({
+      licenseKey: 'CIOB-S5-LIC-2026',
+      adminPassword: 'Admin_S5_Strong_2026!',
+    });
+    const adminSession = await auth.login(
+      'admin',
+      'Admin_S5_Strong_2026!',
+      'CIOB-S5-LIC-2026'
+    );
     expect(adminSession.role).toBe('ADMIN');
+    expect(adminSession.authMethod).toBe('DUAL_KEY_AND');
     const upgradedAdmin = auth.getStoredUsersList().find((u: any) => u.username === 'admin');
     expect(upgradedAdmin?.defaultPass).toBeUndefined();
     expect(String(upgradedAdmin?.passwordHash || '').startsWith('pbkdf2:v1:')).toBe(true);

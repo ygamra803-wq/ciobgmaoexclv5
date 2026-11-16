@@ -5,6 +5,12 @@ import { indexedDBService } from '../../infrastructure/database/IndexedDBService
 import { vaultService } from '../../utils/vaultService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { storageService } from '../../utils/storageService';
+import {
+  LicenseGateService,
+  validateLicenseKeyPolicy,
+  looksLikeStoredVerifierOrHash,
+  type ILicenseRecord,
+} from './LicenseGateService';
 
 const USERS_KEY = 'gmao_auth_accounts_v2';
 const SESSION_KEY = 'gmao_session_v2';
@@ -18,8 +24,9 @@ export const PROHIBITED_BOOTSTRAP_PASSWORDS = new Set([
 ]);
 
 /**
- * SEC-HARDENING-P1 (Batch A): Unified password strength policy
+ * SEC-HARDENING-P1 (Batch A) + LOGIN-LICENSE-P0: Unified password strength policy
  * - Rejects prohibited bootstrap passwords first
+ * - Rejects pasted cryptographic hashes/verifiers (pbkdf2:v1:..., AG1:...)
  * - Minimum 8 characters
  * - Must contain at least one letter ([a-zA-Z]) and one digit ([0-9])
  */
@@ -27,6 +34,11 @@ export function validatePasswordPolicy(rawPassword: string): string {
   const cleanPass = String(rawPassword || '').trim();
   if (!cleanPass) {
     throw new Error('Veuillez saisir un mot de passe.');
+  }
+  if (looksLikeStoredVerifierOrHash(cleanPass)) {
+    throw new Error(
+      'Format de mot de passe invalide : les empreintes cryptographiques stockées ne peuvent pas être utilisées comme mot de passe.'
+    );
   }
   if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPass.toLowerCase())) {
     throw new Error(
@@ -761,6 +773,17 @@ export class AuthService {
   async updateUserPassword(usernameOrId, newPlainPassword) {
     const cleanPass = validatePasswordPolicy(newPlainPassword);
 
+    if (LicenseGateService.isLicenseActive()) {
+      const matchesLicense = await LicenseGateService.verifyLicenseKey(cleanPass, {
+        touchLastAuth: false,
+      });
+      if (matchesLicense) {
+        throw new Error(
+          "Séparation des secrets obligatoire : le mot de passe d'un compte ne peut pas être identique à la clé de licence commerciale."
+        );
+      }
+    }
+
     const users = [...this.getStoredUsersList()];
     const target = String(usernameOrId || '').trim().toLowerCase();
     const idx = users.findIndex(
@@ -829,6 +852,7 @@ export class AuthService {
   resetAllAccountsToDefaults() {
     const defaultUsers = this.getDefaultUsersList();
     this.saveStoredUsersList(defaultUsers, true);
+    LicenseGateService.clearLicenseRecord();
     return defaultUsers;
   }
 
@@ -879,11 +903,176 @@ export class AuthService {
     return session;
   }
 
-  isPinConfigured() {
-    return vaultService.isVaultExists();
+  getLicenseRecord(): ILicenseRecord | null {
+    return LicenseGateService.getLicenseRecord();
   }
 
-  createAdminSession(role = 'ADMIN', authMethod = 'PASSWORD') {
+  /**
+   * Returns true if and only if BOTH:
+   * 1. An ACTIVE commercial license record (`ILicenseRecord`) exists, AND
+   * 2. The primary `admin` account has a real initialized passwordHash (not `_init_seed`).
+   */
+  isLicenseActivated(): boolean {
+    if (!LicenseGateService.isLicenseActive()) return false;
+    const users = this.getStoredUsersList();
+    const adminAcc = users.find(
+      (u) =>
+        String(u.username || '').toLowerCase() === 'admin' ||
+        String(u.id || '').toLowerCase() === 'admin'
+    );
+    const storedHash = String(adminAcc?.passwordHash || '').trim();
+    return Boolean(storedHash) && !storedHash.includes('_init_seed');
+  }
+
+  isPinConfigured() {
+    return this.isLicenseActivated();
+  }
+
+  /**
+   * LOGIN-LICENSE-P0: First-run activation of Commercial License Key + Independent Admin Password.
+   * Strictly enforces `licenseKey !== adminPassword` and never copies the license key into `admin.passwordHash`.
+   */
+  async activateLicenseAndAdmin(params: {
+    licenseKey: string;
+    adminPassword: string;
+    organizationLabel?: string;
+    seatsHint?: string;
+    rememberLicenseOnDevice?: boolean;
+  }): Promise<{ licenseRecord: ILicenseRecord; adminAccount: any }> {
+    const cleanLicenseKey = validateLicenseKeyPolicy(params.licenseKey);
+    const cleanAdminPass = validatePasswordPolicy(params.adminPassword);
+
+    if (cleanLicenseKey.toLowerCase() === cleanAdminPass.toLowerCase()) {
+      throw new Error(
+        'Séparation des secrets obligatoire : la clé de licence commerciale et le mot de passe Administrateur doivent être strictement différents.'
+      );
+    }
+
+    const licenseRecord = await LicenseGateService.activateLicense({
+      licenseKey: cleanLicenseKey,
+      organizationLabel: params.organizationLabel,
+      seatsHint: params.seatsHint,
+    });
+
+    const adminHash = await SecurityService.hashPassword(cleanAdminPass);
+    const storedUsers = [...this.getStoredUsersList()];
+    let adminAccount = null;
+
+    const updatedUsers = storedUsers.map((u) => {
+      if (
+        String(u.username || '').toLowerCase() === 'admin' ||
+        String(u.id || '').toLowerCase() === 'admin'
+      ) {
+        const nextAdmin = {
+          ...u,
+          passwordHash: adminHash,
+          isActive: true,
+        };
+        delete nextAdmin.defaultPass;
+        adminAccount = nextAdmin;
+        return nextAdmin;
+      }
+      return u;
+    });
+
+    this.saveStoredUsersList(updatedUsers, true);
+
+    const newVault = {
+      version: 2,
+      createdAt: new Date().toISOString(),
+      licenseKeyId: licenseRecord.licenseKeyId,
+      accounts: updatedUsers,
+    };
+
+    await vaultService.encryptVault(newVault, cleanLicenseKey);
+    await vaultService.setPinHash(cleanLicenseKey);
+    SecurityService.removeSecure('gmao_admin_pin');
+
+    LicenseGateService.setRememberedLicenseKey(
+      cleanLicenseKey,
+      Boolean(params.rememberLicenseOnDevice)
+    );
+
+    return { licenseRecord, adminAccount };
+  }
+
+  /**
+   * LOGIN-LICENSE-P0: Rotate the commercial license key after verifying both
+   * the current license key AND the current Admin account password.
+   * Account passwords remain untouched.
+   */
+  async rotateLicenseKeyWithAdminAuth(params: {
+    currentLicenseKey: string;
+    adminPassword: string;
+    newLicenseKey: string;
+    organizationLabel?: string;
+    seatsHint?: string;
+  }): Promise<ILicenseRecord> {
+    const cleanCurrentKey = String(params.currentLicenseKey || '').trim();
+    const cleanAdminPass = String(params.adminPassword || '').trim();
+    const cleanNewKey = validateLicenseKeyPolicy(params.newLicenseKey);
+
+    if (!cleanCurrentKey || !cleanAdminPass) {
+      throw new Error(
+        'Veuillez saisir la clé de licence actuelle ainsi que le mot de passe Administrateur pour autoriser la rotation.'
+      );
+    }
+
+    if (cleanNewKey.toLowerCase() === cleanAdminPass.toLowerCase()) {
+      throw new Error(
+        'Séparation des secrets obligatoire : la nouvelle clé de licence ne peut pas être identique au mot de passe Administrateur.'
+      );
+    }
+
+    const users = this.getStoredUsersList();
+    const adminAcc = users.find(
+      (u) =>
+        String(u.username || '').toLowerCase() === 'admin' ||
+        String(u.id || '').toLowerCase() === 'admin'
+    );
+    const adminHash = String(adminAcc?.passwordHash || '').trim();
+    if (!adminHash || adminHash.includes('_init_seed')) {
+      throw new Error("Le compte Administrateur n'est pas initialisé.");
+    }
+
+    const isAdminPassValid = await SecurityService.comparePassword(cleanAdminPass, adminHash);
+    if (!isAdminPassValid) {
+      throw new Error('Mot de passe Administrateur incorrect.');
+    }
+
+    // Also ensure the new license key does not match any other active user's password
+    for (const u of users) {
+      const h = String(u.passwordHash || '').trim();
+      if (h && !h.includes('_init_seed')) {
+        const collides = await SecurityService.comparePassword(cleanNewKey, h);
+        if (collides) {
+          throw new Error(
+            `Séparation des secrets obligatoire : la nouvelle clé de licence ne peut pas être identique au mot de passe du compte "${u.username}".`
+          );
+        }
+      }
+    }
+
+    const rotatedRecord = await LicenseGateService.rotateLicenseKey({
+      currentLicenseKey: cleanCurrentKey,
+      newLicenseKey: cleanNewKey,
+      organizationLabel: params.organizationLabel,
+      seatsHint: params.seatsHint,
+    });
+
+    const newVault = {
+      version: 2,
+      createdAt: new Date().toISOString(),
+      licenseKeyId: rotatedRecord.licenseKeyId,
+      accounts: users,
+    };
+    await vaultService.encryptVault(newVault, cleanNewKey);
+    await vaultService.setPinHash(cleanNewKey);
+
+    return rotatedRecord;
+  }
+
+  createAdminSession(role = 'ADMIN', authMethod = 'DUAL_KEY_AND') {
     const sessionPayload = {
       id: 'admin',
       code: 'admin',
@@ -900,53 +1089,68 @@ export class AuthService {
     return this.saveSignedSession(sessionPayload);
   }
 
-  async loginWithPin(pin) {
-    const cleanPin = (pin || '').trim();
-    if (!cleanPin) {
-      throw new Error('Veuillez saisir votre code PIN.');
-    }
-
-    if (!vaultService.isVaultExists()) {
-      throw new Error("Aucun coffre-fort n'est configuré. Utilisez le mot de passe habituel.");
-    }
-
-    try {
-      await vaultService.decryptVault(cleanPin);
-    } catch {
-      throw new Error('Code PIN incorrect.');
-    }
-
-    const configuredRole =
-      (storageService.getItem(STORAGE_KEYS.ADMIN_ROLE) as string) || 'ADMIN';
-    return this.createAdminSession(configuredRole, 'ENCRYPTED_PIN');
+  /**
+   * LOGIN-LICENSE-P0: PIN-only login is strictly prohibited.
+   * Authentication requires `[Clé de licence] AND [Mot de passe du compte]`.
+   */
+  async loginWithPin(_pin?: string): Promise<never> {
+    throw new Error(
+      "Authentification à clé unique désactivée (LOGIN-LICENSE-P0) : la connexion nécessite obligatoirement la clé de licence commerciale ET le mot de passe du compte (logique AND)."
+    );
   }
 
-  async login(username, password) {
-    const cleanUsername = (username || '').trim().toLowerCase();
-    const cleanPassword = (password || '').trim();
+  /**
+   * LOGIN-LICENSE-P0: Strict Dual-Key `AND` Authentication Gate.
+   * Requires:
+   * 1. Active `ILicenseRecord` on the installation
+   * 2. Valid `licenseKey` matching `ILicenseRecord.licenseVerifier` (PBKDF2-SHA256)
+   * 3. Valid `username` + `password` matching the active account's `passwordHash` (PBKDF2-SHA256)
+   */
+  async login(username: string, password: string, licenseKey?: string) {
+    const cleanUsername = String(username || '').trim().toLowerCase();
+    const cleanPassword = String(password || '').trim();
+    const cleanLicenseKey = String(licenseKey || '').trim();
 
     if (!cleanUsername) {
       throw new Error('Veuillez sélectionner un compte actif avant de vous connecter.');
     }
 
     if (!cleanPassword) {
-      throw new Error('Veuillez saisir votre mot de passe ou code PIN.');
+      throw new Error('Veuillez saisir le mot de passe du compte.');
     }
 
-    // Check if vault PIN matches
-    let isPinMatch = false;
-    if (vaultService.isVaultExists()) {
-      isPinMatch = await vaultService.verifyPinHash(cleanPassword);
+    // 1. Always reject prohibited bootstrap passwords immediately in all environments
+    if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPassword.toLowerCase())) {
+      throw new Error(
+        'Les mots de passe par défaut interdits (admin, magasinier, viewer, tech, 1234) sont désactivés dans tous les environnements. Veuillez utiliser un mot de passe personnel sécurisé.'
+      );
     }
 
-    // If username is admin with valid admin PIN, authenticate as Admin
-    if (cleanUsername === 'admin' && isPinMatch) {
-      const configuredRole =
-        (storageService.getItem(STORAGE_KEYS.ADMIN_ROLE) as string) || 'ADMIN';
-      return this.createAdminSession(configuredRole, 'ENCRYPTED_PIN');
+    // 2. Reject pass-the-hash / pasted cryptographic verifier or hash strings
+    if (
+      looksLikeStoredVerifierOrHash(cleanPassword) ||
+      looksLikeStoredVerifierOrHash(cleanLicenseKey)
+    ) {
+      throw new Error(
+        "Format d'authentification invalide : les empreintes cryptographiques stockées (hash/verifier) ne peuvent pas être utilisées pour ouvrir une session."
+      );
     }
 
-    // Standard user lookup by username, code, personnelId, or alias
+    // 3. Require an ACTIVE commercial license on this installation
+    if (!LicenseGateService.isLicenseActive()) {
+      throw new Error(
+        "Licence système non activée. Veuillez compléter l'activation initiale (Clé de licence commerciale + Mot de passe Administrateur)."
+      );
+    }
+
+    // 4. Require the second key (Clé de licence commerciale) — zero password-only or PIN-only path
+    if (!cleanLicenseKey) {
+      throw new Error(
+        'Authentification à double clé requise (AND) : la clé de licence commerciale ET le mot de passe du compte sont obligatoires.'
+      );
+    }
+
+    // 5. Lookup target account by username, code, personnelId, or alias
     const users = this.getStoredUsersList();
     const user = users.find(
       (u) =>
@@ -958,57 +1162,57 @@ export class AuthService {
         (cleanUsername === 'magasin' && (u.username === 'magasinier' || u.id === 'magasinier'))
     );
 
-    if (user) {
-      if (user.isActive === false) {
-        throw new Error("Ce compte d'accès est désactivé par l'administrateur.");
-      }
-
-      if (PROHIBITED_BOOTSTRAP_PASSWORDS.has(cleanPassword.toLowerCase())) {
-        throw new Error(
-          "Les mots de passe par défaut interdits (admin, magasinier, viewer, tech, 1234) sont désactivés dans tous les environnements. Veuillez utiliser un mot de passe personnel sécurisé."
-        );
-      }
-
-      const storedHash = String(user.passwordHash || '').trim();
-      const hasValidRealHash =
-        Boolean(storedHash) && !storedHash.includes('_init_seed');
-      const isPasswordHashMatch =
-        hasValidRealHash && (await SecurityService.comparePassword(cleanPassword, storedHash));
-      const isPasswordValid =
-        isPasswordHashMatch || (user.role === 'ADMIN' && isPinMatch);
-
-      if (isPasswordValid) {
-        // Upgrade legacy SHA-256 hash to full PBKDF2-SHA256 (600,000 iterations)
-        if (
-          (hasValidRealHash && SecurityService.isLegacyHash(storedHash)) ||
-          user.defaultPass
-        ) {
-          const modernHash = await SecurityService.hashPassword(cleanPassword);
-          user.passwordHash = modernHash;
-          delete user.defaultPass;
-          this.saveStoredUsersList(users, false);
-        }
-
-        const sessionPayload = {
-          ...user,
-          personnelId: user.personnelId || null,
-          personnelName: user.personnelName || user.name || null,
-          id_zone: user.id_zone || null,
-          specialite: user.specialite || null,
-          authMethod: user.role === 'ADMIN' && isPinMatch && !isPasswordHashMatch ? 'ENCRYPTED_PIN' : 'PASSWORD',
-          mustChangePassword: false,
-        };
-        return this.saveSignedSession(sessionPayload);
-      }
-
-      if (!hasValidRealHash && !(user.role === 'ADMIN' && vaultService.isVaultExists())) {
-        throw new Error(
-          "Ce compte n'est pas encore initialisé. Veuillez définir un mot de passe sécurisé ou configurer le Master PIN."
-        );
-      }
+    if (!user) {
+      throw new Error(
+        "Échec d'authentification : clé de licence, identifiant ou mot de passe incorrect."
+      );
     }
 
-    throw new Error("Identifiant ou mot de passe incorrect.");
+    if (user.isActive === false) {
+      throw new Error("Ce compte d'accès est désactivé par l'administrateur.");
+    }
+
+    const storedHash = String(user.passwordHash || '').trim();
+    const hasValidRealHash = Boolean(storedHash) && !storedHash.includes('_init_seed');
+
+    if (!hasValidRealHash) {
+      throw new Error(
+        "Ce compte n'est pas encore initialisé. Veuillez définir un mot de passe sécurisé pour ce compte."
+      );
+    }
+
+    // 6. Evaluate BOTH secrets independently (Strict AND: License Key AND Account Password)
+    const [isLicenseValid, isPasswordHashMatch] = await Promise.all([
+      LicenseGateService.verifyLicenseKey(cleanLicenseKey),
+      SecurityService.comparePassword(cleanPassword, storedHash),
+    ]);
+
+    if (!isLicenseValid || !isPasswordHashMatch) {
+      throw new Error(
+        "Échec d'authentification : clé de licence, identifiant ou mot de passe incorrect."
+      );
+    }
+
+    // Upgrade legacy SHA-256 hash to full PBKDF2-SHA256 (600,000 iterations) if needed
+    if (SecurityService.isLegacyHash(storedHash) || user.defaultPass) {
+      const modernHash = await SecurityService.hashPassword(cleanPassword);
+      user.passwordHash = modernHash;
+      delete user.defaultPass;
+      this.saveStoredUsersList(users, false);
+    }
+
+    const activeLicense = LicenseGateService.getLicenseRecord();
+    const sessionPayload = {
+      ...user,
+      personnelId: user.personnelId || null,
+      personnelName: user.personnelName || user.name || null,
+      id_zone: user.id_zone || null,
+      specialite: user.specialite || null,
+      authMethod: 'DUAL_KEY_AND',
+      licenseKeyId: activeLicense?.licenseKeyId || null,
+      mustChangePassword: false,
+    };
+    return this.saveSignedSession(sessionPayload);
   }
 
   logout() {

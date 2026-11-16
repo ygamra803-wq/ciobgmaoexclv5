@@ -46,5 +46,7 @@
 | **Architecture & ADR Decisions** | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Read when reviewing system boundaries, 3-Tier Asset/Blueprint architecture, or ADRs (`ADR-01` to `ADR-10`). |
 | **Canonical Storage Keys & FK Schema** | [`docs/DATA_SSOT.md`](./docs/DATA_SSOT.md) | Read when touching persistence, `STORAGE_KEYS`, migrations, or entity relationships. |
 | **Layered Data Ingestion & Bundles (`REF_PARC` / `ASSETS`)** | [`docs/DATA_INGESTION_AND_BUNDLES.md`](./docs/DATA_INGESTION_AND_BUNDLES.md) | Read when working on `UnifiedImportPipeline`, bundle schemas, or seed boundaries. |
+| **Dual-Key Gate & Commercial License (`LOGIN-LICENSE-P0`)** | [`docs/SECURITY_LICENSE_GATE.md`](./docs/SECURITY_LICENSE_GATE.md) | Read when working on `LicenseGateService`, `AuthService.login`, or license rotation. |
 | **Documentation Map** | [`DOCS_INDEX.md`](./DOCS_INDEX.md) | Read when looking up the exact documentation file for a specific module or screen. |
 | **Specific UI Screen Specs** | `docs/*_VIEW.md` | Open **only** the single `*_VIEW.md` matching the screen you are actively editing. |
+
