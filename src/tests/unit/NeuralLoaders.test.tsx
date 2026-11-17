@@ -63,19 +63,49 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it('auto-completes NeuralLoader stages cleanly and invokes onComplete', async () => {
+  it('auto-completes NeuralLoader 16-module icon sequence in exact order and invokes onComplete', async () => {
     const onComplete = vi.fn();
+    const expectedOrder = [
+      'dashboard',
+      'stock_article',
+      'entree_sortie_rapide',
+      'machine_registered',
+      'planning_preventive',
+      'corrective',
+      'entrepot',
+      'zone',
+      'utilisateur',
+      'nexus',
+      'guide',
+      'setting',
+      'rapports_vacation',
+      'pilotage',
+      'rapports_mensuel',
+      'validation',
+    ];
+    const observedOrder: string[] = [];
 
     act(() => {
       root.render(<NeuralLoader mode="section" onComplete={onComplete} />);
     });
 
-    for (let step = 0; step < 8; step++) {
+    const recordCurrentModule = () => {
+      const emblem = container.querySelector('[data-showcase-module]');
+      const modId = emblem?.getAttribute('data-showcase-module');
+      if (modId && observedOrder[observedOrder.length - 1] !== modId) {
+        observedOrder.push(modId);
+      }
+    };
+
+    recordCurrentModule();
+    for (let step = 0; step < 25; step++) {
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(350);
+        await vi.advanceTimersByTimeAsync(75);
       });
+      recordCurrentModule();
     }
 
+    expect(observedOrder).toEqual(expectedOrder);
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
@@ -141,4 +171,56 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     expect(container.querySelector('.wm-orbit-fast .wm-atom-primary')).toBeTruthy();
     expect(container.querySelector('svg')).toBeTruthy();
   });
+
+  it('boots full App tree through AppBootGuard (NeuralLoader) and SplashScreen into LoginScreen', async () => {
+    const { ServiceProvider } = await import('../../core/di/ServiceProvider');
+    const { migrateStorageOnce } = await import('../../infrastructure/persistence/migrateStorage');
+    const { I18nProvider } = await import('../../i18n/I18nContext');
+    const { AuthProvider } = await import('../../context/AuthContext');
+    const ErrorBoundary = (await import('../../presentation/components/common/ErrorBoundary')).default;
+    const App = (await import('../../App')).default;
+
+    migrateStorageOnce();
+    ServiceProvider.register();
+
+    act(() => {
+      root.render(
+        <ErrorBoundary>
+          <I18nProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </I18nProvider>
+        </ErrorBoundary>
+      );
+    });
+
+    // Stage 1: NeuralLoader intro showcase via AppBootGuard
+    expect(container.querySelector('[data-showcase-module]')).toBeTruthy();
+    const skipIntroBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes("Passer l'intro")
+    ) as HTMLButtonElement;
+    expect(skipIntroBtn).toBeTruthy();
+
+    act(() => {
+      skipIntroBtn.click();
+      vi.advanceTimersByTime(320);
+    });
+
+    // Stage 2: Operational SSOT SplashScreen
+    expect(container.textContent).toContain('CIOB GMAO LIGHT');
+    const skipSplashBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Accéder directement')
+    ) as HTMLButtonElement;
+    expect(skipSplashBtn).toBeTruthy();
+
+    act(() => {
+      skipSplashBtn.click();
+    });
+
+    // Stage 3: LoginScreen / License Activation Gate
+    expect(container.querySelector('input[type="password"]')).toBeTruthy();
+    expect(container.innerHTML.length).toBeGreaterThan(200);
+  });
 });
+

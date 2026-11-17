@@ -69,6 +69,7 @@ import type {
   IMachineFamily,
   IMachineTemplate,
   IBlueprint,
+  IBlueprintTheoreticalPdr,
   IGeneralSystemType,
   IZone,
   IUserRecord,
@@ -282,10 +283,21 @@ export const DataGateway = {
    * @param list - Array of blueprint records (`IBlueprint[]`).
    * @returns Normalized blueprint array.
    */
-  saveBlueprints(list = []) {
-    const clean = Array.isArray(list)
+  saveBlueprints(
+    list: ReadonlyArray<
+      Omit<IBlueprint, 'pdr_theoriques'> & {
+        pdr_theoriques?: ReadonlyArray<string | IBlueprintTheoreticalPdr>;
+      }
+    > = []
+  ): IBlueprint[] {
+    const clean: IBlueprint[] = Array.isArray(list)
       ? list.map((b) => ({
           ...b,
+          pdr_theoriques: Array.isArray(b?.pdr_theoriques)
+            ? b.pdr_theoriques.map((p): IBlueprintTheoreticalPdr =>
+                typeof p === 'string' ? { id_pdr: p, ref: p } : p
+              )
+            : [],
           preventivePlanItems: Array.isArray(b?.preventivePlanItems) ? b.preventivePlanItems : [],
           commonFailures: Array.isArray(b?.commonFailures) ? b.commonFailures : [],
         }))
@@ -1081,7 +1093,7 @@ export const DataGateway = {
     this.saveGeneralSystemTypes(nextGeneralSystemTypes);
     this.savePersonnel(nextUsers, nextTechnicians, nextOperations);
     this.saveMachines(nextMachines);
-    this.saveBlueprints(seedBlueprints);
+    const savedBlueprints = this.saveBlueprints(seedBlueprints);
     this.saveMachineBom(seedMachineBomLedger);
 
     // REF_PDR (Groups -> Types -> Items -> Designations) -> Movements
@@ -1158,7 +1170,7 @@ export const DataGateway = {
     if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(nextGeneralSystemTypes);
     if (setters.setFamilies) setters.setFamilies(nextFamilies);
     if (setters.setTemplates) setters.setTemplates(nextTemplates);
-    if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
+    if (setters.setBlueprints) setters.setBlueprints(savedBlueprints);
     if (setters.setZones) setters.setZones(nextZones);
     if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
 
@@ -1948,13 +1960,13 @@ export const DataGateway = {
         this.saveTemplates(nextTemplates);
         this.saveGeneralSystemTypes(nextGeneralSystemTypes);
         this.saveMachines(nextMachines);
-        this.saveBlueprints(seedBlueprints);
+        const savedBlueprints = this.saveBlueprints(seedBlueprints);
         this.saveMachineBom(seedMachineBomLedger);
         if (setters.setFamilies) setters.setFamilies(nextFamilies);
         if (setters.setTemplates) setters.setTemplates(nextTemplates);
         if (setters.setGeneralSystemTypes) setters.setGeneralSystemTypes(nextGeneralSystemTypes);
         if (setters.setMachines) setters.setMachines(nextMachines);
-        if (setters.setBlueprints) setters.setBlueprints(seedBlueprints);
+        if (setters.setBlueprints) setters.setBlueprints(savedBlueprints);
         if (setters.setMachineElementsLedger) setters.setMachineElementsLedger(seedMachineBomLedger);
         break;
       }

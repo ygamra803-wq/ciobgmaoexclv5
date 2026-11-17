@@ -4,6 +4,7 @@ import { Logger } from '../logger/LoggerService';
 import { indexedDBService } from '../../infrastructure/database/IndexedDBService';
 import { vaultService } from '../../utils/vaultService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { getSafeLocalStorage, getSafeSessionStorage } from '../../infrastructure/persistence/safeStorage';
 import { storageService } from '../../utils/storageService';
 import {
   LicenseGateService,
@@ -69,6 +70,7 @@ function buildAvatar(nameOrCode = '') {
 export class AuthService {
   static instance = null;
   static _warnedDevBootstrap = false;
+  static _volatileSessionStr: string | null = null;
 
   /**
    * Determine if running in a production environment
@@ -151,17 +153,28 @@ export class AuthService {
     };
     const envelopeStr = JSON.stringify(sessionEnvelope);
 
-    // 1. Store actively in sessionStorage for the current tab / window session
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(SESSION_KEY, envelopeStr);
+    // 1. Store actively in sessionStorage for the current tab / window session (with volatile fallback if blocked)
+    AuthService._volatileSessionStr = envelopeStr;
+    try {
+      const ss = getSafeSessionStorage();
+      if (ss) {
+        ss.setItem(SESSION_KEY, envelopeStr);
+      }
+    } catch {
+      // keep volatile session in memory when Web Storage is blocked
     }
 
     // 2. Persist securely in IndexedDB app_data store
     indexedDBService.setItem(SESSION_KEY, sessionEnvelope).catch(() => {});
 
     // 3. Remove any legacy unencrypted/vulnerable session from localStorage
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(SESSION_KEY);
+    try {
+      const ls = getSafeLocalStorage();
+      if (ls) {
+        ls.removeItem(SESSION_KEY);
+      }
+    } catch {
+      // ignore storage errors
     }
 
     return payload;
@@ -366,11 +379,12 @@ export class AuthService {
 
     // If not in empty factory start mode and stored technicians/operations exist in localStorage, ensure their accounts are synced
     try {
-      if (typeof localStorage !== 'undefined') {
-        const startModeRaw = localStorage.getItem(STORAGE_KEYS.START_MODE);
+      const ls = getSafeLocalStorage();
+      if (ls) {
+        const startModeRaw = ls.getItem(STORAGE_KEYS.START_MODE);
         const startMode = startModeRaw ? startModeRaw.replace(/^"|"$/g, '') : '';
         if (startMode !== 'empty') {
-          const rawTechs = localStorage.getItem(STORAGE_KEYS.TECHNICIANS);
+          const rawTechs = ls.getItem(STORAGE_KEYS.TECHNICIANS);
           if (rawTechs) {
             const parsedTechs = JSON.parse(rawTechs);
             if (Array.isArray(parsedTechs) && parsedTechs.length > 0) {
@@ -387,7 +401,7 @@ export class AuthService {
               });
             }
           }
-          const rawOps = localStorage.getItem(STORAGE_KEYS.OPERATIONS);
+          const rawOps = ls.getItem(STORAGE_KEYS.OPERATIONS);
           if (rawOps) {
             const parsedOps = JSON.parse(rawOps);
             if (Array.isArray(parsedOps) && parsedOps.length > 0) {
@@ -1216,6 +1230,7 @@ export class AuthService {
   }
 
   logout() {
+    AuthService._volatileSessionStr = null;
     clearClientServerSessionToken();
     SecurityService.removeSecure(SESSION_KEY);
     indexedDBService.removeItem(SESSION_KEY).catch(() => {});
@@ -1223,17 +1238,36 @@ export class AuthService {
 
   getCurrentUser() {
     try {
-      // 1. Read active signed session from sessionStorage first
-      let sessionStr = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SESSION_KEY) : null;
+      // 1. Read active signed session from sessionStorage first (or volatile fallback if blocked)
+      const ss = getSafeSessionStorage();
+      let sessionStr: string | null = null;
+      if (ss) {
+        try {
+          sessionStr = ss.getItem(SESSION_KEY);
+        } catch {
+          sessionStr = null;
+        }
+      }
+      if (!sessionStr && !ss) {
+        sessionStr = AuthService._volatileSessionStr;
+      }
 
       // 2. Migration fallback: Check if old localStorage session exists, migrate it, then remove from localStorage
-      if (!sessionStr && typeof localStorage !== 'undefined') {
-        const legacyLocalStr = localStorage.getItem(SESSION_KEY);
-        if (legacyLocalStr) {
-          sessionStr = legacyLocalStr;
-          localStorage.removeItem(SESSION_KEY);
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem(SESSION_KEY, sessionStr);
+      if (!sessionStr) {
+        const ls = getSafeLocalStorage();
+        if (ls) {
+          try {
+            const legacyLocalStr = ls.getItem(SESSION_KEY);
+            if (legacyLocalStr) {
+              sessionStr = legacyLocalStr;
+              AuthService._volatileSessionStr = legacyLocalStr;
+              ls.removeItem(SESSION_KEY);
+              if (ss) {
+                ss.setItem(SESSION_KEY, sessionStr);
+              }
+            }
+          } catch {
+            // ignore storage errors
           }
         }
       }

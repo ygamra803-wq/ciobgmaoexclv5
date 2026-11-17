@@ -156,6 +156,32 @@
   }
 }
 
+@keyframes neuralIconEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.76) translateY(6px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes neuralIconExit {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88) translateY(-4px);
+    filter: blur(3px);
+  }
+}
+
 .neural-fade-in {
   animation: neuralFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -164,8 +190,20 @@
   animation: neuralStageSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.neural-icon-enter {
+  animation: neuralIconEnter 320ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.neural-icon-exit {
+  animation: neuralIconExit 220ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .neural-reduced-static {
+  .neural-reduced-static,
+  .neural-icon-enter,
+  .neural-icon-exit {
     animation: none !important;
     transition: none !important;
   }

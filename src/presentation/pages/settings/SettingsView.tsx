@@ -288,10 +288,17 @@ export default function SettingsView({
   // Local storage size computation (L1 Rapide + L2 IndexedDB High-Capacity)
   const localStorageSizeKB = useMemo(() => {
     let total = 0;
-    for (const x in localStorage) {
-      if (Object.prototype.hasOwnProperty.call(localStorage, x)) {
-        total += (localStorage[x].length + x.length) * 2;
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const ls = window.localStorage;
+        for (const x in ls) {
+          if (Object.prototype.hasOwnProperty.call(ls, x)) {
+            total += (String(ls[x] || '').length + x.length) * 2;
+          }
+        }
       }
+    } catch {
+      // Ignore blocked Web Storage in sandboxed iframes
     }
     return (total / 1024).toFixed(1);
   }, [rawStock, mouvements, machines, families, templates, zones, technicians, operations, types]);

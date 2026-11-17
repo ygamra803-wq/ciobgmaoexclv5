@@ -25,7 +25,8 @@
     "allowJs": false,
     "checkJs": false,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "xlsx": ["./src/vendor/xlsx/index.ts"]
     }
   },
   "include": ["src"]

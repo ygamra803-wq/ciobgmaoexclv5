@@ -6,8 +6,8 @@ export interface ToastState {
 }
 
 export function useAppViewController() {
-  const [showIntroSplash, setShowIntroSplash] = useState(true);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showIntroSplash, setShowIntroSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

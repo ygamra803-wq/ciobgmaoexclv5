@@ -119,14 +119,12 @@ export default function MachineQrFieldModal({
     };
   }, []);
 
-  if (!machine) return null;
-
   const machineCode = String(
-    machine.id_machine_registered || machine.id || machine.code || ''
+    machine?.id_machine_registered || machine?.id || machine?.code || ''
   ).trim();
-  const assetClass = getMachineAssetClass(machine);
+  const assetClass = machine ? getMachineAssetClass(machine) : 'PRODUCTION';
   const sysTypeObj = generalSystemTypes.find(
-    (t) => t.id === machine.id_general_system_type
+    (t) => t.id === machine?.id_general_system_type
   );
 
   const qrUrl = `${hostBaseUrl.replace(/\/+$/, '')}/?machine_qr=${encodeURIComponent(
@@ -140,6 +138,7 @@ export default function MachineQrFieldModal({
   // Machine Preventive Tasks
   const machineTasks = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
+    if (!codeUpper) return [];
     return (preventiveTasks || []).filter(
       (t: PreventiveTaskItem) => String(t.id_machine || t.code_machine || '').trim().toUpperCase() === codeUpper
     );
@@ -156,6 +155,7 @@ export default function MachineQrFieldModal({
   // Last 5 Corrective Interventions on this machine
   const recentCorrective = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
+    if (!codeUpper) return [];
     return (correctiveInterventions || [])
       .filter((ci: CorrectiveInterventionItem) => String(ci.code_machine || '').trim().toUpperCase() === codeUpper)
       .slice(0, 5);
@@ -164,6 +164,7 @@ export default function MachineQrFieldModal({
   // Open BTs on this machine eligible for 3-Click Express Workshop Closure
   const openMachineBts = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
+    if (!codeUpper) return [];
     return (correctiveInterventions || []).filter((ci: CorrectiveInterventionItem) => {
       const mMatch = String(ci.code_machine || '').trim().toUpperCase() === codeUpper;
       if (!mMatch) return false;
@@ -180,7 +181,7 @@ export default function MachineQrFieldModal({
   const healthPassport = useMemo(
     () =>
       computeMachineHealthPassport({
-        machine,
+        machine: machine || ({ id_machine_registered: '' } as IMachine),
         correctiveInterventions,
         preventiveExecutions,
         sortiesExterne,
@@ -191,19 +192,25 @@ export default function MachineQrFieldModal({
   // Machine BOM & Attached Components/Parts
   const machineComponentsAndBom = useMemo(() => {
     const codeUpper = machineCode.toUpperCase();
-    const whAttached = (warehouseItems || []).filter(
-      (w: IWarehouseItem) =>
-        String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase() === codeUpper
-    );
-    const ledgerAttached = (machineElementsLedger || []).filter(
-      (el: MachineElement) =>
-        String(el.id_machine_registered || el.id_machine || '').trim().toUpperCase() === codeUpper
-    );
-    const bpMatch = (blueprints || []).find(
-      (bp: IBlueprint) =>
-        bp.id_blueprint === machine.id_blueprint ||
-        (machine.id_templates && bp.id_templates === machine.id_templates)
-    );
+    const whAttached = codeUpper
+      ? (warehouseItems || []).filter(
+          (w: IWarehouseItem) =>
+            String(w.id_machine_registered || w.id_machine || '').trim().toUpperCase() === codeUpper
+        )
+      : [];
+    const ledgerAttached = codeUpper
+      ? (machineElementsLedger || []).filter(
+          (el: MachineElement) =>
+            String(el.id_machine_registered || el.id_machine || '').trim().toUpperCase() === codeUpper
+        )
+      : [];
+    const bpMatch = machine
+      ? (blueprints || []).find(
+          (bp: IBlueprint) =>
+            bp.id_blueprint === machine.id_blueprint ||
+            (machine.id_templates && bp.id_templates === machine.id_templates)
+        )
+      : undefined;
     return {
       whAttached,
       ledgerAttached,
@@ -215,7 +222,7 @@ export default function MachineQrFieldModal({
   const activityLedger = useMemo(
     () =>
       buildMachineActivityLedger({
-        machineOrId: machine,
+        machineOrId: machine || '',
         correctiveInterventions,
         preventiveExecutions,
         sortiesExterne,
@@ -231,6 +238,8 @@ export default function MachineQrFieldModal({
       warehouseItems,
     ]
   );
+
+  if (!machine) return null;
 
   const handleCopyUrl = () => {
     navigator.clipboard?.writeText(qrUrl);

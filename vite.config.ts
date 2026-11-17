@@ -13,6 +13,7 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      xlsx: path.resolve(__dirname, './src/vendor/xlsx/index.ts'),
       react: path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
     },
@@ -39,7 +40,6 @@ export default defineConfig(({ command }) => ({
       'prop-types',
       'react-window',
       'recharts',
-      'xlsx',
     ],
   },
   plugins: [
@@ -246,28 +246,29 @@ export default defineConfig(({ command }) => ({
             return 'vendor-core';
           }
 
-          // 3. Static Translations / Locales Leaf Chunk (~260 kB)
+          // 3. Local Hardened OpenXML Vendor Leaf Chunk
+          if (id.includes('src/vendor/xlsx')) {
+            return 'vendor-xlsx';
+          }
+
+          // 4. Static Translations / Locales Leaf Chunk (~260 kB)
           if (id.includes('src/i18n/translations/') || id.includes('src/i18n/locales/')) {
             return 'app-i18n';
           }
 
-          // 4. Granular Non-UI GMAO Engine Chunks (Store, Domain/Application, Services/Infra, Core/Utils)
-          if (id.includes('src/store/')) {
-            return 'app-store';
-          }
-          if (id.includes('src/application/') || id.includes('src/domain/')) {
-            return 'app-domain-application';
-          }
-          if (id.includes('src/services/') || id.includes('src/infrastructure/')) {
-            return 'app-services-infra';
-          }
+          // 4. Unified Non-UI GMAO Engine Chunk (prevents cross-chunk circular TDZ crash on boot)
           if (
+            id.includes('src/store/') ||
+            id.includes('src/application/') ||
+            id.includes('src/domain/') ||
+            id.includes('src/services/') ||
+            id.includes('src/infrastructure/') ||
             id.includes('src/core/') ||
             id.includes('src/utils/') ||
             id.includes('src/config/') ||
             id.includes('src/types/')
           ) {
-            return 'app-core-utils';
+            return 'app-engine';
           }
         }
       },

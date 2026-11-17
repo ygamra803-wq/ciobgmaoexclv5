@@ -1,4 +1,5 @@
 import { STORAGE_KEYS, LEGACY_KEY_MAP, OBSOLETE_FLAG_KEYS } from './storageKeys';
+import { getSafeLocalStorage } from './safeStorage';
 import { storageService } from '../../utils/storageService';
 import { Logger } from '../../core/logger/LoggerService';
 
@@ -12,11 +13,12 @@ import { Logger } from '../../core/logger/LoggerService';
  * 5. NEVER load or inject seed data here.
  */
 export function migrateStorageOnce() {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
-    return { migrated: false, reason: 'no_local_storage' };
-  }
-
   try {
+    const ls = getSafeLocalStorage();
+    if (!ls) {
+      return { migrated: false, reason: 'no_local_storage' };
+    }
+
     const alreadyMigrated = storageService.getItem(STORAGE_KEYS.STORAGE_MIGRATED);
     if (alreadyMigrated === true || alreadyMigrated === 'true') {
       return { migrated: false, reason: 'already_migrated' };
@@ -49,14 +51,14 @@ export function migrateStorageOnce() {
       }
 
       // Remove legacy key after checking/copying
-      if (localStorage.getItem(legacyKey) !== null) {
+      if (ls.getItem(legacyKey) !== null) {
         storageService.removeItem(legacyKey);
       }
     }
 
     // Clean up obsolete initialization flags
     for (const flagKey of OBSOLETE_FLAG_KEYS) {
-      if (localStorage.getItem(flagKey) !== null) {
+      if (ls.getItem(flagKey) !== null) {
         storageService.removeItem(flagKey);
       }
     }
@@ -64,7 +66,7 @@ export function migrateStorageOnce() {
     // Migrate legacy start_mode ('demo' / 'empty') if DEMO_MODE is not explicitly set yet
     const existingDemoFlag = storageService.getItem(STORAGE_KEYS.DEMO_MODE);
     if (existingDemoFlag === null || existingDemoFlag === undefined) {
-      const legacyStartMode = localStorage.getItem('gmao_start_mode');
+      const legacyStartMode = ls.getItem('gmao_start_mode');
       if (legacyStartMode === 'empty') {
         storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
       } else if (legacyStartMode === 'demo') {

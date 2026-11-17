@@ -61,12 +61,20 @@ function persistAttempts(map) {
   }
 }
 
-const loginAttemptsMap = getStoredAttempts(); // username -> { count, lockUntil }
+let loginAttemptsMap: Map<string, any> | null = null; // username -> { count, lockUntil }
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
+function getAttemptsMap(): Map<string, any> {
+  if (!loginAttemptsMap) {
+    loginAttemptsMap = getStoredAttempts();
+  }
+  return loginAttemptsMap;
+}
+
 function checkRateLimit(username) {
-  const record = loginAttemptsMap.get(username);
+  const attempts = getAttemptsMap();
+  const record = attempts.get(username);
   if (!record) return;
   if (record.lockUntil && Date.now() < record.lockUntil) {
     const remainingMinutes = Math.ceil((record.lockUntil - Date.now()) / 60000);
@@ -75,24 +83,26 @@ function checkRateLimit(username) {
     );
   }
   if (record.lockUntil && Date.now() >= record.lockUntil) {
-    loginAttemptsMap.delete(username);
-    persistAttempts(loginAttemptsMap);
+    attempts.delete(username);
+    persistAttempts(attempts);
   }
 }
 
 function recordFailedAttempt(username) {
-  const record = loginAttemptsMap.get(username) || { count: 0, lockUntil: null };
+  const attempts = getAttemptsMap();
+  const record = attempts.get(username) || { count: 0, lockUntil: null };
   record.count += 1;
   if (record.count >= MAX_LOGIN_ATTEMPTS) {
     record.lockUntil = Date.now() + LOCKOUT_DURATION_MS;
   }
-  loginAttemptsMap.set(username, record);
-  persistAttempts(loginAttemptsMap);
+  attempts.set(username, record);
+  persistAttempts(attempts);
 }
 
 function resetFailedAttempts(username) {
-  loginAttemptsMap.delete(username);
-  persistAttempts(loginAttemptsMap);
+  const attempts = getAttemptsMap();
+  attempts.delete(username);
+  persistAttempts(attempts);
 }
 
 export const AuthProvider = ({ children }) => {

@@ -7,13 +7,11 @@
  * - Nettoyage automatique de la taille du cache (LRU / Max Entries)
  * - Isolation des requêtes de développement Vite
  */
-const CACHE_NAME = 'gmao-nexus-v5.0.2';
-const DATA_CACHE_NAME = 'gmao-nexus-data-v5.0.2';
-const ASSET_CACHE_NAME = 'gmao-nexus-assets-v5.0.2';
+const CACHE_NAME = 'gmao-nexus-v5.0.3';
+const DATA_CACHE_NAME = 'gmao-nexus-data-v5.0.3';
+const ASSET_CACHE_NAME = 'gmao-nexus-assets-v5.0.3';
 
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/offline.html',
   '/manifest.json',
   '/icon.svg',
@@ -64,8 +62,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Ignorer les requêtes de développement Vite, HMR et WebSockets
+  // Ignorer les requêtes de développement Vite, HMR, scripts d'iframe et WebSockets
   if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/_aistudio') ||
+    url.pathname.startsWith('/__') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
     url.pathname.includes('/@vite') ||
     url.pathname.includes('/@id/') ||
     url.pathname.includes('/@fs/') ||
@@ -119,14 +123,23 @@ async function networkFirstWithCacheFallback(request, cacheName) {
   }
 }
 
+function isValidStaticAssetResponse(request, response) {
+  if (!response || response.status !== 200) return false;
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  if (contentType.includes('text/html')) {
+    return false;
+  }
+  return true;
+}
+
 async function cacheFirstWithNetworkUpdate(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cachedResponse = await cache.match(request);
 
-  if (cachedResponse) {
+  if (cachedResponse && isValidStaticAssetResponse(request, cachedResponse)) {
     fetch(request.clone())
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
+        if (isValidStaticAssetResponse(request, networkResponse)) {
           cache.put(request, networkResponse.clone());
         }
       })
@@ -136,7 +149,7 @@ async function cacheFirstWithNetworkUpdate(request, cacheName) {
 
   try {
     const networkResponse = await fetch(request.clone());
-    if (networkResponse && networkResponse.status === 200) {
+    if (isValidStaticAssetResponse(request, networkResponse)) {
       await cache.put(request, networkResponse.clone());
       cleanupCache(cacheName, MAX_ASSET_CACHE_SIZE);
     }

@@ -740,6 +740,21 @@ export function aes256GcmDecryptRaw(
 
 const AG1_KEY_CACHE_MAX = 64;
 const ag1KeyCache = new Map<string, Uint8Array>();
+const ag1PassphraseSaltCache = new Map<string, Uint8Array>();
+
+function getOrCreatePassphraseSalt(passphrase: string): Uint8Array {
+  const existing = ag1PassphraseSaltCache.get(passphrase);
+  if (existing) return existing;
+  const freshSalt = randomBytes(16);
+  if (ag1PassphraseSaltCache.size >= AG1_KEY_CACHE_MAX) {
+    const oldest = ag1PassphraseSaltCache.keys().next().value;
+    if (oldest !== undefined) {
+      ag1PassphraseSaltCache.delete(oldest);
+    }
+  }
+  ag1PassphraseSaltCache.set(passphrase, freshSalt);
+  return freshSalt;
+}
 
 function deriveAg1Key(passphrase: string, salt: Uint8Array): Uint8Array {
   const cacheKey = `${passphrase}:${bytesToHex(salt)}`;
@@ -759,14 +774,14 @@ function deriveAg1Key(passphrase: string, salt: Uint8Array): Uint8Array {
 
 /**
  * Standard AES-256-GCM string encryption using PBKDF2-HMAC-SHA256 (600,000 iterations),
- * random 128-bit salt, and random 96-bit IV.
+ * 128-bit CSPRNG salt, and fresh 96-bit CSPRNG IV on every encryption.
  * Wire format: `AG1:<saltB64>:<ivB64>:<cipherAndTagB64>`
  */
 export function aes256GcmEncrypt(plaintext: string, passphrase: string): string {
   if (!passphrase) {
     throw new Error('Symmetric passphrase/key is required for AES-256-GCM encryption.');
   }
-  const salt = randomBytes(16);
+  const salt = getOrCreatePassphraseSalt(passphrase);
   const iv = randomBytes(12);
   const key = deriveAg1Key(passphrase, salt);
   const cipherAndTag = aes256GcmEncryptRaw(key, iv, enc.encode(plaintext));
@@ -794,6 +809,9 @@ export function aes256GcmDecrypt(ciphertext: string, passphrase: string): string
     const cipherAndTag = base64ToBytes(payloadB64);
     const key = deriveAg1Key(passphrase, salt);
     const plainBytes = aes256GcmDecryptRaw(key, iv, cipherAndTag);
+    if (salt.length === 16 && !ag1PassphraseSaltCache.has(passphrase)) {
+      ag1PassphraseSaltCache.set(passphrase, salt);
+    }
     return dec.decode(plainBytes);
   } catch {
     return '';

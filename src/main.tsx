@@ -14,24 +14,67 @@ import { vaultService } from './utils/vaultService';
 import { STORAGE_KEYS } from './infrastructure/persistence/storageKeys';
 import { SecurityService } from './core/security/SecurityService';
 
-// Ensure visual attributes are initialized on root DOM element
-const initialAccent = storageService.getItem(STORAGE_KEYS.ACCENT_COLOR) || 'emerald';
-if (typeof document !== 'undefined') {
-  document.documentElement.setAttribute('data-accent', initialAccent);
+// Ensure visual attributes are initialized on root DOM element without crashing on restricted iframes
+try {
+  const initialAccent = storageService.getItem(STORAGE_KEYS.ACCENT_COLOR) || 'emerald';
+  if (typeof document !== 'undefined') {
+    document.documentElement.setAttribute('data-accent', initialAccent);
+  }
+} catch (err) {
+  Logger.warn('[Boot] Accent init skipped:', err, 'main');
 }
 
 // 1. Run one-time SSOT storage migration before any hook reads storage
-migrateStorageOnce();
+try {
+  migrateStorageOnce();
+} catch (err) {
+  Logger.warn('[Boot] Storage migration skipped:', err, 'main');
+}
 
 // Initialize Enterprise Architecture DI Container and Error / Analytics Tracking
-ServiceProvider.register();
-errorTracker.init();
+try {
+  ServiceProvider.register();
+  errorTracker.init();
+} catch (err) {
+  Logger.warn('[Boot] ServiceProvider/errorTracker init notice:', err, 'main');
+}
 
-analytics.track('app_started', 'system', { timestamp: Date.now() });
-
+let hasRendered = false;
 const renderApp = () => {
-  const rootElement = document.getElementById('root');
-  if (rootElement) {
+  if (hasRendered) return;
+  hasRendered = true;
+
+  try {
+    (window as unknown as Record<string, unknown>).__GMAO_BOOTED__ = true;
+    if (
+      typeof window !== 'undefined' &&
+      (window.location.search.includes('__sw_healed=') ||
+        window.location.search.includes('__mod_retry='))
+    ) {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('__sw_healed');
+      cleanUrl.searchParams.delete('__mod_retry');
+      const nextSearch = cleanUrl.searchParams.toString();
+      window.history.replaceState(
+        {},
+        '',
+        `${cleanUrl.pathname}${nextSearch ? `?${nextSearch}` : ''}${cleanUrl.hash}`
+      );
+    }
+  } catch {
+    // Ignore history cleanup errors
+  }
+
+  try {
+    analytics.track('app_started', 'system', { timestamp: Date.now() });
+  } catch {
+    // Non-blocking telemetry failure must never prevent UI mount
+  }
+
+  const rootElement = typeof document !== 'undefined' ? document.getElementById('root') : null;
+  if (!rootElement) return;
+
+  try {
     const root = ReactDOM.createRoot(rootElement);
     root.render(
       <ErrorBoundary>
@@ -42,33 +85,58 @@ const renderApp = () => {
         </I18nProvider>
       </ErrorBoundary>
     );
+  } catch (err) {
+    Logger.error('[Boot] Critical React mount failure:', err, 'main');
+    rootElement.innerHTML =
+      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#f8fafc;font-family:sans-serif;padding:24px;text-align:center;"><div><h1 style="font-size:20px;font-weight:700;margin-bottom:8px;">CIOB GMAO Nexus</h1><p style="font-size:14px;color:#cbd5e1;">Erreur d’initialisation détectée. Veuillez recharger la page (Ctrl+Shift+R).</p></div></div>';
   }
 };
+
+// Fallback timer guarantees the UI mounts immediately even if IndexedDB is slow/blocked in a sandboxed iframe
+const initFallbackTimer = setTimeout(renderApp, 250);
 
 // Initialize key separation (IndexedDB non-extractable CryptoKey -> RAM secret) before rendering
 SecurityService.init()
   .catch((err) => {
     Logger.warn('SecurityService keystore init notice:', err, 'SecurityService');
   })
-  .finally(renderApp);
-
+  .finally(() => {
+    clearTimeout(initFallbackTimer);
+    renderApp();
+  });
 
 // Background initialization for storage migrations
 storageService.init().catch((err) => {
   Logger.warn('Initialization notice:', err, 'storageService');
 });
 
-// Enregistrement du Service Worker pour le mode 100% Offline et PWA
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/service-worker.js')
-      .then((registration) => {
-        Logger.info(`Service Worker enregistré: ${registration.scope}`, null, 'PWA');
-      })
-      .catch((error) => {
-        Logger.warn('Erreur enregistrement Service Worker:', error, 'PWA');
+// Enregistrement du Service Worker pour le mode 100% Offline et PWA (uniquement en production)
+try {
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+    if (import.meta.env?.PROD) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('/service-worker.js')
+          .then((registration) => {
+            Logger.info(`Service Worker enregistré: ${registration.scope}`, null, 'PWA');
+          })
+          .catch((error) => {
+            Logger.warn('Erreur enregistrement Service Worker:', error, 'PWA');
+          });
       });
-  });
+    } else {
+      // En développement, désinscrire tout Service Worker résiduel pouvant intercepter les modules Vite
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister().catch(() => {});
+          }
+        })
+        .catch(() => {});
+    }
+  }
+} catch {
+  // Ignore blocked serviceWorker access in restricted iframes
 }
 

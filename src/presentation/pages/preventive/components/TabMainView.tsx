@@ -7,8 +7,6 @@ import {
   List,
   CheckCircle2,
   Printer,
-  Package,
-  Trash2,
   Activity,
   Clock,
   AlertTriangle,
@@ -27,12 +25,14 @@ import {
   Lock,
   Layers,
   ClipboardCheck,
+  Gauge,
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../../components/common/GmaoKpiCard';
 import { useI18n } from '../../../../i18n/I18nContext';
-import PrintWorkOrderModal from './PrintWorkOrderModal';
-import SystemGeneralRoundModal from './SystemGeneralRoundModal';
 import MonthlyCalendarView from './MonthlyCalendarView';
 import GroupedMachinesView from './GroupedMachinesView';
 import MatrixWeeksView from './MatrixWeeksView';
@@ -40,6 +40,7 @@ import DetailedTaskListView from './DetailedTaskListView';
 import PreventiveAnalyticsView from './PreventiveAnalyticsView';
 import MonthlyDayMatrixView from './MonthlyDayMatrixView';
 import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
+import PreventiveMetersView from './PreventiveMetersView';
 import TabMainModals from './TabMainModals';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
@@ -88,6 +89,10 @@ export default function TabMainView({
   _guides = [],
   stockItems = [],
   warehouseItems = [],
+  meterReadings = [],
+  onRecordReading = null,
+  onBatchRecordReadings = null,
+  overdueCounterTasksCount = 0,
   viewMode: controlledViewMode,
   onViewModeChange,
   onMarkTaskDone,
@@ -215,6 +220,7 @@ export default function TabMainView({
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedTech, setSelectedTech] = useState('ALL');
   const [orphanFilter, setOrphanFilter] = useState('ALL'); // 'ALL' | 'ORPHAN_ONLY' | 'LINKED_ONLY'
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
   // Annotate tasks with orphan status
   const tasksWithOrphanFlag = useMemo(
@@ -444,8 +450,9 @@ export default function TabMainView({
     if (selectedWeek !== 'ALL') count++;
     if (selectedStatus !== 'ALL') count++;
     if (selectedTech !== 'ALL') count++;
+    if (orphanFilter !== 'ALL') count++;
     return count;
-  }, [searchQuery, selectedAssetClass, selectedZone, selectedMachine, selectedBlueprint, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech]);
+  }, [searchQuery, selectedAssetClass, selectedZone, selectedMachine, selectedBlueprint, selectedAction, selectedFrequence, selectedWeek, selectedStatus, selectedTech, orphanFilter]);
 
   const hasActiveFilters = activeFiltersCount > 0;
 
@@ -460,6 +467,7 @@ export default function TabMainView({
     setSelectedWeek('ALL');
     setSelectedStatus('ALL');
     setSelectedTech('ALL');
+    setOrphanFilter('ALL');
   }, []);
 
   // Formatted Option arrays for CustomSelect with master data integration
@@ -1022,8 +1030,8 @@ export default function TabMainView({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
-            {/* View Mode Segmented Controls */}
-            <div className="flex items-center bg-slate-100/90 rounded-xl p-1 border border-slate-200/80 shadow-2xs">
+            {/* Single Unified View Mode Segmented Control */}
+            <div className="flex items-center flex-wrap bg-slate-100/90 rounded-xl p-1 border border-slate-200/80 shadow-2xs">
               <button
                 type="button"
                 onClick={() => setViewMode('monthly_grid')}
@@ -1107,6 +1115,45 @@ export default function TabMainView({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="hidden sm:inline">Historique ({scopedExecutions?.length || 0})</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('meters')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'meters'
+                    ? 'bg-white text-indigo-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Gestion des Horomètres & Compteurs"
+              >
+                <Gauge
+                  className={`w-3.5 h-3.5 ${
+                    overdueCounterTasksCount > 0 ? 'text-rose-600' : 'text-indigo-600'
+                  }`}
+                />
+                <span className="hidden sm:inline">Compteurs</span>
+                {overdueCounterTasksCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[9.5px] font-mono font-black">
+                    {overdueCounterTasksCount}
+                  </span>
+                )}
+              </button>
+
+              {!isTechUser && (
+                <button
+                  type="button"
+                  onClick={() => setViewMode('analytics')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'analytics'
+                      ? 'bg-white text-purple-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Tableau de Bord & Statistiques (Santé & Coûts)"
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
+                  <span className="hidden sm:inline">Analytics</span>
+                </button>
+              )}
             </div>
 
             {/* Export Excel / CSV */}
@@ -1129,21 +1176,6 @@ export default function TabMainView({
             >
               <Printer className="w-3.5 h-3.5" />
             </button>
-
-            {/* Reset Filters Circular Button */}
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={clearAllFilters}
-                className="h-8 w-8 rounded-full border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center transition cursor-pointer shadow-2xs active:scale-95 relative group"
-                title={t('common.filters.reset_tooltip', 'Réinitialiser tous les filtres')}
-              >
-                <RotateCcw className="w-3.5 h-3.5 transition-transform group-hover:-rotate-45" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] font-bold flex items-center justify-center shadow-xs">
-                  {activeFiltersCount}
-                </span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -1219,56 +1251,8 @@ export default function TabMainView({
           )}
         </div>
 
-        {/* QUICK STATUS PRESETS BAR (Bandeau Statut Rapide) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
-            <Activity className="w-3 h-3 text-slate-400" />
-            {t('common.filters.status', 'Statut :')}
-          </span>
-          {[
-            { key: 'ALL', label: t('preventive.filters.all_tasks', 'Toutes les Tâches'), count: scopedTasks.length, colorDot: null },
-            { key: 'À faire', label: t('preventive.filters.to_do', 'À réaliser'), count: stats.aFaire, colorDot: 'bg-blue-500' },
-            { key: 'Fait', label: t('preventive.filters.done', 'Fait & Conforme'), count: stats.fait, colorDot: 'bg-emerald-500' },
-            { key: 'En retard', label: t('preventive.filters.overdue', 'En retard'), count: stats.enRetard, colorDot: 'bg-rose-500' },
-          ].map((preset) => {
-            const isSelected = selectedStatus === preset.key;
-            return (
-              <button
-                key={preset.key}
-                type="button"
-                onClick={() => {
-                  setSelectedStatus(preset.key);
-                }}
-                className={`h-7 px-2.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                  isSelected
-                    ? 'bg-slate-900 text-white shadow-xs font-bold'
-                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-700 font-medium'
-                }`}
-              >
-                {preset.colorDot && (
-                  <span
-                    className={`w-2 h-2 rounded-full ${preset.colorDot} ${
-                      isSelected ? 'ring-2 ring-white/50 animate-pulse' : ''
-                    }`}
-                  />
-                )}
-                <span>{preset.label}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
-                    isSelected
-                      ? 'bg-white/20 text-white'
-                      : 'bg-white text-slate-600 border border-slate-200/60'
-                  }`}
-                >
-                  {preset.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* QUICK ORPHAN FILTER BAR (Admin / Engineering only) */}
-        {!isTechUser && (
+        {/* QUICK ORPHAN FILTER BAR (Shown ONLY when orphanCount > 0 or orphanFilter is active) */}
+        {!isTechUser && (orphanCount > 0 || orphanFilter !== 'ALL') && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1 mr-1 shrink-0">
               <AlertTriangle className="w-3 h-3 text-amber-500" />
@@ -1300,36 +1284,62 @@ export default function TabMainView({
           </div>
         )}
 
-        {/* Search Input Bar (Full Width & Clean) */}
-        <div className="relative w-full">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-slate-400 pointer-events-none">
-            <span className="w-6 h-6 rounded-lg bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-              <Search className="w-3.5 h-3.5" />
-            </span>
+        {/* Search Input Bar + Advanced Filters Toggle */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <div className="relative flex-1">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-slate-400 pointer-events-none">
+              <span className="w-6 h-6 rounded-lg bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
+                <Search className="w-3.5 h-3.5" />
+              </span>
+            </div>
+            <input
+              type="text"
+              placeholder={t('preventive.filters.search_placeholder', 'Recherche multi-mots : machine (ex: FRM-01), organe, action, technicien...')}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+              }}
+              className="w-full pl-12 pr-10 py-2.5 text-xs bg-slate-50/90 border border-slate-200/90 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-medium placeholder:text-slate-400 shadow-2xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
+                title={t('common.cancel', 'Effacer la recherche')}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          <input
-            type="text"
-            placeholder={t('preventive.filters.search_placeholder', 'Recherche multi-mots : machine (ex: FRM-01), organe, action, technicien...')}
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-            }}
-            className="w-full pl-12 pr-10 py-2.5 text-xs bg-slate-50/90 border border-slate-200/90 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-medium placeholder:text-slate-400 shadow-2xs"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer transition-colors"
-              title={t('common.cancel', 'Effacer la recherche')}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className={`h-9 px-3 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
+              showAdvancedFilters || selectedBlueprint !== 'ALL' || selectedWeek !== 'ALL'
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-800 shadow-2xs'
+                : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600'
+            }`}
+            title="Afficher / masquer les filtres avancés (Semaine ISO & Blueprint)"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Filtres avancés</span>
+            {(selectedBlueprint !== 'ALL' || selectedWeek !== 'ALL') && (
+              <span className="px-1.5 py-0.2 rounded-full bg-indigo-600 text-white text-[9.5px] font-mono font-bold">
+                {(selectedBlueprint !== 'ALL' ? 1 : 0) + (selectedWeek !== 'ALL' ? 1 : 0)}
+              </span>
+            )}
+            {showAdvancedFilters || selectedBlueprint !== 'ALL' || selectedWeek !== 'ALL' ? (
+              <ChevronUp className="w-3.5 h-3.5" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5" />
+            )}
+          </button>
         </div>
 
-        {/* 7 Cascading Selector Dropdowns with CustomSelect & Expressive Icons */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 pt-3 border-t border-slate-100">
+        {/* 5 Core Operational Selector Dropdowns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100">
           {/* 1. Zone Filter */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
@@ -1373,29 +1383,6 @@ export default function TabMainView({
               }}
               options={machineOptions}
               placeholder={t('preventive.filters.all_machines', 'Toutes Machines')}
-            />
-          </div>
-
-          {/* 2b. Blueprint / Plan machine Filter */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
-              <span>Blueprint / Plan machine</span>
-              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
-                BOM
-              </span>
-            </div>
-            <CustomSelect
-              value={selectedBlueprint}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-                  <FingerprintPattern className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setSelectedBlueprint(val);
-              }}
-              options={blueprintOptions}
-              placeholder="Tous Blueprints"
             />
           </div>
 
@@ -1445,30 +1432,7 @@ export default function TabMainView({
             />
           </div>
 
-          {/* 5. Semaine ISO Filter */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
-              <span>{t('preventive.filters.iso_week', 'Semaine ISO')}</span>
-              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
-                {t('preventive.filters.badges.weeks_range', 'S1-S52')}
-              </span>
-            </div>
-            <CustomSelect
-              value={selectedWeek}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-                  <CalendarDays className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setSelectedWeek(val);
-              }}
-              options={weekOptions}
-              placeholder={t('preventive.filters.all_weeks', 'Toutes Semaines')}
-            />
-          </div>
-
-          {/* 6. Technicien Filter */}
+          {/* 5. Technicien Filter */}
           <div>
             <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
               <span>{t('common.technician', 'Technicien')}</span>
@@ -1506,6 +1470,57 @@ export default function TabMainView({
             )}
           </div>
         </div>
+
+        {/* Collapsible Advanced Filters (Semaine ISO & Blueprint / Plan machine) */}
+        {(showAdvancedFilters || selectedBlueprint !== 'ALL' || selectedWeek !== 'ALL') && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100 bg-slate-50/50 p-3 rounded-xl">
+            {/* Semaine ISO Filter */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                <span>{t('preventive.filters.iso_week', 'Semaine ISO')}</span>
+                <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
+                  {t('preventive.filters.badges.weeks_range', 'S1-S52')}
+                </span>
+              </div>
+              <CustomSelect
+                value={selectedWeek}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
+                    <CalendarDays className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  setSelectedWeek(val);
+                }}
+                options={weekOptions}
+                placeholder={t('preventive.filters.all_weeks', 'Toutes Semaines')}
+              />
+            </div>
+
+            {/* Blueprint / Plan machine Filter */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                <span>Blueprint / Plan machine</span>
+                <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200/80">
+                  BOM
+                </span>
+              </div>
+              <CustomSelect
+                value={selectedBlueprint}
+                prefixIcon={
+                  <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
+                    <FingerprintPattern className="w-3 h-3" />
+                  </span>
+                }
+                onChange={(val) => {
+                  setSelectedBlueprint(val);
+                }}
+                options={blueprintOptions}
+                placeholder="Tous Blueprints"
+              />
+            </div>
+          </div>
+        )}
 
         {/* ACTIVE FILTER TAGS BAR (Removable Chips) */}
         {hasActiveFilters && (
@@ -1621,6 +1636,16 @@ export default function TabMainView({
               </span>
             )}
 
+            {orphanFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 font-medium">
+                <AlertTriangle className="w-3 h-3 text-amber-600" />
+                <span>Intégrité : <b>{orphanFilter === 'ORPHAN_ONLY' ? 'Orphelines' : 'Liées'}</b></span>
+                <button type="button" onClick={() => setOrphanFilter('ALL')} className="text-amber-500 hover:text-amber-800 cursor-pointer">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
             <button
               type="button"
               onClick={clearAllFilters}
@@ -1641,7 +1666,6 @@ export default function TabMainView({
           onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
-          onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
           clearAllFilters={clearAllFilters}
         />
@@ -1657,7 +1681,6 @@ export default function TabMainView({
           currentWeekNumber={currentWeekNumber}
           onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
-          onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
           clearAllFilters={clearAllFilters}
         />
@@ -1672,7 +1695,6 @@ export default function TabMainView({
           onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
           onNavigateToMachine={_onNavigateToMachine}
-          onSwitchView={(mode) => setViewMode(mode)}
         />
       )}
 
@@ -1684,7 +1706,6 @@ export default function TabMainView({
           onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
-          onSwitchView={(mode) => setViewMode(mode)}
         />
       )}
 
@@ -1696,7 +1717,6 @@ export default function TabMainView({
           onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
           onOpenPrint={(task) => setSelectedTaskForPrint(task)}
-          onSwitchView={(mode) => setViewMode(mode)}
           hasActiveFilters={activeFiltersCount > 0}
           clearAllFilters={clearAllFilters}
         />
@@ -1710,7 +1730,6 @@ export default function TabMainView({
           onDeleteExecution={onDeleteExecution}
           zones={zones}
           actions={actions}
-          onSwitchView={(mode) => setViewMode(mode)}
         />
       )}
 
@@ -1724,6 +1743,21 @@ export default function TabMainView({
           showToast={showToast}
           onDeleteExecution={onDeleteExecution}
           onNavigateToMachine={_onNavigateToMachine}
+        />
+      )}
+
+      {/* VIEW 7: METERS & HOROMÈTRES (Integrated inside Unified Workspace Switcher) */}
+      {viewMode === 'meters' && (
+        <PreventiveMetersView
+          machines={machines}
+          tasks={tasks}
+          meterReadings={meterReadings}
+          onRecordReading={onRecordReading || _onUpdateTaskCounter}
+          onBatchRecordReadings={onBatchRecordReadings}
+          onMarkTaskDone={canExecutePreventive ? onMarkTaskDone : null}
+          onNavigateToPlanBuilder={canManagePreventive ? _onNavigateToPlanBuilder : null}
+          user={user}
+          showToast={showToast}
         />
       )}
 

@@ -93,6 +93,60 @@ export default function PreventiveTab({
     setPrevFilter(initialFilter);
   }, [initialFilter]);
 
+  const handleOpenExecSheet = (task: PreventiveTaskItem) => {
+    setSelectedTaskForExec(task);
+    setExecNotes(String(task.observations_validation || task.observations || ''));
+    setExecDuration(
+      String(
+        parseInt(String(task.duree_reelle || task.duree_estimee_min || task.duree_estimee || 20), 10) ||
+          20
+      )
+    );
+    setExecNumBon(String(task.num_bon_saisi_par_tech || ''));
+    setExecCompteur(
+      task.compteur_actuel || task.dernier_releve
+        ? String(task.compteur_actuel || task.dernier_releve)
+        : ''
+    );
+
+    const initialSpares: ProposedSpareRow[] = [];
+    const existingList: Array<Record<string, unknown>> =
+      Array.isArray(task.pieces_proposees) && task.pieces_proposees.length > 0
+        ? (task.pieces_proposees as Array<Record<string, unknown>>)
+        : Array.isArray(task.pdr_requises) && task.pdr_requises.length > 0
+        ? (task.pdr_requises as unknown as Array<Record<string, unknown>>)
+        : task.pdr_ref
+        ? [
+            {
+              ref: task.pdr_ref,
+              designation: task.pdr_designation || task.pdr_ref,
+              qty: Number(task.pdr_quantite || 1),
+            },
+          ]
+        : [];
+
+    existingList.forEach((p) => {
+      const ref = String(p?.ref || p?.reference || p?.code || '').trim();
+      if (!ref) return;
+      const stockMatch = stockItems.find(
+        (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
+      );
+      initialSpares.push({
+        ref,
+        designation: String(p?.designation || p?.nom || stockMatch?.designation || ref).trim(),
+        qty: Math.max(1, Number(p?.qty ?? p?.quantite ?? 1)),
+        unit: String(p?.unit || p?.unite || stockMatch?.unite || 'pcs'),
+        unitPrice: Number(
+          p?.unitPrice ?? p?.prix_unitaire ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0
+        ),
+      });
+    });
+
+    setProposedSpares(initialSpares);
+    setPickerRef('');
+    setPickerQty('1');
+  };
+
   useEffect(() => {
     if (initialTaskToExecute) {
       handleOpenExecSheet(initialTaskToExecute);
@@ -166,61 +220,6 @@ export default function PreventiveTab({
     pendingValTasks,
     doneTasks,
   ]);
-
-  const handleOpenExecSheet = (task: PreventiveTaskItem) => {
-    setSelectedTaskForExec(task);
-    setExecNotes(String(task.observations_validation || task.observations || ''));
-    setExecDuration(
-      String(
-        parseInt(String(task.duree_reelle || task.duree_estimee_min || task.duree_estimee || 20), 10) ||
-          20
-      )
-    );
-    setExecNumBon(String(task.num_bon_saisi_par_tech || ''));
-    setExecCompteur(
-      task.compteur_actuel || task.dernier_releve
-        ? String(task.compteur_actuel || task.dernier_releve)
-        : ''
-    );
-
-    // Pre-populate spares from pieces_proposees or pdr_requises or single pdr_ref
-    const initialSpares: ProposedSpareRow[] = [];
-    const existingList: Array<Record<string, unknown>> =
-      Array.isArray(task.pieces_proposees) && task.pieces_proposees.length > 0
-        ? (task.pieces_proposees as Array<Record<string, unknown>>)
-        : Array.isArray(task.pdr_requises) && task.pdr_requises.length > 0
-        ? (task.pdr_requises as unknown as Array<Record<string, unknown>>)
-        : task.pdr_ref
-        ? [
-            {
-              ref: task.pdr_ref,
-              designation: task.pdr_designation || task.pdr_ref,
-              qty: Number(task.pdr_quantite || 1),
-            },
-          ]
-        : [];
-
-    existingList.forEach((p) => {
-      const ref = String(p?.ref || p?.reference || p?.code || '').trim();
-      if (!ref) return;
-      const stockMatch = stockItems.find(
-        (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
-      );
-      initialSpares.push({
-        ref,
-        designation: String(p?.designation || p?.nom || stockMatch?.designation || ref).trim(),
-        qty: Math.max(1, Number(p?.qty ?? p?.quantite ?? 1)),
-        unit: String(p?.unit || p?.unite || stockMatch?.unite || 'pcs'),
-        unitPrice: Number(
-          p?.unitPrice ?? p?.prix_unitaire ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0
-        ),
-      });
-    });
-
-    setProposedSpares(initialSpares);
-    setPickerRef('');
-    setPickerQty('1');
-  };
 
   const handleAddSpareRow = () => {
     const cleanRef = pickerRef.trim();

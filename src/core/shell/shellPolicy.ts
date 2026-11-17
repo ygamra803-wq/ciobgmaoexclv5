@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { getSafeLocalStorage } from '../../infrastructure/persistence/safeStorage';
 
 export const SHELL_OVERRIDE_STORAGE_KEY = 'gmao_shell_override';
 export const SHELL_POLICY_CHANGED_EVENT = 'gmao_shell_policy_changed';
@@ -54,12 +55,12 @@ export function parseShellQueryParam(search?: string): ShellMode | null {
 export function readShellOverrideFromStorage(
   storage?: Pick<Storage, 'getItem'> | null
 ): ShellMode | null {
-  const targetStorage =
-    storage !== undefined
-      ? storage
-      : typeof window !== 'undefined' && window.localStorage
-      ? window.localStorage
-      : null;
+  let targetStorage: Pick<Storage, 'getItem'> | null = null;
+  try {
+    targetStorage = storage !== undefined ? storage : getSafeLocalStorage();
+  } catch {
+    targetStorage = null;
+  }
 
   if (!targetStorage) return null;
 
@@ -213,13 +214,14 @@ function notifyShellPolicyChanged(state: ShellPolicyState): void {
  */
 export function setShellMode(mode: ShellMode): ShellPolicyState {
   const validMode: ShellMode = isValidShellMode(mode) ? mode : 'auto';
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.setItem(SHELL_OVERRIDE_STORAGE_KEY, validMode);
-      window.localStorage.setItem(STORAGE_KEYS.DEVICE_MODE, validMode);
-    } catch {
-      // ignore quota errors
+  try {
+    const ls = getSafeLocalStorage();
+    if (ls) {
+      ls.setItem(SHELL_OVERRIDE_STORAGE_KEY, validMode);
+      ls.setItem(STORAGE_KEYS.DEVICE_MODE, validMode);
     }
+  } catch {
+    // ignore quota or SecurityError errors
   }
 
   // If the URL had a conflicting ?shell= query param, clean it so manual button takes immediate effect
@@ -234,13 +236,14 @@ export function setShellMode(mode: ShellMode): ShellPolicyState {
  * Clear manual shell override back to 'auto' and strip ?shell= from URL.
  */
 export function clearShellOverride(): ShellPolicyState {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    try {
-      window.localStorage.removeItem(SHELL_OVERRIDE_STORAGE_KEY);
-      window.localStorage.setItem(STORAGE_KEYS.DEVICE_MODE, 'auto');
-    } catch {
-      // ignore storage errors
+  try {
+    const ls = getSafeLocalStorage();
+    if (ls) {
+      ls.removeItem(SHELL_OVERRIDE_STORAGE_KEY);
+      ls.setItem(STORAGE_KEYS.DEVICE_MODE, 'auto');
     }
+  } catch {
+    // ignore storage errors
   }
 
   cleanUrlShellQueryParamIfPresent();
