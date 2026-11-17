@@ -21,10 +21,12 @@ export class AnalyticsService {
   private static instance: AnalyticsService;
   private readonly storageKey = STORAGE_KEYS.ANALYTICS_EVENTS;
   private readonly maxStoredEvents = 200;
-  private sessionId: string | null = null;
+  private sessionId: string;
   private isEnabled = true;
 
-  private constructor() {}
+  private constructor() {
+    this.sessionId = this.getOrCreateSessionId();
+  }
 
   public static getInstance(): AnalyticsService {
     if (!AnalyticsService.instance) {
@@ -34,9 +36,6 @@ export class AnalyticsService {
   }
 
   private getOrCreateSessionId(): string {
-    if (this.sessionId) {
-      return this.sessionId;
-    }
     try {
       const existing = SecurityService.getSessionSecure('gmao_session_id');
       let id = typeof existing === 'string' && existing ? existing : '';
@@ -44,11 +43,9 @@ export class AnalyticsService {
         id = `sess-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
         SecurityService.saveSessionSecure('gmao_session_id', id);
       }
-      this.sessionId = id;
       return id;
     } catch {
-      this.sessionId = `sess-${Date.now()}`;
-      return this.sessionId;
+      return `sess-${Date.now()}`;
     }
   }
 
@@ -64,7 +61,7 @@ export class AnalyticsService {
       name,
       category,
       timestamp: new Date().toISOString(),
-      sessionId: this.getOrCreateSessionId(),
+      sessionId: this.sessionId,
       properties,
     };
 

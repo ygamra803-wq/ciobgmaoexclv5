@@ -2,7 +2,6 @@ import { constantTimeEqual, sha256Hex, symmetricDecrypt } from '../core/security
 import { Logger } from '../core/logger/LoggerService';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { STORAGE_KEYS, ALL_LEGACY_KEYS } from '../infrastructure/persistence/storageKeys';
-import { getSafeLocalStorage } from '../infrastructure/persistence/safeStorage';
 
 // Cache configuration
 const MAX_CACHE_SIZE = 50;
@@ -112,34 +111,32 @@ const OBSOLETE_OR_DUPLICATE_KEYS = ALL_LEGACY_KEYS;
  * Safely purges obsolete keys and stale snapshots when quota limit is approached
  */
 function purgeObsoleteStorageKeys() {
-  const ls = getSafeLocalStorage();
-  if (!ls) return 0;
+  if (typeof localStorage === 'undefined') return 0;
+  // Only purge legacy keys if one-time migration has already run
+  const migrated = localStorage.getItem(STORAGE_KEYS.STORAGE_MIGRATED);
   let freedCount = 0;
 
-  try {
-    // Only purge legacy keys if one-time migration has already run
-    const migrated = ls.getItem(STORAGE_KEYS.STORAGE_MIGRATED);
-
-    if (migrated === 'true' || migrated === '"true"') {
-      for (const obsoleteKey of OBSOLETE_OR_DUPLICATE_KEYS) {
-        if (ls.getItem(obsoleteKey) !== null) {
-          ls.removeItem(obsoleteKey);
-          memoryCache.delete(obsoleteKey);
-          freedCount++;
-        }
+  if (migrated === 'true' || migrated === '"true"') {
+    for (const obsoleteKey of OBSOLETE_OR_DUPLICATE_KEYS) {
+      if (localStorage.getItem(obsoleteKey) !== null) {
+        localStorage.removeItem(obsoleteKey);
+        memoryCache.delete(obsoleteKey);
+        freedCount++;
       }
     }
+  }
 
-    // 2. Remove old snapshot histories if quota is still critical
+  // 2. Remove old snapshot histories if quota is still critical
+  try {
     const keysToRemove = [];
-    for (let i = 0; i < ls.length; i++) {
-      const k = ls.key(i);
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
       if (k && (k.startsWith('gmao_snapshot_') || k.startsWith('gmao_backup_temp_') || k.includes('_legacy_'))) {
         keysToRemove.push(k);
       }
     }
     keysToRemove.forEach((k) => {
-      ls.removeItem(k);
+      localStorage.removeItem(k);
       freedCount++;
     });
   } catch (err) {
@@ -266,19 +263,18 @@ export const storageService = {
    * Safe asynchronous initialization for legacy migration without blocking UI
    */
   async init() {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
     if (this._isInitializing) return;
-    const ls = getSafeLocalStorage();
-    if (!ls) return;
     this._isInitializing = true;
 
     try {
       // 1. Safe WebCrypto key check if legacy WC: items exist
       let hasWcItems = false;
       try {
-        for (let i = 0; i < ls.length; i++) {
-          const k = ls.key(i);
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
           if (k && k.startsWith('gmao_')) {
-            const val = ls.getItem(k);
+            const val = localStorage.getItem(k);
             if (val && val.startsWith('WC:')) {
               hasWcItems = true;
               break;
@@ -310,14 +306,14 @@ export const storageService = {
         'gmao_security_audit_head_v1',
       ]);
       const migratedKeys = new Set();
-      for (let i = 0; i < ls.length; i++) {
-        const k = ls.key(i);
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
         if (!k || !k.startsWith('gmao_')) continue;
         if (SECURITY_MANAGED_KEYS.has(k) || k.startsWith('gmao_auth_') || k.startsWith('gmao_security_')) continue;
         if (migratedKeys.has(k)) continue;
 
         try {
-          const item = ls.getItem(k);
+          const item = localStorage.getItem(k);
           if (!item) continue;
 
           let decryptedObj = null;
@@ -398,9 +394,8 @@ export const storageService = {
     }
 
     try {
-      const ls = getSafeLocalStorage();
-      if (!ls) return fallback;
-      const item = ls.getItem(key);
+      if (typeof localStorage === 'undefined') return fallback;
+      const item = localStorage.getItem(key);
       if (item === null || item === undefined) return fallback;
 
       // If it's a legacy or SecurityService encrypted token, return fallback safely
@@ -444,15 +439,14 @@ export const storageService = {
     }
 
     try {
-      const ls = getSafeLocalStorage();
-      if (ls) {
+      if (typeof localStorage !== 'undefined') {
         if (value === null || value === undefined) {
-          ls.removeItem(key);
+          localStorage.removeItem(key);
           memoryCache.delete(key);
         } else {
           const serialized = typeof value === 'object' ? JSON.stringify(value) : String(value);
           try {
-            ls.setItem(key, serialized);
+            localStorage.setItem(key, serialized);
           } catch (writeErr: any) {
             // If quota exceeded, purge stale keys and retry once
             const isQuotaError =
@@ -466,7 +460,7 @@ export const storageService = {
               const purged = purgeObsoleteStorageKeys();
               if (purged > 0) {
                 try {
-                  ls.setItem(key, serialized);
+                  localStorage.setItem(key, serialized);
                   return true;
                 } catch (retryErr) {
                   // Fallback safely to memoryCache
@@ -529,9 +523,8 @@ export const storageService = {
   removeItem(key) {
     memoryCache.delete(key);
     try {
-      const ls = getSafeLocalStorage();
-      if (ls) {
-        ls.removeItem(key);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(key);
       }
     } catch (err) {
       Logger.warn(`[StorageService] removeItem localStorage error for '${key}':`, err, 'storageService');
@@ -568,13 +561,12 @@ export const storageService = {
    */
   async removeItemsBatchAsync(keys = []) {
     if (!Array.isArray(keys) || keys.length === 0) return true;
-    const ls = getSafeLocalStorage();
     for (const k of keys) {
       if (!k) continue;
       memoryCache.delete(k);
       try {
-        if (ls) {
-          ls.removeItem(k);
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(k);
         }
       } catch (err) {
         Logger.warn(`[StorageService] removeItemsBatchAsync localStorage error for '${k}':`, err, 'storageService');

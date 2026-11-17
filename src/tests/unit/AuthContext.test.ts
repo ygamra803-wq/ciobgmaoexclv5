@@ -78,28 +78,15 @@ describe('AuthContext Security and Hardening Suite', () => {
     }
   }
 
-  it('should validate inputs using LoginSchema and reject invalid characters in username or missing licenseKey', async () => {
+  it('should validate inputs using LoginSchema and reject invalid characters in username', async () => {
     await runWithAuthContext(async (auth) => {
       await expect(
-        auth.login({
-          username: 'admin; DROP TABLE Users;--',
-          password: 'password123',
-          licenseKey: 'CIOB-LIC-2026',
-        })
+        auth.login({ username: 'admin; DROP TABLE Users;--', password: 'password123' })
       ).rejects.toThrow(/validation|caractères invalides/i);
 
       await expect(
-        auth.login({
-          username: 'sh',
-          password: 'password123',
-          licenseKey: 'CIOB-LIC-2026',
-        })
+        auth.login({ username: 'sh', password: 'password123' })
       ).rejects.toThrow(/validation|Nom d'utilisateur d'au moins 3 caractères/i);
-
-      // Missing licenseKey must be rejected by LoginSchema (Dual-Key AND requirement)
-      await expect(
-        auth.login({ username: 'admin', password: 'password123' })
-      ).rejects.toThrow(/double clé|licence/i);
     });
   });
 
@@ -111,24 +98,16 @@ describe('AuthContext Security and Hardening Suite', () => {
       // Trigger max failed logins (5 attempts)
       for (let i = 0; i < 5; i++) {
         await expect(
-          auth.login({
-            username,
-            password: 'wrongpassword',
-            licenseKey: 'CIOB-LIC-2026',
-          })
+          auth.login({ username, password: 'wrongpassword' })
         ).rejects.toThrow(/incorrect/i);
       }
 
       // 6th attempt should be blocked instantly by rate-limiting lockout
       await expect(
-        auth.login({
-          username,
-          password: 'anypassword',
-          licenseKey: 'CIOB-LIC-2026',
-        })
+        auth.login({ username, password: 'anypassword' })
       ).rejects.toThrow(/Trop de tentatives|verrouillé/i);
     });
-  }, 15000);
+  });
 
   it('should enforce rate-limiting lockout on PIN login attempts', async () => {
     await runWithAuthContext(async (auth) => {
@@ -146,5 +125,5 @@ describe('AuthContext Security and Hardening Suite', () => {
         auth.loginWithPin('9999')
       ).rejects.toThrow(/Trop de tentatives|verrouillé/i);
     });
-  }, 15000);
+  });
 });

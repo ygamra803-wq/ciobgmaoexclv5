@@ -137,11 +137,10 @@ export default function SupervisoryMobileCockpit({
       (t) => String(t.etat || '').toLowerCase() === 'en retard'
     ).length;
 
-    const nowDate = new Date();
-    const todayIso = nowDate.toISOString().slice(0, 10);
-    const sevenDaysAgoDate = new Date(nowDate);
-    sevenDaysAgoDate.setUTCDate(sevenDaysAgoDate.getUTCDate() - 6);
-    const sevenDaysAgo = sevenDaysAgoDate.toISOString().slice(0, 10);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const shiftReport7d = buildShiftOrWeeklyReport({
       from: sevenDaysAgo,
       to: todayIso,

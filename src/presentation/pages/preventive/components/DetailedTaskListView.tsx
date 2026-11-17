@@ -18,6 +18,7 @@ import {
   Zap,
   Gauge,
 } from 'lucide-react';
+import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import { useI18n } from '../../../../i18n/I18nContext';
 
@@ -404,7 +405,7 @@ export default function DetailedTaskListView({
             )}
           </div>
 
-          {/* Right Controls: Grouping Toggle */}
+          {/* Right Controls: Grouping Toggle + 3D Circular Switch Button */}
           <div className="flex items-center gap-3 flex-wrap">
             {/* Toggle Grouping Display Mode */}
             <button
@@ -420,6 +421,12 @@ export default function DetailedTaskListView({
               <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
               <span>{groupByMachine ? t('preventive.table.banners_active', 'Bannières Machine Actives') : t('preventive.table.continuous_view', 'Vue Continue')}</span>
             </button>
+
+            {/* 3D Circular Switch Buttons on the RIGHT */}
+            <ViewSwitchButtonGroup
+              currentView="list"
+              onSwitchView={onSwitchView}
+            />
           </div>
         </div>
 

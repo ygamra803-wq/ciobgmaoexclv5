@@ -13,7 +13,6 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      xlsx: path.resolve(__dirname, './src/vendor/xlsx/index.ts'),
       react: path.resolve(__dirname, './node_modules/react'),
       'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
     },
@@ -40,6 +39,7 @@ export default defineConfig(({ command }) => ({
       'prop-types',
       'react-window',
       'recharts',
+      'xlsx',
     ],
   },
   plugins: [
@@ -285,7 +285,6 @@ export default defineConfig(({ command }) => ({
   server: {
     port: 3000,
     hmr: false,
-    allowedHosts: true,
     watch: {
       ignored: ['**/dist/**', '**/coverage/**', '**/data/**', '**/node_modules/**', '**/.git/**'],
     },
@@ -298,7 +297,6 @@ export default defineConfig(({ command }) => ({
   },
   preview: {
     port: 3000,
-    allowedHosts: true,
     headers: {
       'Content-Security-Policy': "default-src 'self' blob: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://api.dicebear.com; connect-src 'self' blob: data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';",
       'X-Content-Type-Options': 'nosniff',
@@ -309,7 +307,6 @@ export default defineConfig(({ command }) => ({
   test: {
     globals: true,
     environment: 'jsdom',
-    testTimeout: 15000,
     setupFiles: ['./src/tests/setup.js'],
     exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
     coverage: {

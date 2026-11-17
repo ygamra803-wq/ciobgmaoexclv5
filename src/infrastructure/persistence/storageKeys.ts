@@ -86,8 +86,6 @@ export const STORAGE_KEYS = {
   ADMIN_ROLE: 'gmao_admin_role',
   MIGRATION_AUTH_V1: 'gmao_migration_auth_v1',
   AUTH_ACCOUNTS: 'gmao_auth_accounts_v2',
-  LICENSE_RECORD: 'gmao_license_record_v1',
-  REMEMBERED_LICENSE_KEY: 'gmao_workshop_remembered_license_v1',
   ONBOARDING_DISMISSED: 'gmao_onboarding_dismissed_v1',
   ERROR_REPORTS: 'gmao_error_reports',
   ANALYTICS_EVENTS: 'gmao_analytics_events',

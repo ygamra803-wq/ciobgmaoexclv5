@@ -319,8 +319,7 @@ export default function NexusView({
     if (!item?.date_installation) return { hours: 0, isEstimated: false };
     const installedMs = new Date(item.date_installation).getTime();
     if (Number.isNaN(installedMs)) return { hours: 0, isEstimated: false };
-    const currentMs = new Date().getTime();
-    const elapsedDays = Math.max(0, Math.floor((currentMs - installedMs) / (1000 * 60 * 60 * 24)));
+    const elapsedDays = Math.max(0, Math.floor((Date.now() - installedMs) / (1000 * 60 * 60 * 24)));
     const estimatedHours = Math.round(elapsedDays * 6.3);
     return { hours: estimatedHours, isEstimated: estimatedHours > 0 };
   };

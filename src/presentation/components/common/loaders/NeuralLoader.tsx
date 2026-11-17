@@ -1,52 +1,40 @@
+import { useEffect, useState, useMemo, useRef, useCallback, useId, memo } from 'react';
 import {
-  useEffect,
-  useState,
-  useMemo,
-  useRef,
-  useCallback,
-  useId,
-  memo,
-  type ComponentType,
-} from 'react';
-import {
-  LayoutDashboard,
-  Package,
-  Factory,
-  Calendar,
-  Wrench,
-  Warehouse,
-  MapPin,
-  Users,
-  GitBranch,
-  BookOpen,
-  Settings,
-  Clock,
-  Landmark,
-  FileBarChart2,
-  ShieldCheck,
+  BrainCircuit,
+  Cpu,
+  Zap,
+  Activity,
+  CheckCircle2,
   ArrowRight,
-  FileSpreadsheet,
+  Layers,
 } from 'lucide-react';
-import SortieEntreeIcon from '../SortieEntreeIcon';
 
 const CONFIG = {
   nodes: {
-    count: 16,
-    radius: 156,
-    size: 10,
+    count: 12,
+    radius: 152,
+    size: 13,
+    inactiveOpacity: 0.28,
   },
   network: {
-    lineWidth: 1.35,
-    pulseSpeed: 1300,
+    lineWidth: 1.75,
+    glowIntensity: 12,
+    pulseSpeed: 1600,
+    connectionThreshold: 195,
   },
   rings: {
-    radiiOffsets: [34, 56, 78],
-    speeds: [34, 26, 42],
+    count: 5,
+    speeds: [26, 20, 15, 12, 9],
+    opacities: [0.08, 0.11, 0.14, 0.18, 0.22],
   },
   particles: {
-    count: 14,
-    maxSize: 3,
+    count: 20,
+    maxSize: 3.5,
     minSize: 1.5,
+  },
+  progress: {
+    milestones: [25, 50, 75],
+    smoothInterval: 50,
   },
 } as const;
 
@@ -60,13 +48,11 @@ export interface NeuralLoaderProps {
   onComplete?: () => void;
 }
 
-interface ShowcasePhase {
-  id: string;
+interface LoadingStage {
+  text: string;
+  progress: number;
   duration: number;
-  icon: ComponentType<any>;
-  colorHex: string;
-  tintRgba: string;
-  isDualMovement?: boolean;
+  icon: typeof BrainCircuit;
 }
 
 interface NodePosition {
@@ -80,146 +66,23 @@ interface NeuralPulse {
   fromNode: number;
   toNode: number;
   progress: number;
-  tone: 'emerald' | 'blue';
 }
 
-/**
- * Canonical 16-page icon sequence ordered exactly as specified,
- * paired with authentic Light Excel UI PageHeaderIcon colors from the codebase:
- *  1. dashboard            -> LayoutDashboard (blue-700   #1d4ed8)
- *  2. stock article        -> Package         (cyan-700   #0e7490)
- *  3. entri sortie rapide  -> SortieEntreeIcon(emerald-600 + rose-600)
- *  4. machine registered   -> Factory         (emerald-700 #047857)
- *  5. planning preventive  -> Calendar        (indigo-700 #4338ca)
- *  6. corrective           -> Wrench          (amber-700  #b45309)
- *  7. entrepot             -> Warehouse       (indigo-700 #4338ca)
- *  8. zone                 -> MapPin          (purple-700 #7e22ce)
- *  9. utilisateur          -> Users           (purple-700 #7e22ce)
- * 10. nexus                -> GitBranch       (emerald-700 #047857)
- * 11. guide                -> BookOpen        (amber-600  #d97706)
- * 12. setting              -> Settings        (sky-700    #0369a1)
- * 13. rapports vacation    -> Clock           (emerald-700 #047857)
- * 14. pilotage             -> Landmark        (emerald-700 #047857)
- * 15. rapports mensuel     -> FileBarChart2   (indigo-600 #4f46e5)
- * 16. validation           -> ShieldCheck     (rose-600   #e11d48)
- */
-const CANONICAL_SHOWCASE_ICONS: ReadonlyArray<Omit<ShowcasePhase, 'duration'>> = [
-  {
-    id: 'dashboard',
-    icon: LayoutDashboard,
-    colorHex: '#1d4ed8',
-    tintRgba: 'rgba(29, 78, 216, 0.14)',
-  },
-  {
-    id: 'stock_article',
-    icon: Package,
-    colorHex: '#0e7490',
-    tintRgba: 'rgba(14, 116, 144, 0.14)',
-  },
-  {
-    id: 'entree_sortie_rapide',
-    icon: SortieEntreeIcon,
-    colorHex: '#059669',
-    tintRgba: 'rgba(5, 150, 105, 0.14)',
-    isDualMovement: true,
-  },
-  {
-    id: 'machine_registered',
-    icon: Factory,
-    colorHex: '#047857',
-    tintRgba: 'rgba(4, 120, 87, 0.14)',
-  },
-  {
-    id: 'planning_preventive',
-    icon: Calendar,
-    colorHex: '#4338ca',
-    tintRgba: 'rgba(67, 56, 202, 0.14)',
-  },
-  {
-    id: 'corrective',
-    icon: Wrench,
-    colorHex: '#b45309',
-    tintRgba: 'rgba(180, 83, 9, 0.14)',
-  },
-  {
-    id: 'entrepot',
-    icon: Warehouse,
-    colorHex: '#4338ca',
-    tintRgba: 'rgba(67, 56, 202, 0.14)',
-  },
-  {
-    id: 'zone',
-    icon: MapPin,
-    colorHex: '#7e22ce',
-    tintRgba: 'rgba(126, 34, 206, 0.14)',
-  },
-  {
-    id: 'utilisateur',
-    icon: Users,
-    colorHex: '#7e22ce',
-    tintRgba: 'rgba(126, 34, 206, 0.14)',
-  },
-  {
-    id: 'nexus',
-    icon: GitBranch,
-    colorHex: '#047857',
-    tintRgba: 'rgba(4, 120, 87, 0.14)',
-  },
-  {
-    id: 'guide',
-    icon: BookOpen,
-    colorHex: '#d97706',
-    tintRgba: 'rgba(217, 119, 6, 0.14)',
-  },
-  {
-    id: 'setting',
-    icon: Settings,
-    colorHex: '#0369a1',
-    tintRgba: 'rgba(3, 105, 161, 0.14)',
-  },
-  {
-    id: 'rapports_vacation',
-    icon: Clock,
-    colorHex: '#047857',
-    tintRgba: 'rgba(4, 120, 87, 0.14)',
-  },
-  {
-    id: 'pilotage',
-    icon: Landmark,
-    colorHex: '#047857',
-    tintRgba: 'rgba(4, 120, 87, 0.14)',
-  },
-  {
-    id: 'rapports_mensuel',
-    icon: FileBarChart2,
-    colorHex: '#4f46e5',
-    tintRgba: 'rgba(79, 70, 229, 0.14)',
-  },
-  {
-    id: 'validation',
-    icon: ShieldCheck,
-    colorHex: '#e11d48',
-    tintRgba: 'rgba(225, 29, 72, 0.14)',
-  },
-];
-
-const LightExcelParticles = memo(({ count = CONFIG.particles.count }: { count?: number }) => {
+const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: number }) => {
   const particles = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => {
         const seedA = ((i * 37 + 13) % 97) / 97;
         const seedB = ((i * 53 + 29) % 89) / 89;
         const seedC = ((i * 19 + 7) % 43) / 43;
-        const isBlue = i % 3 === 0;
         return {
-          left: `${(seedA * 90 + 5).toFixed(2)}%`,
-          top: `${(seedB * 86 + 7).toFixed(2)}%`,
+          left: `${(seedA * 92 + 4).toFixed(2)}%`,
+          top: `${(seedB * 88 + 6).toFixed(2)}%`,
           size:
             CONFIG.particles.minSize +
             seedC * (CONFIG.particles.maxSize - CONFIG.particles.minSize),
-          duration: 5 + seedA * 4,
-          delay: seedB * 2.4,
-          isBlue,
+          duration: 4.5 + seedA * 4.5,
+          delay: seedB * 2.5,
         };
       }),
     [count]
@@ -230,18 +93,15 @@ const LightExcelParticles = memo(({ count = CONFIG.particles.count }: { count?: 
       {particles.map((particle, i) => (
         <div
           key={i}
-          className="absolute rounded-full neural-reduced-static opacity-60"
+          className="absolute rounded-full neural-reduced-static"
           style={{
             left: particle.left,
             top: particle.top,
             width: `${particle.size}px`,
             height: `${particle.size}px`,
-            background: particle.isBlue
-              ? 'radial-gradient(circle, rgba(37, 99, 235, 0.7), transparent)'
-              : 'radial-gradient(circle, rgba(16, 124, 65, 0.75), transparent)',
-            boxShadow: particle.isBlue
-              ? `0 0 ${particle.size * 3.5}px rgba(37, 99, 235, 0.3)`
-              : `0 0 ${particle.size * 3.5}px rgba(5, 150, 105, 0.35)`,
+            background:
+              'radial-gradient(circle, rgb(var(--color-accent-rgb, 5, 150, 105)), transparent)',
+            boxShadow: `0 0 ${particle.size * 6}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.5)`,
             animation: `neuralFloat ${particle.duration}s ease-in-out infinite`,
             animationDelay: `${particle.delay}s`,
           }}
@@ -250,133 +110,213 @@ const LightExcelParticles = memo(({ count = CONFIG.particles.count }: { count?: 
     </div>
   );
 });
-LightExcelParticles.displayName = 'LightExcelParticles';
+EnhancedParticles.displayName = 'EnhancedParticles';
 
-const LightExcelOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
-  <>
-    {CONFIG.rings.radiiOffsets.map((offset, i) => {
-      const isBlueRing = i === 1;
-      const borderColor = isBlueRing
-        ? `rgba(37, 99, 235, ${isComplete ? 0.28 : 0.16})`
-        : `rgba(16, 124, 65, ${isComplete ? 0.34 : 0.18})`;
+const EnhancedNeuralGrid = memo(() => (
+  <div className="absolute inset-0 opacity-35 dark:opacity-30 pointer-events-none">
+    <div
+      className="absolute inset-0 neural-reduced-static"
+      style={{
+        backgroundImage: `
+          linear-gradient(rgba(var(--color-accent-rgb, 5, 150, 105), 0.11) 1.5px, transparent 1.5px),
+          linear-gradient(90deg, rgba(var(--color-accent-rgb, 5, 150, 105), 0.11) 1.5px, transparent 1.5px)
+        `,
+        backgroundSize: '56px 56px',
+        maskImage: 'radial-gradient(ellipse 85% 70% at 50% 50%, black 15%, transparent 74%)',
+        WebkitMaskImage:
+          'radial-gradient(ellipse 85% 70% at 50% 50%, black 15%, transparent 74%)',
+        animation: 'neuralGridPulse 4s ease-in-out infinite',
+      }}
+    />
+    <div
+      className="absolute inset-0 neural-reduced-static"
+      style={{
+        backgroundImage: `
+          radial-gradient(circle at 30% 38%, rgba(var(--color-accent-rgb, 5, 150, 105), 0.16) 0%, transparent 52%),
+          radial-gradient(circle at 72% 62%, rgba(var(--color-accent-rgb, 5, 150, 105), 0.12) 0%, transparent 50%)
+        `,
+        animation: 'neuralGlowShift 6s ease-in-out infinite alternate',
+      }}
+    />
+    <div
+      className="absolute inset-0 opacity-25"
+      style={{
+        backgroundImage: `
+          repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 40px,
+            rgba(var(--color-accent-rgb, 5, 150, 105), 0.06) 40px,
+            rgba(var(--color-accent-rgb, 5, 150, 105), 0.06) 41.5px
+          )
+        `,
+      }}
+    />
+  </div>
+));
+EnhancedNeuralGrid.displayName = 'EnhancedNeuralGrid';
 
-      return (
+const EnhancedDataStreams = memo(() => {
+  const streams = useMemo(
+    () =>
+      Array.from({ length: 10 }, (_, i) => ({
+        left: `${7 + i * 9.2}%`,
+        duration: 2.6 + ((i * 17) % 10) * 0.25,
+        delay: ((i * 13) % 7) * 0.35,
+      })),
+    []
+  );
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20 dark:opacity-25">
+      {streams.map((stream, i) => (
         <div
           key={i}
-          className="absolute rounded-full transition-all duration-700 neural-reduced-static pointer-events-none"
+          className="absolute top-0 w-[1.5px] h-28 neural-reduced-static"
           style={{
-            inset: `-${offset}px`,
-            border: `1px ${i === 0 ? 'dashed' : 'solid'} ${borderColor}`,
-            animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
-              i % 2 === 1 ? 'reverse' : ''
-            }`,
+            left: stream.left,
+            background:
+              'linear-gradient(to bottom, transparent, rgba(var(--color-accent-rgb, 5, 150, 105), 0.75), rgba(var(--color-accent-rgb, 5, 150, 105), 0.4), transparent)',
+            boxShadow: '0 0 8px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)',
+            animation: `neuralDataStream ${stream.duration}s linear infinite`,
+            animationDelay: `${stream.delay}s`,
           }}
         />
-      );
-    })}
+      ))}
+    </div>
+  );
+});
+EnhancedDataStreams.displayName = 'EnhancedDataStreams';
+
+const EnhancedScannerLine = memo(() => (
+  <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25">
+    <div
+      className="w-full h-[2px] relative neural-reduced-static"
+      style={{
+        background:
+          'linear-gradient(to right, transparent, rgb(var(--color-accent-rgb, 5, 150, 105)), transparent)',
+        boxShadow: '0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.55)',
+        animation: 'neuralScanline 4.8s linear infinite',
+      }}
+    />
+  </div>
+));
+EnhancedScannerLine.displayName = 'EnhancedScannerLine';
+
+const EnhancedOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
+  <>
+    {Array.from({ length: CONFIG.rings.count }).map((_, i) => (
+      <div
+        key={i}
+        className="absolute rounded-full transition-all duration-700 neural-reduced-static"
+        style={{
+          inset: `-${36 + i * 12}px`,
+          opacity: isComplete ? Math.min(CONFIG.rings.opacities[i] * 1.8, 0.45) : CONFIG.rings.opacities[i],
+          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${isComplete ? 0.55 : 0.35})`,
+          boxShadow: `0 0 ${12 + i * 4}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.16)`,
+          animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
+            i % 2 === 0 ? '' : 'reverse'
+          }`,
+          animationDelay: `${i * 0.18}s`,
+        }}
+      />
+    ))}
   </>
 ));
-LightExcelOrbitRings.displayName = 'LightExcelOrbitRings';
+EnhancedOrbitRings.displayName = 'EnhancedOrbitRings';
 
-const LightExcelNode = memo(
-  ({
-    position,
-    isVisited,
-    isCurrentStep,
-  }: {
-    position: NodePosition;
-    isVisited: boolean;
-    isCurrentStep: boolean;
-  }) => {
-    return (
+const EnhancedNeuralNode = memo(
+  ({ position, isActive }: { position: NodePosition; isActive: boolean }) => (
+    <div
+      className="absolute"
+      style={{
+        top: `calc(50% + ${position.y}px)`,
+        left: `calc(50% + ${position.x}px)`,
+        transform: 'translate(-50%, -50%)',
+      }}
+    >
+      {isActive && (
+        <div
+          className="absolute inset-[-20px] rounded-full animate-ping neural-reduced-static"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.38), transparent 70%)',
+            animationDuration: '1.8s',
+          }}
+        />
+      )}
+
       <div
-        className="absolute pointer-events-none"
+        className="absolute inset-[-7px] rounded-full border transition-all duration-500 neural-reduced-static"
         style={{
-          top: `calc(50% + ${position.y}px)`,
-          left: `calc(50% + ${position.x}px)`,
-          transform: 'translate(-50%, -50%)',
+          borderColor: isActive
+            ? 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.65)'
+            : 'transparent',
+          boxShadow: isActive
+            ? '0 0 12px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)'
+            : 'none',
+          animation: isActive ? 'neuralRotate 3s linear infinite' : 'none',
+        }}
+      />
+
+      <div
+        className="relative rounded-full transition-all duration-500"
+        style={{
+          width: `${CONFIG.nodes.size}px`,
+          height: `${CONFIG.nodes.size}px`,
+          background: isActive
+            ? 'radial-gradient(circle, var(--color-accent-500, #10b981), var(--color-accent-700, #047857))'
+            : 'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.45), rgba(var(--color-accent-rgb, 5, 150, 105), 0.2))',
+          boxShadow: isActive
+            ? '0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.75)'
+            : '0 0 4px rgba(var(--color-accent-rgb, 5, 150, 105), 0.25)',
+          opacity: isActive ? 1 : CONFIG.nodes.inactiveOpacity,
+          transform: isActive ? 'scale(1.3)' : 'scale(1)',
+          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${
+            isActive ? 0.9 : 0.35
+          })`,
         }}
       >
-        {isCurrentStep && (
-          <div
-            className="absolute inset-[-11px] rounded-full animate-ping neural-reduced-static"
-            style={{
-              background:
-                'radial-gradient(circle, rgba(16, 185, 129, 0.38), transparent 72%)',
-              animationDuration: '1.6s',
-            }}
-          />
-        )}
-
         <div
-          className="relative rounded-full transition-all duration-500 flex items-center justify-center"
+          className="absolute inset-[3.5px] rounded-full bg-white"
           style={{
-            width: isCurrentStep ? '13px' : `${CONFIG.nodes.size}px`,
-            height: isCurrentStep ? '13px' : `${CONFIG.nodes.size}px`,
-            backgroundColor: isCurrentStep
-              ? '#059669'
-              : isVisited
-                ? '#10b981'
-                : '#ffffff',
-            border: isCurrentStep
-              ? '2px solid #ffffff'
-              : isVisited
-                ? '1.5px solid #047857'
-                : '1.5px solid #cbd5e1',
-            boxShadow: isCurrentStep
-              ? '0 0 0 3px rgba(16, 185, 129, 0.25), 0 0 14px rgba(5, 150, 105, 0.55)'
-              : isVisited
-                ? '0 0 8px rgba(16, 185, 129, 0.35)'
-                : '0 1px 2px rgba(15, 23, 42, 0.08)',
-            transform: isCurrentStep ? 'scale(1.18)' : isVisited ? 'scale(1.04)' : 'scale(1)',
+            boxShadow: '0 0 4px rgba(255,255,255,0.9)',
           }}
-        >
-          <span
-            className="rounded-full transition-colors duration-300"
-            style={{
-              width: isCurrentStep ? '4px' : '3px',
-              height: isCurrentStep ? '4px' : '3px',
-              backgroundColor: isCurrentStep || isVisited ? '#ffffff' : '#94a3b8',
-            }}
-          />
-        </div>
+        />
       </div>
-    );
-  }
+    </div>
+  )
 );
-LightExcelNode.displayName = 'LightExcelNode';
+EnhancedNeuralNode.displayName = 'EnhancedNeuralNode';
 
-const LightExcelConstellation = memo(
+const NeuralNetwork = memo(
   ({
     nodePositions,
-    visitedCount,
-    currentIndex,
+    activeNodes,
     pulses,
   }: {
     nodePositions: NodePosition[];
-    visitedCount: number;
-    currentIndex: number;
+    activeNodes: Set<number>;
     pulses: NeuralPulse[];
   }) => {
     const uid = useId().replace(/:/g, '');
-    const activeGradId = `ciob-excel-active-${uid}`;
-    const pulseEmeraldId = `ciob-excel-pulse-emerald-${uid}`;
-    const pulseBlueId = `ciob-excel-pulse-blue-${uid}`;
+    const connGradId = `ciob-conn-${uid}`;
+    const pulseGradId = `ciob-pulse-${uid}`;
+    const glowFilterId = `ciob-glow-${uid}`;
 
-    // Clean architectural geometry:
-    // 1) Perimeter 16-gon linking adjacent module pins
-    // 2) Harmonic 4-step cross chords linking opposing quadrants cleanly
     const connections = useMemo(() => {
-      const conns: Array<{ from: number; to: number; kind: 'perimeter' | 'chord' }> = [];
-      const n = nodePositions.length;
-      for (let i = 0; i < n; i++) {
-        conns.push({ from: i, to: (i + 1) % n, kind: 'perimeter' });
-        if (i < n / 2) {
-          conns.push({ from: i, to: (i + 4) % n, kind: 'chord' });
+      const conns: Array<{ from: number; to: number }> = [];
+      for (let i = 0; i < nodePositions.length; i++) {
+        for (let j = i + 1; j < nodePositions.length; j++) {
+          const dx = nodePositions[i].x - nodePositions[j].x;
+          const dy = nodePositions[i].y - nodePositions[j].y;
+          if (Math.sqrt(dx * dx + dy * dy) < CONFIG.network.connectionThreshold) {
+            conns.push({ from: i, to: j });
+          }
         }
       }
       return conns;
-    }, [nodePositions.length]);
+    }, [nodePositions]);
 
     return (
       <svg
@@ -385,70 +325,64 @@ const LightExcelConstellation = memo(
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '460px',
-          height: '460px',
+          width: '540px',
+          height: '540px',
         }}
       >
         <defs>
-          <linearGradient id={activeGradId} x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#059669" stopOpacity="0.85" />
-            <stop offset="50%" stopColor="#10b981" stopOpacity="0.9" />
-            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.8" />
+          <linearGradient id={connGradId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.05" />
+            <stop offset="50%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.85" />
+            <stop offset="100%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.05" />
           </linearGradient>
-
-          <radialGradient id={pulseEmeraldId}>
-            <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
-            <stop offset="65%" stopColor="#059669" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#059669" stopOpacity="0" />
+          <radialGradient id={pulseGradId}>
+            <stop offset="0%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="1" />
+            <stop offset="60%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0" />
           </radialGradient>
-
-          <radialGradient id={pulseBlueId}>
-            <stop offset="0%" stopColor="#60a5fa" stopOpacity="1" />
-            <stop offset="65%" stopColor="#2563eb" stopOpacity="0.45" />
-            <stop offset="100%" stopColor="#2563eb" stopOpacity="0" />
-          </radialGradient>
+          <filter id={glowFilterId}>
+            <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        {connections.map(({ from, to, kind }, idx) => {
-          const touchesCurrent = from === currentIndex || to === currentIndex;
-          const bothVisited = from <= visitedCount && to <= visitedCount;
-          const isPerimeter = kind === 'perimeter';
-
-          const stroke = touchesCurrent
-            ? `url(#${activeGradId})`
-            : bothVisited && isPerimeter
-              ? '#10b981'
-              : '#94a3b8';
-
-          const opacity = touchesCurrent
-            ? 0.72
-            : bothVisited
-              ? isPerimeter
-                ? 0.36
-                : 0.16
-              : isPerimeter
-                ? 0.22
-                : 0.11;
-
-          const strokeWidth = touchesCurrent
-            ? CONFIG.network.lineWidth * 1.3
-            : isPerimeter
-              ? CONFIG.network.lineWidth
-              : 1;
+        {connections.map(({ from, to }, idx) => {
+          const isActive = activeNodes.has(from) || activeNodes.has(to);
+          const bothActive = activeNodes.has(from) && activeNodes.has(to);
+          const opacity = bothActive ? 0.78 : isActive ? 0.45 : 0.18;
+          const strokeWidth = bothActive
+            ? CONFIG.network.lineWidth * 1.35
+            : CONFIG.network.lineWidth;
 
           return (
-            <line
-              key={idx}
-              x1={230 + nodePositions[from].x}
-              y1={230 + nodePositions[from].y}
-              x2={230 + nodePositions[to].x}
-              y2={230 + nodePositions[to].y}
-              stroke={stroke}
-              strokeWidth={strokeWidth}
-              opacity={opacity}
-              strokeLinecap="round"
-              style={{ transition: 'opacity 0.35s ease-out, stroke 0.35s ease-out' }}
-            />
+            <g key={idx}>
+              {isActive && (
+                <line
+                  x1={270 + nodePositions[from].x}
+                  y1={270 + nodePositions[from].y}
+                  x2={270 + nodePositions[to].x}
+                  y2={270 + nodePositions[to].y}
+                  stroke="rgb(var(--color-accent-rgb, 5, 150, 105))"
+                  strokeWidth={strokeWidth + 2}
+                  opacity={opacity * 0.28}
+                  filter={`url(#${glowFilterId})`}
+                />
+              )}
+              <line
+                x1={270 + nodePositions[from].x}
+                y1={270 + nodePositions[from].y}
+                x2={270 + nodePositions[to].x}
+                y2={270 + nodePositions[to].y}
+                stroke={`url(#${connGradId})`}
+                strokeWidth={strokeWidth}
+                opacity={opacity}
+                strokeLinecap="round"
+                style={{ transition: 'opacity 0.4s ease-out' }}
+              />
+            </g>
           );
         })}
 
@@ -458,24 +392,18 @@ const LightExcelConstellation = memo(
           }
           const from = nodePositions[pulse.fromNode];
           const to = nodePositions[pulse.toNode];
-          const x = 230 + from.x + (to.x - from.x) * pulse.progress;
-          const y = 230 + from.y + (to.y - from.y) * pulse.progress;
-          const isBlue = pulse.tone === 'blue';
+          const x = 270 + from.x + (to.x - from.x) * pulse.progress;
+          const y = 270 + from.y + (to.y - from.y) * pulse.progress;
 
           return (
             <g key={pulse.id}>
+              <circle cx={x} cy={y} r={10} fill={`url(#${pulseGradId})`} opacity={0.55} />
               <circle
                 cx={x}
                 cy={y}
-                r={7}
-                fill={`url(#${isBlue ? pulseBlueId : pulseEmeraldId})`}
-                opacity={0.65}
-              />
-              <circle
-                cx={x}
-                cy={y}
-                r={2.5}
-                fill={isBlue ? '#3b82f6' : '#10b981'}
+                r={3.5}
+                fill="rgb(var(--color-accent-rgb, 5, 150, 105))"
+                filter={`url(#${glowFilterId})`}
               />
             </g>
           );
@@ -484,41 +412,13 @@ const LightExcelConstellation = memo(
     );
   }
 );
-LightExcelConstellation.displayName = 'LightExcelConstellation';
-
-function renderPhaseIcon(
-  phase: ShowcasePhase,
-  animClass: string,
-  extraScale = false
-) {
-  const Icon = phase.icon;
-  if (phase.isDualMovement) {
-    return (
-      <Icon
-        downColor="text-emerald-600 dark:text-emerald-400"
-        upColor="text-rose-600 dark:text-rose-400"
-        className={`h-16 w-16 sm:h-20 sm:w-20 ${animClass} ${
-          extraScale ? 'scale-105' : ''
-        }`}
-      />
-    );
-  }
-  return (
-    <Icon
-      className={`h-16 w-16 sm:h-20 sm:w-20 ${animClass} ${
-        extraScale ? 'scale-105' : ''
-      }`}
-      style={{ color: phase.colorHex }}
-    />
-  );
-}
+NeuralNetwork.displayName = 'NeuralNetwork';
 
 /**
  * NeuralLoader
- * Mature Light Excel UI intro showcase displayed strictly before the operational
- * SSOT SplashScreen. Reveals the 16 canonical Level-1 and special page icons in
- * exact sequence with gradual crossfade transitions, authentic Light Excel UI
- * semantic colors, and an Emerald/Steel-Blue architectural constellation.
+ * Introductory presentation splash layer ("système de présentation visuelle")
+ * rendered strictly before the operational SSOT SplashScreen.
+ * Adapts dynamically to Light (#FAFAF9) / Dark (.dark) and [data-accent="*"].
  */
 export function NeuralLoader({
   mode = 'fullscreen',
@@ -530,22 +430,48 @@ export function NeuralLoader({
   onComplete,
 }: NeuralLoaderProps) {
   const isFull = mode === 'fullscreen';
-  // Unhurried showcase dwell in fullscreen (~460ms per icon) for clear gradual reveal
-  const stepDurationMs = isFull ? 460 : 75;
+  const durationMultiplier = isFull ? 1 : 0.45;
 
-  const phases: ShowcasePhase[] = useMemo(
-    () =>
-      CANONICAL_SHOWCASE_ICONS.map((item) => ({
-        ...item,
-        duration: stepDurationMs,
-      })),
-    [stepDurationMs]
+  const stages: LoadingStage[] = useMemo(
+    () => [
+      {
+        text: 'Initialisation du Noyau Nexus...',
+        progress: 20,
+        duration: 580 * durationMultiplier,
+        icon: BrainCircuit,
+      },
+      {
+        text: 'Activation Jumeau Numérique...',
+        progress: 48,
+        duration: 640 * durationMultiplier,
+        icon: Layers,
+      },
+      {
+        text: 'Connexion Modules Parc & PDR...',
+        progress: 75,
+        duration: 600 * durationMultiplier,
+        icon: Zap,
+      },
+      {
+        text: 'Calibrage Moteur Analytique...',
+        progress: 96,
+        duration: 540 * durationMultiplier,
+        icon: Activity,
+      },
+      {
+        text: 'Présentation prête.',
+        progress: 100,
+        duration: 340 * durationMultiplier,
+        icon: CheckCircle2,
+      },
+    ],
+    [durationMultiplier]
   );
 
   const nodePositions = useMemo<NodePosition[]>(
     () =>
       Array.from({ length: CONFIG.nodes.count }, (_, i) => {
-        const angleDeg = -90 + i * (360 / CONFIG.nodes.count);
+        const angleDeg = i * (360 / CONFIG.nodes.count);
         const angleRad = angleDeg * (Math.PI / 180);
         return {
           x: Math.cos(angleRad) * CONFIG.nodes.radius,
@@ -556,8 +482,9 @@ export function NeuralLoader({
     []
   );
 
-  const [phaseIndex, setPhaseIndex] = useState(0);
-  const [prevPhaseIndex, setPrevPhaseIndex] = useState<number | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [activeNodes, setActiveNodes] = useState<Set<number>>(() => new Set([0, 3, 6, 9]));
+  const [stageIndex, setStageIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [pulses, setPulses] = useState<NeuralPulse[]>([]);
@@ -566,10 +493,7 @@ export function NeuralLoader({
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onCompleteRef = useRef(onComplete);
-
-  useEffect(() => {
-    onCompleteRef.current = onComplete;
-  }, [onComplete]);
+  onCompleteRef.current = onComplete;
 
   useEffect(() => {
     return () => {
@@ -599,56 +523,103 @@ export function NeuralLoader({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isFull, triggerFinish]);
 
-  // Gradual sequential 16-page icon progression
+  // Smooth progress interpolation toward current stage target
   useEffect(() => {
     if (isComplete || isExiting) return;
-    const currentPhase = phases[phaseIndex];
-    if (!currentPhase) return;
+    const targetProgress = stages[stageIndex]?.progress ?? 100;
+    const interval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= targetProgress) return prev;
+        const delta = Math.max((targetProgress - prev) * 0.16, 1.2);
+        return Math.min(prev + delta, targetProgress);
+      });
+    }, CONFIG.progress.smoothInterval);
+    return () => clearInterval(interval);
+  }, [stageIndex, isComplete, isExiting, stages]);
+
+  // Stage progression & completion handoff
+  useEffect(() => {
+    if (isComplete || isExiting) return;
+    const currentStage = stages[stageIndex];
+    if (!currentStage) return;
 
     const timer = setTimeout(() => {
-      if (phaseIndex < phases.length - 1) {
-        setPrevPhaseIndex(phaseIndex);
-        setPhaseIndex((prev) => prev + 1);
+      if (stageIndex < stages.length - 1) {
+        setStageIndex((prev) => prev + 1);
       } else {
+        setProgress(100);
         setIsComplete(true);
         finishTimerRef.current = setTimeout(() => {
           triggerFinish();
-        }, isFull ? 380 : 250);
+        }, 260);
       }
-    }, currentPhase.duration);
+    }, currentStage.duration);
 
     return () => clearTimeout(timer);
-  }, [phaseIndex, isComplete, isExiting, phases, triggerFinish, isFull]);
+  }, [stageIndex, isComplete, isExiting, stages, triggerFinish]);
 
-  // Traveling Light Excel Emerald & Blue pulses along perimeter & chords
+  // Dynamic neural node activation
+  useEffect(() => {
+    if (isComplete || isExiting) {
+      setActiveNodes(new Set(Array.from({ length: CONFIG.nodes.count }, (_, i) => i)));
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setActiveNodes((prev) => {
+        const next = new Set(prev);
+        if (next.size < CONFIG.nodes.count) {
+          let candidate = 0;
+          for (let attempt = 0; attempt < 8; attempt++) {
+            const pick = Math.floor(Math.random() * CONFIG.nodes.count);
+            if (!next.has(pick)) {
+              candidate = pick;
+              break;
+            }
+          }
+          next.add(candidate);
+        }
+        if (Math.random() > 0.65 && next.size > 4) {
+          const arr = Array.from(next);
+          next.delete(arr[Math.floor(Math.random() * arr.length)]);
+        }
+        return next;
+      });
+    }, 340);
+
+    return () => clearInterval(interval);
+  }, [isComplete, isExiting]);
+
+  // Traveling neural pulses across active links
   useEffect(() => {
     if (isComplete || isExiting || nodePositions.length === 0) return;
     const pulseIntervals = new Set<ReturnType<typeof setInterval>>();
     const pulseTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
     const interval = setInterval(() => {
-      const fromNode = phaseIndex % CONFIG.nodes.count;
-      const useChord = Math.random() > 0.45;
-      const toNode = useChord
-        ? (fromNode + 4) % CONFIG.nodes.count
-        : (fromNode + 1) % CONFIG.nodes.count;
+      const arr = Array.from(activeNodes);
+      if (arr.length < 2) return;
+      const fromNode = arr[Math.floor(Math.random() * arr.length)];
+      let toNode = arr[Math.floor(Math.random() * arr.length)];
+      if (toNode === fromNode) {
+        toNode = arr[(arr.indexOf(fromNode) + 1) % arr.length];
+      }
 
       const newPulse: NeuralPulse = {
         id: Date.now() + Math.random(),
         fromNode,
         toNode,
         progress: 0,
-        tone: useChord ? 'blue' : 'emerald',
       };
-      setPulses((prev) => [...prev.slice(-5), newPulse]);
+      setPulses((prev) => [...prev.slice(-6), newPulse]);
 
       const stepTimer = setInterval(() => {
         setPulses((prev) =>
           prev.map((p) =>
-            p.id === newPulse.id ? { ...p, progress: Math.min(p.progress + 0.065, 1) } : p
+            p.id === newPulse.id ? { ...p, progress: Math.min(p.progress + 0.06, 1) } : p
           )
         );
-      }, 42);
+      }, 45);
       pulseIntervals.add(stepTimer);
 
       const cleanupTimer = setTimeout(() => {
@@ -658,17 +629,16 @@ export function NeuralLoader({
         setPulses((prev) => prev.filter((p) => p.id !== newPulse.id));
       }, CONFIG.network.pulseSpeed);
       pulseTimeouts.add(cleanupTimer);
-    }, 520);
+    }, 650);
 
     return () => {
       clearInterval(interval);
       pulseIntervals.forEach(clearInterval);
       pulseTimeouts.forEach(clearTimeout);
     };
-  }, [phaseIndex, isComplete, isExiting, nodePositions.length]);
+  }, [activeNodes, isComplete, isExiting, nodePositions.length]);
 
-  const currentPhase = phases[phaseIndex] ?? phases[0];
-  const previousPhase = prevPhaseIndex !== null ? phases[prevPhaseIndex] : null;
+  const CurrentIcon = stages[stageIndex]?.icon ?? BrainCircuit;
 
   return (
     <div
@@ -676,34 +646,43 @@ export function NeuralLoader({
       aria-label="Présentation d'accueil CIOB GMAO Nexus"
       className={`${
         isFull
-          ? 'fixed inset-0 z-[100] p-4 sm:p-8 justify-between'
-          : 'relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 justify-center'
-      } bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center overflow-hidden select-none font-sans transition-all duration-300 ${
+          ? 'fixed inset-0 z-[100]'
+          : 'relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-slate-200 dark:border-slate-800'
+      } bg-[#FAFAF9]/95 dark:bg-slate-950/95 backdrop-blur-md text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center overflow-hidden select-none font-sans transition-all duration-300 ${
         isExiting ? 'opacity-0 scale-[1.015] pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
-      {/* Background Excel Grid Subtle Lines & Ambient Orbs — Identical to SplashScreen */}
-      <div className="absolute inset-0 opacity-[0.04] pointer-events-none bg-[radial-gradient(#107c41_1px,transparent_1px)] [background-size:20px_20px]" />
-      <div className="absolute -top-32 -right-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+      <EnhancedNeuralGrid />
+      <EnhancedParticles />
+      <EnhancedDataStreams />
+      <EnhancedScannerLine />
 
-      <LightExcelParticles />
-
-      {/* Top Header Row — Matched to SplashScreen Architecture */}
+      {/* Top Bar: Subtle Badge & Conscious Intro Bypass */}
       {isFull && (
-        <div className="w-full max-w-2xl flex justify-between items-center z-30">
-          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs">
-            <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-            <span className="text-[11px] font-mono tracking-wide text-slate-700 dark:text-slate-200 font-bold">
-              Classeur Virtuel GMAO • Jumeau Numérique
-            </span>
+        <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-8 sm:right-8 z-30 flex items-center justify-between gap-3">
+          <div
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border backdrop-blur-md text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200"
+            style={{
+              background: 'var(--glass-bg)',
+              borderColor: 'var(--glass-border)',
+            }}
+          >
+            <span
+              className="w-2 h-2 rounded-full animate-pulse"
+              style={{ backgroundColor: 'var(--color-accent-500, #10b981)' }}
+            />
+            <span>NEXUS CORE • INTRO</span>
           </div>
 
           {showSkipButton && (
             <button
               type="button"
               onClick={triggerFinish}
-              className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 transition bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs cursor-pointer font-medium"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition cursor-pointer backdrop-blur-md shadow-xs"
+              style={{
+                background: 'var(--glass-bg)',
+                borderColor: 'var(--glass-border)',
+              }}
               title="Passer directement à l'inspection système"
             >
               <span>Passer l&apos;intro</span>
@@ -713,113 +692,181 @@ export function NeuralLoader({
         </div>
       )}
 
-      {/* Center Animated Emblem & Brand Identity */}
-      <div className="z-20 my-auto flex flex-col items-center justify-center text-center">
-        <div
-          className={`relative mb-12 sm:mb-14 ${
-            !isFull ? 'scale-75' : 'scale-90 sm:scale-100'
-          } neural-reduced-static`}
-          style={{ animation: 'neuralFloat 6s ease-in-out infinite' }}
-        >
-          {isFull && (
-            <>
-              {/* Soft Excel Emerald & Steel-Blue Ambient Halo */}
-              <div
-                className="absolute inset-[-64px] blur-[72px] rounded-full pointer-events-none"
-                style={{
-                  background:
-                    'radial-gradient(circle, rgba(16, 185, 129, 0.16), rgba(37, 99, 235, 0.08) 58%, transparent 74%)',
-                }}
-              />
-              {/* Subtle Adaptive Inner Glow Matching Current Module Icon */}
-              <div
-                className="absolute inset-[-28px] blur-[34px] rounded-full transition-colors duration-500 pointer-events-none"
-                style={{
-                  background: `radial-gradient(circle, ${currentPhase.tintRgba}, transparent 72%)`,
-                }}
-              />
-            </>
-          )}
-
-          <LightExcelOrbitRings isComplete={isComplete} />
-          <LightExcelConstellation
-            nodePositions={nodePositions}
-            visitedCount={phaseIndex}
-            currentIndex={phaseIndex}
-            pulses={pulses}
-          />
-
-          {/* Mature Light Excel White Card Emblem with Signature Top Emerald Stripe */}
-          <div
-            data-showcase-module={currentPhase.id}
-            className="relative w-32 h-32 sm:w-36 sm:h-36 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl rounded-3xl border border-slate-200 dark:border-slate-700/80 shadow-xl flex items-center justify-center z-20 overflow-hidden transition-shadow duration-500"
-            style={{
-              boxShadow:
-                '0 20px 45px -12px rgba(15, 23, 42, 0.12), 0 6px 18px -4px rgba(16, 124, 65, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
-            }}
-          >
-            {/* Top Excel Banner Stripe (Identical to SplashScreen Card) */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-700" />
-
-            {/* Subtle Spreadsheet Micro-Grid Inside Emblem */}
+      {/* Central Neural Reactor Core */}
+      <div
+        className={`relative z-10 mb-14 sm:mb-16 ${
+          !isFull ? 'scale-75' : 'scale-90 sm:scale-100'
+        } neural-reduced-static`}
+        style={{ animation: 'neuralFloat 5.5s ease-in-out infinite' }}
+      >
+        {isFull && (
+          <>
             <div
-              className="absolute inset-0 opacity-[0.04] pointer-events-none"
+              className="absolute inset-[-72px] blur-[90px] rounded-full animate-pulse neural-reduced-static"
               style={{
-                backgroundImage:
-                  'linear-gradient(to right, #0f172a 1px, transparent 1px), linear-gradient(to bottom, #0f172a 1px, transparent 1px)',
-                backgroundSize: '14px 14px',
+                background:
+                  'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.28), transparent 70%)',
+                animationDuration: '3s',
               }}
             />
-
-            {/* Two-Layer Crossfade Icon Stage for Smooth Gradual Reveal */}
-            <div className="relative w-20 h-20 sm:w-22 sm:h-22 flex items-center justify-center">
-              {previousPhase && previousPhase.id !== currentPhase.id && (
-                <div
-                  key={`exit-${previousPhase.id}`}
-                  className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                >
-                  {renderPhaseIcon(previousPhase, 'neural-icon-exit')}
-                </div>
-              )}
-
-              <div
-                key={`enter-${currentPhase.id}`}
-                className="absolute inset-0 flex items-center justify-center"
-              >
-                {renderPhaseIcon(currentPhase, 'neural-icon-enter', isComplete)}
-              </div>
-            </div>
-          </div>
-
-          {nodePositions.map((pos, i) => (
-            <LightExcelNode
-              key={i}
-              position={pos}
-              isVisited={i < phaseIndex}
-              isCurrentStep={i === phaseIndex}
+            <div
+              className="absolute inset-[-44px] blur-[52px] rounded-full animate-pulse neural-reduced-static"
+              style={{
+                background:
+                  'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.18), transparent 70%)',
+                animationDuration: '2.4s',
+                animationDelay: '0.4s',
+              }}
             />
-          ))}
+          </>
+        )}
+
+        <EnhancedOrbitRings isComplete={isComplete} />
+        <NeuralNetwork
+          nodePositions={nodePositions}
+          activeNodes={activeNodes}
+          pulses={pulses}
+        />
+
+        {/* Glassmorphic Cube */}
+        <div
+          className="relative backdrop-blur-xl p-8 sm:p-9 rounded-3xl border transition-all duration-700 z-20"
+          style={{
+            background: 'var(--glass-bg)',
+            borderColor: 'var(--glass-border)',
+            boxShadow:
+              'var(--shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.45)',
+          }}
+        >
+          <CurrentIcon
+            className={`h-20 w-20 sm:h-22 sm:w-22 transition-all duration-500 ${
+              isComplete ? 'scale-110' : 'animate-pulse'
+            } neural-reduced-static`}
+            style={{
+              color: 'var(--color-accent-600, #059669)',
+              filter:
+                'drop-shadow(0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.4))',
+            }}
+          />
+          <div
+            className="absolute inset-0 border rounded-3xl animate-ping opacity-30 neural-reduced-static pointer-events-none"
+            style={{
+              borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)',
+              animationDuration: '3s',
+            }}
+          />
         </div>
 
-        {/* Clean Brand Title & Tagline */}
+        {nodePositions.map((pos, i) => (
+          <EnhancedNeuralNode key={i} position={pos} isActive={activeNodes.has(i)} />
+        ))}
+      </div>
+
+      {/* Title, Live Stage Readout & Progress Bar */}
+      <div className="z-20 flex flex-col items-center gap-4 w-full max-w-md px-6">
         {isFull && (
-          <div className="space-y-1.5 px-6">
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+          <div className="text-center space-y-1">
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
               <span>{appName}</span>{' '}
-              <span className="text-emerald-700 dark:text-emerald-400">
+              <span style={{ color: 'var(--color-accent-600, #059669)' }}>
                 {appAccent}
               </span>
             </h1>
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide">
+            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-[0.22em]">
               {tagline}
             </p>
           </div>
         )}
+
+        <div className="h-7 flex items-center justify-center w-full">
+          <p
+            key={stageIndex}
+            className="text-xs sm:text-sm font-mono text-center neural-stage-enter font-medium"
+            style={{ color: 'var(--color-accent-700, #047857)' }}
+          >
+            <span className="opacity-60">&gt;</span>{' '}
+            <span className="dark:text-slate-200">{stages[stageIndex]?.text}</span>
+            <span
+              className="inline-block w-1.5 h-3.5 ml-1.5 align-middle animate-pulse"
+              style={{ backgroundColor: 'var(--color-accent-500, #10b981)' }}
+            />
+          </p>
+        </div>
+
+        <div className="w-full space-y-2.5">
+          <div
+            className="relative w-full h-2 rounded-full overflow-hidden backdrop-blur-sm border"
+            style={{
+              backgroundColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.1)',
+              borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.2)',
+            }}
+          >
+            <div
+              className="absolute inset-y-0 left-0 rounded-full transition-all duration-300 ease-out"
+              style={{
+                width: `${progress}%`,
+                background:
+                  'linear-gradient(90deg, var(--color-accent-600, #059669), var(--color-accent-500, #10b981))',
+                boxShadow:
+                  '0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.5)',
+              }}
+            >
+              <div
+                className="absolute inset-0 w-1/3"
+                style={{
+                  background:
+                    'linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent)',
+                  animation: 'neuralScannerSweep 1.8s ease-in-out infinite',
+                }}
+              />
+            </div>
+
+            {CONFIG.progress.milestones.map((milestone) => (
+              <div
+                key={milestone}
+                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-300"
+                style={{ left: `${milestone}%` }}
+              >
+                <div
+                  className="w-2 h-2 rounded-full transition-transform duration-300"
+                  style={{
+                    backgroundColor:
+                      progress >= milestone
+                        ? 'var(--color-accent-500, #10b981)'
+                        : 'rgba(148, 163, 184, 0.55)',
+                    boxShadow:
+                      progress >= milestone
+                        ? '0 0 8px rgba(var(--color-accent-rgb, 5, 150, 105), 0.7)'
+                        : 'none',
+                    transform: progress >= milestone ? 'scale(1.25)' : 'scale(1)',
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-between items-center text-[11px] font-mono tabular-nums">
+            <span className="text-slate-600 dark:text-slate-400 font-semibold">
+              {Math.round(progress)}%
+            </span>
+            <span
+              className={`font-semibold transition-colors duration-300 ${
+                isComplete ? '' : 'text-slate-500 dark:text-slate-400'
+              }`}
+              style={
+                isComplete
+                  ? { color: 'var(--color-accent-600, #059669)' }
+                  : undefined
+              }
+            >
+              {isComplete ? '✓ PRÊT POUR INDEXATION' : 'INITIALISATION NEXUS...'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Footer Version Stamp — Matched to SplashScreen */}
       {isFull && (
-        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono z-20">
+        <div className="absolute bottom-5 sm:bottom-7 text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] opacity-75 z-20">
           {version}
         </div>
       )}

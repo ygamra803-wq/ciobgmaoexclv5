@@ -139,31 +139,17 @@ describe('SEC-BOOTSTRAP-P0 Security Verification Suite', () => {
       );
     });
 
-    it('in PRODUCTION and DEV: allows login once user has activated a commercial license key and set a strong custom password (LOGIN-LICENSE-P0 AND gate)', async () => {
+    it('in PRODUCTION and DEV: allows login once user has set a strong custom password', async () => {
       const auth = new AuthService();
-      await auth.activateLicenseAndAdmin({
-        licenseKey: 'CIOB-LIC-2026-9981',
-        adminPassword: 'StrongEnterpriseP@ssw0rd!2026',
-      });
+      await auth.updateUserPassword('admin', 'StrongEnterpriseP@ssw0rd!2026');
 
       vi.spyOn(AuthService, 'isProductionMode').mockReturnValue(true);
 
-      // Password-only without license key must be rejected
-      await expect(auth.login('admin', 'StrongEnterpriseP@ssw0rd!2026')).rejects.toThrow(
-        /double clé|licence/i
-      );
-
-      // Both valid license key AND valid account password -> succeeds
-      const session = await auth.login(
-        'admin',
-        'StrongEnterpriseP@ssw0rd!2026',
-        'CIOB-LIC-2026-9981'
-      );
+      const session = await auth.login('admin', 'StrongEnterpriseP@ssw0rd!2026');
       expect(session).toBeDefined();
       expect(session.username).toBe('admin');
-      expect(session.authMethod).toBe('DUAL_KEY_AND');
       expect(session.mustChangePassword).toBe(false);
-    }, 15000);
+    });
   });
 
   // ══════════════════════════════════════════════════════════════

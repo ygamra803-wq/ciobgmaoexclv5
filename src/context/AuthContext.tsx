@@ -6,10 +6,6 @@ import { vaultService } from '../utils/vaultService';
 import { SecurityService } from '../core/security/SecurityService';
 import { validatePasswordPolicy } from '../core/security/AuthService';
 import {
-  LicenseGateService,
-  type ILicenseRecord,
-} from '../core/security/LicenseGateService';
-import {
   clearClientServerSessionToken,
   getClientServerSessionToken,
 } from '../core/security/serverSession';
@@ -19,7 +15,7 @@ import {
   revokeServerSession,
 } from '../core/security/serverSessionClient';
 
-const AuthContext = createContext<any>(null);
+const AuthContext = createContext(null);
 
 const LoginSchema = z.object({
   username: z
@@ -31,13 +27,12 @@ const LoginSchema = z.object({
     .string()
     .min(3, 'Le mot de passe doit comporter au moins 3 caractères')
     .max(128, 'Mot de passe trop long (max 128)'),
-  licenseKey: z
+  pin: z
     .string()
-    .min(
-      1,
-      'Authentification à double clé requise (AND) : la clé de licence commerciale est obligatoire'
-    )
-    .max(128, 'La clé de licence est trop longue'),
+    .min(3, 'Le code PIN doit comporter au moins 3 caractères')
+    .max(10, 'Le code PIN est trop long')
+    .regex(/^\d+$/, 'Le code PIN doit comporter uniquement des chiffres')
+    .optional(),
 });
 
 function getStoredAttempts() {
@@ -61,20 +56,12 @@ function persistAttempts(map) {
   }
 }
 
-let loginAttemptsMap: Map<string, any> | null = null; // username -> { count, lockUntil }
+const loginAttemptsMap = getStoredAttempts(); // username -> { count, lockUntil }
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
 
-function getAttemptsMap(): Map<string, any> {
-  if (!loginAttemptsMap) {
-    loginAttemptsMap = getStoredAttempts();
-  }
-  return loginAttemptsMap;
-}
-
 function checkRateLimit(username) {
-  const attempts = getAttemptsMap();
-  const record = attempts.get(username);
+  const record = loginAttemptsMap.get(username);
   if (!record) return;
   if (record.lockUntil && Date.now() < record.lockUntil) {
     const remainingMinutes = Math.ceil((record.lockUntil - Date.now()) / 60000);
@@ -83,26 +70,24 @@ function checkRateLimit(username) {
     );
   }
   if (record.lockUntil && Date.now() >= record.lockUntil) {
-    attempts.delete(username);
-    persistAttempts(attempts);
+    loginAttemptsMap.delete(username);
+    persistAttempts(loginAttemptsMap);
   }
 }
 
 function recordFailedAttempt(username) {
-  const attempts = getAttemptsMap();
-  const record = attempts.get(username) || { count: 0, lockUntil: null };
+  const record = loginAttemptsMap.get(username) || { count: 0, lockUntil: null };
   record.count += 1;
   if (record.count >= MAX_LOGIN_ATTEMPTS) {
     record.lockUntil = Date.now() + LOCKOUT_DURATION_MS;
   }
-  attempts.set(username, record);
-  persistAttempts(attempts);
+  loginAttemptsMap.set(username, record);
+  persistAttempts(loginAttemptsMap);
 }
 
 function resetFailedAttempts(username) {
-  const attempts = getAttemptsMap();
-  attempts.delete(username);
-  persistAttempts(attempts);
+  loginAttemptsMap.delete(username);
+  persistAttempts(loginAttemptsMap);
 }
 
 export const AuthProvider = ({ children }) => {
@@ -111,19 +96,6 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => authService?.getCurrentUser() || null);
   const [isVaultExists, setIsVaultExists] = useState(() => vaultService.isVaultExists());
   const [isVaultUnlocked, setIsVaultUnlocked] = useState(false);
-  const [licenseRecord, setLicenseRecord] = useState<ILicenseRecord | null>(() =>
-    LicenseGateService.getLicenseRecord()
-  );
-  const [isLicenseActive, setIsLicenseActive] = useState<boolean>(() =>
-    Boolean(
-      authService?.isLicenseActivated
-        ? authService.isLicenseActivated()
-        : LicenseGateService.isLicenseActive()
-    )
-  );
-  const [rememberedLicenseKey, setRememberedLicenseKeyState] = useState<string>(() =>
-    LicenseGateService.getRememberedLicenseKey()
-  );
   const [accounts, setAccounts] = useState(() => authService?.getAvailableAccounts(true) || []);
   const [serverSessionError, setServerSessionError] = useState<string | null>(null);
 
@@ -131,18 +103,9 @@ export const AuthProvider = ({ children }) => {
     if (authService?.getAvailableAccounts) {
       setAccounts(authService.getAvailableAccounts(true));
     }
-    setLicenseRecord(LicenseGateService.getLicenseRecord());
-    setIsLicenseActive(
-      Boolean(
-        authService?.isLicenseActivated
-          ? authService.isLicenseActivated()
-          : LicenseGateService.isLicenseActive()
-      )
-    );
-    setRememberedLicenseKeyState(LicenseGateService.getRememberedLicenseKey());
   }, [authService]);
 
-  // Check initial session & subscribe to account/license updates
+  // Check initial session & subscribe to account updates
   useEffect(() => {
     const sessionUser = authService?.getCurrentUser();
     if (sessionUser) {
@@ -158,20 +121,17 @@ export const AuthProvider = ({ children }) => {
     };
 
     const handleServerSessionRejected = (e: any) => {
-      const msg =
-        e?.detail?.error || e?.detail?.message || 'Session serveur LAN expirée ou refusée.';
+      const msg = e?.detail?.error || e?.detail?.message || 'Session serveur LAN expirée ou refusée.';
       setServerSessionError(msg);
     };
 
     if (typeof window !== 'undefined') {
       window.addEventListener('gmao_auth_accounts_updated', handleAccountsChange);
-      window.addEventListener('gmao_license_record_updated', handleAccountsChange);
       window.addEventListener('storage', handleAccountsChange);
       window.addEventListener('gmao:server_session_expired', handleServerSessionRejected);
       window.addEventListener('gmao:server_session_rejected', handleServerSessionRejected);
       return () => {
         window.removeEventListener('gmao_auth_accounts_updated', handleAccountsChange);
-        window.removeEventListener('gmao_license_record_updated', handleAccountsChange);
         window.removeEventListener('storage', handleAccountsChange);
         window.removeEventListener('gmao:server_session_expired', handleServerSessionRejected);
         window.removeEventListener('gmao:server_session_rejected', handleServerSessionRejected);
@@ -198,100 +158,62 @@ export const AuthProvider = ({ children }) => {
     };
   }, [user]);
 
-  /**
-   * LOGIN-LICENSE-P0: First-Run Activation of Commercial License Key + Independent Admin Password.
-   */
-  const activateLicenseAndAdmin = useCallback(
-    async (params: {
-      licenseKey: string;
-      adminPassword: string;
-      organizationLabel?: string;
-      seatsHint?: string;
-      rememberLicenseOnDevice?: boolean;
-    }) => {
-      if (!authService?.activateLicenseAndAdmin) {
-        throw new Error("Service d'activation de licence indisponible.");
-      }
-      const res = await authService.activateLicenseAndAdmin(params);
-      setIsVaultExists(true);
-      setIsVaultUnlocked(true);
-      refreshAccountsState();
-      return res;
-    },
-    [authService, refreshAccountsState]
-  );
-
-  /**
-   * LOGIN-LICENSE-P0: Rotate the Commercial License Key (requires current license key + current Admin password).
-   */
-  const rotateLicenseKey = useCallback(
-    async (params: {
-      currentLicenseKey: string;
-      adminPassword: string;
-      newLicenseKey: string;
-      organizationLabel?: string;
-      seatsHint?: string;
-    }) => {
-      if (!authService?.rotateLicenseKeyWithAdminAuth) {
-        throw new Error('Service de rotation de licence indisponible.');
-      }
-      const rotated = await authService.rotateLicenseKeyWithAdminAuth(params);
-      setIsVaultExists(true);
-      setIsVaultUnlocked(true);
-      refreshAccountsState();
-      return rotated;
-    },
-    [authService, refreshAccountsState]
-  );
-
-  /**
-   * Legacy setupMasterPin wrapper:
-   * Strictly rejects single-key setup (`LOGIN-LICENSE-P0`) unless an independent `adminPassword` is provided.
-   */
+  // Initialisation du Master PIN pour la première fois - synchronise avec la source unique AuthService
   const setupMasterPin = useCallback(
-    async (licenseKeyOrPin: string, adminPassword?: string, organizationLabel?: string) => {
-      if (!adminPassword) {
-        throw new Error(
-          'Initialisation à clé unique interdite (LOGIN-LICENSE-P0) : veuillez fournir à la fois la clé de licence commerciale ET un mot de passe Administrateur distinct.'
-        );
-      }
-      await activateLicenseAndAdmin({
-        licenseKey: licenseKeyOrPin,
-        adminPassword,
-        organizationLabel,
-      });
-      return true;
-    },
-    [activateLicenseAndAdmin]
-  );
+    async (pin) => {
+      const cleanPin = vaultService.validateMasterPinPolicy(pin);
 
-  // Déchiffrement du coffre-fort avec la clé de licence
-  const unlockVault = useCallback(
-    async (licenseKey) => {
-      const cleanKey = (licenseKey || '').trim();
-      if (!cleanKey) throw new Error('Veuillez saisir la clé de licence commerciale.');
-      const isValidLic = await LicenseGateService.verifyLicenseKey(cleanKey, {
-        touchLastAuth: false,
-      });
-      if (!isValidLic) {
-        throw new Error('Clé de licence commerciale incorrecte.');
-      }
-      if (vaultService.isVaultExists()) {
-        try {
-          const vault = await vaultService.decryptVault(cleanKey);
-          if (vault) {
-            setIsVaultUnlocked(true);
-            await vaultService.setPinHash(cleanKey);
-            refreshAccountsState();
-            return vault;
-          }
-        } catch {
-          // Vault may have been initialized prior to rotation
+      const adminHash = await SecurityService.hashPassword(cleanPin);
+      const storedUsers = authService?.getStoredUsersList
+        ? [...authService.getStoredUsersList()]
+        : [];
+
+      const updatedUsers = storedUsers.map((u) => {
+        if (u.username === 'admin' || u.role === 'ADMIN') {
+          const nextAdmin = { ...u, passwordHash: adminHash };
+          delete nextAdmin.defaultPass;
+          return nextAdmin;
         }
+        return u;
+      });
+
+      if (authService?.saveStoredUsersList) {
+        authService.saveStoredUsersList(updatedUsers, true);
       }
+
+      const newVault = {
+        version: 2,
+        createdAt: new Date().toISOString(),
+        accounts: updatedUsers,
+      };
+
+      await vaultService.encryptVault(newVault, cleanPin);
+      await vaultService.setPinHash(cleanPin);
+
+      SecurityService.removeSecure('gmao_admin_pin');
+
+      setIsVaultExists(true);
       setIsVaultUnlocked(true);
       refreshAccountsState();
+
       return true;
+    },
+    [authService, refreshAccountsState]
+  );
+
+  // Déchiffrement du coffre-fort avec le Master PIN
+  const unlockVault = useCallback(
+    async (pin) => {
+      const cleanPin = (pin || '').trim();
+      if (!cleanPin) throw new Error('Veuillez saisir le code Master PIN.');
+      const vault = await vaultService.decryptVault(cleanPin);
+      if (vault) {
+        setIsVaultUnlocked(true);
+        await vaultService.setPinHash(cleanPin);
+        refreshAccountsState();
+        return vault;
+      }
+      throw new Error('Structure du coffre-fort invalide.');
     },
     [refreshAccountsState]
   );
@@ -334,12 +256,9 @@ export const AuthProvider = ({ children }) => {
     [accounts, authService]
   );
 
-  /**
-   * LOGIN-LICENSE-P0: Unified Dual-Key `AND` Login.
-   * Requires `username`, `password`, AND `licenseKey` (also accepts `pin` alias in params object).
-   */
+  // Authentification système unifiée (supporte compte individuel + mot de passe ou Master PIN)
   const login = useCallback(
-    async (usernameOrParams, passwordParam?: string, licenseKeyParam?: string) => {
+    async (usernameOrParams, passwordParam, pinParam) => {
       const usernameRaw =
         typeof usernameOrParams === 'object' && usernameOrParams !== null
           ? usernameOrParams.code || usernameOrParams.username || ''
@@ -348,44 +267,44 @@ export const AuthProvider = ({ children }) => {
         typeof usernameOrParams === 'object' && usernameOrParams !== null
           ? usernameOrParams.password || ''
           : passwordParam || '';
-      const licenseKeyRaw =
+      const pinRaw =
         typeof usernameOrParams === 'object' && usernameOrParams !== null
-          ? usernameOrParams.licenseKey ||
-            usernameOrParams.pin ||
-            usernameOrParams.pinCode ||
-            ''
-          : licenseKeyParam || '';
+          ? usernameOrParams.pin || usernameOrParams.pinCode || ''
+          : pinParam || '';
 
       try {
         LoginSchema.parse({
           username: String(usernameRaw || '').trim(),
           password: String(passwordRaw || '').trim(),
-          licenseKey: String(licenseKeyRaw || '').trim(),
+          pin: pinRaw ? String(pinRaw).trim() : undefined,
         });
       } catch (err: any) {
-        const detail =
-          err?.issues?.[0]?.message || err?.errors?.[0]?.message || 'Entrées invalides';
-        throw new Error(`Validation des données : ${detail}`, { cause: err });
+        throw new Error(
+          `Validation des données : ${err?.errors?.[0]?.message || 'Entrées invalides'}`,
+          { cause: err }
+        );
       }
 
       const username = String(usernameRaw || '').trim().toLowerCase();
       const password = String(passwordRaw || '').trim();
-      const licenseKey = String(licenseKeyRaw || '').trim();
+      const pin = String(pinRaw || '').trim();
 
       checkRateLimit(username);
 
       try {
-        const loggedInUser = await authService.login(username, password, licenseKey);
-
-        if (vaultService.isVaultExists()) {
+        if (pin && vaultService.isVaultExists()) {
           try {
-            await vaultService.decryptVault(licenseKey);
+            await vaultService.decryptVault(pin);
             setIsVaultUnlocked(true);
           } catch {
-            // Vault decryption is non-fatal once LicenseGateService PBKDF2 verifier succeeded
+            recordFailedAttempt(username);
+            throw new Error(
+              'Master PIN incorrect : échec du déchiffrement du coffre-fort (AES-GCM).'
+            );
           }
         }
 
+        const loggedInUser = await authService.login(username, password);
         resetFailedAttempts(username);
         setUser(loggedInUser);
         refreshAccountsState();
@@ -399,7 +318,10 @@ export const AuthProvider = ({ children }) => {
             loggedInUser?.username ||
             username
         ).trim();
-        const serverAuth = await authenticateServerSession(actorIdentifier, password);
+        const serverAuth = await authenticateServerSession(
+          actorIdentifier,
+          password
+        );
         if (serverAuth?.success) {
           setServerSessionError(null);
         } else if (serverAuth && serverAuth.offline === false) {
@@ -415,19 +337,29 @@ export const AuthProvider = ({ children }) => {
     [authService, refreshAccountsState]
   );
 
-  // LOGIN-LICENSE-P0: PIN-only login is strictly prohibited
+  // Authentification rapide par code PIN (Administrateur)
   const loginWithPin = useCallback(
-    async (pin?: string) => {
+    async (pin) => {
+      const cleanPin = (pin || '').trim();
+      if (!cleanPin) throw new Error('Veuillez saisir le code PIN.');
+
       const rateLimitKey = '__pin_login_attempts__';
       checkRateLimit(rateLimitKey);
+
       try {
-        return await authService.loginWithPin(pin);
+        const loggedInUser = await authService.loginWithPin(cleanPin);
+        setUser(loggedInUser);
+        setIsVaultUnlocked(true);
+        refreshAccountsState();
+        await accessLogService.recordLogin(loggedInUser);
+        resetFailedAttempts(rateLimitKey);
+        return loggedInUser;
       } catch (err) {
         recordFailedAttempt(rateLimitKey);
         throw err;
       }
     },
-    [authService]
+    [authService, refreshAccountsState]
   );
 
   const logout = useCallback(() => {
@@ -439,25 +371,11 @@ export const AuthProvider = ({ children }) => {
   }, [authService]);
 
   const updateUserPassword = useCallback(
-    async (username, newPass, licenseKey) => {
+    async (username, newPass, masterPin) => {
       const cleanPass = validatePasswordPolicy(newPass);
 
-      if (LicenseGateService.isLicenseActive()) {
-        if (!licenseKey || !String(licenseKey).trim()) {
-          throw new Error(
-            'Veuillez saisir la clé de licence commerciale pour autoriser la modification du mot de passe.'
-          );
-        }
-        const isValidLic = await LicenseGateService.verifyLicenseKey(licenseKey, {
-          touchLastAuth: false,
-        });
-        if (!isValidLic) {
-          throw new Error('Clé de licence commerciale incorrecte.');
-        }
-      }
-
-      if (vaultService.isVaultExists() && licenseKey) {
-        await vaultService.decryptVault(licenseKey).catch(() => {});
+      if (vaultService.isVaultExists() && masterPin) {
+        await vaultService.decryptVault(masterPin);
       }
 
       const updated = await authService?.updateUserPassword(username, cleanPass);
@@ -477,14 +395,9 @@ export const AuthProvider = ({ children }) => {
   );
 
   const switchSessionToUser = useCallback(
-    async (username, licenseKey) => {
-      if (LicenseGateService.isLicenseActive() && licenseKey) {
-        const isValidLic = await LicenseGateService.verifyLicenseKey(licenseKey, {
-          touchLastAuth: false,
-        });
-        if (!isValidLic) {
-          throw new Error('Clé de licence commerciale incorrecte.');
-        }
+    async (username, masterPin) => {
+      if (vaultService.isVaultExists() && masterPin) {
+        await vaultService.decryptVault(masterPin);
       }
       // Clear any higher-privilege server session token when switching profiles locally
       clearClientServerSessionToken();
@@ -497,19 +410,12 @@ export const AuthProvider = ({ children }) => {
   );
 
   const resetAllAccountsToDefaults = useCallback(
-    async (licenseKey) => {
-      if (LicenseGateService.isLicenseActive()) {
-        if (!licenseKey) {
-          throw new Error(
-            'Veuillez saisir la clé de licence commerciale pour autoriser la réinitialisation.'
-          );
+    async (masterPin) => {
+      if (vaultService.isVaultExists()) {
+        if (!masterPin) {
+          throw new Error('Veuillez saisir le Master PIN pour autoriser la réinitialisation.');
         }
-        const isValidLic = await LicenseGateService.verifyLicenseKey(licenseKey, {
-          touchLastAuth: false,
-        });
-        if (!isValidLic) {
-          throw new Error('Clé de licence commerciale incorrecte.');
-        }
+        await vaultService.decryptVault(masterPin);
       }
       vaultService.clearMasterPin?.();
       SecurityService.removeSecure('gmao_vault_cipher_v2');
@@ -560,14 +466,6 @@ export const AuthProvider = ({ children }) => {
     [authService, accounts]
   );
 
-  const setRememberedLicenseKey = useCallback(
-    (key: string, remember: boolean) => {
-      LicenseGateService.setRememberedLicenseKey(key, remember);
-      setRememberedLicenseKeyState(LicenseGateService.getRememberedLicenseKey());
-    },
-    []
-  );
-
   return (
     <AuthContext.Provider
       value={{
@@ -576,12 +474,6 @@ export const AuthProvider = ({ children }) => {
         accounts,
         isVaultExists,
         isVaultUnlocked,
-        licenseRecord,
-        isLicenseActive,
-        rememberedLicenseKey,
-        setRememberedLicenseKey,
-        activateLicenseAndAdmin,
-        rotateLicenseKey,
         serverSessionError,
         isServerSessionActive: Boolean(getClientServerSessionToken()),
         setupMasterPin,
@@ -595,12 +487,7 @@ export const AuthProvider = ({ children }) => {
         upsertPersonnelAuthAccount,
         toggleAccountActive,
         removePersonnelAuthAccount,
-        isPinConfigured: () =>
-          Boolean(
-            authService?.isLicenseActivated
-              ? authService.isLicenseActivated()
-              : LicenseGateService.isLicenseActive()
-          ),
+        isPinConfigured: () => vaultService.isVaultExists() || authService?.isPinConfigured(),
         getCurrentSessionUser: () => user || authService?.getCurrentUser(),
         updateUserPassword,
         updateUserProfile: (username, updates) => {
@@ -613,8 +500,7 @@ export const AuthProvider = ({ children }) => {
         hashPassword: (pass) => SecurityService.hashPassword(pass || ''),
         verifyPassword: (pass, hash) => SecurityService.comparePassword(pass || '', hash || ''),
         hashPasswordBCrypt: (pass) => SecurityService.hashPassword(pass || ''),
-        verifyPasswordBCrypt: (pass, hash) =>
-          SecurityService.comparePassword(pass || '', hash || ''),
+        verifyPasswordBCrypt: (pass, hash) => SecurityService.comparePassword(pass || '', hash || ''),
       }}
     >
       {children}
@@ -625,5 +511,4 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => useContext(AuthContext);
 
 export default AuthContext;
-
 

@@ -20,6 +20,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
+import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import { Logger } from '../../../../core/logger/LoggerService';
 
 const MONTH_NAMES = [
@@ -555,6 +556,14 @@ export default function MonthlyDayMatrixView({
               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
               <span>Export Excel (Type B)</span>
             </button>
+
+            {/* View Switcher */}
+            <div className="pl-1 border-l border-slate-200">
+              <ViewSwitchButtonGroup
+                currentView="monthly_grid"
+                onSwitchView={onSwitchView}
+              />
+            </div>
           </div>
         </div>
 

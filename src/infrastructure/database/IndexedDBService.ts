@@ -33,11 +33,7 @@ class IndexedDBService {
   }
 
   isSupported() {
-    try {
-      return typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined' && window.indexedDB !== null;
-    } catch {
-      return false;
-    }
+    return typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined' && window.indexedDB !== null;
   }
 
   delay(ms: number) {
@@ -155,59 +151,23 @@ class IndexedDBService {
 
   _openDB() {
     return new Promise((resolve, reject) => {
-      try {
-        if (!this.isSupported()) {
-          return resolve(null);
-        }
-
-        let settled = false;
-        const timer = setTimeout(() => {
-          if (!settled) {
-            settled = true;
-            reject(new Error('IndexedDB open timed out'));
-          }
-        }, 600);
-
-        const request = window.indexedDB.open(this.dbName, this.version);
-
-        request.onerror = () => {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
-            reject(request.error || new Error('Erreur d\'ouverture IndexedDB'));
-          }
-        };
-
-        request.onblocked = () => {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
-            reject(new Error('IndexedDB open blocked'));
-          }
-        };
-
-        request.onsuccess = () => {
-          if (!settled) {
-            settled = true;
-            clearTimeout(timer);
-            resolve(request.result);
-          } else {
-            try {
-              request.result.close();
-            } catch {
-              // ignore
-            }
-          }
-        };
-
-        request.onupgradeneeded = (event: any) => {
-          const db = event.target.result;
-          const tx = event.target.transaction;
-          this._createStores(db, tx);
-        };
-      } catch (err) {
-        reject(err);
+      if (!this.isSupported()) {
+        return resolve(null);
       }
+
+      const request = window.indexedDB.open(this.dbName, this.version);
+
+      request.onerror = () => reject(request.error || new Error('Erreur d\'ouverture IndexedDB'));
+
+      request.onsuccess = () => {
+        resolve(request.result);
+      };
+
+      request.onupgradeneeded = (event: any) => {
+        const db = event.target.result;
+        const tx = event.target.transaction;
+        this._createStores(db, tx);
+      };
     });
   }
 

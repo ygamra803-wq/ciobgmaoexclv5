@@ -7,13 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      xlsx: path.resolve(__dirname, './src/vendor/xlsx/index.ts'),
     },
   },
   test: {
     globals: true,
     environment: 'jsdom',
-    testTimeout: 15000,
     setupFiles: ['./src/tests/setup.ts'],
     include: ['src/**/*.{test,spec,bench}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
   },

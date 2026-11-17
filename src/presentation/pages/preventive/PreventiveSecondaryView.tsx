@@ -5,6 +5,7 @@ import {
   BookOpen,
   Settings2,
   Wrench,
+  Package,
   Calendar,
 } from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
@@ -127,6 +128,7 @@ export default function PreventiveSecondaryView({
   // Quick stats calculation
   const totalActions = actions.length;
   const totalGuides = guides.length;
+  const totalPdrLinked = guides.reduce((acc, g) => acc + (g.pieces_rechange?.length || 0), 0);
 
   return (
     <AnimatedPage>
@@ -212,6 +214,49 @@ export default function PreventiveSecondaryView({
                   title="Retour à la Matrice & Planning Annuel"
                 />
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* QUICK SECONDARY KPI SUMMARY BAR */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center font-black text-xs shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider truncate">{t('preventive.referentiel.stat_builder', 'Assistant Plan')}</p>
+              <p className="text-xs font-black text-slate-800 truncate">{t('preventive.referentiel.stat_builder_desc', 'Génération Clé en Main')}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center font-black text-xs shrink-0">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider truncate">{t('preventive.referentiel.stat_guide', 'Fiches Guides')}</p>
+              <p className="text-xs font-black text-slate-800 truncate">{t('preventive.referentiel.stat_guide_desc', '{{count}} Organes Métier', { count: totalGuides })}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+              <Package className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider truncate">{t('preventive.referentiel.stat_pdr', 'PDR Associées')}</p>
+              <p className="text-xs font-black text-slate-800 truncate">{t('preventive.referentiel.stat_pdr_desc', '{{count}} Pièces au Stock', { count: totalPdrLinked })}</p>
+            </div>
+          </div>
+
+          <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.04)] flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-black text-xs shrink-0">
+              <Wrench className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider truncate">{t('preventive.referentiel.stat_actions', 'Actions AFNOR')}</p>
+              <p className="text-xs font-black text-slate-800 truncate">{t('preventive.referentiel.stat_actions_desc', '{{count}} Codes Standards', { count: totalActions })}</p>
             </div>
           </div>
         </div>

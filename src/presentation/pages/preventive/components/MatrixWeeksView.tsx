@@ -14,6 +14,7 @@ import {
   Factory,
   MapPin,
 } from 'lucide-react';
+import ViewSwitchButtonGroup from './ViewSwitchButtonGroup';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import { useI18n } from '../../../../i18n/I18nContext';
 
@@ -220,7 +221,7 @@ export default function MatrixWeeksView({
             </button>
           </div>
 
-          {/* Right: Week Range Selector */}
+          {/* Right: Week Range Selector + 3D Circular Switch Button */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-slate-600 mr-1 hidden sm:inline">{t('preventive.table.range', 'Plage :')}</span>
@@ -246,6 +247,12 @@ export default function MatrixWeeksView({
                 ))}
               </div>
             </div>
+
+            {/* 3D Circular Switch Buttons on the RIGHT */}
+            <ViewSwitchButtonGroup
+              currentView="matrix"
+              onSwitchView={onSwitchView}
+            />
           </div>
         </div>
 

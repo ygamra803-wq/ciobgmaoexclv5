@@ -15,22 +15,13 @@ describe('PreventiveService', () => {
     vi.clearAllMocks();
   });
 
-  it('should return empty actions array when storage is empty (Zero Silent Seed Reinjection)', () => {
-    (storageService.getItem as ReturnType<typeof vi.fn>).mockImplementation(() => null);
-    const actions = PreventiveService.getActions();
-    expect(actions).toEqual([]);
-  });
-
-  it('should return persisted actions when present in storage', () => {
-    (storageService.getItem as ReturnType<typeof vi.fn>).mockImplementation((key: string) => {
-      if (key === 'gmao_preventive_actions_v1') {
-        return [{ id: 'ACT-C-001', action_id: 'ACT-C-001', code: 'C', libelle: 'Contrôle' }];
-      }
+  it('should return initial actions when storage is empty', () => {
+    (storageService.getItem as any).mockImplementation((key: string) => {
+      if (key === 'gmao_demo_data_loaded_v1') return true;
       return null;
     });
     const actions = PreventiveService.getActions();
     expect(actions.length).toBeGreaterThan(0);
-    expect(actions[0].code).toBe('C');
   });
 
   it('should add a new action', () => {

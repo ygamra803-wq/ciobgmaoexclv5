@@ -126,50 +126,6 @@ export default function CorrectiveTab({
     setCorrFilter(initialFilter);
   }, [initialFilter]);
 
-  const handleOpenBtSubmitSheet = (bt: CorrectiveInterventionItem) => {
-    setSelectedBtForSubmit(bt);
-    setBtActionRealisee(String(bt.action_realisee || bt.travail_a_faire || ''));
-    setBtNature(String(bt.intervention_nature || ''));
-    setBtNumBon(String(bt.num_bon_saisi_par_tech || ''));
-    setBtArretMachine(Boolean(bt.arret_machine));
-    setBtTempsArret(String(bt.temps_arret || ''));
-
-    const initialParts: ProposedBtPart[] = [];
-    const rawList: Array<Record<string, unknown>> =
-      Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0
-        ? (bt.pieces_proposees as Array<Record<string, unknown>>)
-        : bt.pdr_ref
-        ? [
-            {
-              ref: bt.pdr_ref,
-              designation: bt.pdr_designation || bt.pdr_ref,
-              quantite: Number(bt.pdr_quantite || 1),
-            },
-          ]
-        : [];
-
-    rawList.forEach((p) => {
-      const ref = String(p?.ref || p?.code_article || '').trim();
-      if (!ref) return;
-      const stockMatch = stockItems.find(
-        (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
-      );
-      initialParts.push({
-        ref,
-        designation: String(p?.designation || stockMatch?.designation || ref).trim(),
-        quantite: Math.max(1, Number(p?.quantite ?? p?.qty ?? 1)),
-        unite: String(p?.unite || p?.unit || stockMatch?.unite || 'Pièce'),
-        prix_unitaire: Number(
-          p?.prix_unitaire ?? p?.unitPrice ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0
-        ),
-      });
-    });
-
-    setBtPiecesProposees(initialParts);
-    setPickerRef('');
-    setPickerQty('1');
-  };
-
   useEffect(() => {
     if (initialOpenNewDi) {
       setShowNewDiSheet(true);
@@ -296,6 +252,50 @@ export default function CorrectiveTab({
     setDiArretMachine(false);
     setShowNewDiSheet(false);
     showToast?.("Demande d'intervention (DI) enregistrée sur le terrain.", 'success');
+  };
+
+  const handleOpenBtSubmitSheet = (bt: CorrectiveInterventionItem) => {
+    setSelectedBtForSubmit(bt);
+    setBtActionRealisee(String(bt.action_realisee || bt.travail_a_faire || ''));
+    setBtNature(String(bt.intervention_nature || ''));
+    setBtNumBon(String(bt.num_bon_saisi_par_tech || ''));
+    setBtArretMachine(Boolean(bt.arret_machine));
+    setBtTempsArret(String(bt.temps_arret || ''));
+
+    const initialParts: ProposedBtPart[] = [];
+    const rawList: Array<Record<string, unknown>> =
+      Array.isArray(bt.pieces_proposees) && bt.pieces_proposees.length > 0
+        ? (bt.pieces_proposees as Array<Record<string, unknown>>)
+        : bt.pdr_ref
+        ? [
+            {
+              ref: bt.pdr_ref,
+              designation: bt.pdr_designation || bt.pdr_ref,
+              quantite: Number(bt.pdr_quantite || 1),
+            },
+          ]
+        : [];
+
+    rawList.forEach((p) => {
+      const ref = String(p?.ref || p?.code_article || '').trim();
+      if (!ref) return;
+      const stockMatch = stockItems.find(
+        (s) => String(s.ref || '').trim().toUpperCase() === ref.toUpperCase()
+      );
+      initialParts.push({
+        ref,
+        designation: String(p?.designation || stockMatch?.designation || ref).trim(),
+        quantite: Math.max(1, Number(p?.quantite ?? p?.qty ?? 1)),
+        unite: String(p?.unite || p?.unit || stockMatch?.unite || 'Pièce'),
+        prix_unitaire: Number(
+          p?.prix_unitaire ?? p?.unitPrice ?? stockMatch?.prix ?? stockMatch?.prix_unitaire ?? 0
+        ),
+      });
+    });
+
+    setBtPiecesProposees(initialParts);
+    setPickerRef('');
+    setPickerQty('1');
   };
 
   const handleAddBtPartRow = () => {
