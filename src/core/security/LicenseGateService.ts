@@ -1,6 +1,7 @@
 import { SecurityService } from './SecurityService';
 import { PBKDF2_STANDARD_ITERATIONS, sha256Hex } from './nativeCrypto';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
+import { getSafeLocalStorage } from '../../infrastructure/persistence/safeStorage';
 import { indexedDBService } from '../../infrastructure/database/IndexedDBService';
 
 export type LicenseStatus = 'ACTIVE' | 'INACTIVE' | 'REVOKED';
@@ -140,17 +141,19 @@ class LicenseGateServiceClass {
 
   getLicenseRecord(): ILicenseRecord | null {
     try {
-      const raw =
-        typeof localStorage !== 'undefined'
-          ? localStorage.getItem(LICENSE_RECORD_KEY)
-          : null;
-      if (!raw) {
-        this._lastRawCipher = null;
-        this._cachedRecord = null;
-        return null;
-      }
-      if (this._lastRawCipher === raw && this._cachedRecord) {
-        return this._cachedRecord;
+      const ls = getSafeLocalStorage();
+      if (ls) {
+        const raw = ls.getItem(LICENSE_RECORD_KEY);
+        if (!raw) {
+          const fallbackRecord = SecurityService.getSecure(LICENSE_RECORD_KEY);
+          if (!fallbackRecord) {
+            this._lastRawCipher = null;
+            this._cachedRecord = null;
+            return null;
+          }
+        } else if (this._lastRawCipher === raw && this._cachedRecord) {
+          return this._cachedRecord;
+        }
       }
       const record = SecurityService.getSecure(LICENSE_RECORD_KEY);
       if (
@@ -162,7 +165,7 @@ class LicenseGateServiceClass {
         typeof record.licenseVerifier === 'string' &&
         typeof record.licenseStatus === 'string'
       ) {
-        this._lastRawCipher = raw;
+        this._lastRawCipher = ls ? ls.getItem(LICENSE_RECORD_KEY) : null;
         this._cachedRecord = record as ILicenseRecord;
         return this._cachedRecord;
       }
@@ -174,10 +177,12 @@ class LicenseGateServiceClass {
 
   saveLicenseRecord(record: ILicenseRecord, emitEvent = true): ILicenseRecord {
     SecurityService.saveSecure(LICENSE_RECORD_KEY, record);
-    this._lastRawCipher =
-      typeof localStorage !== 'undefined'
-        ? localStorage.getItem(LICENSE_RECORD_KEY)
-        : null;
+    const ls = getSafeLocalStorage();
+    try {
+      this._lastRawCipher = ls ? ls.getItem(LICENSE_RECORD_KEY) : null;
+    } catch {
+      this._lastRawCipher = null;
+    }
     this._cachedRecord = record;
     indexedDBService.setItem(LICENSE_RECORD_KEY, record).catch(() => {});
     if (emitEvent && typeof window !== 'undefined') {

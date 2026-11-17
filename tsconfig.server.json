@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "noEmit": true
+  },
+  "include": [
+    "server.ts",
+    "src/server/**/*.ts",
+    "src/core/security/serverRbacPolicy.ts",
+    "src/core/security/serverSession.ts",
+    "src/core/security/serverSessionStore.ts",
+    "src/core/security/nativeCrypto.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

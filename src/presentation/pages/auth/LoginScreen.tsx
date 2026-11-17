@@ -403,8 +403,16 @@ export default function LoginScreen() {
       })
     ) {
       storageService.clearCache();
-      localStorage.clear();
-      sessionStorage.clear();
+      try {
+        window.localStorage?.clear();
+      } catch {
+        // ignore blocked storage
+      }
+      try {
+        window.sessionStorage?.clear();
+      } catch {
+        // ignore blocked storage
+      }
       window.location.reload();
     }
   };

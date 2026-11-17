@@ -105,9 +105,15 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   onNavigateToPreventive,
   showToast,
 }) => {
-  const canCreate = usePermission('equipment.create') || usePermission('machine.create');
-  const canEdit = usePermission('equipment.edit') || usePermission('machine.edit');
-  const canDelete = usePermission('equipment.delete') || usePermission('machine.delete');
+  const canCreateEquipment = usePermission('equipment.create');
+  const canCreateMachine = usePermission('machine.create');
+  const canEditEquipment = usePermission('equipment.edit');
+  const canEditMachine = usePermission('machine.edit');
+  const canDeleteEquipment = usePermission('equipment.delete');
+  const canDeleteMachine = usePermission('machine.delete');
+  const canCreate = canCreateEquipment || canCreateMachine;
+  const canEdit = canEditEquipment || canEditMachine;
+  const canDelete = canDeleteEquipment || canDeleteMachine;
 
   // Active section tab: 'equipments' | 'types'
   const [activeSection, setActiveSection] = useState<'equipments' | 'types'>('equipments');

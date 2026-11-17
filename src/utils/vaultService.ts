@@ -12,6 +12,7 @@ import {
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
 import { SecurityService } from '../core/security/SecurityService';
 import { Logger } from '../core/logger/LoggerService';
+import { getSafeLocalStorage } from '../infrastructure/persistence/safeStorage';
 
 const VAULT_SALT_KEY = 'gmao_vault_salt_v2';
 const VAULT_CIPHER_KEY = 'gmao_vault_cipher_v2';
@@ -83,12 +84,17 @@ function readVaultStorageString(key: string): string | null {
   if (typeof decrypted === 'string' && decrypted.trim().length > 0) {
     return decrypted;
   }
-  if (typeof localStorage !== 'undefined') {
-    const raw = localStorage.getItem(key);
-    if (raw && !raw.startsWith('AG1:') && !raw.startsWith('NC2:') && !raw.startsWith('NC1:')) {
-      SecurityService.saveSecure(key, raw);
-      return raw;
+  try {
+    const ls = getSafeLocalStorage();
+    if (ls) {
+      const raw = ls.getItem(key);
+      if (raw && !raw.startsWith('AG1:') && !raw.startsWith('NC2:') && !raw.startsWith('NC1:')) {
+        SecurityService.saveSecure(key, raw);
+        return raw;
+      }
     }
+  } catch {
+    // ignore blocked Web Storage
   }
   return null;
 }
@@ -339,13 +345,20 @@ export async function verifyPinHash(pin) {
   if (!stored) {
     stored = await indexedDBService.getItem(VAULT_PIN_HASH_KEY, null);
   }
-  if (!stored && typeof localStorage !== 'undefined') {
-    stored = localStorage.getItem(VAULT_PIN_HASH_KEY);
-    if (stored) {
-      // Migration automatique vers IndexedDB et suppression de localStorage
-      masterPinHashInMemory = stored;
-      await indexedDBService.setItem(VAULT_PIN_HASH_KEY, stored);
-      localStorage.removeItem(VAULT_PIN_HASH_KEY);
+  if (!stored) {
+    try {
+      const ls = getSafeLocalStorage();
+      if (ls) {
+        stored = ls.getItem(VAULT_PIN_HASH_KEY);
+        if (stored) {
+          // Migration automatique vers IndexedDB et suppression de localStorage
+          masterPinHashInMemory = stored;
+          await indexedDBService.setItem(VAULT_PIN_HASH_KEY, stored);
+          ls.removeItem(VAULT_PIN_HASH_KEY);
+        }
+      }
+    } catch {
+      // ignore blocked Web Storage
     }
   }
   if (!stored) {

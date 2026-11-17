@@ -31,8 +31,18 @@
     ],
     "parts_theoriques": [],
     "pdr_theoriques": [
-      "ROUL-01",
-      "COUR-01"
+      {
+        "id_pdr": "ROUL-01",
+        "ref": "ROUL-01",
+        "designation": "Roulement standard",
+        "quantite_recommandee": 1
+      },
+      {
+        "id_pdr": "COUR-01",
+        "ref": "COUR-01",
+        "designation": "Courroie d'entraînement",
+        "quantite_recommandee": 1
+      }
     ]
   },
   {

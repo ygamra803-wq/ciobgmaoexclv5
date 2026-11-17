@@ -171,4 +171,53 @@ describe('Neural Intro Splash & Route Watermark System', () => {
     expect(container.querySelector('.wm-orbit-fast .wm-atom-primary')).toBeTruthy();
     expect(container.querySelector('svg')).toBeTruthy();
   });
+
+  it('boots full App tree through NeuralLoader -> SplashScreen -> LoginScreen without runtime errors', async () => {
+    const { ServiceProvider } = await import('../../core/di/ServiceProvider');
+    const { migrateStorageOnce } = await import('../../infrastructure/persistence/migrateStorage');
+    const { I18nProvider } = await import('../../i18n/I18nContext');
+    const { AuthProvider } = await import('../../context/AuthContext');
+    const ErrorBoundary = (await import('../../presentation/components/common/ErrorBoundary')).default;
+    const App = (await import('../../App')).default;
+
+    migrateStorageOnce();
+    ServiceProvider.register();
+
+    act(() => {
+      root.render(
+        <ErrorBoundary>
+          <I18nProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </I18nProvider>
+        </ErrorBoundary>
+      );
+    });
+
+    // Stage 1: NeuralLoader fullscreen intro
+    expect(container.textContent).toContain('CIOB');
+    expect(container.textContent).toContain('GMAO NEXUS');
+
+    // Skip intro -> Stage 2: SplashScreen
+    const skipIntroBtn = container.querySelector('button[type="button"]') as HTMLButtonElement;
+    expect(skipIntroBtn).toBeTruthy();
+    act(() => {
+      skipIntroBtn.click();
+      vi.advanceTimersByTime(400);
+    });
+
+    expect(container.textContent).toContain('Classeur Virtuel GMAO');
+
+    // Skip SplashScreen -> Stage 3: LoginScreen
+    const skipSplashBtn = container.querySelector('button') as HTMLButtonElement;
+    expect(skipSplashBtn).toBeTruthy();
+    act(() => {
+      skipSplashBtn.click();
+      vi.advanceTimersByTime(400);
+    });
+
+    expect(container.innerHTML.length).toBeGreaterThan(200);
+  });
 });
+

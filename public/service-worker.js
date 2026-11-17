@@ -66,6 +66,9 @@ self.addEventListener('fetch', (event) => {
 
   // Ignorer les requêtes de développement Vite, HMR et WebSockets
   if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
     url.pathname.includes('/@vite') ||
     url.pathname.includes('/@id/') ||
     url.pathname.includes('/@fs/') ||

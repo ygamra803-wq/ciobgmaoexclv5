@@ -1,3 +1,4 @@
+import type { IncomingHttpHeaders } from 'http';
 import os from 'os';
 import type express from 'express';
 import cors from 'cors';
@@ -58,6 +59,48 @@ export function collectHostIpv4Addresses(): Set<string> {
   return ips;
 }
 
+function isSameHostProxyOrigin(origin: string | undefined, reqHeaders: IncomingHttpHeaders): boolean {
+  if (!origin) return false;
+  const cleanOrigin = origin.trim();
+  if (!cleanOrigin || cleanOrigin === 'null') return false;
+
+  try {
+    const parsedOrigin = new URL(cleanOrigin);
+    if (parsedOrigin.protocol !== 'http:' && parsedOrigin.protocol !== 'https:') {
+      return false;
+    }
+
+    const directHost = String(reqHeaders.host || '')
+      .split(',')[0]
+      .trim()
+      .toLowerCase();
+    const forwardedHost = String(reqHeaders['x-forwarded-host'] || '')
+      .split(',')[0]
+      .trim()
+      .toLowerCase();
+
+    const isLoopbackDirectHost =
+      directHost === 'localhost' ||
+      directHost.startsWith('localhost:') ||
+      directHost === '127.0.0.1' ||
+      directHost.startsWith('127.0.0.1:') ||
+      directHost === '[::1]' ||
+      directHost.startsWith('[::1]:');
+
+    const effectiveHost = isLoopbackDirectHost && forwardedHost ? forwardedHost : directHost;
+    if (!effectiveHost) return false;
+
+    const normalizedEffectiveHost =
+      parsedOrigin.protocol === 'https:'
+        ? effectiveHost.replace(/:443$/, '')
+        : effectiveHost.replace(/:80$/, '');
+
+    return parsedOrigin.host.toLowerCase() === normalizedEffectiveHost;
+  } catch {
+    return false;
+  }
+}
+
 export function createLanCorsMiddleware(port: number): express.RequestHandler {
   const serverHostIps = collectHostIpv4Addresses();
   const extraAllowedOrigins = new Set<string>(
@@ -67,16 +110,7 @@ export function createLanCorsMiddleware(port: number): express.RequestHandler {
       .filter(Boolean)
   );
 
-  return cors({
-    origin: (origin, callback) => {
-      const allowed = isAllowedCorsOrigin(
-        origin,
-        extraAllowedOrigins,
-        serverHostIps,
-        Number(port) || 3000
-      );
-      callback(null, allowed);
-    },
+  const baseCorsOptions: Omit<cors.CorsOptions, 'origin'> = {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -94,7 +128,18 @@ export function createLanCorsMiddleware(port: number): express.RequestHandler {
       'x-gmao-role',
     ],
     maxAge: 600,
-  });
+  };
+
+  return cors((req, callback) => {
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
+    const allowed =
+      isSameHostProxyOrigin(origin, req.headers) ||
+      isAllowedCorsOrigin(origin, extraAllowedOrigins, serverHostIps, Number(port) || 3000);
+    callback(null, {
+      ...baseCorsOptions,
+      origin: allowed,
+    });
+  }) as express.RequestHandler;
 }
 
 interface ExpressJsonError extends Error {

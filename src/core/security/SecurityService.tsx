@@ -15,6 +15,7 @@ import {
   base64ToBytes,
 } from './nativeCrypto';
 import { Logger } from '../logger/LoggerService';
+import { getSafeLocalStorage, getSafeSessionStorage } from '../../infrastructure/persistence/safeStorage';
 
 const KEYSTORE_DB_NAME = 'gmao_security_keystore_v1';
 const KEYSTORE_STORE_NAME = 'wrapping_keys';
@@ -40,6 +41,12 @@ export class SecurityService {
   static _volatileInstanceKey: string | null = null;
   static _warnedMissingKey = false;
   static _initPromise: Promise<void> | null = null;
+  private static _secureValueCache = new Map<
+    string,
+    { rawCipher: string; secretKey: string; serializedJson: string }
+  >();
+  private static _volatileLocalFallback = new Map<string, string>();
+  private static _volatileSessionFallback = new Map<string, string>();
 
   static generateRandomHex(byteLength = 16): string {
     return randomBytesHex(byteLength);
@@ -58,7 +65,7 @@ export class SecurityService {
     this._initPromise = (async () => {
       const legacyKey = this.readAndRemoveLegacyLocalStorageKey();
 
-      const envSecret = import.meta.env.VITE_SECRET_KEY;
+      const envSecret = import.meta.env?.VITE_SECRET_KEY;
       if (envSecret && String(envSecret).trim().length > 0) {
         if (legacyKey && legacyKey !== String(envSecret).trim()) {
           this.migrateLegacyLocalStorageEntries(legacyKey, String(envSecret).trim());
@@ -101,10 +108,11 @@ export class SecurityService {
 
   private static readAndRemoveLegacyLocalStorageKey(): string | null {
     try {
-      if (typeof localStorage === 'undefined') return null;
-      const legacy = localStorage.getItem(LEGACY_LOCALSTORAGE_KEY_NAME);
+      const ls = getSafeLocalStorage();
+      if (!ls) return null;
+      const legacy = ls.getItem(LEGACY_LOCALSTORAGE_KEY_NAME);
       if (legacy) {
-        localStorage.removeItem(LEGACY_LOCALSTORAGE_KEY_NAME);
+        ls.removeItem(LEGACY_LOCALSTORAGE_KEY_NAME);
         return legacy;
       }
     } catch {
@@ -115,16 +123,17 @@ export class SecurityService {
 
   private static migrateLegacyLocalStorageEntries(oldKey: string, newKey: string): void {
     try {
-      if (typeof localStorage === 'undefined') return;
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
+      const ls = getSafeLocalStorage();
+      if (!ls) return;
+      for (let i = 0; i < ls.length; i++) {
+        const k = ls.key(i);
         if (!k || !k.startsWith('gmao_')) continue;
-        const val = localStorage.getItem(k);
+        const val = ls.getItem(k);
         if (!val) continue;
         if (val.startsWith('NC2:') || val.startsWith('NC1:') || val.startsWith('AG1:')) {
           const plain = symmetricDecrypt(val, oldKey);
           if (plain) {
-            localStorage.setItem(k, aes256GcmEncrypt(plain, newKey));
+            ls.setItem(k, aes256GcmEncrypt(plain, newKey));
           }
         }
       }
@@ -135,15 +144,56 @@ export class SecurityService {
 
   private static openKeystoreDb(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(KEYSTORE_DB_NAME, 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(KEYSTORE_STORE_NAME)) {
-          db.createObjectStore(KEYSTORE_STORE_NAME, { keyPath: 'id' });
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new Error('Keystore IndexedDB open timed out'));
         }
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error || new Error('Failed to open keystore IndexedDB'));
+      }, 400);
+
+      try {
+        const req = indexedDB.open(KEYSTORE_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(KEYSTORE_STORE_NAME)) {
+            db.createObjectStore(KEYSTORE_STORE_NAME, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(req.result);
+          } else {
+            try {
+              req.result.close();
+            } catch {
+              // ignore
+            }
+          }
+        };
+        req.onerror = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(req.error || new Error('Failed to open keystore IndexedDB'));
+          }
+        };
+        req.onblocked = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(new Error('Keystore IndexedDB open blocked'));
+          }
+        };
+      } catch (err) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        }
+      }
     });
   }
 
@@ -214,13 +264,13 @@ export class SecurityService {
     // Ensure legacy plaintext key in localStorage is always cleaned up if encountered
     this.readAndRemoveLegacyLocalStorageKey();
 
-    const envSecret = import.meta.env.VITE_SECRET_KEY;
+    const envSecret = import.meta.env?.VITE_SECRET_KEY;
     if (envSecret && String(envSecret).trim().length > 0) {
       return String(envSecret).trim();
     }
 
     const isProd =
-      import.meta.env.PROD ||
+      Boolean(import.meta.env?.PROD) ||
       (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
 
     if (!this._warnedMissingKey) {
@@ -491,8 +541,38 @@ export class SecurityService {
 
   static saveSecure(key: string, data: unknown): void {
     try {
+      const secretKey = this.SECRET_KEY;
+      const serializedJson = JSON.stringify(data);
+      const cached = this._secureValueCache.get(`local:${key}`);
+      const ls = getSafeLocalStorage();
+      const currentRaw = ls ? ls.getItem(key) : this._volatileLocalFallback.get(key);
+      if (
+        cached &&
+        cached.secretKey === secretKey &&
+        cached.serializedJson === serializedJson &&
+        currentRaw === cached.rawCipher
+      ) {
+        return;
+      }
       const encrypted = this.encrypt(data);
-      localStorage.setItem(key, encrypted);
+      let storedInWebStorage = false;
+      if (ls) {
+        try {
+          ls.setItem(key, encrypted);
+          this._volatileLocalFallback.delete(key);
+          storedInWebStorage = true;
+        } catch {
+          storedInWebStorage = false;
+        }
+      }
+      if (!storedInWebStorage) {
+        this._volatileLocalFallback.set(key, encrypted);
+      }
+      this._secureValueCache.set(`local:${key}`, {
+        rawCipher: encrypted,
+        secretKey,
+        serializedJson,
+      });
     } catch (error) {
       Logger.error(`Failed to save secure item: ${key}`, error);
     }
@@ -500,13 +580,40 @@ export class SecurityService {
 
   static getSecure(key: string): any {
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return null;
-      return this.decrypt(raw);
+      const ls = getSafeLocalStorage();
+      let raw: string | null = null;
+      if (ls) {
+        try {
+          raw = ls.getItem(key);
+        } catch {
+          raw = null;
+        }
+      }
+      if (!raw) {
+        raw = this._volatileLocalFallback.get(key) ?? null;
+      }
+      if (!raw) {
+        this._secureValueCache.delete(`local:${key}`);
+        return null;
+      }
+      const secretKey = this.SECRET_KEY;
+      const cached = this._secureValueCache.get(`local:${key}`);
+      if (cached && cached.rawCipher === raw && cached.secretKey === secretKey) {
+        return JSON.parse(cached.serializedJson);
+      }
+      const decrypted = this.decrypt(raw);
+      this._secureValueCache.set(`local:${key}`, {
+        rawCipher: raw,
+        secretKey,
+        serializedJson: JSON.stringify(decrypted),
+      });
+      return decrypted;
     } catch {
+      this._secureValueCache.delete(`local:${key}`);
+      this._volatileLocalFallback.delete(key);
       Logger.warn(`[SecurityService] Resetting unreadable or legacy secure item for key: ${key}`);
       try {
-        localStorage.removeItem(key);
+        getSafeLocalStorage()?.removeItem(key);
       } catch {
         // ignore storage errors
       }
@@ -516,11 +623,17 @@ export class SecurityService {
 
   static removeSecure(key: string): void {
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(key);
+      this._secureValueCache.delete(`local:${key}`);
+      this._secureValueCache.delete(`session:${key}`);
+      this._volatileLocalFallback.delete(key);
+      this._volatileSessionFallback.delete(key);
+      const ls = getSafeLocalStorage();
+      if (ls) {
+        ls.removeItem(key);
       }
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem(key);
+      const ss = getSafeSessionStorage();
+      if (ss) {
+        ss.removeItem(key);
       }
     } catch (error) {
       Logger.warn(`Failed to remove secure item: ${key}`, error);
@@ -529,9 +642,38 @@ export class SecurityService {
 
   static saveSessionSecure(key: string, data: unknown): void {
     try {
-      if (typeof sessionStorage === 'undefined') return;
+      const ss = getSafeSessionStorage();
+      const secretKey = this.SECRET_KEY;
+      const serializedJson = JSON.stringify(data);
+      const cached = this._secureValueCache.get(`session:${key}`);
+      const currentRaw = ss ? ss.getItem(key) : this._volatileSessionFallback.get(key);
+      if (
+        cached &&
+        cached.secretKey === secretKey &&
+        cached.serializedJson === serializedJson &&
+        currentRaw === cached.rawCipher
+      ) {
+        return;
+      }
       const encrypted = this.encrypt(data);
-      sessionStorage.setItem(key, encrypted);
+      let storedInWebStorage = false;
+      if (ss) {
+        try {
+          ss.setItem(key, encrypted);
+          this._volatileSessionFallback.delete(key);
+          storedInWebStorage = true;
+        } catch {
+          storedInWebStorage = false;
+        }
+      }
+      if (!storedInWebStorage) {
+        this._volatileSessionFallback.set(key, encrypted);
+      }
+      this._secureValueCache.set(`session:${key}`, {
+        rawCipher: encrypted,
+        secretKey,
+        serializedJson,
+      });
     } catch (error) {
       Logger.error(`Failed to save secure session item: ${key}`, error);
     }
@@ -539,9 +681,22 @@ export class SecurityService {
 
   static getSessionSecure(key: string): any {
     try {
-      if (typeof sessionStorage === 'undefined') return null;
-      const raw = sessionStorage.getItem(key);
-      if (!raw) return null;
+      const ss = getSafeSessionStorage();
+      let raw: string | null = null;
+      if (ss) {
+        try {
+          raw = ss.getItem(key);
+        } catch {
+          raw = null;
+        }
+      }
+      if (!raw) {
+        raw = this._volatileSessionFallback.get(key) ?? null;
+      }
+      if (!raw) {
+        this._secureValueCache.delete(`session:${key}`);
+        return null;
+      }
       const trimmed = raw.trim();
       if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
         const parsed = JSON.parse(trimmed);
@@ -551,8 +706,21 @@ export class SecurityService {
         }
         return parsed;
       }
-      return this.decrypt(raw);
+      const secretKey = this.SECRET_KEY;
+      const cached = this._secureValueCache.get(`session:${key}`);
+      if (cached && cached.rawCipher === raw && cached.secretKey === secretKey) {
+        return JSON.parse(cached.serializedJson);
+      }
+      const decrypted = this.decrypt(raw);
+      this._secureValueCache.set(`session:${key}`, {
+        rawCipher: raw,
+        secretKey,
+        serializedJson: JSON.stringify(decrypted),
+      });
+      return decrypted;
     } catch {
+      this._secureValueCache.delete(`session:${key}`);
+      this._volatileSessionFallback.delete(key);
       return null;
     }
   }
