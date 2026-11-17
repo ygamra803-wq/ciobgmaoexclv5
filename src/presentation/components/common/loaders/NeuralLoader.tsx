@@ -1,40 +1,35 @@
 import { useEffect, useState, useMemo, useRef, useCallback, useId, memo } from 'react';
 import {
   BrainCircuit,
-  Cpu,
   Zap,
   Activity,
   CheckCircle2,
   ArrowRight,
   Layers,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 const CONFIG = {
   nodes: {
     count: 12,
-    radius: 152,
-    size: 13,
-    inactiveOpacity: 0.28,
+    radius: 148,
+    size: 12,
+    inactiveOpacity: 0.3,
   },
   network: {
-    lineWidth: 1.75,
-    glowIntensity: 12,
-    pulseSpeed: 1600,
-    connectionThreshold: 195,
+    lineWidth: 1.65,
+    pulseSpeed: 1500,
+    connectionThreshold: 190,
   },
   rings: {
-    count: 5,
-    speeds: [26, 20, 15, 12, 9],
-    opacities: [0.08, 0.11, 0.14, 0.18, 0.22],
+    count: 4,
+    speeds: [26, 19, 14, 10],
+    opacities: [0.1, 0.14, 0.18, 0.24],
   },
   particles: {
-    count: 20,
-    maxSize: 3.5,
+    count: 18,
+    maxSize: 3.2,
     minSize: 1.5,
-  },
-  progress: {
-    milestones: [25, 50, 75],
-    smoothInterval: 50,
   },
 } as const;
 
@@ -48,9 +43,7 @@ export interface NeuralLoaderProps {
   onComplete?: () => void;
 }
 
-interface LoadingStage {
-  text: string;
-  progress: number;
+interface ShowcasePhase {
   duration: number;
   icon: typeof BrainCircuit;
 }
@@ -101,7 +94,7 @@ const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: nu
             height: `${particle.size}px`,
             background:
               'radial-gradient(circle, rgb(var(--color-accent-rgb, 5, 150, 105)), transparent)',
-            boxShadow: `0 0 ${particle.size * 6}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.5)`,
+            boxShadow: `0 0 ${particle.size * 5}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)`,
             animation: `neuralFloat ${particle.duration}s ease-in-out infinite`,
             animationDelay: `${particle.delay}s`,
           }}
@@ -112,108 +105,21 @@ const EnhancedParticles = memo(({ count = CONFIG.particles.count }: { count?: nu
 });
 EnhancedParticles.displayName = 'EnhancedParticles';
 
-const EnhancedNeuralGrid = memo(() => (
-  <div className="absolute inset-0 opacity-35 dark:opacity-30 pointer-events-none">
-    <div
-      className="absolute inset-0 neural-reduced-static"
-      style={{
-        backgroundImage: `
-          linear-gradient(rgba(var(--color-accent-rgb, 5, 150, 105), 0.11) 1.5px, transparent 1.5px),
-          linear-gradient(90deg, rgba(var(--color-accent-rgb, 5, 150, 105), 0.11) 1.5px, transparent 1.5px)
-        `,
-        backgroundSize: '56px 56px',
-        maskImage: 'radial-gradient(ellipse 85% 70% at 50% 50%, black 15%, transparent 74%)',
-        WebkitMaskImage:
-          'radial-gradient(ellipse 85% 70% at 50% 50%, black 15%, transparent 74%)',
-        animation: 'neuralGridPulse 4s ease-in-out infinite',
-      }}
-    />
-    <div
-      className="absolute inset-0 neural-reduced-static"
-      style={{
-        backgroundImage: `
-          radial-gradient(circle at 30% 38%, rgba(var(--color-accent-rgb, 5, 150, 105), 0.16) 0%, transparent 52%),
-          radial-gradient(circle at 72% 62%, rgba(var(--color-accent-rgb, 5, 150, 105), 0.12) 0%, transparent 50%)
-        `,
-        animation: 'neuralGlowShift 6s ease-in-out infinite alternate',
-      }}
-    />
-    <div
-      className="absolute inset-0 opacity-25"
-      style={{
-        backgroundImage: `
-          repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 40px,
-            rgba(var(--color-accent-rgb, 5, 150, 105), 0.06) 40px,
-            rgba(var(--color-accent-rgb, 5, 150, 105), 0.06) 41.5px
-          )
-        `,
-      }}
-    />
-  </div>
-));
-EnhancedNeuralGrid.displayName = 'EnhancedNeuralGrid';
-
-const EnhancedDataStreams = memo(() => {
-  const streams = useMemo(
-    () =>
-      Array.from({ length: 10 }, (_, i) => ({
-        left: `${7 + i * 9.2}%`,
-        duration: 2.6 + ((i * 17) % 10) * 0.25,
-        delay: ((i * 13) % 7) * 0.35,
-      })),
-    []
-  );
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20 dark:opacity-25">
-      {streams.map((stream, i) => (
-        <div
-          key={i}
-          className="absolute top-0 w-[1.5px] h-28 neural-reduced-static"
-          style={{
-            left: stream.left,
-            background:
-              'linear-gradient(to bottom, transparent, rgba(var(--color-accent-rgb, 5, 150, 105), 0.75), rgba(var(--color-accent-rgb, 5, 150, 105), 0.4), transparent)',
-            boxShadow: '0 0 8px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)',
-            animation: `neuralDataStream ${stream.duration}s linear infinite`,
-            animationDelay: `${stream.delay}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-});
-EnhancedDataStreams.displayName = 'EnhancedDataStreams';
-
-const EnhancedScannerLine = memo(() => (
-  <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-25">
-    <div
-      className="w-full h-[2px] relative neural-reduced-static"
-      style={{
-        background:
-          'linear-gradient(to right, transparent, rgb(var(--color-accent-rgb, 5, 150, 105)), transparent)',
-        boxShadow: '0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.55)',
-        animation: 'neuralScanline 4.8s linear infinite',
-      }}
-    />
-  </div>
-));
-EnhancedScannerLine.displayName = 'EnhancedScannerLine';
-
 const EnhancedOrbitRings = memo(({ isComplete }: { isComplete: boolean }) => (
   <>
     {Array.from({ length: CONFIG.rings.count }).map((_, i) => (
       <div
         key={i}
-        className="absolute rounded-full transition-all duration-700 neural-reduced-static"
+        className="absolute rounded-full transition-all duration-700 neural-reduced-static pointer-events-none"
         style={{
-          inset: `-${36 + i * 12}px`,
-          opacity: isComplete ? Math.min(CONFIG.rings.opacities[i] * 1.8, 0.45) : CONFIG.rings.opacities[i],
-          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${isComplete ? 0.55 : 0.35})`,
-          boxShadow: `0 0 ${12 + i * 4}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.16)`,
+          inset: `-${34 + i * 14}px`,
+          opacity: isComplete
+            ? Math.min(CONFIG.rings.opacities[i] * 1.6, 0.45)
+            : CONFIG.rings.opacities[i],
+          border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${
+            isComplete ? 0.55 : 0.35
+          })`,
+          boxShadow: `0 0 ${10 + i * 4}px rgba(var(--color-accent-rgb, 5, 150, 105), 0.14)`,
           animation: `neuralRotate ${CONFIG.rings.speeds[i]}s linear infinite ${
             i % 2 === 0 ? '' : 'reverse'
           }`,
@@ -228,7 +134,7 @@ EnhancedOrbitRings.displayName = 'EnhancedOrbitRings';
 const EnhancedNeuralNode = memo(
   ({ position, isActive }: { position: NodePosition; isActive: boolean }) => (
     <div
-      className="absolute"
+      className="absolute pointer-events-none"
       style={{
         top: `calc(50% + ${position.y}px)`,
         left: `calc(50% + ${position.x}px)`,
@@ -237,23 +143,23 @@ const EnhancedNeuralNode = memo(
     >
       {isActive && (
         <div
-          className="absolute inset-[-20px] rounded-full animate-ping neural-reduced-static"
+          className="absolute inset-[-18px] rounded-full animate-ping neural-reduced-static"
           style={{
             background:
-              'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.38), transparent 70%)',
+              'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.34), transparent 70%)',
             animationDuration: '1.8s',
           }}
         />
       )}
 
       <div
-        className="absolute inset-[-7px] rounded-full border transition-all duration-500 neural-reduced-static"
+        className="absolute inset-[-6px] rounded-full border transition-all duration-500 neural-reduced-static"
         style={{
           borderColor: isActive
             ? 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.65)'
             : 'transparent',
           boxShadow: isActive
-            ? '0 0 12px rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)'
+            ? '0 0 10px rgba(var(--color-accent-rgb, 5, 150, 105), 0.4)'
             : 'none',
           animation: isActive ? 'neuralRotate 3s linear infinite' : 'none',
         }}
@@ -268,17 +174,17 @@ const EnhancedNeuralNode = memo(
             ? 'radial-gradient(circle, var(--color-accent-500, #10b981), var(--color-accent-700, #047857))'
             : 'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.45), rgba(var(--color-accent-rgb, 5, 150, 105), 0.2))',
           boxShadow: isActive
-            ? '0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.75)'
-            : '0 0 4px rgba(var(--color-accent-rgb, 5, 150, 105), 0.25)',
+            ? '0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.7)'
+            : '0 0 4px rgba(var(--color-accent-rgb, 5, 150, 105), 0.22)',
           opacity: isActive ? 1 : CONFIG.nodes.inactiveOpacity,
-          transform: isActive ? 'scale(1.3)' : 'scale(1)',
+          transform: isActive ? 'scale(1.25)' : 'scale(1)',
           border: `1.5px solid rgba(var(--color-accent-rgb, 5, 150, 105), ${
             isActive ? 0.9 : 0.35
           })`,
         }}
       >
         <div
-          className="absolute inset-[3.5px] rounded-full bg-white"
+          className="absolute inset-[3px] rounded-full bg-white"
           style={{
             boxShadow: '0 0 4px rgba(255,255,255,0.9)',
           }}
@@ -325,20 +231,44 @@ const NeuralNetwork = memo(
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)',
-          width: '540px',
-          height: '540px',
+          width: '520px',
+          height: '520px',
         }}
       >
         <defs>
           <linearGradient id={connGradId} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.05" />
-            <stop offset="50%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.85" />
-            <stop offset="100%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.05" />
+            <stop
+              offset="0%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="0.06"
+            />
+            <stop
+              offset="50%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="0.82"
+            />
+            <stop
+              offset="100%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="0.06"
+            />
           </linearGradient>
           <radialGradient id={pulseGradId}>
-            <stop offset="0%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="1" />
-            <stop offset="60%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))" stopOpacity="0" />
+            <stop
+              offset="0%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="1"
+            />
+            <stop
+              offset="60%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="0.5"
+            />
+            <stop
+              offset="100%"
+              stopColor="rgb(var(--color-accent-rgb, 5, 150, 105))"
+              stopOpacity="0"
+            />
           </radialGradient>
           <filter id={glowFilterId}>
             <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
@@ -352,30 +282,30 @@ const NeuralNetwork = memo(
         {connections.map(({ from, to }, idx) => {
           const isActive = activeNodes.has(from) || activeNodes.has(to);
           const bothActive = activeNodes.has(from) && activeNodes.has(to);
-          const opacity = bothActive ? 0.78 : isActive ? 0.45 : 0.18;
+          const opacity = bothActive ? 0.72 : isActive ? 0.42 : 0.16;
           const strokeWidth = bothActive
-            ? CONFIG.network.lineWidth * 1.35
+            ? CONFIG.network.lineWidth * 1.3
             : CONFIG.network.lineWidth;
 
           return (
             <g key={idx}>
               {isActive && (
                 <line
-                  x1={270 + nodePositions[from].x}
-                  y1={270 + nodePositions[from].y}
-                  x2={270 + nodePositions[to].x}
-                  y2={270 + nodePositions[to].y}
+                  x1={260 + nodePositions[from].x}
+                  y1={260 + nodePositions[from].y}
+                  x2={260 + nodePositions[to].x}
+                  y2={260 + nodePositions[to].y}
                   stroke="rgb(var(--color-accent-rgb, 5, 150, 105))"
                   strokeWidth={strokeWidth + 2}
-                  opacity={opacity * 0.28}
+                  opacity={opacity * 0.25}
                   filter={`url(#${glowFilterId})`}
                 />
               )}
               <line
-                x1={270 + nodePositions[from].x}
-                y1={270 + nodePositions[from].y}
-                x2={270 + nodePositions[to].x}
-                y2={270 + nodePositions[to].y}
+                x1={260 + nodePositions[from].x}
+                y1={260 + nodePositions[from].y}
+                x2={260 + nodePositions[to].x}
+                y2={260 + nodePositions[to].y}
                 stroke={`url(#${connGradId})`}
                 strokeWidth={strokeWidth}
                 opacity={opacity}
@@ -392,16 +322,16 @@ const NeuralNetwork = memo(
           }
           const from = nodePositions[pulse.fromNode];
           const to = nodePositions[pulse.toNode];
-          const x = 270 + from.x + (to.x - from.x) * pulse.progress;
-          const y = 270 + from.y + (to.y - from.y) * pulse.progress;
+          const x = 260 + from.x + (to.x - from.x) * pulse.progress;
+          const y = 260 + from.y + (to.y - from.y) * pulse.progress;
 
           return (
             <g key={pulse.id}>
-              <circle cx={x} cy={y} r={10} fill={`url(#${pulseGradId})`} opacity={0.55} />
+              <circle cx={x} cy={y} r={9} fill={`url(#${pulseGradId})`} opacity={0.55} />
               <circle
                 cx={x}
                 cy={y}
-                r={3.5}
+                r={3.2}
                 fill="rgb(var(--color-accent-rgb, 5, 150, 105))"
                 filter={`url(#${glowFilterId})`}
               />
@@ -416,9 +346,9 @@ NeuralNetwork.displayName = 'NeuralNetwork';
 
 /**
  * NeuralLoader
- * Introductory presentation splash layer ("système de présentation visuelle")
- * rendered strictly before the operational SSOT SplashScreen.
- * Adapts dynamically to Light (#FAFAF9) / Dark (.dark) and [data-accent="*"].
+ * Pure visual brand showcase ("استعراض دخول") displayed before the operational
+ * SSOT SplashScreen. Shares the exact industrial Excel-Twin background and visual
+ * spirit of SplashScreen without fake progress bars or simulated loading messages.
  */
 export function NeuralLoader({
   mode = 'fullscreen',
@@ -432,38 +362,13 @@ export function NeuralLoader({
   const isFull = mode === 'fullscreen';
   const durationMultiplier = isFull ? 1 : 0.45;
 
-  const stages: LoadingStage[] = useMemo(
+  const phases: ShowcasePhase[] = useMemo(
     () => [
-      {
-        text: 'Initialisation du Noyau Nexus...',
-        progress: 20,
-        duration: 580 * durationMultiplier,
-        icon: BrainCircuit,
-      },
-      {
-        text: 'Activation Jumeau Numérique...',
-        progress: 48,
-        duration: 640 * durationMultiplier,
-        icon: Layers,
-      },
-      {
-        text: 'Connexion Modules Parc & PDR...',
-        progress: 75,
-        duration: 600 * durationMultiplier,
-        icon: Zap,
-      },
-      {
-        text: 'Calibrage Moteur Analytique...',
-        progress: 96,
-        duration: 540 * durationMultiplier,
-        icon: Activity,
-      },
-      {
-        text: 'Présentation prête.',
-        progress: 100,
-        duration: 340 * durationMultiplier,
-        icon: CheckCircle2,
-      },
+      { duration: 580 * durationMultiplier, icon: BrainCircuit },
+      { duration: 640 * durationMultiplier, icon: Layers },
+      { duration: 600 * durationMultiplier, icon: Zap },
+      { duration: 540 * durationMultiplier, icon: Activity },
+      { duration: 340 * durationMultiplier, icon: CheckCircle2 },
     ],
     [durationMultiplier]
   );
@@ -482,9 +387,8 @@ export function NeuralLoader({
     []
   );
 
-  const [progress, setProgress] = useState(0);
   const [activeNodes, setActiveNodes] = useState<Set<number>>(() => new Set([0, 3, 6, 9]));
-  const [stageIndex, setStageIndex] = useState(0);
+  const [phaseIndex, setPhaseIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
   const [pulses, setPulses] = useState<NeuralPulse[]>([]);
@@ -523,40 +427,25 @@ export function NeuralLoader({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isFull, triggerFinish]);
 
-  // Smooth progress interpolation toward current stage target
+  // Visual showcase icon & orbital animation progression until completion
   useEffect(() => {
     if (isComplete || isExiting) return;
-    const targetProgress = stages[stageIndex]?.progress ?? 100;
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= targetProgress) return prev;
-        const delta = Math.max((targetProgress - prev) * 0.16, 1.2);
-        return Math.min(prev + delta, targetProgress);
-      });
-    }, CONFIG.progress.smoothInterval);
-    return () => clearInterval(interval);
-  }, [stageIndex, isComplete, isExiting, stages]);
-
-  // Stage progression & completion handoff
-  useEffect(() => {
-    if (isComplete || isExiting) return;
-    const currentStage = stages[stageIndex];
-    if (!currentStage) return;
+    const currentPhase = phases[phaseIndex];
+    if (!currentPhase) return;
 
     const timer = setTimeout(() => {
-      if (stageIndex < stages.length - 1) {
-        setStageIndex((prev) => prev + 1);
+      if (phaseIndex < phases.length - 1) {
+        setPhaseIndex((prev) => prev + 1);
       } else {
-        setProgress(100);
         setIsComplete(true);
         finishTimerRef.current = setTimeout(() => {
           triggerFinish();
         }, 260);
       }
-    }, currentStage.duration);
+    }, currentPhase.duration);
 
     return () => clearTimeout(timer);
-  }, [stageIndex, isComplete, isExiting, stages, triggerFinish]);
+  }, [phaseIndex, isComplete, isExiting, phases, triggerFinish]);
 
   // Dynamic neural node activation
   useEffect(() => {
@@ -638,7 +527,7 @@ export function NeuralLoader({
     };
   }, [activeNodes, isComplete, isExiting, nodePositions.length]);
 
-  const CurrentIcon = stages[stageIndex]?.icon ?? BrainCircuit;
+  const CurrentIcon = phases[phaseIndex]?.icon ?? BrainCircuit;
 
   return (
     <div
@@ -646,43 +535,34 @@ export function NeuralLoader({
       aria-label="Présentation d'accueil CIOB GMAO Nexus"
       className={`${
         isFull
-          ? 'fixed inset-0 z-[100]'
-          : 'relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-slate-200 dark:border-slate-800'
-      } bg-[#FAFAF9]/95 dark:bg-slate-950/95 backdrop-blur-md text-slate-900 dark:text-slate-100 flex flex-col items-center justify-center overflow-hidden select-none font-sans transition-all duration-300 ${
+          ? 'fixed inset-0 z-[100] p-4 sm:p-8 justify-between'
+          : 'relative w-full h-[calc(85vh-100px)] min-h-[500px] rounded-2xl border border-slate-200 dark:border-slate-800 p-6 justify-center'
+      } bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center overflow-hidden select-none font-sans transition-all duration-300 ${
         isExiting ? 'opacity-0 scale-[1.015] pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
-      <EnhancedNeuralGrid />
-      <EnhancedParticles />
-      <EnhancedDataStreams />
-      <EnhancedScannerLine />
+      {/* Background Excel Grid Subtle Lines & Ambient Orbs — Identical to SplashScreen */}
+      <div className="absolute inset-0 opacity-[0.04] pointer-events-none bg-[radial-gradient(#107c41_1px,transparent_1px)] [background-size:20px_20px]" />
+      <div className="absolute -top-32 -right-32 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Top Bar: Subtle Badge & Conscious Intro Bypass */}
+      <EnhancedParticles />
+
+      {/* Top Header Row — Matched to SplashScreen Architecture */}
       {isFull && (
-        <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-8 sm:right-8 z-30 flex items-center justify-between gap-3">
-          <div
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border backdrop-blur-md text-[11px] font-mono font-semibold text-slate-700 dark:text-slate-200"
-            style={{
-              background: 'var(--glass-bg)',
-              borderColor: 'var(--glass-border)',
-            }}
-          >
-            <span
-              className="w-2 h-2 rounded-full animate-pulse"
-              style={{ backgroundColor: 'var(--color-accent-500, #10b981)' }}
-            />
-            <span>NEXUS CORE • INTRO</span>
+        <div className="w-full max-w-2xl flex justify-between items-center z-30">
+          <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs">
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+            <span className="text-[11px] font-mono tracking-wide text-slate-700 dark:text-slate-200 font-bold">
+              Classeur Virtuel GMAO • Jumeau Numérique
+            </span>
           </div>
 
           {showSkipButton && (
             <button
               type="button"
               onClick={triggerFinish}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border text-xs font-medium text-slate-700 dark:text-slate-200 hover:text-slate-950 dark:hover:text-white transition cursor-pointer backdrop-blur-md shadow-xs"
-              style={{
-                background: 'var(--glass-bg)',
-                borderColor: 'var(--glass-border)',
-              }}
+              className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 hover:text-emerald-800 dark:hover:text-emerald-300 transition bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 px-3.5 py-1.5 rounded-full shadow-xs cursor-pointer font-medium"
               title="Passer directement à l'inspection système"
             >
               <span>Passer l&apos;intro</span>
@@ -692,181 +572,96 @@ export function NeuralLoader({
         </div>
       )}
 
-      {/* Central Neural Reactor Core */}
-      <div
-        className={`relative z-10 mb-14 sm:mb-16 ${
-          !isFull ? 'scale-75' : 'scale-90 sm:scale-100'
-        } neural-reduced-static`}
-        style={{ animation: 'neuralFloat 5.5s ease-in-out infinite' }}
-      >
-        {isFull && (
-          <>
-            <div
-              className="absolute inset-[-72px] blur-[90px] rounded-full animate-pulse neural-reduced-static"
+      {/* Center Animated Emblem & Brand Identity */}
+      <div className="z-20 my-auto flex flex-col items-center justify-center text-center">
+        <div
+          className={`relative mb-12 sm:mb-14 ${
+            !isFull ? 'scale-75' : 'scale-90 sm:scale-100'
+          } neural-reduced-static`}
+          style={{ animation: 'neuralFloat 5.5s ease-in-out infinite' }}
+        >
+          {isFull && (
+            <>
+              <div
+                className="absolute inset-[-68px] blur-[80px] rounded-full animate-pulse neural-reduced-static pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.22), transparent 70%)',
+                  animationDuration: '3s',
+                }}
+              />
+              <div
+                className="absolute inset-[-40px] blur-[48px] rounded-full animate-pulse neural-reduced-static pointer-events-none"
+                style={{
+                  background:
+                    'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.15), transparent 70%)',
+                  animationDuration: '2.4s',
+                  animationDelay: '0.4s',
+                }}
+              />
+            </>
+          )}
+
+          <EnhancedOrbitRings isComplete={isComplete} />
+          <NeuralNetwork
+            nodePositions={nodePositions}
+            activeNodes={activeNodes}
+            pulses={pulses}
+          />
+
+          {/* Industrial Glass Emblem Card with Top Emerald Stripe */}
+          <div
+            className="relative bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl p-8 sm:p-9 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl transition-all duration-700 z-20 overflow-hidden"
+            style={{
+              boxShadow:
+                'var(--shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+            }}
+          >
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-700" />
+
+            <CurrentIcon
+              className={`h-20 w-20 sm:h-22 sm:w-22 transition-all duration-500 ${
+                isComplete ? 'scale-110' : 'animate-pulse'
+              } neural-reduced-static`}
               style={{
-                background:
-                  'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.28), transparent 70%)',
+                color: 'var(--color-accent-600, #059669)',
+                filter:
+                  'drop-shadow(0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.35))',
+              }}
+            />
+            <div
+              className="absolute inset-0 border rounded-3xl animate-ping opacity-25 neural-reduced-static pointer-events-none"
+              style={{
+                borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.4)',
                 animationDuration: '3s',
               }}
             />
-            <div
-              className="absolute inset-[-44px] blur-[52px] rounded-full animate-pulse neural-reduced-static"
-              style={{
-                background:
-                  'radial-gradient(circle, rgba(var(--color-accent-rgb, 5, 150, 105), 0.18), transparent 70%)',
-                animationDuration: '2.4s',
-                animationDelay: '0.4s',
-              }}
-            />
-          </>
-        )}
+          </div>
 
-        <EnhancedOrbitRings isComplete={isComplete} />
-        <NeuralNetwork
-          nodePositions={nodePositions}
-          activeNodes={activeNodes}
-          pulses={pulses}
-        />
-
-        {/* Glassmorphic Cube */}
-        <div
-          className="relative backdrop-blur-xl p-8 sm:p-9 rounded-3xl border transition-all duration-700 z-20"
-          style={{
-            background: 'var(--glass-bg)',
-            borderColor: 'var(--glass-border)',
-            boxShadow:
-              'var(--shadow-glass), inset 0 1px 0 rgba(255, 255, 255, 0.45)',
-          }}
-        >
-          <CurrentIcon
-            className={`h-20 w-20 sm:h-22 sm:w-22 transition-all duration-500 ${
-              isComplete ? 'scale-110' : 'animate-pulse'
-            } neural-reduced-static`}
-            style={{
-              color: 'var(--color-accent-600, #059669)',
-              filter:
-                'drop-shadow(0 0 18px rgba(var(--color-accent-rgb, 5, 150, 105), 0.4))',
-            }}
-          />
-          <div
-            className="absolute inset-0 border rounded-3xl animate-ping opacity-30 neural-reduced-static pointer-events-none"
-            style={{
-              borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.45)',
-              animationDuration: '3s',
-            }}
-          />
+          {nodePositions.map((pos, i) => (
+            <EnhancedNeuralNode key={i} position={pos} isActive={activeNodes.has(i)} />
+          ))}
         </div>
 
-        {nodePositions.map((pos, i) => (
-          <EnhancedNeuralNode key={i} position={pos} isActive={activeNodes.has(i)} />
-        ))}
-      </div>
-
-      {/* Title, Live Stage Readout & Progress Bar */}
-      <div className="z-20 flex flex-col items-center gap-4 w-full max-w-md px-6">
+        {/* Clean Brand Title & Tagline (No Fake Progress Bar or Simulated Loading Strings) */}
         {isFull && (
-          <div className="text-center space-y-1">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <div className="space-y-1.5 px-6">
+            <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-white">
               <span>{appName}</span>{' '}
-              <span style={{ color: 'var(--color-accent-600, #059669)' }}>
+              <span className="text-emerald-700 dark:text-emerald-400">
                 {appAccent}
               </span>
             </h1>
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-[0.22em]">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 tracking-wide">
               {tagline}
             </p>
           </div>
         )}
-
-        <div className="h-7 flex items-center justify-center w-full">
-          <p
-            key={stageIndex}
-            className="text-xs sm:text-sm font-mono text-center neural-stage-enter font-medium"
-            style={{ color: 'var(--color-accent-700, #047857)' }}
-          >
-            <span className="opacity-60">&gt;</span>{' '}
-            <span className="dark:text-slate-200">{stages[stageIndex]?.text}</span>
-            <span
-              className="inline-block w-1.5 h-3.5 ml-1.5 align-middle animate-pulse"
-              style={{ backgroundColor: 'var(--color-accent-500, #10b981)' }}
-            />
-          </p>
-        </div>
-
-        <div className="w-full space-y-2.5">
-          <div
-            className="relative w-full h-2 rounded-full overflow-hidden backdrop-blur-sm border"
-            style={{
-              backgroundColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.1)',
-              borderColor: 'rgba(var(--color-accent-rgb, 5, 150, 105), 0.2)',
-            }}
-          >
-            <div
-              className="absolute inset-y-0 left-0 rounded-full transition-all duration-300 ease-out"
-              style={{
-                width: `${progress}%`,
-                background:
-                  'linear-gradient(90deg, var(--color-accent-600, #059669), var(--color-accent-500, #10b981))',
-                boxShadow:
-                  '0 0 16px rgba(var(--color-accent-rgb, 5, 150, 105), 0.5)',
-              }}
-            >
-              <div
-                className="absolute inset-0 w-1/3"
-                style={{
-                  background:
-                    'linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent)',
-                  animation: 'neuralScannerSweep 1.8s ease-in-out infinite',
-                }}
-              />
-            </div>
-
-            {CONFIG.progress.milestones.map((milestone) => (
-              <div
-                key={milestone}
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-300"
-                style={{ left: `${milestone}%` }}
-              >
-                <div
-                  className="w-2 h-2 rounded-full transition-transform duration-300"
-                  style={{
-                    backgroundColor:
-                      progress >= milestone
-                        ? 'var(--color-accent-500, #10b981)'
-                        : 'rgba(148, 163, 184, 0.55)',
-                    boxShadow:
-                      progress >= milestone
-                        ? '0 0 8px rgba(var(--color-accent-rgb, 5, 150, 105), 0.7)'
-                        : 'none',
-                    transform: progress >= milestone ? 'scale(1.25)' : 'scale(1)',
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-between items-center text-[11px] font-mono tabular-nums">
-            <span className="text-slate-600 dark:text-slate-400 font-semibold">
-              {Math.round(progress)}%
-            </span>
-            <span
-              className={`font-semibold transition-colors duration-300 ${
-                isComplete ? '' : 'text-slate-500 dark:text-slate-400'
-              }`}
-              style={
-                isComplete
-                  ? { color: 'var(--color-accent-600, #059669)' }
-                  : undefined
-              }
-            >
-              {isComplete ? '✓ PRÊT POUR INDEXATION' : 'INITIALISATION NEXUS...'}
-            </span>
-          </div>
-        </div>
       </div>
 
+      {/* Footer Version Stamp — Matched to SplashScreen */}
       {isFull && (
-        <div className="absolute bottom-5 sm:bottom-7 text-[10px] font-mono text-slate-500 dark:text-slate-400 uppercase tracking-[0.18em] opacity-75 z-20">
+        <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono z-20">
           {version}
         </div>
       )}
