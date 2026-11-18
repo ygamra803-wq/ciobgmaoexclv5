@@ -186,6 +186,25 @@ export function createSystemRoutesController(deps: {
     const resolvedDist = path.resolve(distDirectory);
     if (!fs.existsSync(resolvedDist)) return;
 
+    // Neutralize any previously registered VitePWA /sw.js so only /service-worker.js operates in production
+    app.get(['/sw.js', '/registerSW.js'], (_req, res) => {
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.send(
+        `self.addEventListener('install', () => { self.skipWaiting(); });
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith('workbox-precache')).map((k) => caches.delete(k)));
+      await self.registration.unregister();
+    } catch {}
+  })());
+  self.clients.claim();
+});`
+      );
+    });
+
     app.use(expressStaticMiddleware(resolvedDist));
     app.get('/{*splat}', (req, res, next) => {
       if (req.path.startsWith('/api/')) {

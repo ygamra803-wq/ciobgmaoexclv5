@@ -32,43 +32,6 @@
         document.documentElement.setAttribute('data-sidebar-style', sidebarStyle);
       } catch (e) {}
 
-      // Self-heal stale Service Worker & poisoned CacheStorage before ES module graph loads
-      (async function() {
-        try {
-          var hadController = false;
-          var hadRegistrations = false;
-          var hadCaches = false;
-
-          if (typeof window !== 'undefined' && 'caches' in window && window.caches) {
-            try {
-              var cacheKeys = await window.caches.keys();
-              if (cacheKeys && cacheKeys.length > 0) {
-                hadCaches = true;
-                await Promise.all(cacheKeys.map(function(k) { return window.caches.delete(k); }));
-              }
-            } catch (ce) {}
-          }
-
-          if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker) {
-            try {
-              hadController = Boolean(navigator.serviceWorker.controller);
-              var regs = await navigator.serviceWorker.getRegistrations();
-              if (regs && regs.length > 0) {
-                hadRegistrations = true;
-                await Promise.all(regs.map(function(r) { return r.unregister(); }));
-              }
-            } catch (se) {}
-          }
-
-          if (hadController && window.location.search.indexOf('__sw_healed=') === -1) {
-            var nextUrl = new URL(window.location.href);
-            nextUrl.searchParams.set('__sw_healed', String(Date.now()));
-            window.location.replace(nextUrl.toString());
-            return;
-          }
-        } catch (err) {}
-      })();
-
       // Load Google Fonts non-blockingly so external font latency never stalls first paint
       (function() {
         try {
@@ -87,19 +50,53 @@
         } catch (e) {}
       })();
 
-      // Boot watchdog: if ES modules fail to execute due to transient proxy/cache error, auto-recover
+      // Emergency recovery helper: only invoked if module loading fails or times out
+      function healAndRetryOnce(paramName) {
+        try {
+          if (window.__GMAO_BOOTED__ || window.location.search.indexOf(paramName + '=') !== -1) {
+            return;
+          }
+          var tasks = [];
+          if ('caches' in window && window.caches) {
+            tasks.push(
+              window.caches.keys().then(function(keys) {
+                return Promise.all((keys || []).map(function(k) { return window.caches.delete(k); }));
+              }).catch(function() {})
+            );
+          }
+          if ('serviceWorker' in navigator && navigator.serviceWorker) {
+            tasks.push(
+              navigator.serviceWorker.getRegistrations().then(function(regs) {
+                return Promise.all((regs || []).map(function(r) { return r.unregister(); }));
+              }).catch(function() {})
+            );
+          }
+          Promise.all(tasks).finally(function() {
+            if (!window.__GMAO_BOOTED__) {
+              var retryUrl = new URL(window.location.href);
+              retryUrl.searchParams.set(paramName, String(Date.now()));
+              window.location.replace(retryUrl.toString());
+            }
+          });
+        } catch (e) {}
+      }
+
+      // Boot watchdog 1: if a root <script> tag fails to load (e.g. stale SW cached old asset hash), heal & retry once
       window.addEventListener('error', function(ev) {
         try {
           var target = ev && ev.target;
           if (target && target.tagName === 'SCRIPT' && !window.__GMAO_BOOTED__) {
-            if (window.location.search.indexOf('__mod_retry=') === -1) {
-              var retryUrl = new URL(window.location.href);
-              retryUrl.searchParams.set('__mod_retry', String(Date.now()));
-              window.location.replace(retryUrl.toString());
-            }
+            healAndRetryOnce('__mod_retry');
           }
         } catch (e) {}
       }, true);
+
+      // Boot watchdog 2: if app still hasn't booted after 8s due to a stale service worker or deadlocked chunk, heal & retry once
+      setTimeout(function() {
+        if (!window.__GMAO_BOOTED__) {
+          healAndRetryOnce('__sw_healed');
+        }
+      }, 8000);
     })();
   </script>
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">

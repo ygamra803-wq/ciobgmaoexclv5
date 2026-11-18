@@ -46,6 +46,7 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
       includeAssets: [
         'apple-touch-icon.png',
         'icon.svg',
@@ -88,7 +89,9 @@ export default defineConfig(({ command }) => ({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 20 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json,webp}'],
+        navigateFallback: null,
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff,woff2,json,webp}'],
+        globIgnores: ['**/index.html', '**/service-worker.js'],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/cdn\.tailwindcss\.com\/.*/i,

@@ -7,9 +7,9 @@
  * - Nettoyage automatique de la taille du cache (LRU / Max Entries)
  * - Isolation des requêtes de développement Vite
  */
-const CACHE_NAME = 'gmao-nexus-v5.0.3';
-const DATA_CACHE_NAME = 'gmao-nexus-data-v5.0.3';
-const ASSET_CACHE_NAME = 'gmao-nexus-assets-v5.0.3';
+const CACHE_NAME = 'gmao-nexus-v5.0.4';
+const DATA_CACHE_NAME = 'gmao-nexus-data-v5.0.4';
+const ASSET_CACHE_NAME = 'gmao-nexus-assets-v5.0.4';
 
 const PRECACHE_ASSETS = [
   '/offline.html',
@@ -62,8 +62,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (!url.protocol.startsWith('http')) return;
 
-  // Ignorer les requêtes de développement Vite, HMR, scripts d'iframe et WebSockets
+  // Ignorer les requêtes de développement Vite, HMR, scripts d'iframe, SW secondaires et WebSockets
   if (
+    url.pathname === '/sw.js' ||
+    url.pathname === '/registerSW.js' ||
+    url.pathname === '/service-worker.js' ||
     url.pathname.startsWith('/src/') ||
     url.pathname.startsWith('/node_modules/') ||
     url.pathname.startsWith('/_aistudio') ||
@@ -161,15 +164,15 @@ async function cacheFirstWithNetworkUpdate(request, cacheName) {
 
 async function networkFirstWithOfflineFallback(request) {
   try {
-    const networkResponse = await fetch(request.clone());
+    const networkResponse = await fetch(request.clone(), { cache: 'no-store' });
     if (networkResponse && networkResponse.status === 200) {
       const cache = await caches.open(CACHE_NAME);
-      await cache.put(request, networkResponse.clone());
+      await cache.put('/', networkResponse.clone());
     }
     return networkResponse;
   } catch {
     const cache = await caches.open(CACHE_NAME);
-    const cachedResponse = await cache.match(request);
+    const cachedResponse = (await cache.match('/')) || (await cache.match(request));
     if (cachedResponse) return cachedResponse;
 
     const offlineResponse = await cache.match('/offline.html');
