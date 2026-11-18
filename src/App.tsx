@@ -4,7 +4,8 @@ import SplashScreen from './presentation/pages/auth/SplashScreen';
 import RequirePasswordChange from './presentation/pages/auth/RequirePasswordChange';
 import ConfirmDialog from './presentation/components/common/ConfirmDialog';
 import ErrorBoundary from './presentation/components/common/ErrorBoundary';
-import { AppBootGuard, RouteLoader } from './presentation/components/common/loaders';
+import { AppBootGuard } from './presentation/components/common/loaders/AppBootGuard';
+import { NeuralWatermark } from './presentation/components/common/loaders/NeuralWatermark';
 import { useAuth } from './context/AuthContext';
 
 const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
@@ -44,7 +45,13 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <Suspense fallback={<RouteLoader currentTab="dashboard" label="Chargement de l'espace GMAO..." />}>
+      <Suspense
+        fallback={
+          <div className="relative z-10 w-full min-h-screen overflow-hidden">
+            <NeuralWatermark label="Chargement de l'espace GMAO..." />
+          </div>
+        }
+      >
         <AuthenticatedApp />
       </Suspense>
     </ErrorBoundary>

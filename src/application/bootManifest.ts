@@ -1,6 +1,5 @@
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import { storageService } from '../utils/storageService';
-import { useGmaoStore } from '../store/useGmaoStore';
 import { Logger } from '../core/logger/LoggerService';
 
 export interface BootEntityItem {
@@ -107,8 +106,8 @@ export const BOOT_MANIFEST: readonly BootEntityItem[] = [
 ] as const;
 
 /**
- * Inspects a canonical boot entity from the Zustand SSOT or storageService.
- * Returns exact record count and up to 3 sample items (for rawStock) without injecting any demo seeds.
+ * Inspects a canonical boot entity from canonical storageService SSOT.
+ * Avoids eagerly pulling useGmaoStore / DataGateway / 30+ seed JSON files during initial boot splash.
  */
 export function inspectBootEntity(item: BootEntityItem): {
   count: number;
@@ -116,18 +115,7 @@ export function inspectBootEntity(item: BootEntityItem): {
 } {
   let records: unknown[] = [];
 
-  // Primary: Zustand Master Store (in-memory SSOT)
-  try {
-    const storeState = useGmaoStore.getState() as unknown as Record<string, unknown>;
-    const storeVal = storeState[item.id];
-    if (Array.isArray(storeVal)) {
-      records = storeVal;
-    }
-  } catch (err) {
-    Logger.debug(`[inspectBootEntity] Zustand store read skipped for ${item.id}`, err);
-  }
-
-  // Secondary fallback: storageService canonical storage
+  // Read directly from storageService canonical storage
   if (records.length === 0) {
     try {
       const saved = storageService.getItem(item.storageKey);
