@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   BOOT_MANIFEST,
   inspectBootEntity,
-  type BootEntityItem,
 } from '../../application/bootManifest';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { storageService } from '../../utils/storageService';

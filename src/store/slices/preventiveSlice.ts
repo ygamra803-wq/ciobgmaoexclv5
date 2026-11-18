@@ -1,5 +1,4 @@
 import { DataGateway } from '../../application/DataGateway';
-import { PreventiveService } from '../../application/services/PreventiveService';
 import { ActionService } from '../../application/services/preventive/ActionService';
 import { GuideService } from '../../application/services/preventive/GuideService';
 import { PlanService } from '../../application/services/preventive/PlanService';

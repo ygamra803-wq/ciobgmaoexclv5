@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calendar, ChevronDown, Filter, X, Clock } from 'lucide-react';
+import { Calendar, ChevronDown, X, Clock } from 'lucide-react';
 import { useI18n } from '../../../i18n/I18nContext';
 import {
   type PeriodFilterState,

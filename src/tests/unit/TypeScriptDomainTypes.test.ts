@@ -1,17 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type {
-  IStockItem,
-  IMachine,
-  IMouvement,
   IDemandeIntervention,
   IBonTravail,
-  IRapportIntervention,
   IPreventivePlan,
   IPreventiveTask,
   IUserSession,
-  IAuditLog,
   ISyncQueueItem,
-  IMtbfMttrData
 } from '@/types';
 
 describe('TypeScript Domain Types & Contracts (P1-3)', () => {

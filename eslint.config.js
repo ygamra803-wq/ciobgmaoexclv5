@@ -55,12 +55,20 @@ export default [
       'react/prop-types': 'off',
       'no-empty': 'off',
       'react/no-unescaped-entities': 'off',
+      // LINT-DEPS-P1: Global exhaustive-deps remains 'off' (legacy UI views/hooks debt documented; do not enable globally yet).
       'react-hooks/exhaustive-deps': 'off',
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/preserve-manual-memoization': 'off',
     },
     settings: {
       react: { version: '19.2' },
+    },
+  },
+  // LINT-DEPS-P1: Experimental scoped 'warn' on a single clean directory (src/utils)
+  {
+    files: ['src/utils/**/*.{ts,tsx}'],
+    rules: {
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 ];

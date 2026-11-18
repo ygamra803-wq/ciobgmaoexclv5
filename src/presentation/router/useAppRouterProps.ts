@@ -25,9 +25,7 @@ export interface UseAppRouterPropsInput {
     setShowAddZoneModal: (show: boolean) => void;
     [key: string]: unknown;
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handlers: Record<string, (...args: any[]) => any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 

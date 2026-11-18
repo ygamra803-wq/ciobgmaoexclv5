@@ -11,7 +11,6 @@
 
 import { STORAGE_KEYS } from '../infrastructure/persistence/storageKeys';
 import { Logger } from '../core/logger/LoggerService';
-import { ConflictResolutionService } from './ConflictResolutionService';
 
 export const SYNC_CHANNELS = {
   PRIMARY: 'gmao_realtime_sync_channel',

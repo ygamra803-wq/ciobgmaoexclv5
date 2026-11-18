@@ -5,11 +5,6 @@ import {
   filterProductionMachines,
   getMachineAssetClass,
 } from '../../utils/activeMachines';
-import {
-  selectValidationCenterQueues,
-  computeStockReorderAlerts,
-  type StockReorderAlertsSummary,
-} from '../../core/security/validationReconciliation';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
 
 /** Validation statuses excluded from official financial, reliability, and stock calculations (Maker-Checker contract). */

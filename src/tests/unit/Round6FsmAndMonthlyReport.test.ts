@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { WorkOrderStateMachine } from '../../domain/corrective/services/WorkOrderStateMachine';
 import { AvailabilityCalculationService } from '../../domain/services/AvailabilityCalculationService';
 import { MonthlyReportCalculationService } from '../../application/services/MonthlyReportCalculationService';

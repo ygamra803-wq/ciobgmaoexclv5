@@ -1,7 +1,6 @@
 // ✅ ملف: src/tests/integration/StockCalculation.integration.test.ts
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import ExcelFormulaEngine from '../../core/domain/services/ExcelFormulaEngine';
 import StockCalculationService from '../../core/domain/services/StockCalculationService';
 
 describe('Stock Calculation Integration', () => {
@@ -95,7 +94,7 @@ describe('Stock Calculation Integration', () => {
       seuil: Math.floor(Math.random() * 50)
     }));
 
-    const largeMovements = Array.from({ length: 100000 }, (_, i) => ({
+    const largeMovements = Array.from({ length: 100000 }, () => ({
       ref: `ROUL-${String(Math.floor(Math.random() * 10000)).padStart(5, '0')}`,
       type: Math.random() > 0.5 ? 'Entrée' : 'Sortie',
       quantite: Math.floor(Math.random() * 100) + 1

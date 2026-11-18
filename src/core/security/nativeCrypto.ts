@@ -49,10 +49,6 @@ export const PBKDF2_STANDARD_ITERATIONS = 600000;
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-function rotr(x: number, n: number): number {
-  return (x >>> n) | (x << (32 - n));
-}
-
 export function bytesToHex(bytes: Uint8Array): string {
   let out = '';
   for (let i = 0; i < bytes.length; i++) {
