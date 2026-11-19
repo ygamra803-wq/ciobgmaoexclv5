@@ -20,6 +20,7 @@ import { AvailabilityCalculationService } from '../../../domain/services/Availab
 import {
   CorrectiveCalculationService,
   isMachineStoppageFlag,
+  type ParetoDimension,
 } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { filterActiveMachines, getMachineAssetClass } from '../../../utils/activeMachines';
 import PeriodFilterBar from '../../components/common/PeriodFilterBar';
@@ -33,6 +34,7 @@ export default function AnalyseCorrectiveTab({
   interventions = [],
   machines: registeredMachines = [],
   stockItems = [],
+  technicians = [],
   kpis: _kpis = {},
   paretoAnomalies: _paretoAnomalies = [],
   paretoMachines: _paretoMachines = [],
@@ -49,6 +51,7 @@ export default function AnalyseCorrectiveTab({
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedTypePanne, setSelectedTypePanne] = useState('ALL');
   const [periodFilter, setPeriodFilter] = useState<PeriodFilterState>({ preset: 'ALL' });
+  const [paretoDimension, setParetoDimension] = useState<ParetoDimension>('COUNT');
 
   // Fast Lookup Maps
   const machineMap = useMemo(() => {
@@ -68,6 +71,18 @@ export default function AnalyseCorrectiveTab({
     });
     return map;
   }, [stockItems]);
+
+  const technicianMap = useMemo(() => {
+    const map = new Map();
+    (technicians || []).forEach((tech: any) => {
+      if (!tech) return;
+      [tech.id_technician, tech.id, tech.matricule, tech.nom]
+        .map((k) => String(k || '').trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((k) => map.set(k, tech));
+    });
+    return map;
+  }, [technicians]);
 
   // Zone list from machines and interventions
   const zoneOptions = useMemo(() => {
@@ -167,65 +182,35 @@ export default function AnalyseCorrectiveTab({
     });
   }, [filteredInterventions]);
 
-  // Recalculated Pareto Anomalies from filtered dataset
+  // 3D Pareto Anomalies (Frequency | Downtime | TCO Cost)
   const dynamicParetoAnomalies = useMemo(() => {
-    if (filteredInterventions.length === 0) return [];
+    return CorrectiveCalculationService.compute3DPareto(
+      filteredInterventions,
+      'anomalie',
+      paretoDimension,
+      {
+        stockMap,
+        machineMap,
+        technicianMap,
+        limit: 10,
+      }
+    );
+  }, [filteredInterventions, paretoDimension, stockMap, machineMap, technicianMap]);
 
-    const counts: Record<string, number> = {};
-    filteredInterventions.forEach((item: any) => {
-      const anom = item.anomalie || 'Non spécifié';
-      counts[anom] = (counts[anom] || 0) + 1;
-    });
-
-    const sorted = Object.entries(counts)
-      .map(([anomalie, count]) => ({ anomalie, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const totalCount = filteredInterventions.length;
-    let runningSum = 0;
-
-    return sorted.slice(0, 10).map((item) => {
-      runningSum += item.count;
-      const percentage = (item.count / totalCount) * 100;
-      const cumulativePercentage = (runningSum / totalCount) * 100;
-      return {
-        ...item,
-        percentage: Number(percentage.toFixed(1)),
-        cumulativePercentage: Number(cumulativePercentage.toFixed(1)),
-        isPareto80: cumulativePercentage <= 80,
-      };
-    });
-  }, [filteredInterventions]);
-
-  // Recalculated Pareto Machines from filtered dataset
+  // 3D Pareto Machines (Frequency | Downtime | TCO Cost)
   const dynamicParetoMachines = useMemo(() => {
-    if (filteredInterventions.length === 0) return [];
-
-    const counts: Record<string, number> = {};
-    filteredInterventions.forEach((item: any) => {
-      const m = item.code_machine || 'Non spécifié';
-      counts[m] = (counts[m] || 0) + 1;
-    });
-
-    const sorted = Object.entries(counts)
-      .map(([code_machine, count]) => ({ code_machine, count }))
-      .sort((a, b) => b.count - a.count);
-
-    const totalCount = filteredInterventions.length;
-    let runningSum = 0;
-
-    return sorted.slice(0, 10).map((item) => {
-      runningSum += item.count;
-      const percentage = (item.count / totalCount) * 100;
-      const cumulativePercentage = (runningSum / totalCount) * 100;
-      return {
-        ...item,
-        percentage: Number(percentage.toFixed(1)),
-        cumulativePercentage: Number(cumulativePercentage.toFixed(1)),
-        isPareto80: cumulativePercentage <= 80,
-      };
-    });
-  }, [filteredInterventions]);
+    return CorrectiveCalculationService.compute3DPareto(
+      filteredInterventions,
+      'code_machine',
+      paretoDimension,
+      {
+        stockMap,
+        machineMap,
+        technicianMap,
+        limit: 10,
+      }
+    );
+  }, [filteredInterventions, paretoDimension, stockMap, machineMap, technicianMap]);
 
   // Breakdown by Type Panne (E, H, P, M, etc.)
   const typePanneBreakdown = useMemo(() => {
@@ -314,7 +299,7 @@ export default function AnalyseCorrectiveTab({
       .sort((a, b) => b.count - a.count);
   }, [filteredInterventions]);
 
-  // Executive KPI Stats (ISO / AFNOR NF X 60-010 — zero fabricated defaults)
+  // Executive KPI Stats + Industrial TCO Breakdown (ISO / AFNOR NF X 60-010 — zero fabricated defaults)
   const executiveKpis = useMemo(() => {
     const totalInterventions = filteredInterventions.length;
     const closed = filteredInterventions.filter((i) => i.statut === 'CLOTURE').length;
@@ -322,43 +307,31 @@ export default function AnalyseCorrectiveTab({
 
     let totalDowntimeMinutes = 0;
     let totalPdrCost = 0;
+    let totalAtelierCost = 0;
+    let totalLaborCost = 0;
+    let totalDowntimeLossCost = 0;
+    let totalDirectCost = 0;
+    let totalTcoCost = 0;
 
     filteredInterventions.forEach((item) => {
       totalDowntimeMinutes += AvailabilityCalculationService.getDowntimeMinutes(item);
 
-      // Compute PDR Cost accurately only when a spare part was used or explicit cost recorded
-      const explicitCost = Number(item.pdr_cost ?? item.cout_pdr ?? item.cout_total ?? 0);
-      if (explicitCost > 0) {
-        totalPdrCost += explicitCost;
-      } else if (Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0) {
-        item.pieces_utilisees.forEach((piece) => {
-          const refKey = String(piece.ref || piece.code || '').trim().toUpperCase();
-          const stockItem = refKey ? stockMap.get(refKey) : undefined;
-          const price =
-            Number(piece.prix_unitaire) ||
-            Number(piece.prix) ||
-            Number(stockItem?.prix_unitaire) ||
-            Number(stockItem?.prix_achat_ht) ||
-            Number(stockItem?.prix) ||
-            0;
-          const qty = Number(piece.quantite) || 1;
-          totalPdrCost += price * qty;
-        });
-      } else {
-        const pdrKey = String(item.pdr_ref || item.pdr || '').trim().toUpperCase();
-        if (pdrKey) {
-          const stockItem = stockMap.get(pdrKey);
-          const price =
-            Number(item.pdr_prix) ||
-            Number(stockItem?.prix_unitaire) ||
-            Number(stockItem?.prix_achat_ht) ||
-            Number(stockItem?.prix) ||
-            0;
-          const qty = Number(item.pdr_quantite || item.quantite) || 1;
-          totalPdrCost += price * qty;
-        }
-      }
+      const breakdown = CorrectiveCalculationService.computeInterventionCostBreakdown(item, {
+        stockMap,
+        machineMap,
+        technicianMap,
+      });
+      totalPdrCost += breakdown.coutPdr;
+      totalAtelierCost += breakdown.coutAtelier;
+      totalLaborCost += breakdown.coutMainOeuvre;
+      totalDirectCost += breakdown.coutDirectMaintenance;
+      totalDowntimeLossCost += breakdown.coutArretProduction;
+      totalTcoCost += breakdown.coutTotalTco;
     });
+
+    const machinesWithDowntimeRateCount = activeMachinesForKpi.filter(
+      (m: any) => Number(m?.cout_arret_horaire || 0) > 0
+    ).length;
 
     // 1. MTTR via AvailabilityCalculationService
     const mttrHours = AvailabilityCalculationService.calculateMTTR(filteredInterventions);
@@ -429,6 +402,12 @@ export default function AnalyseCorrectiveTab({
       availability: `${availabilityRate.toFixed(1)}%`,
       downtime: downtimeFormatted,
       pdrCost: Math.round(totalPdrCost),
+      atelierCost: Math.round(totalAtelierCost),
+      laborCost: Math.round(totalLaborCost),
+      directCost: Math.round(totalDirectCost),
+      downtimeLossCost: Math.round(totalDowntimeLossCost),
+      totalTco: Math.round(totalTcoCost),
+      machinesWithDowntimeRateCount,
       workingDays: scheduledInfo.workingDays,
       scheduledHours: totalScheduledHours,
       availabilityStatus,
@@ -436,7 +415,7 @@ export default function AnalyseCorrectiveTab({
       mttrStatus,
       downtimeStatus,
     };
-  }, [filteredInterventions, activeMachinesForKpi.length, periodFilter, stockMap]);
+  }, [filteredInterventions, activeMachinesForKpi, periodFilter, stockMap, machineMap, technicianMap]);
 
   // Generate intelligent preventive task from recommendation
   const handleAdoptRecommendation = (rec) => {
@@ -472,22 +451,46 @@ export default function AnalyseCorrectiveTab({
 
   const handleExportParetoExcel = () => {
     try {
+      const dimLabel =
+        paretoDimension === 'COST'
+          ? 'Coût TCO (DH)'
+          : paretoDimension === 'DOWNTIME'
+          ? 'Arrêt (min)'
+          : 'Fréquence';
+
+      const formatExportRows = (rows: typeof dynamicParetoAnomalies, labelHeader: string) =>
+        rows.map((r, idx) => ({
+          Rang: idx + 1,
+          [labelHeader]: r.name,
+          Dimension_Classement: dimLabel,
+          Occurrences: r.count,
+          Arret_Minutes: r.downtimeMinutes,
+          Cout_PDR_DH: r.coutPdr,
+          Cout_Atelier_DH: r.coutAtelier,
+          Cout_Main_Oeuvre_DH: r.coutMainOeuvre,
+          Perte_Arret_DH: r.downtimeCost,
+          Cout_Total_TCO_DH: r.totalCost,
+          Part_Pct: r.percentage,
+          Cumul_Pct: r.cumulativePercentage,
+          Zone_ABC: r.isPareto80 ? 'A (80%)' : 'B/C',
+        }));
+
       exportTypeBWorkbook({
-        filename: `Pareto_Analyse_GMAO_${new Date().toISOString().split('T')[0]}.xlsx`,
-        screenName: 'Analyse & Pareto Correctif',
+        filename: `Pareto_3D_${paretoDimension}_GMAO_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: `Analyse & Pareto 3D (${dimLabel})`,
         sheets: [
           {
-            name: 'Pareto_Anomalies_8020',
-            jsonRows: dynamicParetoAnomalies,
+            name: 'Pareto_Anomalies_3D',
+            jsonRows: formatExportRows(dynamicParetoAnomalies, 'Anomalie'),
           },
           {
-            name: 'Pareto_Machines_8020',
-            jsonRows: dynamicParetoMachines,
+            name: 'Pareto_Machines_3D',
+            jsonRows: formatExportRows(dynamicParetoMachines, 'Code_Machine'),
           },
         ],
       });
 
-      showToast?.('Export Excel de l\'analyse de Pareto généré avec succès (.xlsx)', 'success');
+      showToast?.(`Export Excel Pareto 3D (${dimLabel}) généré avec succès (.xlsx)`, 'success');
     } catch (err) {
       Logger.error(err);
       showToast?.('Erreur lors de l\'export Excel', 'error');
@@ -619,32 +622,84 @@ export default function AnalyseCorrectiveTab({
           </div>
         </div>
 
-        {/* Coût PDR Consommées */}
-        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 hover:border-purple-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(168,85,247,0.12)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between">
+        {/* Coût Global TCO */}
+        <div
+          data-testid="analyse-tco-kpi-card"
+          className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 hover:border-purple-300/80 shadow-[0_4px_16px_-2px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_28px_-4px_rgba(168,85,247,0.12)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group flex flex-col justify-between"
+        >
           <div className="absolute -top-10 -right-10 w-24 h-24 bg-purple-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
           <div>
             <div className="flex items-center justify-between mb-2.5">
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
-                Coût PDR Consommées
+                Coût Global TCO
               </span>
               <BarChart3 className="w-5 h-5 text-purple-600 shrink-0 group-hover:scale-110 transition-transform" />
             </div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl sm:text-3xl font-black text-purple-600 font-mono tracking-tight">
-                {executiveKpis.pdrCost.toLocaleString()}
+                {executiveKpis.totalTco.toLocaleString()}
               </span>
               <span className="text-[11px] font-bold text-slate-400 font-mono">DH</span>
             </div>
             <div className="mt-2 text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
               <span className="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-mono">
-                {executiveKpis.total} interventions
+                Direct: {executiveKpis.directCost.toLocaleString()} DH
               </span>
             </div>
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
-            <span className="text-slate-400 font-medium">Valorisation :</span>
-            <span className="font-mono font-bold text-purple-700">Stock Magasin</span>
+            <span className="text-slate-400 font-medium">PDR + MO + Atelier :</span>
+            <span className="font-mono font-bold text-purple-700">
+              {executiveKpis.total} BT
+            </span>
           </div>
+        </div>
+      </div>
+
+      {/* 1.25. Ventilation Financière TCO (Direct vs Indirect Production Stoppage) */}
+      <div
+        data-testid="analyse-tco-breakdown-strip"
+        className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-xs grid grid-cols-2 lg:grid-cols-4 gap-3"
+      >
+        <div className="p-3 rounded-xl bg-cyan-50/70 border border-cyan-200/80">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-cyan-800 block">
+            Pièces de Rechange (PDR)
+          </span>
+          <span className="text-lg font-black font-mono text-cyan-950 block mt-0.5">
+            {executiveKpis.pdrCost.toLocaleString()} DH
+          </span>
+          <span className="text-[10px] text-cyan-700">Valorisation stock magasin</span>
+        </div>
+        <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 block">
+            Main-d&apos;Œuvre Interne
+          </span>
+          <span className="text-lg font-black font-mono text-amber-950 block mt-0.5">
+            {executiveKpis.laborCost.toLocaleString()} DH
+          </span>
+          <span className="text-[10px] text-amber-700">Heures ouvrées × taux horaire</span>
+        </div>
+        <div className="p-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-800 block">
+            Atelier &amp; Sous-traitance
+          </span>
+          <span className="text-lg font-black font-mono text-indigo-950 block mt-0.5">
+            {executiveKpis.atelierCost.toLocaleString()} DH
+          </span>
+          <span className="text-[10px] text-indigo-700">Bons externes &amp; bobinage</span>
+        </div>
+        <div className="p-3 rounded-xl bg-rose-50/70 border border-rose-200/80">
+          <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-800 block">
+            Perte d&apos;Arrêt Production
+          </span>
+          <span className="text-lg font-black font-mono text-rose-950 block mt-0.5">
+            {executiveKpis.downtimeLossCost.toLocaleString()} DH
+          </span>
+          <span className="text-[10px] text-rose-700">
+            {executiveKpis.machinesWithDowntimeRateCount > 0
+              ? `${executiveKpis.machinesWithDowntimeRateCount} machine(s) tarifée(s)`
+              : 'Taux arrêt machine non configuré (0 DH)'}
+          </span>
         </div>
       </div>
 
@@ -743,6 +798,50 @@ export default function AnalyseCorrectiveTab({
         </div>
       </div>
 
+      {/* 2.5. 3D Pareto Dimension Selector (COUNT | DOWNTIME | COST) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900 text-white rounded-2xl px-4 py-3 shadow-sm">
+        <div>
+          <span className="text-xs font-black uppercase tracking-wider block">
+            Analyse Pareto 3D — Axe de Priorisation 80/20
+          </span>
+          <span className="text-[11px] text-slate-300">
+            Basculez entre fréquence, temps d&apos;arrêt et coût global TCO pour cibler les vraies pertes usine.
+          </span>
+        </div>
+        <div
+          role="tablist"
+          aria-label="Dimension d'analyse Pareto 3D"
+          className="inline-flex items-center p-1 rounded-xl bg-slate-800 border border-slate-700 gap-1"
+        >
+          {(
+            [
+              { id: 'COUNT', label: 'Fréquence' },
+              { id: 'DOWNTIME', label: "Temps d'Arrêt" },
+              { id: 'COST', label: 'Coût TCO (DH)' },
+            ] as Array<{ id: ParetoDimension; label: string }>
+          ).map((dim) => {
+            const active = paretoDimension === dim.id;
+            return (
+              <button
+                key={dim.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={`pareto-dim-${dim.id}`}
+                onClick={() => setParetoDimension(dim.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  active
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/70'
+                }`}
+              >
+                {dim.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 3. Pareto Charts 80/20 Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pareto Top 10 Anomalies */}
@@ -757,7 +856,11 @@ export default function AnalyseCorrectiveTab({
                   Pareto 80/20 : Top 10 Anomalies Constatées
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Classement par fréquence cumulée (Zone Critique A ≤ 80%)
+                  {paretoDimension === 'COST'
+                    ? 'Classement par Coût Global TCO cumulé (Zone Critique A ≤ 80%)'
+                    : paretoDimension === 'DOWNTIME'
+                    ? "Classement par Temps d'Arrêt machine cumulé (Zone Critique A ≤ 80%)"
+                    : 'Classement par fréquence cumulée (Zone Critique A ≤ 80%)'}
                 </p>
               </div>
             </div>
@@ -767,37 +870,62 @@ export default function AnalyseCorrectiveTab({
           </div>
 
           <div className="space-y-3">
-            {dynamicParetoAnomalies.map((item, idx) => (
-              <div key={idx} className="space-y-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-mono font-bold">
-                      {idx + 1}
-                    </span>
-                    <span className="truncate max-w-[220px] sm:max-w-xs">{item.anomalie}</span>
-                    {item.isPareto80 && (
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">
-                        Zone A (80%)
-                      </span>
-                    )}
-                  </span>
-                  <div className="flex items-center gap-2 font-mono text-[11px]">
-                    <span className="font-black text-slate-900">{item.count}</span>
-                    <span className="text-slate-400">({item.percentage}%)</span>
-                    <span className="font-bold text-rose-700">Cumul: {item.cumulativePercentage}%</span>
-                  </div>
-                </div>
+            {dynamicParetoAnomalies.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-4 text-center">
+                Aucune anomalie enregistrée sur le périmètre sélectionné.
+              </p>
+            ) : (
+              dynamicParetoAnomalies.map((item, idx) => {
+                const primaryMetricText =
+                  paretoDimension === 'COST'
+                    ? `${Math.round(item.totalCost).toLocaleString()} DH`
+                    : paretoDimension === 'DOWNTIME'
+                    ? CorrectiveCalculationService.formatDurationHuman(item.downtimeMinutes)
+                    : `${item.count}`;
 
-                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden flex">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      item.isPareto80 ? 'bg-gradient-to-r from-rose-500 to-amber-500' : 'bg-slate-400'
-                    }`}
-                    style={{ width: `${Math.min(100, item.percentage)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+                return (
+                  <div key={`${item.name}-${idx}`} className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5 min-w-0">
+                        <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-mono font-bold shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="truncate max-w-[200px] sm:max-w-xs" title={item.name}>
+                          {item.name}
+                        </span>
+                        {item.isPareto80 && (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+                            Zone A (80%)
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-2 font-mono text-[11px] shrink-0">
+                        <span className="font-black text-slate-900">{primaryMetricText}</span>
+                        <span className="text-slate-400">({item.percentage}%)</span>
+                        <span className="font-bold text-rose-700">Cumul: {item.cumulativePercentage}%</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 pl-5">
+                      <span>{item.count} BT</span>
+                      <span>•</span>
+                      <span>Arrêt: {CorrectiveCalculationService.formatDurationHuman(item.downtimeMinutes)}</span>
+                      <span>•</span>
+                      <span>TCO: {Math.round(item.totalCost).toLocaleString()} DH</span>
+                    </div>
+
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden flex">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          item.isPareto80 ? 'bg-gradient-to-r from-rose-500 to-amber-500' : 'bg-slate-400'
+                        }`}
+                        style={{ width: `${Math.min(100, item.percentage)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -813,7 +941,11 @@ export default function AnalyseCorrectiveTab({
                   Pareto 80/20 : Top 10 Machines Critiques
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Équipements concentrant le plus grand nombre d'arrêts (RCP-02, TRR-11...)
+                  {paretoDimension === 'COST'
+                    ? 'Équipements générant le coût global TCO le plus élevé'
+                    : paretoDimension === 'DOWNTIME'
+                    ? "Équipements concentrant le plus grand temps d'arrêt production"
+                    : "Équipements concentrant le plus grand nombre d'interventions"}
                 </p>
               </div>
             </div>
@@ -823,37 +955,60 @@ export default function AnalyseCorrectiveTab({
           </div>
 
           <div className="space-y-3">
-            {dynamicParetoMachines.map((item, idx) => (
-              <div key={idx} className="space-y-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-mono font-bold">
-                      {idx + 1}
-                    </span>
-                    <span className="font-mono font-bold text-blue-900">{item.code_machine}</span>
-                    {item.isPareto80 && (
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        Priorité Usine
-                      </span>
-                    )}
-                  </span>
-                  <div className="flex items-center gap-2 font-mono text-[11px]">
-                    <span className="font-black text-slate-900">{item.count} pannes</span>
-                    <span className="text-slate-400">({item.percentage}%)</span>
-                    <span className="font-bold text-blue-700">Cumul: {item.cumulativePercentage}%</span>
-                  </div>
-                </div>
+            {dynamicParetoMachines.length === 0 ? (
+              <p className="text-xs text-slate-400 italic py-4 text-center">
+                Aucune machine en panne sur le périmètre sélectionné.
+              </p>
+            ) : (
+              dynamicParetoMachines.map((item, idx) => {
+                const primaryMetricText =
+                  paretoDimension === 'COST'
+                    ? `${Math.round(item.totalCost).toLocaleString()} DH`
+                    : paretoDimension === 'DOWNTIME'
+                    ? CorrectiveCalculationService.formatDurationHuman(item.downtimeMinutes)
+                    : `${item.count} pannes`;
 
-                <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden flex">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      item.isPareto80 ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-slate-400'
-                    }`}
-                    style={{ width: `${Math.min(100, item.percentage)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+                return (
+                  <div key={`${item.name}-${idx}`} className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-slate-800 flex items-center gap-1.5 min-w-0">
+                        <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-mono font-bold shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="font-mono font-bold text-blue-900 truncate">{item.name}</span>
+                        {item.isPareto80 && (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+                            Priorité Usine
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center gap-2 font-mono text-[11px] shrink-0">
+                        <span className="font-black text-slate-900">{primaryMetricText}</span>
+                        <span className="text-slate-400">({item.percentage}%)</span>
+                        <span className="font-bold text-blue-700">Cumul: {item.cumulativePercentage}%</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 pl-5">
+                      <span>{item.count} BT</span>
+                      <span>•</span>
+                      <span>Arrêt: {CorrectiveCalculationService.formatDurationHuman(item.downtimeMinutes)}</span>
+                      <span>•</span>
+                      <span>TCO: {Math.round(item.totalCost).toLocaleString()} DH</span>
+                    </div>
+
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden flex">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          item.isPareto80 ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-slate-400'
+                        }`}
+                        style={{ width: `${Math.min(100, item.percentage)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

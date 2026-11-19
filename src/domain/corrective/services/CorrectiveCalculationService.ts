@@ -418,6 +418,349 @@ export class CorrectiveCalculationService {
         };
       });
   }
+
+  /**
+   * Computes deterministic industrial TCO (Total Cost of Ownership) breakdown for a corrective intervention:
+   * - `coutPdr`: Spare parts cost (explicit `cout_pdr`, `pieces_utilisees` × stock unit price, or single `pdr_ref`).
+   * - `coutAtelier`: Workshop fabrication / external subcontracting cost (`cout_atelier`).
+   * - `coutMainOeuvre`: Internal labor cost = `(repairMinutes / 60) × tauxHoraire`.
+   * - `coutDirectMaintenance`: `coutPdr + coutAtelier + coutMainOeuvre` (Direct maintenance budget impact).
+   * - `coutArretProduction`: Production loss cost = `(downtimeMinutes / 60) × coutArretHoraire` (0 when machine not stopped or rate not configured).
+   * - `coutTotalTco`: `coutDirectMaintenance + coutArretProduction` (Full industrial TCO).
+   */
+  static computeInterventionCostBreakdown(
+    item: any,
+    context: InterventionCostContext = {}
+  ): InterventionCostBreakdown {
+    const defaultLaborRate =
+      context.defaultLaborRate !== undefined && Number.isFinite(Number(context.defaultLaborRate))
+        ? Math.max(0, Number(context.defaultLaborRate))
+        : DEFAULT_LABOR_HOURLY_RATE;
+
+    if (!item || typeof item !== 'object') {
+      return {
+        coutPdr: 0,
+        coutAtelier: 0,
+        tauxHoraire: defaultLaborRate,
+        repairMinutes: 0,
+        repairHours: 0,
+        coutMainOeuvre: 0,
+        coutDirectMaintenance: 0,
+        coutArretHoraire: 0,
+        downtimeMinutes: 0,
+        downtimeHours: 0,
+        coutArretProduction: 0,
+        coutTotalTco: 0,
+      };
+    }
+
+    const stockMap = context.stockMap;
+    const resolveStockItem = (rawRef: unknown) => {
+      const key = String(rawRef || '').trim().toUpperCase();
+      if (!key || !stockMap) return undefined;
+      return stockMap.get(key);
+    };
+
+    // 1. PDR cost
+    let coutPdr = 0;
+    const explicitPdr = Number(item.cout_pdr ?? item.pdr_cost);
+    if (Number.isFinite(explicitPdr) && explicitPdr > 0) {
+      coutPdr = explicitPdr;
+    } else {
+      const pieces = Array.isArray(item.pieces_utilisees) && item.pieces_utilisees.length > 0
+        ? item.pieces_utilisees
+        : Array.isArray(item.pdr_utilisees) && item.pdr_utilisees.length > 0
+        ? item.pdr_utilisees
+        : [];
+      if (pieces.length > 0) {
+        for (const piece of pieces) {
+          const stockItem = resolveStockItem(piece?.ref || piece?.reference || piece?.code);
+          const unitPrice =
+            Number(piece?.prix_unitaire) ||
+            Number(piece?.prix) ||
+            Number(stockItem?.prixUnitaire) ||
+            Number(stockItem?.prix_unitaire) ||
+            Number(stockItem?.prix_achat_ht) ||
+            Number(stockItem?.prix) ||
+            0;
+          const qty = Math.max(0, Number(piece?.quantite ?? piece?.qty ?? 0) || 0);
+          coutPdr += unitPrice * qty;
+        }
+      } else {
+        const pdrKey = String(item.pdr_ref || item.pdr || '').trim();
+        if (pdrKey) {
+          const stockItem = resolveStockItem(pdrKey);
+          const unitPrice =
+            Number(item.pdr_prix) ||
+            Number(stockItem?.prixUnitaire) ||
+            Number(stockItem?.prix_unitaire) ||
+            Number(stockItem?.prix_achat_ht) ||
+            Number(stockItem?.prix) ||
+            0;
+          const qty = Math.max(0, Number(item.pdr_quantite ?? item.quantite ?? 1) || 0);
+          coutPdr = unitPrice * qty;
+        }
+      }
+    }
+
+    // 2. Workshop / subcontracting cost
+    const coutAtelier = Math.max(0, Number(item.cout_atelier) || 0);
+
+    // 3. Repair duration & internal labor cost
+    const repairMinutes = Math.max(
+      0,
+      Number(item.temps_intervention_mins) ||
+        Number(item.temps_minutes) ||
+        Number(item.dureeMinutes) ||
+        this.timeStringToMinutes(item.temps_intervention_calc || item.temps_intervention) ||
+        0
+    );
+    const repairHours = repairMinutes / 60;
+
+    const resolvedTech =
+      context.technician ??
+      (context.technicianMap
+        ? context.technicianMap.get(String(item.technicien_matricule || '').trim().toUpperCase()) ||
+          context.technicianMap.get(String(item.intervenant || '').trim().toUpperCase())
+        : undefined);
+
+    const rawLaborRate =
+      item.taux_horaire !== undefined && item.taux_horaire !== null && item.taux_horaire !== ''
+        ? Number(item.taux_horaire)
+        : resolvedTech?.taux_horaire !== undefined && resolvedTech?.taux_horaire !== null
+        ? Number(resolvedTech.taux_horaire)
+        : defaultLaborRate;
+    const tauxHoraire = Number.isFinite(rawLaborRate) && rawLaborRate >= 0 ? rawLaborRate : defaultLaborRate;
+
+    const explicitLabor = Number(item.cout_main_oeuvre);
+    const coutMainOeuvre =
+      item.cout_main_oeuvre !== undefined &&
+      item.cout_main_oeuvre !== null &&
+      Number.isFinite(explicitLabor) &&
+      explicitLabor >= 0
+        ? explicitLabor
+        : repairHours * tauxHoraire;
+
+    // 4. Production downtime loss cost (never fabricated if machine hourly loss rate is not set)
+    const downtimeMinutes = this.resolveDowntimeMinutes(item);
+    const downtimeHours = downtimeMinutes / 60;
+
+    const resolvedMachine =
+      context.machine ??
+      (context.machineMap
+        ? context.machineMap.get(
+            String(item.code_machine || item.id_machine_registered || item.id_machine || '')
+              .trim()
+              .toUpperCase()
+          )
+        : undefined);
+
+    const rawDowntimeRate =
+      item.cout_arret_horaire !== undefined &&
+      item.cout_arret_horaire !== null &&
+      item.cout_arret_horaire !== ''
+        ? Number(item.cout_arret_horaire)
+        : resolvedMachine?.cout_arret_horaire !== undefined &&
+          resolvedMachine?.cout_arret_horaire !== null
+        ? Number(resolvedMachine.cout_arret_horaire)
+        : 0;
+    const coutArretHoraire = Number.isFinite(rawDowntimeRate) && rawDowntimeRate > 0 ? rawDowntimeRate : 0;
+
+    const explicitDowntimeLoss = Number(item.cout_arret_production);
+    const coutArretProduction =
+      item.cout_arret_production !== undefined &&
+      item.cout_arret_production !== null &&
+      Number.isFinite(explicitDowntimeLoss) &&
+      explicitDowntimeLoss >= 0
+        ? explicitDowntimeLoss
+        : downtimeHours * coutArretHoraire;
+
+    const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
+    const rPdr = round2(coutPdr);
+    const rAtelier = round2(coutAtelier);
+    const rLabor = round2(coutMainOeuvre);
+    const rDirect = round2(rPdr + rAtelier + rLabor);
+    const rDowntimeLoss = round2(coutArretProduction);
+    const rTotalTco = round2(rDirect + rDowntimeLoss);
+
+    return {
+      coutPdr: rPdr,
+      coutAtelier: rAtelier,
+      tauxHoraire: round2(tauxHoraire),
+      repairMinutes,
+      repairHours: round2(repairHours),
+      coutMainOeuvre: rLabor,
+      coutDirectMaintenance: rDirect,
+      coutArretHoraire: round2(coutArretHoraire),
+      downtimeMinutes,
+      downtimeHours: round2(downtimeHours),
+      coutArretProduction: rDowntimeLoss,
+      coutTotalTco: rTotalTco,
+    };
+  }
+
+  /**
+   * 3D Industrial Pareto Engine: ranks buckets (`anomalie`, `code_machine`, `type_panne`, etc.)
+   * by Frequency (`COUNT`), Machine Stoppage (`DOWNTIME` minutes), or Total Cost (`COST` TCO).
+   * Preserves all 3 metrics on every row for cross-dimensional decision-making.
+   */
+  static compute3DPareto(
+    interventions: any[] = [],
+    groupField: 'anomalie' | 'code_machine' | string,
+    dimension: ParetoDimension = 'COUNT',
+    context: InterventionCostContext & { limit?: number } = {}
+  ): Pareto3DItem[] {
+    const valid = (interventions || []).filter(isOfficialIntervention);
+    if (valid.length === 0) return [];
+
+    const buckets = new Map<
+      string,
+      {
+        name: string;
+        count: number;
+        downtimeMinutes: number;
+        repairMinutes: number;
+        coutPdr: number;
+        coutAtelier: number;
+        coutMainOeuvre: number;
+        directCost: number;
+        downtimeCost: number;
+        totalCost: number;
+      }
+    >();
+
+    for (const item of valid) {
+      const rawKey =
+        groupField === 'code_machine'
+          ? item.code_machine || item.id_machine_registered || item.machine || 'Non spécifié'
+          : groupField === 'anomalie'
+          ? item.anomalie || item.panne || 'Non spécifié'
+          : item[groupField] || 'AUTRE';
+      const key = String(rawKey).trim() || 'Non spécifié';
+
+      const cost = this.computeInterventionCostBreakdown(item, context);
+      const prev = buckets.get(key);
+      if (prev) {
+        prev.count += 1;
+        prev.downtimeMinutes += cost.downtimeMinutes;
+        prev.repairMinutes += cost.repairMinutes;
+        prev.coutPdr += cost.coutPdr;
+        prev.coutAtelier += cost.coutAtelier;
+        prev.coutMainOeuvre += cost.coutMainOeuvre;
+        prev.directCost += cost.coutDirectMaintenance;
+        prev.downtimeCost += cost.coutArretProduction;
+        prev.totalCost += cost.coutTotalTco;
+      } else {
+        buckets.set(key, {
+          name: key,
+          count: 1,
+          downtimeMinutes: cost.downtimeMinutes,
+          repairMinutes: cost.repairMinutes,
+          coutPdr: cost.coutPdr,
+          coutAtelier: cost.coutAtelier,
+          coutMainOeuvre: cost.coutMainOeuvre,
+          directCost: cost.coutDirectMaintenance,
+          downtimeCost: cost.coutArretProduction,
+          totalCost: cost.coutTotalTco,
+        });
+      }
+    }
+
+    const extractMetric = (b: {
+      count: number;
+      downtimeMinutes: number;
+      totalCost: number;
+    }): number => {
+      if (dimension === 'DOWNTIME') return b.downtimeMinutes;
+      if (dimension === 'COST') return b.totalCost;
+      return b.count;
+    };
+
+    const sorted = Array.from(buckets.values()).sort((a, b) => {
+      const diff = extractMetric(b) - extractMetric(a);
+      if (diff !== 0) return diff;
+      if (b.count !== a.count) return b.count - a.count;
+      return a.name.localeCompare(b.name);
+    });
+
+    const grandTotalMetric = sorted.reduce((sum, b) => sum + extractMetric(b), 0);
+    const limit = context.limit ?? 10;
+    const round1 = (v: number) => Math.round((Number(v) || 0) * 10) / 10;
+    const round2 = (v: number) => Math.round((Number(v) || 0) * 100) / 100;
+
+    let runningMetric = 0;
+    return sorted.slice(0, limit).map((b) => {
+      const metricValue = round2(extractMetric(b));
+      const priorCumPct = grandTotalMetric > 0 ? (runningMetric / grandTotalMetric) * 100 : 0;
+      runningMetric += extractMetric(b);
+      const percentage = grandTotalMetric > 0 ? (extractMetric(b) / grandTotalMetric) * 100 : 0;
+      const cumulativePercentage =
+        grandTotalMetric > 0 ? (runningMetric / grandTotalMetric) * 100 : 0;
+
+      return {
+        name: b.name,
+        count: b.count,
+        downtimeMinutes: Math.round(b.downtimeMinutes),
+        repairMinutes: Math.round(b.repairMinutes),
+        coutPdr: round2(b.coutPdr),
+        coutAtelier: round2(b.coutAtelier),
+        coutMainOeuvre: round2(b.coutMainOeuvre),
+        directCost: round2(b.directCost),
+        downtimeCost: round2(b.downtimeCost),
+        totalCost: round2(b.totalCost),
+        metricValue,
+        percentage: round1(percentage),
+        cumulativePercentage: round1(cumulativePercentage),
+        // Standard ABC / 80-20 zone A: belongs to vital few if it contributes before hitting 80% threshold
+        isPareto80: metricValue > 0 && priorCumPct < 80,
+      };
+    });
+  }
+}
+
+export const DEFAULT_LABOR_HOURLY_RATE = 35;
+
+export type ParetoDimension = 'COUNT' | 'DOWNTIME' | 'COST';
+
+export interface InterventionCostContext {
+  stockMap?: Map<string, any>;
+  machineMap?: Map<string, any>;
+  technicianMap?: Map<string, any>;
+  machine?: any;
+  technician?: any;
+  defaultLaborRate?: number;
+}
+
+export interface InterventionCostBreakdown {
+  coutPdr: number;
+  coutAtelier: number;
+  tauxHoraire: number;
+  repairMinutes: number;
+  repairHours: number;
+  coutMainOeuvre: number;
+  coutDirectMaintenance: number;
+  coutArretHoraire: number;
+  downtimeMinutes: number;
+  downtimeHours: number;
+  coutArretProduction: number;
+  coutTotalTco: number;
+}
+
+export interface Pareto3DItem {
+  name: string;
+  count: number;
+  downtimeMinutes: number;
+  repairMinutes: number;
+  coutPdr: number;
+  coutAtelier: number;
+  coutMainOeuvre: number;
+  directCost: number;
+  downtimeCost: number;
+  totalCost: number;
+  metricValue: number;
+  percentage: number;
+  cumulativePercentage: number;
+  isPareto80: boolean;
 }
 
 export default CorrectiveCalculationService;

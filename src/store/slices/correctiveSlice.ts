@@ -11,12 +11,14 @@ import {
   validateWorkshopOrderTransition,
   isWorkshopOrderActive,
   getLinkedWorkshopOrdersForIntervention,
+  computeLinkedInternalWorkshopCost,
   type IWorkshopOrder,
   type WorkshopOrderStatus,
 } from '../../domain/corrective/workshopOrderService';
 import {
   createNeedRequestRecord,
   validateNeedRequestTransition,
+  validateNeedRequestFastTrack,
   hasBlockingNeedRequestForIntervention,
   getEffectivePolicyTags,
   type INeedRequest,
@@ -103,8 +105,10 @@ export type CorrectiveSliceKeys = Pick<
   | 'handleCreateNeedRequest'
   | 'handleReviewNeedRequest'
   | 'handleTransitionNeedRequestStatus'
+  | 'handleFastTrackNeedRequest'
   | 'handleConsignInterventionLoto'
   | 'handleDeconsignInterventionLoto'
+  | 'handleSaveInterventionReport'
   | 'correctiveKpis'
   | 'correctiveParetoAnomalies'
   | 'correctiveParetoMachines'
@@ -232,6 +236,40 @@ function computeDowntimeMinutesForClosure(
   return 0;
 }
 
+function resolveMachineAndTechnicianForBt(
+  item: Record<string, any>,
+  machines: any[] = [],
+  technicians: any[] = []
+): { machine?: any; technician?: any } {
+  const mKey = String(item?.code_machine || item?.id_machine_registered || item?.id_machine || '')
+    .trim()
+    .toUpperCase();
+  const machine = mKey
+    ? (machines || []).find((m) => {
+        const keys = [m?.id_machine_registered, m?.id, m?.code, m?.id_machine]
+          .map((v) => String(v || '').trim().toUpperCase())
+          .filter(Boolean);
+        return keys.includes(mKey);
+      })
+    : undefined;
+
+  const techIdKey = String(item?.technicien_matricule || '').trim().toUpperCase();
+  const techNameKey = String(item?.intervenant || item?.submitted_by_name || '').trim().toUpperCase();
+  const technician = (technicians || []).find((t) => {
+    const idCandidates = [t?.id_technician, t?.id]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    const nameCandidates = [t?.nom, t?.name]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    if (techIdKey && idCandidates.includes(techIdKey)) return true;
+    if (techNameKey && nameCandidates.includes(techNameKey)) return true;
+    return false;
+  });
+
+  return { machine, technician };
+}
+
 function validateStockSufficiencyForDeduction(
   pieces: CorrectivePdrConsumedItem[],
   stockMap: Map<string, any>,
@@ -267,6 +305,22 @@ function validateStockSufficiencyForDeduction(
   }
 
   return { valid: true };
+}
+
+function resolveCombinedWorkshopCost(
+  existing: CorrectiveInterventionItem,
+  linkedSorties: ReadonlyArray<{ cout_bobinage?: unknown; etat?: unknown }>,
+  linkedWorkshopOrders: ReadonlyArray<IWorkshopOrder>,
+  overrideCoutAtelier?: unknown
+): number {
+  const internalCost = computeLinkedInternalWorkshopCost(existing, linkedWorkshopOrders);
+  const externalCost = (linkedSorties || []).reduce((sum, s) => {
+    const val = Number(s?.cout_bobinage ?? 0);
+    return Number.isFinite(val) && val > 0 ? sum + val : sum;
+  }, 0);
+  const derivedTotal = Number((externalCost + internalCost).toFixed(2));
+  const explicitCost = Number(overrideCoutAtelier ?? existing.cout_atelier ?? 0) || 0;
+  return Number(Math.max(explicitCost, derivedTotal).toFixed(2));
 }
 
 export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveSliceKeys {
@@ -712,14 +766,18 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       }
 
       // APPROVED branch: verify FSM guards first
-      const openSorties = SortieExterneService.getLinkedOrdersForBt(
+      const linkedSorties = SortieExterneService.getLinkedOrdersForBt(
         existing,
         get().sortiesExterne || []
-      ).some((s) => SortieExterneService.isWorkshopOrderOpen(s.etat));
-      const openWorkshopOrders = getLinkedWorkshopOrdersForIntervention(
+      );
+      const openSorties = linkedSorties.some((s) =>
+        SortieExterneService.isWorkshopOrderOpen(s.etat)
+      );
+      const linkedWorkshopOrders = getLinkedWorkshopOrdersForIntervention(
         existing,
         get().workshopOrders || []
-      ).some((o) => isWorkshopOrderActive(o));
+      );
+      const openWorkshopOrders = linkedWorkshopOrders.some((o) => isWorkshopOrderActive(o));
       const openNeedRequest = hasBlockingNeedRequestForIntervention(
         { ...existing, ...(decisionData || {}) },
         get().needRequests || []
@@ -775,7 +833,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
 
       for (const piece of approvedPieces) {
         const stockMatch = stockMap.get(piece.ref.toUpperCase());
-        const unitPrice = Number(piece.prix_unitaire ?? stockMatch?.prixUnitaire ?? stockMatch?.prix ?? 0) || 0;
+        const unitPrice =
+          Number(piece.prix_unitaire) ||
+          Number(stockMatch?.prixUnitaire) ||
+          Number(stockMatch?.prix_unitaire) ||
+          Number(stockMatch?.prix_achat_ht) ||
+          Number(stockMatch?.prix) ||
+          0;
         totalPdrCost += unitPrice * piece.quantite;
 
         const alreadyDeducted =
@@ -830,9 +894,30 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         resolvedRepairMins
       );
 
-      const coutAtelier = Number(existing.cout_atelier ?? 0) || 0;
+      const coutAtelier = resolveCombinedWorkshopCost(
+        existing,
+        linkedSorties,
+        linkedWorkshopOrders,
+        decisionData?.cout_atelier
+      );
       const coutPdr = Number(totalPdrCost.toFixed(2));
       const coutTotal = Number((coutPdr + coutAtelier).toFixed(2));
+      const { machine: linkedMachine, technician: linkedTech } = resolveMachineAndTechnicianForBt(
+        { ...existing, ...decisionData },
+        get().machines || [],
+        get().technicians || []
+      );
+      const tcoBreakdown = CorrectiveCalculationService.computeInterventionCostBreakdown(
+        {
+          ...existing,
+          ...decisionData,
+          cout_pdr: coutPdr,
+          cout_atelier: coutAtelier,
+          temps_intervention_mins: resolvedRepairMins,
+          temps_arret_minutes: resolvedDowntimeMins,
+        },
+        { machine: linkedMachine, technician: linkedTech, stockMap }
+      );
       const nature = normalizeInterventionNature(
         decisionData?.intervention_nature ?? existing.intervention_nature
       );
@@ -867,7 +952,12 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         temps_arret_minutes: resolvedDowntimeMins,
         cout_pdr: coutPdr,
         cout_atelier: coutAtelier,
+        taux_horaire: tcoBreakdown.tauxHoraire,
+        cout_main_oeuvre: tcoBreakdown.coutMainOeuvre,
+        cout_arret_horaire: tcoBreakdown.coutArretHoraire,
+        cout_arret_production: tcoBreakdown.coutArretProduction,
         cout_total: coutTotal,
+        cout_total_tco: tcoBreakdown.coutTotalTco,
         stock_deducted: emittedIds.length > 0 || (skipDeduction && approvedPieces.length > 0),
         stock_effect:
           emittedIds.length > 0
@@ -895,6 +985,10 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
           validation_status: 'APPROVED',
           statut: 'CLOTURE',
           cout_total: coutTotal,
+          cout_main_oeuvre: tcoBreakdown.coutMainOeuvre,
+          cout_arret_production: tcoBreakdown.coutArretProduction,
+          cout_total_tco: tcoBreakdown.coutTotalTco,
+          validated_with_edits: editedByAdmin,
           skip_stock_deduction: skipDeduction,
           emitted_movement_ids: emittedIds,
         },
@@ -1020,7 +1114,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       for (let idx = 0; idx < pieces.length; idx++) {
         const piece = pieces[idx];
         const stockMatch = stockMap.get(piece.ref.toUpperCase());
-        const unitPrice = Number(piece.prix_unitaire ?? stockMatch?.prixUnitaire ?? stockMatch?.prix ?? 0) || 0;
+        const unitPrice =
+          Number(piece.prix_unitaire) ||
+          Number(stockMatch?.prixUnitaire) ||
+          Number(stockMatch?.prix_unitaire) ||
+          Number(stockMatch?.prix_achat_ht) ||
+          Number(stockMatch?.prix) ||
+          0;
         totalPdrCost += unitPrice * piece.quantite;
 
         const bonRef =
@@ -1078,8 +1178,29 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       );
 
       const coutPdr = Number(totalPdrCost.toFixed(2));
-      const coutAtelier = Number(clotureData?.cout_atelier ?? existing.cout_atelier ?? 0) || 0;
+      const coutAtelier = resolveCombinedWorkshopCost(
+        existing,
+        linkedSorties,
+        linkedWorkshopOrders,
+        clotureData?.cout_atelier
+      );
       const coutTotal = Number((coutPdr + coutAtelier).toFixed(2));
+      const { machine: linkedMachine, technician: linkedTech } = resolveMachineAndTechnicianForBt(
+        { ...existing, ...clotureData },
+        get().machines || [],
+        get().technicians || []
+      );
+      const tcoBreakdown = CorrectiveCalculationService.computeInterventionCostBreakdown(
+        {
+          ...existing,
+          ...clotureData,
+          cout_pdr: coutPdr,
+          cout_atelier: coutAtelier,
+          temps_intervention_mins: resolvedRepairMins,
+          temps_arret_minutes: resolvedDowntimeMins,
+        },
+        { machine: linkedMachine, technician: linkedTech, stockMap }
+      );
       const nature = normalizeInterventionNature(
         clotureData?.intervention_nature ?? existing.intervention_nature
       );
@@ -1121,7 +1242,12 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         temps_arret_minutes: resolvedDowntimeMins,
         cout_pdr: coutPdr,
         cout_atelier: coutAtelier,
+        taux_horaire: tcoBreakdown.tauxHoraire,
+        cout_main_oeuvre: tcoBreakdown.coutMainOeuvre,
+        cout_arret_horaire: tcoBreakdown.coutArretHoraire,
+        cout_arret_production: tcoBreakdown.coutArretProduction,
         cout_total: coutTotal,
+        cout_total_tco: tcoBreakdown.coutTotalTco,
         stock_deducted: emittedIds.length > 0 || (skipDeduction && pieces.length > 0),
         stock_effect:
           emittedIds.length > 0
@@ -1148,6 +1274,9 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         after: {
           statut: 'CLOTURE',
           cout_total: coutTotal,
+          cout_main_oeuvre: tcoBreakdown.coutMainOeuvre,
+          cout_arret_production: tcoBreakdown.coutArretProduction,
+          cout_total_tco: tcoBreakdown.coutTotalTco,
           temps_intervention_mins: resolvedRepairMins,
           temps_arret_minutes: resolvedDowntimeMins,
           emitted_movement_ids: emittedIds,
@@ -1337,7 +1466,8 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     handleTransitionWorkshopOrderStatus: (
       orderId: string,
       nextStatus: WorkshopOrderStatus,
-      observation?: string
+      observation?: string,
+      costDetails?: { heures_atelier?: number; cout_atelier?: number }
     ) => {
       const orders = get().workshopOrders || [];
       const target = orders.find(
@@ -1358,6 +1488,14 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         statut: check.normalizedTarget || nextStatus,
         date_statut: nowIso,
         ...(observation !== undefined ? { observation } : {}),
+        ...(costDetails?.heures_atelier !== undefined &&
+        Number.isFinite(Number(costDetails.heures_atelier))
+          ? { heures_atelier: Math.max(0, Number(costDetails.heures_atelier)) }
+          : {}),
+        ...(costDetails?.cout_atelier !== undefined &&
+        Number.isFinite(Number(costDetails.cout_atelier))
+          ? { cout_atelier: Math.max(0, Number(costDetails.cout_atelier)) }
+          : {}),
       };
 
       const nextOrders = orders.map((o) => (String(o.id) === String(target.id) ? updatedOrder : o));
@@ -1621,6 +1759,115 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       return { valid: true, needRequest: updatedNeed };
     },
 
+    handleFastTrackNeedRequest: (needId: string, options = {}) => {
+      const currentNeeds = get().needRequests || [];
+      const target = currentNeeds.find((r) => String(r.id) === String(needId));
+      if (!target) {
+        return { valid: false, reason: 'Demande de besoin introuvable.' };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(
+        options?.actorRole || resolveActiveSessionRole() || actor.actorRole || ''
+      )
+        .trim()
+        .toUpperCase();
+
+      const linkedWo = target.id_workshop_order
+        ? (get().workshopOrders || []).find(
+            (o) => String(o.id) === String(target.id_workshop_order)
+          ) || null
+        : null;
+
+      // Read-only live stock check when a catalog PDR reference is specified (zero stock mutation)
+      let availableStock: number | null = null;
+      const refKey = String(target.id_ref_pdr || '').trim().toUpperCase();
+      if (refKey) {
+        const stockMatch = (get().rawStock || []).find((s: any) => {
+          const keys = [s?.ref, s?.reference, s?.code_article, s?.code]
+            .map((v) => String(v || '').trim().toUpperCase())
+            .filter(Boolean);
+          return keys.includes(refKey);
+        });
+        if (stockMatch) {
+          availableStock = StockCalculationService.calculateStockActuel(
+            stockMatch,
+            get().mouvements || []
+          );
+        }
+      }
+
+      const check = validateNeedRequestFastTrack(target, {
+        actorRole: effectiveRole,
+        isTechnician: options?.isTechnician,
+        availableStock,
+        linkedWorkshopOrder: linkedWo,
+        closeFieldImmediately: Boolean(options?.closeFieldImmediately),
+      });
+      if (!check.valid || !check.targetStatus) {
+        return { valid: false, reason: check.reason };
+      }
+
+      const nowIso = new Date().toISOString();
+      const targetStatus = check.targetStatus;
+      const nextTimestamps: Partial<Record<NeedRequestStatus, string>> = {
+        ...(target.timestamps || {}),
+        REVUE_SUPERVISEUR: target.timestamps?.REVUE_SUPERVISEUR || nowIso,
+        APPROVISIONNEMENT: target.timestamps?.APPROVISIONNEMENT || nowIso,
+        RECU_STRUCTURE: target.timestamps?.RECU_STRUCTURE || nowIso,
+        REMIS_TECHNICIEN: target.timestamps?.REMIS_TECHNICIEN || nowIso,
+        ...(targetStatus === 'CLOTURE_FIELD'
+          ? {
+              POSE_ESSAI: target.timestamps?.POSE_ESSAI || nowIso,
+              CLOTURE_FIELD: nowIso,
+            }
+          : {}),
+      };
+
+      const noteText =
+        options?.notes_superviseur !== undefined
+          ? String(options.notes_superviseur).trim()
+          : target.notes_superviseur || 'Remise Express Stock (Mode Usine Flexible)';
+
+      const updatedNeed: INeedRequest = {
+        ...target,
+        statut: targetStatus,
+        canal_appro: 'STOCK',
+        fast_track: true,
+        notes_superviseur: noteText,
+        date_statut: nowIso,
+        timestamps: nextTimestamps,
+      };
+
+      get().setNeedRequests(
+        currentNeeds.map((r) => (String(r.id) === String(needId) ? updatedNeed : r))
+      );
+
+      get().appendAuditEvent?.({
+        actorId: String(options?.actorId || actor.actorId || 'ADMIN'),
+        actorName: String(options?.actorName || actor.actorName || 'Administrateur'),
+        actorRole: effectiveRole || actor.actorRole,
+        actionType: 'NEED_REQUEST_FAST_TRACK',
+        entityType: 'NEED_REQUEST',
+        entityId: String(target.code_demande || target.id),
+        before: {
+          statut: target.statut,
+          canal_appro: target.canal_appro || null,
+          fast_track: Boolean(target.fast_track),
+        },
+        after: {
+          statut: updatedNeed.statut,
+          canal_appro: 'STOCK',
+          fast_track: true,
+          id_ref_pdr: target.id_ref_pdr || null,
+          quantite: target.quantite,
+          available_stock_snapshot: availableStock,
+        },
+      });
+
+      return { valid: true, needRequest: updatedNeed };
+    },
+
     handleConsignInterventionLoto: (id, payload = {}) => {
       const current = get().correctiveInterventions || [];
       const existing = current.find((i) => matchesIntervention(i, id));
@@ -1740,6 +1987,87 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
                 override_reason: check.permit.override_reason || '',
               }
             : {}),
+        },
+      });
+
+      return { valid: true, intervention: updated };
+    },
+
+    handleSaveInterventionReport: (id, report, context = {}) => {
+      const current = get().correctiveInterventions || [];
+      const existing = current.find((i) => matchesIntervention(i, id));
+      if (!existing) {
+        return { valid: false, reason: 'Bon de travail introuvable pour enregistrement RCA.' };
+      }
+
+      const actor = resolveActiveActorContext();
+      const effectiveRole = String(context?.actorRole || resolveActiveSessionRole() || actor.actorRole)
+        .trim()
+        .toUpperCase();
+      if (effectiveRole === 'VIEWER' || effectiveRole === 'OBSERVATEUR') {
+        return {
+          valid: false,
+          reason: 'Profil Observateur en lecture seule : enregistrement du rapport technique refusé.',
+        };
+      }
+
+      const nowIso = new Date().toISOString();
+      const savedById = String(context?.actorId || actor.actorId || 'ADMIN');
+      const savedByName = String(context?.actorName || actor.actorName || 'Administrateur');
+
+      const sanitizedReport = report
+        ? {
+            fields: { ...(report.fields || {}) },
+            extraRcaRows: Array.isArray(report.extraRcaRows)
+              ? report.extraRcaRows.map((row, idx) => ({
+                  id: String(row?.id || `rca-${idx + 1}`),
+                  component: String(row?.component || ''),
+                  observation: String(row?.observation || ''),
+                  impact: String(row?.impact || ''),
+                }))
+              : [],
+            updatedAt: String(report.updatedAt || nowIso),
+            savedById,
+            savedByName,
+          }
+        : null;
+
+      const rootCauseSummary = sanitizedReport
+        ? String(sanitizedReport.fields.root_cause_detail || '').trim()
+        : '';
+
+      // Post-mortem RCA documentation is explicitly permitted on CLOTURE BTs without mutating statut, stock, or costs.
+      const updated: CorrectiveInterventionItem = {
+        ...existing,
+        technical_report: sanitizedReport,
+        ...(rootCauseSummary
+          ? { cause_racine: rootCauseSummary }
+          : report === null
+          ? { cause_racine: '' }
+          : {}),
+        rapport_redige: sanitizedReport ? 'OUI' : 'NON',
+        updated_at: nowIso,
+      };
+
+      get().setCorrectiveInterventions((prev) =>
+        (prev || []).map((i) => (matchesIntervention(i, id) ? updated : i))
+      );
+
+      get().appendAuditEvent?.({
+        actorId: savedById,
+        actorName: savedByName,
+        actorRole: effectiveRole,
+        actionType: sanitizedReport ? 'CORRECTIVE_RCA_SAVED' : 'CORRECTIVE_RCA_CLEARED',
+        entityType: 'CORRECTIVE_BT',
+        entityId: String(existing.id || id),
+        before: {
+          has_report: Boolean(existing.technical_report),
+          cause_racine: existing.cause_racine || '',
+        },
+        after: {
+          has_report: Boolean(sanitizedReport),
+          cause_racine: rootCauseSummary,
+          extra_rca_rows: sanitizedReport ? sanitizedReport.extraRcaRows.length : 0,
         },
       });
 

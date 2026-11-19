@@ -26,6 +26,7 @@ export interface IMeterReading {
   date_releve: string;
   releve_par: string;
   source: MeterReadingSource;
+  isMeterReset?: boolean;
   commentaire?: string;
   createdAt: string;
 }

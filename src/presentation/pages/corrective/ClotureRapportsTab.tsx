@@ -1269,6 +1269,18 @@ export default function ClotureRapportsTab({
                     <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-800 border border-slate-200 font-mono font-bold text-xs truncate">
                       {item.code_machine}
                     </span>
+                    {(item.technical_report || item.cause_racine) && (
+                      <span
+                        className="px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 font-mono font-black text-[10px] shrink-0"
+                        title={
+                          item.cause_racine
+                            ? `Cause racine : ${item.cause_racine}`
+                            : 'Rapport technique RCA enregistré en base'
+                        }
+                      >
+                        RCA
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 font-mono font-bold text-xs text-emerald-700 bg-emerald-50/70 px-2 py-0.5 rounded-lg border border-emerald-200/70 shrink-0">
@@ -1524,6 +1536,73 @@ export default function ClotureRapportsTab({
                         )}
                       </div>
                     </div>
+
+                    {/* Ventilation Coûts & TCO */}
+                    {(() => {
+                      const linkedMachine = machineMap.get(
+                        String(previewItem.code_machine || '').trim().toUpperCase()
+                      );
+                      const techMap = new Map<string, any>();
+                      (technicians || []).forEach((tech: any) => {
+                        if (tech?.id_technician) techMap.set(String(tech.id_technician).trim().toUpperCase(), tech);
+                        if (tech?.id) techMap.set(String(tech.id).trim().toUpperCase(), tech);
+                        if (tech?.nom) techMap.set(String(tech.nom).trim().toUpperCase(), tech);
+                      });
+                      const localStockMap = new Map<string, any>();
+                      (stockItems || []).forEach((s: any) => {
+                        const k = String(s?.ref || s?.code_article || '').trim().toUpperCase();
+                        if (k) localStockMap.set(k, s);
+                      });
+                      const cost = CorrectiveCalculationService.computeInterventionCostBreakdown(
+                        previewItem,
+                        { machine: linkedMachine, technicianMap: techMap, stockMap: localStockMap }
+                      );
+                      return (
+                        <div
+                          data-testid="cloture-preview-tco-panel"
+                          className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10.5px] font-extrabold text-slate-800 uppercase tracking-wider">
+                              Ventilation Coûts &amp; TCO Industriel
+                            </span>
+                            <span className="font-mono font-black text-xs text-purple-900 bg-purple-50 px-2.5 py-0.5 rounded-lg border border-purple-200">
+                              Total TCO : {cost.coutTotalTco.toLocaleString('fr-FR')} DH
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                            <div className="p-2 rounded-xl bg-white border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">PDR Stock</span>
+                              <span className="font-mono font-black text-slate-900">
+                                {cost.coutPdr.toLocaleString('fr-FR')} DH
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-white border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                                Main-d&apos;Œuvre ({cost.repairHours}h × {cost.tauxHoraire})
+                              </span>
+                              <span className="font-mono font-black text-blue-800">
+                                {cost.coutMainOeuvre.toLocaleString('fr-FR')} DH
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-white border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">Atelier / Externe</span>
+                              <span className="font-mono font-black text-indigo-800">
+                                {cost.coutAtelier.toLocaleString('fr-FR')} DH
+                              </span>
+                            </div>
+                            <div className="p-2 rounded-xl bg-white border border-slate-200">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase block">
+                                Perte Arrêt ({cost.downtimeHours}h)
+                              </span>
+                              <span className="font-mono font-black text-rose-700">
+                                {cost.coutArretProduction.toLocaleString('fr-FR')} DH
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {(previewItem.submitted_by_name ||
                       previewItem.validated_by_name ||

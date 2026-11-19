@@ -23,9 +23,12 @@ describe('Preventive Task Integration Flow', () => {
     ]);
     PreventiveService.saveExecutions([]);
 
-    const profile = PreventiveService.getMachinePreventiveProfile('MCH-01');
+    const profile = PreventiveService.getMachinePreventiveProfile('MCH-01', {
+      today: executionDate,
+    });
 
     expect(profile.fait_tasks).toBe(1);
     expect(profile.compliance_rate).toBe(100);
+    expect(profile.health_status).toBe('Optimale');
   });
 });

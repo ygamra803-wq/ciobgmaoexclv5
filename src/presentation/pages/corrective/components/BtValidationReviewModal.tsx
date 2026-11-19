@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ShieldCheck,
   X,
@@ -7,6 +7,7 @@ import {
   Package,
   Trash2,
   Wrench,
+  Plus,
 } from 'lucide-react';
 import { INTERVENTION_NATURE_OPTIONS } from '../../../components/common/ValidationStatusBadge';
 import { SortieExterneService } from '../../../../application/services/SortieExterneService';
@@ -58,6 +59,53 @@ export default function BtValidationReviewModal({
   setReviewNote,
   handleReviewDecision,
 }: BtValidationReviewModalProps) {
+  const [pdrSearch, setPdrSearch] = useState('');
+  const [selectedPdrRef, setSelectedPdrRef] = useState('');
+  const [selectedPdrQty, setSelectedPdrQty] = useState<number>(1);
+
+  const filteredStockOptions = useMemo(() => {
+    const q = pdrSearch.trim().toLowerCase();
+    const list = (stockItems || []).filter((s: any) => {
+      const ref = String(s?.ref || s?.code_article || '').trim();
+      if (!ref) return false;
+      if (!q) return true;
+      const des = String(s?.designation || s?.nom || '').toLowerCase();
+      return ref.toLowerCase().includes(q) || des.includes(q);
+    });
+    return list.slice(0, 80);
+  }, [stockItems, pdrSearch]);
+
+  const handleAddMissingPdr = () => {
+    const cleanRef = String(selectedPdrRef || '').trim();
+    if (!cleanRef) {
+      showToast?.('Sélectionnez une pièce de rechange du catalogue à ajouter.', 'warning');
+      return;
+    }
+    const matched = (stockItems || []).find(
+      (s: any) =>
+        String(s?.ref || s?.code_article || '').trim().toUpperCase() === cleanRef.toUpperCase()
+    );
+    const canonicalRef = String(matched?.ref || matched?.code_article || cleanRef).trim();
+    const designation = String(matched?.designation || matched?.nom || canonicalRef).trim();
+    const qtyToAdd = Math.max(1, Math.round(Number(selectedPdrQty) || 1));
+
+    setReviewPieces((prev) => {
+      const existingIdx = prev.findIndex(
+        (p) => String(p.ref || '').trim().toUpperCase() === canonicalRef.toUpperCase()
+      );
+      if (existingIdx >= 0) {
+        return prev.map((p, i) =>
+          i === existingIdx ? { ...p, quantite: Number(p.quantite || 0) + qtyToAdd } : p
+        );
+      }
+      return [...prev, { ref: canonicalRef, designation, quantite: qtyToAdd }];
+    });
+
+    setSelectedPdrRef('');
+    setSelectedPdrQty(1);
+    setPdrSearch('');
+  };
+
   if (!reviewModalBt) return null;
 
   return (
@@ -330,6 +378,64 @@ export default function BtValidationReviewModal({
               <p className="text-xs text-slate-500 italic">
                 Aucune pièce de rechange déclarée sur cette intervention (clôture sans mouvement stock).
               </p>
+            )}
+
+            {/* Supervisor: Add Missing PDR from Catalog (Maker-Checker Edit) */}
+            {(stockItems || []).length > 0 && (
+              <div
+                data-testid="review-add-pdr-panel"
+                className="pt-2.5 border-t border-cyan-200/80 space-y-2"
+              >
+                <span className="text-[10.5px] font-black uppercase tracking-wider text-cyan-900 block">
+                  + Ajouter une pièce manquante (Catalogue Stock)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                  <input
+                    type="text"
+                    data-testid="review-add-pdr-search"
+                    value={pdrSearch}
+                    onChange={(e) => setPdrSearch(e.target.value)}
+                    placeholder="Filtrer réf. ou désignation..."
+                    className="sm:col-span-4 py-1.5 px-2.5 text-xs rounded-lg border border-cyan-300 bg-white focus:outline-hidden focus:border-cyan-500"
+                  />
+                  <select
+                    data-testid="review-add-pdr-select"
+                    value={selectedPdrRef}
+                    onChange={(e) => setSelectedPdrRef(e.target.value)}
+                    className="sm:col-span-5 py-1.5 px-2 text-xs font-semibold rounded-lg border border-cyan-300 bg-white focus:outline-hidden focus:border-cyan-500"
+                  >
+                    <option value="">-- Sélectionner une PDR ({filteredStockOptions.length}) --</option>
+                    {filteredStockOptions.map((s: any) => {
+                      const ref = String(s.ref || s.code_article || '').trim();
+                      const dispo = s.stockActuel ?? s.stock_actuel ?? s.quantite ?? 0;
+                      return (
+                        <option key={ref} value={ref}>
+                          {ref} — {s.designation || s.nom || ref} (Dispo: {dispo})
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <input
+                    type="number"
+                    min={1}
+                    data-testid="review-add-pdr-qty"
+                    value={selectedPdrQty}
+                    onChange={(e) => setSelectedPdrQty(Math.max(1, Number(e.target.value) || 1))}
+                    className="sm:col-span-1 py-1.5 px-2 text-xs font-mono font-bold rounded-lg border border-cyan-300 bg-white text-center"
+                    aria-label="Quantité PDR à ajouter"
+                  />
+                  <button
+                    type="button"
+                    data-testid="review-add-pdr-btn"
+                    onClick={handleAddMissingPdr}
+                    disabled={!selectedPdrRef}
+                    className="sm:col-span-2 py-1.5 px-2.5 rounded-lg bg-cyan-700 hover:bg-cyan-800 disabled:bg-slate-300 text-white font-bold text-xs flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ajouter</span>
+                  </button>
+                </div>
+              </div>
             )}
 
             {reviewPieces.length > 0 && (

@@ -95,6 +95,8 @@ export interface LiveBonAtelierFormState {
   quantite: number;
   description_travaux: string;
   observation: string;
+  heures_atelier: number;
+  cout_atelier: number;
 }
 
 export interface LiveWorkshopQuickFormState {
@@ -230,6 +232,15 @@ export function useInterventionLiveController({
   const handleTransitionNeedRequestStatus = useGmaoStore(
     (s) => s.handleTransitionNeedRequestStatus
   );
+  const handleFastTrackNeedRequest = useGmaoStore((s) => s.handleFastTrackNeedRequest);
+  const canFastTrackNeed =
+    Boolean(user) &&
+    !isTechUser &&
+    !isReadOnlyUser &&
+    (AuthorizationService.hasPermission(user, 'need.review') ||
+      AuthorizationService.hasPermission(user, 'need.handoff') ||
+      AuthorizationService.hasPermission(user, 'corrective.manage') ||
+      AuthorizationService.hasPermission(user, 'stock.edit'));
 
   // Sync with reactive StockIndexStore for real-time stock balances
   useSyncExternalStore(stockIndexStore.subscribeAll, stockIndexStore.getGlobalVersion);
@@ -265,6 +276,37 @@ export function useInterventionLiveController({
     });
     return map;
   }, [machines]);
+
+  // Phase C4: Last 3 closed breakdowns on the same machine (full plant history for field diagnostics)
+  const recentMachineFailures = useMemo(() => {
+    const targetCode = String(activeIntervention?.code_machine || '')
+      .trim()
+      .toUpperCase();
+    if (!targetCode) return [];
+    const currentId = String(activeIntervention?.id ?? '').trim().toUpperCase();
+    const currentBt = String(activeIntervention?.num_bt ?? '').trim().toUpperCase();
+
+    return (interventions || [])
+      .filter((item) => {
+        if (!item) return false;
+        const mCode = String(item.code_machine || '').trim().toUpperCase();
+        if (mCode !== targetCode) return false;
+        const itemId = String(item.id ?? '').trim().toUpperCase();
+        const itemBt = String(item.num_bt ?? '').trim().toUpperCase();
+        if (currentId && itemId === currentId) return false;
+        if (currentBt && itemBt === currentBt) return false;
+        return (
+          String(item.statut || '').toUpperCase() === 'CLOTURE' ||
+          String(item.action_fermee || '').toUpperCase() === 'OUI'
+        );
+      })
+      .sort((a, b) => {
+        const dateA = String(a.date_cloture || a.date_fin || a.date_demande || a.date || '');
+        const dateB = String(b.date_cloture || b.date_fin || b.date_demande || b.date || '');
+        return dateB.localeCompare(dateA);
+      })
+      .slice(0, 3);
+  }, [interventions, activeIntervention]);
 
   // Real-time ticking chronometer (1s tick)
   const [currentTimestamp, setCurrentTimestamp] = useState(() => Date.now());
@@ -483,12 +525,34 @@ export function useInterventionLiveController({
     );
   };
 
+  const handleFastTrackLinkedNeed = (needId: string, closeFieldImmediately = false) => {
+    const res = handleFastTrackNeedRequest(needId, {
+      closeFieldImmediately,
+      actorRole: user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN'),
+      isTechnician: isTechUser,
+      actorId: user?.id || user?.code || 'admin',
+      actorName: user?.name || 'Responsable',
+    });
+    if (!res.valid) {
+      showToast?.(res.reason || 'Remise express refusée.', 'warning');
+      return;
+    }
+    showToast?.(
+      `Remise Express Stock validée pour ${res.needRequest?.code_demande || needId} (${
+        NEED_STATUS_LABELS[res.needRequest?.statut || 'REMIS_TECHNICIEN']
+      }).`,
+      'success'
+    );
+  };
+
   const [showBonAtelierMecaniqueForm, setShowBonAtelierMecaniqueForm] = useState(false);
   const [bonAtelierForm, setBonAtelierForm] = useState<LiveBonAtelierFormState>({
     type_demande: 'REALISATION',
     quantite: 1,
     description_travaux: '',
     observation: '',
+    heures_atelier: 0,
+    cout_atelier: 0,
   });
 
   const handleEmitBonAtelierMecanique = () => {
@@ -501,6 +565,8 @@ export function useInterventionLiveController({
       );
       return;
     }
+    const heuresVal = Number(bonAtelierForm.heures_atelier || 0);
+    const coutVal = Number(bonAtelierForm.cout_atelier || 0);
     const created = handleCreateWorkshopOrder({
       type_demande: bonAtelierForm.type_demande,
       id_machine: String(activeIntervention.code_machine || activeIntervention.machine || '').trim(),
@@ -511,6 +577,8 @@ export function useInterventionLiveController({
       quantite: Math.max(1, Number(bonAtelierForm.quantite) || 1),
       description_travaux: desc,
       observation: String(bonAtelierForm.observation || '').trim() || undefined,
+      ...(heuresVal > 0 ? { heures_atelier: heuresVal } : {}),
+      ...(coutVal > 0 ? { cout_atelier: coutVal } : {}),
       emetteur_section: 'SM',
       emetteur_user_id: user?.id || user?.code || 'SM',
       emetteur_name: user?.name || activeIntervention.intervenant || 'Section Maintenance',
@@ -533,6 +601,8 @@ export function useInterventionLiveController({
         quantite: 1,
         description_travaux: '',
         observation: '',
+        heures_atelier: 0,
+        cout_atelier: 0,
       });
       setShowBonAtelierMecaniqueForm(false);
       showToast?.(
@@ -546,10 +616,10 @@ export function useInterventionLiveController({
 
   const [showQuickWorkshopForm, setShowQuickWorkshopForm] = useState(false);
   const [workshopQuickForm, setWorkshopQuickForm] = useState<LiveWorkshopQuickFormState>({
-    categorie_flux: 'ATELIER_MECANIQUE',
-    nature_travail: 'Usinage / Rectification',
+    categorie_flux: 'SOUS_TRAITANCE_EXTERNE',
+    nature_travail: 'Bobinage complet',
     designation_piece: '',
-    fournisseur_externe: 'Atelier Mécanique Interne',
+    fournisseur_externe: 'Atelier Bobinage Externe',
     cout_bobinage: 0,
     suspendBtAfterCreate: true,
   });
@@ -785,14 +855,18 @@ export function useInterventionLiveController({
     }));
   };
 
-  const executeClotureOrSubmit = (): boolean => {
+  const executeClotureOrSubmit = (overridePatch?: Partial<LiveInterventionFormState>): boolean => {
     if (!activeIntervention) {
       showToast?.('Aucune intervention active sélectionnée', 'warning');
       return false;
     }
 
-    const effectivePieces = buildEffectivePiecesList(formState);
-    const selectedNature = String(formState.intervention_nature || '').trim().toUpperCase();
+    const effectiveForm: LiveInterventionFormState = overridePatch
+      ? { ...formState, ...overridePatch }
+      : formState;
+
+    const effectivePieces = buildEffectivePiecesList(effectiveForm);
+    const selectedNature = String(effectiveForm.intervention_nature || '').trim().toUpperCase();
 
     if (selectedNature === 'REPLACE' && effectivePieces.length === 0) {
       showToast?.(
@@ -804,13 +878,13 @@ export function useInterventionLiveController({
 
     const primaryPiece = effectivePieces.length === 1 ? effectivePieces[0] : null;
     const normalizedFormState = {
-      ...formState,
+      ...effectiveForm,
       ...(selectedNature ? { intervention_nature: selectedNature } : {}),
       pieces_utilisees: effectivePieces,
-      pdr_ref: primaryPiece ? primaryPiece.ref : formState.pdr_ref,
-      pdr_designation: primaryPiece ? primaryPiece.designation : formState.pdr_designation,
-      pdr_quantite: primaryPiece ? primaryPiece.quantite : formState.pdr_quantite,
-      pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : formState.pdr_prix,
+      pdr_ref: primaryPiece ? primaryPiece.ref : effectiveForm.pdr_ref,
+      pdr_designation: primaryPiece ? primaryPiece.designation : effectiveForm.pdr_designation,
+      pdr_quantite: primaryPiece ? primaryPiece.quantite : effectiveForm.pdr_quantite,
+      pdr_prix: primaryPiece ? primaryPiece.prix_unitaire : effectiveForm.pdr_prix,
     };
 
     const now = new Date();
@@ -971,6 +1045,31 @@ export function useInterventionLiveController({
     executeClotureOrSubmit();
   };
 
+  /**
+   * Phase C4: 1-click "Clôture Express" for minor faults requiring 0 PDR.
+   * Strictly reuses `executeClotureOrSubmit` so ALL LOTO, FSM, open workshop order,
+   * blocking NeedRequest, and Maker-Checker invariants remain enforced.
+   */
+  const handleQuickMinorClosure = (actionText: string): boolean => {
+    const cleanAction = String(actionText || '').trim();
+    if (!cleanAction) {
+      showToast?.('Sélectionnez ou saisissez une action mineure avant la clôture express.', 'warning');
+      return false;
+    }
+    const minorPatch: Partial<LiveInterventionFormState> = {
+      action_realisee: cleanAction,
+      travail_a_faire: cleanAction,
+      intervention_nature: 'REGLAGE',
+      pieces_utilisees: [],
+      pdr_ref: '',
+      pdr_designation: '',
+      pdr_quantite: 0,
+      pdr_prix: 0,
+    };
+    setFormState((prev) => ({ ...prev, ...minorPatch }));
+    return executeClotureOrSubmit(minorPatch);
+  };
+
   const actorName = getTechnicianBadgeLabel(user, technicians);
   const actorRole = String(user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN'))
     .trim()
@@ -980,9 +1079,11 @@ export function useInterventionLiveController({
     user,
     isTechUser,
     isReadOnlyUser,
+    canFastTrackNeed,
     actorName,
     actorRole,
     activeIntervention,
+    recentMachineFailures,
     liveWorkingTime,
     shiftStatus,
     formState,
@@ -1006,13 +1107,16 @@ export function useInterventionLiveController({
     machineParts,
     linkedWorkshopOrders,
     linkedInternalWorkshopOrders,
+    openWorkshopOrders,
     linkedNeedRequests,
+    blockingNeedRequests,
     showNeedRequestForm,
     setShowNeedRequestForm,
     needForm,
     setNeedForm,
     handleEmitNeedRequest,
     handleNeedFieldHandoff,
+    handleFastTrackLinkedNeed,
     showBonAtelierMecaniqueForm,
     setShowBonAtelierMecaniqueForm,
     bonAtelierForm,
@@ -1028,5 +1132,6 @@ export function useInterventionLiveController({
     handleMarkSortieReturned,
     executeClotureOrSubmit,
     handleClotureSubmit,
+    handleQuickMinorClosure,
   };
 }

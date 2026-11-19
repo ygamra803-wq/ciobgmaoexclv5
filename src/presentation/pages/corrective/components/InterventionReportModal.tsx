@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FileText, Plus, Printer, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { useGmaoStore } from '../../../../store/useGmaoStore';
+import type { ICorrectiveTechnicalReport } from '../../../../types/store';
 
 export interface InterventionReportFields {
   date: string;
@@ -52,6 +54,10 @@ export interface InterventionReportModalProps {
   intervention?: Record<string, any> | null;
   machine?: Record<string, any> | null;
   technicianName?: string;
+  onSaveReport?: (
+    btId: string | number,
+    report: ICorrectiveTechnicalReport | null
+  ) => { valid: boolean; reason?: string } | void;
   showToast?: (msg: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
 }
 
@@ -256,15 +262,18 @@ export default function InterventionReportModal({
   intervention = null,
   machine = null,
   technicianName,
+  onSaveReport,
   showToast,
 }: InterventionReportModalProps) {
   const draftKey = useMemo(() => getInterventionReportDraftKey(intervention), [intervention]);
+  const btTargetId = intervention?.id ?? intervention?.num_bt ?? null;
 
   const [fields, setFields] = useState<InterventionReportFields>(() =>
     buildInitialReportFields(intervention, machine, technicianName)
   );
   const [extraRcaRows, setExtraRcaRows] = useState<ExtraRcaRow[]>([]);
   const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [persistedInSsot, setPersistedInSsot] = useState(false);
   const [savedTimestamp, setSavedTimestamp] = useState<string | null>(null);
 
   useEffect(() => {
@@ -274,47 +283,75 @@ export default function InterventionReportModal({
     let nextFields = baseFields;
     let nextExtraRows: ExtraRcaRow[] = [];
     let foundDraft = false;
+    let fromSsot = false;
     let draftTime: string | null = null;
 
-    // TODO(RPT-1): Migrer la persistance des brouillons vers DataGateway / STORAGE_KEYS lors de l'étape RPT-1.
-    try {
-      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(draftKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<InterventionReportDraft>;
-        if (parsed && parsed.fields && typeof parsed.fields === 'object') {
-          const merged = { ...baseFields };
-          (Object.keys(EMPTY_FIELDS) as Array<keyof InterventionReportFields>).forEach((key) => {
-            const draftVal = parsed.fields?.[key];
-            if (typeof draftVal === 'string' && draftVal !== '') {
-              merged[key] = draftVal;
-            }
-          });
-          nextFields = merged;
-          foundDraft = true;
-        }
-        if (Array.isArray(parsed?.extraRcaRows)) {
-          nextExtraRows = parsed.extraRcaRows
-            .filter((r) => r && typeof r === 'object')
-            .map((r, idx) => ({
-              id: String(r.id || `rca-extra-${idx}`),
-              component: String(r.component || ''),
-              observation: String(r.observation || ''),
-              impact: String(r.impact || ''),
-            }));
-        }
-        if (typeof parsed?.updatedAt === 'string') {
-          draftTime = parsed.updatedAt;
-        }
+    const hydrateFromReport = (parsed: Partial<InterventionReportDraft> | ICorrectiveTechnicalReport | null | undefined) => {
+      if (!parsed || typeof parsed !== 'object') return false;
+      let loaded = false;
+      if (parsed.fields && typeof parsed.fields === 'object') {
+        const merged = { ...baseFields };
+        (Object.keys(EMPTY_FIELDS) as Array<keyof InterventionReportFields>).forEach((key) => {
+          const draftVal = (parsed.fields as Record<string, unknown>)?.[key];
+          if (typeof draftVal === 'string' && draftVal !== '') {
+            merged[key] = draftVal;
+          }
+        });
+        nextFields = merged;
+        loaded = true;
       }
-    } catch {
-      // Ignore malformed localStorage draft and fall back cleanly to base fields.
+      if (Array.isArray(parsed.extraRcaRows)) {
+        nextExtraRows = parsed.extraRcaRows
+          .filter((r) => r && typeof r === 'object')
+          .map((r, idx) => ({
+            id: String(r.id || `rca-extra-${idx}`),
+            component: String(r.component || ''),
+            observation: String(r.observation || ''),
+            impact: String(r.impact || ''),
+          }));
+      }
+      if (typeof parsed.updatedAt === 'string') {
+        draftTime = parsed.updatedAt;
+      }
+      return loaded;
+    };
+
+    // 1. Priority SSOT (Zustand / DataGateway / SQLite) when linked to a registered BT
+    let ssotReport: ICorrectiveTechnicalReport | null = null;
+    if (btTargetId !== null) {
+      const targetUpper = String(btTargetId).trim().toUpperCase();
+      const liveBt = (useGmaoStore.getState().correctiveInterventions || []).find(
+        (i) =>
+          String(i?.id ?? '').trim().toUpperCase() === targetUpper ||
+          String(i?.num_bt ?? '').trim().toUpperCase() === targetUpper
+      );
+      ssotReport = (liveBt?.technical_report ?? intervention?.technical_report ?? null) as ICorrectiveTechnicalReport | null;
+    }
+
+    if (ssotReport && hydrateFromReport(ssotReport)) {
+      foundDraft = true;
+      fromSsot = true;
+    } else {
+      // 2. Fallback to legacy local draft (standalone mode or pre-migration local draft)
+      try {
+        const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(draftKey) : null;
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<InterventionReportDraft>;
+          if (hydrateFromReport(parsed)) {
+            foundDraft = true;
+          }
+        }
+      } catch {
+        // Ignore malformed localStorage draft and fall back cleanly to base fields.
+      }
     }
 
     setFields(nextFields);
     setExtraRcaRows(nextExtraRows);
     setHasSavedDraft(foundDraft);
+    setPersistedInSsot(fromSsot);
     setSavedTimestamp(draftTime);
-  }, [isOpen, draftKey, intervention, machine, technicianName]);
+  }, [isOpen, draftKey, btTargetId, intervention, machine, technicianName]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -378,20 +415,58 @@ export default function InterventionReportModal({
       updatedAt: nowIso,
     };
 
-    // TODO(RPT-1): Migrer la persistance des brouillons vers DataGateway / STORAGE_KEYS lors de l'étape RPT-1.
+    const ssotPayload: ICorrectiveTechnicalReport = {
+      fields: { ...fields },
+      extraRcaRows: extraRcaRows.map((row) => ({ ...row })),
+      updatedAt: nowIso,
+    };
+
+    let savedToSsot = false;
+    if (btTargetId !== null) {
+      const saveFn = onSaveReport ?? useGmaoStore.getState().handleSaveInterventionReport;
+      if (typeof saveFn === 'function') {
+        const res = saveFn(btTargetId, ssotPayload);
+        if (res && typeof res === 'object' && 'valid' in res) {
+          if (res.valid) {
+            savedToSsot = true;
+          } else if (res.reason && res.reason.toLowerCase().includes('lecture seule')) {
+            showToast?.(res.reason, 'warning');
+            return;
+          }
+        } else {
+          savedToSsot = true;
+        }
+      }
+    }
+
+    // Mirror locally for offline resilience and standalone blank-mode drafts
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(draftKey, JSON.stringify(payload));
       }
       setHasSavedDraft(true);
+      setPersistedInSsot(savedToSsot);
       setSavedTimestamp(nowIso);
       showToast?.('Brouillon du rapport technique enregistré.', 'success');
     } catch {
-      showToast?.("Impossible d'enregistrer le brouillon localement.", 'error');
+      if (savedToSsot) {
+        setHasSavedDraft(true);
+        setPersistedInSsot(true);
+        setSavedTimestamp(nowIso);
+        showToast?.('Brouillon du rapport technique enregistré.', 'success');
+      } else {
+        showToast?.("Impossible d'enregistrer le brouillon localement.", 'error');
+      }
     }
   };
 
   const handleResetDraft = () => {
+    if (btTargetId !== null) {
+      const saveFn = onSaveReport ?? useGmaoStore.getState().handleSaveInterventionReport;
+      if (typeof saveFn === 'function') {
+        saveFn(btTargetId, null);
+      }
+    }
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.removeItem(draftKey);
@@ -402,6 +477,7 @@ export default function InterventionReportModal({
     setFields(buildInitialReportFields(intervention, machine, technicianName));
     setExtraRcaRows([]);
     setHasSavedDraft(false);
+    setPersistedInSsot(false);
     setSavedTimestamp(null);
     showToast?.('Brouillon réinitialisé depuis les données du bon.', 'info');
   };
@@ -639,14 +715,21 @@ export default function InterventionReportModal({
               </span>
               {hasSavedDraft && (
                 <span
-                  className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[11px] font-bold text-emerald-800"
+                  data-testid="rca-persistence-badge"
+                  className={`px-2 py-0.5 rounded-md border text-[11px] font-bold ${
+                    persistedInSsot
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}
                   title={
                     savedTimestamp
                       ? `Enregistré le ${new Date(savedTimestamp).toLocaleString('fr-FR')}`
+                      : persistedInSsot
+                      ? 'Synchronisé en base GMAO / SQLite'
                       : 'Brouillon local actif'
                   }
                 >
-                  Brouillon local
+                  {persistedInSsot ? 'Base GMAO (SQLite)' : 'Brouillon local'}
                 </span>
               )}
             </div>

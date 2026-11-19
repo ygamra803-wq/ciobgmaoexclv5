@@ -745,7 +745,9 @@ export function MachinesRegisteredModals({
           warehouseItems,
         });
         const healthColor =
-          profile.health_status === 'Optimale'
+          profile.health_status === 'Non planifiée'
+            ? 'bg-slate-100 text-slate-700 border-slate-300'
+            : profile.health_status === 'Optimale'
             ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
             : profile.health_status === 'Moyenne'
             ? 'bg-amber-50 text-amber-800 border-amber-300'

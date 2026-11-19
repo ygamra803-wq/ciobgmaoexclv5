@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Plus, Wrench } from 'lucide-react';
+import { Package, Plus, Wrench, Zap, Building2 } from 'lucide-react';
 import {
   isNeedRequestBlockingBtClosure,
   NEED_MATERIAL_CLASS_LABELS,
@@ -32,6 +32,8 @@ interface BonAtelierFormState {
   quantite: number;
   description_travaux: string;
   observation: string;
+  heures_atelier: number;
+  cout_atelier: number;
 }
 
 interface WorkshopQuickFormState {
@@ -47,6 +49,7 @@ export interface InterventionLiveHandoffPanelsProps {
   activeIntervention: any;
   formState: any;
   isTechUser: boolean;
+  canFastTrackNeed?: boolean;
   showNeedRequestForm: boolean;
   setShowNeedRequestForm: React.Dispatch<React.SetStateAction<boolean>>;
   needForm: NeedFormState;
@@ -54,6 +57,7 @@ export interface InterventionLiveHandoffPanelsProps {
   handleEmitNeedRequest: () => void;
   linkedNeedRequests: INeedRequest[];
   handleNeedFieldHandoff: (needId: string, nextStatus: NeedRequestStatus) => void;
+  handleFastTrackLinkedNeed?: (needId: string, closeFieldImmediately?: boolean) => void;
   linkedWorkshopOrders: any[];
   linkedInternalWorkshopOrders: IWorkshopOrder[];
   showBonAtelierMecaniqueForm: boolean;
@@ -78,6 +82,7 @@ export function InterventionLiveHandoffPanels({
   activeIntervention,
   formState,
   isTechUser,
+  canFastTrackNeed = false,
   showNeedRequestForm,
   setShowNeedRequestForm,
   needForm,
@@ -85,6 +90,7 @@ export function InterventionLiveHandoffPanels({
   handleEmitNeedRequest,
   linkedNeedRequests,
   handleNeedFieldHandoff,
+  handleFastTrackLinkedNeed,
   linkedWorkshopOrders,
   linkedInternalWorkshopOrders,
   showBonAtelierMecaniqueForm,
@@ -331,6 +337,24 @@ export function InterventionLiveHandoffPanels({
                       </button>
                     )}
 
+                    {canFastTrackNeed &&
+                      handleFastTrackLinkedNeed &&
+                      (!req.canal_appro || req.canal_appro === 'STOCK') &&
+                      (req.statut === 'DEMANDE_TECH' ||
+                        req.statut === 'REVUE_SUPERVISEUR' ||
+                        req.statut === 'CLARIFICATION') && (
+                        <button
+                          type="button"
+                          data-testid={`live-need-fast-track-${req.code_demande}`}
+                          onClick={() => handleFastTrackLinkedNeed(req.id, false)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition shadow-2xs inline-flex items-center gap-1"
+                          title="Mode Usine Flexible : valider le canal STOCK et remettre immédiatement au technicien en 1 clic"
+                        >
+                          <Zap className="w-3 h-3" />
+                          <span>Express Stock</span>
+                        </button>
+                      )}
+
                     {req.statut === 'POSE_ESSAI' && (
                       <button
                         type="button"
@@ -348,65 +372,95 @@ export function InterventionLiveHandoffPanels({
         )}
       </div>
 
-      {/* CORRECTIVE-ATELIER-P0: Bon de Réalisation & Rectification (Atelier / Externe) lié au BT */}
+      {/* PHASE C2 — Unified Workshop Panel: Atelier Interne (BR/RECT) ⇄ Sous-traitance Externe */}
       {(String(formState.intervention_nature || '').toUpperCase() === 'ATELIER' ||
-        linkedWorkshopOrders.length > 0) && (
+        linkedWorkshopOrders.length > 0 ||
+        linkedInternalWorkshopOrders.length > 0) && (
         <div
           data-testid="live-atelier-bridge-panel"
           className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/90 space-y-3"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             <div>
               <span className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
                 <Wrench className="w-4 h-4 text-indigo-700" />
-                Bon d’Atelier / Rectification & Sous-Traitance lié au BT
+                Atelier & Sous-Traitance lié au BT (Interface Unifiée)
               </span>
               <p className="text-[11px] text-indigo-800 mt-0.5">
-                Tant qu’un bon d’atelier ou externe est en cours, le BT ne peut pas être clôturé définitivement (reste ou passe en <b>EN_ATTENTE_PDR</b>).
+                Choisissez <b>Atelier Interne (BR / RECT)</b> pour usinage maison ou{' '}
+                <b>Sous-traitance Externe</b> pour bobinage/prestataire. Tant qu’un bon est ouvert,
+                la clôture du BT reste protégée.
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap shrink-0">
+
+            {/* Unified 2-Mode Segmented Switcher */}
+            <div
+              className="inline-flex items-center p-1 rounded-xl bg-white border border-indigo-200 shadow-2xs shrink-0 self-start sm:self-auto"
+              role="group"
+              aria-label="Mode Atelier ou Sous-traitance"
+            >
               <button
                 type="button"
                 data-testid="toggle-bon-atelier-mecanique-btn"
-                onClick={() => setShowBonAtelierMecaniqueForm((v) => !v)}
-                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                onClick={() => {
+                  const nextOpen = !showBonAtelierMecaniqueForm;
+                  setShowBonAtelierMecaniqueForm(nextOpen);
+                  if (nextOpen) setShowQuickWorkshopForm(false);
+                }}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 ${
+                  showBonAtelierMecaniqueForm
+                    ? 'bg-amber-600 text-white shadow-2xs'
+                    : 'text-amber-900 hover:bg-amber-50'
+                }`}
               >
                 <Wrench className="w-3.5 h-3.5" />
-                <span>
-                  {showBonAtelierMecaniqueForm
-                    ? 'Fermer Bon Atelier'
-                    : 'Bon atelier mécanique (BR / RECT)'}
-                </span>
+                <span>Interne (BR / RECT)</span>
               </button>
               <button
                 type="button"
                 data-testid="toggle-quick-workshop-btn"
-                onClick={() => setShowQuickWorkshopForm((v) => !v)}
-                className="px-3 py-1.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-2xs"
+                onClick={() => {
+                  const nextOpen = !showQuickWorkshopForm;
+                  setShowQuickWorkshopForm(nextOpen);
+                  if (nextOpen) {
+                    setShowBonAtelierMecaniqueForm(false);
+                    setWorkshopQuickForm((prev) => ({
+                      ...prev,
+                      categorie_flux: 'SOUS_TRAITANCE_EXTERNE',
+                      fournisseur_externe:
+                        prev.fournisseur_externe === 'Atelier Mécanique Interne'
+                          ? 'Atelier Bobinage Externe'
+                          : prev.fournisseur_externe || 'Atelier Bobinage Externe',
+                    }));
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer inline-flex items-center gap-1.5 ${
+                  showQuickWorkshopForm
+                    ? 'bg-indigo-700 text-white shadow-2xs'
+                    : 'text-indigo-900 hover:bg-indigo-50'
+                }`}
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>{showQuickWorkshopForm ? 'Fermer' : '+ Sortie Externe / Bobinage'}</span>
+                <Building2 className="w-3.5 h-3.5" />
+                <span>Externe (Sous-traitance)</span>
               </button>
             </div>
           </div>
 
-          {/* Dedicated Bon Atelier Mécanique (REALISATION / RECTIFICATION) Form */}
+          {/* MODE 1: Internal Mechanical Workshop Order Form (BR / RECT with optional hours & cost) */}
           {showBonAtelierMecaniqueForm && (
             <div
               data-testid="bon-atelier-mecanique-form"
               className="p-3.5 rounded-xl bg-amber-50/90 border-2 border-amber-300 space-y-3"
             >
-              <div className="flex items-center justify-between text-xs font-black text-amber-950 uppercase">
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs font-black text-amber-950 uppercase">
                 <span>
-                  Demande Réalisation / Rectification — Atelier Fabrication Mécanique (Machine:{' '}
-                  {activeIntervention.code_machine})
+                  Bon Atelier Interne (BR / RECT) — Machine : {activeIntervention.code_machine}
                 </span>
                 <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded border border-amber-300">
                   Section SM ➔ Atelier Interne (Sans impact Stock PDR)
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                 <div>
                   <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
                     Type de Demande *
@@ -422,7 +476,9 @@ export function InterventionLiveHandoffPanels({
                     className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-amber-300 bg-white"
                   >
                     <option value="REALISATION">REALISATION (Confection / Usinage neuf)</option>
-                    <option value="RECTIFICATION">RECTIFICATION (Réparation / Tournage / Ajustage)</option>
+                    <option value="RECTIFICATION">
+                      RECTIFICATION (Réparation / Tournage / Ajustage)
+                    </option>
                   </select>
                 </div>
                 <div>
@@ -444,6 +500,62 @@ export function InterventionLiveHandoffPanels({
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Heures atelier (opt.)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    data-testid="bon-atelier-heures-input"
+                    value={bonAtelierForm.heures_atelier || ''}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({
+                        ...p,
+                        heures_atelier: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Ex: 2.5 h"
+                    className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-amber-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Coût atelier DH (opt.)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={10}
+                    data-testid="bon-atelier-cout-input"
+                    value={bonAtelierForm.cout_atelier || ''}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({
+                        ...p,
+                        cout_atelier: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Ex: 450 DH"
+                    className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-amber-300 bg-white"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
+                    Description des travaux demandés *
+                  </label>
+                  <input
+                    type="text"
+                    value={bonAtelierForm.description_travaux}
+                    onChange={(e) =>
+                      setBonAtelierForm((p) => ({ ...p, description_travaux: e.target.value }))
+                    }
+                    placeholder="Ex: Usinage bague bronze Ø40x60 ou rectification arbre moteur..."
+                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-amber-300 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
                     Observation / Tolérance
                   </label>
                   <input
@@ -457,25 +569,11 @@ export function InterventionLiveHandoffPanels({
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">
-                  Description des travaux demandés *
-                </label>
-                <input
-                  type="text"
-                  value={bonAtelierForm.description_travaux}
-                  onChange={(e) =>
-                    setBonAtelierForm((p) => ({ ...p, description_travaux: e.target.value }))
-                  }
-                  placeholder="Ex: Usinage bague bronze Ø40x60 ou rectification arbre moteur..."
-                  className="w-full py-2 px-2.5 text-xs rounded-lg border border-amber-300 bg-white"
-                />
-              </div>
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowBonAtelierMecaniqueForm(false)}
-                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700"
+                  className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
                 >
                   Annuler
                 </button>
@@ -491,8 +589,142 @@ export function InterventionLiveHandoffPanels({
             </div>
           )}
 
-          {/* Existing Linked Internal Mechanical Workshop Orders (BR / RECT) */}
-          {linkedInternalWorkshopOrders.length > 0 && (
+          {/* MODE 2: External Subcontracting Form (Bobinage / Prestataire Externe -> SortieExterne) */}
+          {showQuickWorkshopForm && (
+            <div
+              data-testid="external-workshop-form"
+              className="p-3.5 rounded-xl bg-white border-2 border-indigo-300 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap text-xs font-black text-indigo-950 uppercase">
+                <span>
+                  Sortie Sous-Traitance Externe (Bobinage / Réparation) — Machine :{' '}
+                  {activeIntervention.code_machine}
+                </span>
+                <span className="text-[10px] font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  Prestataire Externe (SORT-EXT)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Nature de la Prestation Externe
+                  </label>
+                  <select
+                    value={workshopQuickForm.nature_travail}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        categorie_flux: 'SOUS_TRAITANCE_EXTERNE',
+                        nature_travail: e.target.value,
+                      }))
+                    }
+                    className="w-full py-2 px-2.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50"
+                  >
+                    <option value="Bobinage complet">Bobinage complet</option>
+                    <option value="Remplacement roulements + étanchéité">
+                      Remplacement roulements + étanchéité
+                    </option>
+                    <option value="Rectification collecteur / induit">
+                      Rectification collecteur / induit
+                    </option>
+                    <option value="Réparation électronique / variateur">
+                      Réparation électronique / variateur
+                    </option>
+                    <option value="Usinage / Traitement thermique externe">
+                      Usinage / Traitement thermique externe
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Organe / Pièce envoyée
+                  </label>
+                  <input
+                    type="text"
+                    value={workshopQuickForm.designation_piece}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({ ...p, designation_piece: e.target.value }))
+                    }
+                    placeholder={`Ex: Moteur 15kW / Variateur ${activeIntervention.code_machine}`}
+                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Prestataire / Fournisseur Externe
+                  </label>
+                  <input
+                    type="text"
+                    value={workshopQuickForm.fournisseur_externe}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        fournisseur_externe: e.target.value,
+                      }))
+                    }
+                    placeholder="Ex: Atelier Bobinage Atlas"
+                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                    Coût devis / estimé (DH)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={workshopQuickForm.cout_bobinage}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        cout_bobinage: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                <label className="flex items-center gap-2 text-xs text-slate-700 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={workshopQuickForm.suspendBtAfterCreate}
+                    onChange={(e) =>
+                      setWorkshopQuickForm((p) => ({
+                        ...p,
+                        suspendBtAfterCreate: e.target.checked,
+                      }))
+                    }
+                    className="rounded border-indigo-300 text-indigo-600"
+                  />
+                  <span>
+                    Suspendre automatiquement le BT en <b>EN_ATTENTE_PDR</b> après sortie
+                  </span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickWorkshopForm(false)}
+                    className="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="confirm-quick-workshop-btn"
+                    onClick={handleQuickCreateWorkshopOrder}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer transition shadow-xs"
+                  >
+                    Enregistrer Sortie Externe & Lier au BT
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Unified Linked Orders List (Internal BR/RECT + External SORT-EXT) */}
+          {(linkedInternalWorkshopOrders.length > 0 || linkedWorkshopOrders.length > 0) && (
             <div className="space-y-2">
               {linkedInternalWorkshopOrders.map((ord) => {
                 const isOpen = isWorkshopOrderActive(ord.statut);
@@ -506,6 +738,9 @@ export function InterventionLiveHandoffPanels({
                     }`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded bg-amber-600 text-white font-mono font-black text-[9.5px] uppercase">
+                        INTERNE
+                      </span>
                       <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
                         {ord.code_bon}
                       </span>
@@ -513,6 +748,16 @@ export function InterventionLiveHandoffPanels({
                         {ord.type_demande} (Qté: {ord.quantite})
                       </span>
                       <span className="font-bold">{ord.description_travaux}</span>
+                      {Number(ord.heures_atelier || 0) > 0 && (
+                        <span className="font-mono text-[10.5px] bg-white/80 px-1.5 py-0.5 rounded border border-amber-200">
+                          {ord.heures_atelier}h
+                        </span>
+                      )}
+                      {Number(ord.cout_atelier || 0) > 0 && (
+                        <span className="font-mono font-bold text-[10.5px] bg-white/80 px-1.5 py-0.5 rounded border border-amber-200">
+                          {Number(ord.cout_atelier).toLocaleString()} DH
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span
@@ -548,12 +793,7 @@ export function InterventionLiveHandoffPanels({
                   </div>
                 );
               })}
-            </div>
-          )}
 
-          {/* Existing Linked Workshop Orders */}
-          {linkedWorkshopOrders.length > 0 && (
-            <div className="space-y-2">
               {linkedWorkshopOrders.map((ord: any) => {
                 const isOpen = SortieExterneService.isWorkshopOrderOpen(ord.etat);
                 return (
@@ -561,20 +801,21 @@ export function InterventionLiveHandoffPanels({
                     key={ord.id || ord.code}
                     className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
                       isOpen
-                        ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+                        ? 'bg-indigo-50/90 border-indigo-300 text-indigo-950'
                         : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
                     }`}
                   >
                     <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded bg-indigo-700 text-white font-mono font-black text-[9.5px] uppercase">
+                        EXTERNE
+                      </span>
                       <span className="font-mono font-black px-2 py-0.5 rounded bg-white border border-current/20">
                         {ord.code}
                       </span>
                       <span className="font-bold">
                         {ord.nature_travail || ord.type_probleme}
                       </span>
-                      <span className="text-[11px] opacity-80">
-                        • {ord.fournisseur_externe}
-                      </span>
+                      <span className="text-[11px] opacity-80">• {ord.fournisseur_externe}</span>
                       <span className="font-mono font-bold text-[11px] bg-white/80 px-2 py-0.5 rounded">
                         {Number(ord.cout_bobinage || 0).toLocaleString()} DH
                       </span>
@@ -608,156 +849,6 @@ export function InterventionLiveHandoffPanels({
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* Quick Workshop Creation Form */}
-          {(showQuickWorkshopForm || linkedWorkshopOrders.length === 0) && (
-            <div className="p-3.5 rounded-xl bg-white border border-indigo-200 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                    Type de Flux
-                  </label>
-                  <select
-                    value={workshopQuickForm.categorie_flux}
-                    onChange={(e) => {
-                      const cat = e.target.value as 'ATELIER_MECANIQUE' | 'SOUS_TRAITANCE_EXTERNE';
-                      setWorkshopQuickForm((p) => ({
-                        ...p,
-                        categorie_flux: cat,
-                        nature_travail:
-                          cat === 'ATELIER_MECANIQUE'
-                            ? 'Usinage / Rectification'
-                            : 'Bobinage complet',
-                        fournisseur_externe:
-                          cat === 'ATELIER_MECANIQUE'
-                            ? 'Atelier Mécanique Interne'
-                            : 'Atelier Bobinage Externe',
-                      }));
-                    }}
-                    className="w-full py-2 px-2.5 text-xs font-bold rounded-lg border border-slate-200 bg-slate-50"
-                  >
-                    <option value="ATELIER_MECANIQUE">
-                      Atelier Mécanique / Usinage & Rectification (BON-ATEL)
-                    </option>
-                    <option value="SOUS_TRAITANCE_EXTERNE">
-                      Sous-Traitance Externe / Bobinage (SORT-EXT)
-                    </option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                    Nature du Travail
-                  </label>
-                  <select
-                    value={workshopQuickForm.nature_travail}
-                    onChange={(e) =>
-                      setWorkshopQuickForm((p) => ({ ...p, nature_travail: e.target.value }))
-                    }
-                    className="w-full py-2 px-2.5 text-xs font-semibold rounded-lg border border-slate-200 bg-slate-50"
-                  >
-                    {workshopQuickForm.categorie_flux === 'ATELIER_MECANIQUE' ? (
-                      <>
-                        <option value="Usinage / Rectification">Usinage / Rectification</option>
-                        <option value="Tournage arbre / axe">Tournage arbre / axe</option>
-                        <option value="Soudure / Rechargement">Soudure / Rechargement</option>
-                        <option value="Confection pièce sur mesure">Confection pièce sur mesure</option>
-                        <option value="Révision mécanique / Alésage">Révision mécanique / Alésage</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="Bobinage complet">Bobinage complet</option>
-                        <option value="Remplacement roulements + étanchéité">
-                          Remplacement roulements + étanchéité
-                        </option>
-                        <option value="Rectification collecteur / induit">
-                          Rectification collecteur / induit
-                        </option>
-                        <option value="Réparation électronique / variateur">
-                          Réparation électronique / variateur
-                        </option>
-                      </>
-                    )}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                    Organe / Pièce à usiner ou réparer
-                  </label>
-                  <input
-                    type="text"
-                    value={workshopQuickForm.designation_piece}
-                    onChange={(e) =>
-                      setWorkshopQuickForm((p) => ({ ...p, designation_piece: e.target.value }))
-                    }
-                    placeholder={`Ex: Arbre principal / Moteur ${activeIntervention.code_machine}`}
-                    className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Atelier / Prestataire
-                    </label>
-                    <input
-                      type="text"
-                      value={workshopQuickForm.fournisseur_externe}
-                      onChange={(e) =>
-                        setWorkshopQuickForm((p) => ({
-                          ...p,
-                          fournisseur_externe: e.target.value,
-                        }))
-                      }
-                      className="w-full py-2 px-2.5 text-xs rounded-lg border border-slate-200 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Coût estimé (DH)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={workshopQuickForm.cout_bobinage}
-                      onChange={(e) =>
-                        setWorkshopQuickForm((p) => ({
-                          ...p,
-                          cout_bobinage: Math.max(0, Number(e.target.value) || 0),
-                        }))
-                      }
-                      className="w-full py-2 px-2.5 text-xs font-mono font-bold rounded-lg border border-slate-200 bg-white"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-slate-100">
-                <label className="flex items-center gap-2 text-xs text-slate-700 font-semibold cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={workshopQuickForm.suspendBtAfterCreate}
-                    onChange={(e) =>
-                      setWorkshopQuickForm((p) => ({
-                        ...p,
-                        suspendBtAfterCreate: e.target.checked,
-                      }))
-                    }
-                    className="rounded border-indigo-300 text-indigo-600"
-                  />
-                  <span>
-                    Suspendre automatiquement le BT en <b>EN_ATTENTE_PDR</b> après création du bon
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  data-testid="confirm-quick-workshop-btn"
-                  onClick={handleQuickCreateWorkshopOrder}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer transition shadow-xs"
-                >
-                  Enregistrer le Bon & Lier au BT
-                </button>
-              </div>
             </div>
           )}
         </div>

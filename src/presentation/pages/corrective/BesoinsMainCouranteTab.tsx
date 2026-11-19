@@ -21,8 +21,10 @@ import {
   XCircle,
   ExternalLink,
   Layers,
+  Zap,
 } from 'lucide-react';
 import { useGmaoStore } from '../../../store/useGmaoStore';
+import { StockCalculationService } from '../../../domain/pdr/services/StockCalculationService';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
@@ -112,11 +114,25 @@ export default function BesoinsMainCouranteTab({
   const machines = useGmaoStore((s) => s.machines || []);
   const correctiveInterventions = useGmaoStore((s) => s.correctiveInterventions || []);
   const rawStock = useGmaoStore((s) => s.rawStock || []);
+  const mouvements = useGmaoStore((s) => s.mouvements || []);
   const handleCreateNeedRequest = useGmaoStore((s) => s.handleCreateNeedRequest);
   const handleReviewNeedRequest = useGmaoStore((s) => s.handleReviewNeedRequest);
   const handleTransitionNeedRequestStatus = useGmaoStore(
     (s) => s.handleTransitionNeedRequestStatus
   );
+  const handleFastTrackNeedRequest = useGmaoStore((s) => s.handleFastTrackNeedRequest);
+
+  const liveStockByRef = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of rawStock || []) {
+      const refKey = String((item as any)?.ref || (item as any)?.code_article || '')
+        .trim()
+        .toUpperCase();
+      if (!refKey) continue;
+      map.set(refKey, StockCalculationService.calculateStockActuel(item as any, mouvements || []));
+    }
+    return map;
+  }, [rawStock, mouvements]);
 
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
 
@@ -449,6 +465,26 @@ export default function BesoinsMainCouranteTab({
     );
   };
 
+  const handleExpressStockFastTrack = (req: INeedRequest, closeFieldImmediately = false) => {
+    const res = handleFastTrackNeedRequest(req.id, {
+      closeFieldImmediately,
+      actorRole: user?.role || (isTechUser ? 'TECHNICIEN' : 'ADMIN'),
+      isTechnician: isTechUser,
+      actorId: user?.id || user?.code || 'admin',
+      actorName: user?.name || 'Responsable',
+    });
+    if (!res.valid) {
+      showToast?.(res.reason || 'Remise express refusée.', 'warning');
+      return;
+    }
+    showToast?.(
+      `Remise Express Stock validée pour ${req.code_demande} ➔ ${
+        NEED_STATUS_LABELS[res.needRequest?.statut || 'REMIS_TECHNICIEN']
+      }.`,
+      'success'
+    );
+  };
+
   const renderStatusBadge = (status: NeedRequestStatus) => {
     const styles: Record<NeedRequestStatus, string> = {
       DEMANDE_TECH: 'bg-amber-100 text-amber-900 border-amber-300',
@@ -515,6 +551,11 @@ export default function BesoinsMainCouranteTab({
             <Truck className="w-3 h-3 shrink-0" />
           )}
           <span>{req.canal_appro}</span>
+          {req.fast_track && (
+            <span className="ml-1 px-1 py-0.2 rounded bg-emerald-600 text-white text-[9px] font-black uppercase">
+              EXPRESS
+            </span>
+          )}
         </span>
         {(linkedWorkshop || req.code_workshop_order) && (
           <button
@@ -546,9 +587,45 @@ export default function BesoinsMainCouranteTab({
       linkedWorkshop != null &&
       isWorkshopOrderActive(linkedWorkshop.statut);
 
+    const refKey = String(req.id_ref_pdr || '').trim().toUpperCase();
+    const knownLiveStock = refKey && liveStockByRef.has(refKey) ? liveStockByRef.get(refKey)! : null;
+    const stockInsufficientForFastTrack =
+      knownLiveStock !== null && knownLiveStock < Math.max(1, Number(req.quantite) || 1);
+    const canShowFastTrack =
+      (canReviewNeed || canHandoffNeed) &&
+      (!req.canal_appro || req.canal_appro === 'STOCK') &&
+      (req.statut === 'DEMANDE_TECH' ||
+        req.statut === 'REVUE_SUPERVISEUR' ||
+        req.statut === 'CLARIFICATION');
+
     return (
       <div className="flex items-center justify-center gap-1.5 flex-wrap">
-        {/* 1. Supervisor Arbitration (DEMANDE_TECH / REVUE_SUPERVISEUR / CLARIFICATION) */}
+        {/* 1a. Phase C3 Flexible Factory Fast-Track (1-click STOCK -> REMIS_TECHNICIEN) */}
+        {canShowFastTrack && (
+          <button
+            type="button"
+            data-testid={`need-fast-track-${req.code_demande}`}
+            disabled={stockInsufficientForFastTrack}
+            onClick={() => handleExpressStockFastTrack(req, false)}
+            title={
+              stockInsufficientForFastTrack
+                ? `Stock insuffisant (${knownLiveStock} dispo < ${req.quantite} demandé) — utilisez Arbitrer Canal (ACHAT / ATELIER)`
+                : 'Mode Usine Flexible : valider canal STOCK et remettre au technicien en 1 clic (sans double déstockage)'
+            }
+            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition inline-flex items-center gap-1 shadow-2xs ${
+              stockInsufficientForFastTrack
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>
+              Express Stock{knownLiveStock !== null ? ` (${knownLiveStock})` : ''}
+            </span>
+          </button>
+        )}
+
+        {/* 1b. Supervisor Full Arbitration (ACHAT / ATELIER / EXTERNE / CLARIFICATION / REJET) */}
         {canReviewNeed &&
           (req.statut === 'DEMANDE_TECH' ||
             req.statut === 'REVUE_SUPERVISEUR' ||

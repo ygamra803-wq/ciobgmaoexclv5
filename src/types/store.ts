@@ -211,6 +211,21 @@ export interface CorrectivePdrConsumedItem {
   [key: string]: unknown;
 }
 
+export interface CorrectiveTechnicalReportExtraRcaRow {
+  id: string;
+  component: string;
+  observation: string;
+  impact: string;
+}
+
+export interface ICorrectiveTechnicalReport {
+  fields: Record<string, string>;
+  extraRcaRows: CorrectiveTechnicalReportExtraRcaRow[];
+  updatedAt: string;
+  savedById?: string;
+  savedByName?: string;
+}
+
 export interface CorrectiveInterventionItem {
   id?: string;
   num_bt?: string;
@@ -274,7 +289,14 @@ export interface CorrectiveInterventionItem {
   code_bon_atelier?: string;
   cout_pdr?: number;
   cout_atelier?: number;
+  taux_horaire?: number;
+  cout_main_oeuvre?: number;
+  cout_arret_horaire?: number;
+  cout_arret_production?: number;
   cout_total?: number;
+  cout_total_tco?: number;
+  cause_racine?: string;
+  technical_report?: ICorrectiveTechnicalReport | null;
   nature_travail_atelier?: string;
   prestataire_atelier?: string;
   validation_status?: ValidationWorkflowStatus | string;
@@ -367,6 +389,7 @@ export interface MeterReadingRecordPayload {
   releve_par?: string;
   source?: MeterReadingSource;
   commentaire?: string;
+  allowMeterReset?: boolean;
 }
 
 export interface GmaoStoreState {
@@ -622,6 +645,11 @@ export interface GmaoStoreState {
     id: string | number,
     payload?: Partial<LotoDeconsignPayload> & { actorRole?: string }
   ) => { valid: boolean; reason?: string; intervention?: CorrectiveInterventionItem };
+  handleSaveInterventionReport: (
+    id: string | number,
+    report: ICorrectiveTechnicalReport | null,
+    context?: { actorRole?: string; actorId?: string; actorName?: string }
+  ) => { valid: boolean; reason?: string; intervention?: CorrectiveInterventionItem };
 
   // ==========================================
   // 8b. Mechanical Workshop Orders (COR-ATELIER-P0)
@@ -634,7 +662,8 @@ export interface GmaoStoreState {
   handleTransitionWorkshopOrderStatus: (
     orderId: string,
     nextStatus: WorkshopOrderStatus,
-    observation?: string
+    observation?: string,
+    costDetails?: { heures_atelier?: number; cout_atelier?: number }
   ) => { valid: boolean; reason?: string; order?: IWorkshopOrder };
 
   // ==========================================
@@ -674,6 +703,17 @@ export interface GmaoStoreState {
       observation_pose_essai?: string;
       notes_superviseur?: string;
       motif_rejet?: string;
+      actorRole?: string;
+      isTechnician?: boolean;
+      actorId?: string;
+      actorName?: string;
+    }
+  ) => { valid: boolean; reason?: string; needRequest?: INeedRequest };
+  handleFastTrackNeedRequest: (
+    needId: string,
+    options?: {
+      notes_superviseur?: string;
+      closeFieldImmediately?: boolean;
       actorRole?: string;
       isTechnician?: boolean;
       actorId?: string;

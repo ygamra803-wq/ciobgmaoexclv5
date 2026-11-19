@@ -173,6 +173,8 @@ export interface IMachine {
   date_dernier_releve?: string;
   compteur_unite_defaut?: 'Heures' | 'Cycles' | 'Km' | string;
   unite_compteur?: string;
+  /** Coût horaire de perte de production en cas d'arrêt machine (ex: DH/h). 0 si non configuré. */
+  cout_arret_horaire?: number;
   [key: string]: unknown;
 }
 
@@ -320,6 +322,8 @@ export interface ITechnician {
   is_active?: boolean;
   actif?: boolean;
   statut?: string;
+  /** Coût horaire de main-d'œuvre interne (ex: DH/h). */
+  taux_horaire?: number;
   [key: string]: unknown;
 }
 

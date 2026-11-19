@@ -157,11 +157,19 @@ export class ExecutionService {
       '';
     const scheduledDueDate = String(rawScheduledDue).trim().slice(0, 10) || undefined;
 
+    const compteurReleveRaw = Number(
+      validationData?.compteur_releve ?? validationData?.dernier_releve ?? 0
+    );
+    const compteurReleve =
+      Number.isFinite(compteurReleveRaw) && compteurReleveRaw > 0 ? compteurReleveRaw : undefined;
+    const skipStockDeduction = Boolean(validationData?.skipStockDeduction);
+    const taskIdStr = String(task?.id || validationData?.taskId || `TASK-${machineCode}`);
+
     const execution: PreventiveExecutionRecord = {
       id:
         validationData?.id ||
         `EXEC-${machineCode}-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-      taskId: String(task?.id || validationData?.taskId || `TASK-${machineCode}`),
+      taskId: taskIdStr,
       taskCode: String(task?.code || validationData?.taskCode || ''),
       machineCode,
       machineName: String(task?.nom_machine || validationData?.machineName || machineCode),
@@ -190,6 +198,8 @@ export class ExecutionService {
           ? validationData.status
           : 'DONE',
       notes: String(validationData?.observations ?? validationData?.notes ?? '').trim(),
+      ...(compteurReleve !== undefined ? { compteur_releve: compteurReleve } : {}),
+      ...(skipStockDeduction ? { skip_stock_deduction: true } : {}),
       ...(validationData?.hasAnomaly === true ||
       validationData?.anomalie_detectee === true ||
       validationData?.createFollowUpDi === true ||
@@ -217,23 +227,22 @@ export class ExecutionService {
             validated_by_id: String(validationData?.validated_by_id || 'admin'),
             validated_by_name: String(validationData?.validated_by_name || 'Administrateur'),
             validated_at: String(validationData?.validated_at || nowIso),
-            stock_deducted: sparesUsed.length > 0,
+            stock_deducted: !skipStockDeduction && sparesUsed.length > 0,
           }),
       createdAt: nowIso,
     };
 
     const current = this.getExecutions();
-    // If resubmitting a task that had a previous NEEDS_CLARIFICATION or PENDING_VALIDATION execution, replace it or prepend
+    // Deduplicate pending/clarification resubmissions by explicit ID or same taskId
     const existingPendingId = validationData?.replaceExecutionId || task?.last_pending_execution_id;
-    const filteredCurrent = existingPendingId
-      ? current.filter(
-          (e) =>
-            !(
-              e.id === existingPendingId &&
-              (e.validation_status === 'PENDING_VALIDATION' || e.validation_status === 'NEEDS_CLARIFICATION')
-            )
-        )
-      : current;
+    const filteredCurrent = current.filter((e) => {
+      const isPendingOrClarify =
+        e.validation_status === 'PENDING_VALIDATION' || e.validation_status === 'NEEDS_CLARIFICATION';
+      if (!isPendingOrClarify) return true;
+      if (existingPendingId && e.id === existingPendingId) return false;
+      if (isPendingValidation && String(e.taskId || '') === taskIdStr) return false;
+      return true;
+    });
 
     const updated = [execution, ...filteredCurrent];
     this.saveExecutions(updated);

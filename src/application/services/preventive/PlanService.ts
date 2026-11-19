@@ -43,9 +43,10 @@ export class PlanService {
     const yearMonth = new Date().toISOString().slice(0, 7);
     const seq = String(currentPlans.length + 1).padStart(3, '0');
 
+    const currentYear = new Date().getFullYear();
     const planId = planData.id || `ID-PLAN-${cleanMach}-${yearMonth}-${seq}`;
     const planCode = planData.code || `PLAN-${cleanMach}-${yearMonth}`;
-    const planRef = planData.ref || `Plan-2025-${zone}-${machineId}-${planData.semaine_cible || 'S1'}`;
+    const planRef = planData.ref || `Plan-${currentYear}-${zone}-${machineId}-${planData.semaine_cible || 'S1'}`;
 
     const newPlan = {
       id: planId,
@@ -103,6 +104,49 @@ export class PlanService {
           ]
         : undefined;
 
+      // Preserve recurrence calculation mode (FIXE vs GLISSANT) and Meter/Hybrid trigger configuration
+      const rawModeCalcul = String(
+        item.mode_calcul_recurrence || planData.mode_calcul_recurrence || 'GLISSANT'
+      )
+        .trim()
+        .toUpperCase();
+      const modeCalculRecurrence = rawModeCalcul === 'FIXE' ? 'FIXE' : 'GLISSANT';
+
+      const rawTrigger = String(
+        item.type_declencheur || planData.type_declencheur || 'CALENDRIER'
+      )
+        .trim()
+        .toUpperCase();
+      const typeDeclencheur =
+        rawTrigger === 'COMPTEUR'
+          ? 'COMPTEUR'
+          : rawTrigger === 'HYBRIDE'
+          ? 'HYBRIDE'
+          : 'CALENDRIER';
+      const hasMeterConfig =
+        typeDeclencheur === 'COMPTEUR' ||
+        typeDeclencheur === 'HYBRIDE' ||
+        Number(item.compteur_seuil_intervalle || 0) > 0;
+
+      const meterInterval = hasMeterConfig
+        ? Math.max(1, Number(item.compteur_seuil_intervalle || 500))
+        : undefined;
+      const meterCurrent = hasMeterConfig
+        ? Math.max(0, Number(item.compteur_actuel ?? item.dernier_releve ?? 0))
+        : undefined;
+      const meterLastDone = hasMeterConfig
+        ? Math.max(0, Number(item.compteur_dernier_declenchement ?? meterCurrent ?? 0))
+        : undefined;
+      const meterNextTarget = hasMeterConfig
+        ? Number(item.compteur_prochain_declenchement) > 0
+          ? Number(item.compteur_prochain_declenchement)
+          : (meterLastDone ?? 0) + (meterInterval ?? 500)
+        : undefined;
+      const meterAlertMargin =
+        hasMeterConfig && Number(item.compteur_marge_alerte) > 0
+          ? Number(item.compteur_marge_alerte)
+          : undefined;
+
       return {
         id: `ID-PREV-${cleanMach}-${cleanComp}-${freq.slice(0, 3).toUpperCase()}-${taskSeq}`,
         id_plan: planId,
@@ -123,13 +167,26 @@ export class PlanService {
         type_intervention: item.type_intervention || this.getActionLabel(actCode),
         action_code: actCode,
         frequence: freq,
+        mode_calcul_recurrence: modeCalculRecurrence,
+        type_declencheur: typeDeclencheur,
+        ...(hasMeterConfig
+          ? {
+              compteur_unite: item.compteur_unite || 'Heures',
+              compteur_seuil_intervalle: meterInterval,
+              compteur_actuel: meterCurrent,
+              dernier_releve: meterCurrent,
+              compteur_dernier_declenchement: meterLastDone,
+              compteur_prochain_declenchement: meterNextTarget,
+              ...(meterAlertMargin ? { compteur_marge_alerte: meterAlertMargin } : {}),
+            }
+          : {}),
         planning,
         is_global_machine: Boolean(item.is_global_machine),
         duree_estimee: item.duree_estimee || '15 min',
         responsable: tech,
         etat: 'À faire',
         priorite: item.priorite || 'Normale',
-        prochaine_echeance: planData.date_prevue || new Date().toISOString().split('T')[0],
+        prochaine_echeance: item.prochaine_echeance || planData.date_prevue || new Date().toISOString().split('T')[0],
         derniere_realisation: null,
         id_corrective: null,
         consigne: item.consigne || `Exécuter l'action ${actCode} sur ${compName}`,

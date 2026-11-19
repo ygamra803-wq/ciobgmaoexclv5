@@ -143,7 +143,9 @@ export interface PreventiveExecutionRecord {
   validated_at?: string;
   validation_note?: string;
   stock_deducted?: boolean;
+  skip_stock_deduction?: boolean;
   emitted_movement_ids?: string[];
+  compteur_releve?: number;
   generated_di_id?: string;
   hasAnomaly?: boolean;
   followUpDiAnomalie?: string;

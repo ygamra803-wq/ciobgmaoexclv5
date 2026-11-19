@@ -4,27 +4,19 @@ import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../../infrastructure/persistence/migrateStorage';
 import { ExecutionService } from './ExecutionService';
+import { computeNextDueDateForMode } from '../../../domain/preventive/preventiveScheduleEngine';
+import { MeterService } from '../meter/MeterService';
 
 export const STORAGE_KEY_TASKS = STORAGE_KEYS.PREVENTIVE_TASKS;
 export const INITIAL_TASKS: any[] = [];
 
-export function computeNextDueDate(dateRealisation: string, frequence?: string): string {
-  try {
-    const base = new Date(dateRealisation);
-    if (Number.isNaN(base.getTime())) return dateRealisation;
-    const f = String(frequence || 'Mensuel').toLowerCase();
-    let days = 30;
-    if (f.includes('jour') || f.includes('quotid')) days = 1;
-    else if (f.includes('bi') && f.includes('hebdo')) days = 14;
-    else if (f.includes('hebdo') || f === '7j' || f === '1s') days = 7;
-    else if (f.includes('trimestr') || f === '3m' || f === '90j') days = 90;
-    else if (f.includes('semestr') || f === '6m' || f === '180j') days = 180;
-    else if (f.includes('annuel') || f === '1a' || f === '12m' || f === '365j') days = 365;
-    base.setUTCDate(base.getUTCDate() + days);
-    return base.toISOString().split('T')[0];
-  } catch {
-    return dateRealisation;
-  }
+export function computeNextDueDate(
+  dateRealisation: string,
+  frequence?: string,
+  modeCalcul?: string,
+  previousDueDate?: string
+): string {
+  return computeNextDueDateForMode(dateRealisation, frequence, modeCalcul, previousDueDate);
 }
 
 export class TaskService {
@@ -69,13 +61,21 @@ export class TaskService {
       const isSameMachine =
         targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
       if (isSameTask || isSameMachine) {
-        const isCounter = t.type_declencheur === 'COMPTEUR' || t.type_declencheur === 'HYBRIDE';
-        const targetVal = Number(t.compteur_prochain_declenchement || 0);
-        const isOverdue = targetVal > 0 && numericVal >= targetVal;
+        const isCounter =
+          t.type_declencheur === 'COMPTEUR' ||
+          t.type_declencheur === 'HYBRIDE' ||
+          Number(t.compteur_seuil_intervalle || 0) > 0;
+        const evalRes = MeterService.evaluateTaskTrigger(t, numericVal);
         let etat = t.etat;
-        if (isCounter && t.etat !== 'Fait' && t.etat !== 'En attente validation') {
-          if (isOverdue) etat = 'En retard';
-          else if (etat === 'En retard' && !isOverdue) etat = 'À faire';
+        const isAwaitingReview =
+          t.etat === 'En attente validation' ||
+          t.etat === 'À clarifier' ||
+          t.validation_status === 'PENDING_VALIDATION' ||
+          t.validation_status === 'NEEDS_CLARIFICATION';
+        if (isCounter && !isAwaitingReview) {
+          if (evalRes.isOverdue) etat = 'En retard';
+          else if (evalRes.isWarning && (t.etat === 'Fait' || t.etat === 'En retard')) etat = 'À faire';
+          else if (etat === 'En retard' && !evalRes.isOverdue) etat = 'À faire';
         }
         return {
           ...t,
@@ -118,7 +118,8 @@ export class TaskService {
         targetMachine && String(t.id_machine || '').trim().toUpperCase() === targetMachine;
 
       if (!isTarget) {
-        if (isSameMachine && releveNum > 0) {
+        // NEVER mutate sibling tasks' counters while an execution is still PENDING_VALIDATION
+        if (!isPending && isSameMachine && releveNum > 0) {
           return {
             ...t,
             dernier_releve: releveNum,
@@ -148,16 +149,19 @@ export class TaskService {
           ...(execution.nom_composant ? { nom_composant: execution.nom_composant } : {}),
           ...(execution.id_part ? { id_part: execution.id_part } : {}),
           ...(execution.nom_part ? { nom_part: execution.nom_part } : {}),
-          ...(releveNum > 0
-            ? { dernier_releve: releveNum, compteur_actuel: releveNum }
-            : {}),
+          ...(releveNum > 0 ? { pending_compteur_releve: releveNum } : {}),
           updated_at: nowIso,
         };
       }
 
       const previousDue =
         t.prochaine_echeance || t.nextDueDate || t.date_prevue || t.date_planifiee || t.dueDate || '';
-      const nextDue = computeNextDueDate(dateRealisation, t.frequence);
+      const nextDue = computeNextDueDateForMode(
+        dateRealisation,
+        t.frequence,
+        t.mode_calcul_recurrence,
+        previousDue
+      );
       const prevCost = Number(t.cout_cumule || 0);
       const addedCost = Number(execution.totalCost || 0);
       const nextPlanning =
@@ -165,11 +169,35 @@ export class TaskService {
           ? { ...t.planning, [execution.periodWeek]: 'DONE' }
           : t.planning;
 
+      const isCounterTask =
+        t.type_declencheur === 'COMPTEUR' ||
+        t.type_declencheur === 'HYBRIDE' ||
+        Number(t.compteur_seuil_intervalle || 0) > 0;
+      const effectiveMeterReading =
+        releveNum > 0
+          ? releveNum
+          : isCounterTask
+          ? Math.max(0, Number(t.compteur_actuel ?? t.dernier_releve ?? 0))
+          : 0;
+      const meterAdvancement =
+        isCounterTask && effectiveMeterReading > 0
+          ? {
+              dernier_releve: effectiveMeterReading,
+              ...MeterService.advanceTaskThresholdOnExecution(t, effectiveMeterReading),
+            }
+          : releveNum > 0
+          ? {
+              dernier_releve: releveNum,
+              compteur_actuel: releveNum,
+            }
+          : {};
+
       return {
         ...t,
         etat: 'Fait',
         validation_status: 'APPROVED',
         last_pending_execution_id: '',
+        pending_compteur_releve: undefined,
         pieces_proposees: execution.sparesProposed || [],
         validated_by_id: execution.validated_by_id || 'admin',
         validated_by_name: execution.validated_by_name || 'Administrateur',
@@ -187,15 +215,7 @@ export class TaskService {
         ...(execution.nom_composant ? { nom_composant: execution.nom_composant } : {}),
         ...(execution.id_part ? { id_part: execution.id_part } : {}),
         ...(execution.nom_part ? { nom_part: execution.nom_part } : {}),
-        ...(releveNum > 0
-          ? {
-              dernier_releve: releveNum,
-              compteur_actuel: releveNum,
-              compteur_dernier_declenchement: releveNum,
-              compteur_prochain_declenchement:
-                releveNum + Math.max(1, Number(t.compteur_seuil_intervalle || 500)),
-            }
-          : {}),
+        ...meterAdvancement,
         planning: nextPlanning,
         updated_at: nowIso,
       };

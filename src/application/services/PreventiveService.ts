@@ -7,6 +7,8 @@ import DataGateway from '../DataGateway';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { loadCollection } from '../../infrastructure/persistence/migrateStorage';
 import { filterActiveMachines } from '../../utils/activeMachines';
+import { resolveActiveSessionRole } from '../../store/slices/storeBootstrapSlice';
+import { computeTaskCycleStatus } from '../../domain/preventive/preventiveScheduleEngine';
 import type { IMachine } from '../../types/domain';
 import type { PreventiveExecutionRecord } from '../../types/preventive';
 import type { IPreventiveActionCatalogItem, IPreventiveGuideCatalogItem } from '../../types/store';
@@ -85,7 +87,7 @@ export interface MachinePreventiveProfile {
   fait_tasks: number;
   retard_tasks: number;
   compliance_rate: number;
-  health_status: 'Optimale' | 'Moyenne' | 'Critique';
+  health_status: 'Optimale' | 'Moyenne' | 'Critique' | 'Non planifiée';
   prochaine_intervention: { semaine: string; date: string } | null;
   cout_total_preventif: number;
 }
@@ -179,10 +181,19 @@ export class PreventiveService {
       throw new Error('Aucune tâche préventive valide fournie.');
     }
 
+    const resolvedRole = String(options.actorRole || resolveActiveSessionRole() || '')
+      .trim()
+      .toUpperCase();
+    const managerRoles = ['ADMIN', 'RESPONSABLE', 'RESPONSABLE_MAINTENANCE'];
+    if (resolvedRole && !managerRoles.includes(resolvedRole)) {
+      throw new Error(
+        'RBAC_DENIED : Permissions insuffisantes pour importer des tâches préventives (Administrateur ou Responsable Maintenance requis).'
+      );
+    }
+
     const existingTasks = this.getTasks();
     if (replace) {
-      const actorRole = String(options.actorRole || 'ADMIN').trim().toUpperCase();
-      if (actorRole !== 'ADMIN') {
+      if (resolvedRole !== 'ADMIN') {
         throw new Error('RBAC_DENIED : Seul un administrateur peut remplacer le planning préventif.');
       }
       const existingExecutions = ExecutionService.getExecutions();
@@ -321,8 +332,14 @@ export class PreventiveService {
     if (Array.isArray(guides) && targetComp) {
       const compLower = targetComp.toLowerCase();
       const match =
-        guides.find((g) => String(g.composant_nom || g.composant_type || '').toLowerCase() === compLower) ||
-        guides.find((g) => compLower.includes(String(g.composant_nom || g.composant_type || '').toLowerCase()));
+        guides.find((g) => {
+          const gName = String(g.composant_nom || g.composant_type || '').trim().toLowerCase();
+          return Boolean(gName) && gName === compLower;
+        }) ||
+        guides.find((g) => {
+          const gName = String(g.composant_nom || g.composant_type || '').trim().toLowerCase();
+          return gName.length >= 2 && compLower.includes(gName);
+        });
       const guidePieces = Array.isArray(match?.pieces_rechange) ? match.pieces_rechange : [];
       guidePieces.forEach((gp) => {
         const ref = String(gp?.reference || gp?.ref || gp?.code || '').trim();
@@ -369,7 +386,10 @@ export class PreventiveService {
    * Unapproved (`PENDING_VALIDATION` / `NEEDS_CLARIFICATION` / `REJECTED`) and `SKIPPED` executions
    * are excluded from the realized cost roll-up.
    */
-  static getMachinePreventiveProfile(machineId: string): MachinePreventiveProfile {
+  static getMachinePreventiveProfile(
+    machineId: string,
+    options: { today?: string } = {}
+  ): MachinePreventiveProfile {
     const idUpper = String(machineId || '').trim().toUpperCase();
     const allTasks = Array.isArray(this.getTasks()) ? this.getTasks() : [];
     const allExecutions = Array.isArray(this.getExecutions()) ? this.getExecutions() : [];
@@ -387,27 +407,34 @@ export class PreventiveService {
       return ex.status !== 'SKIPPED';
     });
 
+    const evaluatedTasks = tasks.map((t) => ({
+      task: t,
+      evalRes: computeTaskCycleStatus(t, { today: options.today }),
+    }));
+
     const total_tasks = tasks.length;
-    const fait_tasks = tasks.filter(
-      (t) => String(t.etat || '').toLowerCase() === 'fait'
+    const fait_tasks = evaluatedTasks.filter(
+      ({ evalRes }) => evalRes.effectiveEtat === 'Fait'
     ).length;
-    const retard_tasks = tasks.filter(
-      (t) => String(t.etat || '').toLowerCase().includes('retard')
+    const retard_tasks = evaluatedTasks.filter(
+      ({ evalRes }) => evalRes.effectiveEtat === 'En retard'
     ).length;
 
     const compliance_rate =
-      total_tasks > 0 ? Math.round((fait_tasks / total_tasks) * 100) : 100;
+      total_tasks > 0 ? Math.round((fait_tasks / total_tasks) * 100) : 0;
 
     const health_status: MachinePreventiveProfile['health_status'] =
-      retard_tasks === 0 && compliance_rate >= 80
+      total_tasks === 0
+        ? 'Non planifiée'
+        : retard_tasks === 0 && compliance_rate >= 80
         ? 'Optimale'
         : retard_tasks <= 2 && compliance_rate >= 50
         ? 'Moyenne'
         : 'Critique';
 
-    const pendingTask = tasks.find(
-      (t) => String(t.etat || '').toLowerCase() !== 'fait'
-    );
+    const pendingTask = evaluatedTasks.find(
+      ({ evalRes }) => evalRes.effectiveEtat !== 'Fait'
+    )?.task;
     const lastRealisation =
       pendingTask?.derniere_realisation ||
       pendingTask?.lastExecutedAt ||

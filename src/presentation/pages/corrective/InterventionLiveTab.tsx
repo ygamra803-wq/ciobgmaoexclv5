@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   CheckCircle,
   Wrench,
@@ -9,6 +10,9 @@ import {
   AlertTriangle,
   Wand2,
   LayoutList,
+  History,
+  Zap,
+  Clock,
 } from 'lucide-react';
 import { WizardShell, useWizardFeature, type WizardProfile } from '../../components/common/wizard';
 import { useI18n } from '../../../i18n/I18nContext';
@@ -31,14 +35,25 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
   const { t } = useI18n();
   const { isEnabled: isWizardMode, setEnabled: setWizardMode } = useWizardFeature('corrective_bt');
 
+  const [quickMinorAction, setQuickMinorAction] = useState('');
+  const QUICK_MINOR_PRESETS = [
+    'Réarmement relais thermique',
+    'Nettoyage capteur / cellule',
+    'Réglage fin de course',
+    'Serrage bornier / connexion',
+    'Appoint huile / graissage',
+  ];
+
   const ctrl = useInterventionLiveController(props);
   const {
     user,
     isTechUser,
     isReadOnlyUser,
+    canFastTrackNeed,
     actorName,
     actorRole,
     activeIntervention,
+    recentMachineFailures,
     liveWorkingTime,
     shiftStatus,
     formState,
@@ -61,13 +76,16 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
     machineParts,
     linkedWorkshopOrders,
     linkedInternalWorkshopOrders,
+    openWorkshopOrders,
     linkedNeedRequests,
+    blockingNeedRequests,
     showNeedRequestForm,
     setShowNeedRequestForm,
     needForm,
     setNeedForm,
     handleEmitNeedRequest,
     handleNeedFieldHandoff,
+    handleFastTrackLinkedNeed,
     showBonAtelierMecaniqueForm,
     setShowBonAtelierMecaniqueForm,
     bonAtelierForm,
@@ -83,6 +101,7 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
     handleMarkSortieReturned,
     executeClotureOrSubmit,
     handleClotureSubmit,
+    handleQuickMinorClosure,
   } = ctrl;
 
   if (!activeIntervention) {
@@ -115,6 +134,7 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
       formState={formState}
       setFormState={setFormState}
       isTechUser={isTechUser}
+      canFastTrackNeed={canFastTrackNeed}
       isWizardMode={isWizardMode}
       showNeedRequestForm={showNeedRequestForm}
       setShowNeedRequestForm={setShowNeedRequestForm}
@@ -123,6 +143,7 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
       handleEmitNeedRequest={handleEmitNeedRequest}
       linkedNeedRequests={linkedNeedRequests}
       handleNeedFieldHandoff={handleNeedFieldHandoff}
+      handleFastTrackLinkedNeed={handleFastTrackLinkedNeed}
       linkedWorkshopOrders={linkedWorkshopOrders}
       linkedInternalWorkshopOrders={linkedInternalWorkshopOrders}
       showBonAtelierMecaniqueForm={showBonAtelierMecaniqueForm}
@@ -377,6 +398,172 @@ export default function InterventionLiveTab(props: InterventionLiveTabProps) {
         actorName={actorName}
         actorRole={actorRole}
       />
+
+      {/* PHASE C4a — Dernières 3 pannes clôturées sur la même machine */}
+      <div
+        data-testid="live-recent-failures-panel"
+        className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-2.5"
+      >
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-800">
+            <History className="w-4 h-4 text-amber-600" />
+            <span>
+              Dernières Pannes — {activeIntervention.code_machine} (Top 3 Historique)
+            </span>
+          </div>
+          <span className="text-[10.5px] font-mono font-bold text-slate-500">
+            {recentMachineFailures.length > 0
+              ? `${recentMachineFailures.length} intervention(s) récente(s)`
+              : 'Aucun antécédent clôturé'}
+          </span>
+        </div>
+
+        {recentMachineFailures.length === 0 ? (
+          <p className="text-xs text-slate-500">
+            Première panne enregistrée ou aucun historique clôturé sur{' '}
+            <b>{activeIntervention.code_machine}</b>.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+            {recentMachineFailures.map((prevBt, idx) => {
+              const prevDate = String(
+                prevBt.date_cloture || prevBt.date_fin || prevBt.date_demande || prevBt.date || ''
+              ).slice(0, 10);
+              const prevPdrs = Array.isArray(prevBt.pieces_utilisees)
+                ? prevBt.pieces_utilisees.map((p) => `${p.ref} (×${p.quantite})`).join(', ')
+                : prevBt.pdr_ref || '';
+              return (
+                <div
+                  key={String(prevBt.id || prevBt.num_bt || idx)}
+                  data-testid={`recent-failure-card-${idx}`}
+                  className="p-3 rounded-xl bg-slate-50/90 border border-slate-200 space-y-1 text-xs"
+                >
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="font-mono font-black text-[11px] text-slate-900">
+                      {prevBt.num_bt || prevBt.id}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-500 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      {prevDate || '—'}
+                      {prevBt.temps_intervention_calc || prevBt.temps_intervention
+                        ? ` · ${prevBt.temps_intervention_calc || prevBt.temps_intervention}`
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="font-bold text-rose-800 line-clamp-1">
+                    {prevBt.anomalie || 'Anomalie non précisée'}
+                  </div>
+                  <div className="text-[11px] text-slate-700 line-clamp-2">
+                    <b className="text-slate-900">
+                      {prevBt.cause_racine ? 'Cause / Action :' : 'Action :'}
+                    </b>{' '}
+                    {prevBt.cause_racine || prevBt.action_realisee || prevBt.travail_a_faire || '—'}
+                  </div>
+                  {prevPdrs && (
+                    <div className="text-[10px] font-mono font-bold text-cyan-800 bg-cyan-50 border border-cyan-200 px-2 py-0.5 rounded truncate">
+                      PDR : {prevPdrs}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* PHASE C4b — Clôture Express (Panne mineure — 0 PDR) */}
+      {!isReadOnlyUser && activeIntervention.statut !== 'CLOTURE' && (() => {
+        const lotoCheck: { valid: boolean; reason?: string } = !isTechUser
+          ? canCloseWorkOrderWithLoto(activeIntervention)
+          : { valid: true };
+        const expressBlocker =
+          !lotoCheck.valid
+            ? lotoCheck.reason || 'Permis LOTO encore consigné.'
+            : !isTechUser && openWorkshopOrders.length > 0
+            ? 'Bon d’atelier / externe encore ouvert.'
+            : !isTechUser && blockingNeedRequests.length > 0
+            ? 'Demande de besoin encore en cours.'
+            : null;
+        return (
+          <div
+            data-testid="live-quick-minor-closure"
+            className="bg-emerald-50/70 rounded-2xl border border-emerald-200/90 p-4 shadow-xs space-y-2.5"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-emerald-950">
+                <Zap className="w-4 h-4 text-emerald-600" />
+                <span>Clôture Express — Panne Mineure (0 PDR · Réglage / Nettoyage)</span>
+              </div>
+              <span className="text-[10.5px] font-mono font-bold text-emerald-800 bg-white/80 px-2 py-0.5 rounded border border-emerald-200">
+                {isTechUser ? 'Soumission 1-clic (Maker-Checker actif)' : 'Clôture directe 1-clic (LOTO respecté)'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_MINOR_PRESETS.map((preset) => {
+                const selected = quickMinorAction === preset;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    data-testid={`quick-minor-preset-${preset.slice(0, 12).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                    onClick={() => setQuickMinorAction(preset)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                      selected
+                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                        : 'bg-white hover:bg-emerald-100 text-emerald-950 border-emerald-200'
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input
+                type="text"
+                data-testid="live-quick-minor-input"
+                value={quickMinorAction}
+                onChange={(e) => setQuickMinorAction(e.target.value)}
+                placeholder="Choisissez un raccourci ci-dessus ou décrivez l'action mineure..."
+                className="flex-1 py-2 px-3 rounded-xl border border-emerald-300 bg-white text-xs font-medium text-slate-900 focus:outline-hidden focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                data-testid="live-quick-minor-submit-btn"
+                disabled={Boolean(expressBlocker) || !quickMinorAction.trim()}
+                onClick={() => {
+                  const ok = handleQuickMinorClosure(quickMinorAction);
+                  if (ok) setQuickMinorAction('');
+                }}
+                className={`px-4 py-2 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition shrink-0 ${
+                  Boolean(expressBlocker) || !quickMinorAction.trim()
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : isTechUser
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shadow-xs'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>
+                  {isTechUser ? 'Soumettre Express (0 PDR)' : 'Clôture Express (0 PDR)'}
+                </span>
+              </button>
+            </div>
+
+            {expressBlocker && (
+              <div
+                data-testid="live-quick-minor-blocker"
+                className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Clôture express verrouillée : {expressBlocker}</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {(activeIntervention.validation_status === 'NEEDS_CLARIFICATION' ||
         activeIntervention.validation_status === 'REJECTED') && (

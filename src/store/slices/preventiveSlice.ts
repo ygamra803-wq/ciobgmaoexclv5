@@ -2,13 +2,19 @@ import { DataGateway } from '../../application/DataGateway';
 import { ActionService } from '../../application/services/preventive/ActionService';
 import { GuideService } from '../../application/services/preventive/GuideService';
 import { PlanService } from '../../application/services/preventive/PlanService';
-import { TaskService, computeNextDueDate } from '../../application/services/preventive/TaskService';
+import { TaskService } from '../../application/services/preventive/TaskService';
 import { ExecutionService } from '../../application/services/preventive/ExecutionService';
 import { MeterService } from '../../application/services/meter/MeterService';
 import SortieExterneService from '../../application/services/SortieExterneService';
+import { StockCalculationService } from '../../core/domain/services/StockCalculationService';
+import {
+  computeNextDueDateForMode,
+  resolvePreventiveLaborRate,
+} from '../../domain/preventive/preventiveScheduleEngine';
 import { storageService } from '../../utils/storageService';
 import { STORAGE_KEYS } from '../../infrastructure/persistence/storageKeys';
 import { safeId } from '../../utils/safeId';
+import { Logger } from '../../core/logger/LoggerService';
 import type {
   GmaoStoreState,
   IPreventiveActionCatalogItem,
@@ -31,7 +37,112 @@ import {
   getInitialPreventive,
   getInitialSorties,
   resolveActiveActorContext,
+  resolveActiveSessionRole,
+  isPartAlreadyDeductedByStoreBon,
 } from './storeBootstrapSlice';
+
+const PREVENTIVE_MANAGER_ROLES = new Set(['ADMIN', 'RESPONSABLE', 'RESPONSABLE_MAINTENANCE']);
+const PREVENTIVE_EXECUTOR_ROLES = new Set([
+  'ADMIN',
+  'RESPONSABLE',
+  'RESPONSABLE_MAINTENANCE',
+  'TECHNICIEN',
+]);
+
+function resolvePreventiveRole(explicitRole?: unknown): string {
+  return String(explicitRole || resolveActiveSessionRole() || '')
+    .trim()
+    .toUpperCase();
+}
+
+function canManagePreventiveSession(explicitRole?: unknown): boolean {
+  const role = resolvePreventiveRole(explicitRole);
+  if (!role) return true; // Headless unit test without active browser session
+  return PREVENTIVE_MANAGER_ROLES.has(role);
+}
+
+function canExecutePreventiveSession(explicitRole?: unknown): boolean {
+  const role = resolvePreventiveRole(explicitRole);
+  if (!role) return true;
+  return PREVENTIVE_EXECUTOR_ROLES.has(role);
+}
+
+function isFieldOnlyRole(explicitRole?: unknown): boolean {
+  const role = resolvePreventiveRole(explicitRole);
+  return role === 'TECHNICIEN' || role === 'OPERATEUR';
+}
+
+function resolveSpareUnitPrice(rawSpare: any, stockMatch: any): number {
+  const rawPrice = Number(rawSpare?.unitPrice ?? rawSpare?.prix_unitaire ?? rawSpare?.prix ?? 0);
+  if (Number.isFinite(rawPrice) && rawPrice > 0) return rawPrice;
+  const stockPrice = Number(
+    stockMatch?.prix_unitaire ??
+      stockMatch?.prixUnitaire ??
+      stockMatch?.prix ??
+      stockMatch?.prix_achat_ht ??
+      0
+  );
+  return Number.isFinite(stockPrice) && stockPrice > 0 ? stockPrice : 0;
+}
+
+function normalizePreventiveSparesList(
+  items: unknown,
+  stockMap: Map<string, any>
+): PreventiveExecutionSpareItem[] {
+  if (!Array.isArray(items)) return [];
+  return items
+    .map((s: any) => {
+      const ref = String(s?.ref || s?.reference || s?.code || '').trim();
+      const qty = Number(s?.qty ?? s?.quantite ?? 0);
+      const stockMatch = stockMap.get(ref.toUpperCase());
+      const unitPrice = resolveSpareUnitPrice(s, stockMatch);
+      return {
+        ref,
+        designation: String(s?.designation || stockMatch?.designation || ref || 'PDR').trim(),
+        qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
+        unit: String(s?.unit || s?.unite || stockMatch?.unite || 'pcs'),
+        unitPrice,
+      };
+    })
+    .filter((s) => Boolean(s.ref && s.qty > 0));
+}
+
+function validatePreventiveStockSufficiency(
+  spares: PreventiveExecutionSpareItem[],
+  stockMap: Map<string, any>,
+  currentMovements: IMouvement[],
+  numBonSaisi: unknown,
+  skipAllDeduction: boolean
+): { valid: boolean; reason?: string } {
+  if (skipAllDeduction || spares.length === 0) return { valid: true };
+  const requestedByRef = new Map<string, { ref: string; qty: number }>();
+
+  for (const sp of spares) {
+    const refKey = String(sp.ref || '').trim().toUpperCase();
+    if (!refKey || sp.qty <= 0) continue;
+    if (isPartAlreadyDeductedByStoreBon(currentMovements, numBonSaisi, sp.ref)) continue;
+    const prev = requestedByRef.get(refKey);
+    if (prev) {
+      prev.qty += sp.qty;
+    } else {
+      requestedByRef.set(refKey, { ref: sp.ref, qty: sp.qty });
+    }
+  }
+
+  for (const [refKey, req] of requestedByRef.entries()) {
+    const stockMatch = stockMap.get(refKey);
+    if (!stockMatch) continue;
+    const liveStock = StockCalculationService.calculateStockActuel(stockMatch, currentMovements);
+    if (req.qty > liveStock) {
+      return {
+        valid: false,
+        reason: `Stock insuffisant pour ${req.ref} : demandé ${req.qty}, disponible ${liveStock}.`,
+      };
+    }
+  }
+
+  return { valid: true };
+}
 
 type StoreSet = (
   partial: Partial<GmaoStoreState> | ((state: GmaoStoreState) => Partial<GmaoStoreState>)
@@ -142,6 +253,10 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
 
     handleRecordMeterReading: (payload: MeterReadingRecordPayload) => {
       if (!payload || !payload.machineId) return null;
+      if (!canExecutePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleRecordMeterReading');
+        return null;
+      }
       const result = MeterService.recordReading(
         payload,
         get().meterReadings || [],
@@ -152,11 +267,33 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
       set({ meterReadings: result.updatedReadings });
       get().setMachines(result.updatedMachines);
       get().setPreventiveTasks(result.updatedTasks);
+
+      if (result.newReading.isMeterReset) {
+        const actor = resolveActiveActorContext();
+        get().appendAuditEvent({
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'METER_RESET_RECORDED',
+          entityType: 'METER_READING',
+          entityId: result.newReading.id,
+          before: { valeur: result.newReading.valeur_precedente, machineId: result.newReading.machineId },
+          after: {
+            valeur: result.newReading.valeur,
+            unite: result.newReading.unite,
+            commentaire: result.newReading.commentaire,
+          },
+        });
+      }
       return result.newReading;
     },
 
     handleBatchRecordMeterReadings: (readingsPayload: MeterReadingRecordPayload[]) => {
       if (!Array.isArray(readingsPayload) || readingsPayload.length === 0) return [];
+      if (!canExecutePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleBatchRecordMeterReadings');
+        return [];
+      }
       const recorded: IMeterReading[] = [];
       let currReadings = get().meterReadings || [];
       let currMachines = get().machines || [];
@@ -181,6 +318,11 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleUpdateTask: (id, updates) => {
+      if (!canManagePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleUpdateTask');
+        return;
+      }
+      const prevTask = (get().preventiveTasks || []).find((t) => String(t.id) === String(id));
       get().setPreventiveTasks((prev) =>
         (prev || []).map((t) =>
           String(t.id) === String(id)
@@ -188,35 +330,90 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
             : t
         )
       );
+      if (prevTask) {
+        const actor = resolveActiveActorContext();
+        get().appendAuditEvent({
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'PREVENTIVE_TASK_UPDATED',
+          entityType: 'PREVENTIVE_TASK',
+          entityId: String(id),
+          before: { etat: prevTask.etat, frequence: prevTask.frequence, prochaine_echeance: prevTask.prochaine_echeance },
+          after: updates as Record<string, unknown>,
+        });
+      }
     },
 
     handleDeleteTask: (id) => {
+      if (!canManagePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleDeleteTask');
+        return;
+      }
+      const prevTask = (get().preventiveTasks || []).find((t) => String(t.id) === String(id));
       get().setPreventiveTasks((prev) =>
         (prev || []).filter((t) => String(t.id) !== String(id))
       );
+      if (prevTask) {
+        const actor = resolveActiveActorContext();
+        get().appendAuditEvent({
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'PREVENTIVE_TASK_DELETED',
+          entityType: 'PREVENTIVE_TASK',
+          entityId: String(id),
+          before: {
+            code: prevTask.code,
+            id_machine: prevTask.id_machine,
+            composant: prevTask.composant,
+          },
+          after: null,
+        });
+      }
     },
 
     handleUpdateTaskCounter: (id, newCounterValue) => {
+      if (!canExecutePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleUpdateTaskCounter');
+        return;
+      }
       const currentTasks = get().preventiveTasks || [];
       const numericVal = Number(newCounterValue || 0);
       const target = currentTasks.find((t) => String(t.id) === String(id));
       const targetMachine = String(target?.id_machine || '').trim().toUpperCase();
+
+      // Route through MeterService SSOT so machines, meterReadings, and preventiveTasks stay synchronized
+      if (targetMachine) {
+        const actor = resolveActiveActorContext();
+        get().handleRecordMeterReading({
+          machineId: targetMachine,
+          valeur: numericVal,
+          unite: (target?.compteur_unite as any) || 'Heures',
+          releve_par: actor.actorName,
+          source: 'MANUEL',
+        });
+        return;
+      }
+
       const nowIso = new Date().toISOString();
-
       const updated = currentTasks.map((t) => {
-        const isSameTask = String(t.id) === String(id);
-        const isSameMachine =
-          Boolean(targetMachine) &&
-          String(t.id_machine || '').trim().toUpperCase() === targetMachine;
-        if (!isSameTask && !isSameMachine) return t;
-
-        const isCounter = t.type_declencheur === 'COMPTEUR' || t.type_declencheur === 'HYBRIDE';
-        const targetVal = Number(t.compteur_prochain_declenchement || 0);
-        const isOverdue = targetVal > 0 && numericVal >= targetVal;
+        if (String(t.id) !== String(id)) return t;
+        const isCounter =
+          t.type_declencheur === 'COMPTEUR' ||
+          t.type_declencheur === 'HYBRIDE' ||
+          Number(t.compteur_seuil_intervalle || 0) > 0;
+        const evalRes = MeterService.evaluateTaskTrigger(t, numericVal);
         let etat = t.etat;
-        if (isCounter && t.etat !== 'Fait' && t.etat !== 'En attente validation') {
-          if (isOverdue) etat = 'En retard';
-          else if (etat === 'En retard' && !isOverdue) etat = 'À faire';
+        const isAwaitingReview =
+          t.etat === 'En attente validation' ||
+          t.etat === 'À clarifier' ||
+          t.validation_status === 'PENDING_VALIDATION' ||
+          t.validation_status === 'NEEDS_CLARIFICATION';
+        if (isCounter && !isAwaitingReview) {
+          if (evalRes.isOverdue) etat = 'En retard';
+          else if (evalRes.isWarning && (t.etat === 'Fait' || t.etat === 'En retard')) etat = 'À faire';
+          else if (etat === 'En retard' && !evalRes.isOverdue) etat = 'À faire';
         }
         return {
           ...t,
@@ -231,38 +428,96 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleMarkTaskDone: (id, validationData: Record<string, any> = {}) => {
+      if (!canExecutePreventiveSession(validationData?.actorRole)) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleMarkTaskDone');
+        return undefined;
+      }
+
       const currentTasks = get().preventiveTasks || [];
+      const targetTaskBefore = currentTasks.find((t) => String(t.id) === String(id));
+      const actor = resolveActiveActorContext();
+
+      // Server/Store-enforced Maker-Checker: Technicians / Operators CANNOT self-approve
+      const forcePendingValidation =
+        isFieldOnlyRole(validationData?.actorRole) ||
+        validationData?.submitForValidation === true ||
+        String(validationData?.validation_status || '').trim().toUpperCase() === 'PENDING_VALIDATION';
+
       const stockMap = new Map<string, any>();
       for (const s of get().rawStock || []) {
         const refKey = String(s?.ref || '').trim().toUpperCase();
         if (refKey) stockMap.set(refKey, s);
       }
 
-      const resolveSparePrices = (items: any) =>
-        Array.isArray(items)
-          ? items.map((s: any) => {
-              const ref = String(s?.ref || s?.reference || s?.code || '').trim();
-              const stockMatch = stockMap.get(ref.toUpperCase());
-              const rawPrice = Number(s?.unitPrice ?? s?.prix_unitaire ?? s?.prix ?? 0);
-              const stockPrice = Number(stockMatch?.prix_unitaire ?? stockMatch?.prixUnitaire ?? stockMatch?.prix ?? 0) || 0;
-              const unitPrice = Number.isFinite(rawPrice) && rawPrice > 0 ? rawPrice : stockPrice;
-              return {
-                ...s,
-                ref,
-                designation: String(s?.designation || stockMatch?.designation || ref || 'PDR').trim(),
-                unitPrice,
-              };
-            })
-          : items;
+      const rawSparesInput = Array.isArray(validationData?.sparesProposed)
+        ? validationData.sparesProposed
+        : Array.isArray(validationData?.usedPDR)
+        ? validationData.usedPDR
+        : Array.isArray(validationData?.sparesUsed)
+        ? validationData.sparesUsed
+        : Array.isArray(validationData?.pieces_utilisees)
+        ? validationData.pieces_utilisees
+        : Array.isArray(validationData?.pieces_proposees)
+        ? validationData.pieces_proposees
+        : [];
+      const normalizedSpares = normalizePreventiveSparesList(rawSparesInput, stockMap);
 
-      const enrichedValidationData = {
+      const skipDeduction = Boolean(validationData?.skipStockDeduction);
+      const currentMovements = get().mouvements || [];
+      const bonSaisi = String(validationData?.num_bon_saisi_par_tech || '').trim();
+
+      // Pre-validate stock sufficiency BEFORE mutating any state on direct approval
+      if (!forcePendingValidation && normalizedSpares.length > 0) {
+        const stockCheck = validatePreventiveStockSufficiency(
+          normalizedSpares,
+          stockMap,
+          currentMovements,
+          bonSaisi,
+          skipDeduction
+        );
+        if (!stockCheck.valid) {
+          Logger.warn(`[PreventiveSlice] Blocked handleMarkTaskDone: ${stockCheck.reason}`);
+          return undefined;
+        }
+      }
+
+      const executorName = String(
+        validationData?.technicien ||
+          validationData?.technicien_realisateur ||
+          validationData?.executorName ||
+          validationData?.submitted_by_name ||
+          targetTaskBefore?.responsable ||
+          actor.actorName
+      ).trim();
+
+      const resolvedLaborRate = resolvePreventiveLaborRate(
+        get().technicians || [],
+        validationData?.id_technician || executorName,
+        validationData?.taux_horaire ?? validationData?.laborRate
+      );
+
+      const enrichedValidationData: Record<string, any> = {
         ...validationData,
-        ...(Array.isArray(validationData?.sparesUsed)
-          ? { sparesUsed: resolveSparePrices(validationData.sparesUsed) }
-          : {}),
-        ...(Array.isArray(validationData?.sparesProposed)
-          ? { sparesProposed: resolveSparePrices(validationData.sparesProposed) }
-          : {}),
+        technicien: executorName,
+        taux_horaire: resolvedLaborRate,
+        laborRate: resolvedLaborRate,
+        sparesUsed: normalizedSpares,
+        sparesProposed: normalizedSpares,
+        usedPDR: normalizedSpares,
+        skipStockDeduction: skipDeduction,
+        ...(forcePendingValidation
+          ? {
+              submitForValidation: true,
+              validation_status: 'PENDING_VALIDATION',
+              submitted_by_id: String(validationData?.submitted_by_id || actor.actorId),
+              submitted_by_name: String(validationData?.submitted_by_name || executorName || actor.actorName),
+            }
+          : {
+              submitForValidation: false,
+              validation_status: 'APPROVED',
+              validated_by_id: String(validationData?.validated_by_id || actor.actorId),
+              validated_by_name: String(validationData?.validated_by_name || actor.actorName),
+            }),
       };
 
       // Keep TaskService storage aligned with Zustand store before executing markTaskAsDone
@@ -277,19 +532,29 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
 
       if (latestExec && latestExec.validation_status === 'APPROVED') {
         const spares = Array.isArray(latestExec.sparesUsed) ? latestExec.sparesUsed : [];
-        if (spares.length > 0 && !(latestExec.emitted_movement_ids?.length)) {
+        let emittedIds: string[] = Array.isArray(latestExec.emitted_movement_ids)
+          ? [...latestExec.emitted_movement_ids]
+          : [];
+
+        if (!skipDeduction && spares.length > 0 && emittedIds.length === 0) {
           const bonCode = String(
-            latestExec.num_bon_saisi_par_tech || `BS-PRV-${latestExec.taskId}`
+            bonSaisi || latestExec.num_bon_saisi_par_tech || `BS-PRV-${latestExec.taskId}`
           ).trim();
-          const emittedIds: string[] = [];
           const newMovements: IMouvement[] = spares
-            .filter((sp) => sp && sp.ref && Number(sp.qty) > 0)
+            .filter(
+              (sp) =>
+                sp &&
+                sp.ref &&
+                Number(sp.qty) > 0 &&
+                !isPartAlreadyDeductedByStoreBon(currentMovements, bonSaisi || bonCode, sp.ref)
+            )
             .map((sp) => {
               const mvtId = safeId('MVT');
               emittedIds.push(mvtId);
               return {
                 id: mvtId,
                 code_bon: bonCode,
+                ...(bonSaisi ? { num_bon_saisi_par_tech: bonSaisi } : {}),
                 source_preventive_execution_id: latestExec!.id,
                 type: 'Sortie Interne',
                 ref: sp.ref,
@@ -307,26 +572,58 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
           if (newMovements.length > 0) {
             get().setMouvements((prev) => [...newMovements, ...(prev || [])]);
           }
-
-          latestExec = {
-            ...latestExec,
-            stock_deducted: true,
-            emitted_movement_ids: emittedIds,
-          };
-          updatedExecutions = updatedExecutions.map((e) =>
-            String(e.id) === String(latestExec!.id) ? latestExec! : e
-          );
-          ExecutionService.saveExecutions(updatedExecutions);
         }
+
+        // Honor createFollowUpDi on direct Admin/Supervisor completion as well!
+        let generatedDiId = latestExec.generated_di_id ? String(latestExec.generated_di_id) : undefined;
+        if (
+          (validationData?.createFollowUpDi === true || validationData?.request_followup_di === true) &&
+          !generatedDiId
+        ) {
+          const targetTaskAfter = updatedTasks.find((t: any) => String(t.id) === String(id));
+          const diDescription = String(
+            validationData?.followUpDiAnomalie ||
+              validationData?.followUpDiDescription ||
+              latestExec.notes ||
+              `Anomalie détectée lors du préventif ${targetTaskAfter?.code || latestExec.taskId}`
+          ).trim();
+          const createdDi = get().handleAddDemandeIntervention({
+            code_machine: String(latestExec.machineCode || targetTaskAfter?.id_machine || '').trim(),
+            id_zone: latestExec.zone || targetTaskAfter?.id_zone || '',
+            zone: latestExec.zone || targetTaskAfter?.id_zone || '',
+            anomalie: diDescription,
+            priorite: String(validationData?.followUpDiPriorite || 'HAUTE'),
+            source: 'AUTO_DI_PREVENTIF',
+            source_preventive_execution_id: latestExec.id,
+            source_preventive_task_id: latestExec.taskId,
+            intervenant: latestExec.executorName || actor.actorName,
+          });
+          if (createdDi?.id) {
+            generatedDiId = String(createdDi.id);
+          }
+        }
+
+        latestExec = {
+          ...latestExec,
+          stock_deducted: !skipDeduction && emittedIds.length > 0,
+          skip_stock_deduction: skipDeduction,
+          emitted_movement_ids: emittedIds,
+          ...(generatedDiId ? { generated_di_id: generatedDiId } : {}),
+        };
+        updatedExecutions = updatedExecutions.map((e) =>
+          String(e.id) === String(latestExec!.id) ? latestExec! : e
+        );
+        ExecutionService.saveExecutions(updatedExecutions);
       }
 
       get().setPreventiveTasks(updatedTasks);
       get().setPreventiveExecutions(updatedExecutions);
 
+      // Update machine counter & record MeterReading ONLY on APPROVED execution (NEVER on PENDING_VALIDATION!)
       const releveNum = Number(
         validationData?.compteur_releve ?? validationData?.dernier_releve ?? 0
       );
-      if (releveNum > 0) {
+      if (latestExec && latestExec.validation_status === 'APPROVED' && releveNum > 0) {
         const targetTask = updatedTasks.find((t: any) => String(t.id) === String(id));
         const targetMachineKey = String(
           targetTask?.id_machine || latestExec?.machineCode || ''
@@ -334,21 +631,47 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
           .trim()
           .toUpperCase();
         if (targetMachineKey) {
-          get().setMachines((prev) =>
-            (prev || []).map((m: any) => {
-              const mKeys = [m?.id_machine_registered, m?.code, m?.id]
-                .filter(Boolean)
-                .map((v) => String(v).trim().toUpperCase());
-              if (!mKeys.includes(targetMachineKey)) return m;
-              return {
-                ...m,
-                compteur_heures: releveNum,
-                compteur_actuel: releveNum,
-                dernier_releve_compteur: releveNum,
-              };
-            })
-          );
+          try {
+            const meterRes = MeterService.recordReading(
+              {
+                machineId: targetMachineKey,
+                valeur: releveNum,
+                unite: (targetTask?.compteur_unite as any) || 'Heures',
+                date_releve: latestExec.executedAt || new Date().toISOString().slice(0, 10),
+                releve_par: latestExec.executorName || actor.actorName,
+                source: 'PREVENTIVE_EXECUTION',
+                commentaire: `Exécution préventive ${targetTask?.code || id}`,
+              },
+              get().meterReadings || [],
+              get().machines || [],
+              [] // Avoid overwriting freshly-advanced task thresholds
+            );
+            MeterService.saveReadings(meterRes.updatedReadings);
+            set({ meterReadings: meterRes.updatedReadings });
+            get().setMachines(meterRes.updatedMachines);
+          } catch (meterErr) {
+            Logger.warn('[PreventiveSlice] Skipped non-monotonic meter sync on task execution:', meterErr);
+          }
         }
+      }
+
+      if (latestExec && latestExec.validation_status === 'APPROVED') {
+        get().appendAuditEvent({
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'PREVENTIVE_EXECUTION_APPROVED',
+          entityType: 'PREVENTIVE_EXECUTION',
+          entityId: latestExec.id,
+          before: { taskId: String(id), etat: targetTaskBefore?.etat },
+          after: {
+            validation_status: 'APPROVED',
+            totalCost: latestExec.totalCost,
+            stock_deducted: latestExec.stock_deducted,
+            emitted_movement_ids: latestExec.emitted_movement_ids || [],
+            ...(latestExec.generated_di_id ? { generated_di_id: latestExec.generated_di_id } : {}),
+          },
+        });
       }
 
       return latestExec || undefined;
@@ -359,6 +682,11 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
       decisionData: ValidationReviewDecisionPayload = {},
       onAddMouvement = null
     ) => {
+      if (!canManagePreventiveSession(decisionData?.actorRole)) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleReviewPreventiveExecutionValidation');
+        return null;
+      }
+
       const currentExecs = get().preventiveExecutions || [];
       const existing = currentExecs.find((e) => String(e.id) === String(executionId));
       if (!existing) return null;
@@ -397,6 +725,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
               etat: nextStatus === 'NEEDS_CLARIFICATION' ? 'À clarifier' : 'Rejeté',
               validation_status: nextStatus,
               validation_note: validationNote,
+              pending_compteur_releve: undefined,
               updated_at: nowIso,
             };
           })
@@ -428,58 +757,70 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
         ? decisionData.sparesUsed
         : existing.sparesProposed || [];
 
-      const sparesUsed: PreventiveExecutionSpareItem[] = rawApproved
-        .map((s: any) => {
-          const ref = String(s?.ref || s?.reference || s?.code || '').trim();
-          const qty = Number(s?.qty ?? s?.quantite ?? 0);
-          const stockMatch = stockMap.get(ref.toUpperCase());
-          const rawUnitPrice = Number(s?.unitPrice ?? s?.prix_unitaire ?? s?.prix ?? 0);
-          const stockPrice =
-            Number(stockMatch?.prix_unitaire ?? stockMatch?.prixUnitaire ?? stockMatch?.prix ?? 0) || 0;
-          const unitPrice =
-            Number.isFinite(rawUnitPrice) && rawUnitPrice > 0 ? rawUnitPrice : stockPrice;
-          return {
-            ref,
-            designation: String(s?.designation || stockMatch?.designation || ref || 'PDR').trim(),
-            qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
-            unit: String(s?.unit || s?.unite || 'pcs'),
-            unitPrice: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0,
-          };
-        })
-        .filter((s) => Boolean(s.ref && s.qty > 0));
-
-      const sparesCost = Number(
-        sparesUsed.reduce((sum, s) => sum + s.qty * (s.unitPrice || 0), 0).toFixed(2)
-      );
-      const laborCost = ((Number(existing.durationMinutes) || 15) / 60) * (Number(existing.laborRate) || 35);
-      const totalCost = Number((sparesCost + laborCost).toFixed(2));
+      const sparesUsed = normalizePreventiveSparesList(rawApproved, stockMap);
+      const skipDeduction = Boolean(decisionData?.skipStockDeduction || existing.skip_stock_deduction);
+      const currentMovements = get().mouvements || [];
       const bonCode = String(
         decisionData?.code_bon_magasin ||
           existing.num_bon_saisi_par_tech ||
           `BS-PRV-${existing.taskId}`
       ).trim();
 
+      const stockCheck = validatePreventiveStockSufficiency(
+        sparesUsed,
+        stockMap,
+        currentMovements,
+        existing.num_bon_saisi_par_tech || bonCode,
+        skipDeduction
+      );
+      if (!stockCheck.valid) {
+        Logger.warn(`[PreventiveSlice] Blocked review approval: ${stockCheck.reason}`);
+        return null;
+      }
+
+      const sparesCost = Number(
+        sparesUsed.reduce((sum, s) => sum + s.qty * (s.unitPrice || 0), 0).toFixed(2)
+      );
+      const resolvedLaborRate = resolvePreventiveLaborRate(
+        get().technicians || [],
+        existing.executorName,
+        existing.laborRate
+      );
+      const laborCost = ((Number(existing.durationMinutes) || 15) / 60) * resolvedLaborRate;
+      const totalCost = Number((sparesCost + laborCost).toFixed(2));
+
       const emittedIds: string[] = [];
-      const newMovements: IMouvement[] = sparesUsed.map((sp) => {
-        const mvtId = safeId('MVT');
-        emittedIds.push(mvtId);
-        return {
-          id: mvtId,
-          code_bon: bonCode,
-          num_bon_saisi_par_tech: existing.num_bon_saisi_par_tech,
-          source_preventive_execution_id: existing.id,
-          type: 'Sortie Interne',
-          ref: sp.ref,
-          designation: sp.designation,
-          quantite: sp.qty,
-          date: existing.executedAt || nowIso.slice(0, 10),
-          technicien: existing.executorName,
-          id_machine_registered: existing.machineCode,
-          id_zone: existing.zone,
-          action_id: 'PREVENTIVE',
-          prix_unitaire: sp.unitPrice,
-        };
-      });
+      const newMovements: IMouvement[] = skipDeduction
+        ? []
+        : sparesUsed
+            .filter(
+              (sp) =>
+                !isPartAlreadyDeductedByStoreBon(
+                  currentMovements,
+                  existing.num_bon_saisi_par_tech || bonCode,
+                  sp.ref
+                )
+            )
+            .map((sp) => {
+              const mvtId = safeId('MVT');
+              emittedIds.push(mvtId);
+              return {
+                id: mvtId,
+                code_bon: bonCode,
+                num_bon_saisi_par_tech: existing.num_bon_saisi_par_tech,
+                source_preventive_execution_id: existing.id,
+                type: 'Sortie Interne',
+                ref: sp.ref,
+                designation: sp.designation,
+                quantite: sp.qty,
+                date: existing.executedAt || nowIso.slice(0, 10),
+                technicien: existing.executorName,
+                id_machine_registered: existing.machineCode,
+                id_zone: existing.zone,
+                action_id: 'PREVENTIVE',
+                prix_unitaire: sp.unitPrice,
+              };
+            });
 
       if (newMovements.length > 0) {
         get().setMouvements((prev) => [...newMovements, ...(prev || [])]);
@@ -518,17 +859,27 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
         }
       }
 
+      const approvedMeterReading = Number(
+        decisionData?.compteur_releve ??
+          existing.compteur_releve ??
+          targetTask?.pending_compteur_releve ??
+          0
+      );
+
       const updatedExec: PreventiveExecutionRecord = {
         ...existing,
+        laborRate: resolvedLaborRate,
         sparesUsed,
         sparesCost,
         totalCost,
+        ...(approvedMeterReading > 0 ? { compteur_releve: approvedMeterReading } : {}),
         validation_status: 'APPROVED',
         validated_by_id: validatorId,
         validated_by_name: validatorName,
         validated_at: nowIso,
         validation_note: validationNote,
-        stock_deducted: sparesUsed.length > 0,
+        stock_deducted: !skipDeduction && emittedIds.length > 0,
+        skip_stock_deduction: skipDeduction,
         emitted_movement_ids: emittedIds,
         ...(generatedDiId ? { generated_di_id: generatedDiId } : {}),
       };
@@ -537,29 +888,110 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
         (prev || []).map((e) => (String(e.id) === String(executionId) ? updatedExec : e))
       );
 
+      const targetMachineCode = String(
+        existing.machineCode || targetTask?.id_machine || ''
+      )
+        .trim()
+        .toUpperCase();
+
       get().setPreventiveTasks((prev) =>
         (prev || []).map((t) => {
-          if (String(t.id) !== String(existing.taskId)) return t;
+          const isTarget = String(t.id) === String(existing.taskId);
+          const isSiblingSameMachine =
+            !isTarget &&
+            Boolean(targetMachineCode) &&
+            String(t.id_machine || '').trim().toUpperCase() === targetMachineCode;
+
+          if (isSiblingSameMachine && approvedMeterReading > 0) {
+            return {
+              ...t,
+              dernier_releve: approvedMeterReading,
+              compteur_actuel: approvedMeterReading,
+              updated_at: nowIso,
+            };
+          }
+          if (!isTarget) return t;
+
           const prevCost = Number(t.cout_cumule || 0);
           const dateRealisation = existing.executedAt || nowIso.slice(0, 10);
-          const nextDue = computeNextDueDate(dateRealisation, t.frequence);
+          const previousDue = String(
+            t.prochaine_echeance || t.nextDueDate || t.date_echeance || ''
+          );
+          const nextDue = computeNextDueDateForMode(
+            dateRealisation,
+            t.frequence,
+            String(t.mode_calcul_recurrence || ''),
+            previousDue
+          );
+
+          const isCounterTask =
+            t.type_declencheur === 'COMPTEUR' ||
+            t.type_declencheur === 'HYBRIDE' ||
+            Number(t.compteur_seuil_intervalle || 0) > 0;
+          const effectiveReading =
+            approvedMeterReading > 0
+              ? approvedMeterReading
+              : isCounterTask
+              ? Math.max(0, Number(t.compteur_actuel ?? t.dernier_releve ?? 0))
+              : 0;
+          const meterAdvancement =
+            isCounterTask && effectiveReading > 0
+              ? {
+                  dernier_releve: effectiveReading,
+                  ...MeterService.advanceTaskThresholdOnExecution(t, effectiveReading),
+                }
+              : approvedMeterReading > 0
+              ? {
+                  dernier_releve: approvedMeterReading,
+                  compteur_actuel: approvedMeterReading,
+                }
+              : {};
+
           return {
             ...t,
             etat: 'Fait',
             validation_status: 'APPROVED',
             last_pending_execution_id: '',
+            pending_compteur_releve: undefined,
             validated_by_id: validatorId,
             validated_by_name: validatorName,
             validated_at: nowIso,
             validation_note: validationNote,
             derniere_realisation: dateRealisation,
             lastExecutedAt: dateRealisation,
+            ...(previousDue ? { echeance_precedente: previousDue } : {}),
             prochaine_echeance: nextDue,
             cout_cumule: Number((prevCost + totalCost).toFixed(2)),
+            ...meterAdvancement,
             updated_at: nowIso,
           };
         })
       );
+
+      // Sync machine counter & append MeterReading upon approval
+      if (approvedMeterReading > 0 && targetMachineCode) {
+        try {
+          const meterRes = MeterService.recordReading(
+            {
+              machineId: targetMachineCode,
+              valeur: approvedMeterReading,
+              unite: (targetTask?.compteur_unite as any) || 'Heures',
+              date_releve: existing.executedAt || nowIso.slice(0, 10),
+              releve_par: existing.executorName || validatorName,
+              source: 'PREVENTIVE_EXECUTION',
+              commentaire: `Validation préventive ${targetTask?.code || existing.taskId}`,
+            },
+            get().meterReadings || [],
+            get().machines || [],
+            []
+          );
+          MeterService.saveReadings(meterRes.updatedReadings);
+          set({ meterReadings: meterRes.updatedReadings });
+          get().setMachines(meterRes.updatedMachines);
+        } catch (meterErr) {
+          Logger.warn('[PreventiveSlice] Skipped non-monotonic meter sync on approval:', meterErr);
+        }
+      }
 
       get().appendAuditEvent({
         actorId: validatorId,
@@ -574,6 +1006,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
           sparesCost,
           totalCost,
           emitted_movement_ids: emittedIds,
+          ...(approvedMeterReading > 0 ? { compteur_releve: approvedMeterReading } : {}),
           ...(generatedDiId ? { generated_di_id: generatedDiId } : {}),
         },
       });
@@ -582,21 +1015,105 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleDeletePreventiveExecution: (id: string) => {
-      get().setPreventiveExecutions((prev) =>
-        (prev || []).filter((e) => String(e.id) !== String(id))
+      if (!canManagePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleDeletePreventiveExecution');
+        return;
+      }
+      const currentExecs = get().preventiveExecutions || [];
+      const targetExec = currentExecs.find((e) => String(e.id) === String(id));
+      if (!targetExec) return;
+
+      const remainingExecs = currentExecs.filter((e) => String(e.id) !== String(id));
+      get().setPreventiveExecutions(remainingExecs);
+
+      // Rollback any emitted stock movements linked to this execution so stock math stays exact
+      const emittedSet = new Set(
+        (targetExec.emitted_movement_ids || []).map((mId) => String(mId).trim()).filter(Boolean)
       );
+      const currentMouvements = get().mouvements || [];
+      const filteredMouvements = currentMouvements.filter((m) => {
+        if (!m) return false;
+        if (emittedSet.has(String(m.id || '').trim())) return false;
+        if (String(m.source_preventive_execution_id || '').trim() === String(targetExec.id)) {
+          return false;
+        }
+        return true;
+      });
+      if (filteredMouvements.length !== currentMouvements.length) {
+        get().setMouvements(filteredMouvements);
+      }
+
+      // Recompute cumulative cost for the linked task from remaining approved executions
+      if (targetExec.taskId) {
+        const targetTaskIdStr = String(targetExec.taskId);
+        const recomputedCost = Number(
+          remainingExecs
+            .filter((ex) => {
+              if (String(ex.taskId || '') !== targetTaskIdStr) return false;
+              const vStatus = String(ex.validation_status || 'APPROVED').toUpperCase();
+              return (vStatus === 'APPROVED' || vStatus === 'NONE' || vStatus === '') && ex.status !== 'SKIPPED';
+            })
+            .reduce((sum, ex) => sum + (Number(ex.totalCost) || 0), 0)
+            .toFixed(2)
+        );
+        get().setPreventiveTasks((prev) =>
+          (prev || []).map((t) =>
+            String(t.id) === targetTaskIdStr
+              ? { ...t, cout_cumule: recomputedCost, updated_at: new Date().toISOString() }
+              : t
+          )
+        );
+      }
+
+      const actor = resolveActiveActorContext();
+      get().appendAuditEvent({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
+        actionType: 'PREVENTIVE_EXECUTION_DELETED',
+        entityType: 'PREVENTIVE_EXECUTION',
+        entityId: targetExec.id,
+        before: {
+          taskId: targetExec.taskId,
+          totalCost: targetExec.totalCost,
+          emitted_movement_ids: targetExec.emitted_movement_ids || [],
+        },
+        after: {
+          rolledBackMovementsCount: currentMouvements.length - filteredMouvements.length,
+        },
+      });
     },
 
     handleCreatePlanWithTasks: (planData, taskItems) => {
+      if (!canManagePreventiveSession()) {
+        Logger.warn('[PreventiveSlice] RBAC blocked handleCreatePlanWithTasks');
+        return { plan: {} as IPreventivePlanCatalogItem, tasks: [] };
+      }
       PlanService.savePlans(get().preventivePlans || []);
       TaskService.saveTasks(get().preventiveTasks || []);
       const res = PlanService.createPlanWithTasks(planData, taskItems);
       get().setPreventivePlans(PlanService.getPlans());
       get().setPreventiveTasks(TaskService.getTasks());
+
+      const actor = resolveActiveActorContext();
+      get().appendAuditEvent({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
+        actionType: 'PREVENTIVE_PLAN_CREATED',
+        entityType: 'PREVENTIVE_PLAN',
+        entityId: String(res?.plan?.id || 'PLAN'),
+        before: null,
+        after: {
+          id_machine: res?.plan?.id_machine,
+          tasksCount: res?.tasks?.length || 0,
+        },
+      });
       return res;
     },
 
     handleAddAction: (actionData) => {
+      if (!canManagePreventiveSession()) return get().preventiveActions || [];
       ActionService.saveActions(get().preventiveActions || []);
       const next = ActionService.addAction(actionData);
       get().setPreventiveActions(next);
@@ -604,6 +1121,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleUpdateAction: (id, actionData) => {
+      if (!canManagePreventiveSession()) return get().preventiveActions || [];
       ActionService.saveActions(get().preventiveActions || []);
       const next = ActionService.updateAction(id, actionData);
       get().setPreventiveActions(next);
@@ -611,6 +1129,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleDeleteAction: (id) => {
+      if (!canManagePreventiveSession()) return get().preventiveActions || [];
       ActionService.saveActions(get().preventiveActions || []);
       const next = ActionService.deleteAction(id);
       get().setPreventiveActions(next);
@@ -618,6 +1137,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleAddGuide: (guideData) => {
+      if (!canManagePreventiveSession()) return get().preventiveGuides || [];
       GuideService.saveGuides(get().preventiveGuides || []);
       const next = GuideService.addGuide(guideData);
       get().setPreventiveGuides(next);
@@ -625,6 +1145,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleUpdateGuide: (id, guideData) => {
+      if (!canManagePreventiveSession()) return get().preventiveGuides || [];
       GuideService.saveGuides(get().preventiveGuides || []);
       const next = GuideService.updateGuide(id, guideData);
       get().setPreventiveGuides(next);
@@ -632,6 +1153,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleDeleteGuide: (id) => {
+      if (!canManagePreventiveSession()) return get().preventiveGuides || [];
       GuideService.saveGuides(get().preventiveGuides || []);
       const next = GuideService.deleteGuide(id);
       get().setPreventiveGuides(next);
@@ -639,6 +1161,9 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleResetPreventiveToBaseline: async () => {
+      if (!canManagePreventiveSession()) {
+        return { cancelled: true, restoredCount: 0, orphanCountAfter: 0 };
+      }
       const isDemoMode =
         storageService.getItem(STORAGE_KEYS.DEMO_MODE, false) === true &&
         storageService.getItem(STORAGE_KEYS.START_MODE, 'empty') !== 'empty';
@@ -658,11 +1183,27 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
     },
 
     handleClearPreventiveForRealFactory: async () => {
+      if (!canManagePreventiveSession()) {
+        return { cancelled: true, clearedCount: 0 };
+      }
       const prevCount = (get().preventiveTasks || []).length;
+      const prevExecCount = (get().preventiveExecutions || []).length;
       get().setPreventiveTasks([]);
       get().setPreventivePlans([]);
       get().setPreventiveExecutions([]);
       get().setMeterReadings([]);
+
+      const actor = resolveActiveActorContext();
+      get().appendAuditEvent({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: actor.actorRole,
+        actionType: 'PREVENTIVE_FACTORY_CLEARED',
+        entityType: 'PREVENTIVE_TASK',
+        entityId: 'ALL',
+        before: { tasksCount: prevCount, executionsCount: prevExecCount },
+        after: { tasksCount: 0, executionsCount: 0 },
+      });
       return { cancelled: false, clearedCount: prevCount };
     },
 

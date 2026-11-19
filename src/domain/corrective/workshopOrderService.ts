@@ -73,6 +73,8 @@ export interface IWorkshopOrder {
   date_emission: string;
   date_statut?: string;
   observation?: string;
+  heures_atelier?: number;
+  cout_atelier?: number;
   taches_atelier?: IWorkshopTaskItem[];
 }
 
@@ -325,6 +327,12 @@ export function createWorkshopOrderRecord(
     date_emission: dateEmission,
     date_statut: nowIso,
     observation: payload?.observation ? String(payload.observation).trim() : '',
+    ...(payload?.heures_atelier !== undefined && Number.isFinite(Number(payload.heures_atelier))
+      ? { heures_atelier: Math.max(0, Number(payload.heures_atelier)) }
+      : {}),
+    ...(payload?.cout_atelier !== undefined && Number.isFinite(Number(payload.cout_atelier))
+      ? { cout_atelier: Math.max(0, Number(payload.cout_atelier)) }
+      : {}),
     taches_atelier: Array.isArray(payload?.taches_atelier) ? payload.taches_atelier : [],
   };
 }
@@ -356,5 +364,26 @@ export function getLinkedWorkshopOrdersForIntervention(
     if (ordDi && (ordDi === intId || (numBt && ordDi === numBt))) return true;
     return false;
   });
+}
+
+/**
+ * Sums optional internal workshop costs (`cout_atelier`) across all non-cancelled
+ * {@link IWorkshopOrder} records linked to a corrective intervention.
+ */
+export function computeLinkedInternalWorkshopCost(
+  intervention: Record<string, any> | null | undefined,
+  workshopOrders: ReadonlyArray<IWorkshopOrder> = []
+): number {
+  const linked = getLinkedWorkshopOrdersForIntervention(intervention, workshopOrders);
+  if (linked.length === 0) return 0;
+  let total = 0;
+  for (const ord of linked) {
+    if (normalizeWorkshopOrderStatus(ord.statut) === 'ANNULE') continue;
+    const cost = Number(ord.cout_atelier ?? 0);
+    if (Number.isFinite(cost) && cost > 0) {
+      total += cost;
+    }
+  }
+  return Number(total.toFixed(2));
 }
 

@@ -18,6 +18,7 @@ import AnalyseCorrectiveTab from './AnalyseCorrectiveTab';
 import AtelierFabricationTab from './AtelierFabricationTab';
 import BesoinsMainCouranteTab from './BesoinsMainCouranteTab';
 import CorrectiveFormulasModal from './CorrectiveFormulasModal';
+import LiveStoppedMachinesBoard from './components/LiveStoppedMachinesBoard';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
@@ -447,6 +448,17 @@ export default function CorrectiveView({
         </div>
       </div>
 
+      {/* 1b. Live Stopped Machines Board (Phase C — Owner & Maintenance Manager Real-Time Strip) */}
+      <LiveStoppedMachinesBoard
+        interventions={techScopedInterventions}
+        machines={machines}
+        onOpenLive={(item) => {
+          setActiveLiveId?.(item.id);
+          handleTabChange('corrective_live');
+        }}
+        onOpenDi={() => handleTabChange('corrective_di')}
+      />
+
       {/* 2. Sub-Tab Dynamic Contents with Smooth Animated Transitions */}
       <AnimatePresence mode="wait">
         <motion.div
@@ -558,6 +570,7 @@ export default function CorrectiveView({
               interventions={interventions}
               machines={machines}
               stockItems={stockItems}
+              technicians={technicians}
               kpis={kpis}
               paretoAnomalies={paretoAnomalies}
               paretoMachines={paretoMachines}

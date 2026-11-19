@@ -172,6 +172,7 @@ export class MeterService {
       releve_par?: string;
       source?: IMeterReading['source'];
       commentaire?: string;
+      allowMeterReset?: boolean;
     },
     currentReadings: IMeterReading[] = [],
     machines: any[] = [],
@@ -183,7 +184,10 @@ export class MeterService {
     updatedTasks: any[];
   } {
     const rawVal = Number(payload.valeur);
-    const newNumericVal = Math.max(0, isNaN(rawVal) ? 0 : rawVal);
+    if (!Number.isFinite(rawVal) || rawVal < 0) {
+      throw new Error('INVALID_METER_READING : La valeur du relevé compteur doit être un nombre positif.');
+    }
+    const newNumericVal = rawVal;
     const targetMachineCode = String(payload.machineId || '').trim().toUpperCase();
     const dateStr = payload.date_releve || new Date().toISOString().split('T')[0];
     const techName = String(payload.releve_par || 'Opérateur').trim();
@@ -205,7 +209,21 @@ export class MeterService {
       ? Number(previousForMach.valeur || 0)
       : Number(matchedMach?.compteur_heures ?? matchedMach?.dernier_releve_compteur ?? 0);
 
-    const delta = Math.max(0, newNumericVal - previousValue);
+    const isLowerThanPrevious = previousValue > 0 && newNumericVal < previousValue;
+    if (isLowerThanPrevious && payload.allowMeterReset !== true) {
+      throw new Error(
+        `NON_MONOTONIC_READING : Relevé (${newNumericVal} ${unit}) inférieur au précédent (${previousValue} ${unit}) pour ${targetMachineCode}. Activez "Remplacement compteur" si l'horomètre a été remplacé.`
+      );
+    }
+
+    const isMeterReset = Boolean(isLowerThanPrevious && payload.allowMeterReset === true);
+    const delta = isMeterReset ? newNumericVal : Math.max(0, newNumericVal - previousValue);
+
+    const baseComment = payload.commentaire
+      ? String(payload.commentaire).trim()
+      : delta > 0
+      ? `+${delta} ${unit} cumulées`
+      : undefined;
 
     const newReading: IMeterReading = {
       id: `REL-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
@@ -219,7 +237,10 @@ export class MeterService {
       date_releve: dateStr,
       releve_par: techName,
       source,
-      commentaire: payload.commentaire || (delta > 0 ? `+${delta} ${unit} cumulées` : undefined),
+      ...(isMeterReset ? { isMeterReset: true } : {}),
+      commentaire: isMeterReset
+        ? `[Remplacement compteur] ${baseComment || `Ancien: ${previousValue} ${unit} → Nouveau: ${newNumericVal} ${unit}`}`
+        : baseComment,
       createdAt: nowIso,
     };
 
@@ -241,20 +262,31 @@ export class MeterService {
       return m;
     });
 
-    // 3. Update Tasks for this machine and evaluate trigger status
+    // 3. Update Tasks for this machine and evaluate trigger status (including re-opening recurring 'Fait' tasks!)
     const updatedTasks = tasks.map((t) => {
       const taskMach = String(t.id_machine || '').trim().toUpperCase();
       if (taskMach !== targetMachineCode) return t;
 
-      const isCounterBased = t.type_declencheur === 'COMPTEUR' || t.type_declencheur === 'HYBRIDE';
+      const isCounterBased =
+        t.type_declencheur === 'COMPTEUR' ||
+        t.type_declencheur === 'HYBRIDE' ||
+        Number(t.compteur_seuil_intervalle || 0) > 0;
       const evalResult = this.evaluateTaskTrigger(t, newNumericVal);
 
       let nextEtat = t.etat;
-      // If task is not already done or pending validation, update etat to 'En retard' or 'À faire'
-      if (t.etat !== 'Fait' && t.etat !== 'En attente validation') {
+      // Only preserve pending validation / clarification states; recurring 'Fait' tasks MUST re-open when thresholds hit
+      const isAwaitingReview =
+        t.etat === 'En attente validation' ||
+        t.etat === 'À clarifier' ||
+        t.validation_status === 'PENDING_VALIDATION' ||
+        t.validation_status === 'NEEDS_CLARIFICATION';
+
+      if (isCounterBased && !isAwaitingReview) {
         if (evalResult.isOverdue) {
           nextEtat = 'En retard';
-        } else if (t.etat === 'En retard' && !evalResult.isOverdue && isCounterBased) {
+        } else if (evalResult.isWarning && (t.etat === 'Fait' || t.etat === 'En retard')) {
+          nextEtat = 'À faire';
+        } else if (t.etat === 'En retard' && !evalResult.isOverdue) {
           nextEtat = 'À faire';
         }
       }

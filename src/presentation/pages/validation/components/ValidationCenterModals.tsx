@@ -1,12 +1,12 @@
-import React from 'react';
-import { X, AlertTriangle, Trash2, Calculator } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { X, AlertTriangle, Trash2, Calculator, Plus } from 'lucide-react';
 import { INTERVENTION_NATURE_OPTIONS } from '../../../components/common/ValidationStatusBadge';
 import type {
   CandidateStoreMovementMatch,
   ClaimReconciliationResult,
   ReconciliationAlert,
 } from '../../../../core/security/validationReconciliation';
-import type { ISortieDemand, ISortieDemandItem } from '../../../../types/domain';
+import type { ISortieDemand, ISortieDemandItem, IStockItem } from '../../../../types/domain';
 import type {
   PreventiveExecutionRecord,
   PreventiveExecutionSpareItem,
@@ -44,6 +44,7 @@ export interface ValidationCenterModalsProps {
   setBtActionRealisee: (v: string) => void;
   btPieces: ValidationBtPieceDraft[];
   setBtPieces: React.Dispatch<React.SetStateAction<ValidationBtPieceDraft[]>>;
+  stockItems?: IStockItem[];
   btSkipStockDeduction: boolean;
   setBtSkipStockDeduction: (v: boolean) => void;
   btNote: string;
@@ -90,6 +91,7 @@ export default function ValidationCenterModals({
   setBtActionRealisee,
   btPieces,
   setBtPieces,
+  stockItems = [],
   btSkipStockDeduction,
   setBtSkipStockDeduction,
   btNote,
@@ -125,6 +127,52 @@ export default function ValidationCenterModals({
   setShowFormulasModal,
   validationFormulas,
 }: ValidationCenterModalsProps) {
+  const [vcPdrSearch, setVcPdrSearch] = useState('');
+  const [vcSelectedPdrRef, setVcSelectedPdrRef] = useState('');
+  const [vcSelectedPdrQty, setVcSelectedPdrQty] = useState<number>(1);
+
+  const vcFilteredStockOptions = useMemo(() => {
+    const q = vcPdrSearch.trim().toLowerCase();
+    return (stockItems || [])
+      .filter((s) => {
+        const ref = String(s?.ref || s?.code_article || '').trim();
+        if (!ref) return false;
+        if (!q) return true;
+        const des = String(s?.designation || s?.nom || '').toLowerCase();
+        return ref.toLowerCase().includes(q) || des.includes(q);
+      })
+      .slice(0, 80);
+  }, [stockItems, vcPdrSearch]);
+
+  const handleAddVcMissingPdr = () => {
+    const cleanRef = String(vcSelectedPdrRef || '').trim();
+    if (!cleanRef) return;
+    const matched = (stockItems || []).find(
+      (s) => String(s?.ref || s?.code_article || '').trim().toUpperCase() === cleanRef.toUpperCase()
+    );
+    const canonicalRef = String(matched?.ref || matched?.code_article || cleanRef).trim();
+    const designation = String(matched?.designation || matched?.nom || canonicalRef).trim();
+    const qtyToAdd = Math.max(1, Math.round(Number(vcSelectedPdrQty) || 1));
+
+    setBtPieces((prev) => {
+      const idx = prev.findIndex(
+        (p) => String(p.ref || '').trim().toUpperCase() === canonicalRef.toUpperCase()
+      );
+      if (idx >= 0) {
+        return prev.map((p, i) => {
+          if (i !== idx) return p;
+          const nextQty = Number(p.quantite ?? p.qty ?? 0) + qtyToAdd;
+          return { ...p, quantite: nextQty, qty: nextQty };
+        });
+      }
+      return [...prev, { ref: canonicalRef, designation, quantite: qtyToAdd, qty: qtyToAdd }];
+    });
+
+    setVcSelectedPdrRef('');
+    setVcSelectedPdrQty(1);
+    setVcPdrSearch('');
+  };
+
   return (
     <>
       {/* MODAL 1: CORRECTIVE BT MAKER-CHECKER REVIEW MODAL */}
@@ -256,6 +304,67 @@ export default function ValidationCenterModals({
                     ))}
                   </div>
                 )}
+                {/* Supervisor: Add Missing PDR from Catalog */}
+                {stockItems.length > 0 && (
+                  <div
+                    data-testid="vc-bt-add-pdr-panel"
+                    className="pt-2 border-t border-slate-200/80 space-y-1.5"
+                  >
+                    <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-700 block">
+                      + Ajouter une pièce manquante (Stock)
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
+                      <input
+                        type="text"
+                        data-testid="vc-bt-add-pdr-search"
+                        value={vcPdrSearch}
+                        onChange={(e) => setVcPdrSearch(e.target.value)}
+                        placeholder="Filtrer réf..."
+                        className="sm:col-span-4 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                      />
+                      <select
+                        data-testid="vc-bt-add-pdr-select"
+                        value={vcSelectedPdrRef}
+                        onChange={(e) => setVcSelectedPdrRef(e.target.value)}
+                        className="sm:col-span-5 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold"
+                      >
+                        <option value="">-- Pièce ({vcFilteredStockOptions.length}) --</option>
+                        {vcFilteredStockOptions.map((s) => {
+                          const ref = String(s.ref || s.code_article || '').trim();
+                          const label = String(s.designation || s.nom || ref);
+                          const dispo = Number(s.stockActuel ?? s.stock_actuel ?? s.quantite ?? 0);
+                          return (
+                            <option key={ref} value={ref}>
+                              {ref} — {label} (Dispo: {dispo})
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        data-testid="vc-bt-add-pdr-qty"
+                        value={vcSelectedPdrQty}
+                        onChange={(e) =>
+                          setVcSelectedPdrQty(Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="sm:col-span-1 rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs font-mono text-center"
+                        aria-label="Quantité PDR à ajouter"
+                      />
+                      <button
+                        type="button"
+                        data-testid="vc-bt-add-pdr-btn"
+                        onClick={handleAddVcMissingPdr}
+                        disabled={!vcSelectedPdrRef}
+                        className="sm:col-span-2 rounded-lg bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-bold text-xs px-2 py-1 flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Ajouter</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {btPieces.length > 0 && (
                   <label className="flex items-start gap-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700 cursor-pointer select-none">
                     <input

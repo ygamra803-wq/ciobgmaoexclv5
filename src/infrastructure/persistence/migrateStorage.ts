@@ -116,6 +116,8 @@ const SNAPSHOT_FIELD_MAP: Record<string, string> = {
   [STORAGE_KEYS.PREVENTIVE_ACTIONS]: 'preventiveActions',
   [STORAGE_KEYS.PREVENTIVE_GUIDES]: 'preventiveGuides',
   [STORAGE_KEYS.PREVENTIVE_PLANS]: 'preventivePlans',
+  [STORAGE_KEYS.PREVENTIVE_EXECUTIONS]: 'preventiveExecutions',
+  [STORAGE_KEYS.METER_READINGS]: 'meterReadings',
   [STORAGE_KEYS.SORTIE_EXTERNE]: 'sortiesExterne',
   [STORAGE_KEYS.CORRECTIVE_INTERVENTIONS]: 'correctiveInterventions',
   [STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE]: 'correctiveActionsByPanne',

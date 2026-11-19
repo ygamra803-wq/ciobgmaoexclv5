@@ -18,6 +18,7 @@ interface InterventionLiveDiagnosticStepProps {
   formState: LiveInterventionFormState;
   setFormState: Dispatch<SetStateAction<LiveInterventionFormState>>;
   isTechUser: boolean;
+  canFastTrackNeed?: boolean;
   isWizardMode: boolean;
   showNeedRequestForm: boolean;
   setShowNeedRequestForm: Dispatch<SetStateAction<boolean>>;
@@ -26,6 +27,7 @@ interface InterventionLiveDiagnosticStepProps {
   handleEmitNeedRequest: () => void;
   linkedNeedRequests: INeedRequest[];
   handleNeedFieldHandoff: (needId: string, nextStatus: NeedRequestStatus) => void;
+  handleFastTrackLinkedNeed?: (needId: string, closeFieldImmediately?: boolean) => void;
   linkedWorkshopOrders: SortieExterneItem[];
   linkedInternalWorkshopOrders: IWorkshopOrder[];
   showBonAtelierMecaniqueForm: boolean;
@@ -57,6 +59,7 @@ export function InterventionLiveDiagnosticStep({
   formState,
   setFormState,
   isTechUser,
+  canFastTrackNeed,
   isWizardMode,
   showNeedRequestForm,
   setShowNeedRequestForm,
@@ -65,6 +68,7 @@ export function InterventionLiveDiagnosticStep({
   handleEmitNeedRequest,
   linkedNeedRequests,
   handleNeedFieldHandoff,
+  handleFastTrackLinkedNeed,
   linkedWorkshopOrders,
   linkedInternalWorkshopOrders,
   showBonAtelierMecaniqueForm,
@@ -157,6 +161,7 @@ export function InterventionLiveDiagnosticStep({
         activeIntervention={activeIntervention}
         formState={formState}
         isTechUser={isTechUser}
+        canFastTrackNeed={canFastTrackNeed}
         showNeedRequestForm={showNeedRequestForm}
         setShowNeedRequestForm={setShowNeedRequestForm}
         needForm={needForm}
@@ -164,6 +169,7 @@ export function InterventionLiveDiagnosticStep({
         handleEmitNeedRequest={handleEmitNeedRequest}
         linkedNeedRequests={linkedNeedRequests}
         handleNeedFieldHandoff={handleNeedFieldHandoff}
+        handleFastTrackLinkedNeed={handleFastTrackLinkedNeed}
         linkedWorkshopOrders={linkedWorkshopOrders}
         linkedInternalWorkshopOrders={linkedInternalWorkshopOrders}
         showBonAtelierMecaniqueForm={showBonAtelierMecaniqueForm}

@@ -1873,6 +1873,7 @@ export default function ValidationCenterView({
         setBtActionRealisee={setBtActionRealisee}
         btPieces={btPieces}
         setBtPieces={setBtPieces}
+        stockItems={stockItems}
         btSkipStockDeduction={btSkipStockDeduction}
         setBtSkipStockDeduction={setBtSkipStockDeduction}
         btNote={btNote}

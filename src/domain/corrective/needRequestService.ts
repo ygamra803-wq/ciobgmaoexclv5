@@ -86,6 +86,7 @@ export interface INeedRequest {
   motif_rejet?: string;
   observation_pose_essai?: string;
   requires_material: boolean;
+  fast_track?: boolean;
   policy_tags_snapshot?: string[];
   date_creation: string;
   date_statut: string;
@@ -508,6 +509,123 @@ export function validateNeedRequestTransition(
   }
 
   return { valid: true };
+}
+
+export interface NeedFastTrackContext {
+  actorRole?: string;
+  isTechnician?: boolean;
+  availableStock?: number | null;
+  linkedWorkshopOrder?: IWorkshopOrder | null;
+  closeFieldImmediately?: boolean;
+}
+
+export interface NeedFastTrackValidation {
+  valid: boolean;
+  reason?: string;
+  targetStatus?: 'REMIS_TECHNICIEN' | 'CLOTURE_FIELD';
+}
+
+/**
+ * Validates the "Flexible Factory" 1-click Fast-Track path (`STOCK` channel only)
+ * for simple in-stock spare parts.
+ *
+ * Security & Domain Invariants:
+ *  - Fail-closed RBAC: strictly forbidden for `TECHNICIEN`, `OPERATEUR`, `VIEWER`, `OBSERVATEUR`.
+ *  - Only allowed from `DEMANDE_TECH`, `REVUE_SUPERVISEUR`, `CLARIFICATION`,
+ *    or `APPROVISIONNEMENT` when already routed to `STOCK`.
+ *  - Blocked if already routed to `ACHAT`, `ATELIER`, or `EXTERNE`, or if an active
+ *    internal workshop order is linked.
+ *  - When `id_ref_pdr` is specified and live `availableStock` is provided, requires
+ *    `availableStock >= req.quantite`.
+ *  - Zero direct stock mutation (deduction happens strictly at BT closure/approval).
+ */
+export function validateNeedRequestFastTrack(
+  req: Partial<INeedRequest> | null | undefined,
+  context: NeedFastTrackContext = {}
+): NeedFastTrackValidation {
+  if (!req) {
+    return { valid: false, reason: 'Demande de besoin introuvable.' };
+  }
+
+  const roleNorm = String(context.actorRole || '').trim().toUpperCase();
+  const isTech =
+    context.isTechnician === true ||
+    roleNorm === 'TECHNICIEN' ||
+    roleNorm === 'OPERATEUR';
+  const isReadOnly = roleNorm === 'VIEWER' || roleNorm === 'OBSERVATEUR';
+
+  if (isTech || isReadOnly) {
+    return {
+      valid: false,
+      reason:
+        'Sécurité RBAC : seul un Administrateur, Responsable Maintenance ou Magasinier peut valider une remise express en stock.',
+    };
+  }
+
+  const currentStatus = String(req.statut || 'DEMANDE_TECH')
+    .trim()
+    .toUpperCase() as NeedRequestStatus;
+  if (isNeedRequestTerminal(currentStatus)) {
+    return {
+      valid: false,
+      reason: `Remise express refusée : la demande est déjà dans un état terminal (${currentStatus}).`,
+    };
+  }
+
+  const existingCanal = req.canal_appro
+    ? (String(req.canal_appro).trim().toUpperCase() as NeedApproChannel)
+    : null;
+  if (existingCanal && existingCanal !== 'STOCK') {
+    return {
+      valid: false,
+      reason: `Remise express réservée au canal STOCK (demande déjà orientée vers ${existingCanal}).`,
+    };
+  }
+
+  const allowedSourceStatuses: ReadonlyArray<NeedRequestStatus> = [
+    'DEMANDE_TECH',
+    'REVUE_SUPERVISEUR',
+    'CLARIFICATION',
+    'APPROVISIONNEMENT',
+  ];
+  if (!allowedSourceStatuses.includes(currentStatus)) {
+    return {
+      valid: false,
+      reason: `Remise express non applicable depuis le statut ${currentStatus}.`,
+    };
+  }
+
+  if (
+    context.linkedWorkshopOrder != null &&
+    isWorkshopOrderActive(context.linkedWorkshopOrder.statut)
+  ) {
+    return {
+      valid: false,
+      reason: `Remise express bloquée : le Bon d'Atelier ${context.linkedWorkshopOrder.code_bon} est encore actif.`,
+    };
+  }
+
+  const requiredQty = Math.max(1, Math.round(Number(req.quantite) || 1));
+  if (
+    req.id_ref_pdr &&
+    context.availableStock !== undefined &&
+    context.availableStock !== null
+  ) {
+    const avail = Number(context.availableStock);
+    if (!Number.isFinite(avail) || avail < requiredQty) {
+      return {
+        valid: false,
+        reason: `Stock insuffisant pour remise express [${req.id_ref_pdr}] : disponible ${
+          Number.isFinite(avail) ? avail : 0
+        }, demandé ${requiredQty}. Passez par l'arbitrage ACHAT / ATELIER.`,
+      };
+    }
+  }
+
+  return {
+    valid: true,
+    targetStatus: context.closeFieldImmediately ? 'CLOTURE_FIELD' : 'REMIS_TECHNICIEN',
+  };
 }
 
 /**
