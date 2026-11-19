@@ -1,5 +1,5 @@
 import type express from 'express';
-import { mergeEntityCollection, mergeGmaoStateSnapshot } from '../../services/lanStateMergeService';
+import { mergeEntityCollection, mergeGmaoStateSnapshot } from '../../services/lanStateMergeService.ts';
 import {
   clampMakerCheckerCollectionForRole,
   clampMakerCheckerRecordForRole,
@@ -7,15 +7,15 @@ import {
   normalizeServerRole,
   resolveEffectiveServerRole,
   sanitizeBulkStateForRole,
-} from '../../core/security/serverRbacPolicy';
+} from '../../core/security/serverRbacPolicy.ts';
 import {
   sanitizeIncomingAccountFields,
   sanitizeIncomingStateCredentials,
   sanitizeStateSnapshotForTransport,
   stripSensitiveAccountFields,
-} from '../../core/security/serverSession';
-import { readRecentAuditEntries } from '../auditLogReader';
-import { validateProjectedStockInvariant } from '../stockInvariantGuard';
+} from '../../core/security/serverSession.ts';
+import { readRecentAuditEntries } from '../auditLogReader.ts';
+import { validateProjectedStockInvariant } from '../stockInvariantGuard.ts';
 import {
   ALLOWED_ENTITIES,
   ALLOWED_ENTITY_SET,
@@ -24,7 +24,7 @@ import {
   type GmaoApiRequest,
   type GmaoDbState,
   type ServerRecord,
-} from '../types';
+} from '../types.ts';
 
 function toErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;

@@ -3,33 +3,33 @@ import fs from 'fs';
 import type http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { isWeakOrEmptyApiToken } from './src/core/security/serverRbacPolicy';
-import { resolveServerSessionSecret } from './src/core/security/serverSession';
-import { createServerSessionStore } from './src/core/security/serverSessionStore';
-import { randomBytesHex } from './src/core/security/nativeCrypto';
-import { serverLogger } from './src/server/serverLogger';
+import { isWeakOrEmptyApiToken } from './src/core/security/serverRbacPolicy.ts';
+import { resolveServerSessionSecret } from './src/core/security/serverSession.ts';
+import { createServerSessionStore } from './src/core/security/serverSessionStore.ts';
+import { randomBytesHex } from './src/core/security/nativeCrypto.ts';
+import { serverLogger } from './src/server/serverLogger.ts';
 import {
   ALLOWED_ENTITIES,
   MAX_STATE_PAYLOAD_LIMIT,
   type CreateGmaoApiAppOptions,
-} from './src/server/types';
+} from './src/server/types.ts';
 import {
   buildCspHeaderValue,
   createLanCorsMiddleware,
   createSecurityHeadersMiddleware,
   jsonPayloadErrorMiddleware,
   renderHtmlWithCspNonce,
-} from './src/server/middleware/securityHeaders';
-import { createSecurityCacheController } from './src/server/middleware/rateLimiter';
-import { createAuthenticateApiMiddleware } from './src/server/middleware/authenticateApi';
-import { mountSwaggerRoutes } from './src/server/middleware/swaggerGuard';
+} from './src/server/middleware/securityHeaders.ts';
+import { createSecurityCacheController } from './src/server/middleware/rateLimiter.ts';
+import { createAuthenticateApiMiddleware } from './src/server/middleware/authenticateApi.ts';
+import { mountSwaggerRoutes } from './src/server/middleware/swaggerGuard.ts';
 import {
   createAtomicStatePersister,
   hydrateInitialDbState,
-} from './src/server/persistence/stateStore';
-import { mountAuthRoutes } from './src/server/routes/authRoutes';
-import { mountEntityAndStateRoutes } from './src/server/routes/entityRoutes';
-import { createSystemRoutesController } from './src/server/routes/systemRoutes';
+} from './src/server/persistence/stateStore.ts';
+import { mountAuthRoutes } from './src/server/routes/authRoutes.ts';
+import { mountEntityAndStateRoutes } from './src/server/routes/entityRoutes.ts';
+import { createSystemRoutesController } from './src/server/routes/systemRoutes.ts';
 
 export { ALLOWED_ENTITIES, buildCspHeaderValue, renderHtmlWithCspNonce };
 export type { CreateGmaoApiAppOptions };

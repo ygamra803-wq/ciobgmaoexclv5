@@ -8,6 +8,7 @@ import { createGmaoApiApp } from '../../../../server';
 import { pbkdf2Sha256Hex, randomBytesHex } from '../nativeCrypto';
 import { readRecentAuditEntries } from '../../../server/auditLogReader';
 import { validateProjectedStockInvariant } from '../../../server/stockInvariantGuard';
+import { createAtomicStatePersister, createDefaultState } from '../../../server/persistence/stateStore';
 
 function makePbkdf2Hash(plainPassword: string): string {
   const saltHex = randomBytesHex(16);
@@ -337,5 +338,198 @@ describe('Server Hardening — Atomic Persistence Rollback, Bounded Audit Tail &
     expect(allowedDelete.status).toBe(200);
     expect(dbState.mouvements).toHaveLength(1);
     expect(dbState.mouvements[0].id).toBe('MVT-ENT-1');
+  });
+
+  it('P0-3: concurrent persistState failure and rollback does NOT leak rolled-back state into a queued second write', async () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-p03-race-'));
+    const stateFile = path.join(tempDir, 'gmao_state.json');
+    const stateTmpFile = path.join(tempDir, 'gmao_state.json.tmp');
+    const auditFile = path.join(tempDir, 'gmao_audit.jsonl');
+
+    const dbState = createDefaultState();
+    dbState.machines = [{ id: 'M-BASE', code: 'M-BASE' }];
+    dbState.zones = [{ id: 'Z-BASE', nom: 'Zone Base' }];
+    const initialVersion = dbState.version;
+
+    const { persistState } = createAtomicStatePersister({
+      dbState,
+      stateFile,
+      stateTmpFile,
+      auditFile,
+    });
+
+    // Block T1's rename by placing a directory at stateFile
+    fs.mkdirSync(stateFile);
+
+    // T1 mutates dbState.machines and queues persistState with a rollback that also clears the disk fault
+    const prevMachines = [...dbState.machines];
+    dbState.machines.push({ id: 'M-GHOST', code: 'M-GHOST' });
+    const t1 = persistState(
+      { actor: 'admin', action: 'CREATE', entity: 'machines', summary: 'T1 fail' },
+      () => {
+        dbState.machines = prevMachines;
+        // Clear disk fault right after T1 rolls back so queued T2 succeeds on disk
+        fs.rmSync(stateFile, { recursive: true, force: true });
+      }
+    );
+
+    // T2 arrives concurrently BEFORE T1 resolves, mutating an independent slice (zones)
+    const prevZones = [...dbState.zones];
+    dbState.zones.push({ id: 'Z-VALID', nom: 'Zone Valid' });
+    const t2 = persistState(
+      { actor: 'admin', action: 'CREATE', entity: 'zones', summary: 'T2 ok' },
+      () => {
+        dbState.zones = prevZones;
+      }
+    );
+
+    await expect(t1).rejects.toThrow();
+    await expect(t2).resolves.toBeUndefined();
+
+    // Version must advance strictly by +1 (only T2 succeeded), and M-GHOST must NOT exist on disk or in memory
+    expect(dbState.version).toBe(initialVersion + 1);
+    expect(dbState.machines.some((m: any) => m.id === 'M-GHOST')).toBe(false);
+    expect(dbState.zones.some((z: any) => z.id === 'Z-VALID')).toBe(true);
+
+    const diskState = JSON.parse(fs.readFileSync(stateFile, 'utf-8'));
+    expect(diskState.version).toBe(initialVersion + 1);
+    expect(diskState.machines.some((m: any) => m.id === 'M-GHOST')).toBe(false);
+    expect(diskState.zones.some((z: any) => z.id === 'Z-VALID')).toBe(true);
+  });
+
+  it('P0-2: syncs partGroups, pdrGroups, workshopOrders, needRequests, financialBudgets, and currencyConfig with RBAC enforcement', async () => {
+    const TECH_PASS = 'TechStrong#2026!';
+    await startTestServer({
+      users: [
+        {
+          id: 'USR-ADMIN',
+          username: 'admin',
+          nom: 'Admin',
+          role: 'ADMIN',
+          passwordHash: makePbkdf2Hash(ADMIN_PASS),
+          is_active: true,
+        },
+      ],
+      technicians: [
+        {
+          id: 'TECH-1',
+          username: 'tech1',
+          nom: 'Technicien 1',
+          role: 'TECHNICIEN',
+          passwordHash: makePbkdf2Hash(TECH_PASS),
+          is_active: true,
+        },
+      ],
+    });
+
+    const adminLogin = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/auth/login',
+      body: { identifier: 'USR-ADMIN', password: ADMIN_PASS },
+    });
+    expect(adminLogin.status).toBe(200);
+    const adminToken = adminLogin.json.token;
+
+    const techLogin = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/auth/login',
+      body: { identifier: 'TECH-1', password: TECH_PASS },
+    });
+    expect(techLogin.status).toBe(200);
+    const techToken = techLogin.json.token;
+
+    // ADMIN pushes all previously missing entities via POST /api/gmao/state
+    const adminPush = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/state',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        partGroups: [{ id: 'PG-1', nom: 'Étanchéité' }],
+        pdrGroups: [{ id: 'PDRG-1', nom: 'Roulements' }],
+        workshopOrders: [{ id: 'WO-1', code: 'OT-001', statut: 'OUVERT' }],
+        needRequests: [{ id: 'NR-1', code: 'DA-001', statut: 'EN_ATTENTE' }],
+        financialBudgets: {
+          fiscalYear: 2026,
+          allocatedPreventive: 120000,
+          allocatedCorrective: 80000,
+          allocatedExternal: 30000,
+          allocatedSparesStock: 50000,
+          periodMode: 'ANNUAL',
+        },
+        currencyConfig: {
+          activeCurrencyCode: 'EUR',
+          baseCurrencyCode: 'MAD',
+          madSymbolVariant: 'DH',
+          vatRatePercent: 20,
+          fiscalYear: 2026,
+        },
+      },
+    });
+    expect(adminPush.status).toBe(200);
+
+    const stateAfterAdmin = await sendHttpRequest({
+      port,
+      method: 'GET',
+      path: '/api/gmao/state',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(stateAfterAdmin.status).toBe(200);
+    expect(stateAfterAdmin.json.data.partGroups).toEqual([{ id: 'PG-1', nom: 'Étanchéité' }]);
+    expect(stateAfterAdmin.json.data.pdrGroups).toEqual([{ id: 'PDRG-1', nom: 'Roulements' }]);
+    expect(stateAfterAdmin.json.data.workshopOrders).toEqual([{ id: 'WO-1', code: 'OT-001', statut: 'OUVERT' }]);
+    expect(stateAfterAdmin.json.data.needRequests).toEqual([{ id: 'NR-1', code: 'DA-001', statut: 'EN_ATTENTE' }]);
+    expect(stateAfterAdmin.json.data.financialBudgets).toMatchObject({ fiscalYear: 2026, allocatedPreventive: 120000 });
+    expect(stateAfterAdmin.json.data.currencyConfig).toMatchObject({ activeCurrencyCode: 'EUR', fiscalYear: 2026 });
+
+    // TECHNICIEN attempting direct write to financialBudgets or currencyConfig must receive 403
+    const techBudgetRes = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/financialBudgets',
+      headers: { Authorization: `Bearer ${techToken}` },
+      body: { fiscalYear: 2099, allocatedPreventive: 999999 },
+    });
+    expect(techBudgetRes.status).toBe(403);
+
+    const techCurrencyRes = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/currencyConfig',
+      headers: { Authorization: `Bearer ${techToken}` },
+      body: { activeCurrencyCode: 'USD' },
+    });
+    expect(techCurrencyRes.status).toBe(403);
+
+    // TECHNICIEN pushing bulk state must have financialBudgets, currencyConfig, partGroups, pdrGroups stripped fail-closed
+    const techBulkPush = await sendHttpRequest({
+      port,
+      method: 'POST',
+      path: '/api/gmao/state',
+      headers: { Authorization: `Bearer ${techToken}` },
+      body: {
+        merge: true,
+        workshopOrders: [{ id: 'WO-2', code: 'OT-002', statut: 'OUVERT' }],
+        partGroups: [{ id: 'PG-HACK', nom: 'Tampered' }],
+        pdrGroups: [{ id: 'PDRG-HACK', nom: 'Tampered' }],
+        financialBudgets: { fiscalYear: 2099, allocatedPreventive: 0 },
+        currencyConfig: { activeCurrencyCode: 'USD' },
+      },
+    });
+    expect(techBulkPush.status).toBe(200);
+
+    const stateAfterTech = await sendHttpRequest({
+      port,
+      method: 'GET',
+      path: '/api/gmao/state',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    expect(stateAfterTech.json.data.workshopOrders.some((w: any) => w.id === 'WO-2')).toBe(true);
+    expect(stateAfterTech.json.data.partGroups.some((g: any) => g.id === 'PG-HACK')).toBe(false);
+    expect(stateAfterTech.json.data.pdrGroups.some((g: any) => g.id === 'PDRG-HACK')).toBe(false);
+    expect(stateAfterTech.json.data.financialBudgets).toMatchObject({ fiscalYear: 2026, allocatedPreventive: 120000 });
+    expect(stateAfterTech.json.data.currencyConfig).toMatchObject({ activeCurrencyCode: 'EUR' });
   });
 });

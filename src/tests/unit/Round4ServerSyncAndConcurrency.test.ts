@@ -250,4 +250,75 @@ describe('Round 4 — Server-Authoritative Persistence, Version Concurrency & Au
     expect(merged.statut).toBe('CLOTURE');
     expect(merged.stock_deducted).toBe(true);
   });
+
+  it('P0-2 Parity: serverSyncService.buildLocalPayload covers all server ALLOWED_ENTITIES and DataGateway.loadFullServerState hydrates budgets & currency', async () => {
+    const { ALLOWED_ENTITIES } = await import('../../server/types');
+    const { DataGateway } = await import('../../application/DataGateway');
+    const { storageService } = await import('../../utils/storageService');
+    const { STORAGE_KEYS } = await import('../../infrastructure/persistence/storageKeys');
+
+    storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, {
+      fiscalYear: 2026,
+      allocatedPreventive: 55000,
+      allocatedCorrective: 45000,
+      periodMode: 'ANNUAL',
+    });
+    storageService.setItem(STORAGE_KEYS.CURRENCY_CONFIG, {
+      activeCurrencyCode: 'EUR',
+      baseCurrencyCode: 'MAD',
+      madSymbolVariant: 'DH',
+      vatRatePercent: 20,
+      fiscalYear: 2026,
+    });
+
+    const payload = serverSyncService.buildLocalPayload({
+      machines: [],
+      authAccounts: [],
+      pdrGroups: [{ id: 'PDRG-1', nom: 'Roulements' }],
+      partGroups: [{ id: 'PG-1', nom: 'Joints' }],
+      workshopOrders: [{ id: 'WO-1', code: 'OT-1' }],
+      needRequests: [{ id: 'NR-1', code: 'DA-1' }],
+    });
+
+    for (const entity of ALLOWED_ENTITIES) {
+      expect(Object.prototype.hasOwnProperty.call(payload, entity)).toBe(true);
+    }
+
+    storageService.removeItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
+    storageService.removeItem(STORAGE_KEYS.CURRENCY_CONFIG);
+
+    DataGateway.loadFullServerState({
+      partGroups: [{ id: 'PG-SRV', nom: 'Hydraulique' }],
+      pdrGroups: [{ id: 'PDRG-SRV', nom: 'Filtres' }],
+      workshopOrders: [{ id: 'WO-SRV', code: 'OT-SRV' }],
+      needRequests: [{ id: 'NR-SRV', code: 'DA-SRV' }],
+      financialBudgets: {
+        fiscalYear: 2026,
+        allocatedPreventive: 90000,
+        allocatedCorrective: 60000,
+        periodMode: 'QUARTERLY',
+      },
+      currencyConfig: {
+        activeCurrencyCode: 'USD',
+        baseCurrencyCode: 'MAD',
+        madSymbolVariant: 'DH',
+        vatRatePercent: 20,
+        fiscalYear: 2026,
+      },
+    });
+
+    expect(storageService.getItem(STORAGE_KEYS.PART_GROUPS)).toEqual([{ id: 'PG-SRV', nom: 'Hydraulique' }]);
+    expect(storageService.getItem(STORAGE_KEYS.PDR_GROUPS)).toEqual([{ id: 'PDRG-SRV', nom: 'Filtres' }]);
+    expect(storageService.getItem(STORAGE_KEYS.WORKSHOP_ORDERS)).toEqual([{ id: 'WO-SRV', code: 'OT-SRV' }]);
+    expect(storageService.getItem(STORAGE_KEYS.NEED_REQUESTS)).toEqual([{ id: 'NR-SRV', code: 'DA-SRV' }]);
+    expect(storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS)).toMatchObject({
+      fiscalYear: 2026,
+      allocatedPreventive: 90000,
+      periodMode: 'QUARTERLY',
+    });
+    expect(storageService.getItem(STORAGE_KEYS.CURRENCY_CONFIG)).toMatchObject({
+      activeCurrencyCode: 'USD',
+      fiscalYear: 2026,
+    });
+  });
 });

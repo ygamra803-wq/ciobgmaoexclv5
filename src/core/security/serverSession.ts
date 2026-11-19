@@ -14,7 +14,7 @@ import {
   pbkdf2Sha256Hex,
   randomBytesHex,
   sha256Hex,
-} from './nativeCrypto';
+} from './nativeCrypto.ts';
 
 export { constantTimeEqual };
 

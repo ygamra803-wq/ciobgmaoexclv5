@@ -9,8 +9,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { getMaxConcurrentSessionsForRole } from './serverSession';
-import { Logger } from '../logger/LoggerService';
+import { getMaxConcurrentSessionsForRole } from './serverSession.ts';
+import { Logger } from '../logger/LoggerService.ts';
 
 export interface ActiveSessionEntry {
   sid: string;

@@ -1,12 +1,12 @@
 import fs from 'fs';
 import { randomUUID } from 'crypto';
-import { serverLogger } from '../serverLogger';
+import { serverLogger } from '../serverLogger.ts';
 import {
   ALLOWED_ENTITIES,
   OBJECT_ENTITY_SET,
   type AuditWriteContext,
   type GmaoDbState,
-} from '../types';
+} from '../types.ts';
 
 /**
  * Builds an empty factory-clean GMAO state matching the canonical entity allowlist.
@@ -107,27 +107,27 @@ export function createAtomicStatePersister(params: {
     auditContext?: AuditWriteContext,
     rollbackState?: () => void
   ): Promise<void> => {
-    const prevVersion = typeof params.dbState.version === 'number' ? params.dbState.version : 1;
-    const prevUpdatedAt = params.dbState.updatedAt;
-    const currentVersion = prevVersion + 1;
-    const currentUpdatedAt = new Date().toISOString();
-    params.dbState.version = currentVersion;
-    params.dbState.updatedAt = currentUpdatedAt;
-    const serializedState = JSON.stringify(params.dbState, null, 2);
-
-    const auditEntry = auditContext
-      ? JSON.stringify({
-          id: `aud_${Date.now()}_${randomUUID().slice(0, 8)}`,
-          timestamp: currentUpdatedAt,
-          version: currentVersion,
-          actor: auditContext.actor || 'system',
-          action: auditContext.action,
-          entity: auditContext.entity,
-          summary: auditContext.summary || '',
-        }) + '\n'
-      : null;
-
     const writeTask = writeQueue.then(async () => {
+      const prevVersion = typeof params.dbState.version === 'number' ? params.dbState.version : 1;
+      const prevUpdatedAt = params.dbState.updatedAt;
+      const currentVersion = prevVersion + 1;
+      const currentUpdatedAt = new Date().toISOString();
+      params.dbState.version = currentVersion;
+      params.dbState.updatedAt = currentUpdatedAt;
+      const serializedState = JSON.stringify(params.dbState, null, 2);
+
+      const auditEntry = auditContext
+        ? JSON.stringify({
+            id: `aud_${Date.now()}_${randomUUID().slice(0, 8)}`,
+            timestamp: currentUpdatedAt,
+            version: currentVersion,
+            actor: auditContext.actor || 'system',
+            action: auditContext.action,
+            entity: auditContext.entity,
+            summary: auditContext.summary || '',
+          }) + '\n'
+        : null;
+
       try {
         await fs.promises.writeFile(params.stateTmpFile, serializedState, 'utf-8');
         await fs.promises.rename(params.stateTmpFile, params.stateFile);

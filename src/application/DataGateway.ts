@@ -1566,6 +1566,8 @@ export const DataGateway = {
       sortieDemands.length > 0 ||
       replenishmentOrders.length > 0 ||
       meterReadings.length > 0 ||
+      workshopOrders.length > 0 ||
+      needRequests.length > 0 ||
       auditEvents.length > 0;
 
     storageService.setItem(STORAGE_KEYS.DEMO_MODE, false);
@@ -1624,6 +1626,32 @@ export const DataGateway = {
     this.savePartTypes(partTypes);
     this.savePartDesignations(partDesignations);
     this.saveSortiesExterne(sortiesExterne);
+
+    if (
+      serverData.financialBudgets &&
+      typeof serverData.financialBudgets === 'object' &&
+      !Array.isArray(serverData.financialBudgets) &&
+      Object.keys(serverData.financialBudgets as Record<string, unknown>).length > 0
+    ) {
+      const sanitizedBudgets = this.sanitizePayload(serverData.financialBudgets);
+      storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, sanitizedBudgets);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gmao_financial_budget_updated', { detail: sanitizedBudgets }));
+      }
+    }
+
+    if (
+      serverData.currencyConfig &&
+      typeof serverData.currencyConfig === 'object' &&
+      !Array.isArray(serverData.currencyConfig) &&
+      Object.keys(serverData.currencyConfig as Record<string, unknown>).length > 0
+    ) {
+      const sanitizedCurrency = this.sanitizePayload(serverData.currencyConfig);
+      storageService.setItem(STORAGE_KEYS.CURRENCY_CONFIG, sanitizedCurrency);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gmao:currency-config-changed', { detail: sanitizedCurrency }));
+      }
+    }
 
     if (typeof setters.applyRemoteStateUpdate === 'function') {
       setters.applyRemoteStateUpdate({

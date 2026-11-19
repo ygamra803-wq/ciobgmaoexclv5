@@ -1,4 +1,4 @@
-import { normalizeType } from '../application/IncrementalStockIndex';
+import { normalizeType } from '../application/IncrementalStockIndex.ts';
 
 export interface StockViolation {
   ref: string;

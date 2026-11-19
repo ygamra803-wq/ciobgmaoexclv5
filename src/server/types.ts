@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import type { ResolvedServerActor } from '../core/security/serverRbacPolicy';
-import type { resolveServerSessionSecret, ServerSessionPayload } from '../core/security/serverSession';
-import type { createServerSessionStore } from '../core/security/serverSessionStore';
+import type { ResolvedServerActor } from '../core/security/serverRbacPolicy.ts';
+import type { resolveServerSessionSecret, ServerSessionPayload } from '../core/security/serverSession.ts';
+import type { createServerSessionStore } from '../core/security/serverSessionStore.ts';
 
 /**
  * Canonical allowlist of GMAO collections and dictionary entities managed by the LAN API host.
@@ -40,6 +40,7 @@ export const ALLOWED_ENTITIES = [
   'compGroups',
   'compFamilies',
   'compTemplates',
+  'partGroups',
   'partTypes',
   'partDesignations',
   'sortiesExterne',
@@ -48,11 +49,17 @@ export const ALLOWED_ENTITIES = [
   'replenishmentOrders',
   'workshopOrders',
   'needRequests',
+  'financialBudgets',
+  'currencyConfig',
   'auditEvents',
 ] as const;
 
 export type AllowedEntityKey = (typeof ALLOWED_ENTITIES)[number];
-export type DictionaryEntityKey = 'correctiveActionsByPanne' | 'correctivePanneCategories';
+export type DictionaryEntityKey =
+  | 'correctiveActionsByPanne'
+  | 'correctivePanneCategories'
+  | 'financialBudgets'
+  | 'currencyConfig';
 export type ArrayEntityKey = Exclude<AllowedEntityKey, DictionaryEntityKey>;
 
 export const ALLOWED_ENTITY_SET = new Set<string>(ALLOWED_ENTITIES);
@@ -60,6 +67,8 @@ export const ALLOWED_ENTITY_SET = new Set<string>(ALLOWED_ENTITIES);
 export const OBJECT_ENTITY_SET = new Set<string>([
   'correctiveActionsByPanne',
   'correctivePanneCategories',
+  'financialBudgets',
+  'currencyConfig',
 ]);
 
 export const MAX_STATE_PAYLOAD_LIMIT = '10mb';

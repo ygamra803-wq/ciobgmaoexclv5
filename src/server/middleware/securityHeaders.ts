@@ -2,9 +2,9 @@ import type { IncomingHttpHeaders } from 'http';
 import os from 'os';
 import type express from 'express';
 import cors from 'cors';
-import { isAllowedCorsOrigin } from '../../core/security/serverRbacPolicy';
-import { randomBytesHex } from '../../core/security/nativeCrypto';
-import { MAX_STATE_PAYLOAD_LIMIT } from '../types';
+import { isAllowedCorsOrigin } from '../../core/security/serverRbacPolicy.ts';
+import { randomBytesHex } from '../../core/security/nativeCrypto.ts';
+import { MAX_STATE_PAYLOAD_LIMIT } from '../types.ts';
 
 /**
  * Builds the Content-Security-Policy header value.

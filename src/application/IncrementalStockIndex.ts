@@ -1,4 +1,4 @@
-import { Logger } from '../core/logger/LoggerService';
+import { Logger } from '../core/logger/LoggerService.ts';
 
 export type MovementType = 'ENTREE' | 'SORTIE' | 'COMMANDE';
 

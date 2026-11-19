@@ -11,20 +11,20 @@ import {
   isWeakOrEmptyApiToken,
   normalizeServerRole,
   resolveEffectiveServerRole,
-} from '../../core/security/serverRbacPolicy';
+} from '../../core/security/serverRbacPolicy.ts';
 import {
   extractServerSessionToken,
   verifyServerSession,
-} from '../../core/security/serverSession';
-import { constantTimeEqual } from '../../core/security/nativeCrypto';
-import { serverLogger } from '../serverLogger';
+} from '../../core/security/serverSession.ts';
+import { constantTimeEqual } from '../../core/security/nativeCrypto.ts';
+import { serverLogger } from '../serverLogger.ts';
 import type {
   GmaoApiRequest,
   GmaoDbState,
   ServerSessionStore,
   SessionSecretResolution,
   SseTicketEntry,
-} from '../types';
+} from '../types.ts';
 
 /**
  * Factory creating the fail-closed API authentication and RBAC enforcement middleware.

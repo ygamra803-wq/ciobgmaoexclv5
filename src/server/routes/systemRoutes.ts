@@ -2,12 +2,12 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import express from 'express';
-import { randomBytesHex } from '../../core/security/nativeCrypto';
+import { randomBytesHex } from '../../core/security/nativeCrypto.ts';
 import {
   buildCspHeaderValue,
   renderHtmlWithCspNonce,
-} from '../middleware/securityHeaders';
-import type { GmaoApiRequest, GmaoDbState, SseTicketEntry } from '../types';
+} from '../middleware/securityHeaders.ts';
+import type { GmaoApiRequest, GmaoDbState, SseTicketEntry } from '../types.ts';
 
 /**
  * Mounts health diagnostics, LAN network discovery, lightweight revision polling,

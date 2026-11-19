@@ -314,6 +314,9 @@ export const serverSyncService = {
     const rawStock = Array.isArray(store.rawStock)
       ? store.rawStock
       : storageService.getItem(STORAGE_KEYS.RAW_STOCK) || [];
+    const pdrGroups = Array.isArray(store.pdrGroups)
+      ? store.pdrGroups
+      : storageService.getItem(STORAGE_KEYS.PDR_GROUPS) || [];
     const types = Array.isArray(store.types)
       ? store.types
       : storageService.getItem(STORAGE_KEYS.STOCK_TYPES) || [];
@@ -379,6 +382,12 @@ export const serverSyncService = {
       : Array.isArray(store.intervenants)
       ? store.intervenants
       : storageService.getItem(STORAGE_KEYS.CORRECTIVE_INTERVENANTS) || [];
+    const workshopOrders = Array.isArray(store.workshopOrders)
+      ? store.workshopOrders
+      : storageService.getItem(STORAGE_KEYS.WORKSHOP_ORDERS) || [];
+    const needRequests = Array.isArray(store.needRequests)
+      ? store.needRequests
+      : storageService.getItem(STORAGE_KEYS.NEED_REQUESTS) || [];
     const users = Array.isArray(store.users)
       ? store.users
       : storageService.getItem(STORAGE_KEYS.PERSONNEL) || [];
@@ -403,6 +412,9 @@ export const serverSyncService = {
     const compTemplates = Array.isArray(store.compTemplates)
       ? store.compTemplates
       : storageService.getItem(STORAGE_KEYS.COMP_TEMPLATES) || [];
+    const partGroups = Array.isArray(store.partGroups)
+      ? store.partGroups
+      : storageService.getItem(STORAGE_KEYS.PART_GROUPS) || [];
     const partTypes = Array.isArray(store.partTypes)
       ? store.partTypes
       : storageService.getItem(STORAGE_KEYS.PART_TYPES) || [];
@@ -429,6 +441,34 @@ export const serverSyncService = {
       ? store.auditEvents
       : storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS) || [];
 
+    const rawFinancialBudgets =
+      store.financialBudgets &&
+      typeof store.financialBudgets === 'object' &&
+      !Array.isArray(store.financialBudgets)
+        ? store.financialBudgets
+        : storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
+    const financialBudgets =
+      rawFinancialBudgets &&
+      typeof rawFinancialBudgets === 'object' &&
+      !Array.isArray(rawFinancialBudgets) &&
+      Object.keys(rawFinancialBudgets).length > 0
+        ? rawFinancialBudgets
+        : undefined;
+
+    const rawCurrencyConfig =
+      store.currencyConfig &&
+      typeof store.currencyConfig === 'object' &&
+      !Array.isArray(store.currencyConfig)
+        ? store.currencyConfig
+        : storageService.getItem(STORAGE_KEYS.CURRENCY_CONFIG);
+    const currencyConfig =
+      rawCurrencyConfig &&
+      typeof rawCurrencyConfig === 'object' &&
+      !Array.isArray(rawCurrencyConfig) &&
+      Object.keys(rawCurrencyConfig).length > 0
+        ? rawCurrencyConfig
+        : undefined;
+
     let authAccounts: any[] | undefined = Array.isArray(customState?.authAccounts)
       ? customState.authAccounts
       : undefined;
@@ -449,6 +489,7 @@ export const serverSyncService = {
     return {
       rawStock,
       stock: rawStock,
+      pdrGroups,
       types,
       designations,
       machines,
@@ -473,6 +514,8 @@ export const serverSyncService = {
       correctivePanneCategories,
       correctiveTravauxAFaire,
       correctiveIntervenants,
+      workshopOrders,
+      needRequests,
       users,
       technicians,
       operations,
@@ -482,9 +525,12 @@ export const serverSyncService = {
       compGroups,
       compFamilies,
       compTemplates,
+      partGroups,
       partTypes,
       partDesignations,
       sortiesExterne,
+      ...(financialBudgets ? { financialBudgets } : {}),
+      ...(currencyConfig ? { currencyConfig } : {}),
       ...(hasDeletedIds ? { deletedIdsByEntity: pendingDeletedIds } : {}),
       updatedAt: this.getLocalModifiedAt() || new Date().toISOString(),
     };

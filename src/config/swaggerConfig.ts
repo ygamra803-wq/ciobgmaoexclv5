@@ -1,5 +1,5 @@
-import { SwaggerOptions } from 'swagger-ui-express';
-import { APP_VERSION, APP_RELEASE_TAG } from './appVersion';
+import type { SwaggerOptions } from 'swagger-ui-express';
+import { APP_VERSION, APP_RELEASE_TAG } from './appVersion.ts';
 
 export const swaggerSpec = {
   openapi: '3.0.0',

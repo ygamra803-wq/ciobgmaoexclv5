@@ -3,13 +3,13 @@ import {
   normalizeServerRole,
   resolveEffectiveServerRole,
   resolveRecordCanonicalRole,
-} from '../../core/security/serverRbacPolicy';
+} from '../../core/security/serverRbacPolicy.ts';
 import {
   extractServerSessionToken,
   signServerSession,
   verifyAccountCredentials,
   verifyServerSession,
-} from '../../core/security/serverSession';
+} from '../../core/security/serverSession.ts';
 import type {
   GmaoApiRequest,
   GmaoDbState,
@@ -17,7 +17,7 @@ import type {
   ServerRecord,
   ServerSessionStore,
   SessionSecretResolution,
-} from '../types';
+} from '../types.ts';
 
 function isRecordArchived(item: unknown): boolean {
   if (!item || typeof item !== 'object') return false;

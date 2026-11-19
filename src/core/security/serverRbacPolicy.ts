@@ -11,7 +11,7 @@
  *     unapproved field claims from self-approving (`validation_status: 'APPROVED'` + `stock_deducted: true`)
  *     when pushed from a `TECHNICIEN` or `OPERATEUR` device.
  */
-import { constantTimeEqual } from './nativeCrypto';
+import { constantTimeEqual } from './nativeCrypto.ts';
 
 export const ADMIN_ONLY_ENTITIES = new Set<string>([
   'users',
@@ -19,6 +19,8 @@ export const ADMIN_ONLY_ENTITIES = new Set<string>([
   'operations',
   'zones',
   'authAccounts',
+  'financialBudgets',
+  'currencyConfig',
 ]);
 
 export const STOCK_LEDGER_ENTITIES = new Set<string>([
@@ -34,8 +36,10 @@ export const CATALOG_PROTECTED_ENTITIES = new Set<string>([
   'compGroups',
   'compFamilies',
   'compTemplates',
+  'partGroups',
   'partTypes',
   'partDesignations',
+  'pdrGroups',
   'types',
   'designations',
   'machines',
@@ -67,8 +71,10 @@ export const MAGASIN_WRITABLE_ENTITIES = new Set<string>([
   'entrepotComponents',
   'sortiesExterne',
   'needRequests',
+  'pdrGroups',
   'types',
   'designations',
+  'partGroups',
   'partTypes',
   'partDesignations',
   'compGroups',

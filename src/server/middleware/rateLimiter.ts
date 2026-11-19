@@ -1,5 +1,5 @@
 import type express from 'express';
-import type { LoginThrottleEntry, ServerSessionStore, SseTicketEntry } from '../types';
+import type { LoginThrottleEntry, ServerSessionStore, SseTicketEntry } from '../types.ts';
 
 export interface RateLimitController {
   apiRateLimiter: express.RequestHandler;

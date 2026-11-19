@@ -1,9 +1,9 @@
 import type express from 'express';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec, swaggerUiOptions } from '../../config/swaggerConfig';
-import { isLoopbackRemoteAddress, isWeakOrEmptyApiToken } from '../../core/security/serverRbacPolicy';
-import { constantTimeEqual } from '../../core/security/nativeCrypto';
-import { serverLogger } from '../serverLogger';
+import { swaggerSpec, swaggerUiOptions } from '../../config/swaggerConfig.ts';
+import { isLoopbackRemoteAddress, isWeakOrEmptyApiToken } from '../../core/security/serverRbacPolicy.ts';
+import { constantTimeEqual } from '../../core/security/nativeCrypto.ts';
+import { serverLogger } from '../serverLogger.ts';
 
 /**
  * Mounts OpenAPI / Swagger endpoints guarded by environment mode, loopback restriction (DEV),
