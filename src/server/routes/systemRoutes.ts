@@ -3,15 +3,22 @@ import os from 'os';
 import path from 'path';
 import express from 'express';
 import { randomBytesHex } from '../../core/security/nativeCrypto.ts';
+import { normalizeServerRole } from '../../core/security/serverRbacPolicy.ts';
 import {
   buildCspHeaderValue,
   renderHtmlWithCspNonce,
 } from '../middleware/securityHeaders.ts';
-import type { GmaoApiRequest, GmaoDbState, SseTicketEntry } from '../types.ts';
+import type {
+  GmaoApiRequest,
+  GmaoDbState,
+  SqliteBackupResult,
+  SqliteStorageInfo,
+  SseTicketEntry,
+} from '../types.ts';
 
 /**
  * Mounts health diagnostics, LAN network discovery, lightweight revision polling,
- * ticketed SSE broadcast stream, and production static nonced CSP SPA serving.
+ * SQLite database diagnostics/backups, ticketed SSE broadcast stream, and production static SPA serving.
  */
 export function createSystemRoutesController(deps: {
   app: express.Application;
@@ -21,6 +28,9 @@ export function createSystemRoutesController(deps: {
   sseTicketTtlMs: number;
   pruneSecurityCaches: (nowMs: number) => void;
   authenticateApi: express.RequestHandler;
+  storageDescriptor?: string;
+  getStorageInfo?: () => SqliteStorageInfo;
+  createHotBackup?: () => Promise<SqliteBackupResult>;
 }) {
   const {
     app,
@@ -30,6 +40,9 @@ export function createSystemRoutesController(deps: {
     sseTicketTtlMs,
     pruneSecurityCaches,
     authenticateApi,
+    storageDescriptor,
+    getStorageInfo,
+    createHotBackup,
   } = deps;
 
   const sseClients = new Set<express.Response>();
@@ -46,13 +59,70 @@ export function createSystemRoutesController(deps: {
   };
 
   const healthHandler: express.RequestHandler = (_req, res) => {
+    const info = getStorageInfo?.();
     res.json({
       status: 'healthy',
       service: 'GMAO Enterprise Backend API',
       timestamp: new Date().toISOString(),
       version: dbState.version,
-      storage: 'Atomic JSON File + Serialized Memory Engine',
+      storage: storageDescriptor || 'SQLite Single-File ACID Engine (WAL)',
+      storageEngine: info?.engine || 'sqlite',
+      journalMode: info?.journalMode || 'WAL',
     });
+  };
+
+  const dbInfoHandler: express.RequestHandler = (req, res) => {
+    const gmaoReq = req as GmaoApiRequest;
+    const role = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
+    if (!gmaoReq.resolvedServerActor?.sessionVerified || (role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Verified ADMIN or RESPONSABLE_MAINTENANCE session required to inspect database info.',
+      });
+    }
+    if (!getStorageInfo) {
+      return res.status(404).json({
+        success: false,
+        message: 'Database diagnostics unavailable.',
+      });
+    }
+    return res.json({
+      success: true,
+      data: getStorageInfo(),
+    });
+  };
+
+  const dbBackupHandler: express.RequestHandler = async (req, res) => {
+    const gmaoReq = req as GmaoApiRequest;
+    const role = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
+    if (!gmaoReq.resolvedServerActor?.sessionVerified || (role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Verified ADMIN or RESPONSABLE_MAINTENANCE session required to create database backups.',
+      });
+    }
+    if (!createHotBackup) {
+      return res.status(400).json({
+        success: false,
+        code: 'BACKUP_UNSUPPORTED_ENGINE',
+        message: 'Online SQLite VACUUM INTO backup is only available when the SQLite engine is active.',
+      });
+    }
+    try {
+      const backup = await createHotBackup();
+      return res.status(201).json({
+        success: true,
+        data: backup,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        success: false,
+        code: 'BACKUP_FAILED',
+        message: err instanceof Error ? err.message : 'Failed to create SQLite hot backup',
+      });
+    }
   };
 
   const networkInfoHandler: express.RequestHandler = (_req, res) => {
@@ -178,6 +248,8 @@ export function createSystemRoutesController(deps: {
     app.get('/api/gmao/health', healthHandler);
     app.get('/api/network/info', authenticateApi, networkInfoHandler);
     app.get('/api/gmao/revision', revisionHandler);
+    app.get('/api/gmao/db/info', dbInfoHandler);
+    app.post('/api/gmao/db/backup', dbBackupHandler);
     app.post('/api/gmao/events/ticket', issueSseTicketHandler);
     app.get('/api/gmao/events', sseStreamHandler);
   };

@@ -12,6 +12,8 @@ import {
   ALLOWED_ENTITIES,
   MAX_STATE_PAYLOAD_LIMIT,
   type CreateGmaoApiAppOptions,
+  type ServerStorageEngine,
+  type SqliteStorageInfo,
 } from './src/server/types.ts';
 import {
   buildCspHeaderValue,
@@ -27,6 +29,10 @@ import {
   createAtomicStatePersister,
   hydrateInitialDbState,
 } from './src/server/persistence/stateStore.ts';
+import {
+  createSqliteStateStore,
+  type SqliteStateStore,
+} from './src/server/persistence/sqliteStateStore.ts';
 import { mountAuthRoutes } from './src/server/routes/authRoutes.ts';
 import { mountEntityAndStateRoutes } from './src/server/routes/entityRoutes.ts';
 import { createSystemRoutesController } from './src/server/routes/systemRoutes.ts';
@@ -77,10 +83,29 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     }
   }
 
-  const DATA_DIR = options.dataDir ? path.resolve(options.dataDir) : path.join(__dirname, 'data');
+  const readCliFlag = (flag: string): string | null => {
+    const idx = process.argv.indexOf(flag);
+    return idx !== -1 && process.argv[idx + 1] ? String(process.argv[idx + 1]).trim() : null;
+  };
+
+  const rawDataDir = options.dataDir || readCliFlag('--data-dir') || process.env.GMAO_DATA_DIR;
+  const rawDbFile = options.dbFile || readCliFlag('--db-file') || process.env.GMAO_DB_FILE;
+  const DATA_DIR = rawDataDir
+    ? path.resolve(rawDataDir)
+    : rawDbFile
+    ? path.dirname(path.resolve(rawDbFile))
+    : path.join(__dirname, 'data');
+  const DB_FILE = rawDbFile ? path.resolve(rawDbFile) : path.join(DATA_DIR, 'ciob_gmao.db');
+  const BACKUP_DIR = path.join(DATA_DIR, 'backups');
   const STATE_FILE = path.join(DATA_DIR, 'gmao_state.json');
   const STATE_TMP_FILE = path.join(DATA_DIR, 'gmao_state.json.tmp');
   const AUDIT_FILE = path.join(DATA_DIR, 'gmao_audit.jsonl');
+
+  const envEngine = String(process.env.GMAO_STORAGE_ENGINE || '').trim().toLowerCase();
+  const storageEngine: ServerStorageEngine =
+    options.storageEngine || (envEngine === 'json' ? 'json' : 'sqlite');
+  const backupRetention =
+    options.backupRetention ?? (Number(process.env.GMAO_BACKUP_RETENTION) || 10);
 
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -116,11 +141,27 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   const securityCache = createSecurityCacheController(sessionStore);
   app.use('/api', securityCache.apiRateLimiter);
 
-  // Hydrate durable state & mount API authentication/RBAC gate
-  const dbState = hydrateInitialDbState({
-    stateFile: STATE_FILE,
-    initialState: options.initialState,
-  });
+  // Hydrate durable state (SQLite Single-File ACID default, or legacy Atomic JSON fallback)
+  let broadcastStateEvent: ((eventPayload: Record<string, unknown>) => void) | null = null;
+  let sqliteStore: SqliteStateStore | null = null;
+
+  const dbState =
+    storageEngine === 'sqlite'
+      ? (() => {
+          sqliteStore = createSqliteStateStore({
+            dbFile: DB_FILE,
+            legacyStateFile: STATE_FILE,
+            legacyAuditFile: AUDIT_FILE,
+            initialState: options.initialState,
+            journalMode: options.sqliteJournalMode,
+            onStatePersisted: (payload) => broadcastStateEvent?.(payload),
+          });
+          return sqliteStore.dbState;
+        })()
+      : hydrateInitialDbState({
+          stateFile: STATE_FILE,
+          initialState: options.initialState,
+        });
 
   const authenticateApi = createAuthenticateApiMiddleware({
     dbState,
@@ -134,7 +175,33 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   // OpenAPI / Swagger UI (environment & token guarded)
   mountSwaggerRoutes(app, isProduction);
 
-  // System, LAN discovery & SSE routes
+  const getStorageInfo = (): SqliteStorageInfo => {
+    if (sqliteStore) {
+      return sqliteStore.getStorageInfo(BACKUP_DIR);
+    }
+    const sizeBytes = fs.existsSync(STATE_FILE) ? fs.statSync(STATE_FILE).size : 0;
+    return {
+      engine: 'json',
+      dbFile: STATE_FILE,
+      journalMode: 'NONE',
+      schemaVersion: 0,
+      version: dbState.version,
+      updatedAt: dbState.updatedAt,
+      sizeBytes,
+      walSizeBytes: 0,
+      entityCount: ALLOWED_ENTITIES.length,
+      auditCount: 0,
+      backupsCount: 0,
+      migratedFromJsonAt: null,
+      isNetworkPath: false,
+    };
+  };
+
+  const storageDescriptor = sqliteStore
+    ? `SQLite Single-File ACID Engine (${sqliteStore.journalMode})`
+    : 'Atomic JSON File + Serialized Memory Engine';
+
+  // System, LAN discovery, DB diagnostics/backup & SSE routes
   const systemRoutes = createSystemRoutesController({
     app,
     dbState,
@@ -143,17 +210,25 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     sseTicketTtlMs: securityCache.sseTicketTtlMs,
     pruneSecurityCaches: securityCache.pruneSecurityCaches,
     authenticateApi,
+    storageDescriptor,
+    getStorageInfo,
+    createHotBackup: sqliteStore
+      ? () => sqliteStore!.createHotBackup(BACKUP_DIR, backupRetention)
+      : undefined,
   });
+  broadcastStateEvent = systemRoutes.broadcastSseEvent;
   systemRoutes.mountRoutes();
 
   // Atomic disk persistence & SSE broadcast hook
-  const { persistState } = createAtomicStatePersister({
-    dbState,
-    stateFile: STATE_FILE,
-    stateTmpFile: STATE_TMP_FILE,
-    auditFile: AUDIT_FILE,
-    onStatePersisted: systemRoutes.broadcastSseEvent,
-  });
+  const persistState = sqliteStore
+    ? sqliteStore.persistState
+    : createAtomicStatePersister({
+        dbState,
+        stateFile: STATE_FILE,
+        stateTmpFile: STATE_TMP_FILE,
+        auditFile: AUDIT_FILE,
+        onStatePersisted: systemRoutes.broadcastSseEvent,
+      }).persistState;
 
   // Authentication & Entity CRUD routes (including DELETE stock invariant guard)
   mountAuthRoutes(app, {
@@ -167,6 +242,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
   mountEntityAndStateRoutes(app, {
     dbState,
     auditFile: AUDIT_FILE,
+    readAuditEntries: sqliteStore ? sqliteStore.readRecentAuditEntries : undefined,
     persistState,
   });
 
@@ -178,6 +254,7 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     securityCache.dispose();
     sessionStore.clearMemoryOnly();
     systemRoutes.closeAllSseClients();
+    sqliteStore?.close();
   };
 
   return {
@@ -185,6 +262,9 @@ export function createGmaoApiApp(options: CreateGmaoApiAppOptions = {}) {
     dbState,
     port: PORT,
     isProduction,
+    storageEngine,
+    dbFile: sqliteStore ? sqliteStore.dbFile : STATE_FILE,
+    getStorageInfo,
     sessionStore,
     mountProductionStaticWithCspNonce: systemRoutes.mountProductionStaticWithCspNonce,
     cleanup,

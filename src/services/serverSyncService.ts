@@ -42,6 +42,31 @@ export interface ServerAuditEntry {
   summary: string;
 }
 
+export interface ServerDatabaseInfo {
+  engine: 'sqlite' | 'json';
+  dbFile: string;
+  journalMode: 'WAL' | 'DELETE' | 'NONE';
+  schemaVersion: number;
+  version: number;
+  updatedAt: string;
+  sizeBytes: number;
+  walSizeBytes: number;
+  entityCount: number;
+  auditCount: number;
+  backupsCount: number;
+  migratedFromJsonAt: string | null;
+  isNetworkPath: boolean;
+}
+
+export interface ServerDatabaseBackupResult {
+  backupFile: string;
+  fileName: string;
+  sizeBytes: number;
+  version: number;
+  createdAt: string;
+  retainedBackups: number;
+}
+
 export interface ConflictDetectionResult {
   hasConflict: boolean;
   reason?: 'SERVER_NEWER' | 'DATA_DIVERGENCE';
@@ -635,6 +660,59 @@ export const serverSyncService = {
       return Array.isArray(json?.data) ? json.data : [];
     } catch {
       return [];
+    }
+  },
+
+  /**
+   * Queries single-file SQLite database diagnostics (path, size, WAL mode, backups count).
+   * Requires verified ADMIN or RESPONSABLE_MAINTENANCE server session.
+   */
+  async fetchDatabaseInfo(): Promise<{ success: boolean; data?: ServerDatabaseInfo; message?: string }> {
+    try {
+      const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/db/info'), {
+        method: 'GET',
+        headers: buildClientAuthHeaders({ Accept: 'application/json' }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, message: json?.message || `HTTP ${response.status}` };
+      }
+      return { success: true, data: json?.data as ServerDatabaseInfo };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to query server database info',
+      };
+    }
+  },
+
+  /**
+   * Triggers a consistent online SQLite VACUUM INTO hot backup on the host PC.
+   * Requires verified ADMIN or RESPONSABLE_MAINTENANCE server session.
+   */
+  async triggerDatabaseBackup(): Promise<{
+    success: boolean;
+    data?: ServerDatabaseBackupResult;
+    message?: string;
+  }> {
+    try {
+      const response = await fetch(networkConfigService.resolveApiUrl('/api/gmao/db/backup'), {
+        method: 'POST',
+        headers: buildClientAuthHeaders({
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok) {
+        return { success: false, message: json?.message || `HTTP ${response.status}` };
+      }
+      return { success: true, data: json?.data as ServerDatabaseBackupResult };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : 'Failed to create SQLite hot backup',
+      };
     }
   },
 

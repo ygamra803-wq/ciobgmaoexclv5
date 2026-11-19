@@ -76,7 +76,10 @@ describe('Server Hardening — Atomic Persistence Rollback, Bounded Audit Tail &
   const ADMIN_PASS = 'Admin_S3cure_2026!';
   const TEST_SECRET = 'ciob-gmao-test-persistence-secret-0123456789abcdef';
 
-  const startTestServer = async (initialState: Record<string, any>) => {
+  const startTestServer = async (
+    initialState: Record<string, any>,
+    extraOpts: { storageEngine?: 'sqlite' | 'json' } = {}
+  ) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gmao-persist-audit-'));
     const instance = createGmaoApiApp({
       dataDir: tempDir,
@@ -84,6 +87,7 @@ describe('Server Hardening — Atomic Persistence Rollback, Bounded Audit Tail &
       isProduction: false,
       sessionSecret: TEST_SECRET,
       initialState,
+      storageEngine: extraOpts.storageEngine,
     });
     cleanupApp = instance.cleanup;
     await new Promise<void>((resolve) => {
@@ -168,20 +172,23 @@ describe('Server Hardening — Atomic Persistence Rollback, Bounded Audit Tail &
   });
 
   it('persistState failure returns HTTP 500, rolls back version & memory state, and keeps writeQueue healthy', async () => {
-    const { dbState } = await startTestServer({
-      users: [
-        {
-          id: 'USR-ADMIN',
-          username: 'admin',
-          nom: 'Admin',
-          role: 'ADMIN',
-          passwordHash: makePbkdf2Hash(ADMIN_PASS),
-          is_active: true,
-        },
-      ],
-      technicians: [],
-      machines: [{ id: 'M-1', code: 'M-1' }],
-    });
+    const { dbState } = await startTestServer(
+      {
+        users: [
+          {
+            id: 'USR-ADMIN',
+            username: 'admin',
+            nom: 'Admin',
+            role: 'ADMIN',
+            passwordHash: makePbkdf2Hash(ADMIN_PASS),
+            is_active: true,
+          },
+        ],
+        technicians: [],
+        machines: [{ id: 'M-1', code: 'M-1' }],
+      },
+      { storageEngine: 'json' }
+    );
 
     const login = await sendHttpRequest({
       port,

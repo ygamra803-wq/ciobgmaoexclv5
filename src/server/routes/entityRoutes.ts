@@ -63,10 +63,11 @@ export function mountEntityAndStateRoutes(
   deps: {
     dbState: GmaoDbState;
     auditFile: string;
+    readAuditEntries?: (limit: number) => Promise<Record<string, unknown>[]>;
     persistState: (auditContext?: AuditWriteContext, rollbackState?: () => void) => Promise<void>;
   }
 ): void {
-  const { dbState, auditFile, persistState } = deps;
+  const { dbState, auditFile, readAuditEntries, persistState } = deps;
 
   const resolveActor = (req: express.Request): string => {
     const gmaoReq = req as GmaoApiRequest;
@@ -116,12 +117,14 @@ export function mountEntityAndStateRoutes(
     return role === 'ADMIN' || role === 'RESPONSABLE_MAINTENANCE';
   };
 
-  // Bounded O(1) tail read of server-side audit log
+  // Bounded O(1) tail read of server-side audit log (indexed SQLite table or bounded JSONL tail)
   app.get('/api/gmao/audit', async (req, res) => {
     try {
       const limitParam = Number(req.query.limit) || 100;
       const limit = Math.min(Math.max(1, limitParam), 500);
-      const recent = await readRecentAuditEntries(auditFile, limit);
+      const recent = readAuditEntries
+        ? await readAuditEntries(limit)
+        : await readRecentAuditEntries(auditFile, limit);
       return res.json({ success: true, data: recent });
     } catch (err) {
       return res.status(500).json({

@@ -265,7 +265,8 @@ export function createAuthenticateApiMiddleware(deps: {
         fullPath === '/api/gmao/auditevents' ||
         fullPath === '/api/gmao/users' ||
         fullPath === '/api/gmao/authaccounts' ||
-        fullPath === '/api/gmao/security/telemetry';
+        fullPath === '/api/gmao/security/telemetry' ||
+        fullPath === '/api/gmao/db/info';
 
       if (resolvedActor.identityStatus === 'UNKNOWN' && registryInitialized) {
         return res.status(403).json({
@@ -279,6 +280,7 @@ export function createAuthenticateApiMiddleware(deps: {
         const allowBootstrapRead =
           !registryInitialized &&
           fullPath !== '/api/gmao/security/telemetry' &&
+          fullPath !== '/api/gmao/db/info' &&
           (hasValidStrongToken || (!isProduction && isLoopbackRemoteAddress(remoteAddress)));
         if (!allowBootstrapRead) {
           return res.status(403).json({
@@ -294,7 +296,8 @@ export function createAuthenticateApiMiddleware(deps: {
         resolvedActor.sessionVerified &&
         (fullPath === '/api/gmao/audit' ||
           fullPath === '/api/gmao/auditevents' ||
-          fullPath === '/api/gmao/authaccounts')
+          fullPath === '/api/gmao/authaccounts' ||
+          fullPath === '/api/gmao/db/info')
       ) {
         const readRole = normalizeServerRole(resolvedActor.effectiveRole);
         if (readRole !== 'ADMIN' && readRole !== 'RESPONSABLE_MAINTENANCE') {
@@ -382,6 +385,17 @@ export function createAuthenticateApiMiddleware(deps: {
           error: 'Forbidden',
           message: 'Role VIEWER or unauthenticated actor is read-only and cannot modify server state.',
         });
+      }
+
+      if (targetEntity === 'db') {
+        if (role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Role '${role}' is not authorized to execute database maintenance operations.`,
+          });
+        }
+        return next();
       }
 
       if (targetEntity && targetEntity !== 'state' && targetEntity !== 'audit') {

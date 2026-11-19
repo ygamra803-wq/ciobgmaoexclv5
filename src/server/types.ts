@@ -85,8 +85,40 @@ export type GmaoDbState = {
   [key: string]: unknown;
 };
 
+export type ServerStorageEngine = 'sqlite' | 'json';
+export type SqliteJournalMode = 'WAL' | 'DELETE';
+
+export interface SqliteStorageInfo {
+  engine: ServerStorageEngine;
+  dbFile: string;
+  journalMode: SqliteJournalMode | 'NONE';
+  schemaVersion: number;
+  version: number;
+  updatedAt: string;
+  sizeBytes: number;
+  walSizeBytes: number;
+  entityCount: number;
+  auditCount: number;
+  backupsCount: number;
+  migratedFromJsonAt: string | null;
+  isNetworkPath: boolean;
+}
+
+export interface SqliteBackupResult {
+  backupFile: string;
+  fileName: string;
+  sizeBytes: number;
+  version: number;
+  createdAt: string;
+  retainedBackups: number;
+}
+
 export interface CreateGmaoApiAppOptions {
   dataDir?: string;
+  dbFile?: string;
+  storageEngine?: ServerStorageEngine;
+  sqliteJournalMode?: SqliteJournalMode;
+  backupRetention?: number;
   port?: number;
   isProduction?: boolean;
   initialState?: Record<string, unknown>;

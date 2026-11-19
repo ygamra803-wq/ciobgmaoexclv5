@@ -37,6 +37,7 @@ import type { IAuditEvent } from '../../../../types/audit';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import Action3DButton from '../../../components/common/Action3DButton';
 import { SettingsSectionCard, SETTINGS_BUTTON_STYLES } from './settingsUi';
+import SqliteHostDatabaseCard from './SqliteHostDatabaseCard';
 
 export interface AccessLogEntry {
   id?: string;
@@ -514,6 +515,7 @@ export default function SettingsBackupAuditTab({
       {auditSubTab === 'backups' && (
         <div className="space-y-4">
           <SyncButtons showToast={showToast} />
+          <SqliteHostDatabaseCard showToast={showToast} />
 
           <SettingsSectionCard
             title="Points de Restauration Locaux"
