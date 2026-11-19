@@ -320,7 +320,7 @@ class IndexedDBService {
   /**
    * Retrieves an item from 'app_data' store with fallback.
    */
-  async getItem(key, fallback = null) {
+  async getItem<T = any>(key: string, fallback: T = null as T): Promise<T> {
     if (!this.isSupported()) {
       return this.fallbackMemoryStore.has(key) ? this.fallbackMemoryStore.get(key) : fallback;
     }
@@ -350,7 +350,7 @@ class IndexedDBService {
   /**
    * Sets a single item in 'app_data' store.
    */
-  async setItem(key, value) {
+  async setItem(key: string, value: unknown): Promise<boolean> {
     this.fallbackMemoryStore.set(key, value);
 
     if (!this.isSupported()) {
@@ -380,7 +380,7 @@ class IndexedDBService {
   /**
    * Batch write multiple key-value pairs to 'app_data' in a single transaction.
    */
-  async setItemsBatch(itemsMap = {}) {
+  async setItemsBatch(itemsMap: Record<string, unknown> = {}): Promise<boolean> {
     if (!itemsMap || typeof itemsMap !== 'object') return false;
 
     // Update fallback memory
@@ -417,7 +417,7 @@ class IndexedDBService {
   /**
    * Removes an item from 'app_data' store.
    */
-  async removeItem(key) {
+  async removeItem(key: string): Promise<boolean> {
     this.fallbackMemoryStore.delete(key);
 
     if (!this.isSupported()) {
@@ -447,7 +447,7 @@ class IndexedDBService {
   /**
    * Alias for removeItem
    */
-  async deleteItem(key) {
+  async deleteItem(key: string): Promise<boolean> {
     return this.removeItem(key);
   }
 
@@ -455,7 +455,7 @@ class IndexedDBService {
   // SECTION 2: Entity Stores API
   // ==========================================
 
-  async getStore(storeName, mode = 'readonly') {
+  async getStore(storeName: string, mode: IDBTransactionMode = 'readonly'): Promise<IDBObjectStore | null> {
     const db = await this.init();
     if (!db || !db.objectStoreNames.contains(storeName)) return null;
     const tx = db.transaction([storeName], mode);
@@ -497,7 +497,7 @@ class IndexedDBService {
    * - If 1 argument: get(key) from 'app_data'
    * - If 2 arguments: get(storeName, key)
    */
-  async get(storeNameOrKey, key = null) {
+  async get(storeNameOrKey: string, key: IDBValidKey | null = null): Promise<any> {
     if (key === null) {
       return this.getItem(storeNameOrKey);
     }
@@ -522,7 +522,7 @@ class IndexedDBService {
   /**
    * Puts a record into an entity store.
    */
-  async put(storeName, data) {
+  async put(storeName: string, data: unknown): Promise<boolean> {
     if (!this.isSupported()) return true;
 
     try {
@@ -542,7 +542,7 @@ class IndexedDBService {
   /**
    * Bulk puts multiple items into an entity store in a single transaction.
    */
-  async bulkPut(storeName, items = []) {
+  async bulkPut(storeName: string, items: ReadonlyArray<unknown> = []): Promise<boolean> {
     if (!items || items.length === 0) return true;
     if (!this.isSupported()) return true;
 
@@ -571,7 +571,7 @@ class IndexedDBService {
   /**
    * Deletes a record from an entity store by key.
    */
-  async delete(storeName, key) {
+  async delete(storeName: string, key: IDBValidKey): Promise<boolean> {
     if (!this.isSupported()) return true;
 
     try {

@@ -103,7 +103,7 @@ function getLegacyPersistenceSecret() {
 const KEY_STORE_NAME = 'gmao_crypto_keys';
 const KEY_ID = 'main_aes_gcm_key';
 
-let webCryptoKey = null;
+let webCryptoKey: CryptoKey | null = null;
 
 // Stale / Legacy keys that can be safely purged when localStorage faces quota pressure (after one-time migration)
 const OBSOLETE_OR_DUPLICATE_KEYS = ALL_LEGACY_KEYS;
@@ -251,7 +251,7 @@ const idbKeyStore = {
   },
 };
 
-const base64ToArrayBuffer = (base64) => {
+const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
   const binary_string = atob(base64);
   const len = binary_string.length;
   const bytes = new Uint8Array(len);
@@ -384,7 +384,7 @@ export const storageService = {
   /**
    * Synchronous retrieval with memory cache and localStorage fallback
    */
-  getItem(key, fallback = null) {
+  getItem<T = any>(key: string, fallback: unknown = null): T {
     const cached = memoryCache.get(key);
     if (cached !== undefined) {
       // True LRU: Re-insert to make it the most recently used
@@ -392,42 +392,42 @@ export const storageService = {
       memoryCache.set(key, cached);
       if (cached && typeof cached === 'object') {
         cached._lastAccessed = Date.now();
-        return cached.data !== undefined ? cached.data : cached;
+        return (cached.data !== undefined ? cached.data : cached) as T;
       }
-      return cached;
+      return cached as T;
     }
 
     try {
       const ls = getSafeLocalStorage();
-      if (!ls) return fallback;
+      if (!ls) return fallback as T;
       const item = ls.getItem(key);
-      if (item === null || item === undefined) return fallback;
+      if (item === null || item === undefined) return fallback as T;
 
       // If it's a legacy or SecurityService encrypted token, return fallback safely
       if (typeof item === 'string' && (item.startsWith('WC:') || item.startsWith('U2FsdGVkX1') || item.startsWith('NC1:') || item.startsWith('NC2:') || item.startsWith('AG1:'))) {
-        return fallback;
+        return fallback as T;
       }
 
       try {
         const parsed = JSON.parse(item);
         const cachedEntry = { data: parsed, _lastAccessed: Date.now() };
         memoryCache.set(key, cachedEntry);
-        return parsed;
+        return parsed as T;
       } catch {
         const cachedEntry = { data: item, _lastAccessed: Date.now() };
         memoryCache.set(key, cachedEntry);
-        return item;
+        return item as T;
       }
     } catch (err) {
       Logger.warn(`[StorageService] getItem read error for key '${key}':`, err, 'storageService');
-      return fallback;
+      return fallback as T;
     }
   },
 
   /**
    * Synchronous storage with immediate persistence to localStorage and memoryCache
    */
-  setItem(key, value) {
+  setItem(key: string, value: unknown): boolean {
     const cachedEntry = { data: value, _lastAccessed: Date.now() };
     if (memoryCache.has(key)) {
       memoryCache.delete(key);
@@ -507,7 +507,7 @@ export const storageService = {
    * Asynchronous setItem that awaits IndexedDB completion in addition to synchronous memoryCache + localStorage write.
    * Prevents L2 -> L1 hydration races during factory clear/reset operations.
    */
-  async setItemAsync(key, value) {
+  async setItemAsync(key: string, value: unknown): Promise<boolean> {
     this.setItem(key, value);
     if (key.startsWith('gmao_')) {
       try {
@@ -526,7 +526,7 @@ export const storageService = {
   /**
    * Remove item from memory cache, localStorage, and IndexedDB
    */
-  removeItem(key) {
+  removeItem(key: string): boolean {
     memoryCache.delete(key);
     try {
       const ls = getSafeLocalStorage();
@@ -551,7 +551,7 @@ export const storageService = {
   /**
    * Asynchronous removeItem that awaits IndexedDB removal completion.
    */
-  async removeItemAsync(key) {
+  async removeItemAsync(key: string): Promise<boolean> {
     this.removeItem(key);
     if (key.startsWith('gmao_')) {
       try {
@@ -566,7 +566,7 @@ export const storageService = {
   /**
    * Synchronously and asynchronously purges a batch of keys from memoryCache, localStorage, and IndexedDB.
    */
-  async removeItemsBatchAsync(keys = []) {
+  async removeItemsBatchAsync(keys: string[] = []): Promise<boolean> {
     if (!Array.isArray(keys) || keys.length === 0) return true;
     const ls = getSafeLocalStorage();
     for (const k of keys) {
@@ -596,7 +596,7 @@ export const storageService = {
    * - Never overwrites an explicit empty factory state (START_MODE === 'empty' or DEMO_MODE === false).
    * - Never overwrites a key that already has an authoritative array/object in localStorage.
    */
-  async hydrateFromIndexedDB(key, fallback = null) {
+  async hydrateFromIndexedDB<T = any>(key: string, fallback: T = null as T): Promise<T> {
     try {
       const startMode = this.getItem(STORAGE_KEYS.START_MODE);
       const demoFlag = this.getItem(STORAGE_KEYS.DEMO_MODE);
@@ -608,9 +608,9 @@ export const storageService = {
         return fallback;
       }
 
-      const existing = this.getItem(key, undefined);
+      const existing = this.getItem<unknown>(key, undefined);
       if (Array.isArray(existing) && existing.length > 0) {
-        return existing;
+        return existing as T;
       }
 
       const idbVal = await indexedDBService.getItem(key, null);
@@ -641,21 +641,21 @@ export const storageService = {
   /**
    * Convenience method to save updated stock articles
    */
-  saveArticles(articles) {
+  saveArticles(articles: unknown) {
     return this.setItem(STORAGE_KEYS.RAW_STOCK, articles);
   },
 
   /**
    * Hash PIN code using SHA-256 (synchronous helper for legacy callers)
    */
-  hashPin(pin) {
+  hashPin(pin: string | number) {
     return sha256Hex(String(pin || '').trim());
   },
 
   /**
    * Verify input PIN against stored sha256 hash without writing to localStorage
    */
-  verifyPin(inputPin, storedValue) {
+  verifyPin(inputPin: string | number, storedValue: unknown) {
     if (!storedValue || typeof storedValue !== 'string') return false;
     const cleanInput = String(inputPin || '').trim();
     if (storedValue.length === 64 && /^[0-9a-f]+$/i.test(storedValue)) {

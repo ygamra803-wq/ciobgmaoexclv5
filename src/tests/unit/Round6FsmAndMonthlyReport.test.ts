@@ -76,10 +76,21 @@ describe('Round 6: Work Order FSM (M-03), Reliability Metrics MTTR/MTBF/OEE (M-0
     });
 
     it('verifies InterventionLiveTab does not duplicate onAddMouvement upon closure', () => {
-      const liveTabPath = path.resolve(process.cwd(), 'src/presentation/pages/corrective/InterventionLiveTab.tsx');
-      const content = fs.readFileSync(liveTabPath, 'utf-8');
-      // handleClotureSubmit should delegate to onClotureIntervention and not call onAddMouvement directly inside handleClotureSubmit
-      const submitBlock = content.slice(content.indexOf('const executeClotureOrSubmit'));
+      const liveTabPath = path.resolve(
+        process.cwd(),
+        'src/presentation/pages/corrective/InterventionLiveTab.tsx'
+      );
+      const liveControllerPath = path.resolve(
+        process.cwd(),
+        'src/presentation/pages/corrective/hooks/useInterventionLiveController.ts'
+      );
+      const tabContent = fs.readFileSync(liveTabPath, 'utf-8');
+      const controllerContent = fs.readFileSync(liveControllerPath, 'utf-8');
+      // executeClotureOrSubmit lives in useInterventionLiveController and delegates to onClotureIntervention without emitting a duplicate SORTIE
+      const submitBlock = controllerContent.slice(
+        controllerContent.indexOf('const executeClotureOrSubmit')
+      );
+      expect(tabContent).toContain('useInterventionLiveController');
       expect(submitBlock).toContain('onClotureIntervention(activeIntervention.id');
       expect(submitBlock).not.toContain("type: 'SORTIE'");
     });

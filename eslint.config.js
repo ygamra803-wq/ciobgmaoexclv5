@@ -64,9 +64,15 @@ export default [
       react: { version: '19.2' },
     },
   },
-  // LINT-DEPS-P1: Experimental scoped 'warn' on a single clean directory (src/utils)
+  // LINT-DEPS-P1: Progressive scoped 'warn' on clean directories (expanded as views/hooks are refactored)
   {
-    files: ['src/utils/**/*.{ts,tsx}'],
+    files: [
+      'src/utils/**/*.{ts,tsx}',
+      'src/application/repositories/**/*.{ts,tsx}',
+      'src/presentation/pages/corrective/hooks/**/*.{ts,tsx}',
+      'src/presentation/pages/corrective/components/InterventionLive*.{ts,tsx}',
+      'src/presentation/pages/corrective/InterventionLiveTab.tsx',
+    ],
     rules: {
       'react-hooks/exhaustive-deps': 'warn',
     },

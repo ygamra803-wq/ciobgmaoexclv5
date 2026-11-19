@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client", "vite-plugin-pwa/client"],
+    "noEmit": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true
+  },
+  "include": [
+    "server.ts",
+    "src/server/**/*.ts",
+    "src/core/logger/LoggerService.ts",
+    "src/core/security/nativeCrypto.ts",
+    "src/core/security/serverRbacPolicy.ts",
+    "src/core/security/serverSession.ts",
+    "src/core/security/serverSessionStore.ts",
+    "src/application/repositories/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/__tests__/**",
+    "**/*.test.ts",
+    "**/*.test.tsx"
+  ]
+}

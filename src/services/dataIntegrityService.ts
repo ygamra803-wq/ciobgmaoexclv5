@@ -315,7 +315,7 @@ class DataIntegrityService {
       }
       const agg = mvtsByRef.get(r)!;
       const qte = Number(m.quantite ?? m.quantity) || 0;
-      const normalized = normalizeType(m.type);
+      const normalized = normalizeType(m.type ?? '');
       if (normalized === 'ENTREE') {
         agg.entrees += qte;
       } else if (normalized === 'SORTIE') {
@@ -409,7 +409,7 @@ class DataIntegrityService {
       }
 
       // Contrôle Type (aligné avec IncrementalStockIndex: Entrée*, Sortie*, Commande)
-      if (!normalizeType(movement.type)) {
+      if (!normalizeType(movement.type ?? '')) {
         errors.push({
           type: 'INVALID_TYPE',
           row: rowNum,
@@ -736,7 +736,7 @@ class DataIntegrityService {
       }
       const agg = mvtsByRef.get(r)!;
       const qte = Number(m.quantite ?? m.quantity) || 0;
-      const normalized = normalizeType(m.type);
+      const normalized = normalizeType(m.type ?? '');
       if (normalized === 'ENTREE') agg.entrees += qte;
       else if (normalized === 'SORTIE') agg.sorties += qte;
     });

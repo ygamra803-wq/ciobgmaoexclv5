@@ -30,6 +30,9 @@ jobs:
       - name: TypeScript Check (Express LAN Server)
         run: npm run typecheck:server
 
+      - name: TypeScript Strict Check (STRICT-P1)
+        run: npm run typecheck:strict
+
       - name: ESLint Static Analysis (JS + TypeScript)
         run: npm run lint
 

@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 
-export const sanitizeString = (str) => {
+export const sanitizeString = <T,>(str: T): T => {
   if (typeof str !== 'string') return str;
   // Basic XSS prevention by escaping HTML chars
   return str
@@ -9,14 +9,14 @@ export const sanitizeString = (str) => {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    .replace(/\//g, '&#x2F;') as T;
 };
 
 /**
  * Sanitizes HTML markup using DOMPurify with a strict whitelist suitable for printable GMAO vouchers.
  * Strips all scripts, event handlers (onerror, onload, onclick), iframes, objects, and javascript: URIs.
  */
-export const sanitizeHtml = (dirtyHtml) => {
+export const sanitizeHtml = (dirtyHtml: unknown): string => {
   if (typeof dirtyHtml !== 'string' || !dirtyHtml) return '';
 
   if (typeof DOMPurify?.sanitize === 'function') {
@@ -39,7 +39,7 @@ export const sanitizeHtml = (dirtyHtml) => {
 /**
  * Sanitizes dynamic strings intended for filenames or document titles.
  */
-export const sanitizeFilename = (value, fallback = 'Document') => {
+export const sanitizeFilename = (value: unknown, fallback = 'Document'): string => {
   if (value === null || value === undefined) return fallback;
   const cleaned = String(value)
     .replace(/[^a-zA-Z0-9_\-.]/g, '_')
@@ -49,18 +49,19 @@ export const sanitizeFilename = (value, fallback = 'Document') => {
   return cleaned || fallback;
 };
 
-export const sanitizeObject = (obj) => {
+export const sanitizeObject = <T = unknown>(obj: T): T => {
   if (Array.isArray(obj)) {
-    return obj.map(sanitizeObject);
+    return obj.map((entry) => sanitizeObject(entry)) as T;
   } else if (obj !== null && typeof obj === 'object') {
-    const sanitized = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        sanitized[sanitizeString(key)] = sanitizeObject(obj[key]);
+    const sanitized: Record<string, unknown> = {};
+    const record = obj as Record<string, unknown>;
+    for (const key in record) {
+      if (Object.prototype.hasOwnProperty.call(record, key)) {
+        sanitized[sanitizeString(key)] = sanitizeObject(record[key]);
       }
     }
-    return sanitized;
+    return sanitized as T;
   }
-  return typeof obj === 'string' ? sanitizeString(obj) : obj;
+  return (typeof obj === 'string' ? sanitizeString(obj) : obj) as T;
 };
 

@@ -573,7 +573,7 @@ export function mountEntityAndStateRoutes(
       const currentList = [...getArraySlice(dbState, entity)];
       const prevRawStock = [...getArraySlice(dbState, 'rawStock')];
       const prevStock = [...getArraySlice(dbState, 'stock')];
-      const sanitizedCollectionPayload = sanitizeIncomingAccountFields(entity, payload) as unknown[];
+      const sanitizedCollectionPayload = sanitizeIncomingAccountFields(entity, payload) as ServerRecord[];
       const actorRole = normalizeServerRole(gmaoReq.resolvedServerActor?.effectiveRole);
       const effectivePayload =
         gmaoReq.isBootstrapAuthorized === true

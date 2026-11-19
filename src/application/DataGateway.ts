@@ -1,23 +1,29 @@
 import { STORAGE_KEYS, LEGACY_KEY_MAP, ALL_LEGACY_KEYS } from '../infrastructure/persistence/storageKeys';
 import { storageService } from '../utils/storageService';
 import { indexedDBService } from '../infrastructure/database/IndexedDBService';
-import { dataIntegrityService } from '../services/dataIntegrityService';
 import { sanitizeObject } from '../utils/sanitize';
-import { safeId } from '../utils/safeId';
 import { ValidationService } from '../core/validation/ValidationService';
 import { AuthService } from '../core/security/AuthService';
 import { movementRepository } from './MovementRepository';
 import { StockCalculationService } from '../domain/pdr/services/StockCalculationService';
-import { sanitizeMachinesHierarchy } from '../utils/assetHierarchy';
+import {
+  AuditRepo,
+  CorrectiveRepo,
+  FinanceRepo,
+  MachineRepo,
+  PersonnelRepo,
+  PreventiveRepo,
+  StockRepo,
+  WarehouseRepo,
+  buildInitialStockMap,
+} from './repositories';
 import {
   EMPTY_FISCAL_BUDGET,
   DEMO_FISCAL_BUDGET,
   type FiscalBudgetConfig,
-  type BudgetPeriodMode,
-  type BudgetAuditEntry,
 } from '../domain/finance/entities/FinancialBudget';
 import type { GmaoStoreSetters } from '../types/store';
-import type { IAuditEvent, AuditSnapshot } from '../types/audit';
+import type { IAuditEvent } from '../types/audit';
 import {
   exportCmCatalogBundle,
   exportEntrepotBomBundle,
@@ -47,17 +53,6 @@ import type {
   RefPersonnelOperationRow,
   RefPersonnelTechnicianRow,
 } from '../services/import/types/unifiedImportTypes';
-
-/** Normalizes arbitrary audit snapshot values into a frozen object record or null before persisting. */
-function freezeAuditSnapshot(val: unknown): AuditSnapshot {
-  if (val && typeof val === 'object' && !Array.isArray(val)) {
-    return Object.freeze({ ...(val as Record<string, unknown>) });
-  }
-  if (Array.isArray(val)) {
-    return Object.freeze({ items: Object.freeze([...val]) });
-  }
-  return val == null ? null : Object.freeze({ value: val });
-}
 import type {
   IStockItem,
   IMouvement,
@@ -69,7 +64,6 @@ import type {
   IMachineFamily,
   IMachineTemplate,
   IBlueprint,
-  IBlueprintTheoreticalPdr,
   IGeneralSystemType,
   IZone,
   IUserRecord,
@@ -137,27 +131,6 @@ import seedPartTypes from '../data/warehouse/seedPartTypes.json';
 import seedPartDesignations from '../data/warehouse/seedPartDesignations.json';
 
 /**
- * Builds an initial stock lookup map (`ref -> stockInitial`) used to re-prime
- * `movementRepository` during bulk seed or server state synchronization.
- *
- * @param rawStock - Array of stock articles (`IStockItem[]`).
- * @returns Map of trimmed reference strings to numeric `stockInitial` balances.
- */
-function buildInitialStockMap(
-  rawStock: ReadonlyArray<{ ref?: unknown; Ref?: unknown; stockInitial?: unknown }> = []
-): Map<string, number> {
-  const map = new Map<string, number>();
-  if (!Array.isArray(rawStock)) return map;
-  for (const item of rawStock) {
-    if (!item) continue;
-    const ref = String(item.ref || item.Ref || '').trim();
-    if (!ref) continue;
-    map.set(ref, Number(item.stockInitial) || 0);
-  }
-  return map;
-}
-
-/**
  * @namespace DataGateway
  * @description
  * Canonical Single Source of Truth (SSOT) Write & Lifecycle Gateway for CIOB GMAO Nexus v5.0.2.
@@ -218,683 +191,88 @@ export const DataGateway = {
   },
 
   // ==========================================
-  // 1. MACHINES & TOPOLOGY
+  // 1. MACHINES & TOPOLOGY (delegated to MachineRepo)
   // ==========================================
-  /**
-   * Persists the registered shopfloor machines collection (`STORAGE_KEYS.MACHINES` / Tier 2 Physical Assets).
-   * Normalizes `asset_class` (`'PRODUCTION' | 'SYSTEM_GENERAL'`), enforces acyclic `parent_id` line hierarchy
-   * via `sanitizeMachinesHierarchy`, and optionally filters invalid records via `ValidationService.validateMachine`.
-   *
-   * @param list - Array of machine records (`IMachine[]`).
-   * @param options - Optional `{ validate?: boolean }` flag.
-   * @returns Normalized and persisted array of machines.
-   */
-  saveMachines(list = [], { validate = false } = {}) {
-    let clean = Array.isArray(list)
-      ? sanitizeMachinesHierarchy(
-          list.map((m) => {
-            if (!m || typeof m !== 'object') return m;
-            const assetClass =
-              String(m.asset_class || '').trim().toUpperCase() === 'SYSTEM_GENERAL'
-                ? 'SYSTEM_GENERAL'
-                : 'PRODUCTION';
-            return {
-              ...m,
-              asset_class: assetClass,
-              id_general_system_type:
-                assetClass === 'SYSTEM_GENERAL' ? m.id_general_system_type || null : null,
-            };
-          })
-        )
-      : [];
-    if (validate) {
-      clean = clean.filter((m) => {
-        const res = ValidationService.validateMachine(m) as { isValid?: boolean; valid?: boolean };
-        return res.isValid ?? res.valid ?? true;
-      });
-    }
-    storageService.setItem(STORAGE_KEYS.MACHINES, clean);
-    return clean;
-  },
-
-  saveGeneralSystemTypes(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.GENERAL_SYSTEM_TYPES, clean);
-    return clean;
-  },
-
-  saveFamilies(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.FAMILIES, clean);
-    return clean;
-  },
-
-  saveTemplates(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.TEMPLATES, clean);
-    return clean;
-  },
-
-  /**
-   * Persists Tier 3 virtual cognitive blueprints (`STORAGE_KEYS.BLUEPRINTS`).
-   * Guarantees that `preventivePlanItems` and `commonFailures` are always initialized as arrays.
-   * Note: Blueprints are virtual cognitive twins and never own a physical `Zone` or `Technician`.
-   *
-   * @param list - Array of blueprint records (`IBlueprint[]`).
-   * @returns Normalized blueprint array.
-   */
-  saveBlueprints(
-    list: ReadonlyArray<
-      Omit<IBlueprint, 'pdr_theoriques'> & {
-        pdr_theoriques?: ReadonlyArray<string | IBlueprintTheoreticalPdr>;
-      }
-    > = []
-  ): IBlueprint[] {
-    const clean: IBlueprint[] = Array.isArray(list)
-      ? list.map((b) => ({
-          ...b,
-          pdr_theoriques: Array.isArray(b?.pdr_theoriques)
-            ? b.pdr_theoriques.map((p): IBlueprintTheoreticalPdr =>
-                typeof p === 'string' ? { id_pdr: p, ref: p } : p
-              )
-            : [],
-          preventivePlanItems: Array.isArray(b?.preventivePlanItems) ? b.preventivePlanItems : [],
-          commonFailures: Array.isArray(b?.commonFailures) ? b.commonFailures : [],
-        }))
-      : [];
-    storageService.setItem(STORAGE_KEYS.BLUEPRINTS, clean);
-    return clean;
-  },
-
-  saveZones(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.ZONES, clean);
-    return clean;
-  },
-
-  saveMachineBom(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.MACHINE_BOM, clean);
-    return clean;
-  },
+  saveMachines: MachineRepo.saveMachines.bind(MachineRepo),
+  saveGeneralSystemTypes: MachineRepo.saveGeneralSystemTypes.bind(MachineRepo),
+  saveFamilies: MachineRepo.saveFamilies.bind(MachineRepo),
+  saveTemplates: MachineRepo.saveTemplates.bind(MachineRepo),
+  saveBlueprints: MachineRepo.saveBlueprints.bind(MachineRepo),
+  saveZones: MachineRepo.saveZones.bind(MachineRepo),
+  saveMachineBom: MachineRepo.saveMachineBom.bind(MachineRepo),
 
   // ==========================================
-  // 2. STOCK & MOVEMENTS
+  // 2. STOCK & MOVEMENTS (delegated to StockRepo)
   // ==========================================
-  /**
-   * Persists the canonical spare parts catalog (`STORAGE_KEYS.RAW_STOCK`).
-   *
-   * @param list - Array of stock items (`IStockItem[]`).
-   * @returns Persisted stock array.
-   */
-  saveStock(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.RAW_STOCK, clean);
-    return clean;
-  },
-
-  saveStockTypes(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.STOCK_TYPES, clean);
-    return clean;
-  },
-
-  savePdrGroups(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PDR_GROUPS, clean);
-    return clean;
-  },
-
-  loadPdrGroups() {
-    const data = storageService.getItem(STORAGE_KEYS.PDR_GROUPS);
-    return Array.isArray(data) ? data : [];
-  },
-
-  saveDesignations(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.DESIGNATIONS, clean);
-    return clean;
-  },
-
-  /**
-   * Persists the stock movement ledger (`STORAGE_KEYS.MOUVEMENTS`).
-   * When `strict === true` and `stock` is provided, filters out movements referencing unknown `ref` codes.
-   *
-   * @param list - Array of stock movement records (`IMouvement[]`).
-   * @param options - Optional `{ stock?: IStockItem[] | null, strict?: boolean }` referential filter config.
-   * @returns Persisted movement array.
-   */
-  saveMouvements(list = [], { stock = null, strict = false } = {}) {
-    let clean = Array.isArray(list) ? list : [];
-    if (strict && Array.isArray(stock) && stock.length > 0) {
-      const validRefs = new Set(
-        stock.map((s) => String(s.ref || '').trim().toUpperCase()).filter(Boolean)
-      );
-      clean = clean.filter((m) => {
-        const ref = String(m.ref || '').trim().toUpperCase();
-        return !ref || validRefs.has(ref);
-      });
-    }
-    storageService.setItem(STORAGE_KEYS.MOUVEMENTS, clean);
-    return clean;
-  },
-
-  saveMovements(list = [], options = {}) {
-    return this.saveMouvements(list, options);
-  },
-
-  saveSortieDemands(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.SORTIE_DEMANDS, clean);
-    return clean;
-  },
-
-  saveReplenishmentOrders(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.REPLENISHMENT_ORDERS, clean);
-    return clean;
-  },
+  saveStock: StockRepo.saveStock.bind(StockRepo),
+  saveStockTypes: StockRepo.saveStockTypes.bind(StockRepo),
+  savePdrGroups: StockRepo.savePdrGroups.bind(StockRepo),
+  loadPdrGroups: StockRepo.loadPdrGroups.bind(StockRepo),
+  saveDesignations: StockRepo.saveDesignations.bind(StockRepo),
+  saveMouvements: StockRepo.saveMouvements.bind(StockRepo),
+  saveMovements: StockRepo.saveMovements.bind(StockRepo),
+  saveSortieDemands: StockRepo.saveSortieDemands.bind(StockRepo),
+  saveReplenishmentOrders: StockRepo.saveReplenishmentOrders.bind(StockRepo),
 
   // ==========================================
-  // 3. PREVENTIVE MAINTENANCE
+  // 3. PREVENTIVE MAINTENANCE (delegated to PreventiveRepo)
   // ==========================================
-  /**
-   * Persists preventive maintenance tasks (`STORAGE_KEYS.PREVENTIVE_TASKS`) with optional
-   * referential integrity checking against registered `machines`.
-   * - In non-strict mode (`strict: false`), tasks referencing unknown/archived machines are tagged with `_isOrphan: true`.
-   * - In strict mode (`strict: true`), orphan tasks are excluded from persistence.
-   *
-   * @param list - Array of preventive task records (`IPreventiveTask[]`).
-   * @param options - Optional `{ machines?: IMachine[] | null, strict?: boolean }`.
-   * @returns `{ saved: IPreventiveTask[], orphanCount: number }`.
-   */
-  savePreventiveTasks(list = [], { machines = null, strict = false } = {}) {
-    let clean = Array.isArray(list) ? list : [];
-    let orphanCount = 0;
-
-    if (Array.isArray(machines) && (machines.length > 0 || strict)) {
-      const activeIds = dataIntegrityService.buildActiveMachineIdSet(machines);
-      if (strict) {
-        const kept = [];
-        clean.forEach((t) => {
-          const ref = t.id_machine || t.machine_id || t.code_machine;
-          if (dataIntegrityService.isOrphanMachineRef(ref, activeIds)) {
-            orphanCount++;
-          } else {
-            kept.push({ ...t, _isOrphan: false });
-          }
-        });
-        clean = kept;
-      } else {
-        clean = clean.map((t) => {
-          const ref = t.id_machine || t.machine_id || t.code_machine;
-          const isOrphan = dataIntegrityService.isOrphanMachineRef(ref, activeIds);
-          if (isOrphan) orphanCount++;
-          return { ...t, _isOrphan: isOrphan };
-        });
-      }
-    }
-
-    storageService.setItem(STORAGE_KEYS.PREVENTIVE_TASKS, clean);
-    return { saved: clean, orphanCount };
-  },
-
-  savePreventiveActions(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PREVENTIVE_ACTIONS, clean);
-    return clean;
-  },
-
-  savePreventiveGuides(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PREVENTIVE_GUIDES, clean);
-    return clean;
-  },
-
-  savePreventivePlans(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PREVENTIVE_PLANS, clean);
-    return clean;
-  },
-
-  savePreventiveExecutions(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PREVENTIVE_EXECUTIONS, clean);
-    return clean;
-  },
-
-  saveMeterReadings(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.METER_READINGS, clean);
-    return clean;
-  },
+  savePreventiveTasks: PreventiveRepo.savePreventiveTasks.bind(PreventiveRepo),
+  savePreventiveActions: PreventiveRepo.savePreventiveActions.bind(PreventiveRepo),
+  savePreventiveGuides: PreventiveRepo.savePreventiveGuides.bind(PreventiveRepo),
+  savePreventivePlans: PreventiveRepo.savePreventivePlans.bind(PreventiveRepo),
+  savePreventiveExecutions: PreventiveRepo.savePreventiveExecutions.bind(PreventiveRepo),
+  saveMeterReadings: PreventiveRepo.saveMeterReadings.bind(PreventiveRepo),
 
   // ==========================================
-  // 4. CORRECTIVE MAINTENANCE
+  // 4. CORRECTIVE MAINTENANCE (delegated to CorrectiveRepo)
   // ==========================================
-  /**
-   * Persists corrective maintenance interventions (`DI` / `BT` in `STORAGE_KEYS.CORRECTIVE_INTERVENTIONS`)
-   * with optional referential integrity checking against registered `machines`.
-   *
-   * @param list - Array of corrective intervention records (`ICorrectiveIntervention[]`).
-   * @param options - Optional `{ machines?: IMachine[] | null, strict?: boolean }`.
-   * @returns `{ saved: ICorrectiveIntervention[], orphanCount: number }`.
-   */
-  saveCorrectiveInterventions(list = [], { machines = null, strict = false } = {}) {
-    let clean = Array.isArray(list) ? list : [];
-    let orphanCount = 0;
-
-    if (Array.isArray(machines) && (machines.length > 0 || strict)) {
-      const activeIds = dataIntegrityService.buildActiveMachineIdSet(machines);
-      if (strict) {
-        const kept = [];
-        clean.forEach((i) => {
-          const ref = i.code_machine || i.id_machine || i.machine_id || i.id_machine_registered;
-          if (dataIntegrityService.isOrphanMachineRef(ref, activeIds)) {
-            orphanCount++;
-          } else {
-            kept.push({ ...i, _isOrphan: false });
-          }
-        });
-        clean = kept;
-      } else {
-        clean = clean.map((i) => {
-          const ref = i.code_machine || i.id_machine || i.machine_id || i.id_machine_registered;
-          const isOrphan = dataIntegrityService.isOrphanMachineRef(ref, activeIds);
-          if (isOrphan) orphanCount++;
-          return { ...i, _isOrphan: isOrphan };
-        });
-      }
-    }
-
-    storageService.setItem(STORAGE_KEYS.CORRECTIVE_INTERVENTIONS, clean);
-    return { saved: clean, orphanCount };
-  },
-
-  saveCorrectiveActionsByPanne(dict = {}) {
-    const clean = dict && typeof dict === 'object' ? dict : {};
-    storageService.setItem(STORAGE_KEYS.CORRECTIVE_ACTIONS_BY_PANNE, clean);
-    return clean;
-  },
-
-  saveCorrectivePanneCategories(dict = {}) {
-    const clean = dict && typeof dict === 'object' ? dict : {};
-    storageService.setItem(STORAGE_KEYS.CORRECTIVE_PANNE_CATEGORIES, clean);
-    return clean;
-  },
-
-  saveCorrectiveTravaux(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.CORRECTIVE_TRAVAUX, clean);
-    return clean;
-  },
-
-  saveCorrectiveIntervenants(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.CORRECTIVE_INTERVENANTS, clean);
-    return clean;
-  },
-
-  /**
-   * Persists Internal Mechanical Workshop Orders (`Bon de Réalisation / Rectification` — `COR-ATELIER-P0`)
-   * to `STORAGE_KEYS.WORKSHOP_ORDERS` (`gmao_workshop_orders_v1`).
-   *
-   * @param list - Array of workshop order records (`IWorkshopOrder[]`).
-   * @returns Persisted workshop orders array.
-   */
-  saveWorkshopOrders<T = IWorkshopOrder>(list: T[] = []): T[] {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.WORKSHOP_ORDERS, clean);
-    return clean;
-  },
-
-  /**
-   * Persists Need Requests & Handoff records (`COR-HANDOFF-P0`)
-   * to `STORAGE_KEYS.NEED_REQUESTS` (`gmao_need_requests_v1`).
-   *
-   * @param list - Array of need request records (`INeedRequest[]`).
-   * @returns Persisted need requests array.
-   */
-  saveNeedRequests<T = INeedRequest>(list: T[] = []): T[] {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.NEED_REQUESTS, clean);
-    return clean;
-  },
+  saveCorrectiveInterventions: CorrectiveRepo.saveCorrectiveInterventions.bind(CorrectiveRepo),
+  saveCorrectiveActionsByPanne: CorrectiveRepo.saveCorrectiveActionsByPanne.bind(CorrectiveRepo),
+  saveCorrectivePanneCategories: CorrectiveRepo.saveCorrectivePanneCategories.bind(CorrectiveRepo),
+  saveCorrectiveTravaux: CorrectiveRepo.saveCorrectiveTravaux.bind(CorrectiveRepo),
+  saveCorrectiveIntervenants: CorrectiveRepo.saveCorrectiveIntervenants.bind(CorrectiveRepo),
+  saveWorkshopOrders: CorrectiveRepo.saveWorkshopOrders.bind(CorrectiveRepo),
+  saveNeedRequests: CorrectiveRepo.saveNeedRequests.bind(CorrectiveRepo),
 
   // ==========================================
-  // 5. PERSONNEL & USERS
+  // 5. PERSONNEL & USERS (delegated to PersonnelRepo)
   // ==========================================
-  savePersonnel(users = [], technicians = null, operations = null) {
-    const cleanUsers = Array.isArray(users) ? users : [];
-    storageService.setItem(STORAGE_KEYS.PERSONNEL, cleanUsers);
-    if (Array.isArray(technicians)) {
-      storageService.setItem(STORAGE_KEYS.TECHNICIANS, technicians);
-    }
-    if (Array.isArray(operations)) {
-      storageService.setItem(STORAGE_KEYS.OPERATIONS, operations);
-    }
-    return cleanUsers;
-  },
-
-  saveUsers(users = []) {
-    return this.savePersonnel(users);
-  },
-
-  saveTechnicians(technicians = []) {
-    const clean = Array.isArray(technicians) ? technicians : [];
-    storageService.setItem(STORAGE_KEYS.TECHNICIANS, clean);
-    return clean;
-  },
-
-  saveOperations(operations = []) {
-    const clean = Array.isArray(operations) ? operations : [];
-    storageService.setItem(STORAGE_KEYS.OPERATIONS, clean);
-    return clean;
-  },
+  savePersonnel: PersonnelRepo.savePersonnel.bind(PersonnelRepo),
+  saveUsers: PersonnelRepo.saveUsers.bind(PersonnelRepo),
+  saveTechnicians: PersonnelRepo.saveTechnicians.bind(PersonnelRepo),
+  saveOperations: PersonnelRepo.saveOperations.bind(PersonnelRepo),
 
   // ==========================================
-  // 6. WAREHOUSE / ENTREPÔT
+  // 6. WAREHOUSE / ENTREPÔT (delegated to WarehouseRepo)
   // ==========================================
-  saveWarehouseItems(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.WAREHOUSE_ITEMS, clean);
-    return clean;
-  },
-
-  saveEntrepotComponents(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.ENTREPOT_COMPONENTS, clean);
-    return clean;
-  },
-
-  saveCompGroups(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.COMP_GROUPS, clean);
-    return clean;
-  },
-
-  saveCompFamilies(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.COMP_FAMILIES, clean);
-    return clean;
-  },
-
-  saveCompTemplates(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.COMP_TEMPLATES, clean);
-    return clean;
-  },
-
-  savePartGroups(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PART_GROUPS, clean);
-    return clean;
-  },
-
-  loadPartGroups() {
-    const data = storageService.getItem(STORAGE_KEYS.PART_GROUPS);
-    return Array.isArray(data) ? data : [];
-  },
-
-  savePartTypes(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PART_TYPES, clean);
-    return clean;
-  },
-
-  savePartDesignations(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.PART_DESIGNATIONS, clean);
-    return clean;
-  },
+  saveWarehouseItems: WarehouseRepo.saveWarehouseItems.bind(WarehouseRepo),
+  saveEntrepotComponents: WarehouseRepo.saveEntrepotComponents.bind(WarehouseRepo),
+  saveCompGroups: WarehouseRepo.saveCompGroups.bind(WarehouseRepo),
+  saveCompFamilies: WarehouseRepo.saveCompFamilies.bind(WarehouseRepo),
+  saveCompTemplates: WarehouseRepo.saveCompTemplates.bind(WarehouseRepo),
+  savePartGroups: WarehouseRepo.savePartGroups.bind(WarehouseRepo),
+  loadPartGroups: WarehouseRepo.loadPartGroups.bind(WarehouseRepo),
+  savePartTypes: WarehouseRepo.savePartTypes.bind(WarehouseRepo),
+  savePartDesignations: WarehouseRepo.savePartDesignations.bind(WarehouseRepo),
 
   // ==========================================
-  // 7. SORTIE EXTERNE & BOBINAGE
+  // 7. SORTIE EXTERNE & BOBINAGE (delegated to StockRepo)
   // ==========================================
-  saveSortiesExterne(list = []) {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.SORTIE_EXTERNE, clean);
-    return clean;
-  },
+  saveSortiesExterne: StockRepo.saveSortiesExterne.bind(StockRepo),
 
   // ==========================================
-  // 7b. FINANCIAL BUDGETS & COSTING CONFIG
+  // 7b. FINANCIAL BUDGETS & COSTING CONFIG (delegated to FinanceRepo)
   // ==========================================
-  /**
-   * Retrieves the active fiscal budget configuration (`STORAGE_KEYS.FINANCIAL_BUDGETS`).
-   * Enforces the `FIN-P0` zero-seed invariant: when `START_MODE === 'empty'` and the stored
-   * budget originated from `'DEMO_SEED'`, returns a clean `EMPTY_FISCAL_BUDGET`.
-   *
-   * @returns Normalized {@link FiscalBudgetConfig}.
-   */
-  getFinancialBudget(): FiscalBudgetConfig {
-    const startMode = storageService.getItem(STORAGE_KEYS.START_MODE);
-    const saved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS);
-    if (saved && typeof saved === 'object' && typeof saved.fiscalYear === 'number') {
-      // FIN-P0: If factory is in empty mode and budget came from a stale demo seed, return zeroed budget
-      if (startMode === 'empty' && saved.updatedBy === 'DEMO_SEED') {
-        return { ...EMPTY_FISCAL_BUDGET };
-      }
-      return {
-        ...EMPTY_FISCAL_BUDGET,
-        ...saved,
-        periodMode:
-          saved.periodMode === 'MONTHLY' || saved.periodMode === 'QUARTERLY' ? saved.periodMode : 'ANNUAL',
-        burnWarningPercent: Math.max(50, Math.min(100, Number(saved.burnWarningPercent ?? 90))),
-        budgetChangeLog: Array.isArray(saved.budgetChangeLog) ? saved.budgetChangeLog.slice(0, 5) : [],
-      } as FiscalBudgetConfig;
-    }
-    const isDemo = storageService.getItem(STORAGE_KEYS.DEMO_MODE) === true;
-    return isDemo && startMode !== 'empty' ? { ...DEMO_FISCAL_BUDGET } : { ...EMPTY_FISCAL_BUDGET };
-  },
-
-  /**
-   * Sanitizes, validates, and persists the fiscal budget configuration (`STORAGE_KEYS.FINANCIAL_BUDGETS`).
-   * Automatically records a `BudgetAuditEntry` in `budgetChangeLog` (retaining the latest 5 revisions),
-   * appends an immutable `BUDGET_UPDATED` event to `STORAGE_KEYS.AUDIT_EVENTS` (unless triggered by
-   * `FACTORY_RESET` or `DEMO_SEED`), and dispatches the `'gmao_financial_budget_updated'` DOM event.
-   *
-   * @param budget - Partial or complete {@link FiscalBudgetConfig} update payload.
-   * @param actorName - Identifier of the administrator or system actor performing the update.
-   * @returns Normalized and persisted {@link FiscalBudgetConfig}.
-   */
-  saveFinancialBudget(budget: Partial<FiscalBudgetConfig>, actorName?: string): FiscalBudgetConfig {
-    const clean = this.sanitizePayload(budget || {}) as Partial<FiscalBudgetConfig>;
-    const prevSaved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS) as Partial<FiscalBudgetConfig> | null;
-
-    const fiscalYear = Number(clean.fiscalYear) || new Date().getFullYear();
-    const allocatedPreventive = Math.max(0, Number(clean.allocatedPreventive) || 0);
-    const allocatedCorrective = Math.max(0, Number(clean.allocatedCorrective) || 0);
-    const allocatedExternal = Math.max(0, Number(clean.allocatedExternal) || 0);
-    const allocatedSparesStock = Math.max(0, Number(clean.allocatedSparesStock) || 0);
-    const periodMode: BudgetPeriodMode =
-      clean.periodMode === 'MONTHLY' || clean.periodMode === 'QUARTERLY' ? clean.periodMode : 'ANNUAL';
-    const burnWarningPercent = Math.max(50, Math.min(100, Number(clean.burnWarningPercent ?? 90)));
-    const updatedAt = clean.updatedAt || new Date().toISOString();
-    const updatedBy = actorName || clean.updatedBy || 'ADMIN';
-
-    const sanitizeSeries = (arr: unknown, len: number): number[] => {
-      if (!Array.isArray(arr)) return Array(len).fill(0);
-      return Array.from({ length: len }, (_, i) => Math.max(0, Math.round((Number(arr[i]) || 0) * 100) / 100));
-    };
-
-    const monthlyAllocations = clean.monthlyAllocations
-      ? {
-          preventive: sanitizeSeries(clean.monthlyAllocations.preventive, 12),
-          corrective: sanitizeSeries(clean.monthlyAllocations.corrective, 12),
-          external: sanitizeSeries(clean.monthlyAllocations.external, 12),
-          spares: sanitizeSeries(clean.monthlyAllocations.spares, 12),
-        }
-      : undefined;
-
-    const quarterlyAllocations = clean.quarterlyAllocations
-      ? {
-          preventive: sanitizeSeries(clean.quarterlyAllocations.preventive, 4),
-          corrective: sanitizeSeries(clean.quarterlyAllocations.corrective, 4),
-          external: sanitizeSeries(clean.quarterlyAllocations.external, 4),
-          spares: sanitizeSeries(clean.quarterlyAllocations.spares, 4),
-        }
-      : undefined;
-
-    const totalAllocated =
-      allocatedPreventive + allocatedCorrective + allocatedExternal + allocatedSparesStock;
-
-    let budgetChangeLog: BudgetAuditEntry[] = Array.isArray(clean.budgetChangeLog)
-      ? clean.budgetChangeLog
-      : Array.isArray(prevSaved?.budgetChangeLog)
-      ? prevSaved.budgetChangeLog
-      : [];
-
-    if (updatedBy === 'FACTORY_RESET') {
-      budgetChangeLog = [];
-    } else if (updatedBy !== 'DEMO_SEED') {
-      const auditEntry: BudgetAuditEntry = {
-        id: `bgt-log-${Date.now()}`,
-        timestamp: updatedAt,
-        updatedBy,
-        fiscalYear,
-        periodMode,
-        totalAllocated,
-        summary: `Ex. ${fiscalYear} (${periodMode}) — Plafond: ${totalAllocated.toLocaleString('fr-FR')} MAD (Seuil alerte: ${burnWarningPercent}%)`,
-      };
-      budgetChangeLog = [auditEntry, ...budgetChangeLog].slice(0, 5);
-    }
-
-    const next: FiscalBudgetConfig = {
-      fiscalYear,
-      allocatedPreventive,
-      allocatedCorrective,
-      allocatedExternal,
-      allocatedSparesStock,
-      technicianHourlyRate: Math.max(0, Number(clean.technicianHourlyRate ?? EMPTY_FISCAL_BUDGET.technicianHourlyRate)),
-      productionDowntimeCostPerHour: Math.max(
-        0,
-        Number(clean.productionDowntimeCostPerHour ?? EMPTY_FISCAL_BUDGET.productionDowntimeCostPerHour)
-      ),
-      berThresholdPercent: Math.max(10, Math.min(200, Number(clean.berThresholdPercent) || 70)),
-      defaultVatRate: Math.max(0, Math.min(100, Number(clean.defaultVatRate ?? 20))),
-      periodMode,
-      burnWarningPercent,
-      ...(monthlyAllocations ? { monthlyAllocations } : {}),
-      ...(quarterlyAllocations ? { quarterlyAllocations } : {}),
-      budgetChangeLog,
-      updatedAt,
-      updatedBy,
-    };
-    storageService.setItem(STORAGE_KEYS.FINANCIAL_BUDGETS, next);
-    if (updatedBy !== 'FACTORY_RESET' && updatedBy !== 'DEMO_SEED') {
-      this.appendAuditEvent({
-        actorId: updatedBy,
-        actorName: updatedBy,
-        actorRole: 'ADMIN',
-        actionType: 'BUDGET_UPDATED',
-        entityType: 'FINANCIAL_BUDGET',
-        entityId: String(fiscalYear),
-        before: prevSaved
-          ? {
-              fiscalYear: prevSaved.fiscalYear,
-              periodMode: prevSaved.periodMode,
-              allocatedPreventive: prevSaved.allocatedPreventive,
-              allocatedCorrective: prevSaved.allocatedCorrective,
-              allocatedExternal: prevSaved.allocatedExternal,
-              allocatedSparesStock: prevSaved.allocatedSparesStock,
-            }
-          : null,
-        after: {
-          fiscalYear,
-          periodMode,
-          totalAllocated,
-          allocatedPreventive,
-          allocatedCorrective,
-          allocatedExternal,
-          allocatedSparesStock,
-        },
-        meta: {
-          summary: `Budget Ex. ${fiscalYear} (${periodMode}) mis à jour: ${totalAllocated} MAD`,
-        },
-      });
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gmao_financial_budget_updated', { detail: next }));
-    }
-    return next;
-  },
+  getFinancialBudget: FinanceRepo.getFinancialBudget.bind(FinanceRepo),
+  saveFinancialBudget: FinanceRepo.saveFinancialBudget.bind(FinanceRepo),
 
   // ==========================================
-  // 7c. APPEND-ONLY ENTERPRISE AUDIT LEDGER (AUDIT-LEDGER-P0)
+  // 7c. APPEND-ONLY ENTERPRISE AUDIT LEDGER (delegated to AuditRepo)
   // ==========================================
-  /**
-   * Reads the institutional append-only audit ledger (`STORAGE_KEYS.AUDIT_EVENTS`).
-   *
-   * @returns Array of immutable audit event records (`IAuditEvent[]`).
-   */
-  getAuditEvents(): IAuditEvent[] {
-    const raw = storageService.getItem(STORAGE_KEYS.AUDIT_EVENTS);
-    return Array.isArray(raw) ? (raw as IAuditEvent[]) : [];
-  },
-
-  /**
-   * Persists the audit events collection to `STORAGE_KEYS.AUDIT_EVENTS` and dispatches
-   * `'gmao_audit_events_synced'`.
-   *
-   * @param list - Array of audit events.
-   * @returns Persisted audit events array.
-   */
-  saveAuditEvents(list: IAuditEvent[] = []): IAuditEvent[] {
-    const clean = Array.isArray(list) ? list : [];
-    storageService.setItem(STORAGE_KEYS.AUDIT_EVENTS, clean);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gmao_audit_events_synced', { detail: { list: clean } }));
-    }
-    return clean;
-  },
-
-  /**
-   * Constructs an immutable (`Object.freeze`) audit event with frozen `before`, `after`, and `meta`
-   * snapshots, prepends it to `STORAGE_KEYS.AUDIT_EVENTS`, and dispatches `'gmao_audit_event_appended'`.
-   *
-   * @param payload - Audit event descriptor (`actionType`, `entityType`, `entityId`, `before`, `after`, actor details).
-   * @returns `{ event, list }` containing the newly frozen event and updated ledger.
-   */
-  appendAuditEvent(payload: {
-    id?: string;
-    ts?: string;
-    actorId?: string;
-    actorName?: string;
-    actorRole?: string;
-    actionType: string;
-    entityType: string;
-    entityId: string;
-    before: unknown;
-    after: unknown;
-    meta?: Record<string, unknown>;
-  }): { event: IAuditEvent; list: IAuditEvent[] } {
-    const current = this.getAuditEvents();
-    const safeBefore = freezeAuditSnapshot(payload.before);
-    const safeAfter = freezeAuditSnapshot(payload.after);
-    const event: IAuditEvent = Object.freeze({
-      id: payload.id || safeId('AUD'),
-      ts: payload.ts || new Date().toISOString(),
-      actorId: String(payload.actorId || payload.actorName || 'SYSTEM').trim(),
-      actorName: String(payload.actorName || payload.actorId || 'Système GMAO').trim(),
-      actorRole: String(payload.actorRole || 'ADMIN').trim().toUpperCase(),
-      actionType: String(payload.actionType || 'MUTATION').trim(),
-      entityType: String(payload.entityType || 'ENTITY').trim(),
-      entityId: String(payload.entityId || 'UNKNOWN').trim(),
-      before: safeBefore,
-      after: safeAfter,
-      meta: Object.freeze({
-        ...(typeof navigator !== 'undefined' && navigator.userAgent ? { userAgent: navigator.userAgent } : {}),
-        ...(payload.meta || {}),
-      }),
-    });
-    const next = [event, ...current];
-    this.saveAuditEvents(next);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('gmao_audit_event_appended', { detail: { event, list: next } }));
-    }
-    return { event, list: next };
-  },
+  getAuditEvents: AuditRepo.getAuditEvents.bind(AuditRepo),
+  saveAuditEvents: AuditRepo.saveAuditEvents.bind(AuditRepo),
+  appendAuditEvent: AuditRepo.appendAuditEvent.bind(AuditRepo),
 
   // ==========================================
   // 8. EXPLICIT DEMO DATA LOADER & FACTORY CLEAR

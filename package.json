@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "typecheck:server": "tsc --noEmit -p tsconfig.server.json",
+    "typecheck:strict": "tsc --noEmit -p tsconfig.strict.json",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,css}\""
   },

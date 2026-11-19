@@ -13,8 +13,9 @@ export class Logger {
 
   static currentLevel = this.LOG_LEVELS.INFO;
 
-  static setLevel(level) {
-    this.currentLevel = this.LOG_LEVELS[level] || this.LOG_LEVELS.INFO;
+  static setLevel(level: keyof typeof Logger.LOG_LEVELS | string) {
+    const key = String(level || '').toUpperCase() as keyof typeof Logger.LOG_LEVELS;
+    this.currentLevel = this.LOG_LEVELS[key] ?? this.LOG_LEVELS.INFO;
   }
 
   private static resolveArgs(data: unknown = {}, context: unknown = ''): { resolvedData: unknown; resolvedContext: string } {
