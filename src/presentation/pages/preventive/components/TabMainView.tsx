@@ -41,6 +41,7 @@ import PreventiveAnalyticsView from './PreventiveAnalyticsView';
 import MonthlyDayMatrixView from './MonthlyDayMatrixView';
 import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveMetersView from './PreventiveMetersView';
+import PreventiveWeeklyCockpit from './PreventiveWeeklyCockpit';
 import TabMainModals from './TabMainModals';
 import PreventiveService from '../../../../application/services/PreventiveService';
 import {
@@ -829,6 +830,62 @@ export default function TabMainView({
     setSelectedTaskForValidation(null);
   };
 
+  // Phase C: 1-Click Fast Execution from Today & This Week Cockpit
+  const handleQuickValidateTask = useCallback(
+    (task, overrideTechName?: string) => {
+      if (!canExecutePreventive || !task) return;
+      const executorName =
+        overrideTechName ||
+        (isTechUser ? techDisplayName || task.responsable || '' : task.responsable || 'Technicien');
+      const resolvedRate = resolvePreventiveLaborRate(technicians, executorName);
+      const taskMach =
+        machineMap.get(task.id_machine) ||
+        machineMap.get(String(task.id_machine || '').trim().toUpperCase());
+      const liveMachineMeter =
+        taskMach?.compteur_heures ??
+        task.pending_compteur_releve ??
+        task.compteur_actuel ??
+        task.dernier_releve ??
+        '';
+
+      onMarkTaskDone(task.id, {
+        date_realisation: new Date().toISOString().split('T')[0],
+        technicien: executorName,
+        duree_reelle: task.duree_estimee || '15 min',
+        taux_horaire: resolvedRate,
+        observations: `[VALIDATION RAPIDE S${currentWeekNumber}] Intervention préventive ${task.action_code || 'C'} sur ${task.composant || task.id_machine} réalisée conformément.`,
+        usedPDR: [],
+        num_bon_saisi_par_tech: '',
+        skipStockDeduction: false,
+        createFollowUpDi: false,
+        mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
+        compteur_releve: liveMachineMeter,
+        id_composant: task.id_composant || '',
+        nom_composant: task.nom_composant || '',
+        id_part: task.id_part || '',
+        nom_part: task.nom_part || '',
+      });
+    },
+    [
+      canExecutePreventive,
+      isTechUser,
+      techDisplayName,
+      technicians,
+      machineMap,
+      onMarkTaskDone,
+      currentWeekNumber,
+    ]
+  );
+
+  const isPlanningWorkspace =
+    viewMode === 'matrix' ||
+    viewMode === 'list' ||
+    viewMode === 'monthly_grid' ||
+    viewMode === 'grouped' ||
+    viewMode === 'calendar';
+  const isHistoryOrAnalyticsWorkspace =
+    viewMode === 'executions' || viewMode === 'analytics';
+
   // Open Corrective Trigger Modal
   const handleOpenCorrective = (task) => {
     if (!canTriggerCorrective) return;
@@ -1039,9 +1096,32 @@ export default function TabMainView({
         />
       </GmaoKpiGrid>
 
+      {/* PHASE C: TODAY & THIS WEEK COCKPIT (لوحة اليوم والأسبوع) */}
+      <PreventiveWeeklyCockpit
+        tasks={tasksWithOrphanFlag}
+        machines={machines}
+        technicians={technicians}
+        currentWeekNumber={currentWeekNumber}
+        isTechUser={isTechUser}
+        techDisplayName={techDisplayName}
+        canExecutePreventive={canExecutePreventive}
+        onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
+        onQuickValidateTask={canExecutePreventive ? handleQuickValidateTask : null}
+        onOpenRoundModal={canExecutePreventive ? () => setShowSystemGeneralRoundModal(true) : null}
+        onFilterOverdue={() => {
+          setSelectedStatus(selectedStatus === 'En retard' ? 'ALL' : 'En retard');
+          if (!isPlanningWorkspace) setViewMode('list');
+        }}
+        onFilterThisWeek={() => {
+          const currentW = `S${currentWeekNumber}`;
+          setSelectedWeek(selectedWeek === currentW ? 'ALL' : currentW);
+          if (!isPlanningWorkspace) setViewMode('list');
+        }}
+      />
+
       {/* FILTER TOOLBAR CARD (Tactile Elevation & CustomSelect Dropdowns) */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        {/* Top Header Row inside Filter Card */}
+        {/* Top Header Row inside Filter Card: 4 Clear Primary Workspaces */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs">
@@ -1062,114 +1142,54 @@ export default function TabMainView({
                 )}
               </div>
               <p className="text-[10.5px] text-slate-400 font-medium">
-                {t('preventive.filters.subtitle', 'Matrice 52 Semaines · Planning Dynamique & Fiches Métier')}
+                {t('preventive.filters.subtitle', '4 Espaces Opérationnels : Planning · Compteurs · Historique & Coûts · Plans')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap self-end sm:self-auto">
-            {/* Single Unified View Mode Segmented Control */}
-            <div className="flex items-center flex-wrap bg-slate-100/90 rounded-xl p-1 border border-slate-200/80 shadow-2xs">
+            {/* 4 Consolidated Primary Workspaces (Phase C Small-Factory Simplification) */}
+            <div
+              data-testid="preventive-4-workspaces-bar"
+              className="flex items-center flex-wrap bg-slate-100/90 rounded-xl p-1 border border-slate-200/80 shadow-2xs gap-0.5"
+            >
+              {/* Workspace 1: Planning & Exécution (العمل الأسبوعي والجدول) */}
               <button
                 type="button"
-                onClick={() => setViewMode('monthly_grid')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'monthly_grid'
-                    ? 'bg-white text-cyan-900 shadow-xs'
+                onClick={() => {
+                  if (!isPlanningWorkspace) setViewMode('matrix');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isPlanningWorkspace
+                    ? 'bg-white text-indigo-950 shadow-xs border border-indigo-200/70'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="Grille Planning Mensuel Excel par Jours (J1→J31)"
+                title="Espace 1 : Planning & Exécution Hebdomadaire (Liste, Matrice S1-S52, Grille J1-J31, Par Machine, Calendrier)"
               >
-                <CalendarRange className="w-3.5 h-3.5 text-cyan-600" />
-                <span className="hidden sm:inline">{t('preventive.view_modes.days_grid', 'Grille Jours J1-J31')}</span>
+                <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Planning &amp; Exécution</span>
+                <span className="px-1.5 py-0.2 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 text-[9.5px] font-mono font-bold">
+                  {filteredTasks.length}
+                </span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setViewMode('matrix')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'matrix'
-                    ? 'bg-white text-indigo-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Matrice Annuelle 52 Semaines"
-              >
-                <Grid className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">{t('preventive.view_modes.weeks_matrix', 'Matrice S1-S52')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('grouped')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'grouped'
-                    ? 'bg-white text-indigo-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Vue Machines & Tâches Groupées (Accordéon)"
-              >
-                <Factory className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden sm:inline">{t('preventive.view_modes.by_machine', 'Par Machine')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('calendar')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'calendar'
-                    ? 'bg-white text-teal-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Vue Calendrier Mensuel avec Badges Machines"
-              >
-                <CalendarDays className="w-3.5 h-3.5 text-teal-600" />
-                <span className="hidden sm:inline">{t('preventive.view_modes.monthly_calendar', 'Calendrier Mensuel')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'list'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Tableau Détaillé Liste"
-              >
-                <List className="w-3.5 h-3.5 text-slate-600" />
-                <span className="hidden sm:inline">{t('preventive.view_modes.tasks_list', 'Liste Tâches')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('executions')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  viewMode === 'executions'
-                    ? 'bg-white text-emerald-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-                title="Historique des Exécutions Préventives"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="hidden sm:inline">Historique ({scopedExecutions?.length || 0})</span>
-              </button>
-
+              {/* Workspace 2: Compteurs & Horomètres (العدادات والساعات) */}
               <button
                 type="button"
                 onClick={() => setViewMode('meters')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'meters'
-                    ? 'bg-white text-indigo-900 shadow-xs'
+                    ? 'bg-white text-cyan-950 shadow-xs border border-cyan-200/70'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
-                title="Gestion des Horomètres & Compteurs"
+                title="Espace 2 : Tournée de Relevé Rapide des Horomètres & Alertes Compteurs"
               >
                 <Gauge
                   className={`w-3.5 h-3.5 ${
-                    overdueCounterTasksCount > 0 ? 'text-rose-600' : 'text-indigo-600'
+                    overdueCounterTasksCount > 0 ? 'text-rose-600' : 'text-cyan-600'
                   }`}
                 />
-                <span className="hidden sm:inline">Compteurs</span>
+                <span>Compteurs &amp; Heures</span>
                 {overdueCounterTasksCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-800 border border-rose-300 text-[9.5px] font-mono font-black">
                     {overdueCounterTasksCount}
@@ -1177,19 +1197,44 @@ export default function TabMainView({
                 )}
               </button>
 
-              {!isTechUser && (
+              {/* Workspace 3: Historique & Analytics (السجل والتحليلات) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isHistoryOrAnalyticsWorkspace) setViewMode('executions');
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  isHistoryOrAnalyticsWorkspace
+                    ? 'bg-white text-emerald-950 shadow-xs border border-emerald-200/70'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+                title="Espace 3 : Journal des Exécutions (Maker-Checker) & Tableaux de Bord / Coûts"
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Historique &amp; Analytics</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[9.5px] font-mono font-bold ${
+                    pendingValidationExecutions.length > 0
+                      ? 'bg-purple-600 text-white font-black'
+                      : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  }`}
+                >
+                  {pendingValidationExecutions.length > 0
+                    ? `${pendingValidationExecutions.length} À valider`
+                    : scopedExecutions?.length || 0}
+                </span>
+              </button>
+
+              {/* Workspace 4: Plans & Guides (الخطط والأدلة) */}
+              {canManagePreventive && Boolean(_onNavigateToPlanBuilder) && (
                 <button
                   type="button"
-                  onClick={() => setViewMode('analytics')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                    viewMode === 'analytics'
-                      ? 'bg-white text-purple-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                  title="Tableau de Bord & Statistiques (Santé & Coûts)"
+                  onClick={() => _onNavigateToPlanBuilder()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer text-slate-600 hover:text-indigo-900 hover:bg-white/70"
+                  title="Espace 4 : Concepteur de Plans, Fiches Guides & Catalogue Actions"
                 >
-                  <BarChart3 className="w-3.5 h-3.5 text-purple-600" />
-                  <span className="hidden sm:inline">Analytics</span>
+                  <Wrench className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Plans &amp; Guides</span>
                 </button>
               )}
             </div>
@@ -1216,6 +1261,118 @@ export default function TabMainView({
             </button>
           </div>
         </div>
+
+        {/* Sub-Switcher for Workspace 1 (Planning Views) or Workspace 3 (Historique vs Analytics) */}
+        {isPlanningWorkspace && (
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100 text-xs">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+              Affichage du Planning :
+            </span>
+            <div className="flex items-center flex-wrap gap-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>{t('preventive.view_modes.tasks_list', 'Liste Tâches')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('matrix')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'matrix'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Grid className="w-3.5 h-3.5" />
+                <span>{t('preventive.view_modes.weeks_matrix', 'Matrice S1-S52')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('monthly_grid')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'monthly_grid'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <CalendarRange className="w-3.5 h-3.5" />
+                <span>{t('preventive.view_modes.days_grid', 'Grille Jours J1-J31')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('grouped')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'grouped'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Factory className="w-3.5 h-3.5" />
+                <span>{t('preventive.view_modes.by_machine', 'Par Machine')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('calendar')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'calendar'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>{t('preventive.view_modes.monthly_calendar', 'Calendrier Mensuel')}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isHistoryOrAnalyticsWorkspace && (
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-100 text-xs">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">
+              Sous-espace Historique &amp; Rapports :
+            </span>
+            <div className="flex items-center flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('executions')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'executions'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Journal des Exécutions &amp; Validation ({scopedExecutions?.length || 0})</span>
+              </button>
+
+              {!isTechUser && (
+                <button
+                  type="button"
+                  onClick={() => setViewMode('analytics')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    viewMode === 'analytics'
+                      ? 'bg-purple-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Analytics, Ponctualité &amp; Coûts (MO + PDR)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* QUICK CLASSE D'ÉQUIPEMENT FILTER BAR (Production vs Système Général) */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs no-scrollbar">

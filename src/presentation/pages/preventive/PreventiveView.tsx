@@ -360,93 +360,139 @@ export default function PreventiveView({
         </div>
 
         {/* Anti-Recurrence Predictive Suggestions from Corrective Nexus */}
-        {canManagePreventive && preventiveRecommendations && preventiveRecommendations.length > 0 && (
-          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <span>Pont Prédictif Correctif → Préventif</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
-                    {preventiveRecommendations.length} récidives détectées
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Machines ayant subi ≥ 3 pannes récentes sur un même organe ({preventiveRecommendations.map((r) => r.code_machine || r.machine).join(', ')}). Créer des routines de contrôle pour éradiquer ces pannes.
-                </p>
-              </div>
-            </div>
+        {canManagePreventive && preventiveRecommendations && preventiveRecommendations.length > 0 && (() => {
+          const now = new Date();
+          const yearStart = new Date(now.getFullYear(), 0, 1);
+          const dayOfYear = Math.floor((now.getTime() - yearStart.getTime()) / (24 * 60 * 60 * 1000));
+          const currentWeekNum = Math.min(52, Math.max(1, Math.ceil((dayOfYear + yearStart.getDay() + 1) / 7)));
+          const currentWeekKey = `S${currentWeekNum}`;
+          const todayIso = now.toISOString().split('T')[0];
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
-              {preventiveRecommendations.slice(0, 2).map((rec, i) => {
-                const machineLabel = rec.code_machine || rec.machine || 'Machine';
-                const anomClean = String(rec.anomalie || 'inspection_generale').replace(/_/g, ' ');
-                const matchedMach = (machines || []).find(
-                  (m) =>
-                    String(m.id_machine_registered || m.id || m.code || '')
-                      .trim()
-                      .toUpperCase() === String(machineLabel).trim().toUpperCase()
-                );
-                const resolvedTech =
-                  matchedMach?.technician ||
-                  matchedMach?.technicien_responsable ||
-                  matchedMach?.technicien ||
-                  'Technicien';
-                return (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      if (typeof onAdoptRecommendation === 'function') {
-                        onAdoptRecommendation(rec);
-                        return;
-                      }
-                      if (typeof onCreatePlanWithTasks === 'function') {
-                        onCreatePlanWithTasks(
-                          {
-                            id_machine: machineLabel,
-                            nom_machine: matchedMach?.designation || `Machine ${machineLabel}`,
-                            id_zone: matchedMach?.id_zone_default || matchedMach?.id_zone || rec.zone || 'Atelier',
-                            id_technicien: resolvedTech,
-                            semaine_cible: 'S1',
-                            description: rec.recommendation || `Routine anti-récidive (${anomClean})`,
-                          },
-                          [
+          return (
+            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 border border-amber-300 dark:border-amber-700/60 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 flex-wrap">
+                    <span>Pont Prédictif Correctif → Préventif</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                      {preventiveRecommendations.length} récidives détectées
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                      Cible immédiate : {currentWeekKey}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    Machines ayant subi ≥ 3 pannes récentes sur un même organe ({preventiveRecommendations.map((r) => r.code_machine || r.machine).join(', ')}). Créez des routines rattachées dès la semaine {currentWeekKey}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {preventiveRecommendations.slice(0, 3).map((rec, i) => {
+                  const machineLabel = String(rec.code_machine || rec.machine || 'Machine').trim();
+                  const anomClean = String(rec.anomalie || rec.titre || 'inspection_generale')
+                    .replace(/^Maintenance Préventive Ciblée\s*:\s*/i, '')
+                    .replace(/_/g, ' ')
+                    .trim();
+                  const composantName = `Contrôle ${anomClean}`;
+                  const alreadyExists = (tasks || []).some(
+                    (t) =>
+                      String(t.id_machine || '').trim().toUpperCase() === machineLabel.toUpperCase() &&
+                      (String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase() ||
+                        String(t.composant || '').trim().toLowerCase().includes(anomClean.toLowerCase()))
+                  );
+
+                  const matchedMach = (machines || []).find(
+                    (m) =>
+                      String(m.id_machine_registered || m.id || m.code || '')
+                        .trim()
+                        .toUpperCase() === machineLabel.toUpperCase()
+                  );
+                  const resolvedTech =
+                    matchedMach?.technician ||
+                    matchedMach?.technicien_responsable ||
+                    matchedMach?.technicien ||
+                    'Technicien';
+
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={alreadyExists}
+                      onClick={() => {
+                        if (alreadyExists) return;
+                        if (typeof onAdoptRecommendation === 'function') {
+                          onAdoptRecommendation(rec);
+                          return;
+                        }
+                        if (typeof onCreatePlanWithTasks === 'function') {
+                          onCreatePlanWithTasks(
                             {
-                              composant: `Contrôle ${anomClean}`,
-                              action_code: 'C',
-                              frequence: rec.suggestedIntervalDays && rec.suggestedIntervalDays <= 10 ? 'Hebdo' : 'Mensuel',
-                              duree_estimee: '20 min',
-                              priorite: 'Haute',
-                              consigne: rec.recommendedAction || `Contrôle préventif systématique (${anomClean})`,
+                              id_machine: machineLabel,
+                              nom_machine: matchedMach?.designation || `Machine ${machineLabel}`,
+                              id_zone: matchedMach?.id_zone_default || matchedMach?.id_zone || rec.zone || 'Atelier',
+                              id_technicien: resolvedTech,
+                              semaine_cible: currentWeekKey,
+                              date_prevue: todayIso,
+                              description: rec.recommendation || `Routine anti-récidive (${anomClean})`,
                             },
-                          ]
-                        );
-                        showToast?.(`Routine préventive planifiée pour ${machineLabel}`, 'success');
-                      } else if (onAddAction) {
-                        onAddAction({
-                          code: 'C',
-                          libelle: `Contrôle systématique ${anomClean} (${machineLabel})`,
-                          description: rec.recommendedAction || '',
-                          type_maintenance: 'Préventif',
-                          frequence_defaut: '1M',
-                        });
-                        showToast?.(`Tâche préventive créée pour ${machineLabel}`, 'success');
-                      } else {
-                        showToast?.(`Recommandation transmise à l'ingénierie pour ${machineLabel}`, 'success');
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Créer routine: {machineLabel}
-                  </button>
-                );
-              })}
+                            [
+                              {
+                                composant: composantName,
+                                action_code: 'C',
+                                frequence: rec.suggestedIntervalDays && rec.suggestedIntervalDays <= 10 ? 'Hebdo' : 'Mensuel',
+                                duree_estimee: '20 min',
+                                priorite: 'Haute',
+                                consigne: rec.recommendedAction || `Contrôle préventif systématique (${anomClean})`,
+                              },
+                            ]
+                          );
+                          showToast?.(
+                            `Routine préventive planifiée pour ${machineLabel} dès ${currentWeekKey}`,
+                            'success'
+                          );
+                        } else if (onAddAction) {
+                          onAddAction({
+                            code: 'C',
+                            libelle: `Contrôle systématique ${anomClean} (${machineLabel})`,
+                            description: rec.recommendedAction || '',
+                            type_maintenance: 'Préventif',
+                            frequence_defaut: '1M',
+                          });
+                          showToast?.(`Tâche préventive créée pour ${machineLabel}`, 'success');
+                        } else {
+                          showToast?.(`Recommandation transmise à l'ingénierie pour ${machineLabel}`, 'success');
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 ${
+                        alreadyExists
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default'
+                          : 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer'
+                      }`}
+                    >
+                      {alreadyExists ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>Routine active : {machineLabel}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>
+                            Créer routine ({currentWeekKey}) : {machineLabel}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ========================================================================= */}
         {/* MAIN VIEW CONTENT                                                         */}

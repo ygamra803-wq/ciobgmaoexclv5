@@ -1,6 +1,6 @@
 import type { CorrectiveInterventionItem } from '../../types/store';
 
-export type IoTProtocol = 'MQTT' | 'OPC_UA' | 'MODBUS_TCP';
+export type IoTProtocol = 'MANUEL' | 'MQTT' | 'OPC_UA' | 'MODBUS_TCP';
 
 export type CbmParameterType =
   | 'VIBRATION_RMS'

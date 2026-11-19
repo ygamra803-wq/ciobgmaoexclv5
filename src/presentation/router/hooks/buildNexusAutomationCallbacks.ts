@@ -25,6 +25,13 @@ export interface PreventiveRecommendationInput {
   description?: string;
 }
 
+export function getCurrentIsoWeekKey(referenceDate: Date = new Date()): string {
+  const start = new Date(referenceDate.getFullYear(), 0, 1);
+  const days = Math.floor((referenceDate.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+  const weekNum = Math.min(52, Math.max(1, Math.ceil((days + start.getDay() + 1) / 7)));
+  return `S${weekNum}`;
+}
+
 export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
   const {
     machines,
@@ -103,6 +110,8 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
     const isComp = element.element_type === 'COMPONENT';
     const isPart = element.element_type === 'PART';
     const parentKey = String(element.parent_component_key || '').trim();
+    const currentWeekKey = getCurrentIsoWeekKey();
+    const todayIso = new Date().toISOString().split('T')[0];
 
     handleCreatePlanWithTasks(
       {
@@ -110,7 +119,8 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
         nom_machine: machine.designation || machine.nom || `Machine ${machineId}`,
         id_zone: zoneId,
         id_technicien: techName,
-        semaine_cible: 'S1',
+        semaine_cible: currentWeekKey,
+        date_prevue: todayIso,
         description: `Surveillance préventive BOM Nexus pour ${element.ref_element} sur ${machineId}`,
       },
       [
@@ -141,7 +151,7 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
         },
       ]
     );
-    return { skipped: false, frequence, composantLabel };
+    return { skipped: false, frequence, composantLabel, semaine_cible: currentWeekKey };
   };
 
   const onAdoptRecommendation = (rec: PreventiveRecommendationInput) => {
@@ -155,7 +165,8 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
     const alreadyExists = (preventiveTasks || []).some(
       (t) =>
         String(t.id_machine || '').trim().toUpperCase() === machineId &&
-        String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase()
+        (String(t.composant || '').trim().toLowerCase() === composantName.toLowerCase() ||
+          String(t.composant || '').trim().toLowerCase().includes(anomClean.toLowerCase()))
     );
     if (alreadyExists) {
       showToast?.(`Une routine préventive "${composantName}" existe déjà pour ${machineId}.`, 'info');
@@ -171,6 +182,9 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
       matchedMachine?.technicien ||
       'Technicien';
     const freq = rec?.suggestedIntervalDays && Number(rec.suggestedIntervalDays) <= 10 ? 'Hebdo' : 'Mensuel';
+    const currentWeekKey = getCurrentIsoWeekKey();
+    const todayIso = new Date().toISOString().split('T')[0];
+
     if (typeof handleCreatePlanWithTasks === 'function') {
       handleCreatePlanWithTasks(
         {
@@ -178,7 +192,8 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
           nom_machine: matchedMachine?.designation || `Machine ${machineId}`,
           id_zone: zoneId,
           id_technicien: techName,
-          semaine_cible: 'S1',
+          semaine_cible: currentWeekKey,
+          date_prevue: todayIso,
           description: rec?.recommendation || rec?.description || `Routine anti-récidive (${anomClean}) pour ${machineId}`,
         },
         [
@@ -202,8 +217,16 @@ export function buildNexusAutomationCallbacks(deps: NexusAutomationDeps) {
         frequence_defaut: freq === 'Hebdo' ? '1S' : '1M',
       });
     }
-    showToast?.(`Routine préventive "${composantName}" planifiée pour ${machineId} (${freq}).`, 'success');
-    return { skipped: false, machineId, composant: composantName };
+    showToast?.(
+      `Routine préventive "${composantName}" planifiée pour ${machineId} dès ${currentWeekKey} (${freq}).`,
+      'success'
+    );
+    return {
+      skipped: false,
+      machineId,
+      composant: composantName,
+      semaine_cible: currentWeekKey,
+    };
   };
 
   const onCreateCorrectiveFromPreventive = (

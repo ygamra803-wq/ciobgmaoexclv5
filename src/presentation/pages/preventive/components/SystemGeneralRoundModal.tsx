@@ -23,7 +23,6 @@ import {
 import type {
   IGeneralSystemType,
   IMachine,
-  IStockItem,
   ITechnician,
   IZone,
 } from '../../../../types/domain';
@@ -59,6 +58,7 @@ export interface RoundTaskValidationPayload {
   usedPDR: RoundUsedPdrLine[];
   num_bon_saisi_par_tech: string;
   mode_calcul_recurrence: string;
+  submitForValidation?: boolean;
 }
 
 export interface RoundTaskCorrectivePayload {
@@ -130,6 +130,15 @@ export default function SystemGeneralRoundModal({
 }: SystemGeneralRoundModalProps) {
   const generalSystemTypes = useGmaoStore((s) => s.generalSystemTypes) || [];
 
+  const currentWeekKey = useMemo(() => {
+    const d = new Date();
+    const start = new Date(d.getFullYear(), 0, 1);
+    const days = Math.floor((d.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+    const weekNum = Math.min(52, Math.max(1, Math.ceil((days + start.getDay() + 1) / 7)));
+    return `S${weekNum}`;
+  }, []);
+
+  const [roundScope, setRoundScope] = useState<'SYSTEM_GENERAL' | 'WEEKLY_ALL'>('SYSTEM_GENERAL');
   const [selectedSysType, setSelectedSysType] = useState<string>('ALL');
   const [selectedZone, setSelectedZone] = useState<string>('ALL');
   const [onlyDueTasks, setOnlyDueTasks] = useState<boolean>(false);
@@ -137,6 +146,7 @@ export default function SystemGeneralRoundModal({
   const [roundTech, setRoundTech] = useState<string>(defaultTechName || '');
   const [durationPerPoint, setDurationPerPoint] = useState<string>('10 min');
   const [globalBonNumber, setGlobalBonNumber] = useState<string>('');
+  const [multiRoleSubmitAsTech, setMultiRoleSubmitAsTech] = useState<boolean>(false);
   const [pointStates, setPointStates] = useState<Record<string, RoundPointState>>({});
 
   useEffect(() => {
@@ -193,12 +203,33 @@ export default function SystemGeneralRoundModal({
     });
   }, [tasks, machineMap]);
 
+  // Filter tasks due this week or overdue across ALL machines (Weekly Fast Round for small factories)
+  const weeklyDueAllTasks = useMemo(() => {
+    return (tasks || []).filter((t) => {
+      const mId = String(t.id_machine || '');
+      const m = machineMap.get(mId) || machineMap.get(mId.trim().toUpperCase());
+      if (m && String(m.status || '').toUpperCase() === 'ARCHIVEE') return false;
+      const machineMeter = m?.compteur_heures ?? (m as any)?.compteur_actuel;
+      const cycle = computeTaskCycleStatus(t, { machineCurrentMeter: machineMeter });
+      if (cycle.effectiveEtat === 'En retard') return true;
+      if (
+        cycle.effectiveEtat === 'À faire' &&
+        (Boolean(t.planning && t.planning[currentWeekKey]) || cycle.triggerReason !== 'NONE')
+      ) {
+        return true;
+      }
+      return false;
+    });
+  }, [tasks, machineMap, currentWeekKey]);
+
+  const baseRoundTasks = roundScope === 'WEEKLY_ALL' ? weeklyDueAllTasks : sysGenTasks;
+
   const filteredRoundTasks = useMemo(() => {
-    return sysGenTasks.filter((t) => {
+    return baseRoundTasks.filter((t) => {
       const m =
         machineMap.get(t.id_machine) ||
         machineMap.get(String(t.id_machine || '').trim().toUpperCase());
-      if (selectedSysType !== 'ALL') {
+      if (roundScope === 'SYSTEM_GENERAL' && selectedSysType !== 'ALL') {
         const mSysType = String(m?.id_general_system_type || '');
         if (mSysType !== selectedSysType) return false;
       }
@@ -215,7 +246,7 @@ export default function SystemGeneralRoundModal({
       }
       return true;
     });
-  }, [sysGenTasks, machineMap, selectedSysType, selectedZone, onlyDueTasks]);
+  }, [baseRoundTasks, roundScope, machineMap, selectedSysType, selectedZone, onlyDueTasks]);
 
   // Initialize pointStates when filteredRoundTasks changes
   useEffect(() => {
@@ -323,14 +354,18 @@ export default function SystemGeneralRoundModal({
         ];
       }
 
+      const roundLabel =
+        roundScope === 'WEEKLY_ALL'
+          ? `TOURNÉE HEBDO ${currentWeekKey}`
+          : 'RONDE SYSTÈME GÉNÉRAL';
       const observations =
         st.outcome === 'ANOMALIE'
-          ? `[RONDE SYSTÈME GÉNÉRAL - ANOMALIE] ${
+          ? `[${roundLabel} - ANOMALIE] ${
               st.anomalyNote || `Anomalie constatée sur ${task.composant || task.id_machine}`
             }`
           : st.outcome === 'PDR'
-          ? `[RONDE SYSTÈME GÉNÉRAL - PDR UTILISÉE] Contrôle effectué avec remplacement PDR (${st.pdrRef} x${st.pdrQty}).`
-          : `[RONDE SYSTÈME GÉNÉRAL - CONFORME] Inspection périodique conforme (${task.composant || task.id_machine}).`;
+          ? `[${roundLabel} - PDR UTILISÉE] Contrôle effectué avec remplacement PDR (${st.pdrRef} x${st.pdrQty}).`
+          : `[${roundLabel} - CONFORME] Inspection périodique conforme (${task.composant || task.id_machine}).`;
 
       const executorName = roundTech || task.responsable || 'Technicien';
       const resolvedLaborRate = resolvePreventiveLaborRate(technicians, executorName);
@@ -343,6 +378,7 @@ export default function SystemGeneralRoundModal({
         usedPDR,
         num_bon_saisi_par_tech: st.numBon || globalBonNumber || '',
         mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
+        submitForValidation: isTechUser || multiRoleSubmitAsTech,
       });
       completedCount += 1;
 
@@ -350,22 +386,29 @@ export default function SystemGeneralRoundModal({
         onCreateCorrective(task, {
           description:
             st.anomalyNote ||
-            `Anomalie détectée durant la ronde Système Général sur ${task.composant} (${task.id_machine}).`,
+            `Anomalie détectée durant la ronde sur ${task.composant} (${task.id_machine}).`,
           priorite: 'Haute',
-          demandeur: roundTech || 'Ronde Système Général',
+          demandeur: executorName || 'Ronde Préventive',
         });
         triggeredDiCount += 1;
       }
     }
 
     showToast?.(
-      `Ronde Système Général enregistrée : ${completedCount} point(s) validé(s)${
+      `Ronde enregistrée : ${completedCount} point(s) ${
+        isTechUser || multiRoleSubmitAsTech ? 'soumis (À valider)' : 'validé(s)'
+      }${
         triggeredDiCount > 0 ? `, ${triggeredDiCount} DI corrective(s) ouverte(s)` : ''
       }.`,
       'success'
     );
     onClose();
   };
+
+  const currentResolvedTechRate = resolvePreventiveLaborRate(
+    technicians,
+    roundTech || defaultTechName || ''
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -379,14 +422,14 @@ export default function SystemGeneralRoundModal({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-black tracking-tight">
-                  Mode Ronde — Inspection Groupée Système Général
+                  Mode Ronde Rapide — Exécution Groupée ({currentWeekKey})
                 </h3>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500/30 text-indigo-100 border border-indigo-400/40">
                   {filteredRoundTasks.length} point(s) de contrôle
                 </span>
               </div>
               <p className="text-xs text-indigo-200/80 mt-0.5">
-                Validez en lot vos rondes sécurité incendie (SYS-SEC), air comprimé (SYS-AIR), eau & utilités en un seul écran.
+                Validez en une seule opération cohérente vos rondes Système Général ou l&apos;ensemble des tâches échues de la semaine {currentWeekKey}.
               </p>
             </div>
           </div>
@@ -403,6 +446,54 @@ export default function SystemGeneralRoundModal({
 
         {/* Filter & Round Context Bar */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-3 shrink-0 text-xs">
+          {/* Scope Switcher Bar: Système Général vs Tournée Hebdomadaire Rapide */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200/80">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500 mr-1">
+                Périmètre de la Ronde :
+              </span>
+              <button
+                type="button"
+                onClick={() => setRoundScope('SYSTEM_GENERAL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  roundScope === 'SYSTEM_GENERAL'
+                    ? 'bg-indigo-600 text-white shadow-2xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Système Général ({sysGenTasks.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoundScope('WEEKLY_ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  roundScope === 'WEEKLY_ALL'
+                    ? 'bg-emerald-600 text-white shadow-2xs'
+                    : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Tournée Hebdomadaire Rapide {currentWeekKey} &amp; Retards ({weeklyDueAllTasks.length})</span>
+              </button>
+            </div>
+
+            {!isTechUser && (
+              <label
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 font-bold text-[11px] cursor-pointer"
+                title="PC Partagé Atelier : enregistrer la ronde comme déclaration terrain (en attente de validation Maker-Checker) ou valider directement en tant que responsable"
+              >
+                <input
+                  type="checkbox"
+                  checked={multiRoleSubmitAsTech}
+                  onChange={(e) => setMultiRoleSubmitAsTech(e.target.checked)}
+                  className="rounded border-purple-400 text-purple-600"
+                />
+                <span>Mode PC Partagé : Enregistrer comme déclaration technicien (À valider)</span>
+              </label>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
             {/* 1. Type de Système Général */}
             <div>
@@ -413,9 +504,14 @@ export default function SystemGeneralRoundModal({
               <select
                 value={selectedSysType}
                 onChange={(e) => setSelectedSysType(e.target.value)}
-                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:border-indigo-500 outline-none"
+                disabled={roundScope === 'WEEKLY_ALL'}
+                className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:border-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-400"
               >
-                <option value="ALL">Tous les Systèmes ({sysGenTasks.length})</option>
+                <option value="ALL">
+                  {roundScope === 'WEEKLY_ALL'
+                    ? `Toutes Machines (${weeklyDueAllTasks.length})`
+                    : `Tous les Systèmes (${sysGenTasks.length})`}
+                </option>
                 {generalSystemTypes.map((st: IGeneralSystemType) => (
                   <option key={st.id} value={st.id}>
                     {st.code ? `${st.code} • ` : ''}
@@ -448,25 +544,31 @@ export default function SystemGeneralRoundModal({
               </select>
             </div>
 
-            {/* 3. Technicien */}
+            {/* 3. Technicien (Single-PC Multi-Role Support) */}
             <div>
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-1">
-                <User className="w-3 h-3 text-emerald-600" />
-                <span>Inspecteur / Technicien</span>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between gap-1 mb-1">
+                <span className="flex items-center gap-1">
+                  <User className="w-3 h-3 text-emerald-600" />
+                  <span>Exécutant Terrain</span>
+                </span>
+                <span className="font-mono text-[9.5px] text-emerald-700 font-black">
+                  {currentResolvedTechRate} DH/h
+                </span>
               </label>
               <input
                 type="text"
                 value={roundTech}
                 onChange={(e) => setRoundTech(e.target.value)}
                 disabled={isTechUser && Boolean(defaultTechName)}
-                placeholder="Nom du technicien..."
+                placeholder="Choisir ou saisir technicien..."
                 list="round-tech-list"
                 className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 disabled:bg-slate-100"
               />
               <datalist id="round-tech-list">
-                {activeTechnicians.map((t: ITechnician) => (
-                  <option key={t.id_technician || t.nom} value={t.nom} />
-                ))}
+                {activeTechnicians.map((t: ITechnician) => {
+                  const fullName = t.nom ? `${t.nom} ${t.prenom || ''}`.trim() : String(t.id_technician || '');
+                  return <option key={t.id_technician || fullName} value={fullName} />;
+                })}
               </datalist>
             </div>
 
@@ -522,7 +624,7 @@ export default function SystemGeneralRoundModal({
                   onChange={(e) => setOnlyDueTasks(e.target.checked)}
                   className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <span>Masquer les points déjà validés ce mois</span>
+                <span>Masquer les points déjà validés ce cycle</span>
               </label>
             </div>
 

@@ -17,6 +17,7 @@ import SystemGeneralRoundModal, {
 } from './SystemGeneralRoundModal';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
+import { resolvePreventiveLaborRate } from '../../../../domain/preventive/preventiveScheduleEngine';
 import type {
   IMachine,
   IMouvement,
@@ -223,24 +224,50 @@ export default function TabMainModals({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">Technicien Réalisateur :</label>
+                  <label className="flex items-center justify-between font-bold text-slate-700 uppercase mb-1">
+                    <span>Technicien Réalisateur :</span>
+                    <span className="font-mono text-[10px] text-emerald-700 font-black">
+                      Taux MO : {Number(validationData.taux_horaire || 35)} DH/h
+                    </span>
+                  </label>
                   <input
                     type="text"
                     required
                     readOnly={isTechUser}
+                    list="validation-modal-tech-list"
                     value={validationData.technicien}
                     onChange={(e) => {
                       if (!isTechUser) {
-                        setValidationData({ ...validationData, technicien: e.target.value });
+                        const nextTech = e.target.value;
+                        const nextRate = resolvePreventiveLaborRate(technicians, nextTech);
+                        setValidationData({
+                          ...validationData,
+                          technicien: nextTech,
+                          taux_horaire: nextRate,
+                        });
                       }
                     }}
-                    placeholder="Nom du technicien"
+                    placeholder="Choisir ou saisir le technicien exécutant..."
                     className={`w-full px-3 py-2 border rounded-xl ${
                       isTechUser
                         ? 'bg-purple-50/70 border-purple-200 text-purple-900 font-bold cursor-not-allowed'
                         : 'bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-emerald-500'
                     }`}
                   />
+                  {!isTechUser && (
+                    <datalist id="validation-modal-tech-list">
+                      {(technicians || []).map((tech: ITechnician | string, idx: number) => {
+                        const fullName =
+                          typeof tech === 'string'
+                            ? tech.trim()
+                            : tech?.nom
+                            ? `${tech.nom} ${tech.prenom || ''}`.trim()
+                            : String(tech?.id_technician || '').trim();
+                        if (!fullName) return null;
+                        return <option key={idx} value={fullName} />;
+                      })}
+                    </datalist>
+                  )}
                 </div>
               </div>
 

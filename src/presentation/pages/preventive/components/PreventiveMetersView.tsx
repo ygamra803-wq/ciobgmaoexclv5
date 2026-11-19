@@ -336,9 +336,6 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* CBM / IoT Sensor Telemetry Panel (MQTT / OPC-UA / Modbus) */}
-      <CbmIoTSensorPanel machines={activeMachines} showToast={showToast} />
-
       {/* ========================================================================= */}
       {/* 1. TOP COCKPIT KPIS                                                       */}
       {/* ========================================================================= */}
@@ -1108,6 +1105,9 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Optional Manual Conditional Readings (Collapsed by default at bottom) */}
+      <CbmIoTSensorPanel machines={activeMachines} showToast={showToast} defaultExpanded={false} />
     </div>
   );
 };

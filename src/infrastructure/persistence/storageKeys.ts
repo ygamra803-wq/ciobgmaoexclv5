@@ -28,6 +28,7 @@ export const STORAGE_KEYS = {
   PREVENTIVE_PLANS: 'gmao_preventive_plans_v3',
   PREVENTIVE_EXECUTIONS: 'gmao_preventive_executions_v1',
   METER_READINGS: 'gmao_meter_readings_v1',
+  CBM_MANUAL_RULES: 'gmao_cbm_manual_rules_v1',
 
   // 4. Corrective Maintenance
   CORRECTIVE_INTERVENTIONS: 'gmao_corrective_interventions_v4',

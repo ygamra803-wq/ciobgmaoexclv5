@@ -350,7 +350,18 @@ export function resolvePreventiveLaborRate(
   if (key && Array.isArray(technicians) && technicians.length > 0) {
     const matched = technicians.find((t) => {
       if (!t) return false;
-      const candidates = [t.id, t.id_technician, t.code, t.nom, t.name, t.username]
+      const fullName = t.nom && t.prenom ? `${t.nom} ${t.prenom}`.trim() : undefined;
+      const candidates = [
+        t.id,
+        t.id_technician,
+        t.code,
+        t.nom,
+        t.prenom,
+        fullName,
+        t.nom_technicien,
+        t.name,
+        t.username,
+      ]
         .filter(Boolean)
         .map((v) => String(v).trim().toUpperCase());
       return candidates.includes(key);
