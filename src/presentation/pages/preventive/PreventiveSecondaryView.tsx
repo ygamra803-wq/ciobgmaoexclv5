@@ -6,6 +6,7 @@ import {
   Settings2,
   Wrench,
   Calendar,
+  ShieldAlert,
 } from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
@@ -16,6 +17,9 @@ import TabPlanBuilder from './components/TabPlanBuilder';
 import TabGuide from './components/TabGuide';
 import TabActions from './components/TabActions';
 import { useI18n } from '../../../i18n/I18nContext';
+import { useAuth } from '../../../context/AuthContext';
+import { AuthorizationService } from '../../../core/security/AuthorizationService';
+import { isTechnicianRole } from '../../../core/security/technicianScope';
 
 export default function PreventiveSecondaryView({
   actions = [],
@@ -41,6 +45,9 @@ export default function PreventiveSecondaryView({
   initialSubTab = 'BUILDER',
 }) {
   const { t } = useI18n();
+  const { user } = useAuth();
+  const canManagePreventive =
+    Boolean(user) && !isTechnicianRole(user) && AuthorizationService.hasPermission(user, 'preventive.manage');
   // Active secondary sub-tab: 'BUILDER' | 'GUIDE' | 'ACTIONS'
   const [activeSubTab, setActiveSubTab] = useState(initialSubTab);
 
@@ -48,6 +55,7 @@ export default function PreventiveSecondaryView({
   // ACTIONS HANDLERS
   // ==========================================
   const handleAddAction = (actionData) => {
+    if (!canManagePreventive) return;
     if (onAddAction) {
       onAddAction(actionData);
     } else {
@@ -57,6 +65,7 @@ export default function PreventiveSecondaryView({
   };
 
   const handleUpdateAction = (id, actionData) => {
+    if (!canManagePreventive) return;
     if (onUpdateAction) {
       onUpdateAction(id, actionData);
     } else {
@@ -66,6 +75,7 @@ export default function PreventiveSecondaryView({
   };
 
   const handleDeleteAction = (id) => {
+    if (!canManagePreventive) return;
     if (onDeleteAction) {
       onDeleteAction(id);
     } else {
@@ -78,6 +88,7 @@ export default function PreventiveSecondaryView({
   // GUIDES HANDLERS
   // ==========================================
   const handleAddGuide = (guideData) => {
+    if (!canManagePreventive) return;
     if (onAddGuide) {
       onAddGuide(guideData);
     } else {
@@ -87,6 +98,7 @@ export default function PreventiveSecondaryView({
   };
 
   const handleUpdateGuide = (id, guideData) => {
+    if (!canManagePreventive) return;
     if (onUpdateGuide) {
       onUpdateGuide(id, guideData);
     } else {
@@ -96,6 +108,7 @@ export default function PreventiveSecondaryView({
   };
 
   const handleDeleteGuide = (id) => {
+    if (!canManagePreventive) return;
     if (onDeleteGuide) {
       onDeleteGuide(id);
     } else {
@@ -108,13 +121,18 @@ export default function PreventiveSecondaryView({
   // PLAN BUILDER HANDLER
   // ==========================================
   const handleCreatePlanWithTasks = (planData, taskItems) => {
+    if (!canManagePreventive) return;
     let result;
     if (onCreatePlanWithTasks) {
       result = onCreatePlanWithTasks(planData, taskItems);
     } else {
       result = PreventiveService.createPlanWithTasks(planData, taskItems);
     }
-    
+    if (!result || !Array.isArray(result.tasks) || result.tasks.length === 0) {
+      if (showToast) showToast('Création du plan refusée : droits insuffisants ou aucune tâche générée.', 'error');
+      return;
+    }
+
     if (showToast) {
       showToast(`Plan ${result?.plan?.code || planData.code} généré avec succès (${result?.tasks?.length || taskItems.length} tâches programmées) !`, 'success');
     }
@@ -123,6 +141,33 @@ export default function PreventiveSecondaryView({
       onNavigateToMainView();
     }
   };
+
+  if (!canManagePreventive) {
+    return (
+      <AnimatedPage>
+        <div className="bg-white rounded-2xl border border-rose-200 p-8 max-w-xl mx-auto mt-8 text-center shadow-sm space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-200 mx-auto flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-black text-slate-900">
+            Accès réservé à la gestion préventive
+          </h3>
+          <p className="text-xs text-slate-600 leading-relaxed">
+            La configuration des plans récurrents, fiches guides et catalogues d&apos;actions requiert la permission <code className="font-mono font-bold">preventive.manage</code>.
+          </p>
+          {onNavigateToMainView && (
+            <button
+              type="button"
+              onClick={onNavigateToMainView}
+              className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition cursor-pointer"
+            >
+              Retour au Planning Préventif
+            </button>
+          )}
+        </div>
+      </AnimatedPage>
+    );
+  }
 
   // Quick stats calculation
   const totalActions = actions.length;

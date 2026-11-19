@@ -96,7 +96,7 @@ export default function PreventiveView({
       t.type_declencheur === 'COMPTEUR' ||
       t.type_declencheur === 'HYBRIDE' ||
       Number(t.compteur_seuil_intervalle) > 0;
-    if (!isCounter || t.etat === 'Fait' || t.etat === 'En attente validation') return false;
+    if (!isCounter || t.etat === 'En attente validation' || t.etat === 'À clarifier') return false;
     const tMach = String(t.id_machine || '').trim().toUpperCase();
     const machObj = (machines || []).find(
       (m) => String(m?.id_machine_registered || m?.id || m?.code || '').trim().toUpperCase() === tMach
@@ -144,10 +144,18 @@ export default function PreventiveView({
           ...(onAddMouvement ? { onAddMouvement } : {}),
         };
 
-    if (onMarkTaskDoneProp) {
-      onMarkTaskDoneProp(id, enrichedValidationData);
-    } else {
-      PreventiveService.markTaskAsDone(id, enrichedValidationData);
+    const actionResult = onMarkTaskDoneProp
+      ? onMarkTaskDoneProp(id, enrichedValidationData)
+      : PreventiveService.markTaskAsDone(id, enrichedValidationData);
+
+    if (!actionResult) {
+      if (showToast) {
+        showToast(
+          'Validation bloquée : stock PDR insuffisant ou autorisation refusée.',
+          'error'
+        );
+      }
+      return;
     }
 
     // V3 Maker-Checker: If submitted by Technician, DO NOT emit stock movement until Admin approval
@@ -456,7 +464,10 @@ export default function PreventiveView({
             stockItems={stockItems}
             warehouseItems={warehouseItems}
             meterReadings={meterReadings}
-            onRecordReading={onRecordReading || handleUpdateTaskCounter}
+            onRecordReading={
+              onRecordReading ||
+              ((payload) => useGmaoStore.getState().handleRecordMeterReading(payload))
+            }
             onBatchRecordReadings={onBatchRecordReadings}
             overdueCounterTasksCount={overdueCounterTasksCount}
             viewMode={viewMode}

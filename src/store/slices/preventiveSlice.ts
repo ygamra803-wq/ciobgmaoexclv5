@@ -73,16 +73,22 @@ function isFieldOnlyRole(explicitRole?: unknown): boolean {
 }
 
 function resolveSpareUnitPrice(rawSpare: any, stockMatch: any): number {
-  const rawPrice = Number(rawSpare?.unitPrice ?? rawSpare?.prix_unitaire ?? rawSpare?.prix ?? 0);
-  if (Number.isFinite(rawPrice) && rawPrice > 0) return rawPrice;
-  const stockPrice = Number(
-    stockMatch?.prix_unitaire ??
-      stockMatch?.prixUnitaire ??
-      stockMatch?.prix ??
-      stockMatch?.prix_achat_ht ??
-      0
-  );
-  return Number.isFinite(stockPrice) && stockPrice > 0 ? stockPrice : 0;
+  const candidates = [
+    rawSpare?.unitPrice,
+    rawSpare?.prix_unitaire,
+    rawSpare?.prixUnitaire,
+    rawSpare?.prix,
+    rawSpare?.prix_achat_ht,
+    stockMatch?.prix_unitaire,
+    stockMatch?.prixUnitaire,
+    stockMatch?.prix,
+    stockMatch?.prix_achat_ht,
+  ];
+  for (const c of candidates) {
+    const num = Number(c);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return 0;
 }
 
 function normalizePreventiveSparesList(
@@ -464,7 +470,13 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
 
       const skipDeduction = Boolean(validationData?.skipStockDeduction);
       const currentMovements = get().mouvements || [];
-      const bonSaisi = String(validationData?.num_bon_saisi_par_tech || '').trim();
+      const bonSaisi = String(
+        validationData?.num_bon_saisi_par_tech ||
+          validationData?.num_bon_sortie ||
+          validationData?.code_bon_magasin ||
+          validationData?.code_bon ||
+          ''
+      ).trim();
 
       // Pre-validate stock sufficiency BEFORE mutating any state on direct approval
       if (!forcePendingValidation && normalizedSpares.length > 0) {

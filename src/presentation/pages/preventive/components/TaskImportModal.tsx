@@ -2,8 +2,11 @@
 import { useState } from 'react';
 import { Upload, FileText, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import PreventiveService from '../../../../application/services/PreventiveService';
+import { useAuth } from '../../../../context/AuthContext';
 
 export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
+  const { user } = useAuth();
+  const isAdminUser = String(user?.role || '').trim().toUpperCase() === 'ADMIN';
   const [rawText, setRawText] = useState('');
   const [error, setError] = useState(null);
   const [statusMsg, setStatusMsg] = useState(null);
@@ -31,8 +34,13 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
       let parsed = null;
       let text = rawText.trim();
 
-      // If user pasted JS format (e.g., export const PART_TASKS = [...] or [...])
-      if (text.includes('=')) {
+      // Only strip JS variable assignment prefix (e.g., export const PART_TASKS = [...])
+      // without corrupting valid JSON payloads whose string fields contain '='.
+      if (
+        !text.startsWith('[') &&
+        !text.startsWith('{') &&
+        /^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z0-9_$]+\s*=/.test(text)
+      ) {
         text = text.substring(text.indexOf('=') + 1).trim();
       }
       if (text.endsWith(';')) {
@@ -49,7 +57,12 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
         throw new Error("Le tableau est vide.");
       }
 
-      const updated = PreventiveService.bulkImportTasks(parsed, mode === 'replace');
+      const replaceRequested = mode === 'replace' && isAdminUser;
+      const updated = PreventiveService.bulkImportTasks(parsed, replaceRequested, {
+        actorRole: user?.role,
+        actorId: user?.id,
+        actorName: user?.name || user?.nom,
+      });
       setStatusMsg(`Succès ! ${parsed.length} tâche(s) vérifiée(s) et importée(s) avec succès.`);
       setTimeout(() => {
         onImportSuccess(updated);
@@ -124,14 +137,22 @@ export default function TaskImportModal({ isOpen, onClose, onImportSuccess }) {
               </button>
               <button
                 type="button"
-                onClick={() => setMode('replace')}
+                disabled={!isAdminUser}
+                onClick={() => isAdminUser && setMode('replace')}
+                title={
+                  isAdminUser
+                    ? 'Remplacer toutes les tâches (Administrateur uniquement)'
+                    : 'Réservé au rôle Administrateur (ADMIN)'
+                }
                 className={`px-3 py-1.5 rounded-lg font-medium transition ${
-                  mode === 'replace'
+                  !isAdminUser
+                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : mode === 'replace'
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'bg-white text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                Écraser tout (Remplacer)
+                Écraser tout (Admin)
               </button>
             </div>
           </div>

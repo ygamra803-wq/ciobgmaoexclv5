@@ -15,6 +15,7 @@ import {
   Search,
   Wrench,
 } from 'lucide-react';
+import { computeTaskCycleStatus } from '../../../../domain/preventive/preventiveScheduleEngine';
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -386,6 +387,19 @@ export default function GroupedMachinesView({
                       </thead>
                       <tbody className="divide-y divide-slate-100 font-medium">
                         {group.tasks.map((task, idx) => {
+                          const liveMach = machineMap.get(
+                            String(task.id_machine || group.id_machine || '').trim().toUpperCase()
+                          );
+                          const liveMeter = Number(
+                            liveMach?.compteur_heures ??
+                              liveMach?.dernier_releve_compteur ??
+                              task.compteur_actuel ??
+                              task.dernier_releve ??
+                              0
+                          );
+                          const effectiveEtat = computeTaskCycleStatus(task, {
+                            machineCurrentMeter: liveMeter,
+                          }).effectiveEtat;
                           const actionMeta = ACTION_PILL_MAP[task.action_code] || {
                             bg: 'bg-slate-100 text-slate-800 border-slate-200',
                             dot: 'bg-slate-500',
@@ -396,7 +410,7 @@ export default function GroupedMachinesView({
                             <tr
                               key={task.id || idx}
                               className={`hover:bg-indigo-50/30 transition-colors ${
-                                task.etat === 'En retard' ? 'bg-rose-50/30' : ''
+                                effectiveEtat === 'En retard' ? 'bg-rose-50/30' : ''
                               }`}
                             >
                               <td className="py-2.5 px-3 font-bold text-slate-900">
@@ -437,14 +451,16 @@ export default function GroupedMachinesView({
                               <td className="py-2.5 px-3 text-center">
                                 <span
                                   className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                    task.etat === 'Fait'
+                                    effectiveEtat === 'Fait'
                                       ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                      : task.etat === 'En retard'
+                                      : effectiveEtat === 'En retard'
                                       ? 'bg-rose-50 text-rose-800 border-rose-200 animate-pulse'
+                                      : effectiveEtat === 'En attente validation'
+                                      ? 'bg-purple-50 text-purple-800 border-purple-200'
                                       : 'bg-blue-50 text-blue-800 border-blue-200'
                                   }`}
                                 >
-                                  {task.etat || 'À faire'}
+                                  {effectiveEtat || 'À faire'}
                                 </span>
                               </td>
 
@@ -471,14 +487,23 @@ export default function GroupedMachinesView({
                                       BT
                                     </button>
                                   )}
-                                  {onOpenValidate && task.etat !== 'Fait' && (
+                                  {onOpenValidate && effectiveEtat !== 'En attente validation' && (
                                     <button
                                       type="button"
                                       onClick={() => onOpenValidate(task)}
-                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95"
+                                      className={`px-2.5 py-1 rounded-lg font-bold text-xs transition cursor-pointer shadow-2xs flex items-center gap-1 active:scale-95 ${
+                                        effectiveEtat === 'Fait'
+                                          ? 'bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white border border-slate-300'
+                                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                      }`}
+                                      title={
+                                        effectiveEtat === 'Fait'
+                                          ? 'Enregistrer une nouvelle exécution de cycle'
+                                          : 'Valider l’exécution'
+                                      }
                                     >
                                       <CheckCircle2 className="w-3 h-3" />
-                                      Valider
+                                      {effectiveEtat === 'Fait' ? 'Nouvelle exéc.' : 'Valider'}
                                     </button>
                                   )}
                                 </div>

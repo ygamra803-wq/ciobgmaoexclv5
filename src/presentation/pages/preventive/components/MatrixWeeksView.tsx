@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import { useI18n } from '../../../../i18n/I18nContext';
+import { computeTaskCycleStatus } from '../../../../domain/preventive/preventiveScheduleEngine';
 
 const ACTION_PILL_MAP: Record<string, any> = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -600,12 +601,30 @@ export default function MatrixWeeksView({
                       {/* Expanded Sub-Rows for Tasks of this Machine */}
                       {isExpanded &&
                         group.tasks.map((task, taskIdx) => {
-                          const statusBadge = STATUT_BADGES[task.etat] || STATUT_BADGES['À faire'];
-                          const localizedStatus = task.etat === 'Fait'
-                            ? t('preventive.table.status.done', 'Fait')
-                            : task.etat === 'En retard'
-                            ? t('preventive.table.status.late', 'En retard')
-                            : t('preventive.table.status.todo', 'À faire');
+                          const liveMach = machineMap.get(
+                            String(task.id_machine || group.id_machine || '').trim().toUpperCase()
+                          );
+                          const liveMeter = Number(
+                            liveMach?.compteur_heures ??
+                              liveMach?.dernier_releve_compteur ??
+                              task.compteur_actuel ??
+                              task.dernier_releve ??
+                              0
+                          );
+                          const cycleStatus = computeTaskCycleStatus(task, {
+                            machineCurrentMeter: liveMeter,
+                          });
+                          const effectiveEtat = cycleStatus.effectiveEtat;
+                          const statusBadge =
+                            STATUT_BADGES[effectiveEtat] || STATUT_BADGES['À faire'];
+                          const localizedStatus =
+                            effectiveEtat === 'Fait'
+                              ? t('preventive.table.status.done', 'Fait')
+                              : effectiveEtat === 'En retard'
+                              ? t('preventive.table.status.late', 'En retard')
+                              : effectiveEtat === 'En attente validation' || effectiveEtat === 'À clarifier'
+                              ? effectiveEtat
+                              : t('preventive.table.status.todo', 'À faire');
 
                           const actionConfig = ACTION_PILL_MAP[task.action_code] || {
                             bg: 'bg-slate-100 text-slate-800 border-slate-200',
@@ -700,7 +719,7 @@ export default function MatrixWeeksView({
                                         className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[10.5px] mx-auto transition-all shadow-2xs ${
                                           onOpenValidate ? 'hover:scale-110 active:scale-95 cursor-pointer' : 'cursor-default'
                                         } ${
-                                          task.etat === 'En retard'
+                                          effectiveEtat === 'En retard'
                                             ? 'bg-rose-600 text-white animate-pulse shadow-rose-200'
                                             : 'bg-indigo-50 text-indigo-800 hover:bg-indigo-600 hover:text-white border border-indigo-200'
                                         }`}
@@ -743,14 +762,24 @@ export default function MatrixWeeksView({
                                   >
                                     <Printer className="w-3.5 h-3.5" />
                                   </button>
-                                  {onOpenValidate && task.etat !== 'Fait' && (
+                                  {onOpenValidate && effectiveEtat !== 'En attente validation' && (
                                     <button
                                       type="button"
                                       onClick={() => onOpenValidate(task)}
-                                      className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-95"
-                                      title={t('preventive.buttons.validate_execution', 'Valider')}
+                                      className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-95 ${
+                                        effectiveEtat === 'Fait'
+                                          ? 'bg-slate-100 hover:bg-emerald-600 text-slate-700 hover:text-white border border-slate-300'
+                                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                      }`}
+                                      title={
+                                        effectiveEtat === 'Fait'
+                                          ? 'Enregistrer une nouvelle exécution de cycle'
+                                          : t('preventive.buttons.validate_execution', 'Valider')
+                                      }
                                     >
-                                      {t('common.confirm', 'Valider')}
+                                      {effectiveEtat === 'Fait'
+                                        ? 'Nouvelle exéc.'
+                                        : t('common.confirm', 'Valider')}
                                     </button>
                                   )}
                                 </div>

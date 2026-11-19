@@ -22,6 +22,7 @@ import {
 import { MeterService } from '../../../../application/services/meter/MeterService';
 import type { IMeterReading, MeterUnit } from '../../../../types/meter';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
+import { isTechnicianRole } from '../../../../core/security/technicianScope';
 import CbmIoTSensorPanel from './CbmIoTSensorPanel';
 
 interface PreventiveMetersViewProps {
@@ -36,9 +37,11 @@ interface PreventiveMetersViewProps {
     releve_par?: string;
     source?: any;
     commentaire?: string;
+    allowMeterReset?: boolean;
   }) => void;
   onBatchRecordReadings: (readingsPayload: any[]) => void;
-  onMarkTaskDone?: (taskId: string | number, validationData: any) => void;
+  onMarkTaskDone?: (taskId: string | number, validationData: any) => any;
+  onOpenValidate?: ((task: any) => void) | null;
   onNavigateToPlanBuilder?: () => void;
   user?: any;
   showToast?: (message: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
@@ -51,6 +54,7 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
   onRecordReading,
   onBatchRecordReadings,
   onMarkTaskDone,
+  onOpenValidate = null,
   onNavigateToPlanBuilder,
   user,
   showToast,
@@ -64,6 +68,7 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
   const [singleReadingValue, setSingleReadingValue] = useState<string>('');
   const [singleReadingUnit, setSingleReadingUnit] = useState<MeterUnit>('Heures');
   const [singleReadingComment, setSingleReadingComment] = useState<string>('');
+  const [singleReadingAllowReset, setSingleReadingAllowReset] = useState<boolean>(false);
 
   const [historyModalMachine, setHistoryModalMachine] = useState<any | null>(null);
   const [showBatchTourModal, setShowBatchTourModal] = useState(false);
@@ -108,8 +113,18 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
         };
       });
 
-      const hasOverdue = evaluatedTasks.some((item) => item.evaluation.isOverdue && item.task.etat !== 'Fait');
-      const hasWarning = evaluatedTasks.some((item) => item.evaluation.isWarning && item.task.etat !== 'Fait');
+      const hasOverdue = evaluatedTasks.some(
+        (item) =>
+          item.evaluation.isOverdue &&
+          item.task.etat !== 'En attente validation' &&
+          item.task.etat !== 'À clarifier'
+      );
+      const hasWarning = evaluatedTasks.some(
+        (item) =>
+          item.evaluation.isWarning &&
+          item.task.etat !== 'En attente validation' &&
+          item.task.etat !== 'À clarifier'
+      );
 
       let overallStatus: 'OVERDUE' | 'WARNING' | 'OK' = 'OK';
       if (hasOverdue) overallStatus = 'OVERDUE';
@@ -150,7 +165,10 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
         monitoredMachines++;
       }
       item.tasks.forEach((tItem) => {
-        if (tItem.task.etat !== 'Fait') {
+        if (
+          tItem.task.etat !== 'En attente validation' &&
+          tItem.task.etat !== 'À clarifier'
+        ) {
           if (tItem.evaluation.isOverdue) overdueCount++;
           else if (tItem.evaluation.isWarning) warningCount++;
         }
@@ -200,19 +218,39 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
       return;
     }
 
-    onRecordReading({
-      machineId: singleReadingModalMachine.code,
-      valeur: val,
-      unite: singleReadingUnit,
-      releve_par: user?.name || user?.nom || 'Technicien',
-      source: 'MANUEL',
-      commentaire: singleReadingComment.trim() || undefined,
-    });
+    if (val < singleReadingModalMachine.currentReading && !singleReadingAllowReset) {
+      showToast?.(
+        `Relevé inférieur à l'index précédent (${singleReadingModalMachine.currentReading}). Cochez la case de remplacement/réinitialisation de compteur si le compteur a été changé.`,
+        'error'
+      );
+      return;
+    }
 
-    showToast?.(`Relevé enregistré pour ${singleReadingModalMachine.code}: ${val} ${singleReadingUnit}`, 'success');
-    setSingleReadingModalMachine(null);
-    setSingleReadingValue('');
-    setSingleReadingComment('');
+    try {
+      onRecordReading({
+        machineId: singleReadingModalMachine.code,
+        valeur: val,
+        unite: singleReadingUnit,
+        releve_par: user?.name || user?.nom || 'Technicien',
+        source: 'MANUEL',
+        commentaire: singleReadingComment.trim() || undefined,
+        allowMeterReset: singleReadingAllowReset || undefined,
+      });
+
+      showToast?.(
+        `Relevé enregistré pour ${singleReadingModalMachine.code}: ${val} ${singleReadingUnit}`,
+        'success'
+      );
+      setSingleReadingModalMachine(null);
+      setSingleReadingValue('');
+      setSingleReadingComment('');
+      setSingleReadingAllowReset(false);
+    } catch (err: any) {
+      showToast?.(
+        err?.message || 'Erreur lors de l’enregistrement du relevé horomètre.',
+        'error'
+      );
+    }
   };
 
   // Open single reading modal
@@ -221,6 +259,7 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
     setSingleReadingValue(String(item.currentReading || ''));
     setSingleReadingUnit(item.defaultUnit || 'Heures');
     setSingleReadingComment('');
+    setSingleReadingAllowReset(false);
   };
 
   // Open Batch Tour Modal
@@ -239,6 +278,7 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
   const handleSaveBatchTour = (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any[] = [];
+    const nonMonotonicMachines: string[] = [];
     const techName = user?.name || user?.nom || 'Technicien Tournée';
     const today = new Date().toISOString().split('T')[0];
 
@@ -247,6 +287,10 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
       if (!valStr || isNaN(numericVal) || numericVal <= 0) return;
 
       const currentMach = machinesWithCounters.find((m) => m.code === mCode);
+      if (currentMach && numericVal < currentMach.currentReading) {
+        nonMonotonicMachines.push(`${mCode} (${numericVal} < ${currentMach.currentReading})`);
+        return;
+      }
       // Only record if value is different or positive
       if (numericVal !== currentMach?.currentReading) {
         payload.push({
@@ -261,15 +305,33 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
       }
     });
 
+    if (nonMonotonicMachines.length > 0) {
+      showToast?.(
+        `Valeurs inférieures à l'index actuel détectées : ${nonMonotonicMachines.join(', ')}. Utilisez la saisie individuelle pour déclarer un remplacement de compteur.`,
+        'error'
+      );
+      return;
+    }
+
     if (payload.length === 0) {
       showToast?.('Aucun changement de relevé détecté.', 'info');
       setShowBatchTourModal(false);
       return;
     }
 
-    onBatchRecordReadings(payload);
-    showToast?.(`Tournée enregistrée avec succès (${payload.length} machines mises à jour).`, 'success');
-    setShowBatchTourModal(false);
+    try {
+      onBatchRecordReadings(payload);
+      showToast?.(
+        `Tournée enregistrée avec succès (${payload.length} machines mises à jour).`,
+        'success'
+      );
+      setShowBatchTourModal(false);
+    } catch (err: any) {
+      showToast?.(
+        err?.message || 'Erreur lors de la sauvegarde de la tournée de relevés.',
+        'error'
+      );
+    }
   };
 
   return (
@@ -611,7 +673,8 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
                       </p>
                     ) : (
                       item.tasks.map(({ task, evaluation }) => {
-                        const isDone = task.etat === 'Fait';
+                        const isPendingValidation =
+                          task.etat === 'En attente validation' || task.etat === 'À clarifier';
                         const progressColor = evaluation.isOverdue
                           ? 'bg-rose-500'
                           : evaluation.isWarning
@@ -622,9 +685,9 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
                           <div
                             key={task.id}
                             className={`p-2.5 rounded-xl border text-xs transition ${
-                              evaluation.isOverdue && !isDone
+                              evaluation.isOverdue && !isPendingValidation
                                 ? 'bg-rose-50/50 border-rose-200 text-rose-900'
-                                : evaluation.isWarning && !isDone
+                                : evaluation.isWarning && !isPendingValidation
                                 ? 'bg-amber-50/50 border-amber-200 text-amber-900'
                                 : 'bg-slate-50 border-slate-200/80 text-slate-800'
                             }`}
@@ -650,29 +713,45 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
                               <span>
                                 Seuil: <strong className="font-mono text-slate-700">{evaluation.targetValue} {evaluation.unit}</strong>
                               </span>
-                              <span className={evaluation.isOverdue && !isDone ? 'font-bold text-rose-700' : ''}>
+                              <span className={evaluation.isOverdue && !isPendingValidation ? 'font-bold text-rose-700' : ''}>
                                 {evaluation.message}
                               </span>
                             </div>
 
-                            {/* Direct Execute Trigger if Overdue or Warning */}
-                            {!isDone && (evaluation.isOverdue || evaluation.isWarning) && onMarkTaskDone && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onMarkTaskDone(task.id, {
-                                    compteur_releve: item.currentReading,
-                                    date_realisation: new Date().toISOString().split('T')[0],
-                                    technicien: user?.name || user?.nom || 'Technicien',
-                                  });
-                                  showToast?.(`Tâche ${task.code || task.id} exécutée avec succès !`, 'success');
-                                }}
-                                className="mt-2 w-full py-1 px-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 font-bold text-[10px] flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer"
-                              >
-                                <Wrench className="w-3 h-3 text-indigo-600" />
-                                <span>Valider l&apos;intervention maintenant</span>
-                              </button>
-                            )}
+                            {/* Execute Trigger routed through full Maker-Checker validation modal */}
+                            {!isPendingValidation &&
+                              (evaluation.isOverdue || evaluation.isWarning) &&
+                              (onOpenValidate || onMarkTaskDone) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onOpenValidate) {
+                                      onOpenValidate({
+                                        ...task,
+                                        compteur_actuel: item.currentReading,
+                                      });
+                                      return;
+                                    }
+                                    if (onMarkTaskDone) {
+                                      const techOnly = isTechnicianRole(user);
+                                      onMarkTaskDone(task.id, {
+                                        compteur_releve: item.currentReading,
+                                        date_realisation: new Date().toISOString().split('T')[0],
+                                        technicien: user?.name || user?.nom || 'Technicien',
+                                        submitForValidation: techOnly,
+                                      });
+                                    }
+                                  }}
+                                  className="mt-2 w-full py-1 px-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 font-bold text-[10px] flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer"
+                                >
+                                  <Wrench className="w-3 h-3 text-indigo-600" />
+                                  <span>
+                                    {isTechnicianRole(user)
+                                      ? 'Déclarer l’intervention (pour validation)'
+                                      : 'Valider l’intervention maintenant'}
+                                  </span>
+                                </button>
+                              )}
                           </div>
                         );
                       })
@@ -755,6 +834,23 @@ export const PreventiveMetersView: React.FC<PreventiveMetersViewProps> = ({
                     </span>
                   )}
                 </div>
+
+                {singleReadingValue !== '' &&
+                  !isNaN(Number(singleReadingValue)) &&
+                  Number(singleReadingValue) < singleReadingModalMachine.currentReading && (
+                    <label className="mt-2.5 flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-[11px] cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={singleReadingAllowReset}
+                        onChange={(e) => setSingleReadingAllowReset(e.target.checked)}
+                        className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>
+                        <b>Index inférieur au précédent ({singleReadingModalMachine.currentReading}) :</b>{' '}
+                        Confirmer un remplacement / réinitialisation de compteur (journalisé en audit).
+                      </span>
+                    </label>
+                  )}
               </div>
 
               <div>

@@ -73,7 +73,10 @@ export class ExecutionService {
     const periodWeek = validationData?.semaine || validationData?.periodWeek || getIsoWeekLabel(normalizedDate);
 
     const durationMinutes = parseDurationMinutes(
-      validationData?.durationMinutes ?? validationData?.duree_reelle ?? task?.duree_estimee,
+      validationData?.durationMinutes ??
+        validationData?.duree_reelle_min ??
+        validationData?.duree_reelle ??
+        task?.duree_estimee,
       15
     );
     const laborRate = Number(validationData?.taux_horaire ?? validationData?.laborRate ?? 35) || 0;

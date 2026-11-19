@@ -43,6 +43,7 @@ import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveMetersView from './PreventiveMetersView';
 import TabMainModals from './TabMainModals';
 import PreventiveService from '../../../../application/services/PreventiveService';
+import { sanitizeCsvCell } from '../../../../domain/preventive/preventiveScheduleEngine';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
 import {
@@ -836,26 +837,28 @@ export default function TabMainView({
     const rows = filteredTasks.map((t) => {
       const weekCols = allWeeks.map((w) => (t.planning && t.planning[w]) ? t.planning[w] : '');
       return [
-        `"${t.code || ''}"`,
-        `"${t.id_machine || ''}"`,
-        `"${t.nom_machine || ''}"`,
-        `"${t.id_zone || ''}"`,
-        `"${t.composant || ''}"`,
-        `"${t.action_code || ''}"`,
-        `"${t.type_intervention || ''}"`,
-        `"${t.frequence || ''}"`,
-        `"${t.responsable || ''}"`,
-        `"${t.duree_estimee || ''}"`,
-        `"${t.etat || ''}"`,
-        `"${t.prochaine_echeance || ''}"`,
-        `"${t.derniere_realisation || ''}"`,
-        `"${Number(t.cout_cumule || 0).toFixed(2)}"`,
-        ...weekCols.map((val) => `"${val}"`),
-        `"${(t.consigne || t.observations || '').replace(/"/g, '""')}"`,
+        sanitizeCsvCell(t.code || ''),
+        sanitizeCsvCell(t.id_machine || ''),
+        sanitizeCsvCell(t.nom_machine || ''),
+        sanitizeCsvCell(t.id_zone || ''),
+        sanitizeCsvCell(t.composant || ''),
+        sanitizeCsvCell(t.action_code || ''),
+        sanitizeCsvCell(t.type_intervention || ''),
+        sanitizeCsvCell(t.frequence || ''),
+        sanitizeCsvCell(t.responsable || ''),
+        sanitizeCsvCell(t.duree_estimee || ''),
+        sanitizeCsvCell(t.etat || ''),
+        sanitizeCsvCell(t.prochaine_echeance || ''),
+        sanitizeCsvCell(t.derniere_realisation || ''),
+        sanitizeCsvCell(Number(t.cout_cumule || 0).toFixed(2)),
+        ...weekCols.map((val) => sanitizeCsvCell(val)),
+        sanitizeCsvCell(t.consigne || t.observations || ''),
       ];
     });
 
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+    const csvContent =
+      '\uFEFF' +
+      [headers.map((h) => sanitizeCsvCell(h)).join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -864,6 +867,7 @@ export default function TabMainView({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -1662,6 +1666,7 @@ export default function TabMainView({
       {viewMode === 'monthly_grid' && (
         <MonthlyDayMatrixView
           tasks={filteredTasks}
+          executions={scopedExecutions}
           machines={machines}
           onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onOpenCorrective={canTriggerCorrective ? handleOpenCorrective : null}
@@ -1752,9 +1757,13 @@ export default function TabMainView({
           machines={machines}
           tasks={tasks}
           meterReadings={meterReadings}
-          onRecordReading={onRecordReading || _onUpdateTaskCounter}
+          onRecordReading={
+            onRecordReading ||
+            ((payload) => useGmaoStore.getState().handleRecordMeterReading(payload))
+          }
           onBatchRecordReadings={onBatchRecordReadings}
           onMarkTaskDone={canExecutePreventive ? onMarkTaskDone : null}
+          onOpenValidate={canExecutePreventive ? handleOpenValidate : null}
           onNavigateToPlanBuilder={canManagePreventive ? _onNavigateToPlanBuilder : null}
           user={user}
           showToast={showToast}

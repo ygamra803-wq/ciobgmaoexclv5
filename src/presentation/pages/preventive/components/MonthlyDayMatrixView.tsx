@@ -21,6 +21,11 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { Logger } from '../../../../core/logger/LoggerService';
+import {
+  hasApprovedExecutionInPeriod,
+  computeTaskCycleStatus,
+  sanitizeCsvCell,
+} from '../../../../domain/preventive/preventiveScheduleEngine';
 
 const MONTH_NAMES = [
   'Janvier',
@@ -75,6 +80,7 @@ function getISOWeekNumber(d: Date) {
  */
 export default function MonthlyDayMatrixView({
   tasks = [],
+  executions = [],
   machines = [],
   onOpenValidate = null,
   onOpenCorrective = null,
@@ -157,6 +163,17 @@ export default function MonthlyDayMatrixView({
     (task, dayInfo) => {
       const actionCode = (task.action_code || 'C').toUpperCase();
       const planning = task.planning || {};
+      const dayDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(
+        dayInfo.dayNumber
+      ).padStart(2, '0')}`;
+      const isDoneForPeriod = hasApprovedExecutionInPeriod(
+        task.id,
+        dayDateStr,
+        dayInfo.weekKey,
+        executions
+      );
+      const cycleStatus = computeTaskCycleStatus(task);
+      const isOverdueNow = !isDoneForPeriod && cycleStatus.isOverdue;
 
       // 1. Direct echeance date match
       if (task.prochaine_echeance) {
@@ -170,8 +187,8 @@ export default function MonthlyDayMatrixView({
           return {
             hasAction: true,
             code: actionCode,
-            isDone: task.etat === 'Fait',
-            isOverdue: task.etat === 'En retard',
+            isDone: isDoneForPeriod,
+            isOverdue: isOverdueNow,
           };
         }
       }
@@ -181,22 +198,23 @@ export default function MonthlyDayMatrixView({
         return {
           hasAction: true,
           code: actionCode,
-          isDone: task.etat === 'Fait',
-          isOverdue: task.etat === 'En retard',
+          isDone: isDoneForPeriod,
+          isOverdue: isOverdueNow,
         };
       }
 
       // 3. Week Matrix match
       const weekVal = planning[dayInfo.weekKey];
       if (weekVal) {
+        const isWeekMarkedDone = weekVal === 'DONE' || isDoneForPeriod;
         const freq = (task.frequence || '').toLowerCase();
         if (freq.includes('quotidien') || freq.includes('jour')) {
           if (!dayInfo.isWeekend) {
             return {
               hasAction: true,
-              code: typeof weekVal === 'string' ? weekVal : actionCode,
-              isDone: task.etat === 'Fait',
-              isOverdue: task.etat === 'En retard',
+              code: typeof weekVal === 'string' && weekVal !== 'DONE' ? weekVal : actionCode,
+              isDone: isDoneForPeriod,
+              isOverdue: isOverdueNow,
             };
           }
         }
@@ -204,25 +222,25 @@ export default function MonthlyDayMatrixView({
           if (dayInfo.dayOfWeek === 3) {
             return {
               hasAction: true,
-              code: typeof weekVal === 'string' ? weekVal : actionCode,
-              isDone: task.etat === 'Fait',
-              isOverdue: task.etat === 'En retard',
+              code: typeof weekVal === 'string' && weekVal !== 'DONE' ? weekVal : actionCode,
+              isDone: isWeekMarkedDone,
+              isOverdue: !isWeekMarkedDone && cycleStatus.isOverdue,
             };
           }
         }
         if (dayInfo.dayOfWeek === 2) {
           return {
             hasAction: true,
-            code: typeof weekVal === 'string' ? weekVal : actionCode,
-            isDone: task.etat === 'Fait',
-            isOverdue: task.etat === 'En retard',
+            code: typeof weekVal === 'string' && weekVal !== 'DONE' ? weekVal : actionCode,
+            isDone: isWeekMarkedDone,
+            isOverdue: !isWeekMarkedDone && cycleStatus.isOverdue,
           };
         }
       }
 
       return null;
     },
-    [selectedYear, selectedMonth]
+    [selectedYear, selectedMonth, executions]
   );
 
   const machineMap = useMemo(() => {
@@ -411,15 +429,16 @@ export default function MonthlyDayMatrixView({
       });
 
       const csvContent =
-        'data:text/csv;charset=utf-8,\uFEFF' +
+        '\uFEFF' +
         [
-          headers.join(';'),
-          ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')),
-        ].join('\n');
+          headers.map((h) => sanitizeCsvCell(h)).join(';'),
+          ...rows.map((r) => r.map((c) => sanitizeCsvCell(c)).join(';')),
+        ].join('\r\n');
 
-      const encodedUri = encodeURI(csvContent);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
+      link.setAttribute('href', url);
       link.setAttribute(
         'download',
         `Planning_Preventif_Mensuel_${MONTH_NAMES[selectedMonth]}_${selectedYear}.csv`
@@ -427,6 +446,7 @@ export default function MonthlyDayMatrixView({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (e) {
       Logger.error('Export error in MonthlyDayMatrixView:', e);
     }
