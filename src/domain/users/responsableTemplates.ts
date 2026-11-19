@@ -45,17 +45,49 @@ export const RESPONSABLE_TEMPLATES = [
   },
 ];
 
-export const getTemplateById = (templateId) => {
+export interface ResponsableTemplate {
+  id: string;
+  label: string;
+  badge: string;
+  badgeClass: string;
+  badgeDarkClass: string;
+  dotClass: string;
+  cardBorder: string;
+  description: string;
+  defaultZones: string[];
+}
+
+export type TemplateIdInput =
+  | string
+  | { id?: string }
+  | ReadonlyArray<string | { id?: string } | null | undefined>
+  | null
+  | undefined;
+
+export interface TemplateUserLike {
+  templates?: TemplateIdInput;
+  template_ids?: TemplateIdInput;
+  template_id?: TemplateIdInput;
+  type?: string;
+  type_profil?: string;
+  id_operation?: string;
+  id?: string;
+  nom?: string;
+}
+
+export const getTemplateById = (templateId?: string | null): ResponsableTemplate => {
   return RESPONSABLE_TEMPLATES.find((t) => t.id === templateId) || RESPONSABLE_TEMPLATES[0];
 };
 
 /**
  * Normalizes any template input (array, comma-separated string, single string) into a clean array of valid template IDs.
  */
-export const normalizeTemplateIds = (input) => {
+export const normalizeTemplateIds = (input: TemplateIdInput): string[] => {
   if (!input) return [];
   if (Array.isArray(input)) {
-    return input.map((t) => (typeof t === 'string' ? t.trim() : t?.id)).filter(Boolean);
+    return input
+      .map((t) => (typeof t === 'string' ? t.trim() : t?.id))
+      .filter((id): id is string => Boolean(id));
   }
   if (typeof input === 'string') {
     return input
@@ -63,7 +95,7 @@ export const normalizeTemplateIds = (input) => {
       .map((s) => s.trim())
       .filter((s) => RESPONSABLE_TEMPLATES.some((t) => t.id === s));
   }
-  if (input && typeof input === 'object' && input.id) {
+  if (typeof input === 'object' && 'id' in input && input.id) {
     return [input.id];
   }
   return [];
@@ -72,23 +104,29 @@ export const normalizeTemplateIds = (input) => {
 /**
  * Returns template objects matching the provided list of template IDs.
  */
-export const getTemplatesByIds = (templateIds) => {
+export const getTemplatesByIds = (templateIds: TemplateIdInput): ResponsableTemplate[] => {
   const ids = normalizeTemplateIds(templateIds);
   if (ids.length === 0) return [];
   return ids
     .map((id) => RESPONSABLE_TEMPLATES.find((t) => t.id === id))
-    .filter(Boolean);
+    .filter((t): t is ResponsableTemplate => Boolean(t));
 };
 
 /**
  * Resolves all active templates for a given user or operation object.
  */
-export const getTemplatesForUser = (user) => {
+export const getTemplatesForUser = (user?: TemplateUserLike | null): ResponsableTemplate[] => {
   if (!user) return [];
   const rawIds = user.templates || user.template_ids || user.template_id;
   let ids = normalizeTemplateIds(rawIds);
 
-  if (ids.length === 0 && (user.type === 'RESPONSABLE' || user.type_profil === 'RESPONSABLE' || user.type_profil === 'CHEF' || String(user.id_operation || user.id).startsWith('RESP'))) {
+  if (
+    ids.length === 0 &&
+    (user.type === 'RESPONSABLE' ||
+      user.type_profil === 'RESPONSABLE' ||
+      user.type_profil === 'CHEF' ||
+      String(user.id_operation || user.id || '').startsWith('RESP'))
+  ) {
     const nomLower = String(user.nom || '').toLowerCase();
     if (nomLower.includes('magasin')) ids = ['RMG'];
     else if (nomLower.includes('maintenance') || nomLower.includes('centrale')) ids = ['RMT'];
@@ -96,13 +134,15 @@ export const getTemplatesForUser = (user) => {
     else ids = ['RZN'];
   }
 
-  return ids.map((id) => RESPONSABLE_TEMPLATES.find((t) => t.id === id)).filter(Boolean);
+  return ids
+    .map((id) => RESPONSABLE_TEMPLATES.find((t) => t.id === id))
+    .filter((t): t is ResponsableTemplate => Boolean(t));
 };
 
 /**
  * Formats multi-template labels as a readable string (e.g. "Responsable Maintenance, Responsable Zone")
  */
-export const formatTemplateLabels = (templateIds) => {
+export const formatTemplateLabels = (templateIds: TemplateIdInput): string => {
   const tpls = getTemplatesByIds(templateIds);
   return tpls.map((t) => t.label).join(', ');
 };

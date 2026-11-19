@@ -1,429 +1,131 @@
-import { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import { useMemo } from 'react';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Boxes,
+  CheckCircle2,
+  Inbox,
+  MapPin,
+  Package,
+  Radio,
+  ShoppingCart,
+  Tag,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react';
 import AnimatedPage from '../../components/common/AnimatedPage';
-import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import QuickMovementModal from '../warehouse/QuickMovementModal';
 import EditArticleModal from './EditArticleModal';
-import { StockItem } from '../../../core/domain';
 import StockKPIBar from './components/StockKPIBar';
-import { multiTokenSearch } from '../../../utils/searchUtils';
-import { usePermission } from '../../components/common/PermissionGate';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
-import IndustrialFilterCard, { FilterField, FilterSearchInput } from '../../components/common/IndustrialFilterCard';
-import { useI18n } from '../../../i18n/I18nContext';
-import { contextMenu } from '../../../services/ContextMenuService';
-import { Logger } from '../../../core/logger/LoggerService';
-import {
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
-  Package,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  SlidersHorizontal,
-  ChevronDown,
-  Tag,
-  MapPin,
-  TrendingDown,
-  TrendingUp,
-  Boxes,
-  X,
-  Radio,
-  MoreVertical,
-  Edit,
-  Inbox,
-  Calculator,
-  Lock,
-  ShoppingCart,
-  FileSpreadsheet,
-  Download,
-  Upload,
-} from 'lucide-react';
 import StockReplenishmentModal from './components/StockReplenishmentModal';
-import { useGmaoStore } from '../../../store/useGmaoStore';
-import {
-  computeReservedStockMap,
-  computeStockReorderAlerts,
-} from '../../../core/security/validationReconciliation';
-import { PdrGroup } from '../../../types/domain';
-import {
-  listPdrGroups,
-  listPdrTypesByGroup,
-  listStockItemsByGroupType,
-  resolvePdrHierarchy,
-} from '../../../domain/stock/pdrHierarchyService';
 import PdrGroupsModal from './components/PdrGroupsModal';
 import PdrCatalogExcelModal from './components/PdrCatalogExcelModal';
 import StockLotCumpModal from './components/StockLotCumpModal';
 import StockFormulasModal from './components/StockFormulasModal';
-import { downloadPdrCatalogWorkbook } from '../../../services/pdrHierarchyExcelService';
+import { StockAlertBanners } from './components/StockAlertBanners';
+import { StockFilterPanel } from './components/StockFilterPanel';
+import { StockDataGridRow } from './components/StockDataGridRow';
+import { useStockViewController, type StockViewProps } from './hooks/useStockViewController';
+import type { IStockItem, StockType } from '../../../types/domain';
 
-const TYPE_STYLES = {
-  Foret: 'bg-amber-50 text-amber-700 border-amber-200',
-  Tenaille: 'bg-slate-100 text-slate-700 border-slate-200',
-  Cheville: 'bg-violet-50 text-violet-700 border-violet-200',
-  Poinçon: 'bg-rose-50 text-rose-700 border-rose-200',
-  Vis: 'bg-blue-50 text-blue-700 border-blue-200',
-  Raccord: 'bg-cyan-50 text-cyan-700 border-cyan-200',
-  Roulement: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  Courroie: 'bg-orange-50 text-orange-700 border-orange-200',
-  Capteur: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  teflon: 'bg-teal-50 text-teal-700 border-teal-200',
-};
+export type { StockViewProps };
 
-function getTypeStyle(typeStr) {
-  if (!typeStr) return 'bg-cyan-50 text-cyan-800 border-cyan-200';
-  const clean = String(typeStr).trim();
-  const key = Object.keys(TYPE_STYLES).find((k) => k.toLowerCase() === clean.toLowerCase());
-  return TYPE_STYLES[key] || 'bg-cyan-50 text-cyan-800 border-cyan-200';
-}
+export default function StockView(props: StockViewProps) {
+  const {
+    setStockSearch = () => {},
+    stockTypeFilter = 'ALL',
+    setStockTypeFilter = () => {},
+    stockAlertOnly = false,
+    setStockAlertOnly = () => {},
+    types = [],
+    zones = [],
+    machines = [],
+    technicians = [],
+    operations = [],
+    mouvements = [],
+    onOpenAddArticle = () => {},
+    onAddMouvement = () => {},
+    onUpdateArticle = () => {},
+    onDirectAdjustStock = () => {},
+    stockKPIs = { total: 0, alertes: 0, ruptures: 0, ok: 0, totalSorties: 0, totalEntrees: 0 },
+    onNavigateToPdrGroups,
+  } = props;
 
-export default function StockView({
-  stockItems: propStockItems = [],
-  stockSearch = '',
-  setStockSearch = () => {},
-  stockTypeFilter = 'ALL',
-  setStockTypeFilter = () => {},
-  stockAlertOnly = false,
-  setStockAlertOnly = () => {},
-  types = [],
-  zones = [],
-  machines = [],
-  technicians = [],
-  operations = [],
-  mouvements = [],
-  onOpenAddArticle = () => {},
-  onQuickSortie: _onQuickSortie = () => {},
-  onAddMouvement = () => {},
-  onUpdateArticle = () => {},
-  onDirectAdjustStock = () => {},
-  stockKPIs = { total: 0, alertes: 0, ruptures: 0, ok: 0, totalSorties: 0, totalEntrees: 0 },
-  onNavigateToType: _onNavigateToType = () => {},
-  onNavigateToPdrGroups,
-  pdrGroups: propPdrGroups = [],
-  setPdrGroups: propSetPdrGroups,
-}: any) {
-  const { t } = useI18n();
-  const stockItems = propStockItems || [];
-  const storePdrGroups = useGmaoStore((s) => s.pdrGroups) || [];
-  const setStorePdrGroups = useGmaoStore((s) => s.setPdrGroups);
-  const effectivePdrGroups =
-    propPdrGroups && propPdrGroups.length > 0 ? propPdrGroups : storePdrGroups;
-  const effectiveSetPdrGroups = propSetPdrGroups || setStorePdrGroups;
-
-  const [stockGroupFilter, setStockGroupFilter] = useState('ALL');
-  const [showGroupsModal, setShowGroupsModal] = useState(false);
-  const [showPdrExcelModal, setShowPdrExcelModal] = useState(false);
-
-  const availableTypes = useMemo(
-    () => listPdrTypesByGroup(types, stockGroupFilter),
-    [types, stockGroupFilter]
-  );
-
-  const storeCorrective = useGmaoStore((s) => s.correctiveInterventions);
-  const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
-  const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
-  const storePreventiveTasks = useGmaoStore((s) => s.preventiveTasks);
-
-  const reservedStockMap = useMemo(
-    () =>
-      computeReservedStockMap({
-        correctiveInterventions: storeCorrective,
-        preventiveExecutions: storePreventiveExecs,
-        sortieDemands: storeSortieDemands,
-        preventiveTasks: storePreventiveTasks,
-      }),
-    [storeCorrective, storePreventiveExecs, storeSortieDemands, storePreventiveTasks]
-  );
-
-  const getReservedEntry = useCallback(
-    (ref?: string) => {
-      const key = String(ref || '')
-        .trim()
-        .toUpperCase();
-      return key ? reservedStockMap.get(key) || null : null;
-    },
-    [reservedStockMap]
-  );
-
-  const reservedSummary = useMemo(() => {
-    let articlesCount = 0;
-    let totalUnits = 0;
-    let riskCount = 0;
-    for (const item of stockItems) {
-      const entry = getReservedEntry(item.ref);
-      if (entry && entry.reservedQty > 0) {
-        articlesCount += 1;
-        totalUnits += entry.reservedQty;
-        const domainItem = new StockItem(item);
-        const netDispo = domainItem.getActuel() - entry.reservedQty;
-        if (netDispo <= domainItem.getSeuilAlerte()) {
-          riskCount += 1;
-        }
-      }
-    }
-    return { articlesCount, totalUnits, riskCount };
-  }, [stockItems, getReservedEntry]);
-
-  const reorderAlerts = useMemo(
-    () =>
-      computeStockReorderAlerts({
-        stockItems,
-        reservedStockMap,
-      }),
-    [stockItems, reservedStockMap]
-  );
-
-  const [showReorderPanel, setShowReorderPanel] = useState(false);
-  const [showReplenishmentModal, setShowReplenishmentModal] = useState(false);
-  const [showLotCumpModal, setShowLotCumpModal] = useState(false);
-
-  const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
-
-  const emplacements = useMemo(() => {
-    const set = new Set();
-    (stockItems || []).forEach((item) => {
-      if (item.emplacement) set.add(item.emplacement);
-    });
-    return Array.from(set).sort();
-  }, [stockItems]);
-
-  const [stockCriticiteFilter, setStockCriticiteFilter] = useState('ALL');
-  const [stockDomaineFilter, setStockDomaineFilter] = useState('ALL');
-
-  const deferredStockSearch = useDeferredValue(stockSearch);
-  const filteredStock = useMemo(() => {
-    if (!stockItems || stockItems.length === 0) return [];
-
-    const baseGroupFiltered = listStockItemsByGroupType(
-      stockItems,
-      types,
-      stockGroupFilter,
-      stockTypeFilter
-    );
-
-    return baseGroupFiltered.filter((item) => {
-      // Filter by emplacement
-      if (stockEmplacementFilter !== 'ALL') {
-        if (item.emplacement !== stockEmplacementFilter) {
-          return false;
-        }
-      }
-
-      // Filter by ABC criticality (P2)
-      if (stockCriticiteFilter !== 'ALL') {
-        const itemCrit = String(item.criticite || 'B').trim().toUpperCase();
-        if (itemCrit !== stockCriticiteFilter) {
-          return false;
-        }
-      }
-
-      // Filter by Domaine Technique (P3 — inherits from Type or Group if not set on SKU)
-      if (stockDomaineFilter !== 'ALL') {
-        const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
-        const effDomaine = String(
-          item.domaine_technique ||
-            hierarchy.type?.domaine_technique ||
-            hierarchy.group?.domaine_technique ||
-            ''
-        )
-          .trim()
-          .toUpperCase();
-        if (effDomaine !== stockDomaineFilter) {
-          return false;
-        }
-      }
-
-      // Filter by alert status
-      const domainItem = new StockItem(item);
-      if (stockAlertOnly && domainItem.getCriticite() === 'OK') {
-        return false;
-      }
-
-      // Filter by search
-      if (deferredStockSearch) {
-        return multiTokenSearch(
-          item,
-          [
-            'ref',
-            'designation',
-            'emplacement',
-            'type',
-            'id_type',
-            'id_group',
-            'ref_constructeur',
-            'code_equivalents',
-            'domaine_technique',
-            'unite_mesure',
-            'criticite',
-          ],
-          deferredStockSearch
-        );
-      }
-
-      return true;
-    });
-  }, [
+  const ctrl = useStockViewController(props);
+  const {
+    t,
     stockItems,
-    types,
     effectivePdrGroups,
+    effectiveSetPdrGroups,
+    availableTypes,
+    reservedSummary,
+    getReservedEntry,
+    reorderAlerts,
+    emplacements,
     stockGroupFilter,
-    stockTypeFilter,
+    setStockGroupFilter,
     stockEmplacementFilter,
+    setStockEmplacementFilter,
     stockCriticiteFilter,
+    setStockCriticiteFilter,
     stockDomaineFilter,
-    stockAlertOnly,
-    deferredStockSearch,
-  ]);
+    setStockDomaineFilter,
+    localSearch,
+    setLocalSearch,
+    pageSize,
+    setPageSize,
+    currentPage,
+    setCurrentPage,
+    sortField,
+    sortOrder,
+    showSortMenu,
+    setShowSortMenu,
+    sortMenuRef,
+    activeKpiFilter,
+    setActiveKpiFilter,
+    activeActionMenuRef,
+    setActiveActionMenuRef,
+    showGroupsModal,
+    setShowGroupsModal,
+    showPdrExcelModal,
+    setShowPdrExcelModal,
+    showReorderPanel,
+    setShowReorderPanel,
+    showReplenishmentModal,
+    setShowReplenishmentModal,
+    showLotCumpModal,
+    setShowLotCumpModal,
+    showFormulasModal,
+    setShowFormulasModal,
+    quickModalState,
+    setQuickModalState,
+    editArticleModalState,
+    setEditArticleModalState,
+    canEditStock,
+    canCreateStock,
+    canCreateMovement,
+    effectiveFiltered,
+    displayedStock,
+    totalItems,
+    startIndex,
+    hasActiveFilters,
+    clearAllFilters,
+    stockFilterPresets,
+    activeStockFilterChips,
+    handleSort,
+    handleExportExcel,
+    handleOpenQuickModal,
+    handleOpenEditArticle,
+    handleRowContextMenu,
+  } = ctrl;
 
-  const [pageSize, setPageSize] = useState(20);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState('type');
-  const [sortOrder, setSortOrder] = useState('asc');
-  const [showSortMenu, setShowSortMenu] = useState(false);
-  const [activeKpiFilter, setActiveKpiFilter] = useState('ALL'); // ALL | 'OK' | 'ALERTE' | 'RUPTURE'
-  const [showFormulasModal, setShowFormulasModal] = useState(false);
-
-  // Dropdown actions popover menu state for table rows
-  const [activeActionMenuRef, setActiveActionMenuRef] = useState<any>(null);
-
-  // Modals state
-  const [quickModalState, setQuickModalState] = useState<any>({
-    isOpen: false,
-    article: null,
-    initialFlow: 'Sortie Interne',
-    initialAction: 'CORRECTIVE',
-  });
-
-  const [editArticleModalState, setEditArticleModalState] = useState<any>({
-    isOpen: false,
-    article: null,
-  });
-
-  const canEditStock = usePermission('stock.edit');
-  const canCreateStock = usePermission('stock.create');
-  const canCreateMovement = usePermission('movement.create');
-
-  const sortMenuRef = useRef<any>(null);
-
-  // Debounce state for high-performance stock searching
-  const [localSearch, setLocalSearch] = useState(stockSearch);
-
-  // Sync from parent in case a smart link modifies stockSearch externally
-  useEffect(() => {
-    setLocalSearch(stockSearch);
-  }, [stockSearch]);
-
-  // Debounce propagation of search input to setStockSearch
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setStockSearch(localSearch);
-    }, 200);
-    return () => clearTimeout(handler);
-  }, [localSearch, setStockSearch]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [stockSearch, stockTypeFilter, stockAlertOnly, activeKpiFilter, sortField, sortOrder]);
-
-  // Close menus on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target)) {
-        setShowSortMenu(false);
-      }
-      if (!event.target.closest('.action-menu-container')) {
-        setActiveActionMenuRef(null);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-  };
-
-  // Pre-filter with active KPI status card if clicked
-  const effectiveFiltered = useMemo(() => {
-    if (activeKpiFilter === 'ALL') return filteredStock;
-    if (activeKpiFilter === 'RESERVED') {
-      return filteredStock.filter((item) => {
-        const entry = getReservedEntry(item.ref);
-        return Boolean(entry && entry.reservedQty > 0);
-      });
-    }
-    return filteredStock.filter((item) => item.alerte === activeKpiFilter);
-  }, [filteredStock, activeKpiFilter, getReservedEntry]);
-
-  const sortStock = useCallback((items) => {
-    if (!sortField || !items || items.length === 0) return items || [];
-    const list = [...items];
-    const isAsc = sortOrder === 'asc';
-
-    return list.sort((a, b) => {
-      let valA = a[sortField];
-      let valB = b[sortField];
-
-      if (sortField === 'alerte') {
-        const priority = { RUPTURE: 0, ALERTE: 1, OK: 2 };
-        valA = priority[a.alerte] ?? 3;
-        valB = priority[b.alerte] ?? 3;
-        if (valA !== valB) return isAsc ? valA - valB : valB - valA;
-      } else if (
-        ['stockInitial', 'entrees', 'sorties', 'stockActuel', 'seuil'].includes(sortField)
-      ) {
-        valA = Number(valA || 0);
-        valB = Number(valB || 0);
-        if (valA !== valB) return isAsc ? valA - valB : valB - valA;
-      } else if (sortField === 'type') {
-        const typeComp = String(a.type || a.id_type || '').localeCompare(
-          String(b.type || b.id_type || ''),
-          undefined,
-          { sensitivity: 'base' }
-        );
-        if (typeComp !== 0) return isAsc ? typeComp : -typeComp;
-        return String(a.ref || '').localeCompare(String(b.ref || ''), undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        });
-      } else {
-        const strComp = String(valA || '').localeCompare(String(valB || ''), undefined, {
-          numeric: true,
-          sensitivity: 'base',
-        });
-        if (strComp !== 0) return isAsc ? strComp : -strComp;
-      }
-
-      // Secondary sort by ref numeric
-      return String(a.ref || '').localeCompare(String(b.ref || ''), undefined, {
-        numeric: true,
-        sensitivity: 'base',
-      });
-    });
-  }, [sortField, sortOrder]);
-
-  const sortedStock = useMemo(() => {
-    return sortStock(effectiveFiltered);
-  }, [effectiveFiltered, sortStock]);
-
-  const totalItems = sortedStock.length;
-  const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
-  const startIndex = (currentPage - 1) * effectivePageSize;
-  const rawDisplayedStock =
-    pageSize === 0 ? sortedStock : sortedStock.slice(startIndex, startIndex + effectivePageSize);
-  const displayedStock = rawDisplayedStock;
-
-
-  const renderSortIcon = (field) => {
+  const renderSortIcon = (field: string) => {
     if (sortField !== field) {
       return (
         <ArrowUpDown className="w-3 h-3 text-slate-300 group-hover:text-slate-500 transition shrink-0" />
@@ -436,302 +138,9 @@ export default function StockView({
     );
   };
 
-  const hasActiveFilters = Boolean(
-    stockGroupFilter !== 'ALL' ||
-    stockTypeFilter !== 'ALL' ||
-    stockEmplacementFilter !== 'ALL' ||
-    stockCriticiteFilter !== 'ALL' ||
-    stockDomaineFilter !== 'ALL' ||
-    stockAlertOnly ||
-    activeKpiFilter !== 'ALL' ||
-    localSearch ||
-    sortField !== 'type' ||
-    sortOrder !== 'asc'
-  );
-
-  const clearAllFilters = () => {
-    setStockGroupFilter('ALL');
-    setStockTypeFilter('ALL');
-    setStockEmplacementFilter('ALL');
-    setStockCriticiteFilter('ALL');
-    setStockDomaineFilter('ALL');
-    setStockAlertOnly(false);
-    setActiveKpiFilter('ALL');
-    setLocalSearch('');
-    setSortField('type');
-    setSortOrder('asc');
-  };
-
-  const stockFilterPresets = useMemo(() => [
-    {
-      key: 'ALL',
-      label: t('common.filters.all'),
-      count: stockItems.length,
-      activeBg: 'bg-slate-900 text-white shadow-xs',
-      onClick: () => {
-        setActiveKpiFilter('ALL');
-        setStockAlertOnly(false);
-      },
-      isActive: activeKpiFilter === 'ALL' && !stockAlertOnly,
-    },
-    {
-      key: 'OK',
-      label: t('stock.status_ok', 'Stock Normal'),
-      count: stockKPIs.ok || 0,
-      activeBg: 'bg-emerald-600 text-white shadow-xs',
-      colorDot: 'bg-emerald-500',
-      onClick: () => {
-        setActiveKpiFilter('OK');
-        setStockAlertOnly(false);
-      },
-      isActive: activeKpiFilter === 'OK',
-    },
-    {
-      key: 'ALERTE',
-      label: t('stock.status_alert', 'Alerte Seuil'),
-      count: stockKPIs.alertes || 0,
-      activeBg: 'bg-amber-600 text-white shadow-xs',
-      colorDot: 'bg-amber-500',
-      onClick: () => {
-        setActiveKpiFilter('ALERTE');
-        setStockAlertOnly(false);
-      },
-      isActive: activeKpiFilter === 'ALERTE',
-    },
-    {
-      key: 'RUPTURE',
-      label: t('stock.status_rupture', 'Rupture Stock'),
-      count: stockKPIs.ruptures || 0,
-      activeBg: 'bg-rose-600 text-white shadow-xs',
-      colorDot: 'bg-rose-500',
-      onClick: () => {
-        setActiveKpiFilter('RUPTURE');
-        setStockAlertOnly(false);
-      },
-      isActive: activeKpiFilter === 'RUPTURE',
-    },
-    {
-      key: 'ALL_ALERTS',
-      label: t('stock.all_alerts', 'Toutes Alertes'),
-      count: (stockKPIs.ruptures || 0) + (stockKPIs.alertes || 0),
-      activeBg: 'bg-violet-600 text-white shadow-xs',
-      colorDot: 'bg-violet-500',
-      onClick: () => {
-        setStockAlertOnly(true);
-        setActiveKpiFilter('ALL');
-      },
-      isActive: stockAlertOnly && activeKpiFilter === 'ALL',
-    },
-    {
-      key: 'RESERVED',
-      label: 'Réservé (Maker-Checker)',
-      count: reservedSummary.articlesCount,
-      activeBg: 'bg-purple-700 text-white shadow-xs',
-      colorDot: 'bg-purple-500',
-      onClick: () => {
-        setActiveKpiFilter(activeKpiFilter === 'RESERVED' ? 'ALL' : 'RESERVED');
-        setStockAlertOnly(false);
-      },
-      isActive: activeKpiFilter === 'RESERVED',
-    },
-  ], [stockItems.length, stockKPIs, activeKpiFilter, stockAlertOnly, reservedSummary.articlesCount, setActiveKpiFilter, setStockAlertOnly, t]);
-
-  const activeStockFilterChips = useMemo(() => {
-    const chips = [];
-    if (localSearch) {
-      chips.push({
-        key: 'search',
-        label: `${t('common.filters.search')}: "${localSearch}"`,
-        onRemove: () => {
-          setLocalSearch('');
-          setStockSearch('');
-        },
-      });
-    }
-    if (stockGroupFilter !== 'ALL') {
-      const grp = effectivePdrGroups.find((g: any) => g.id === stockGroupFilter);
-      chips.push({
-        key: 'group',
-        label: `Groupe: ${grp ? grp.code : stockGroupFilter === 'UNCLASSIFIED' ? 'Non classé' : stockGroupFilter}`,
-        onRemove: () => setStockGroupFilter('ALL'),
-      });
-    }
-    if (stockTypeFilter !== 'ALL') {
-      chips.push({
-        key: 'type',
-        label: `${t('stock.piece_type', 'Type')}: ${stockTypeFilter}`,
-        onRemove: () => setStockTypeFilter('ALL'),
-      });
-    }
-    if (activeKpiFilter !== 'ALL') {
-      chips.push({
-        key: 'state',
-        label: `${t('common.filters.state')} ${activeKpiFilter}`,
-        onRemove: () => setActiveKpiFilter('ALL'),
-      });
-    }
-    if (stockAlertOnly && activeKpiFilter === 'ALL') {
-      chips.push({
-        key: 'alerts',
-        label: t('stock.all_alerts', 'Toutes Alertes'),
-        onRemove: () => setStockAlertOnly(false),
-      });
-    }
-    if (stockEmplacementFilter !== 'ALL') {
-      chips.push({
-        key: 'emplacement',
-        label: `${t('stock.emplacement', 'Emplacement')}: ${stockEmplacementFilter}`,
-        onRemove: () => setStockEmplacementFilter('ALL'),
-      });
-    }
-    if (stockCriticiteFilter !== 'ALL') {
-      chips.push({
-        key: 'criticite',
-        label: `Criticité: Classe ${stockCriticiteFilter}`,
-        onRemove: () => setStockCriticiteFilter('ALL'),
-      });
-    }
-    if (stockDomaineFilter !== 'ALL') {
-      chips.push({
-        key: 'domaine',
-        label: `Domaine: ${stockDomaineFilter}`,
-        onRemove: () => setStockDomaineFilter('ALL'),
-      });
-    }
-    return chips;
-  }, [localSearch, stockGroupFilter, effectivePdrGroups, stockTypeFilter, activeKpiFilter, stockAlertOnly, stockEmplacementFilter, stockCriticiteFilter, stockDomaineFilter, setStockSearch, setStockGroupFilter, setActiveKpiFilter, setStockTypeFilter, setStockAlertOnly, setStockEmplacementFilter, t]);
-
-  const handleExportExcel = () => {
-    try {
-      const headers = [
-        'REF (B)',
-        'DÉSIGNATION (C)',
-        'TYPE (D)',
-        'DOMAINE TECHNIQUE',
-        'UNITÉ MESURE',
-        'CRITICITÉ (ABC)',
-        'RÉF CONSTRUCTEUR',
-        'CODES ÉQUIVALENTS',
-        'DÉLAI APPRO (J)',
-        'POLICY TAGS',
-        'STOCK INITIAL (E)',
-        'ENTRÉES (F)',
-        'SORTIES (G)',
-        'STOCK ACTUEL (H)',
-        'SEUIL (I)',
-        'ALERTE (J)',
-        'EMPLACEMENT (K)',
-      ];
-      const rows = effectiveFiltered.map((item) => {
-        const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
-        const effDomaine =
-          item.domaine_technique ||
-          hierarchy.type?.domaine_technique ||
-          hierarchy.group?.domaine_technique ||
-          '';
-        return [
-          item.ref || '',
-          item.designation || '',
-          item.type || item.id_type || '',
-          effDomaine,
-          item.unite_mesure || item.unite || 'PCS',
-          item.criticite || 'B',
-          item.ref_constructeur || '',
-          item.code_equivalents || '',
-          item.delai_appro_jours ?? '',
-          (item.policy_tags && item.policy_tags.length > 0 ? item.policy_tags : ['REPLACING']).join('|'),
-          item.stockInitial || 0,
-          item.entrees || 0,
-          item.sorties || 0,
-          item.stockActuel || 0,
-          item.seuil || 0,
-          item.alerte || '',
-          item.emplacement || '',
-        ];
-      });
-      const csvContent =
-        'data:text/csv;charset=utf-8,\uFEFF' +
-        [
-          headers.join(';'),
-          ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')),
-        ].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `GMAO_Stock_Actuel_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (e) {
-      Logger.error('Export error in StockView:', e);
-    }
-  };
-
-  const handleOpenQuickModal = (item, flow, action) => {
-    setQuickModalState({
-      isOpen: true,
-      article: item,
-      initialFlow: flow,
-      initialAction: action,
-    });
-    setActiveActionMenuRef(null);
-  };
-
-  const handleOpenEditArticle = (item) => {
-    setEditArticleModalState({
-      isOpen: true,
-      article: item,
-    });
-    setActiveActionMenuRef(null);
-  };
-
-  const handleRowContextMenu = (e, item) => {
-    const menuItems = [];
-    if (canEditStock) {
-      menuItems.push({
-        id: 'edit',
-        label: t('stock.context.edit', 'Modifier l’article'),
-        onClick: () => handleOpenEditArticle(item),
-      });
-    }
-    if (canCreateMovement) {
-      menuItems.push(
-        {
-          id: 'quick-sortie',
-          label: t('stock.context.quick_sortie', 'Sortie directe (Sortie PDR)'),
-          onClick: () => handleOpenQuickModal(item, 'Sortie', 'CORRECTIVE'),
-        },
-        {
-          id: 'quick-entree',
-          label: t('stock.context.quick_entree', 'Entrée directe (Réapprovisionnement)'),
-          onClick: () => handleOpenQuickModal(item, 'Entrée', 'REAPPRO'),
-        }
-      );
-    }
-    if (menuItems.length > 0) {
-      menuItems.push({ separator: true });
-    }
-    menuItems.push({
-      id: 'copy-ref',
-      label: t('stock.context.copy_ref', { ref: item.ref }),
-      onClick: () => {
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(item.ref);
-        }
-      },
-    });
-    contextMenu.show(e, menuItems, `Article: ${item.ref}`);
-  };
-
   const stockColumns = useMemo(
     () => [
-      {
-        key: 'ref',
-        label: t('stock.fields.ref', 'REF'),
-        colLetter: 'B',
-        icon: Tag,
-        sortable: true,
-      },
+      { key: 'ref', label: t('stock.fields.ref', 'REF'), colLetter: 'B', icon: Tag, sortable: true },
       {
         key: 'designation',
         label: t('stock.fields.designation', 'DÉSIGNATION'),
@@ -740,13 +149,7 @@ export default function StockView({
         sortable: true,
         headerClassName: 'min-w-[220px]',
       },
-      {
-        key: 'type',
-        label: t('stock.fields.type', 'TYPE'),
-        colLetter: 'D',
-        icon: Boxes,
-        sortable: true,
-      },
+      { key: 'type', label: t('stock.fields.type', 'TYPE'), colLetter: 'D', icon: Boxes, sortable: true },
       {
         key: 'stockInitial',
         label: t('stock.fields.initial', 'INITIAL'),
@@ -814,32 +217,29 @@ export default function StockView({
 
   return (
     <AnimatedPage className="space-y-5">
-      {/* Top Banner (BDR Light GMAO Header Card with 3D Tactile Elevation) */}
+      {/* Top Banner */}
       <div className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/90 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden group/header">
-        {/* Subtle Ambient Gradient Background Highlight */}
         <div className="absolute -top-12 -right-12 w-48 h-48 bg-cyan-500/5 rounded-full blur-2xl pointer-events-none group-hover/header:bg-cyan-500/10 transition-colors duration-500" />
-
         <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5 relative">
           <PageHeaderIcon icon={Package} colorClass="text-cyan-700" />
-
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <span>{t('stock.title_full', 'Stock Actuel & Catalogue Pièces de Rechange (PDR)')}</span>
             </h2>
             <p className="text-xs text-slate-500 mt-1 max-w-3xl leading-relaxed">
-              {t('stock.banner_desc', 'Tableau central miroir de Stock_Actuel (Excel B → K). Calcul temps réel : Stock Actuel = Initial (E) + Entrées (F) - Sorties (G) avec menu d\'actions et flux directs.')}
+              {t(
+                'stock.banner_desc',
+                "Tableau central miroir de Stock_Actuel (Excel B → K). Calcul temps réel : Stock Actuel = Initial (E) + Entrées (F) - Sorties (G) avec menu d'actions et flux directs."
+              )}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5 shrink-0 relative">
-          {/* 3D Formula Circular Trigger Button */}
           <FormulasModalButton
             onClick={() => setShowFormulasModal(true)}
             title={t('stock.formulas_button', 'Formules Excel (Col. B → K)')}
           />
-
-          {/* 3D Lots, Multi-Bin & CUMP/FEFO Button */}
           <Action3DButton
             variant="circle"
             color="primary"
@@ -847,8 +247,6 @@ export default function StockView({
             onClick={() => setShowLotCumpModal(true)}
             title="Multi-Emplacements (Bins), Lots & Péremption (FEFO/FIFO) & Valorisation CUMP"
           />
-
-          {/* 3D Replenishment & Purchase Orders Button (Warehouse / Admin only) */}
           {canEditStock && (
             <Action3DButton
               variant="circle"
@@ -859,8 +257,6 @@ export default function StockView({
               title="Réapprovisionnement PDR & Commandes Fournisseurs"
             />
           )}
-
-          {/* 3D Primary Add Article Button */}
           {canCreateStock && (
             <Action3DButton
               variant="circle"
@@ -874,7 +270,6 @@ export default function StockView({
         </div>
       </div>
 
-      {/* KPI Cards Bar (Interactive Clickable Filters) */}
       <StockKPIBar
         stockItems={stockItems}
         stockKPIs={stockKPIs}
@@ -885,513 +280,60 @@ export default function StockView({
         setStockAlertOnly={setStockAlertOnly}
       />
 
-      {/* Virtual Stock Reservation Banner (Maker-Checker) */}
-      {reservedSummary.articlesCount > 0 && (
-        <div className="bg-purple-50/90 border border-purple-300 rounded-2xl p-3.5 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-purple-700 text-white flex items-center justify-center shrink-0">
-              <Lock className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-xs font-black text-purple-950 uppercase tracking-wider flex items-center gap-2">
-                <span>Stock Physique vs Stock Disponible (Réservation Virtuelle Maker-Checker)</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-purple-200 text-purple-900">
-                  {reservedSummary.totalUnits} u. réservée(s)
-                </span>
-              </div>
-              <p className="text-[11px] text-purple-800 mt-0.5">
-                {reservedSummary.articlesCount} référence(s) ont des sorties déclarées par les techniciens en attente de validation responsable.
-                {reservedSummary.riskCount > 0 && (
-                  <span className="font-bold text-rose-700 ml-1">
-                    Attention : {reservedSummary.riskCount} article(s) passent sous le seuil ou en rupture après validation !
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveKpiFilter(activeKpiFilter === 'RESERVED' ? 'ALL' : 'RESERVED');
-              setStockAlertOnly(false);
-            }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-              activeKpiFilter === 'RESERVED'
-                ? 'bg-slate-900 text-white'
-                : 'bg-purple-700 hover:bg-purple-800 text-white shadow-2xs'
-            }`}
-          >
-            {activeKpiFilter === 'RESERVED'
-              ? 'Afficher tout le stock'
-              : `Filtrer les réservations (${reservedSummary.articlesCount})`}
-          </button>
-        </div>
-      )}
+      <StockAlertBanners
+        reservedSummary={reservedSummary}
+        reorderAlerts={reorderAlerts}
+        activeKpiFilter={activeKpiFilter}
+        setActiveKpiFilter={setActiveKpiFilter}
+        stockAlertOnly={stockAlertOnly}
+        setStockAlertOnly={setStockAlertOnly}
+        canEditStock={canEditStock}
+        showReorderPanel={showReorderPanel}
+        setShowReorderPanel={setShowReorderPanel}
+        onOpenReplenishment={() => setShowReplenishmentModal(true)}
+      />
 
-      {/* C3 — Lightweight Stock Reorder Alert Card (Read-only warning, no purchasing module) */}
-      {reorderAlerts.totalAlertCount > 0 && (
-        <div
-          className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-2xs space-y-3"
-          data-testid="c3-stock-reorder-alert-card"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
-                    Alerte Réapprovisionnement (C3 — Articles sous seuil / rupture)
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-900 border border-rose-200">
-                    {reorderAlerts.ruptureCount} rupture(s)
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-200/80 text-amber-950 border border-amber-300">
-                    {reorderAlerts.sousSeuilCount} sous seuil
-                  </span>
-                  {reorderAlerts.reservationRiskCount > 0 && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                      {reorderAlerts.reservationRiskCount} sous seuil après réservation
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-amber-900 mt-0.5">
-                  Lecture seule basée sur le solde affiché (Stock Actuel ≤ Seuil Min) et les réservations en attente. Aucun bon d&apos;achat automatique n&apos;est généré.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setStockAlertOnly(!stockAlertOnly);
-                  setActiveKpiFilter('ALL');
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  stockAlertOnly
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white hover:bg-amber-100 text-amber-950 border border-amber-300'
-                }`}
-              >
-                {stockAlertOnly ? 'Tout afficher' : 'Filtrer dans la grille'}
-              </button>
-              {canEditStock && (
-                <button
-                  type="button"
-                  onClick={() => setShowReplenishmentModal(true)}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5" />
-                  <span>Générer Commande</span>
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowReorderPanel((prev) => !prev)}
-                className="px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
-              >
-                <span>
-                  {showReorderPanel
-                    ? 'Masquer la liste'
-                    : `Voir la liste (${reorderAlerts.totalAlertCount})`}
-                </span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 transition-transform ${
-                    showReorderPanel ? 'rotate-180' : ''
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {showReorderPanel && (
-            <div className="bg-white rounded-xl border border-amber-200 overflow-x-auto">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-extrabold uppercase text-slate-600">
-                    <th className="py-2 px-3">Réf</th>
-                    <th className="py-2 px-3">Désignation</th>
-                    <th className="py-2 px-3">Emplacement</th>
-                    <th className="py-2 px-3 text-right">Stock Actuel</th>
-                    <th className="py-2 px-3 text-right">Réservé (Attente)</th>
-                    <th className="py-2 px-3 text-right">Net Dispo</th>
-                    <th className="py-2 px-3 text-right">Seuil Min</th>
-                    <th className="py-2 px-3 text-center">Statut Alerte</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {reorderAlerts.items.slice(0, 15).map((item) => (
-                    <tr key={item.ref} className="hover:bg-slate-50/80">
-                      <td className="py-2 px-3 font-mono font-bold text-slate-900">{item.ref}</td>
-                      <td className="py-2 px-3 font-semibold text-slate-800">
-                        {item.designation}
-                      </td>
-                      <td className="py-2 px-3 text-slate-600">{item.emplacement}</td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                        {item.stockActuel} {item.unit}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono text-purple-800">
-                        {item.reservedQty > 0 ? `${item.reservedQty} ${item.unit}` : '—'}
-                      </td>
-                      <td
-                        className={`py-2 px-3 text-right font-mono font-bold ${
-                          item.netAvailable <= 0 ? 'text-rose-700' : 'text-amber-800'
-                        }`}
-                      >
-                        {item.netAvailable} {item.unit}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-slate-700">
-                        {item.seuil} {item.unit}
-                      </td>
-                      <td className="py-2 px-3 text-center">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
-                            item.status === 'RUPTURE'
-                              ? 'bg-rose-100 text-rose-900 border-rose-200'
-                              : item.status === 'SOUS_SEUIL'
-                              ? 'bg-amber-100 text-amber-900 border-amber-200'
-                              : 'bg-purple-100 text-purple-900 border-purple-200'
-                          }`}
-                        >
-                          {item.statusLabelFr}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 4. Central Unified Industrial Filter & Search Card */}
-      <IndustrialFilterCard
-        title={t('common.filters.title')}
-        subtitle={t('stock.filters_subtitle', 'Catalogue Pièces de Rechange • Liaisons Excel Colonnes B → K')}
-        color="amber"
+      <StockFilterPanel
+        t={t}
+        stockItems={stockItems}
         filteredCount={effectiveFiltered.length}
-        totalCount={stockItems.length}
+        effectivePdrGroups={effectivePdrGroups}
+        types={types}
+        availableTypes={availableTypes}
+        emplacements={emplacements}
+        localSearch={localSearch}
+        setLocalSearch={setLocalSearch}
+        setStockSearch={setStockSearch}
+        stockGroupFilter={stockGroupFilter}
+        setStockGroupFilter={setStockGroupFilter}
+        stockTypeFilter={stockTypeFilter}
+        setStockTypeFilter={setStockTypeFilter}
+        activeKpiFilter={activeKpiFilter}
+        setActiveKpiFilter={setActiveKpiFilter}
+        stockAlertOnly={stockAlertOnly}
+        setStockAlertOnly={setStockAlertOnly}
+        stockEmplacementFilter={stockEmplacementFilter}
+        setStockEmplacementFilter={setStockEmplacementFilter}
+        stockCriticiteFilter={stockCriticiteFilter}
+        setStockCriticiteFilter={setStockCriticiteFilter}
+        stockDomaineFilter={stockDomaineFilter}
+        setStockDomaineFilter={setStockDomaineFilter}
+        sortField={sortField}
+        sortOrder={sortOrder}
+        showSortMenu={showSortMenu}
+        setShowSortMenu={setShowSortMenu}
+        sortMenuRef={sortMenuRef}
+        handleSort={handleSort}
         hasActiveFilters={hasActiveFilters}
-        onReset={clearAllFilters}
-        onExportExcel={handleExportExcel}
-        exportLabel={t('common.filters.export_excel')}
-        presets={stockFilterPresets}
-        presetsLabel={t('common.filters.state')}
-        activeFilters={activeStockFilterChips}
-        onClearAll={clearAllFilters}
-      >
-        {/* PDR Hierarchy Summary & Management */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-amber-100/90">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-              Hiérarchie PDR (N1 ➔ N2 ➔ SKU) :
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-mono text-[10.5px] font-bold">
-              Groupe ({effectivePdrGroups.length})
-            </span>
-            <span className="text-slate-400 text-xs font-bold">➔</span>
-            <span className="px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 font-mono text-[10.5px] font-bold">
-              Type ({availableTypes.length})
-            </span>
-            <span className="text-slate-400 text-xs font-bold">➔</span>
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[10.5px] font-bold">
-              SKU / Ref ({stockItems.length})
-            </span>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() =>
-                downloadPdrCatalogWorkbook({
-                  pdrGroups: effectivePdrGroups,
-                  types,
-                  rawStock: stockItems,
-                })
-              }
-              data-testid="btn-quick-export-pdr-catalog"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
-              title="Exporter le catalogue PDR à 3 feuilles (PDR_GROUPS, PDR_TYPES, PDR_ITEMS)"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Exporter catalogue PDR (Groupes / Types / Articles)</span>
-            </button>
-            {canEditStock && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowPdrExcelModal(true)}
-                  data-testid="btn-open-pdr-excel-modal"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
-                  title="Importer ou exporter un classeur Excel PDR hiérarchique (.xlsx)"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Importer Catalogue PDR (.xlsx)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowGroupsModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-xs cursor-pointer active:scale-95"
-                >
-                  <Package className="w-3.5 h-3.5 text-indigo-300" />
-                  <span>Gérer Groupes PDR</span>
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+        clearAllFilters={clearAllFilters}
+        handleExportExcel={handleExportExcel}
+        stockFilterPresets={stockFilterPresets}
+        activeStockFilterChips={activeStockFilterChips}
+        canEditStock={canEditStock}
+        onOpenPdrExcelModal={() => setShowPdrExcelModal(true)}
+        onOpenGroupsModal={() => setShowGroupsModal(true)}
+      />
 
-        {/* 5-Column Multi-Criteria Filter Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
-          {/* 1. Omni-Text Search */}
-          <FilterSearchInput
-            value={localSearch}
-            onChange={setLocalSearch}
-            onClear={() => {
-              setLocalSearch('');
-              setStockSearch('');
-            }}
-            placeholder={t('stock.search_placeholder', 'Ref, désignation, emplacement...')}
-            colBadge="Col. B+C"
-            colBadgeColor="slate"
-            focusRingColor="focus:ring-amber-500"
-            className="w-full sm:col-span-2 lg:col-span-1"
-          />
-
-          {/* 2. Groupe PDR (Niveau 1) */}
-          <FilterField label={t('stock.pdr_group', 'Groupe PDR')} colBadge="Niveau 1" colBadgeColor="indigo">
-            <CustomSelect
-              value={stockGroupFilter}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs">
-                  <Package className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                setStockGroupFilter(val);
-                if (val !== 'ALL' && stockTypeFilter !== 'ALL') {
-                  const subTypes = listPdrTypesByGroup(types, val);
-                  const stillValid = subTypes.some(
-                    (t: any) => (t.id_type || t.libelle) === stockTypeFilter
-                  );
-                  if (!stillValid) setStockTypeFilter('ALL');
-                }
-              }}
-              options={[
-                { value: 'ALL', label: `Tous les Groupes (${effectivePdrGroups.length})` },
-                { value: 'UNCLASSIFIED', label: 'Non classé / Sans groupe' },
-                ...effectivePdrGroups.map((g: any) => ({
-                  value: g.id,
-                  label: `${g.code} — ${g.libelle}`,
-                })),
-              ]}
-            />
-          </FilterField>
-
-          {/* 3. Type de Pièce (Niveau 2) */}
-          <FilterField label={t('stock.piece_type', 'Type de Pièce')} colBadge="Niveau 2" colBadgeColor="amber">
-            <CustomSelect
-              value={stockTypeFilter}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-                  <Boxes className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => setStockTypeFilter(val)}
-              options={[
-                {
-                  value: 'ALL',
-                  label: `${t('stock.all_types', 'Tous les Types')} (${availableTypes.length})`,
-                },
-                ...availableTypes.map((tItem: any) => {
-                  const val = typeof tItem === 'string' ? tItem : tItem.id_type || tItem.libelle;
-                  const label = typeof tItem === 'string' ? tItem : tItem.libelle || tItem.id_type;
-                  return {
-                    value: val,
-                    label: `${label}`,
-                  };
-                }),
-              ]}
-            />
-          </FilterField>
-
-          {/* 3. État / Alerte (Col. J) */}
-          <FilterField label={t('stock.state_alert', 'État / Alerte')} colBadge="Col. J" colBadgeColor="amber">
-            <CustomSelect
-              value={activeKpiFilter !== 'ALL' ? activeKpiFilter : stockAlertOnly ? 'ALL_ALERTS' : 'ALL'}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-                  <AlertTriangle className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => {
-                if (val === 'ALL') {
-                  setActiveKpiFilter('ALL');
-                  setStockAlertOnly(false);
-                } else if (val === 'ALL_ALERTS') {
-                  setActiveKpiFilter('ALL');
-                  setStockAlertOnly(true);
-                } else {
-                  setActiveKpiFilter(val);
-                  setStockAlertOnly(false);
-                }
-              }}
-              options={[
-                { value: 'ALL', label: t('stock.all_states', 'Tous États') },
-                { value: 'OK', label: t('stock.state_ok', '🟢 Stock Normal (OK)') },
-                { value: 'ALERTE', label: t('stock.state_alert_opt', '🟡 Alerte Seuil') },
-                { value: 'RUPTURE', label: t('stock.state_rupture_opt', '🔴 Rupture de Stock') },
-                { value: 'ALL_ALERTS', label: t('stock.all_alerts', '⚡ Toutes Alertes') },
-              ]}
-            />
-          </FilterField>
-
-          {/* 4. Emplacement (Col. K) */}
-          <FilterField label={t('stock.emplacement', 'Emplacement')} colBadge="Col. K" colBadgeColor="amber">
-            <CustomSelect
-              value={stockEmplacementFilter}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shadow-2xs">
-                  <MapPin className="w-3 h-3" />
-                </span>
-              }
-              onChange={(val) => setStockEmplacementFilter(val)}
-              options={[
-                { value: 'ALL', label: t('stock.all_emplacements', 'Tous Emplacements') },
-                ...emplacements.map((emp) => ({
-                  value: emp,
-                  label: emp,
-                })),
-              ]}
-            />
-          </FilterField>
-
-          {/* 4b. Criticité ABC (P2) */}
-          <FilterField label="Criticité (ABC)" colBadge="ABC" colBadgeColor="rose">
-            <CustomSelect
-              value={stockCriticiteFilter}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-rose-100 border border-rose-300/80 flex items-center justify-center text-rose-700 shadow-2xs font-mono text-[10px] font-black">
-                  {stockCriticiteFilter === 'ALL' ? 'ABC' : stockCriticiteFilter}
-                </span>
-              }
-              onChange={(val) => setStockCriticiteFilter(val)}
-              options={[
-                { value: 'ALL', label: 'Toutes Criticités (A/B/C)' },
-                { value: 'A', label: '🔴 Classe A — Vital / Critique' },
-                { value: 'B', label: '🟡 Classe B — Majeur / Important' },
-                { value: 'C', label: '🟢 Classe C — Standard / Courant' },
-              ]}
-            />
-          </FilterField>
-
-          {/* 4c. Domaine Technique (P3) */}
-          <FilterField label="Domaine Technique" colBadge="Métier" colBadgeColor="indigo">
-            <CustomSelect
-              value={stockDomaineFilter}
-              prefixIcon={
-                <span className="w-5 h-5 rounded-md bg-indigo-100 border border-indigo-300/80 flex items-center justify-center text-indigo-700 shadow-2xs font-mono text-[9px] font-black">
-                  DOM
-                </span>
-              }
-              onChange={(val) => setStockDomaineFilter(val)}
-              options={[
-                { value: 'ALL', label: 'Tous Domaines Techniques' },
-                { value: 'MECANIQUE', label: '⚙️ MÉCANIQUE' },
-                { value: 'ELECTRIQUE', label: '⚡ ÉLECTRIQUE' },
-                { value: 'HYDRAULIQUE', label: '💧 HYDRAULIQUE' },
-                { value: 'PNEUMATIQUE', label: '💨 PNEUMATIQUE' },
-                { value: 'AUTOMATISME', label: '🤖 AUTOMATISME' },
-                { value: 'LUBRIFIANTS', label: '🛢️ LUBRIFIANTS' },
-                { value: 'CONSOMMABLES', label: '🧰 CONSOMMABLES' },
-              ]}
-            />
-          </FilterField>
-
-          {/* 5. Sort Menu Button & Popover */}
-          <div className="relative" ref={sortMenuRef}>
-            <div className="flex items-center justify-between mb-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-800">
-              <span>{t('common.filters.sort_and_order', 'Tri & Ordre')}</span>
-              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80">
-                Col. B→K
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowSortMenu(!showSortMenu)}
-              className={`w-full h-9 px-2.5 rounded-xl border text-xs font-semibold transition flex items-center justify-between cursor-pointer ${
-                showSortMenu || sortField !== 'type' || sortOrder !== 'asc'
-                  ? 'bg-amber-50/80 text-amber-950 border-amber-300 ring-1 ring-amber-200'
-                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <div className="flex items-center gap-2 truncate">
-                <span className="w-5 h-5 rounded-md bg-amber-100 border border-amber-300/80 flex items-center justify-center text-amber-700 shrink-0 shadow-2xs">
-                  <ArrowUpDown className="w-3 h-3" />
-                </span>
-                <span className="truncate">
-                  {t('common.filters.sort_prefix', 'Tri :')} <b className="font-mono text-slate-900">{sortField.slice(0, 10).toUpperCase()}</b> (
-                  {sortOrder === 'asc' ? t('common.filters.asc', 'A→Z') : t('common.filters.desc', 'Z→A')})
-                </span>
-              </div>
-              <ChevronDown
-                className={`w-3 h-3 text-slate-400 transition-transform shrink-0 ${showSortMenu ? 'rotate-180' : ''}`}
-              />
-            </button>
-
-            {/* Sort Popover Menu */}
-            {showSortMenu && (
-              <div className="absolute right-0 mt-1 w-64 bg-white rounded-2xl border border-slate-200 shadow-xl z-50 p-2.5 space-y-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span>{t('common.filters.sort_columns_title', 'Sélectionner la Colonne de Tri')}</span>
-                  <span>B→K</span>
-                </div>
-                <div className="grid grid-cols-1 gap-1 text-xs max-h-60 overflow-y-auto pr-0.5">
-                  {[
-                    { key: 'ref', label: t('stock.columns.ref', 'REF (Col. B)') },
-                    { key: 'designation', label: t('stock.columns.designation', 'Désignation (Col. C)') },
-                    { key: 'type', label: t('stock.columns.type', 'Type de Pièce (Col. D)') },
-                    { key: 'stockInitial', label: t('stock.columns.initial', 'Stock Initial (Col. E)') },
-                    { key: 'entrees', label: t('stock.columns.entrees', 'Entrées Réappro (Col. F)') },
-                    { key: 'sorties', label: t('stock.columns.sorties', 'Sorties Totales (Col. G)') },
-                    { key: 'stockActuel', label: t('stock.columns.actuel', 'Stock Actuel (Col. H)') },
-                    { key: 'seuil', label: t('stock.columns.seuil', 'Seuil Critique (Col. I)') },
-                    { key: 'alerte', label: t('stock.columns.alerte', 'Alerte & État (Col. J)') },
-                    { key: 'emplacement', label: t('stock.columns.emplacement', 'Emplacement (Col. K)') },
-                  ].map((col) => (
-                    <button
-                      key={col.key}
-                      type="button"
-                      onClick={() => {
-                        handleSort(col.key);
-                        setShowSortMenu(false);
-                      }}
-                      className={`px-2.5 py-1.5 rounded-lg border text-left font-medium text-[11px] flex items-center justify-between transition cursor-pointer ${
-                        sortField === col.key
-                          ? 'bg-amber-50 text-amber-950 border-amber-300 font-bold'
-                          : 'bg-slate-50 text-slate-700 border-slate-200/80 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>{col.label}</span>
-                      {sortField === col.key && (
-                        sortOrder === 'asc' ? (
-                          <ArrowUp className="w-3.5 h-3.5 text-amber-700" />
-                        ) : (
-                          <ArrowDown className="w-3.5 h-3.5 text-amber-700" />
-                        )
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </IndustrialFilterCard>
-
-      {/* Unified Industrial Data Grid */}
       <GmaoIndustrialDataGrid
         title={t('stock.grid_title', 'Tableau Stock_Actuel • Ordre Excel Row 3 : B → K')}
         icon={<Package className="w-4 h-4 text-cyan-600" />}
@@ -1419,397 +361,41 @@ export default function StockView({
           color: 'cyan',
           itemLabel: t('stock.items_label', 'articles'),
         }}
-        renderRow={(item, idx) => {
+        renderRow={(item: IStockItem, idx: number) => {
           const rowNum = startIndex + idx + 1;
-          const domainItem = new StockItem(item);
-                  const typeObj = types.find(
-                    (t) => t.id_type === item.id_type || t.libelle === item.type
-                  );
-                  const isMenuOpen = activeActionMenuRef === item.ref;
-
-                  return (
-                    <tr
-                      key={`stock-row-${item.id || item.ref || 'stk'}-${rowNum}`}
-                      onContextMenu={(e) => handleRowContextMenu(e, item)}
-                      className="even:bg-slate-50/70 odd:bg-white hover:bg-cyan-50/40 border-b border-slate-200/70 transition-colors"
-                    >
-                      {/* Row N° Column */}
-                      <td className="py-3 px-3 text-center font-mono text-[11px] font-bold text-slate-400 bg-slate-100/40 border-r border-slate-200/80 shrink-0">
-                        {rowNum}
-                      </td>
-
-                      {/* Ref */}
-                      <td className="py-3 px-3.5 font-mono font-bold text-slate-900 whitespace-nowrap">
-                        <div className="flex flex-col items-start gap-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
-                              {item.ref}
-                            </span>
-                            {(() => {
-                              const crit = String(item.criticite || 'B').trim().toUpperCase();
-                              const critStyle =
-                                crit === 'A'
-                                  ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                  : crit === 'C'
-                                  ? 'bg-slate-100 text-slate-600 border-slate-200'
-                                  : 'bg-amber-50 text-amber-800 border-amber-200';
-                              return (
-                                <span
-                                  className={`px-1.5 py-0.2 rounded text-[9.5px] font-mono font-black border ${critStyle}`}
-                                  title={`Criticité PDR : Classe ${crit}`}
-                                >
-                                  {crit}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          {item.ref_constructeur && (
-                            <span
-                              className="text-[10px] font-mono font-medium text-slate-500 max-w-[160px] truncate"
-                              title={`Réf. Constructeur / OEM : ${item.ref_constructeur}`}
-                            >
-                              OEM: {item.ref_constructeur}
-                            </span>
-                          )}
-                          {item.code_equivalents && (
-                            <span
-                              className="text-[9.5px] font-mono font-semibold text-indigo-600 bg-indigo-50/70 px-1.5 py-0.2 rounded border border-indigo-100 max-w-[165px] truncate"
-                              title={`Codes équivalents : ${item.code_equivalents}`}
-                            >
-                              Éq: {item.code_equivalents}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Désignation */}
-                      <td className="py-3 px-3.5 font-bold text-slate-900 whitespace-nowrap">
-                        <div className="flex flex-col items-start gap-1">
-                          <span>{item.designation}</span>
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {(item.policy_tags && item.policy_tags.length > 0
-                              ? item.policy_tags
-                              : ['REPLACING']
-                            ).map((tag: string) => (
-                              <span
-                                key={tag}
-                                className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-50 text-sky-800 border border-sky-200"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Type (Badge) & Hierarchical Group */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        {(() => {
-                          const hierarchy = resolvePdrHierarchy(item, effectivePdrGroups, types);
-                          const effDomaine = String(
-                            item.domaine_technique ||
-                              hierarchy.type?.domaine_technique ||
-                              hierarchy.group?.domaine_technique ||
-                              ''
-                          )
-                            .trim()
-                            .toUpperCase();
-                          return (
-                            <div className="flex flex-col gap-1 items-start">
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {hierarchy.group && (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-mono text-[9.5px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
-                                    title={`Groupe PDR: ${hierarchy.group.libelle} (${hierarchy.group.code})`}
-                                  >
-                                    <span>{hierarchy.group.code}</span>
-                                  </span>
-                                )}
-                                {effDomaine && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setStockDomaineFilter(effDomaine)}
-                                    className="px-1.5 py-0.2 rounded font-mono text-[9px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition cursor-pointer"
-                                    title={`Filtrer sur le Domaine Technique : ${effDomaine}`}
-                                  >
-                                    {effDomaine}
-                                  </button>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  const filterVal = item.type || item.id_type;
-                                  if (filterVal) {
-                                    setStockTypeFilter(filterVal);
-                                  }
-                                }}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition cursor-pointer shadow-2xs ${getTypeStyle(item.type)}`}
-                                title={t('stock.filter_by_type_tooltip', 'Filtrer par ce Type')}
-                              >
-                                <span>{item.type || (typeObj ? typeObj.libelle : item.id_type)}</span>
-                              </button>
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Initial (E) */}
-                      <td className="py-3 px-2.5 text-right font-mono text-slate-600">
-                        <span>{item.stockInitial}</span>
-                        <span className="ml-1 text-[9.5px] text-slate-400 font-semibold">
-                          {item.unite_mesure || item.unite || 'PCS'}
-                        </span>
-                      </td>
-
-                      {/* Entrées (F) */}
-                      <td className="py-3 px-2.5 text-right font-mono font-bold text-emerald-700">
-                        {item.entrees > 0 ? `+${item.entrees}` : '0'}
-                      </td>
-
-                      {/* Sorties (G) */}
-                      <td className="py-3 px-2.5 text-right font-mono font-bold text-rose-700">
-                        {item.sorties > 0 ? `-${item.sorties}` : '0'}
-                      </td>
-
-                      {/* Actuel (H) + Réservé & Disponible Net */}
-                      <td className="py-3 px-2.5 text-right font-mono">
-                        {(() => {
-                          const actuel = domainItem.getActuel();
-                          const uom = String(item.unite_mesure || item.unite || 'PCS').toUpperCase();
-                          const resEntry = getReservedEntry(item.ref);
-                          const reservedQty = resEntry?.reservedQty || 0;
-                          const netDispo = actuel - reservedQty;
-                          const isNetCrit = reservedQty > 0 && netDispo <= domainItem.getSeuilAlerte();
-                          const tooltipText =
-                            reservedQty > 0
-                              ? `Stock Physique : ${actuel} ${uom}\nRéservé (En attente validation) : ${reservedQty} ${uom}\nDisponible Net : ${netDispo} ${uom}\nDétail : ${resEntry?.sources
-                                  .map((s) => `${s.code} (${s.machineCode || s.claimType}: ${s.qty})`)
-                                  .join(', ')}`
-                              : `Stock Physique Actuel : ${actuel} ${uom}`;
-
-                          return (
-                            <div className="inline-flex flex-col items-end gap-1" title={tooltipText}>
-                              <div className="flex items-center gap-1">
-                                <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-black text-slate-900 text-sm">
-                                  {actuel}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100/80 border border-slate-200/80 text-[9.5px] font-mono font-bold text-slate-600">
-                                  {uom}
-                                </span>
-                              </div>
-                              {reservedQty > 0 && (
-                                <div className="flex flex-col items-end gap-0.5 text-[10px] leading-tight">
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200 font-bold">
-                                    <Lock className="w-2.5 h-2.5 text-purple-600" />
-                                    <span>Réservé: -{reservedQty}</span>
-                                  </span>
-                                  <span
-                                    className={`px-1.5 py-0.5 rounded font-bold border ${
-                                      netDispo <= 0
-                                        ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                        : isNetCrit
-                                        ? 'bg-amber-100 text-amber-900 border-amber-300'
-                                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                    }`}
-                                  >
-                                    Dispo net: {netDispo} {uom}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-
-                      {/* Seuil (I) & Délai Appro (P3) */}
-                      <td className="py-3 px-2.5 text-right font-mono text-slate-500 font-semibold">
-                        <div className="flex flex-col items-end gap-0.5">
-                          <div>
-                            <span>{domainItem.getSeuilAlerte()}</span>
-                            <span className="ml-1 text-[9.5px] text-slate-400">
-                              {item.unite_mesure || item.unite || 'PCS'}
-                            </span>
-                          </div>
-                          {Number(item.delai_appro_jours) > 0 && (
-                            <span
-                              className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200"
-                              title={`Délai d'approvisionnement fournisseur : ${item.delai_appro_jours} jour(s)`}
-                            >
-                              Délai: {item.delai_appro_jours}j
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Alerte Badge (J) */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        {domainItem.getCriticite() === 'RUPTURE' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-50 text-rose-700 border border-rose-300">
-                            <XCircle className="w-3.5 h-3.5" />
-                            <span>{t('stock.status_rupture', 'RUPTURE')}</span>
-                          </span>
-                        )}
-                        {domainItem.getCriticite() === 'ALERTE' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-700 border border-amber-300">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            <span>{t('stock.status_alert', 'ALERTE')}</span>
-                          </span>
-                        )}
-                        {domainItem.getCriticite() === 'OK' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>{t('stock.status_ok', 'OK')}</span>
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Emplacement (K) */}
-                      <td className="py-3 px-3.5 font-mono text-slate-700 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold">
-                          <MapPin className="w-3 h-3 text-purple-500" />
-                          <span>{item.emplacement || t('stock.not_assigned', 'Non assigné')}</span>
-                        </span>
-                      </td>
-
-                      {/* Quick Actions & Flux Menu (PDR Specialized) */}
-                      <td className="py-3 px-3.5 text-center whitespace-nowrap action-menu-container relative">
-                        {canCreateMovement ? (
-                          <div className="flex items-center justify-center gap-1.5">
-                            {/* Primary Fast Button: Quick Sortie */}
-                            <button
-                              onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold transition shadow-2xs cursor-pointer active:scale-95"
-                              title={t('stock.quick_sortie_title', 'Sortie Rapide / Intervention')}
-                            >
-                              <TrendingDown className="w-3.5 h-3.5 text-rose-400" />
-                              <span>{t('stock.actions.quick_sortie', 'Sortie')}</span>
-                            </button>
-
-                            {/* Quick Dropdown Actions Button */}
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setActiveActionMenuRef(isMenuOpen ? null : item.ref)
-                                }
-                                className={`w-8 h-8 rounded-xl border flex items-center justify-center transition cursor-pointer ${
-                                  isMenuOpen
-                                    ? 'bg-cyan-100 text-cyan-900 border-cyan-400 shadow-2xs'
-                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                                }`}
-                                title={t('stock.actions_menu_title', 'Menu des Flux & Actions rapides')}
-                              >
-                                <MoreVertical className="w-3.5 h-3.5" />
-                              </button>
-
-                              {/* Dropdown Menu */}
-                              {isMenuOpen && (
-                                <div className="absolute right-0 top-full mt-1.5 w-60 bg-white rounded-2xl border border-slate-200 shadow-2xl z-50 p-2 space-y-1 text-left animate-in fade-in slide-in-from-top-2 duration-150">
-                                  <div className="px-2.5 py-1.5 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-                                    <span>{t('stock.flux_menu_header', 'FLUX & ACTIONS PDR')}</span>
-                                    <span className="font-mono text-cyan-800">{item.ref}</span>
-                                  </div>
-
-                                  {/* 1. Sortie Interne */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Sortie Interne', 'CORRECTIVE')}
-                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-rose-50 hover:text-rose-950 flex items-center gap-2 transition cursor-pointer"
-                                  >
-                                    <div className="w-6 h-6 rounded-lg bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
-                                      <TrendingDown className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <div className="font-bold">{t('stock.actions.quick_sortie', 'Sortie Interne')}</div>
-                                      <div className="text-[10px] text-slate-400">{t('stock.actions.quick_sortie_sub', 'Corrective, Préventive, Usage')}</div>
-                                    </div>
-                                  </button>
-
-                                  {/* 2. Entrée Interne */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Entrée Interne', 'RETOUR')}
-                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-cyan-50 hover:text-cyan-950 flex items-center gap-2 transition cursor-pointer"
-                                  >
-                                    <div className="w-6 h-6 rounded-lg bg-cyan-100 flex items-center justify-center text-cyan-600 shrink-0">
-                                      <TrendingUp className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <div className="font-bold">{t('stock.actions.quick_entree', 'Entrée Interne')}</div>
-                                      <div className="text-[10px] text-slate-400">{t('stock.actions.quick_entree_sub', 'Retour Atelier, Récupération')}</div>
-                                    </div>
-                                  </button>
-
-                                  {/* 3. Entrée Externe (Réapprovisionnement) */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Entrée Externe', 'REAPPRO')}
-                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-950 flex items-center gap-2 transition cursor-pointer"
-                                  >
-                                    <div className="w-6 h-6 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                                      <Inbox className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <div className="font-bold">{t('stock.actions.external_entree', 'Entrée Externe')}</div>
-                                      <div className="text-[10px] text-slate-400">{t('stock.actions.external_entree_sub', 'Réappro Fournisseur (+ Qté)')}</div>
-                                    </div>
-                                  </button>
-
-                                  {/* 4. Ajustement Inventaire & Recalibrage */}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenQuickModal(item, 'Ajustement', 'INVENTAIRE')}
-                                    className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-amber-50 hover:text-amber-950 flex items-center gap-2 transition cursor-pointer"
-                                  >
-                                    <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center text-amber-600 shrink-0">
-                                      <SlidersHorizontal className="w-3.5 h-3.5" />
-                                    </div>
-                                    <div>
-                                      <div className="font-bold">{t('stock.actions.adjust_stock', 'Ajuster le Stock')}</div>
-                                      <div className="text-[10px] text-slate-400">{t('stock.actions.adjust_stock_sub', 'Corriger valeur réelle / écart')}</div>
-                                    </div>
-                                  </button>
-
-                                  {canEditStock && (
-                                    <div className="border-t border-slate-100 my-1 pt-1">
-                                      {/* 5. Modifier la fiche Article */}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenEditArticle(item)}
-                                        className="w-full px-2.5 py-1.5 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 flex items-center gap-2 transition cursor-pointer"
-                                      >
-                                        <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
-                                          <Edit className="w-3.5 h-3.5" />
-                                        </div>
-                                        <div>
-                                          <div className="font-bold text-slate-800">{t('stock.actions.edit_article', 'Modifier l\'Article')}</div>
-                                          <div className="text-[10px] text-slate-400">{t('stock.actions.edit_article_sub', 'Désignation, Seuil, Emplacement')}</div>
-                                        </div>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-[10.5px] font-mono font-bold select-none"
-                            title="Consultation uniquement — Déclarez vos consommations PDR dans vos Bons de Travail ou Tâches Préventives"
-                          >
-                            Consultation
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                }}
+          return (
+            <StockDataGridRow
+              key={`stock-row-${item.id || item.ref || 'stk'}-${rowNum}`}
+              t={t}
+              item={item}
+              rowNum={rowNum}
+              types={types}
+              effectivePdrGroups={effectivePdrGroups}
+              reservedEntry={getReservedEntry(item.ref)}
+              isMenuOpen={activeActionMenuRef === item.ref}
+              canCreateMovement={canCreateMovement}
+              canEditStock={canEditStock}
+              onToggleMenu={setActiveActionMenuRef}
+              onContextMenu={handleRowContextMenu}
+              onFilterDomaine={setStockDomaineFilter}
+              onFilterType={setStockTypeFilter}
+              onOpenQuickModal={handleOpenQuickModal}
+              onOpenEditArticle={handleOpenEditArticle}
+            />
+          );
+        }}
       />
 
-      {/* Quick Movement & Flux Modal */}
       <QuickMovementModal
         isOpen={quickModalState.isOpen}
-        onClose={() => setQuickModalState({ isOpen: false, article: null, initialFlow: 'Sortie Interne', initialAction: 'CORRECTIVE' })}
+        onClose={() =>
+          setQuickModalState({
+            isOpen: false,
+            article: null,
+            initialFlow: 'Sortie Interne',
+            initialAction: 'CORRECTIVE',
+          })
+        }
         article={quickModalState.article}
         initialFlow={quickModalState.initialFlow}
         initialAction={quickModalState.initialAction}
@@ -1822,7 +408,6 @@ export default function StockView({
         onDirectAdjustStock={onDirectAdjustStock}
       />
 
-      {/* Edit Article Modal */}
       <EditArticleModal
         isOpen={editArticleModalState.isOpen}
         onClose={() => setEditArticleModalState({ isOpen: false, article: null })}
@@ -1833,35 +418,27 @@ export default function StockView({
         onOpenAddTypeModal={onOpenAddArticle}
       />
 
-      {/* PDR Groups Management Modal (Niveau 1) */}
       <PdrGroupsModal
         isOpen={showGroupsModal}
         onClose={() => setShowGroupsModal(false)}
         pdrGroups={effectivePdrGroups}
-        onSaveGroups={(nextGroups) => {
-          effectiveSetPdrGroups(nextGroups);
-        }}
+        onSaveGroups={(nextGroups) => effectiveSetPdrGroups(nextGroups)}
         types={types}
         stockItems={stockItems}
         onNavigateToPdrGroups={onNavigateToPdrGroups}
       />
 
-      {/* PDR 3-Sheet Excel Catalog Import/Export Modal */}
       <PdrCatalogExcelModal
         isOpen={showPdrExcelModal}
         onClose={() => setShowPdrExcelModal(false)}
         pdrGroups={effectivePdrGroups}
-        types={types}
+        types={types as StockType[]}
         rawStock={stockItems}
         mouvements={mouvements}
         canEditStock={canEditStock}
       />
 
-      {/* Excel Formulas Preview Modal */}
-      <StockFormulasModal
-        isOpen={showFormulasModal}
-        onClose={() => setShowFormulasModal(false)}
-      />
+      <StockFormulasModal isOpen={showFormulasModal} onClose={() => setShowFormulasModal(false)} />
 
       {showReplenishmentModal && canEditStock && (
         <StockReplenishmentModal

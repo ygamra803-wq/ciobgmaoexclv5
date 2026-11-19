@@ -12,17 +12,31 @@ import { Logger } from '../logger/LoggerService';
  * - 📊 إحصائيات دقيقة لمعدل النجاح/الإخفاق (Hit/Miss Ratio & Memory Usage).
  * -  Singleton Pattern لضمان مشاركة نفس المخرجات عبر مكونات النظام.
  */
+export interface CacheEntry {
+  value: unknown;
+  expiresAt: number;
+  tags: string[];
+  createdAt: number;
+  size: number;
+}
+
 export class CacheService {
   static instance: CacheService | null = null;
-  cache: Map<string, any>;
-  ttl: number;
-  tags: Map<string, Set<string>>;
+  cache: Map<string, CacheEntry> = new Map();
+  ttl: number = 5 * 60 * 1000;
+  tags: Map<string, Set<string>> = new Map();
   stats: {
     hits: number;
     misses: number;
     sets: number;
     deletes: number;
     invalidations: number;
+  } = {
+    hits: 0,
+    misses: 0,
+    sets: 0,
+    deletes: 0,
+    invalidations: 0,
   };
 
   /**
@@ -59,24 +73,27 @@ export class CacheService {
    * @param {number} [ttl=this.ttl] - الصلاحية بالميلي ثانية
    * @param {Array<string>} [tags=[]] - وسوم التصنيف لعمليات الإلغاء الجماعي
    */
-  set(key, value, ttl = this.ttl, tags = []) {
+  set(key: string, value: unknown, ttl: number = this.ttl, tags: string[] = []): void {
     try {
       const expiresAt = Date.now() + ttl;
-      
+      const serialized = JSON.stringify(value);
+
       this.cache.set(key, {
         value,
         expiresAt,
         tags,
         createdAt: Date.now(),
-        size: JSON.stringify(value).length
+        size: serialized ? serialized.length : 0
       });
 
       // تسجيل الوسوم
-      tags.forEach(tag => {
-        if (!this.tags.has(tag)) {
-          this.tags.set(tag, new Set());
+      tags.forEach((tag: string) => {
+        let tagSet = this.tags.get(tag);
+        if (!tagSet) {
+          tagSet = new Set();
+          this.tags.set(tag, tagSet);
         }
-        this.tags.get(tag).add(key);
+        tagSet.add(key);
       });
 
       this.stats.sets++;
@@ -92,7 +109,7 @@ export class CacheService {
    * @param {string} key - مفتاح الكائن
    * @returns {any|null} القيمة المخزنة أو null عند الإخفاق/انتهاء الصلاحية
    */
-  get(key) {
+  get(key: string): any {
     try {
       const item = this.cache.get(key);
 
@@ -119,7 +136,7 @@ export class CacheService {
   /**
    * Check if key exists
    */
-  has(key) {
+  has(key: string): boolean {
     try {
       const item = this.cache.get(key);
       if (!item) return false;
@@ -137,11 +154,11 @@ export class CacheService {
   /**
    * Delete cache value
    */
-  delete(key) {
+  delete(key: string): void {
     try {
       const item = this.cache.get(key);
       if (item) {
-        item.tags.forEach(tag => {
+        item.tags.forEach((tag: string) => {
           this.tags.get(tag)?.delete(key);
         });
       }
@@ -156,12 +173,12 @@ export class CacheService {
   /**
    * Invalidate cache by tag
    */
-  invalidateByTag(tag) {
+  invalidateByTag(tag: string): void {
     try {
-      const keys = this.tags.get(tag) || new Set();
+      const keys = this.tags.get(tag) || new Set<string>();
       const count = keys.size;
       
-      keys.forEach(key => this.delete(key));
+      keys.forEach((key: string) => this.delete(key));
       
       this.stats.invalidations++;
       Logger.debug(`🔄 Cache INVALIDATE TAG: ${tag}`, { count });

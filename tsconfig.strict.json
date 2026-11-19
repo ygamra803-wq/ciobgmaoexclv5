@@ -11,17 +11,20 @@
     "server.ts",
     "src/server/**/*.ts",
     "src/core/logger/LoggerService.ts",
+    "src/core/cache/**/*.{ts,tsx}",
     "src/core/security/nativeCrypto.ts",
     "src/core/security/serverRbacPolicy.ts",
     "src/core/security/serverSession.ts",
     "src/core/security/serverSessionStore.ts",
-    "src/application/repositories/**/*.ts"
+    "src/application/repositories/**/*.ts",
+    "src/domain/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "**/__tests__/**",
     "**/*.test.ts",
-    "**/*.test.tsx"
+    "**/*.test.tsx",
+    "src/domain/pdr/services/StockCalculationService.ts"
   ]
 }

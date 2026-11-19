@@ -63,53 +63,83 @@ export const BlueprintSchema = z.object({
 /**
  * خدمة التحقق من البيانات - ValidationService
  */
+export interface FieldValidationError {
+  field?: string;
+  message: string;
+}
+
+export interface RowValidationError {
+  row: number;
+  errors: FieldValidationError[];
+}
+
+export interface EntityImportValidationResult {
+  valid: boolean;
+  errors: RowValidationError[];
+}
+
+export interface DomainValidationResult<T = unknown> {
+  valid: boolean;
+  data: T | null;
+  errors: FieldValidationError[];
+  summary?: string;
+}
+
+export interface ImportedDataPayload {
+  machines?: unknown[];
+  stockItems?: unknown[];
+  mouvements?: unknown[];
+  technicians?: unknown[];
+  zones?: unknown[];
+}
+
 export class ValidationService {
   /**
    * التحقق من الآلة
    */
-  static validateMachine(data) {
+  static validateMachine(data: unknown) {
     return this.validate(data, MachineSchema, 'الآلة');
   }
 
   /**
    * التحقق من عنصر المخزون
    */
-  static validateStockItem(data) {
+  static validateStockItem(data: unknown) {
     return this.validate(data, StockItemSchema, 'عنصر المخزون');
   }
 
   /**
    * التحقق من الحركة
    */
-  static validateMouvement(data) {
+  static validateMouvement(data: unknown) {
     return this.validate(data, MouvementSchema, 'الحركة');
   }
 
   /**
    * التحقق من الفني
    */
-  static validateTechnician(data) {
+  static validateTechnician(data: unknown) {
     return this.validate(data, TechnicianSchema, 'الفني');
   }
 
   /**
    * التحقق من المنطقة
    */
-  static validateZone(data) {
+  static validateZone(data: unknown) {
     return this.validate(data, ZoneSchema, 'المنطقة');
   }
 
   /**
    * التحقق من النموذج
    */
-  static validateBlueprint(data) {
+  static validateBlueprint(data: unknown) {
     return this.validate(data, BlueprintSchema, 'النموذج');
   }
 
   /**
    * دالة التحقق العامة
    */
-  static validate(data, schema, entityName) {
+  static validate<T>(data: unknown, schema: z.ZodType<T>, entityName: string): DomainValidationResult<T> {
     try {
       const validated = schema.parse(data);
       return {
@@ -117,9 +147,9 @@ export class ValidationService {
         data: validated,
         errors: []
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        const errors = ((error as any).issues || (error as any).errors || []).map((err: any) => ({
+        const errors: FieldValidationError[] = (error.issues || []).map((err) => ({
           field: err.path.join('.'),
           message: err.message
         }));
@@ -132,10 +162,11 @@ export class ValidationService {
         };
       }
 
+      const msg = error instanceof Error ? error.message : String(error);
       return {
         valid: false,
         data: null,
-        errors: [{ message: error?.message || String(error) }],
+        errors: [{ message: msg }],
         summary: `خطأ غير متوقع في ${entityName}`
       };
     }
@@ -144,8 +175,8 @@ export class ValidationService {
   /**
    * التحقق من البيانات المستوردة
    */
-  static validateImportedData(data) {
-    const results = {
+  static validateImportedData(data: ImportedDataPayload | null | undefined) {
+    const results: Record<'machines' | 'stockItems' | 'mouvements' | 'technicians' | 'zones', EntityImportValidationResult> = {
       machines: { valid: true, errors: [] },
       stockItems: { valid: true, errors: [] },
       mouvements: { valid: true, errors: [] },
@@ -155,7 +186,7 @@ export class ValidationService {
 
     // التحقق من الآلات
     if (Array.isArray(data?.machines)) {
-      data.machines.forEach((item, index) => {
+      data.machines.forEach((item: unknown, index: number) => {
         const validation = this.validateMachine(item);
         if (!validation.valid) {
           results.machines.valid = false;
@@ -169,7 +200,7 @@ export class ValidationService {
 
     // التحقق من عناصر المخزون
     if (Array.isArray(data?.stockItems)) {
-      data.stockItems.forEach((item, index) => {
+      data.stockItems.forEach((item: unknown, index: number) => {
         const validation = this.validateStockItem(item);
         if (!validation.valid) {
           results.stockItems.valid = false;
@@ -183,7 +214,7 @@ export class ValidationService {
 
     // التحقق من الحركات
     if (Array.isArray(data?.mouvements)) {
-      data.mouvements.forEach((item, index) => {
+      data.mouvements.forEach((item: unknown, index: number) => {
         const validation = this.validateMouvement(item);
         if (!validation.valid) {
           results.mouvements.valid = false;
@@ -197,7 +228,7 @@ export class ValidationService {
 
     // التحقق من الفنيين
     if (Array.isArray(data?.technicians)) {
-      data.technicians.forEach((item, index) => {
+      data.technicians.forEach((item: unknown, index: number) => {
         const validation = this.validateTechnician(item);
         if (!validation.valid) {
           results.technicians.valid = false;
@@ -211,7 +242,7 @@ export class ValidationService {
 
     // التحقق من المناطق
     if (Array.isArray(data?.zones)) {
-      data.zones.forEach((item, index) => {
+      data.zones.forEach((item: unknown, index: number) => {
         const validation = this.validateZone(item);
         if (!validation.valid) {
           results.zones.valid = false;
@@ -223,7 +254,7 @@ export class ValidationService {
       });
     }
 
-    const allValid = Object.values(results).every(r => r.valid);
+    const allValid = Object.values(results).every((r) => r.valid);
 
     return {
       valid: allValid,

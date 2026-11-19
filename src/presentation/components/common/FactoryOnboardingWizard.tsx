@@ -185,7 +185,9 @@ export default function FactoryOnboardingWizard({
   const [techName, setTechName] = useState('');
   const [techSpec, setTechSpec] = useState('Électromécanique');
 
-  const isVisible = forceOpen || status.shouldAutoShow;
+  const [wasEngagedInSession, setWasEngagedInSession] = useState(false);
+
+  const isVisible = forceOpen || status.shouldAutoShow || (!status.isDismissed && wasEngagedInSession);
   if (!isVisible) return null;
 
   const handleDismiss = () => {
@@ -194,6 +196,7 @@ export default function FactoryOnboardingWizard({
     } catch {
       // ignore storage errors
     }
+    setWasEngagedInSession(false);
     setDismissedFlag(true);
     onCloseForceOpen?.();
     showToast?.(
@@ -227,6 +230,7 @@ export default function FactoryOnboardingWizard({
     setZoneCode('');
     setZoneName('');
     if (!machineZone) setMachineZone(code);
+    setWasEngagedInSession(true);
     showToast?.(`Zone « ${code} — ${name} » enregistrée.`, 'success');
     setActiveStep(2);
   };
@@ -283,6 +287,7 @@ export default function FactoryOnboardingWizard({
     setMachines((prev: any[]) => [...(prev || []), newMachine]);
     setMachineCode('');
     setMachineName('');
+    setWasEngagedInSession(true);
     showToast?.(
       `Équipement « ${code} — ${name} » (${machineAssetClass}) enregistré.`,
       'success'
@@ -323,6 +328,7 @@ export default function FactoryOnboardingWizard({
     ]);
     setTechId('');
     setTechName('');
+    setWasEngagedInSession(true);
     showToast?.(`Technicien « ${name} (${code}) » enregistré.`, 'success');
     setActiveStep(5);
   };

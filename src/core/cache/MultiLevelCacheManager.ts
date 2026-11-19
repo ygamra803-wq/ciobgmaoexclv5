@@ -11,7 +11,7 @@ export class MultiLevelCacheManager {
   static instance: MultiLevelCacheManager | null = null;
   l1Cache: any;
   l2Storage: any;
-  l3FormulaCache: Map<string, any>;
+  l3FormulaCache: Map<string, any> = new Map();
   impactStats: {
     l1Hits: number;
     l2Hits: number;
@@ -19,6 +19,13 @@ export class MultiLevelCacheManager {
     misses: number;
     totalSavedMs: number;
     warmedEntriesCount: number;
+  } = {
+    l1Hits: 0,
+    l2Hits: 0,
+    l3Hits: 0,
+    misses: 0,
+    totalSavedMs: 0,
+    warmedEntriesCount: 0,
   };
 
   constructor() {
@@ -130,7 +137,7 @@ export class MultiLevelCacheManager {
   /**
    * Invalidate cache entries by tag across all levels
    */
-  async invalidateByTag(tag) {
+  async invalidateByTag(tag: string) {
     // Invalidate L1
     this.l1Cache.invalidateByTag(tag);
 
@@ -152,7 +159,7 @@ export class MultiLevelCacheManager {
   /**
    * Invalidate by Pattern (e.g. key starts with "stock_")
    */
-  invalidateByPattern(pattern) {
+  invalidateByPattern(pattern: string | RegExp) {
     const regex = pattern instanceof RegExp ? pattern : new RegExp(pattern);
 
     // L1
