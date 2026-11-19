@@ -130,6 +130,14 @@ export class TaskService {
         return t;
       }
 
+      const requestedMode = String(validationData?.mode_calcul_recurrence || '')
+        .trim()
+        .toUpperCase();
+      const effectiveMode =
+        requestedMode === 'FIXE' || requestedMode === 'GLISSANT'
+          ? requestedMode
+          : t.mode_calcul_recurrence || 'GLISSANT';
+
       if (isPending) {
         return {
           ...t,
@@ -145,6 +153,7 @@ export class TaskService {
           technicien_realisateur: execution.executorName || t.responsable,
           observations_validation: execution.notes || '',
           duree_reelle: validationData?.duree_reelle || `${execution.durationMinutes} min`,
+          mode_calcul_recurrence: effectiveMode,
           ...(execution.id_composant ? { id_composant: execution.id_composant } : {}),
           ...(execution.nom_composant ? { nom_composant: execution.nom_composant } : {}),
           ...(execution.id_part ? { id_part: execution.id_part } : {}),
@@ -159,7 +168,7 @@ export class TaskService {
       const nextDue = computeNextDueDateForMode(
         dateRealisation,
         t.frequence,
-        t.mode_calcul_recurrence,
+        effectiveMode,
         previousDue
       );
       const prevCost = Number(t.cout_cumule || 0);
@@ -207,6 +216,7 @@ export class TaskService {
         lastExecutedAt: dateRealisation,
         ...(previousDue ? { echeance_precedente: previousDue } : {}),
         prochaine_echeance: nextDue,
+        mode_calcul_recurrence: effectiveMode,
         technicien_realisateur: execution.executorName || t.responsable,
         observations_validation: execution.notes || '',
         duree_reelle: validationData?.duree_reelle || `${execution.durationMinutes} min`,

@@ -127,6 +127,7 @@ export interface PreventiveExecutionRecord {
   executorName?: string;
   durationMinutes?: number;
   laborRate?: number;
+  laborCost?: number;
   sparesCost?: number;
   totalCost?: number;
   status?: 'DONE' | 'SKIPPED' | 'PARTIAL' | string;

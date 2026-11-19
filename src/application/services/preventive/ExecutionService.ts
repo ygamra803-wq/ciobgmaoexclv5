@@ -194,6 +194,7 @@ export class ExecutionService {
       executorName,
       durationMinutes,
       laborRate,
+      laborCost: Number(laborCost.toFixed(2)),
       sparesCost: Number(sparesCost.toFixed(2)),
       totalCost,
       status:

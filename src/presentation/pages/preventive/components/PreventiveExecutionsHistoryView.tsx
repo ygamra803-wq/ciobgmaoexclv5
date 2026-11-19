@@ -24,6 +24,11 @@ import { AuthorizationService } from '../../../../core/security/AuthorizationSer
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { reconcileFieldClaim } from '../../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../../application/services/MachineHealthPassportService';
+import {
+  isApprovedPreventiveExecution,
+  computeExecutionDelayDays,
+} from '../../../../domain/preventive/preventiveAnalyticsEngine';
+import { StockCalculationService } from '../../../../domain/pdr/services/StockCalculationService';
 
 interface PreventiveExecutionsHistoryViewProps {
   executions: PreventiveExecutionRecord[];
@@ -140,12 +145,13 @@ export default function PreventiveExecutionsHistoryView({
     });
   }, [executions, periodFilter, validationFilter, search]);
 
-  // Aggregate metrics for filtered period
+  // Aggregate realized metrics for filtered period (strictly APPROVED executions — excludes PENDING/REJECTED)
   const metrics = useMemo(() => {
-    const totalExecs = filteredExecutions.length;
-    const totalMinutes = filteredExecutions.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-    const totalSparesCost = filteredExecutions.reduce((sum, e) => sum + (e.sparesCost || 0), 0);
-    const totalCost = filteredExecutions.reduce((sum, e) => sum + (e.totalCost || 0), 0);
+    const approved = filteredExecutions.filter((e) => isApprovedPreventiveExecution(e));
+    const totalExecs = approved.length;
+    const totalMinutes = approved.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
+    const totalSparesCost = approved.reduce((sum, e) => sum + (e.sparesCost || 0), 0);
+    const totalCost = approved.reduce((sum, e) => sum + (e.totalCost || 0), 0);
     const hours = (totalMinutes / 60).toFixed(1);
     return { totalExecs, totalMinutes, hours, totalSparesCost, totalCost };
   }, [filteredExecutions]);
@@ -471,12 +477,32 @@ export default function PreventiveExecutionsHistoryView({
                       ? exec.sparesUsed
                       : exec.sparesProposed || [];
 
+                  const delayDays = computeExecutionDelayDays(exec);
+
                   return (
                     <tr key={exec.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 whitespace-nowrap">
                         <div className="font-mono font-bold text-slate-900">{exec.executedAt}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {exec.periodMonth} • {exec.periodWeek}
+                        <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
+                          <span>
+                            {exec.periodMonth} • {exec.periodWeek}
+                          </span>
+                          {delayDays !== null && (
+                            <span
+                              className={`px-1.5 py-0.2 rounded font-bold ${
+                                delayDays <= 0
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}
+                              title={
+                                exec.scheduledDueDate
+                                  ? `Échéance prévue : ${exec.scheduledDueDate}`
+                                  : undefined
+                              }
+                            >
+                              {delayDays <= 0 ? 'À temps' : `+${delayDays}j`}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
@@ -745,8 +771,10 @@ export default function PreventiveExecutionsHistoryView({
                     const stockMatch = (stockItems || []).find(
                       (s) => String(s.ref || '').toLowerCase() === String(sp.ref || '').toLowerCase()
                     );
-                    const stockActuel = Number(stockMatch?.stockActuel ?? 0);
-                    const isShort = stockMatch && sp.qty > stockActuel;
+                    const stockActuel = stockMatch
+                      ? StockCalculationService.calculateStockActuel(stockMatch, storeMouvements)
+                      : 0;
+                    const isShort = Boolean(stockMatch) && sp.qty > stockActuel;
 
                     return (
                       <div

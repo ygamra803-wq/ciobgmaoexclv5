@@ -43,7 +43,12 @@ import PreventiveExecutionsHistoryView from './PreventiveExecutionsHistoryView';
 import PreventiveMetersView from './PreventiveMetersView';
 import TabMainModals from './TabMainModals';
 import PreventiveService from '../../../../application/services/PreventiveService';
-import { sanitizeCsvCell } from '../../../../domain/preventive/preventiveScheduleEngine';
+import {
+  sanitizeCsvCell,
+  computeTaskCycleStatus,
+  resolvePreventiveLaborRate,
+} from '../../../../domain/preventive/preventiveScheduleEngine';
+import { computePreventiveAnalytics } from '../../../../domain/preventive/preventiveAnalyticsEngine';
 import { multiTokenSearch } from '../../../../utils/searchUtils';
 import { dataIntegrityService } from '../../../../services/dataIntegrityService';
 import {
@@ -409,6 +414,8 @@ export default function TabMainView({
       const m =
         machineMap.get(t.id_machine) ||
         machineMap.get(String(t.id_machine || '').trim().toUpperCase());
+      const liveMeter = m?.compteur_heures ?? m?.compteur_actuel;
+      const effectiveEtat = computeTaskCycleStatus(t, { machineCurrentMeter: liveMeter }).effectiveEtat;
       const matchAssetClass =
         selectedAssetClass === 'ALL' || getMachineAssetClass(m) === selectedAssetClass;
       const effZone = m?.id_zone_default || m?.id_zone || t.id_zone;
@@ -417,7 +424,7 @@ export default function TabMainView({
       const matchBlueprint = doesTaskMatchBlueprint(t, selectedBlueprint, machines);
       const matchAct = selectedAction === 'ALL' || (t.action_code || 'C').toUpperCase() === selectedAction.toUpperCase();
       const matchFreq = selectedFrequence === 'ALL' || norm(t.frequence) === norm(selectedFrequence);
-      const matchStat = selectedStatus === 'ALL' || t.etat === selectedStatus;
+      const matchStat = selectedStatus === 'ALL' || effectiveEtat === selectedStatus;
       const matchTech = selectedTech === 'ALL' || norm(t.responsable) === norm(selectedTech);
       const matchWeek = selectedWeek === 'ALL' || (t.planning && Boolean(t.planning[selectedWeek]));
 
@@ -429,15 +436,28 @@ export default function TabMainView({
   }, [tasksWithOrphanFlag, deferredSearchQuery, selectedAssetClass, selectedZone, selectedMachine, selectedBlueprint, machines, selectedAction, selectedFrequence, selectedStatus, selectedTech, selectedWeek, machineMap, orphanFilter]);
 
   const stats = useMemo(() => {
-    const total = scopedTasks.length;
-    const aFaire = scopedTasks.filter((t) => t.etat === 'À faire').length;
-    const fait = scopedTasks.filter((t) => t.etat === 'Fait').length;
-    const enRetard = scopedTasks.filter((t) => t.etat === 'En retard').length;
-    const complianceRate = total > 0 ? Math.round((fait / total) * 100) : 0;
-    const totalCost = scopedTasks.reduce((acc, curr) => acc + Number(curr.cout_cumule || 0), 0);
+    const analytics = computePreventiveAnalytics({
+      tasks: scopedTasks,
+      executions: scopedExecutions,
+      machines,
+    });
+    const fallbackTaskCost = scopedTasks.reduce((acc, curr) => acc + Number(curr.cout_cumule || 0), 0);
+    const realizedTotalCost =
+      analytics.punctuality.approvedExecutionsCount > 0
+        ? analytics.costs.totalCost
+        : Math.round(fallbackTaskCost * 100) / 100;
 
-    return { total, aFaire, fait, enRetard, complianceRate, totalCost: Math.round(totalCost * 100) / 100 };
-  }, [scopedTasks]);
+    return {
+      total: analytics.overview.totalTasks,
+      aFaire: analytics.overview.todoCount,
+      fait: analytics.overview.doneCount,
+      enRetard: analytics.overview.overdueCount,
+      complianceRate: analytics.overview.dynamicComplianceRate,
+      totalCost: realizedTotalCost,
+      sparesCost: analytics.costs.totalSparesCost,
+      laborCost: analytics.costs.totalLaborCost,
+    };
+  }, [scopedTasks, scopedExecutions, machines]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -549,7 +569,9 @@ export default function TabMainView({
 
   const frequenceOptions = useMemo(() => [
     { value: 'ALL', label: t('preventive.filters.all_frequences', 'Toutes Fréquences'), badge: t('preventive.filters.badges.period', 'Période'), badgeColor: 'bg-slate-100 text-slate-700' },
+    { value: 'Quotidien', label: 'Quotidien (Journalier)', sublabel: 'Chaque jour', badge: '1J', badgeColor: 'bg-cyan-50 text-cyan-800 border border-cyan-200' },
     { value: 'Hebdo', label: 'Hebdomadaire (Hebdo)', sublabel: 'Toutes les semaines', badge: '7J', badgeColor: 'bg-blue-50 text-blue-800 border border-blue-200' },
+    { value: 'Bimensuel', label: 'Bimensuel (15 Jours)', sublabel: 'Toutes les 2 semaines', badge: '15J', badgeColor: 'bg-indigo-50 text-indigo-800 border border-indigo-200' },
     { value: 'Mensuel', label: 'Mensuel (Mois)', sublabel: 'Toutes les 4 semaines', badge: '30J', badgeColor: 'bg-teal-50 text-teal-800 border border-teal-200' },
     { value: 'Trimestriel', label: 'Trimestriel (3 Mois)', sublabel: 'Toutes les 12 semaines', badge: '90J', badgeColor: 'bg-amber-50 text-amber-800 border border-amber-200' },
     { value: 'Semestriel', label: 'Semestriel (6 Mois)', sublabel: 'Toutes les 26 semaines', badge: '180J', badgeColor: 'bg-purple-50 text-purple-800 border border-purple-200' },
@@ -732,13 +754,25 @@ export default function TabMainView({
     });
     const hasAnom = hasPreventiveExecutionAnomaly({ notes: initialObs });
 
+    const resolvedTech = isTechUser
+      ? techDisplayName || task.responsable || ''
+      : task.responsable || '';
+    const resolvedLaborRate = resolvePreventiveLaborRate(technicians, resolvedTech);
+    const taskMach =
+      machineMap.get(task.id_machine) ||
+      machineMap.get(String(task.id_machine || '').trim().toUpperCase());
+    const liveMachineMeter =
+      taskMach?.compteur_heures ??
+      task.pending_compteur_releve ??
+      task.compteur_actuel ??
+      task.dernier_releve ??
+      '';
+
     setValidationData({
       date_realisation: new Date().toISOString().split('T')[0],
-      technicien: isTechUser
-        ? techDisplayName || task.responsable || ''
-        : task.responsable || '',
+      technicien: resolvedTech,
       duree_reelle: task.duree_estimee || '15 min',
-      taux_horaire: 35,
+      taux_horaire: resolvedLaborRate,
       observations: initialObs,
       usedPDR: enrichedRecommended,
       num_bon_saisi_par_tech: task.num_bon_saisi_par_tech || '',
@@ -746,7 +780,7 @@ export default function TabMainView({
       createFollowUpDi: !isTechUser && hasAnom,
       followUpDiAnomalie: initialObs,
       mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
-      compteur_releve: task.compteur_actuel || '',
+      compteur_releve: liveMachineMeter,
       id_composant: resolvedIdComp,
       nom_composant: resolvedNomComp,
       id_part: resolvedIdPart,
@@ -990,17 +1024,17 @@ export default function TabMainView({
           footerValue={t('preventive.kpis.trigger_wo', 'Déclenchement BT')}
         />
 
-        {/* Card 5: Budget PDR */}
+        {/* Card 5: Coût Réalisé Préventif (MO + PDR) */}
         <GmaoKpiCard
-          title={t('preventive.kpis.pdr_budget', 'Budget PDR Réalisé')}
+          title={t('preventive.kpis.pdr_budget', 'Coût Réel Préventif')}
           value={stats.totalCost.toFixed(2)}
           unit="DH"
           icon={DollarSign}
           color="amber"
           valueColored={false}
-          badgeText={t('preventive.kpis.parts', 'Pièces')}
-          footerLabel="Valorisation :"
-          footerValue={t('preventive.kpis.cumulative_cost', 'Coût cumulé préventif')}
+          badgeText={`PDR ${stats.sparesCost.toFixed(0)} DH`}
+          footerLabel="Répartition :"
+          footerValue={`MO ${stats.laborCost.toFixed(0)} DH · PDR ${stats.sparesCost.toFixed(0)} DH`}
           className="col-span-2 lg:col-span-1"
         />
       </GmaoKpiGrid>
@@ -1732,6 +1766,10 @@ export default function TabMainView({
         <PreventiveAnalyticsView
           tasks={filteredTasks}
           executions={scopedExecutions}
+          machines={machines}
+          stockItems={stockItems}
+          mouvements={storeMouvements}
+          correctiveInterventions={storeCorrectiveInterventions}
           onDeleteExecution={onDeleteExecution}
           zones={zones}
           actions={actions}

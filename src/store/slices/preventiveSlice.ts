@@ -881,6 +881,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
       const updatedExec: PreventiveExecutionRecord = {
         ...existing,
         laborRate: resolvedLaborRate,
+        laborCost: Number(laborCost.toFixed(2)),
         sparesUsed,
         sparesCost,
         totalCost,

@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import TablePaginationCard from '../../../components/common/TablePaginationCard';
 import { useI18n } from '../../../../i18n/I18nContext';
+import { computeTaskCycleStatus } from '../../../../domain/preventive/preventiveScheduleEngine';
 
 const ACTION_PILL_MAP = {
   C: { bg: 'bg-blue-500/10 text-blue-800 border-blue-200/80', dot: 'bg-blue-600', label: 'Contrôle' },
@@ -31,10 +32,12 @@ const ACTION_PILL_MAP = {
   L: { bg: 'bg-cyan-500/10 text-cyan-800 border-cyan-200/80', dot: 'bg-cyan-600', label: 'Lubrification' },
 };
 
-const STATUT_BADGES = {
+const STATUT_BADGES: Record<string, string> = {
   'À faire': 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs',
   'Fait': 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-2xs',
   'En retard': 'bg-rose-50 text-rose-700 border-rose-200 shadow-2xs animate-pulse',
+  'En attente validation': 'bg-purple-50 text-purple-800 border-purple-200 shadow-2xs',
+  'À clarifier': 'bg-amber-50 text-amber-800 border-amber-300 shadow-2xs',
 };
 
 /**
@@ -145,9 +148,16 @@ export default function DetailedTaskListView({
     const rows = [];
     machineGroups.forEach((group) => {
       const isCollapsed = Boolean(collapsedMachines[group.id_machine]);
-      const doneCount = group.tasks.filter((t) => t.etat === 'Fait').length;
-      const lateCount = group.tasks.filter((t) => t.etat === 'En retard').length;
-      const pendingCount = group.tasks.filter((t) => t.etat === 'À faire').length;
+      const groupMeter = group.machineEntity?.compteur_heures ?? group.machineEntity?.compteur_actuel;
+      let doneCount = 0;
+      let lateCount = 0;
+      let pendingCount = 0;
+      group.tasks.forEach((tTask) => {
+        const eff = computeTaskCycleStatus(tTask, { machineCurrentMeter: groupMeter }).effectiveEtat;
+        if (eff === 'Fait') doneCount += 1;
+        else if (eff === 'En retard') lateCount += 1;
+        else pendingCount += 1;
+      });
 
       rows.push({
         type: 'GROUP_HEADER',
@@ -240,12 +250,24 @@ export default function DetailedTaskListView({
       dot: 'bg-indigo-600',
       label: tItem.action_code,
     };
+    const registeredMach = machineMap.get(String(tItem.id_machine || '').trim().toUpperCase());
+    const liveMeter = registeredMach?.compteur_heures ?? registeredMach?.compteur_actuel;
+    const cycleInfo = computeTaskCycleStatus(tItem, { machineCurrentMeter: liveMeter });
+    const effectiveEtat = cycleInfo.effectiveEtat;
     const localizedStatus =
-      tItem.etat === 'Fait'
+      effectiveEtat === 'Fait'
         ? t('preventive.table.status.done', 'Fait')
-        : tItem.etat === 'En retard'
+        : effectiveEtat === 'En retard'
         ? t('preventive.table.status.late', 'En retard')
+        : effectiveEtat === 'En attente validation'
+        ? 'À valider'
+        : effectiveEtat === 'À clarifier'
+        ? 'À clarifier'
         : t('preventive.table.status.todo', 'À faire');
+    const displayedMeter =
+      liveMeter !== undefined && Number.isFinite(Number(liveMeter))
+        ? Number(liveMeter)
+        : Number(tItem.compteur_actuel ?? tItem.dernier_releve ?? 0);
 
     return (
       <Fragment>
@@ -318,10 +340,20 @@ export default function DetailedTaskListView({
             {(tItem.type_declencheur === 'COMPTEUR' ||
               tItem.type_declencheur === 'HYBRIDE' ||
               Number(tItem.compteur_seuil_intervalle) > 0) && (
-              <div className="flex items-center gap-1 text-[10px] text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/60">
-                <Gauge className="w-2.5 h-2.5 text-indigo-600" />
+              <div
+                className={`flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                  cycleInfo.isOverdue &&
+                  (cycleInfo.triggerReason === 'METER' || cycleInfo.triggerReason === 'BOTH')
+                    ? 'text-rose-700 bg-rose-50 border-rose-200'
+                    : 'text-indigo-700 bg-indigo-50 border-indigo-200/60'
+                }`}
+              >
+                <Gauge className="w-2.5 h-2.5 shrink-0" />
                 <span>
-                  {tItem.compteur_actuel || tItem.dernier_releve || 0} / {tItem.compteur_prochain_declenchement || (Number(tItem.compteur_actuel || 0) + Number(tItem.compteur_seuil_intervalle || 500))} {tItem.compteur_unite || 'h'}
+                  {displayedMeter} /{' '}
+                  {tItem.compteur_prochain_declenchement ||
+                    Number(tItem.compteur_actuel || 0) + Number(tItem.compteur_seuil_intervalle || 500)}{' '}
+                  {tItem.compteur_unite || 'h'}
                 </span>
               </div>
             )}
@@ -340,7 +372,11 @@ export default function DetailedTaskListView({
         </td>
 
         <td className="py-2.5 px-3 text-center border-r border-slate-200/70 whitespace-nowrap">
-          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${STATUT_BADGES[tItem.etat] || ''}`}>
+          <span
+            className={`inline-block px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${
+              STATUT_BADGES[effectiveEtat] || 'bg-slate-100 text-slate-700 border-slate-200'
+            }`}
+          >
             {localizedStatus}
           </span>
         </td>
@@ -369,9 +405,13 @@ export default function DetailedTaskListView({
               <button
                 type="button"
                 onClick={() => onOpenValidate(tItem)}
-                className="px-2.5 py-1 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition cursor-pointer"
+                className={`px-2.5 py-1 text-xs font-bold text-white rounded-lg transition cursor-pointer ${
+                  effectiveEtat === 'Fait'
+                    ? 'bg-slate-600 hover:bg-slate-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
               >
-                {t('common.confirm', 'Valider')}
+                {effectiveEtat === 'Fait' ? 'Nouvelle exéc.' : t('common.confirm', 'Valider')}
               </button>
             )}
           </div>
@@ -587,11 +627,15 @@ export default function DetailedTaskListView({
 
                     // TASK or GROUP_TASK row
                     const { task: tItem, rowNumber } = virtualRow;
+                    const rowMach = machineMap.get(String(tItem.id_machine || '').trim().toUpperCase());
+                    const rowEffEtat = computeTaskCycleStatus(tItem, {
+                      machineCurrentMeter: rowMach?.compteur_heures ?? rowMach?.compteur_actuel,
+                    }).effectiveEtat;
                     return (
                       <tr
                         key={virtualRow.key}
                         className={`even:bg-slate-50/40 odd:bg-white hover:bg-indigo-50/50 border-b border-slate-200/70 transition-colors ${
-                          tItem.etat === 'En retard' ? 'bg-rose-50/20' : ''
+                          rowEffEtat === 'En retard' ? 'bg-rose-50/20' : ''
                         }`}
                       >
                         {renderTaskCells(tItem, rowNumber, virtualRow.type === 'GROUP_TASK')}

@@ -393,15 +393,32 @@ export default function TabPlanBuilder({
     const machCode = machObj?.id_machine_registered || machObj?.code_machine || selectedMachineId;
     const machName = machObj?.designation || machObj?.nom || `Machine ${machCode}`;
 
-    const finalTasks = taskList.map((t) => ({
-      ...t,
-      mode_calcul_recurrence: modeCalculRecurrence,
-      type_declencheur: typeDeclencheur,
-      compteur_unite: compteurUnite,
-      compteur_seuil_intervalle: Number(compteurIntervalle),
-      compteur_actuel: Number(compteurIndexActuel),
-      compteur_prochain_declenchement: Number(compteurIndexActuel) + Number(compteurIntervalle),
-    }));
+    const isMeterPlan = typeDeclencheur !== 'CALENDRIER';
+    const meterFields = isMeterPlan
+      ? {
+          compteur_unite: compteurUnite,
+          compteur_seuil_intervalle: Math.max(1, Number(compteurIntervalle) || 500),
+          compteur_actuel: Math.max(0, Number(compteurIndexActuel) || 0),
+          compteur_prochain_declenchement:
+            Math.max(0, Number(compteurIndexActuel) || 0) +
+            Math.max(1, Number(compteurIntervalle) || 500),
+        }
+      : {};
+
+    const finalTasks = taskList.map((t) => {
+      const matchedPdr = t.pdr_ref
+        ? availablePdrList.find(
+            (p) => String(p.ref || '').trim().toLowerCase() === String(t.pdr_ref).trim().toLowerCase()
+          )
+        : null;
+      return {
+        ...t,
+        ...(matchedPdr ? { pdr_designation: matchedPdr.designation } : {}),
+        mode_calcul_recurrence: modeCalculRecurrence,
+        type_declencheur: typeDeclencheur,
+        ...meterFields,
+      };
+    });
 
     // Add global machine action if toggled
     if (includeGlobalMachineAction) {
@@ -414,10 +431,7 @@ export default function TabPlanBuilder({
         target_week: startWeek,
         mode_calcul_recurrence: modeCalculRecurrence,
         type_declencheur: typeDeclencheur,
-        compteur_unite: compteurUnite,
-        compteur_seuil_intervalle: Number(compteurIntervalle),
-        compteur_actuel: Number(compteurIndexActuel),
-        compteur_prochain_declenchement: Number(compteurIndexActuel) + Number(compteurIntervalle),
+        ...meterFields,
         duree_estimee: '25 min',
         consigne: `Intervention globale (${actObj?.libelle || 'Nettoyage'}) sur l'ensemble du bâti et des sécurités de ${machCode}.`,
         is_global_machine: true,
@@ -748,7 +762,9 @@ export default function TabPlanBuilder({
                   onChange={(e) => handleUpdateTaskField(task.id_temp, 'frequence', e.target.value)}
                   className="px-2 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700"
                 >
+                  <option value="Quotidien">Quotidien</option>
                   <option value="Hebdo">Hebdo</option>
+                  <option value="Bimensuel">Bimensuel</option>
                   <option value="Mensuel">Mensuel</option>
                   <option value="Trimestriel">Trimestriel</option>
                   <option value="Semestriel">Semestriel</option>
@@ -818,7 +834,9 @@ export default function TabPlanBuilder({
             onChange={(e) => setFrequenceGlobale(e.target.value)}
             className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500"
           >
+            <option value="Quotidien">Quotidien (Journalier)</option>
             <option value="Hebdo">Hebdomadaire (Toutes les semaines)</option>
+            <option value="Bimensuel">Bimensuel (Toutes les 2 semaines)</option>
             <option value="Mensuel">Mensuel (Toutes les 4 semaines)</option>
             <option value="Trimestriel">Trimestriel (Toutes les 12 sem.)</option>
             <option value="Semestriel">Semestriel (Toutes les 26 sem.)</option>

@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Package,
   Trash2,
+  Gauge,
 } from 'lucide-react';
 import PrintWorkOrderModal from './PrintWorkOrderModal';
 import SystemGeneralRoundModal, {
@@ -267,6 +268,81 @@ export default function TabMainModals({
                 </div>
               </div>
 
+              {/* Meter Reading Input for COMPTEUR / HYBRIDE tasks */}
+              {(selectedTaskForValidation.type_declencheur === 'COMPTEUR' ||
+                selectedTaskForValidation.type_declencheur === 'HYBRIDE' ||
+                Number(selectedTaskForValidation.compteur_seuil_intervalle || 0) > 0) && (() => {
+                const machCode = String(selectedTaskForValidation.id_machine || '').trim().toUpperCase();
+                const matchedMach = (machines || []).find(
+                  (m: any) =>
+                    String(m.id_machine_registered || m.code_machine || m.id || '')
+                      .trim()
+                      .toUpperCase() === machCode
+                );
+                const liveMachineMeter = Number(
+                  matchedMach?.compteur_heures ??
+                    selectedTaskForValidation.compteur_actuel ??
+                    selectedTaskForValidation.dernier_releve ??
+                    0
+                );
+                const targetMeter = Number(
+                  selectedTaskForValidation.compteur_prochain_declenchement || 0
+                );
+                const meterUnit = selectedTaskForValidation.compteur_unite || 'Heures';
+                const enteredMeter = Number(validationData.compteur_releve || 0);
+                const isLowerThanMachine =
+                  String(validationData.compteur_releve ?? '').trim() !== '' &&
+                  Number.isFinite(enteredMeter) &&
+                  enteredMeter < liveMachineMeter;
+
+                return (
+                  <div className="p-3 rounded-2xl bg-cyan-50/70 border border-cyan-200 space-y-2 text-xs">
+                    <div className="flex items-center justify-between flex-wrap gap-1.5">
+                      <label className="font-black text-cyan-950 uppercase flex items-center gap-1.5">
+                        <Gauge className="w-4 h-4 text-cyan-700" />
+                        <span>Relevé Compteur à l&apos;exécution ({meterUnit}) :</span>
+                      </label>
+                      <span className="font-mono text-[10.5px] font-bold text-cyan-800">
+                        Index actuel : {liveMachineMeter} {meterUnit}
+                        {targetMeter > 0 ? ` · Seuil : ${targetMeter} ${meterUnit}` : ''}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        placeholder={`Ex: ${Math.max(liveMachineMeter, targetMeter || liveMachineMeter)}`}
+                        value={validationData.compteur_releve ?? ''}
+                        onChange={(e) =>
+                          setValidationData({
+                            ...validationData,
+                            compteur_releve: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-1.5 bg-white border border-cyan-300 rounded-xl font-mono font-bold text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                      />
+                      <span className="text-[10.5px] text-cyan-900">
+                        {Number(selectedTaskForValidation.compteur_seuil_intervalle || 0) > 0
+                          ? `Prochain seuil après validation : ${
+                              (Number(validationData.compteur_releve) || liveMachineMeter) +
+                              Number(selectedTaskForValidation.compteur_seuil_intervalle)
+                            } ${meterUnit}`
+                          : 'Synchronise automatiquement le compteur machine.'}
+                      </span>
+                    </div>
+                    {isLowerThanMachine && (
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1.5 rounded-xl">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          Attention : le relevé saisi ({enteredMeter}) est inférieur au compteur machine actuel ({liveMachineMeter} {meterUnit}).
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* P1: Organe / Composant (Cycle de vie) & Localisation Part Structurelle */}
               {(validationMachineComponents.length > 0 ||
                 validationMachineParts.length > 0 ||
@@ -361,43 +437,75 @@ export default function TabMainModals({
                 {/* Used PDR Items list */}
                 {validationData.usedPDR.length > 0 && (
                   <div className="space-y-1 max-h-36 overflow-y-auto">
-                    {validationData.usedPDR.map((pdr: TabMainPdrDraftItem, idx: number) => (
-                      <div key={idx} className="bg-white p-2 rounded-xl border border-indigo-100 flex items-center justify-between text-xs">
-                        <div>
-                          <span className="font-bold text-slate-800">{pdr.designation}</span>
-                          <span className="text-[11px] text-slate-400 font-mono ml-2">
-                            Réf: {pdr.reference} • Qte: {pdr.quantite} {pdr.unite}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePdrFromValidation(idx)}
-                          className="text-rose-500 hover:text-rose-700 p-1"
+                    {validationData.usedPDR.map((pdr: TabMainPdrDraftItem, idx: number) => {
+                      const matchedInv = rankedValidationInventory.find(
+                        (i) =>
+                          String(i.reference || i.ref || '').trim().toLowerCase() ===
+                          String(pdr.reference || pdr.ref || '').trim().toLowerCase()
+                      );
+                      const availStock =
+                        matchedInv !== undefined ? Number(matchedInv.stockActuel ?? 0) : null;
+                      const isShort = availStock !== null && Number(pdr.quantite || 1) > availStock;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`bg-white p-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${
+                            isShort ? 'border-rose-300 bg-rose-50/40' : 'border-indigo-100'
+                          }`}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-800">{pdr.designation}</span>
+                            <span className="text-[11px] text-slate-400 font-mono ml-2">
+                              Réf: {pdr.reference} • Qte: {pdr.quantite} {pdr.unite}
+                            </span>
+                            {isShort && (
+                              <span className="ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold text-rose-700">
+                                <AlertTriangle className="w-3 h-3" /> Stock dispo: {availStock}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePdrFromValidation(idx)}
+                            className="text-rose-500 hover:text-rose-700 p-1 shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Add Quick PDR from BOM-ranked inventory dropdown */}
+                {/* Add Quick PDR from BOM-ranked inventory dropdown with Quantity & Stock Check */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-2 border-t border-indigo-100 text-xs">
-                  <div className="sm:col-span-8">
+                  <div className="sm:col-span-6">
                     <select
                       value={newPdrItem.reference}
                       onChange={(e) => {
-                        const it = rankedValidationInventory.find((i) => i.reference === e.target.value || i.ref === e.target.value);
+                        const it = rankedValidationInventory.find(
+                          (i) => i.reference === e.target.value || i.ref === e.target.value
+                        );
                         if (it) {
                           const refCode = String(it.reference || it.ref || '');
                           setNewPdrItem({
                             id_article: String(it.id_article || `PDR-${refCode}`),
                             designation: it.designation,
                             reference: refCode,
-                            quantite: 1,
+                            quantite: Math.max(1, Number(newPdrItem.quantite || 1)),
                             unite: String(it.unite || 'pcs'),
                             prix_unitaire: Number(it.prix_unitaire || 0),
                             source: it.source,
+                          });
+                        } else {
+                          setNewPdrItem({
+                            id_article: '',
+                            designation: '',
+                            reference: '',
+                            quantite: 1,
+                            unite: 'Pièce',
+                            prix_unitaire: 0,
                           });
                         }
                       }}
@@ -411,6 +519,22 @@ export default function TabMainModals({
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={newPdrItem.quantite || 1}
+                      onChange={(e) =>
+                        setNewPdrItem({
+                          ...newPdrItem,
+                          quantite: Math.max(1, Number(e.target.value || 1)),
+                        })
+                      }
+                      aria-label="Quantité PDR"
+                      title="Quantité à consommer"
+                      className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-xl font-mono font-bold text-center text-slate-800"
+                    />
                   </div>
                   <div className="sm:col-span-4">
                     <button
@@ -505,7 +629,7 @@ export default function TabMainModals({
                 />
               </div>
 
-              {!isTechUser && (
+              {!isTechUser ? (
                 <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2 text-xs">
                   <label className="flex items-start gap-2 text-amber-950 cursor-pointer select-none">
                     <input
@@ -543,6 +667,38 @@ export default function TabMainModals({
                       className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"
                     />
                   )}
+                </div>
+              ) : (
+                <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2 text-xs">
+                  <label className="flex items-start gap-2 text-amber-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(validationData.createFollowUpDi)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const currentObs = String(validationData.observations || '');
+                        const hasTag = currentObs.toUpperCase().includes('[ANOMALIE');
+                        setValidationData({
+                          ...validationData,
+                          createFollowUpDi: checked,
+                          observations:
+                            checked && !hasTag
+                              ? `[ANOMALIE DÉTECTÉE] ${currentObs}`
+                              : currentObs,
+                          followUpDiAnomalie:
+                            validationData.followUpDiAnomalie || currentObs || '',
+                        });
+                      }}
+                      className="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                      <strong className="font-black">
+                        Signaler une anomalie pour DI corrective (Revue Responsable)
+                      </strong>{' '}
+                      — Pré-alerte le responsable pour ouvrir une DI sur{' '}
+                      <code className="font-mono font-bold">{selectedTaskForValidation.id_machine}</code> lors de la validation.
+                    </span>
+                  </label>
                 </div>
               )}
 

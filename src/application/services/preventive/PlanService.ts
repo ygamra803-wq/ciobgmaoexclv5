@@ -112,21 +112,21 @@ export class PlanService {
         .toUpperCase();
       const modeCalculRecurrence = rawModeCalcul === 'FIXE' ? 'FIXE' : 'GLISSANT';
 
-      const rawTrigger = String(
-        item.type_declencheur || planData.type_declencheur || 'CALENDRIER'
+      const explicitTriggerRaw = String(
+        item.type_declencheur || planData.type_declencheur || ''
       )
         .trim()
         .toUpperCase();
       const typeDeclencheur =
-        rawTrigger === 'COMPTEUR'
+        explicitTriggerRaw === 'COMPTEUR'
           ? 'COMPTEUR'
-          : rawTrigger === 'HYBRIDE'
+          : explicitTriggerRaw === 'HYBRIDE'
           ? 'HYBRIDE'
           : 'CALENDRIER';
       const hasMeterConfig =
         typeDeclencheur === 'COMPTEUR' ||
         typeDeclencheur === 'HYBRIDE' ||
-        Number(item.compteur_seuil_intervalle || 0) > 0;
+        (explicitTriggerRaw === '' && Number(item.compteur_seuil_intervalle || 0) > 0);
 
       const meterInterval = hasMeterConfig
         ? Math.max(1, Number(item.compteur_seuil_intervalle || 500))

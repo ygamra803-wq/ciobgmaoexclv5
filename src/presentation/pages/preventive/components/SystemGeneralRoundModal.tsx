@@ -16,6 +16,10 @@ import {
 import { getMachineAssetClass } from '../../../../utils/activeMachines';
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { buildConsumablePdrInventory } from '../../../../core/domain';
+import {
+  computeTaskCycleStatus,
+  resolvePreventiveLaborRate,
+} from '../../../../domain/preventive/preventiveScheduleEngine';
 import type {
   IGeneralSystemType,
   IMachine,
@@ -203,7 +207,11 @@ export default function SystemGeneralRoundModal({
         if (tZone !== selectedZone) return false;
       }
       if (onlyDueTasks) {
-        if (t.etat === 'Fait' || t.validation_status === 'PENDING_VALIDATION') return false;
+        const machineMeter = m?.compteur_heures ?? (m as any)?.compteur_actuel;
+        const cycle = computeTaskCycleStatus(t, { machineCurrentMeter: machineMeter });
+        if (cycle.effectiveEtat === 'Fait' || cycle.effectiveEtat === 'En attente validation') {
+          return false;
+        }
       }
       return true;
     });
@@ -215,8 +223,13 @@ export default function SystemGeneralRoundModal({
       const next = { ...prev };
       for (const t of filteredRoundTasks) {
         if (!next[t.id]) {
+          const m =
+            machineMap.get(t.id_machine) ||
+            machineMap.get(String(t.id_machine || '').trim().toUpperCase());
+          const machineMeter = m?.compteur_heures ?? (m as any)?.compteur_actuel;
+          const cycle = computeTaskCycleStatus(t, { machineCurrentMeter: machineMeter });
           const isAlreadyDone =
-            t.etat === 'Fait' || t.validation_status === 'PENDING_VALIDATION';
+            cycle.effectiveEtat === 'Fait' || cycle.effectiveEtat === 'En attente validation';
           next[t.id] = {
             selected: !isAlreadyDone,
             outcome: 'CONFORME',
@@ -230,7 +243,7 @@ export default function SystemGeneralRoundModal({
       }
       return next;
     });
-  }, [filteredRoundTasks]);
+  }, [filteredRoundTasks, machineMap]);
 
   if (!isOpen) return null;
 
@@ -319,15 +332,17 @@ export default function SystemGeneralRoundModal({
           ? `[RONDE SYSTÈME GÉNÉRAL - PDR UTILISÉE] Contrôle effectué avec remplacement PDR (${st.pdrRef} x${st.pdrQty}).`
           : `[RONDE SYSTÈME GÉNÉRAL - CONFORME] Inspection périodique conforme (${task.composant || task.id_machine}).`;
 
+      const executorName = roundTech || task.responsable || 'Technicien';
+      const resolvedLaborRate = resolvePreventiveLaborRate(technicians, executorName);
       onMarkTaskDone?.(String(task.id), {
         date_realisation: roundDate,
-        technicien: roundTech || task.responsable || 'Technicien',
+        technicien: executorName,
         duree_reelle: durationPerPoint || '10 min',
-        taux_horaire: 35,
+        taux_horaire: resolvedLaborRate,
         observations,
         usedPDR,
         num_bon_saisi_par_tech: st.numBon || globalBonNumber || '',
-        mode_calcul_recurrence: 'FIXE',
+        mode_calcul_recurrence: task.mode_calcul_recurrence || 'FIXE',
       });
       completedCount += 1;
 
