@@ -37,7 +37,7 @@ import { confirmAction } from '../../../utils/confirmAction';
 import { isWorkshopOrderActive } from '../../../domain/corrective/workshopOrderService';
 import { isNeedRequestActive } from '../../../domain/corrective/needRequestService';
 import { Package } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 
 export default function CorrectiveView({
   subTab = 'corrective_di',
@@ -181,10 +181,17 @@ export default function CorrectiveView({
         ];
       });
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Rapport_Correctif');
-      XLSX.writeFile(wb, `GMAO_Correctif_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `GMAO_Correctif_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Correctif Hub (Global)',
+        sheets: [
+          {
+            name: 'Rapport_Correctif',
+            headers,
+            rows: dataRows,
+          },
+        ],
+      });
 
       showToast?.('Export Excel du rapport correctif généré avec succès (.xlsx)', 'success');
     } catch (err) {

@@ -1,3 +1,5 @@
+import { normalizeDateToYMD } from '../../../utils/datePeriodUtils';
+
 const UNAPPROVED_STATUSES = new Set([
   'PENDING_VALIDATION',
   'NEEDS_CLARIFICATION',
@@ -15,12 +17,82 @@ function isOfficialIntervention(item: any): boolean {
   return true;
 }
 
+export function isMachineStoppageFlag(item: any): boolean {
+  if (!item) return false;
+  if (item.arret_machine === true || item.is_stoppage === true) return true;
+  const str = String(item.arret_machine ?? '').trim().toUpperCase();
+  return str === 'OUI' || str === 'TRUE' || str === '1' || str === 'YES';
+}
+
+/**
+ * Factory shift windows in minutes from local midnight (00:00):
+ * - Working days: Monday (1) through Saturday (6); Sunday (0) is non-working.
+ * - Morning shift: 08:00 (480) -> 13:15 (795) = 315 min
+ * - Lunch break:   13:15 -> 14:00 (45 min automatically excluded)
+ * - Afternoon:     14:00 (840) -> 17:00 (1020) = 180 min
+ * Total standard shift = 495 min/day (8h 15m).
+ */
+export const FACTORY_SHIFT_WINDOWS: ReadonlyArray<readonly [number, number]> = [
+  [8 * 60, 13 * 60 + 15],
+  [14 * 60, 17 * 60],
+];
+
+export const FACTORY_SHIFT_MINUTES_PER_DAY = 495; // 8.25h
+export const FACTORY_SHIFT_HOURS_PER_DAY = 8.25;
+
+const MAX_SHIFT_SCAN_DAYS = 366;
+
+function parseLocalDateTimeParts(
+  dateStr: string,
+  timeStr: string
+): { year: number; month: number; day: number; hour: number; minute: number } | null {
+  const ymd = normalizeDateToYMD(dateStr);
+  if (!ymd) return null;
+  const [yStr, mStr, dStr] = ymd.split('-');
+  const year = Number(yStr);
+  const month = Number(mStr);
+  const day = Number(dStr);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+
+  const cleanTime = String(timeStr || '').trim();
+  const timeMatch = cleanTime.match(/^(\d{1,2}):(\d{2})/);
+  const hour = timeMatch ? Math.min(23, Math.max(0, Number(timeMatch[1]))) : 8;
+  const minute = timeMatch ? Math.min(59, Math.max(0, Number(timeMatch[2]))) : 0;
+
+  const check = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (
+    Number.isNaN(check.getTime()) ||
+    check.getFullYear() !== year ||
+    check.getMonth() !== month - 1 ||
+    check.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return { year, month, day, hour, minute };
+}
+
+export interface WorkingTimeResult {
+  minutes: number;
+  formatted: string;
+  dureeMinutes: number;
+  dureeHeures: string;
+  isOvertime?: boolean;
+}
+
 export class CorrectiveCalculationService {
   static minutesToTimeString(minutes: number): string {
     const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
     const hrs = Math.floor(safeMinutes / 60);
     const mins = safeMinutes % 60;
     return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  }
+
+  static formatDurationHuman(minutes: number): string {
+    const safe = Math.max(0, Math.round(Number(minutes) || 0));
+    const hrs = Math.floor(safe / 60);
+    const mins = safe % 60;
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
   }
 
   static timeStringToMinutes(timeStr: unknown): number {
@@ -54,29 +126,154 @@ export class CorrectiveCalculationService {
     return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
   }
 
-  static calculateWorkingTime(dDebut: string, hDebut: string, dFin: string, hFin: string) {
+  /**
+   * Computes real factory working minutes between `(dDebut, hDebut)` and `(dFin, hFin)`:
+   * - Intersects `[start, end]` with Mon-Sat shift windows `[08:00-13:15]` and `[14:00-17:00]`.
+   * - Automatically excludes the 45-minute lunch break (`13:15-14:00`), overnight non-shift hours,
+   *   and Sundays (`day === 0`).
+   * - Never fabricates a default 60-minute duration on 0-minute or invalid ranges.
+   * - If an emergency intervention starts and finishes entirely on the same calendar day outside
+   *   normal shift hours (e.g., Sunday or night overtime <= 8h), records actual elapsed minutes
+   *   with `isOvertime: true` so real emergency overtime work is not erased to 0.
+   */
+  static calculateWorkingTime(
+    dDebut: string,
+    hDebut: string,
+    dFin: string,
+    hFin: string
+  ): WorkingTimeResult {
+    const zeroResult: WorkingTimeResult = {
+      minutes: 0,
+      formatted: '0m',
+      dureeMinutes: 0,
+      dureeHeures: '0.0',
+      isOvertime: false,
+    };
+
     try {
-      const start = new Date(`${dDebut}T${hDebut || '08:00'}:00`);
-      const end = new Date(`${dFin}T${hFin || '17:00'}:00`);
-      const diffMs = Math.max(0, end.getTime() - start.getTime());
-      const minutes = Math.round(diffMs / (1000 * 60)) || 60;
-      const hrs = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      const formatted = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+      const startParts = parseLocalDateTimeParts(dDebut, hDebut || '08:00');
+      const endParts = parseLocalDateTimeParts(dFin, hFin || '17:00');
+      if (!startParts || !endParts) {
+        return zeroResult;
+      }
+
+      const startMs = new Date(
+        startParts.year,
+        startParts.month - 1,
+        startParts.day,
+        startParts.hour,
+        startParts.minute,
+        0,
+        0
+      ).getTime();
+      const endMs = new Date(
+        endParts.year,
+        endParts.month - 1,
+        endParts.day,
+        endParts.hour,
+        endParts.minute,
+        0,
+        0
+      ).getTime();
+
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+        return zeroResult;
+      }
+
+      const startDayCursor = new Date(startParts.year, startParts.month - 1, startParts.day, 0, 0, 0, 0);
+      const endDayMidnight = new Date(endParts.year, endParts.month - 1, endParts.day, 0, 0, 0, 0);
+
+      let workingMinutes = 0;
+      let scannedDays = 0;
+      const cursor = new Date(startDayCursor.getTime());
+
+      while (cursor.getTime() <= endDayMidnight.getTime() && scannedDays < MAX_SHIFT_SCAN_DAYS) {
+        scannedDays++;
+        const dayOfWeek = cursor.getDay(); // 0 = Sunday (non-working)
+        if (dayOfWeek !== 0) {
+          const y = cursor.getFullYear();
+          const m = cursor.getMonth();
+          const d = cursor.getDate();
+
+          for (const [winStartMin, winEndMin] of FACTORY_SHIFT_WINDOWS) {
+            const winStartMs = new Date(
+              y,
+              m,
+              d,
+              Math.floor(winStartMin / 60),
+              winStartMin % 60,
+              0,
+              0
+            ).getTime();
+            const winEndMs = new Date(
+              y,
+              m,
+              d,
+              Math.floor(winEndMin / 60),
+              winEndMin % 60,
+              0,
+              0
+            ).getTime();
+
+            const overlapStart = Math.max(startMs, winStartMs);
+            const overlapEnd = Math.min(endMs, winEndMs);
+            if (overlapEnd > overlapStart) {
+              workingMinutes += Math.round((overlapEnd - overlapStart) / 60000);
+            }
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      const sameCalendarDay =
+        startParts.year === endParts.year &&
+        startParts.month === endParts.month &&
+        startParts.day === endParts.day;
+      const rawElapsedMins = Math.round((endMs - startMs) / 60000);
+
+      let isOvertime = false;
+      if (workingMinutes === 0 && sameCalendarDay && rawElapsedMins > 0 && rawElapsedMins <= 480) {
+        // Same-day emergency overtime intervention (e.g., Sunday or post-17:00 shift)
+        workingMinutes = rawElapsedMins;
+        isOvertime = true;
+      }
+
+      const safeMinutes = Math.max(0, workingMinutes);
       return {
-        minutes,
-        formatted,
-        dureeMinutes: minutes,
-        dureeHeures: (minutes / 60).toFixed(1),
+        minutes: safeMinutes,
+        formatted: this.formatDurationHuman(safeMinutes),
+        dureeMinutes: safeMinutes,
+        dureeHeures: (safeMinutes / 60).toFixed(1),
+        isOvertime,
       };
     } catch {
-      return {
-        minutes: 60,
-        formatted: '1h 0m',
-        dureeMinutes: 60,
-        dureeHeures: '1.0',
-      };
+      return zeroResult;
     }
+  }
+
+  /**
+   * Resolves explicit machine stoppage downtime in minutes.
+   * Returns 0 whenever `arret_machine` is false and no explicit stoppage duration was entered.
+   */
+  static resolveDowntimeMinutes(item: any): number {
+    if (!item) return 0;
+    const explicitArretMins =
+      Number(item.temps_arret_minutes) ||
+      this.timeStringToMinutes(item.temps_arret || item.duree_arret);
+    if (explicitArretMins > 0) {
+      return explicitArretMins;
+    }
+    if (!isMachineStoppageFlag(item)) {
+      return 0;
+    }
+    // Machine was stopped but technician did not enter a separate stoppage duration -> fallback to repair duration
+    return (
+      Number(item.temps_intervention_mins) ||
+      Number(item.temps_minutes) ||
+      Number(item.dureeMinutes) ||
+      this.timeStringToMinutes(item.temps_intervention_calc || item.temps_intervention) ||
+      0
+    );
   }
 
   static computeKpis(interventions: any[] = []) {
@@ -85,21 +282,39 @@ export class CorrectiveCalculationService {
     const closedItems = list.filter((i) => i.statut === 'CLOTURE');
     const clotures = closedItems.length;
     const enCours = list.filter((i) => i.statut === 'EN_COURS').length;
+
     let totalDowntimeMinutes = 0;
-    let closedDowntimeMinutes = 0;
+    let totalRepairMinutes = 0;
+    let closedWithDurationCount = 0;
+
     for (const i of list) {
-      const mins = Number(i.temps_intervention_mins || i.temps_arret_minutes || i.dureeMinutes || 0);
-      totalDowntimeMinutes += mins;
+      totalDowntimeMinutes += this.resolveDowntimeMinutes(i);
+
       if (i.statut === 'CLOTURE') {
-        closedDowntimeMinutes += mins;
+        const repairMins =
+          Number(i.temps_intervention_mins) ||
+          Number(i.temps_minutes) ||
+          Number(i.dureeMinutes) ||
+          this.timeStringToMinutes(i.temps_intervention_calc || i.temps_intervention) ||
+          Number(i.temps_arret_minutes) ||
+          this.timeStringToMinutes(i.temps_arret) ||
+          0;
+        if (repairMins > 0) {
+          totalRepairMinutes += repairMins;
+          closedWithDurationCount++;
+        }
       }
     }
-    const mttr = clotures > 0 ? (closedDowntimeMinutes / clotures).toFixed(1) : '0';
+
+    const mttr =
+      closedWithDurationCount > 0 ? (totalRepairMinutes / closedWithDurationCount).toFixed(1) : '0';
+
     return {
       totalInterventions: total,
       cloturesCount: clotures,
       enCoursCount: enCours,
       totalDowntimeMinutes,
+      totalRepairMinutes,
       mttrMinutes: mttr,
       tauxResolution: total > 0 ? Math.round((clotures / total) * 100) : 100,
     };
@@ -127,13 +342,43 @@ export class CorrectiveCalculationService {
     });
   }
 
-  static detectPreventiveRecommendations(interventions: any[] = []) {
-    const byMachine: Record<string, { count: number; anomalies: Record<string, number>; zone?: string }> = {};
+  /**
+   * Detects recurring failures per `(machine, anomaly)` inside a rolling time window (default 90 days)
+   * so obsolete 2-year-old incidents never spam false preventive recommendations forever.
+   */
+  static detectPreventiveRecommendations(
+    interventions: any[] = [],
+    options: { windowDays?: number; minRecurrences?: number; referenceDate?: Date } = {}
+  ) {
+    const windowDays = options.windowDays ?? 90;
+    const minRecurrences = options.minRecurrences ?? 3;
+    const refDate = options.referenceDate || new Date();
+    const cutoffMs =
+      windowDays > 0 ? refDate.getTime() - windowDays * 24 * 60 * 60 * 1000 : -Infinity;
+
+    const byMachine: Record<
+      string,
+      { count: number; anomalies: Record<string, number>; zone?: string; typePanne?: string }
+    > = {};
+
     for (const item of (interventions || []).filter(isOfficialIntervention)) {
       const mId = String(item.code_machine || item.id_machine_registered || item.machine || '').trim();
       if (!mId) continue;
+
+      if (windowDays > 0) {
+        const ymd = normalizeDateToYMD(
+          item.date_cloture || item.date_fin || item.date_demande || item.demande_date || item.date || item.created_at
+        );
+        if (ymd) {
+          const itemMs = new Date(`${ymd}T12:00:00`).getTime();
+          if (Number.isFinite(itemMs) && itemMs < cutoffMs) {
+            continue;
+          }
+        }
+      }
+
       if (!byMachine[mId]) {
-        byMachine[mId] = { count: 0, anomalies: {}, zone: item.zone };
+        byMachine[mId] = { count: 0, anomalies: {}, zone: item.zone, typePanne: item.type_panne };
       }
       byMachine[mId].count += 1;
       const anom = String(item.anomalie || item.panne || 'inspection_generale').trim();
@@ -141,13 +386,25 @@ export class CorrectiveCalculationService {
         byMachine[mId].anomalies[anom] = (byMachine[mId].anomalies[anom] || 0) + 1;
       }
     }
+
     return Object.entries(byMachine)
-      .filter(([_, data]) => data.count >= 3)
+      .filter(([_, data]) => data.count >= minRecurrences)
+      .sort((a, b) => b[1].count - a[1].count)
       .map(([machine, data]) => {
         const topAnomalie =
           Object.entries(data.anomalies).sort((a, b) => b[1] - a[1])[0]?.[0] ||
           'inspection_generale';
         const cleanLabel = topAnomalie.replace(/_/g, ' ');
+        const suggestedIntervalDays = data.count >= 5 ? 7 : 30;
+        const typeLabel =
+          data.typePanne === 'E'
+            ? 'contrôle électrique / serrage borniers'
+            : data.typePanne === 'H'
+            ? 'contrôle circuit hydraulique / étanchéité & pression'
+            : data.typePanne === 'P'
+            ? 'contrôle réseau pneumatique / FRL & électrovannes'
+            : 'inspection mécanique ciblée / alignement & usure';
+
         return {
           machine,
           code_machine: machine,
@@ -155,13 +412,12 @@ export class CorrectiveCalculationService {
           repetitionCount: data.count,
           anomalie: topAnomalie,
           zone: data.zone || 'Atelier',
-          suggestedIntervalDays: data.count >= 5 ? 7 : 30,
-          recommendedAction: `Contrôle préventif systématique (${cleanLabel}) sur ${machine}`,
-          recommendation: `Créer une inspection préventive renforcée sur ${machine} suite à ${data.count} pannes récentes (${cleanLabel}).`,
+          suggestedIntervalDays,
+          recommendedAction: `Planifier un ${typeLabel} (${cleanLabel}) tous les ${suggestedIntervalDays} jours sur ${machine}.`,
+          recommendation: `Créer une inspection préventive ciblée sur ${machine} suite à ${data.count} pannes récentes (${cleanLabel}) sur les ${windowDays} derniers jours.`,
         };
       });
   }
 }
 
 export default CorrectiveCalculationService;
-

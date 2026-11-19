@@ -82,6 +82,7 @@ export default function LotoPermitPanel({
   const [vatVerified, setVatVerified] = useState<boolean>(Boolean(permit.vat_verified));
   const [zoneCleared, setZoneCleared] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>(permit.notes || '');
+  const [overrideReason, setOverrideReason] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [showReconsignForm, setShowReconsignForm] = useState<boolean>(false);
 
@@ -92,6 +93,7 @@ export default function LotoPermitPanel({
     setVatVerified(Boolean(p.vat_verified));
     setZoneCleared(false);
     setNotes(p.notes || '');
+    setOverrideReason('');
     setErrorMsg(null);
     setShowReconsignForm(false);
   }, [intervention?.id, intervention?.loto_status]);
@@ -99,6 +101,22 @@ export default function LotoPermitPanel({
   if (!intervention) return null;
 
   const interventionId = String(intervention.id ?? intervention.num_bt ?? '');
+  const normalizedRole = String(actorRole || '').trim().toUpperCase();
+  const isSupervisorOrAdmin =
+    !normalizedRole ||
+    normalizedRole === 'ADMIN' ||
+    normalizedRole === 'SUPER_ADMIN' ||
+    normalizedRole === 'MANAGER' ||
+    normalizedRole === 'SUPERVISEUR' ||
+    normalizedRole === 'SUPERVISOR' ||
+    normalizedRole === 'CHEF_ATELIER' ||
+    normalizedRole === 'RESPONSABLE';
+  const consignateurIdNorm = String(permit.consignateur_id || '').trim().toUpperCase();
+  const actorIdNorm = String(actorId || '').trim().toUpperCase();
+  const isDifferentLockHolder =
+    Boolean(consignateurIdNorm) && Boolean(actorIdNorm) && consignateurIdNorm !== actorIdNorm;
+  const isBlockedOtherTechnician = isDifferentLockHolder && !isSupervisorOrAdmin;
+  const isSupervisorBreakLock = isDifferentLockHolder && isSupervisorOrAdmin;
 
   const toggleEnergy = (energy: LotoEnergyType) => {
     setEnergyTypes((prev) =>
@@ -152,12 +170,21 @@ export default function LotoPermitPanel({
   const handleDeconsignSubmit = () => {
     if (!interventionId) return;
     setErrorMsg(null);
+    if (isBlockedOtherTechnician) {
+      const msg = `Déconsignation refusée : ce cadenas appartient à ${permit.consignateur_name || permit.consignateur_id}. Seul son titulaire ou un Superviseur/Admin peut lever le verrouillage.`;
+      setErrorMsg(msg);
+      showToast?.(msg, 'warning');
+      return;
+    }
     const res = handleDeconsignInterventionLoto(interventionId, {
       zone_cleared: zoneCleared,
       deconsignateur_id: actorId,
       deconsignateur_name: actorName,
       actorRole,
       notes,
+      ...(isSupervisorBreakLock && overrideReason.trim()
+        ? { supervisor_override_reason: overrideReason.trim() }
+        : {}),
     });
     if (!res.valid) {
       const msg = res.reason || 'Déconsignation LOTO refusée.';
@@ -166,7 +193,9 @@ export default function LotoPermitPanel({
       return;
     }
     showToast?.(
-      `Équipement déconsigné (DECONSIGNE) : remise en énergie sûre et clôture BT débloquée.`,
+      isSupervisorBreakLock
+        ? `Levée exceptionnelle (Break-Lock) enregistrée dans le journal d'audit : équipement déconsigné.`
+        : `Équipement déconsigné (DECONSIGNE) : remise en énergie sûre et clôture BT débloquée.`,
       'success'
     );
   };
@@ -422,30 +451,68 @@ export default function LotoPermitPanel({
 
           {!isReadOnly && !isClosed && (
             <>
-              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  data-testid="loto-zone-cleared-checkbox"
-                  checked={zoneCleared}
-                  onChange={(e) => setZoneCleared(e.target.checked)}
-                  className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-xs font-bold text-emerald-950">
-                  Zone d&apos;intervention dégagée, protecteurs remontés et remise en énergie sécurisée *
-                </span>
-              </label>
-
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  data-testid="loto-deconsign-submit-btn"
-                  onClick={handleDeconsignSubmit}
-                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
+              {isBlockedOtherTechnician ? (
+                <div
+                  data-testid="loto-personal-lock-blocked"
+                  className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-950 text-xs font-bold flex items-start gap-2.5"
                 >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span>Déconsigner &amp; Retirer le Cadenas</span>
-                </button>
-              </div>
+                  <ShieldAlert className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                  <span>
+                    Cadenas personnel verrouillé par <b>{permit.consignateur_name || permit.consignateur_id}</b>.
+                    Par règle de sécurité LOTO, seul le titulaire du cadenas ou un Superviseur/Admin habilité peut effectuer la déconsignation.
+                  </span>
+                </div>
+              ) : (
+                <>
+                  {isSupervisorBreakLock && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-black text-amber-950">
+                        <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                        <span>
+                          Levée exceptionnelle Superviseur (Break-Lock) — Cadenas posé par {permit.consignateur_name || permit.consignateur_id}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        data-testid="loto-override-reason-input"
+                        value={overrideReason}
+                        onChange={(e) => setOverrideReason(e.target.value)}
+                        placeholder="Motif de la levée exceptionnelle (ex: fin de poste, autorisation chef d'atelier)..."
+                        className="w-full h-9 px-3 rounded-xl border border-amber-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  )}
+
+                  <label className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      data-testid="loto-zone-cleared-checkbox"
+                      checked={zoneCleared}
+                      onChange={(e) => setZoneCleared(e.target.checked)}
+                      className="mt-0.5 rounded border-emerald-400 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-xs font-bold text-emerald-950">
+                      Zone d&apos;intervention dégagée, protecteurs remontés et remise en énergie sécurisée *
+                    </span>
+                  </label>
+
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      data-testid="loto-deconsign-submit-btn"
+                      onClick={handleDeconsignSubmit}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer inline-flex items-center gap-2 shadow-sm"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>
+                        {isSupervisorBreakLock
+                          ? 'Déconsigner (Levée Exceptionnelle Auditée)'
+                          : 'Déconsigner & Retirer le Cadenas'}
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

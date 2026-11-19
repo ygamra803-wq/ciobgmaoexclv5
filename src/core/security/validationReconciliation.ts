@@ -429,15 +429,15 @@ export function reconcileFieldClaim({
     }
   }
 
-  if (claimType === 'SORTIE' && candidateStoreMovements.length > 0) {
+  if ((claimType === 'SORTIE' || claimType === 'CORRECTIVE') && candidateStoreMovements.length > 0) {
     const firstCand = candidateStoreMovements[0];
-    if (firstCand.bonNumberDiffers) {
+    if (firstCand.bonNumberDiffers || !normBon) {
       alerts.push({
         code: 'CANDIDATE_STORE_BON_MATCH',
         severity: 'warning',
         ref: firstCand.ref,
-        title: `Écart N° Bon Terrain (${numBonSaisi || '—'}) × Magasin (${firstCand.code_bon})`,
-        detail: `Un mouvement magasin existant (${firstCand.code_bon}, Qté: ${firstCand.quantite}) correspond à la même pièce (${firstCand.ref}). Vous pouvez les fusionner sans double déstockage ou signaler un écart.`,
+        title: `Écart N° Bon Terrain (${numBonSaisi || 'Non saisi'}) × Magasin (${firstCand.code_bon})`,
+        detail: `Un mouvement magasin existant (${firstCand.code_bon}, Qté: ${firstCand.quantite}) correspond à la même pièce (${firstCand.ref}). Cochez « Déjà déstocké au magasin » ou fusionnez les bons pour éviter un double déstockage.`,
       });
     }
   }

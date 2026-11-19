@@ -1,6 +1,10 @@
 import { DataGateway } from '../../application/DataGateway';
 import SortieExterneService from '../../application/services/SortieExterneService';
-import { CorrectiveCalculationService } from '../../domain/corrective/services/CorrectiveCalculationService';
+import {
+  CorrectiveCalculationService,
+  isMachineStoppageFlag,
+} from '../../domain/corrective/services/CorrectiveCalculationService';
+import { StockCalculationService } from '../../domain/pdr/services/StockCalculationService';
 import { WorkOrderStateMachine } from '../../domain/corrective/services/WorkOrderStateMachine';
 import {
   createWorkshopOrderRecord,
@@ -147,6 +151,122 @@ function areSamePdrLists(
       .sort()
       .join('|');
   return sortKey(a) === sortKey(b);
+}
+
+const NON_DESTRUCTIVE_ROLES = new Set([
+  'TECHNICIEN',
+  'TECHNICIAN',
+  'OPERATEUR',
+  'OPERATOR',
+  'VIEWER',
+  'OBSERVATEUR',
+]);
+
+function normalizeTypePanne(raw: unknown): string {
+  const clean = String(raw || '').trim();
+  if (!clean) return 'M';
+  const upper = clean
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (upper === 'M' || upper.startsWith('MECA')) return 'M';
+  if (upper === 'E' || upper.startsWith('ELEC')) return 'E';
+  if (upper === 'H' || upper.startsWith('HYDR')) return 'H';
+  if (upper === 'P' || upper.startsWith('PNEU')) return 'P';
+  if (upper === 'S' || upper.startsWith('SECU')) return 'S';
+  if (upper === 'A' || upper.startsWith('AUTO')) return 'A';
+  if (upper.startsWith('AUTR') || upper === 'OTHER') return 'AUTRE';
+  return clean;
+}
+
+function normalizePriorite(raw: unknown): 'HAUTE' | 'MOYENNE' | 'BASSE' {
+  const upper = String(raw || '')
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+  if (
+    upper.includes('CRITIQUE') ||
+    upper.includes('URGENT') ||
+    upper === 'HAUTE' ||
+    upper === 'HIGH' ||
+    upper === 'P1'
+  ) {
+    return 'HAUTE';
+  }
+  if (upper.includes('MINEUR') || upper === 'BASSE' || upper === 'LOW' || upper === 'P3') {
+    return 'BASSE';
+  }
+  return 'MOYENNE';
+}
+
+function computeNextBtNumber(interventions: CorrectiveInterventionItem[]): string {
+  const year = new Date().getFullYear();
+  const prefix = `BT-${year}-`;
+  let maxSeq = 0;
+  for (const item of interventions || []) {
+    const code = String(item?.num_bt || '').trim().toUpperCase();
+    if (!code.startsWith(prefix)) continue;
+    const match = code.match(/^BT-\d{4}-(\d+)$/);
+    if (match) {
+      const seq = Number(match[1]);
+      if (Number.isFinite(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return `${prefix}${String(maxSeq + 1).padStart(3, '0')}`;
+}
+
+function computeDowntimeMinutesForClosure(
+  item: Record<string, any>,
+  repairMinutes: number
+): number {
+  const explicitMins = CorrectiveCalculationService.timeStringToMinutes(item?.temps_arret);
+  if (explicitMins > 0) return explicitMins;
+  if (item?.temps_arret_minutes !== undefined && item?.temps_arret_minutes !== null && item?.temps_arret_minutes !== '') {
+    const numeric = Number(item.temps_arret_minutes);
+    if (Number.isFinite(numeric) && numeric >= 0) return Math.round(numeric);
+  }
+  if (isMachineStoppageFlag(item)) {
+    return Math.max(0, Math.round(repairMinutes || 0));
+  }
+  return 0;
+}
+
+function validateStockSufficiencyForDeduction(
+  pieces: CorrectivePdrConsumedItem[],
+  stockMap: Map<string, any>,
+  currentMovements: IMouvement[],
+  numBonSaisi: unknown,
+  skipAllDeduction: boolean
+): { valid: boolean; reason?: string } {
+  if (skipAllDeduction || pieces.length === 0) return { valid: true };
+  const pendingQtyByRef = new Map<string, { ref: string; qty: number }>();
+
+  for (const piece of pieces) {
+    const refKey = String(piece.ref || '').trim().toUpperCase();
+    if (!refKey || piece.quantite <= 0) continue;
+    if (isPartAlreadyDeductedByStoreBon(currentMovements, numBonSaisi, piece.ref)) continue;
+    const prev = pendingQtyByRef.get(refKey);
+    if (prev) {
+      prev.qty += piece.quantite;
+    } else {
+      pendingQtyByRef.set(refKey, { ref: piece.ref, qty: piece.quantite });
+    }
+  }
+
+  for (const [refKey, req] of pendingQtyByRef.entries()) {
+    const stockMatch = stockMap.get(refKey);
+    if (!stockMatch) continue;
+    const liveStock = StockCalculationService.calculateStockActuel(stockMatch, currentMovements);
+    if (req.qty > liveStock) {
+      return {
+        valid: false,
+        reason: `Stock insuffisant pour ${req.ref} : demandé ${req.qty}, disponible ${liveStock}.`,
+      };
+    }
+  }
+
+  return { valid: true };
 }
 
 export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveSliceKeys {
@@ -342,12 +462,26 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const nowIso = new Date().toISOString();
       const today = nowIso.slice(0, 10);
       const timeNow = nowIso.slice(11, 16);
+      const requiresLoto = Boolean(data?.requires_loto);
       const created: CorrectiveInterventionItem = {
         ...data,
         id: String(data?.id || safeId('DI')).trim(),
         code_machine: String(data?.code_machine || data?.id_machine_registered || '').trim(),
+        type_panne: normalizeTypePanne(data?.type_panne),
+        priorite: normalizePriorite(data?.priorite),
         statut: 'DEMANDE',
         action_fermee: 'NON',
+        requires_loto: requiresLoto,
+        ...(requiresLoto
+          ? {
+              loto_status: 'ATTENTE_CONSIGNATION' as const,
+              loto: {
+                required: true,
+                status: 'ATTENTE_CONSIGNATION' as const,
+                energy_types: [],
+              },
+            }
+          : {}),
         demande_date: data?.demande_date || data?.date_demande || today,
         date_demande: data?.date_demande || data?.demande_date || today,
         demande_heure: data?.demande_heure || data?.heure_demande || timeNow,
@@ -365,7 +499,24 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const existing = current.find((i) => matchesIntervention(i, id));
       if (!existing) return null;
 
-      const check = WorkOrderStateMachine.validateTransition(existing, 'EN_COURS', {
+      const requiresLoto = Boolean(btDetails?.requires_loto ?? existing.requires_loto);
+      const targetStatut = String(
+        btDetails?.statut || (requiresLoto ? 'BT_PLANIFIE' : 'EN_COURS')
+      ).trim();
+
+      const candidateRecord: CorrectiveInterventionItem = {
+        ...existing,
+        ...btDetails,
+        requires_loto: requiresLoto,
+        ...(requiresLoto && !existing.loto?.status && !existing.loto_status
+          ? {
+              loto_status: 'ATTENTE_CONSIGNATION',
+              loto: { required: true, status: 'ATTENTE_CONSIGNATION', energy_types: [] },
+            }
+          : {}),
+      };
+
+      const check = WorkOrderStateMachine.validateTransition(candidateRecord, targetStatut, {
         ...btDetails,
         code_machine: btDetails.code_machine || existing.code_machine || existing.machine,
       });
@@ -374,15 +525,23 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const nowIso = new Date().toISOString();
       const today = nowIso.slice(0, 10);
       const timeNow = nowIso.slice(11, 16);
-      const existingBtCount = current.filter((i) => Boolean(i.num_bt)).length;
 
       const updated: CorrectiveInterventionItem = {
         ...existing,
         ...btDetails,
+        ...(btDetails?.type_panne ? { type_panne: normalizeTypePanne(btDetails.type_panne) } : {}),
+        ...(btDetails?.priorite ? { priorite: normalizePriorite(btDetails.priorite) } : {}),
+        requires_loto: requiresLoto,
+        ...(requiresLoto && !existing.loto?.status && !existing.loto_status
+          ? {
+              loto_status: 'ATTENTE_CONSIGNATION' as const,
+              loto: { required: true, status: 'ATTENTE_CONSIGNATION' as const, energy_types: [] },
+            }
+          : {}),
         num_bt: String(
-          btDetails?.num_bt || existing.num_bt || `BT-${new Date().getFullYear()}-${String(existingBtCount + 1).padStart(3, '0')}`
+          btDetails?.num_bt || existing.num_bt || computeNextBtNumber(current)
         ).trim(),
-        statut: btDetails?.statut || 'EN_COURS',
+        statut: targetStatut,
         action_fermee: 'NON',
         date_debut: btDetails?.date_debut || existing.date_debut || today,
         heure_debut: btDetails?.heure_debut || existing.heure_debut || timeNow,
@@ -580,12 +739,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       if (!fsmCheck.valid) return null;
 
       const claimedPieces = normalizePdrItems(
-        existing.pieces_claimed ?? existing.pieces_proposees ?? []
+        existing.pieces_claimed ?? existing.pieces_proposees ?? existing.pdr_utilisees ?? []
       );
       const rawApproved =
         decisionData?.pieces_utilisees ??
         decisionData?.approvedItems ??
         existing.pieces_proposees ??
+        existing.pdr_utilisees ??
         [];
       const approvedPieces = normalizePdrItems(rawApproved);
       const editedByAdmin =
@@ -594,9 +754,19 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const currentMovements = get().mouvements || [];
       const stockMap = new Map<string, any>();
       for (const s of get().rawStock || []) {
-        const refKey = String(s?.ref || '').trim().toUpperCase();
+        const refKey = String(s?.ref || (s as any)?.reference || '').trim().toUpperCase();
         if (refKey) stockMap.set(refKey, s);
       }
+
+      const skipDeduction = Boolean(decisionData?.skipStockDeduction);
+      const stockSufficiency = validateStockSufficiencyForDeduction(
+        approvedPieces,
+        stockMap,
+        currentMovements,
+        existing.num_bon_saisi_par_tech,
+        skipDeduction
+      );
+      if (!stockSufficiency.valid) return null;
 
       const bonRef = `BS-BT-${existing.id || id}`;
       const newMovements: IMouvement[] = [];
@@ -608,11 +778,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         const unitPrice = Number(piece.prix_unitaire ?? stockMatch?.prixUnitaire ?? stockMatch?.prix ?? 0) || 0;
         totalPdrCost += unitPrice * piece.quantite;
 
-        const alreadyDeducted = isPartAlreadyDeductedByStoreBon(
-          currentMovements,
-          existing.num_bon_saisi_par_tech,
-          piece.ref
-        );
+        const alreadyDeducted =
+          skipDeduction ||
+          isPartAlreadyDeductedByStoreBon(
+            currentMovements,
+            existing.num_bon_saisi_par_tech,
+            piece.ref
+          );
         if (!alreadyDeducted) {
           const mvtId = safeId('MVT');
           emittedIds.push(mvtId);
@@ -649,6 +821,14 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const dFin = String(decisionData?.date_fin || existing.date_fin_proposee || dDebut);
       const hFin = String(decisionData?.heure_fin || existing.heure_fin_proposee || '17:00');
       const timing = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
+      const resolvedRepairMins =
+        Number(decisionData?.temps_intervention_mins) ||
+        existing.temps_intervention_mins ||
+        timing.minutes;
+      const resolvedDowntimeMins = computeDowntimeMinutesForClosure(
+        { ...existing, ...decisionData },
+        resolvedRepairMins
+      );
 
       const coutAtelier = Number(existing.cout_atelier ?? 0) || 0;
       const coutPdr = Number(totalPdrCost.toFixed(2));
@@ -656,6 +836,11 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const nature = normalizeInterventionNature(
         decisionData?.intervention_nature ?? existing.intervention_nature
       );
+
+      const formattedRepair =
+        decisionData?.temps_intervention ||
+        existing.temps_intervention_propose ||
+        timing.formatted;
 
       const closedBt: CorrectiveInterventionItem = {
         ...existing,
@@ -676,19 +861,20 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         date_fin: dFin,
         heure_fin: hFin,
         date_cloture: nowIso.slice(0, 10),
-        temps_intervention:
-          decisionData?.temps_intervention ||
-          existing.temps_intervention_propose ||
-          timing.formatted,
-        temps_intervention_mins:
-          Number(decisionData?.temps_intervention_mins) ||
-          existing.temps_intervention_mins ||
-          timing.minutes,
+        temps_intervention: formattedRepair,
+        temps_intervention_calc: formattedRepair,
+        temps_intervention_mins: resolvedRepairMins,
+        temps_arret_minutes: resolvedDowntimeMins,
         cout_pdr: coutPdr,
         cout_atelier: coutAtelier,
         cout_total: coutTotal,
-        stock_deducted: approvedPieces.length > 0,
-        stock_effect: approvedPieces.length > 0 ? 'APPLIED' : 'NONE',
+        stock_deducted: emittedIds.length > 0 || (skipDeduction && approvedPieces.length > 0),
+        stock_effect:
+          emittedIds.length > 0
+            ? 'APPLIED'
+            : skipDeduction && approvedPieces.length > 0
+            ? 'ALREADY_DEDUCTED_BY_STORE'
+            : 'NONE',
         emitted_movement_ids: emittedIds,
         updated_at: nowIso,
       };
@@ -709,6 +895,7 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
           validation_status: 'APPROVED',
           statut: 'CLOTURE',
           cout_total: coutTotal,
+          skip_stock_deduction: skipDeduction,
           emitted_movement_ids: emittedIds,
         },
       });
@@ -805,8 +992,20 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const currentMovements = get().mouvements || [];
       const stockMap = new Map<string, any>();
       for (const s of get().rawStock || []) {
-        const refKey = String(s?.ref || '').trim().toUpperCase();
+        const refKey = String(s?.ref || (s as any)?.reference || '').trim().toUpperCase();
         if (refKey) stockMap.set(refKey, s);
+      }
+
+      const skipDeduction = Boolean(clotureData?.skipStockDeduction);
+      const stockSufficiency = validateStockSufficiencyForDeduction(
+        pieces,
+        stockMap,
+        currentMovements,
+        clotureData?.num_bon_saisi_par_tech ?? existing.num_bon_saisi_par_tech,
+        skipDeduction
+      );
+      if (!stockSufficiency.valid) {
+        return null;
       }
 
       const manualBon = String(
@@ -827,11 +1026,13 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         const bonRef =
           manualBon || (pieces.length > 1 ? `${baseBtBon}-${idx + 1}` : baseBtBon);
 
-        const alreadyDeducted = isPartAlreadyDeductedByStoreBon(
-          currentMovements,
-          clotureData?.num_bon_saisi_par_tech ?? existing.num_bon_saisi_par_tech,
-          piece.ref
-        );
+        const alreadyDeducted =
+          skipDeduction ||
+          isPartAlreadyDeductedByStoreBon(
+            currentMovements,
+            clotureData?.num_bon_saisi_par_tech ?? existing.num_bon_saisi_par_tech,
+            piece.ref
+          );
         if (!alreadyDeducted) {
           const mvtId = safeId('MVT');
           emittedIds.push(mvtId);
@@ -867,6 +1068,14 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       const dFin = String(clotureData?.date_fin || nowIso.slice(0, 10));
       const hFin = String(clotureData?.heure_fin || nowIso.slice(11, 16));
       const timing = CorrectiveCalculationService.calculateWorkingTime(dDebut, hDebut, dFin, hFin);
+      const resolvedRepairMins =
+        Number(clotureData?.temps_intervention_mins) ||
+        existing.temps_intervention_mins ||
+        timing.minutes;
+      const resolvedDowntimeMins = computeDowntimeMinutesForClosure(
+        { ...existing, ...clotureData },
+        resolvedRepairMins
+      );
 
       const coutPdr = Number(totalPdrCost.toFixed(2));
       const coutAtelier = Number(clotureData?.cout_atelier ?? existing.cout_atelier ?? 0) || 0;
@@ -881,6 +1090,8 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
           ? `${firstPiece.designation} (+${pieces.length - 1} réf.)`
           : firstPiece.designation
         : clotureData?.pdr_designation ?? existing.pdr_designation;
+
+      const formattedRepair = clotureData?.temps_intervention || timing.formatted;
 
       const closedBt: CorrectiveInterventionItem = {
         ...existing,
@@ -904,16 +1115,20 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         date_fin: dFin,
         heure_fin: hFin,
         date_cloture: clotureData?.date_cloture || dFin,
-        temps_intervention: clotureData?.temps_intervention || timing.formatted,
-        temps_intervention_mins:
-          Number(clotureData?.temps_intervention_mins) ||
-          existing.temps_intervention_mins ||
-          timing.minutes,
+        temps_intervention: formattedRepair,
+        temps_intervention_calc: formattedRepair,
+        temps_intervention_mins: resolvedRepairMins,
+        temps_arret_minutes: resolvedDowntimeMins,
         cout_pdr: coutPdr,
         cout_atelier: coutAtelier,
         cout_total: coutTotal,
-        stock_deducted: pieces.length > 0,
-        stock_effect: pieces.length > 0 ? 'APPLIED' : 'NONE',
+        stock_deducted: emittedIds.length > 0 || (skipDeduction && pieces.length > 0),
+        stock_effect:
+          emittedIds.length > 0
+            ? 'APPLIED'
+            : skipDeduction && pieces.length > 0
+            ? 'ALREADY_DEDUCTED_BY_STORE'
+            : 'NONE',
         emitted_movement_ids: emittedIds,
         updated_at: nowIso,
       };
@@ -921,6 +1136,23 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       get().setCorrectiveInterventions((prev) =>
         (prev || []).map((i) => (matchesIntervention(i, id) ? closedBt : i))
       );
+
+      get().appendAuditEvent?.({
+        actorId: String(clotureData?.validated_by_id || actor.actorId),
+        actorName: String(clotureData?.validated_by_name || actor.actorName),
+        actorRole: effectiveRole || actor.actorRole,
+        actionType: 'CORRECTIVE_BT_CLOSED',
+        entityType: 'CORRECTIVE_BT',
+        entityId: String(existing.id || id),
+        before: { statut: existing.statut, action_fermee: existing.action_fermee },
+        after: {
+          statut: 'CLOTURE',
+          cout_total: coutTotal,
+          temps_intervention_mins: resolvedRepairMins,
+          temps_arret_minutes: resolvedDowntimeMins,
+          emitted_movement_ids: emittedIds,
+        },
+      });
 
       // Sync linked warehouse component status if requested at BT closure
       const compId = String(clotureData?.id_composant || existing.id_composant || '').trim();
@@ -948,27 +1180,56 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
     },
 
     handleUpdateCorrectiveIntervention: (id, patch = {}) => {
+      const current = get().correctiveInterventions || [];
+      const target = current.find((i) => matchesIntervention(i, id));
+      if (!target) return false;
+
+      // Closure MUST flow through handleClotureIntervention / handleReviewInterventionValidation
+      // so stock deductions, LOTO/workshop/need guards, downtime math & AUDIT_EVENTS cannot be bypassed.
+      if (
+        patch.statut &&
+        String(patch.statut).trim().toUpperCase() === 'CLOTURE' &&
+        String(target.statut || '').trim().toUpperCase() !== 'CLOTURE'
+      ) {
+        return false;
+      }
+
+      if (patch.statut && patch.statut !== target.statut) {
+        const check = WorkOrderStateMachine.validateTransition(target, patch.statut, patch);
+        if (!check.valid) {
+          return false;
+        }
+      }
+
       const nowIso = new Date().toISOString();
+      const normalizedPatch: Record<string, any> = {
+        ...patch,
+        ...(patch.type_panne ? { type_panne: normalizeTypePanne(patch.type_panne) } : {}),
+        ...(patch.priorite ? { priorite: normalizePriorite(patch.priorite) } : {}),
+      };
+
       get().setCorrectiveInterventions((prev) =>
-        (prev || []).map((i) => {
-          if (!matchesIntervention(i, id)) return i;
-          if (patch.statut && patch.statut !== i.statut) {
-            const check = WorkOrderStateMachine.validateTransition(i, patch.statut, patch);
-            if (!check.valid) {
-              return i;
-            }
-          }
-          return { ...i, ...patch, updated_at: nowIso };
-        })
+        (prev || []).map((i) =>
+          matchesIntervention(i, id) ? { ...i, ...normalizedPatch, updated_at: nowIso } : i
+        )
       );
+      return true;
     },
 
     handleDeleteCorrectiveIntervention: (id) => {
+      const sessionRole = resolveActiveSessionRole();
+      if (sessionRole && NON_DESTRUCTIVE_ROLES.has(sessionRole)) {
+        return false;
+      }
+
       const current = get().correctiveInterventions || [];
       const target = current.find((i) => matchesIntervention(i, id));
-      const targetId = String(target?.id || id || '').trim();
+      if (!target) return false;
+
+      const actor = resolveActiveActorContext();
+      const targetId = String(target.id || id || '').trim();
       const emittedSet = new Set(
-        Array.isArray(target?.emitted_movement_ids) ? target.emitted_movement_ids.map(String) : []
+        Array.isArray(target.emitted_movement_ids) ? target.emitted_movement_ids.map(String) : []
       );
       const fallbackBon = targetId ? `BS-BT-${targetId}` : '';
 
@@ -986,6 +1247,29 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
           })
         );
       }
+
+      if (String(get().activeLiveInterventionId ?? '') === String(target.id ?? id)) {
+        get().setActiveLiveInterventionId(null);
+      }
+
+      get().appendAuditEvent?.({
+        actorId: actor.actorId,
+        actorName: actor.actorName,
+        actorRole: sessionRole || actor.actorRole,
+        actionType: 'CORRECTIVE_BT_DELETED',
+        entityType: 'CORRECTIVE_BT',
+        entityId: targetId || String(id),
+        before: {
+          num_bt: target.num_bt || null,
+          code_machine: target.code_machine || null,
+          statut: target.statut || null,
+          anomalie: target.anomalie || null,
+          cout_total: target.cout_total || 0,
+        },
+        after: null,
+      });
+
+      return true;
     },
 
     handleBulkImportCorrective: (_importedItems: CorrectiveInterventionItem[]) => {
@@ -1414,6 +1698,7 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
 
       const check = validateLotoDeconsignation(existing.loto, {
         ...payload,
+        actorRole: effectiveRole,
         deconsignateur_id: payload.deconsignateur_id || actor.actorId,
         deconsignateur_name: payload.deconsignateur_name || actor.actorName,
       });
@@ -1438,14 +1723,23 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
         actorId: check.permit.deconsignateur_id || actor.actorId,
         actorName: check.permit.deconsignateur_name || actor.actorName,
         actorRole: effectiveRole,
-        actionType: 'LOTO_DECONSIGNED',
+        actionType: check.permit.override_break_lock ? 'LOTO_BREAK_LOCK_OVERRIDE' : 'LOTO_DECONSIGNED',
         entityType: 'CORRECTIVE_BT',
         entityId: String(existing.id || id),
-        before: { loto_status: existing.loto_status || existing.loto?.status },
+        before: {
+          loto_status: existing.loto_status || existing.loto?.status,
+          consignateur_id: existing.loto?.consignateur_id || null,
+        },
         after: {
           loto_status: check.permit.status,
           num_cadenas: check.permit.num_cadenas,
           deconsigned_at: check.permit.deconsigned_at,
+          ...(check.permit.override_break_lock
+            ? {
+                override_break_lock: true,
+                override_reason: check.permit.override_reason || '',
+              }
+            : {}),
         },
       });
 

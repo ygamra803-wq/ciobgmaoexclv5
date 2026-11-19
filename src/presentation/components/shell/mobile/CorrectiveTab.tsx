@@ -19,6 +19,7 @@ import {
   type buildTechnicianDashboardScope,
 } from '../../../../core/security/technicianScope';
 import { filterActiveMachines } from '../../../../utils/activeMachines';
+import { canStartWorkWithLoto } from '../../../../domain/corrective/lotoService';
 import ValidationStatusBadge, {
   INTERVENTION_NATURE_OPTIONS,
 } from '../../common/ValidationStatusBadge';
@@ -267,6 +268,20 @@ export default function CorrectiveTab({
         ''
     );
 
+    const canonicalTypePanneMap: Record<string, string> = {
+      MECANIQUE: 'M',
+      ELECTRIQUE: 'E',
+      PNEUMATIQUE: 'P',
+      HYDRAULIQUE: 'H',
+      SECURITE: 'S',
+    };
+    const canonicalPriorite =
+      diUrgence === 'Critique (Arrêt)'
+        ? 'HAUTE'
+        : diUrgence === 'Mineure'
+        ? 'BASSE'
+        : 'MOYENNE';
+
     onAddDemandeIntervention({
       code_machine: machineCode,
       id_machine_registered: machineCode,
@@ -282,10 +297,10 @@ export default function CorrectiveTab({
       anomalie: diAnomalie.trim(),
       travail_a_faire: diAnomalie.trim(),
       urgence: diUrgence,
-      priorite: diUrgence === 'Critique (Arrêt)' ? 'Critique' : diUrgence,
+      priorite: canonicalPriorite,
       arret_machine: diArretMachine || diUrgence === 'Critique (Arrêt)',
       categorie_panne: diCategorie,
-      type_panne: diCategorie,
+      type_panne: canonicalTypePanneMap[diCategorie] || diCategorie,
       demandeur: techName,
       intervenant: techName,
       id_technician: techId,
@@ -565,10 +580,11 @@ export default function CorrectiveTab({
                     )}
 
                     <div className="flex items-center gap-2 flex-wrap text-[10px] font-mono text-slate-500">
-                      {Boolean(item.demande_date) && (
+                      {Boolean(item.date_demande || item.demande_date) && (
                         <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3" />
-                          {String(item.demande_date || '')} {String(item.demande_heure || '')}
+                          {String(item.date_demande || item.demande_date || '')}{' '}
+                          {String(item.heure_demande || item.demande_heure || '')}
                         </span>
                       )}
                       {Boolean(item.urgence) && (
@@ -630,8 +646,17 @@ export default function CorrectiveTab({
                       <button
                         type="button"
                         onClick={() => {
+                          const lotoCheck = canStartWorkWithLoto(item);
                           onStartLiveIntervention(item.id || '');
-                          showToast?.('Intervention démarrée en mode Live (EN_COURS).', 'info');
+                          if (!lotoCheck.valid) {
+                            showToast?.(
+                              lotoCheck.reason ||
+                                "Permis LOTO requis : consignez l'équipement avant de démarrer les travaux.",
+                              'warning'
+                            );
+                          } else {
+                            showToast?.('Intervention démarrée en mode Live (EN_COURS).', 'info');
+                          }
                         }}
                         data-testid={`mobile-corr-start-btn-${item.id}`}
                         className="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-2xs"
@@ -703,7 +728,7 @@ export default function CorrectiveTab({
             <div className="space-y-3">
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                  Équipement actif (filterActiveMachines) *
+                  Équipement actif *
                 </label>
                 <select
                   required
@@ -877,6 +902,37 @@ export default function CorrectiveTab({
                   placeholder="Décrivez la réparation effectuée, les réglages et essais..."
                   className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"
                 />
+              </div>
+
+              {/* Stoppage & Real Production Downtime */}
+              <div className="p-3 rounded-2xl bg-rose-50/50 border border-rose-200/80 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    data-testid="mobile-bt-arret-checkbox"
+                    checked={btArretMachine}
+                    onChange={(e) => setBtArretMachine(e.target.checked)}
+                    className="rounded border-rose-300 text-rose-600"
+                  />
+                  <span className="text-xs font-bold text-rose-900">
+                    Arrêt machine / production pendant cette panne
+                  </span>
+                </label>
+                {btArretMachine && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-rose-800 mb-1">
+                      Durée d&apos;arrêt machine réelle (TTA — optionnel)
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="mobile-bt-temps-arret-input"
+                      value={btTempsArret}
+                      onChange={(e) => setBtTempsArret(e.target.value)}
+                      placeholder="Ex: 01:30 ou 90 min (sinon = temps d'intervention)"
+                      className="w-full rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Multi-PDR Proposal Section */}

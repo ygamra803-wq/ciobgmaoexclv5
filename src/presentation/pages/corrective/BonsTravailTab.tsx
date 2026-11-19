@@ -23,7 +23,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import { Logger } from '../../../core/logger/LoggerService';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
@@ -238,7 +238,10 @@ export default function BonsTravailTab({
       );
 
       if (result === null) {
-        showToast?.('Action impossible : vérifiez le statut du Bon de Travail.', 'warning');
+        showToast?.(
+          'Action impossible : stock insuffisant, permis LOTO actif, bon atelier ouvert ou statut BT invalide.',
+          'warning'
+        );
         return;
       }
     }
@@ -432,8 +435,7 @@ export default function BonsTravailTab({
         filterStatus === 'EN_COURS' &&
         bt.statut !== 'EN_COURS' &&
         bt.statut !== 'BT_PLANIFIE' &&
-        bt.statut !== 'EN_ATTENTE_PDR' &&
-        bt.statut !== 'DEMANDE'
+        bt.statut !== 'EN_ATTENTE_PDR'
       )
         return false;
       if (filterStatus === 'EN_ATTENTE_PDR' && bt.statut !== 'EN_ATTENTE_PDR') return false;
@@ -613,10 +615,17 @@ export default function BonsTravailTab({
         item.statut || '',
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Bons_de_Travail');
-      XLSX.writeFile(wb, `Bons_de_Travail_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `Bons_de_Travail_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Bons de Travail (Correctif)',
+        sheets: [
+          {
+            name: 'Bons_de_Travail',
+            headers,
+            rows: dataRows,
+          },
+        ],
+      });
 
       showToast?.('Export Excel des Bons de Travail généré avec succès (.xlsx)', 'success');
     } catch (err) {
@@ -915,6 +924,20 @@ export default function BonsTravailTab({
               </span>
             );
           }
+          if (bt.statut === 'BT_PLANIFIE') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-sky-100 text-sky-900 border border-sky-300 font-mono shadow-2xs">
+                BT PLANIFIÉ
+              </span>
+            );
+          }
+          if (bt.statut === 'ANNULE') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-slate-200 text-slate-700 border border-slate-300 font-mono shadow-2xs">
+                ANNULÉ
+              </span>
+            );
+          }
           return (
             <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-blue-100 text-blue-900 border border-blue-300 font-mono animate-pulse shadow-2xs">
               EN COURS
@@ -990,7 +1013,14 @@ export default function BonsTravailTab({
                   type="button"
                   onClick={() => {
                     const nextStatus = isWaitingPdr ? 'EN_COURS' : 'EN_ATTENTE_PDR';
-                    onUpdateIntervention(bt.id, { statut: nextStatus });
+                    const ok = onUpdateIntervention(bt.id, { statut: nextStatus });
+                    if (ok === false) {
+                      showToast?.(
+                        `Transition refusée pour ${bt.num_bt} : vérifiez le permis LOTO ou le statut actuel du BT.`,
+                        'warning'
+                      );
+                      return;
+                    }
                     showToast?.(
                       isWaitingPdr
                         ? `BT ${bt.num_bt} remis EN COURS`

@@ -1,6 +1,17 @@
+import {
+  FACTORY_SHIFT_HOURS_PER_DAY,
+  CorrectiveCalculationService,
+  isMachineStoppageFlag,
+} from '../corrective/services/CorrectiveCalculationService';
+import {
+  getPeriodBoundaries,
+  normalizeDateToYMD,
+  type PeriodFilterState,
+} from '../../utils/datePeriodUtils';
+
 /**
  * AvailabilityCalculationService
- * Deterministic industrial reliability engine for MTBF, MTTR, Availability %, and Stock Valuation.
+ * Deterministic industrial reliability engine for MTBF, MTTR, Operational Availability %, and Stock Valuation.
  */
 
 export interface InterventionTimingLike {
@@ -12,6 +23,7 @@ export interface InterventionTimingLike {
   machine?: string;
   statut?: string;
   etat?: string;
+  validation_status?: string;
   temps_intervention_mins?: number | string;
   temps_minutes?: number | string;
   dureeMinutes?: number | string;
@@ -25,6 +37,11 @@ export interface InterventionTimingLike {
   duree_arret?: number | string;
   date_debut?: string;
   date_fin?: string;
+  date_demande?: string;
+  demande_date?: string;
+  date_cloture?: string;
+  date?: string;
+  created_at?: string;
   heure_debut?: string;
   heure_fin?: string;
   startDate?: string;
@@ -48,6 +65,44 @@ export interface MachineAvailabilityRefLike {
   id?: string;
   id_machine_registered?: string;
   [key: string]: unknown;
+}
+
+const EXCLUDED_VALIDATION_STATUSES = new Set([
+  'PENDING_VALIDATION',
+  'NEEDS_CLARIFICATION',
+  'REJECTED',
+]);
+
+function isExcludedRecord(item: InterventionTimingLike | null | undefined): boolean {
+  if (!item) return true;
+  const status = String(item.statut || item.etat || '').trim().toUpperCase();
+  if (status === 'ANNULE' || status === 'CANCELLED' || status === 'REJECTED') return true;
+  const valStatus = String(item.validation_status || '').trim().toUpperCase();
+  if (EXCLUDED_VALIDATION_STATUSES.has(valStatus)) return true;
+  return false;
+}
+
+/** Counts Mon-Sat working days inclusive between two YYYY-MM-DD dates. */
+export function countWorkingDaysBetween(startYmd: string, endYmd: string): number {
+  const s = normalizeDateToYMD(startYmd);
+  const e = normalizeDateToYMD(endYmd);
+  if (!s || !e || e < s) return 0;
+
+  const [sy, sm, sd] = s.split('-').map(Number);
+  const [ey, em, ed] = e.split('-').map(Number);
+  const cursor = new Date(sy, sm - 1, sd, 12, 0, 0, 0);
+  const end = new Date(ey, em - 1, ed, 12, 0, 0, 0);
+
+  let workingDays = 0;
+  let guard = 0;
+  while (cursor.getTime() <= end.getTime() && guard < 3660) {
+    guard++;
+    if (cursor.getDay() !== 0) {
+      workingDays++;
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return workingDays;
 }
 
 export class AvailabilityCalculationService {
@@ -77,8 +132,8 @@ export class AvailabilityCalculationService {
   }
 
   /**
-   * Resolves repair duration in minutes across canonical and legacy intervention fields,
-   * falling back to 45 minutes only when no explicit timestamp or duration metadata exists.
+   * Resolves actual repair duration in minutes across canonical and legacy intervention fields.
+   * Returns 0 (NEVER a fabricated 45-minute fallback) when no duration or timestamp exists.
    */
   static getInterventionDurationMinutes(
     intervention: InterventionTimingLike | null | undefined
@@ -89,7 +144,6 @@ export class AvailabilityCalculationService {
       Number(intervention.temps_intervention_mins) ||
       Number(intervention.temps_minutes) ||
       Number(intervention.dureeMinutes) ||
-      Number(intervention.temps_arret_minutes) ||
       0;
     if (explicitMins > 0) {
       return explicitMins;
@@ -98,27 +152,25 @@ export class AvailabilityCalculationService {
     if (typeof intervention.duration === 'number' && intervention.duration > 0) {
       return Math.round(intervention.duration * 60);
     }
-    if (typeof intervention.downtimeHours === 'number' && intervention.downtimeHours > 0) {
-      return Math.round(intervention.downtimeHours * 60);
-    }
 
     const parsedFromIntervention = this.parseDurationStringMinutes(
       intervention.temps_intervention_calc ||
         intervention.temps_intervention ||
-        intervention.duree ||
-        intervention.temps_arret
+        intervention.duree
     );
     if (parsedFromIntervention > 0) {
       return parsedFromIntervention;
     }
 
     if (intervention.date_debut && intervention.date_fin) {
-      const hDebut = intervention.heure_debut || '08:00';
-      const hFin = intervention.heure_fin || '09:00';
-      const start = new Date(`${intervention.date_debut}T${hDebut}`).getTime();
-      const end = new Date(`${intervention.date_fin}T${hFin}`).getTime();
-      if (!isNaN(start) && !isNaN(end) && end > start) {
-        return Math.round((end - start) / (1000 * 60));
+      const timing = CorrectiveCalculationService.calculateWorkingTime(
+        String(intervention.date_debut),
+        String(intervention.heure_debut || '08:00'),
+        String(intervention.date_fin),
+        String(intervention.heure_fin || '17:00')
+      );
+      if (timing.minutes > 0) {
+        return timing.minutes;
       }
     }
 
@@ -130,12 +182,28 @@ export class AvailabilityCalculationService {
       }
     }
 
-    return 45;
+    // Legacy fallback if only stoppage duration was stored on a closed stoppage record
+    if (typeof intervention.temps_arret_minutes === 'number' && intervention.temps_arret_minutes > 0) {
+      return intervention.temps_arret_minutes;
+    }
+    if (typeof intervention.downtimeHours === 'number' && intervention.downtimeHours > 0) {
+      return Math.round(intervention.downtimeHours * 60);
+    }
+    const parsedArret = this.parseDurationStringMinutes(intervention.temps_arret);
+    if (parsedArret > 0) {
+      return parsedArret;
+    }
+
+    return 0;
   }
 
-  /** Parses machine stoppage / downtime duration in minutes. */
+  /**
+   * Parses actual machine stoppage / production downtime in minutes.
+   * Returns 0 when `arret_machine === false` and no explicit stoppage duration was provided.
+   */
   static getDowntimeMinutes(intervention: InterventionTimingLike | null | undefined): number {
     if (!intervention) return 0;
+
     if (typeof intervention.downtimeHours === 'number' && intervention.downtimeHours > 0) {
       return Math.round(intervention.downtimeHours * 60);
     }
@@ -148,10 +216,83 @@ export class AvailabilityCalculationService {
     if (parsedArret > 0) {
       return parsedArret;
     }
-    return this.getInterventionDurationMinutes(intervention);
+
+    // Strictly respect non-stoppage work orders so running-machine maintenance does not inflate downtime
+    if (
+      intervention.arret_machine === false ||
+      String(intervention.arret_machine ?? '').trim().toUpperCase() === 'NON'
+    ) {
+      return 0;
+    }
+
+    if (isMachineStoppageFlag(intervention)) {
+      return this.getInterventionDurationMinutes(intervention);
+    }
+
+    return 0;
   }
 
-  /** Computes MTTR (Mean Time To Repair) in hours across closed corrective interventions. */
+  /**
+   * Computes true scheduled operating hours for a given period filter and active machine count,
+   * using real Mon-Sat working days × 8.25h/day (08:00-13:15 + 14:00-17:00).
+   */
+  static calculateScheduledHoursForPeriod(
+    machineCount: number,
+    periodFilter: PeriodFilterState | null | undefined,
+    interventions: InterventionTimingLike[] = []
+  ): { scheduledHours: number; workingDays: number; startDate: string | null; endDate: string | null } {
+    const safeMachines = Math.max(1, Math.round(Number(machineCount) || 1));
+    const todayYmd = new Date().toISOString().slice(0, 10);
+
+    let start: string | null = null;
+    let end: string | null = null;
+
+    if (periodFilter && periodFilter.preset !== 'ALL') {
+      const bounds = getPeriodBoundaries(periodFilter);
+      start = bounds.start;
+      // Cap end date at today for ongoing periods (THIS_MONTH / THIS_QUARTER / THIS_YEAR) so future days aren't counted
+      end = bounds.end && bounds.end > todayYmd ? todayYmd : bounds.end;
+    }
+
+    if (!start || !end) {
+      // Infer actual observation window from intervention dates
+      let minDate: string | null = null;
+      let maxDate: string | null = null;
+      for (const item of interventions || []) {
+        if (isExcludedRecord(item)) continue;
+        const ymd = normalizeDateToYMD(
+          item.date_demande || item.demande_date || item.date_debut || item.date_cloture || item.date || item.created_at
+        );
+        if (!ymd) continue;
+        if (!minDate || ymd < minDate) minDate = ymd;
+        if (!maxDate || ymd > maxDate) maxDate = ymd;
+      }
+      if (minDate && maxDate) {
+        start = minDate;
+        end = maxDate > todayYmd ? maxDate : todayYmd;
+      } else {
+        // Default 1 standard industrial month (26 working days × 8.25h) when empty
+        const workingDays = 26;
+        return {
+          scheduledHours: Math.round(safeMachines * workingDays * FACTORY_SHIFT_HOURS_PER_DAY),
+          workingDays,
+          startDate: null,
+          endDate: null,
+        };
+      }
+    }
+
+    const workingDays = Math.max(1, countWorkingDaysBetween(start, end));
+    const scheduledHours = Math.max(1, Math.round(safeMachines * workingDays * FACTORY_SHIFT_HOURS_PER_DAY));
+    return {
+      scheduledHours,
+      workingDays,
+      startDate: start,
+      endDate: end,
+    };
+  }
+
+  /** Computes MTTR (Mean Time To Repair) in hours across officially closed corrective interventions. */
   static calculateMTTR(interventions: InterventionTimingLike[] = []): number {
     if (!Array.isArray(interventions) || interventions.length === 0) return 0;
 
@@ -159,19 +300,20 @@ export class AvailabilityCalculationService {
     let repairCount = 0;
 
     for (const item of interventions) {
+      if (isExcludedRecord(item)) continue;
+
       const isCorrective =
         !item.type ||
         item.type === 'CORRECTIVE' ||
         item.type_panne ||
         item.anomalie ||
         item.code_machine;
-      const status = String(item.statut || item.etat || '').toUpperCase();
+      const status = String(item.statut || item.etat || '').trim().toUpperCase();
       const isClosed =
         status === 'CLOTURE' ||
+        status === 'CLÔTURÉ' ||
         status === 'FERME' ||
         status === 'TERMINE' ||
-        Boolean(item.temps_intervention_mins) ||
-        Boolean(item.temps_intervention_calc) ||
         Boolean(item.endDate);
 
       if (isCorrective && isClosed) {
@@ -199,33 +341,35 @@ export class AvailabilityCalculationService {
 
   /**
    * Computes MTBF (Mean Time Between Failures) in hours:
-   * `(Total Operating Time - Total Downtime) / Failure Count`.
+   * `(Total Scheduled Operating Hours - Total Real Downtime Hours) / Failure Count`.
+   * Excludes cancelled, rejected, and unapproved declarations.
    */
   static calculateMTBF(
     interventions: InterventionTimingLike[] = [],
     totalOperatingHours: number | null = null
   ): number {
-    if (!Array.isArray(interventions) || interventions.length === 0) {
-      return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 168;
+    const validRecords = (interventions || []).filter((item) => !isExcludedRecord(item));
+    if (validRecords.length === 0) {
+      return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 0;
     }
 
     let failureCount = 0;
     let totalDowntimeHours = 0;
 
-    for (const item of interventions) {
-      const status = String(item.statut || item.etat || '').toUpperCase();
-      if (status === 'ANNULE') continue;
+    for (const item of validRecords) {
+      const status = String(item.statut || item.etat || '').trim().toUpperCase();
+      // Ignore unstarted raw requests without stoppage when counting real failures
+      const isStoppage =
+        isMachineStoppageFlag(item) ||
+        typeof item.downtimeHours === 'number' ||
+        Number(item.temps_arret_minutes) > 0 ||
+        Boolean(item.temps_arret);
+      if (status === 'DEMANDE' && !isStoppage) continue;
 
       const isFailure =
         !item.type || item.type === 'CORRECTIVE' || item.type_panne || item.code_machine;
       if (isFailure) {
         failureCount++;
-        const isStoppage =
-          item.arret_machine === true ||
-          item.arret_machine === 'OUI' ||
-          item.is_stoppage ||
-          typeof item.downtimeHours === 'number' ||
-          Boolean(item.temps_arret);
         if (isStoppage) {
           const mins = this.getDowntimeMinutes(item);
           totalDowntimeHours += mins / 60;
@@ -234,31 +378,52 @@ export class AvailabilityCalculationService {
     }
 
     if (failureCount === 0) {
-      return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 168;
+      return totalOperatingHours && totalOperatingHours > 0 ? Math.round(totalOperatingHours) : 0;
     }
 
-    const distinctMachines = new Set(
-      interventions
-        .map((i) => i.code_machine || i.id_machine_registered || i.machine)
-        .filter(Boolean)
-    ).size;
-    const inferredBase = Math.max(distinctMachines * 160, failureCount * 24, 160);
+    const distinctMachines = Math.max(
+      1,
+      new Set(
+        validRecords
+          .map((i) => i.code_machine || i.id_machine_registered || i.machine)
+          .filter(Boolean)
+      ).size
+    );
+    const inferred = this.calculateScheduledHoursForPeriod(distinctMachines, { preset: 'ALL' }, validRecords);
     const operatingBase =
-      totalOperatingHours && totalOperatingHours > 0 ? totalOperatingHours : inferredBase;
+      totalOperatingHours && totalOperatingHours > 0
+        ? totalOperatingHours
+        : inferred.scheduledHours;
 
     const netOperatingHours = Math.max(0, operatingBase - totalDowntimeHours);
-    return Math.max(1, Math.round(netOperatingHours / failureCount));
+    const rawMtbf = netOperatingHours / failureCount;
+    return rawMtbf >= 10 ? Math.round(rawMtbf) : Number(rawMtbf.toFixed(1));
   }
 
-  /** Computes operational availability percentage: `(MTBF / (MTBF + MTTR)) * 100`. */
+  /**
+   * Computes true operational availability percentage (ISO / AFNOR NF X 60-010):
+   * - When `totalScheduledHours` is provided: `((Scheduled - RealDowntime) / Scheduled) * 100`.
+   * - Otherwise falls back to intrinsic availability `(MTBF / (MTBF + MTTR)) * 100`.
+   */
   static calculateAvailability(
     interventions: InterventionTimingLike[] = [],
     totalScheduledHours: number | null = null
   ): number {
-    if (!Array.isArray(interventions) || interventions.length === 0) return 100;
+    const validRecords = (interventions || []).filter((item) => !isExcludedRecord(item));
+    if (validRecords.length === 0) return 100;
 
-    const mtbf = this.calculateMTBF(interventions, totalScheduledHours);
-    const mttr = this.calculateMTTR(interventions);
+    if (totalScheduledHours && totalScheduledHours > 0) {
+      let totalDowntimeMinutes = 0;
+      for (const item of validRecords) {
+        totalDowntimeMinutes += this.getDowntimeMinutes(item);
+      }
+      const downtimeHours = totalDowntimeMinutes / 60;
+      const availability = ((totalScheduledHours - downtimeHours) / totalScheduledHours) * 100;
+      return Number(Math.max(0, Math.min(100, availability)).toFixed(2));
+    }
+
+    const mtbf = this.calculateMTBF(validRecords, null);
+    const mttr = this.calculateMTTR(validRecords);
 
     if (mtbf === 0 && mttr === 0) return 100;
     if (mtbf + mttr === 0) return 100;

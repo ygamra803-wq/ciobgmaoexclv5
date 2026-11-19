@@ -198,10 +198,22 @@ export interface LotoConsignPayload {
 export interface LotoDeconsignPayload {
   deconsignateur_id?: string;
   deconsignateur_name?: string;
+  actorRole?: string;
   zone_cleared?: boolean;
+  supervisor_override_reason?: string;
   notes?: string;
   timestamp?: string;
 }
+
+const SUPERVISOR_OVERRIDE_ROLES = new Set([
+  'ADMIN',
+  'SUPER_ADMIN',
+  'RESPONSABLE',
+  'RESPONSABLE_MAINTENANCE',
+  'SUPERVISEUR',
+  'CHEF_ATELIER',
+  'MANAGER',
+]);
 
 export function validateLotoConsignation(
   currentPermit: Partial<ILotoPermit> | null | undefined,
@@ -249,7 +261,7 @@ export function validateLotoConsignation(
 export function validateLotoDeconsignation(
   currentPermit: Partial<ILotoPermit> | null | undefined,
   payload: Partial<LotoDeconsignPayload> = {}
-): { valid: boolean; reason?: string; permit?: ILotoPermit } {
+): { valid: boolean; reason?: string; permit?: ILotoPermit & { override_break_lock?: boolean; override_reason?: string } } {
   const currentStatus = normalizeLotoStatus(currentPermit?.status, Boolean(currentPermit?.required));
   if (currentStatus !== 'CONSIGNE') {
     return {
@@ -265,7 +277,32 @@ export function validateLotoDeconsignation(
     };
   }
 
+  // Personal Lock-Holder Safety Rule (OSHA 1910.147 / NF C 18-510):
+  // A different technician cannot remove another worker's personal padlock.
+  const lockerId = String(currentPermit?.consignateur_id || '').trim().toUpperCase();
+  const unlockerId = String(payload.deconsignateur_id || '').trim().toUpperCase();
+  const normRole = String(payload.actorRole || '').trim().toUpperCase();
+  const isDifferentActor = Boolean(lockerId && unlockerId && lockerId !== unlockerId);
+  const isSupervisor = !normRole || SUPERVISOR_OVERRIDE_ROLES.has(normRole);
+
+  if (isDifferentActor && !isSupervisor) {
+    return {
+      valid: false,
+      reason: `Sécurité LOTO : seul le consignateur (${currentPermit?.consignateur_name || lockerId}) peut retirer son propre cadenas, ou un Responsable/Admin via procédure de levée exceptionnelle.`,
+    };
+  }
+
+  const overrideReason = String(payload.supervisor_override_reason || '').trim();
+  const isBreakLockOverride = isDifferentActor && isSupervisor;
+
   const nowIso = payload.timestamp || new Date().toISOString();
+  const combinedNotes = [
+    payload.notes ? String(payload.notes).trim() : currentPermit?.notes,
+    isBreakLockOverride && overrideReason ? `[LEVÉE EXCEPTIONNELLE LOTO] ${overrideReason}` : '',
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
   return {
     valid: true,
     permit: {
@@ -280,7 +317,10 @@ export function validateLotoDeconsignation(
       deconsignateur_id: String(payload.deconsignateur_id || 'SUP').trim(),
       deconsignateur_name: String(payload.deconsignateur_name || 'Responsable').trim(),
       deconsigned_at: nowIso,
-      notes: payload.notes ? String(payload.notes).trim() : currentPermit?.notes,
+      notes: combinedNotes || undefined,
+      ...(isBreakLockOverride
+        ? { override_break_lock: true, ...(overrideReason ? { override_reason: overrideReason } : {}) }
+        : {}),
     },
   };
 }

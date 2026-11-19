@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { CorrectiveCalculationService } from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { Logger } from '../../../core/logger/LoggerService';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
@@ -197,7 +197,7 @@ export default function ClotureRapportsTab({
   // KPI Metrics
   const kpiStats = useMemo(() => {
     const total = scopedInterventions.length;
-    const closed = scopedInterventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
+    const closed = scopedInterventions.filter((i) => i.statut === 'CLOTURE').length;
     const pendingValidation = scopedInterventions.filter(
       (i) => i.statut !== 'CLOTURE' && i.validation_status === 'PENDING_VALIDATION'
     ).length;
@@ -215,14 +215,16 @@ export default function ClotureRapportsTab({
       (i) => Boolean(i.pdr || i.pdr_ref || (Array.isArray(i.pieces_utilisees) && i.pieces_utilisees.length > 0))
     ).length;
 
-    // MTTR calculation
+    // MTTR calculation (strictly officially closed, non-rejected interventions)
     let totalMinutes = 0;
     let countMinutes = 0;
     scopedInterventions.forEach((i) => {
+      if (i.statut !== 'CLOTURE') return;
+      if (String(i.validation_status || '').toUpperCase() === 'REJECTED') return;
       const rawTimeStr = i.temps_intervention_calc || i.temps_intervention;
       const minutes =
-        i.temps_minutes ||
-        i.temps_intervention_mins ||
+        Number(i.temps_intervention_mins) ||
+        Number(i.temps_minutes) ||
         (rawTimeStr ? CorrectiveCalculationService.timeStringToMinutes(rawTimeStr) : 0);
       if (minutes > 0) {
         totalMinutes += minutes;
@@ -447,10 +449,17 @@ export default function ClotureRapportsTab({
         ];
       });
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Rapport_Correctif_Filtre');
-      XLSX.writeFile(wb, `Rapport_Correctif_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `Rapport_Correctif_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Clôture & Rapports Correctifs',
+        sheets: [
+          {
+            name: 'Rapport_Correctif_Filtre',
+            headers,
+            rows: dataRows,
+          },
+        ],
+      });
 
       showToast?.('Export Excel du rapport filtré généré avec succès (.xlsx)', 'success');
     } catch (err) {

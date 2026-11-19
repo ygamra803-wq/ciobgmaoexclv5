@@ -24,7 +24,7 @@ import {
   Lock,
   Play,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import PeriodFilterBar from '../../components/common/PeriodFilterBar';
@@ -328,13 +328,17 @@ export const AtelierFabricationTab: React.FC<AtelierFabricationTabProps> = ({
         WORKSHOP_STATUS_LABELS[item.statut] || item.statut || '',
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Bons_Atelier_Mecanique');
-      XLSX.writeFile(
-        wb,
-        `Atelier_Mecanique_BR_RECT_${new Date().toISOString().split('T')[0]}.xlsx`
-      );
+      exportTypeBWorkbook({
+        filename: `Atelier_Mecanique_BR_RECT_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Atelier Fabrication Mécanique (BR / RECT)',
+        sheets: [
+          {
+            name: 'Bons_Atelier_Mecanique',
+            headers,
+            rows: dataRows,
+          },
+        ],
+      });
 
       showToast?.(
         'Export Excel des Bons d’Atelier Mécanique généré avec succès (.xlsx)',

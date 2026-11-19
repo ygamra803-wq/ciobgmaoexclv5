@@ -15,9 +15,15 @@ import {
   Activity,
   FileSpreadsheet,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import { AvailabilityCalculationService } from '../../../domain/services/AvailabilityCalculationService';
+import {
+  CorrectiveCalculationService,
+  isMachineStoppageFlag,
+} from '../../../domain/corrective/services/CorrectiveCalculationService';
 import { filterActiveMachines, getMachineAssetClass } from '../../../utils/activeMachines';
+import PeriodFilterBar from '../../components/common/PeriodFilterBar';
+import { type PeriodFilterState, isDateInPeriod } from '../../../utils/datePeriodUtils';
 import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
@@ -28,9 +34,9 @@ export default function AnalyseCorrectiveTab({
   machines: registeredMachines = [],
   stockItems = [],
   kpis: _kpis = {},
-  paretoAnomalies = [],
-  paretoMachines = [],
-  preventiveRecommendations = [],
+  paretoAnomalies: _paretoAnomalies = [],
+  paretoMachines: _paretoMachines = [],
+  preventiveRecommendations: _preventiveRecommendations = [],
   onNavigateToTab,
   onAddPreventiveTask,
   showToast,
@@ -42,6 +48,7 @@ export default function AnalyseCorrectiveTab({
   const [selectedAssetClass, setSelectedAssetClass] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [selectedZone, setSelectedZone] = useState('ALL');
   const [selectedTypePanne, setSelectedTypePanne] = useState('ALL');
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterState>({ preset: 'ALL' });
 
   // Fast Lookup Maps
   const machineMap = useMemo(() => {
@@ -107,9 +114,33 @@ export default function AnalyseCorrectiveTab({
     return prodOnly.length > 0 ? prodOnly : scopedActiveMachines;
   }, [scopedActiveMachines, selectedAssetClass]);
 
-  // Filtered interventions for deep analytics
+  const availableDates = useMemo(() => {
+    return (interventions || []).map(
+      (item: any) =>
+        item.date_demande || item.demande_date || item.date_debut || item.date_cloture || item.date || item.created_at
+    );
+  }, [interventions]);
+
+  // Filtered official interventions for deep analytics (excludes cancelled, rejected, and unapproved claims)
   const filteredInterventions = useMemo(() => {
-    return interventions.filter((item: any) => {
+    return (interventions || []).filter((item: any) => {
+      const wfStatus = String(item.statut || item.etat || '').trim().toUpperCase();
+      const valStatus = String(item.validation_status || '').trim().toUpperCase();
+      if (
+        wfStatus === 'ANNULE' ||
+        wfStatus === 'CANCELLED' ||
+        wfStatus === 'EN_ATTENTE_VALIDATION' ||
+        valStatus === 'REJECTED' ||
+        valStatus === 'PENDING_VALIDATION' ||
+        valStatus === 'NEEDS_CLARIFICATION'
+      ) {
+        return false;
+      }
+
+      const itemDate =
+        item.date_demande || item.demande_date || item.date_debut || item.date_cloture || item.date || item.created_at;
+      if (!isDateInPeriod(itemDate, periodFilter)) return false;
+
       const m = machineMap.get(String(item.code_machine || item.id_machine || '').trim().toUpperCase());
       if (selectedAssetClass !== 'ALL') {
         const itemAssetClass = item.asset_class
@@ -126,7 +157,15 @@ export default function AnalyseCorrectiveTab({
       if (selectedTypePanne !== 'ALL' && item.type_panne !== selectedTypePanne) return false;
       return true;
     });
-  }, [interventions, selectedAssetClass, selectedZone, selectedTypePanne, machineMap]);
+  }, [interventions, selectedAssetClass, selectedZone, selectedTypePanne, periodFilter, machineMap]);
+
+  // Dynamic 90-day rolling preventive recommendations scoped to current filters
+  const dynamicRecommendations = useMemo(() => {
+    return CorrectiveCalculationService.detectPreventiveRecommendations(filteredInterventions, {
+      windowDays: 90,
+      minRecurrences: 3,
+    });
+  }, [filteredInterventions]);
 
   // Recalculated Pareto Anomalies from filtered dataset
   const dynamicParetoAnomalies = useMemo(() => {
@@ -275,20 +314,17 @@ export default function AnalyseCorrectiveTab({
       .sort((a, b) => b.count - a.count);
   }, [filteredInterventions]);
 
-  // Executive KPI Stats (Strict Industrial Excel Formulas)
+  // Executive KPI Stats (ISO / AFNOR NF X 60-010 — zero fabricated defaults)
   const executiveKpis = useMemo(() => {
     const totalInterventions = filteredInterventions.length;
-    const closed = filteredInterventions.filter((i) => i.statut === 'CLOTURE' || i.temps_intervention_calc).length;
-    const arret = filteredInterventions.filter((i) => i.arret_machine === true || i.arret_machine === 'OUI').length;
+    const closed = filteredInterventions.filter((i) => i.statut === 'CLOTURE').length;
+    const arret = filteredInterventions.filter((i) => isMachineStoppageFlag(i)).length;
 
     let totalDowntimeMinutes = 0;
     let totalPdrCost = 0;
 
     filteredInterventions.forEach((item) => {
-      if (item.arret_machine === true || item.arret_machine === 'OUI') {
-        const mins = AvailabilityCalculationService.getDowntimeMinutes(item);
-        totalDowntimeMinutes += mins > 0 ? mins : 45;
-      }
+      totalDowntimeMinutes += AvailabilityCalculationService.getDowntimeMinutes(item);
 
       // Compute PDR Cost accurately only when a spare part was used or explicit cost recorded
       const explicitCost = Number(item.pdr_cost ?? item.cout_pdr ?? item.cout_total ?? 0);
@@ -325,19 +361,64 @@ export default function AnalyseCorrectiveTab({
     });
 
     // 1. MTTR via AvailabilityCalculationService
+    const mttrHours = AvailabilityCalculationService.calculateMTTR(filteredInterventions);
     const mttrFormatted = AvailabilityCalculationService.formatMTTR(filteredInterventions);
 
-    // 2. MTBF via AvailabilityCalculationService
-    const numMachines = Math.max(1, activeMachinesForKpi.length);
-    const totalScheduledHours = numMachines * 160; // 160h standard industrial monthly operating time
-    const mtbfCalculatedHours = AvailabilityCalculationService.calculateMTBF(filteredInterventions, totalScheduledHours);
+    // 2. Period-scaled scheduled operating hours (Mon-Sat × 8.25h/day)
+    const scheduledInfo = AvailabilityCalculationService.calculateScheduledHoursForPeriod(
+      activeMachinesForKpi.length,
+      periodFilter,
+      filteredInterventions
+    );
+    const totalScheduledHours = scheduledInfo.scheduledHours;
 
-    // 3. Operational Availability Rate
-    const availabilityRate = AvailabilityCalculationService.calculateAvailability(filteredInterventions, totalScheduledHours);
+    // 3. MTBF & Operational Availability Rate
+    const mtbfCalculatedHours = AvailabilityCalculationService.calculateMTBF(
+      filteredInterventions,
+      totalScheduledHours
+    );
+    const availabilityRate = AvailabilityCalculationService.calculateAvailability(
+      filteredInterventions,
+      totalScheduledHours
+    );
 
     const downtimeHours = Math.floor(totalDowntimeMinutes / 60);
     const downtimeMins = totalDowntimeMinutes % 60;
     const downtimeFormatted = `${downtimeHours}h ${downtimeMins}m`;
+
+    const availabilityStatus =
+      availabilityRate >= 95
+        ? { label: 'Conforme (≥95%)', colorClass: 'text-emerald-700' }
+        : availabilityRate >= 85
+        ? { label: 'À surveiller', colorClass: 'text-amber-700' }
+        : { label: 'Critique (<85%)', colorClass: 'text-rose-700' };
+
+    const mtbfStatus =
+      totalInterventions === 0
+        ? { label: '0 panne', colorClass: 'text-slate-500' }
+        : mtbfCalculatedHours >= 120
+        ? { label: 'Élevée', colorClass: 'text-emerald-700' }
+        : mtbfCalculatedHours >= 40
+        ? { label: 'Modérée', colorClass: 'text-amber-700' }
+        : { label: 'Critique', colorClass: 'text-rose-700' };
+
+    const mttrStatus =
+      closed === 0 || mttrHours === 0
+        ? { label: 'N/A', colorClass: 'text-slate-500' }
+        : mttrHours <= 1
+        ? { label: 'Rapide (≤1h)', colorClass: 'text-emerald-700' }
+        : mttrHours <= 3
+        ? { label: 'Standard', colorClass: 'text-amber-700' }
+        : { label: 'Élevé (>3h)', colorClass: 'text-rose-700' };
+
+    const downtimeStatus =
+      totalDowntimeMinutes === 0
+        ? { label: 'Aucun arrêt', colorClass: 'text-emerald-700' }
+        : availabilityRate >= 95
+        ? { label: 'Maîtrisé', colorClass: 'text-emerald-700' }
+        : availabilityRate >= 85
+        ? { label: 'Modéré', colorClass: 'text-amber-700' }
+        : { label: 'Critique', colorClass: 'text-rose-700' };
 
     return {
       total: totalInterventions,
@@ -348,8 +429,14 @@ export default function AnalyseCorrectiveTab({
       availability: `${availabilityRate.toFixed(1)}%`,
       downtime: downtimeFormatted,
       pdrCost: Math.round(totalPdrCost),
+      workingDays: scheduledInfo.workingDays,
+      scheduledHours: totalScheduledHours,
+      availabilityStatus,
+      mtbfStatus,
+      mttrStatus,
+      downtimeStatus,
     };
-  }, [filteredInterventions, activeMachinesForKpi.length, stockMap]);
+  }, [filteredInterventions, activeMachinesForKpi.length, periodFilter, stockMap]);
 
   // Generate intelligent preventive task from recommendation
   const handleAdoptRecommendation = (rec) => {
@@ -385,12 +472,20 @@ export default function AnalyseCorrectiveTab({
 
   const handleExportParetoExcel = () => {
     try {
-      const wsAnomalies = XLSX.utils.json_to_sheet(dynamicParetoAnomalies);
-      const wsMachines = XLSX.utils.json_to_sheet(dynamicParetoMachines);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, wsAnomalies, 'Pareto_Anomalies_8020');
-      XLSX.utils.book_append_sheet(wb, wsMachines, 'Pareto_Machines_8020');
-      XLSX.writeFile(wb, `Pareto_Analyse_GMAO_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `Pareto_Analyse_GMAO_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Analyse & Pareto Correctif',
+        sheets: [
+          {
+            name: 'Pareto_Anomalies_8020',
+            jsonRows: dynamicParetoAnomalies,
+          },
+          {
+            name: 'Pareto_Machines_8020',
+            jsonRows: dynamicParetoMachines,
+          },
+        ],
+      });
 
       showToast?.('Export Excel de l\'analyse de Pareto généré avec succès (.xlsx)', 'success');
     } catch (err) {
@@ -426,8 +521,12 @@ export default function AnalyseCorrectiveTab({
             </div>
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
-            <span className="text-slate-400 font-medium">Taux calculé :</span>
-            <span className="font-mono font-bold text-emerald-700">OEE / TRS</span>
+            <span className="text-slate-400 font-medium">
+              Disponibilité Op. ({executiveKpis.workingDays}j) :
+            </span>
+            <span className={`font-mono font-bold ${executiveKpis.availabilityStatus.colorClass}`}>
+              {executiveKpis.availabilityStatus.label}
+            </span>
           </div>
         </div>
 
@@ -449,13 +548,15 @@ export default function AnalyseCorrectiveTab({
             </div>
             <div className="mt-2 text-[10.5px] text-slate-500 flex items-center gap-1 flex-wrap">
               <span className="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-mono">
-                Temps moyen inter-pannes
+                Base {executiveKpis.scheduledHours}h ouvrées
               </span>
             </div>
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
             <span className="text-slate-400 font-medium">Fiabilité parc :</span>
-            <span className="font-mono font-bold text-blue-700">Conforme</span>
+            <span className={`font-mono font-bold ${executiveKpis.mtbfStatus.colorClass}`}>
+              {executiveKpis.mtbfStatus.label}
+            </span>
           </div>
         </div>
 
@@ -483,7 +584,9 @@ export default function AnalyseCorrectiveTab({
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
             <span className="text-slate-400 font-medium">Rapidité équipe :</span>
-            <span className="font-mono font-bold text-amber-700">Standard</span>
+            <span className={`font-mono font-bold ${executiveKpis.mttrStatus.colorClass}`}>
+              {executiveKpis.mttrStatus.label}
+            </span>
           </div>
         </div>
 
@@ -510,7 +613,9 @@ export default function AnalyseCorrectiveTab({
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
             <span className="text-slate-400 font-medium">Impact production :</span>
-            <span className="font-mono font-bold text-rose-700">Contrôlé</span>
+            <span className={`font-mono font-bold ${executiveKpis.downtimeStatus.colorClass}`}>
+              {executiveKpis.downtimeStatus.label}
+            </span>
           </div>
         </div>
 
@@ -537,11 +642,20 @@ export default function AnalyseCorrectiveTab({
             </div>
           </div>
           <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[10.5px]">
-            <span className="text-slate-400 font-medium">Liaison Magasin :</span>
-            <span className="font-mono font-bold text-purple-700">VLOOKUP Actif</span>
+            <span className="text-slate-400 font-medium">Valorisation :</span>
+            <span className="font-mono font-bold text-purple-700">Stock Magasin</span>
           </div>
         </div>
       </div>
+
+      {/* 1.5. Period Filter Bar */}
+      <PeriodFilterBar
+        value={periodFilter}
+        onChange={setPeriodFilter}
+        availableDates={availableDates}
+        filteredCount={filteredInterventions.length}
+        totalCount={interventions.length}
+      />
 
       {/* 2. Filter & Export Bar */}
       <div className="bg-white border border-slate-200/90 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -598,13 +712,17 @@ export default function AnalyseCorrectiveTab({
           </select>
 
           {/* Reset Filters */}
-          {(selectedAssetClass !== 'ALL' || selectedZone !== 'ALL' || selectedTypePanne !== 'ALL') && (
+          {(selectedAssetClass !== 'ALL' ||
+            selectedZone !== 'ALL' ||
+            selectedTypePanne !== 'ALL' ||
+            periodFilter.preset !== 'ALL') && (
             <button
               type="button"
               onClick={() => {
                 setSelectedAssetClass('ALL');
                 setSelectedZone('ALL');
                 setSelectedTypePanne('ALL');
+                setPeriodFilter({ preset: 'ALL' });
               }}
               className="h-8 px-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
             >
@@ -675,7 +793,7 @@ export default function AnalyseCorrectiveTab({
                     className={`h-full rounded-full transition-all duration-500 ${
                       item.isPareto80 ? 'bg-gradient-to-r from-rose-500 to-amber-500' : 'bg-slate-400'
                     }`}
-                    style={{ width: `${Math.min(100, item.cumulativePercentage)}%` }}
+                    style={{ width: `${Math.min(100, item.percentage)}%` }}
                   />
                 </div>
               </div>
@@ -731,7 +849,7 @@ export default function AnalyseCorrectiveTab({
                     className={`h-full rounded-full transition-all duration-500 ${
                       item.isPareto80 ? 'bg-gradient-to-r from-blue-500 to-cyan-500' : 'bg-slate-400'
                     }`}
-                    style={{ width: `${Math.min(100, item.cumulativePercentage)}%` }}
+                    style={{ width: `${Math.min(100, item.percentage)}%` }}
                   />
                 </div>
               </div>
@@ -845,47 +963,53 @@ export default function AnalyseCorrectiveTab({
                 Générateur de Recommandations Préventives (Anti-Pannes Récurrentes)
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Si une machine subit ≥ 3 pannes identiques, le système propose automatiquement d'injecter une tâche préventive.
+                Fenêtre glissante de 90 jours : si une machine subit ≥ 3 pannes sur la période récente, le système propose automatiquement une action préventive ciblée.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-          {preventiveRecommendations.slice(0, 3).map((rec, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-2xl border border-amber-200/90 p-4 shadow-xs space-y-3 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-mono font-black text-slate-900">{rec.code_machine}</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-800">
-                    {rec.count} récurrences
-                  </span>
+        {dynamicRecommendations.length === 0 ? (
+          <div className="bg-white/80 rounded-2xl border border-amber-200/70 p-4 text-xs text-slate-600 font-medium">
+            Aucune récurrence critique (≥ 3 pannes sur les 90 derniers jours) détectée sur le périmètre filtré.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {dynamicRecommendations.slice(0, 3).map((rec, idx) => (
+              <div
+                key={idx}
+                className="bg-white rounded-2xl border border-amber-200/90 p-4 shadow-xs space-y-3 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-mono font-black text-slate-900">{rec.code_machine}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-100 text-rose-800">
+                      {rec.count} récurrences (90j)
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700 mt-1">
+                    Anomalie : <span className="text-amber-800">{rec.anomalie}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {rec.recommendedAction || rec.recommendation}
+                  </p>
                 </div>
-                <p className="text-xs font-semibold text-slate-700 mt-1">
-                  Anomalie : <span className="text-amber-800">{rec.anomalie}</span>
-                </p>
-                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                  Recommandation : inspection mensuelle du circuit de commande et lubrification.
-                </p>
-              </div>
 
-              {canManagePreventive && (
-                <button
-                  type="button"
-                  onClick={() => handleAdoptRecommendation(rec)}
-                  className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-sm shadow-amber-600/25 flex items-center justify-center gap-1.5 active:scale-95"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Créer la Tâche Préventive</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+                {canManagePreventive && (
+                  <button
+                    type="button"
+                    onClick={() => handleAdoptRecommendation(rec)}
+                    className="w-full py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer shadow-sm shadow-amber-600/25 flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>Créer la Tâche Préventive</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

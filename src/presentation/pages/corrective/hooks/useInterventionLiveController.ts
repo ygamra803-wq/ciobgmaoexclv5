@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useSyncExternalStore, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore, type FormEvent } from 'react';
 import { CorrectiveCalculationService } from '../../../../domain/corrective/services/CorrectiveCalculationService';
 import { stockIndexStore } from '../../../../application/StockIndexStore';
 import { isWarehouseComponent, isWarehousePart } from '../../../../core/domain/EntrepotItem';
@@ -332,10 +332,19 @@ export function useInterventionLiveController({
   const [formState, setFormState] = useState<LiveInterventionFormState>(EMPTY_FORM_STATE);
   const [travailSearch, setTravailSearch] = useState('');
   const [showTravailSuggestions, setShowTravailSuggestions] = useState(false);
+  const lastHydratedInterventionIdRef = useRef<string | null>(null);
 
-  // Sync initial values when active intervention changes
+  // Sync initial values ONLY when switching to a different active intervention ID
+  // so background SSE / LAN state sync updates never wipe unsaved technician input.
   useEffect(() => {
-    if (!activeIntervention) return;
+    if (!activeIntervention) {
+      lastHydratedInterventionIdRef.current = null;
+      return;
+    }
+    const currentKey = String(activeIntervention.id ?? activeIntervention.num_bt ?? '');
+    if (lastHydratedInterventionIdRef.current === currentKey) return;
+    lastHydratedInterventionIdRef.current = currentKey;
+
     const rawPieces =
       Array.isArray(activeIntervention.pieces_utilisees) &&
       activeIntervention.pieces_utilisees.length > 0
@@ -941,8 +950,8 @@ export function useInterventionLiveController({
 
     if (closedResult === null) {
       showToast?.(
-        'Transition refusée : vérifiez le travail réalisé ou le statut du Bon de Travail.',
-        'warning'
+        'Clôture refusée : vérifiez la disponibilité du stock PDR, le travail réalisé, le permis LOTO ou les bons atelier liés.',
+        'error'
       );
       return false;
     }

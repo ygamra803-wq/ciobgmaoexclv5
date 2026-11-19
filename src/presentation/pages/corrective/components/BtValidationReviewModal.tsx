@@ -170,7 +170,7 @@ export default function BtValidationReviewModal({
                   ) : (
                     <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                   )}
-                  Contrôle Automatique de Concordance (V4)
+                  Contrôle Automatique de Concordance
                 </span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white/80 border border-current/20">
                   {reviewReconciliation.alerts.length === 0
@@ -218,7 +218,7 @@ export default function BtValidationReviewModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
-                Nature de l&apos;intervention (VAL-4)
+                Nature de l&apos;intervention
               </label>
               <select
                 data-testid="bt-review-nature-select"

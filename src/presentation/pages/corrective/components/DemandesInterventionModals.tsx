@@ -24,6 +24,7 @@ export interface DemandesNewFormState {
   anomalie: string;
   travail_a_faire: string;
   arret_machine: boolean;
+  requires_loto: boolean;
 }
 
 export interface DemandesConvertFormState {
@@ -35,6 +36,7 @@ export interface DemandesConvertFormState {
   pdr_ref: string;
   pdr_quantite: number;
   allowWaitPdrOnConflict: boolean;
+  requires_loto: boolean;
 }
 
 export interface DemandesMachineOption {
@@ -474,18 +476,34 @@ export default function DemandesInterventionModals({
                 </div>
               </div>
 
-              {/* Arrêt Machine Checkbox */}
-              <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50/60 border border-amber-200">
-                <input
-                  type="checkbox"
-                  id="arretMachineCheck"
-                  checked={newForm.arret_machine}
-                  onChange={(e) => setNewForm({ ...newForm, arret_machine: e.target.checked })}
-                  className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
-                />
-                <label htmlFor="arretMachineCheck" className="font-bold text-slate-800 text-xs cursor-pointer">
-                  La machine est à l&apos;arrêt complet (Ligne bloquée)
-                </label>
+              {/* Arrêt Machine & Permis LOTO Checkboxes */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50/60 border border-amber-200">
+                  <input
+                    type="checkbox"
+                    id="arretMachineCheck"
+                    checked={newForm.arret_machine}
+                    onChange={(e) => setNewForm({ ...newForm, arret_machine: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-300 cursor-pointer"
+                  />
+                  <label htmlFor="arretMachineCheck" className="font-bold text-slate-800 text-xs cursor-pointer">
+                    La machine est à l&apos;arrêt complet (Ligne bloquée)
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-50/60 border border-rose-200">
+                  <input
+                    type="checkbox"
+                    id="diRequiresLotoCheck"
+                    data-testid="di-requires-loto-checkbox"
+                    checked={Boolean(newForm.requires_loto)}
+                    onChange={(e) => setNewForm({ ...newForm, requires_loto: e.target.checked })}
+                    className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-rose-300 cursor-pointer"
+                  />
+                  <label htmlFor="diRequiresLotoCheck" className="font-bold text-rose-950 text-xs cursor-pointer">
+                    Consignation Énergétique (LOTO) obligatoire avant démarrage des travaux
+                  </label>
+                </div>
               </div>
 
               {/* Travail à faire */}
@@ -841,6 +859,21 @@ export default function DemandesInterventionModals({
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Permis LOTO Sécurité */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-rose-50/70 border border-rose-200">
+                <input
+                  type="checkbox"
+                  id="convertRequiresLotoCheck"
+                  data-testid="convert-requires-loto-checkbox"
+                  checked={Boolean(convertForm.requires_loto)}
+                  onChange={(e) => setConvertForm({ ...convertForm, requires_loto: e.target.checked })}
+                  className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-rose-300 cursor-pointer"
+                />
+                <label htmlFor="convertRequiresLotoCheck" className="font-bold text-rose-950 text-xs cursor-pointer">
+                  Exiger un Permis de Consignation LOTO (le BT démarre en statut « BT_PLANIFIE » jusqu&apos;à consignation VAT)
+                </label>
               </div>
 
               {/* Instructions de Travail */}

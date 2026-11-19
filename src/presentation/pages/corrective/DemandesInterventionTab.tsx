@@ -23,7 +23,7 @@ import {
   Radio,
   Power,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import { Logger } from '../../../core/logger/LoggerService';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
@@ -234,6 +234,7 @@ export default function DemandesInterventionTab({
     anomalie: panneCategories?.E?.[0] || '',
     travail_a_faire: '',
     arret_machine: true,
+    requires_loto: false,
   });
 
   useEffect(() => {
@@ -417,6 +418,7 @@ export default function DemandesInterventionTab({
     pdr_ref: '',
     pdr_quantite: 1,
     allowWaitPdrOnConflict: false,
+    requires_loto: false,
   });
 
   const convertTechEvaluations = useMemo(() => {
@@ -653,10 +655,17 @@ export default function DemandesInterventionTab({
         item.intervenant || '',
       ]);
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Demandes_Intervention');
-      XLSX.writeFile(wb, `Demandes_Intervention_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `Demandes_Intervention_Export_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Demandes d’Intervention (DI)',
+        sheets: [
+          {
+            name: 'Demandes_Intervention',
+            headers,
+            rows: dataRows,
+          },
+        ],
+      });
 
       showToast?.('Export Excel des demandes d\'intervention généré avec succès (.xlsx)', 'success');
     } catch (err) {
@@ -699,6 +708,7 @@ export default function DemandesInterventionTab({
       pdr_ref: di.pdr_ref || '',
       pdr_quantite: Number(di.pdr_quantite) || 1,
       allowWaitPdrOnConflict: false,
+      requires_loto: Boolean(di.requires_loto),
     });
   };
 
@@ -755,19 +765,32 @@ export default function DemandesInterventionTab({
       !convertReservationEval.canAllocateAll &&
       convertForm.allowWaitPdrOnConflict
         ? 'EN_ATTENTE_PDR'
+        : convertForm.requires_loto
+        ? 'BT_PLANIFIE'
         : 'EN_COURS';
 
-    onConvertToBt(showConvertModal.id, {
+    const converted = onConvertToBt(showConvertModal.id, {
       ...convertForm,
       statut: nextStatut,
+      requires_loto: Boolean(convertForm.requires_loto),
       ...(resolvedMatricule ? { technicien_matricule: resolvedMatricule } : {}),
       ...(reservedSpares.length > 0 ? { pieces_reservees: reservedSpares } : {}),
     });
 
+    if (!converted) {
+      showToast?.(
+        'Conversion en BT refusée : vérifiez la machine, le statut de la demande ou les exigences LOTO.',
+        'error'
+      );
+      return;
+    }
+
     showToast?.(
-      reservedSpares.length > 0
-        ? `BT ${convertForm.num_bt} créé avec réservation ferme de ${reservedSpares[0].quantite}x ${reservedSpares[0].ref} !`
-        : `DI convertie en Bon de Travail ${convertForm.num_bt}`,
+      convertForm.requires_loto && nextStatut === 'BT_PLANIFIE'
+        ? `BT ${converted.num_bt || convertForm.num_bt} planifié (LOTO requis avant démarrage).`
+        : reservedSpares.length > 0
+        ? `BT ${converted.num_bt || convertForm.num_bt} créé avec réservation ferme de ${reservedSpares[0].quantite}x ${reservedSpares[0].ref} !`
+        : `DI convertie en Bon de Travail ${converted.num_bt || convertForm.num_bt}`,
       'success'
     );
     setShowConvertModal(null);
@@ -932,9 +955,37 @@ export default function DemandesInterventionTab({
               </span>
             );
           }
+          if (di.statut === 'BT_PLANIFIE') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-indigo-100 text-indigo-900 border border-indigo-300 font-mono shadow-2xs">
+                BT PLANIFIÉ
+              </span>
+            );
+          }
+          if (di.statut === 'EN_ATTENTE_PDR') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-purple-100 text-purple-900 border border-purple-300 font-mono shadow-2xs">
+                ATTENTE PDR
+              </span>
+            );
+          }
+          if (di.statut === 'ANNULE') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-slate-200 text-slate-700 border border-slate-300 font-mono shadow-2xs">
+                ANNULÉ
+              </span>
+            );
+          }
+          if (di.statut === 'CLOTURE') {
+            return (
+              <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
+                CLÔTURÉ
+              </span>
+            );
+          }
           return (
-            <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono shadow-2xs">
-              CLÔTURÉ
+            <span className="px-2.5 py-1 rounded-full font-bold text-[10.5px] bg-slate-100 text-slate-700 border border-slate-300 font-mono shadow-2xs">
+              {di.statut || 'OUVERT'}
             </span>
           );
         },

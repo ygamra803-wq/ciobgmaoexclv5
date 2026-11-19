@@ -239,6 +239,7 @@ export interface CorrectiveInterventionItem {
   action_fermee?: 'OUI' | 'NON' | string;
   arret_machine?: 'OUI' | 'NON' | boolean | string;
   temps_arret?: string | number;
+  temps_arret_minutes?: number;
   date?: string;
   demande_date?: string;
   date_demande?: string;
@@ -252,6 +253,7 @@ export interface CorrectiveInterventionItem {
   heure_fin_proposee?: string;
   date_cloture?: string;
   temps_intervention?: string;
+  temps_intervention_calc?: string;
   temps_intervention_propose?: string;
   temps_intervention_mins?: number;
   pdr_ref?: string;
@@ -353,6 +355,7 @@ export interface ValidationReviewDecisionPayload {
   temps_intervention_mins?: number;
   action_realisee?: string;
   intervention_nature?: string;
+  skipStockDeduction?: boolean;
   [key: string]: unknown;
 }
 
@@ -605,8 +608,8 @@ export interface GmaoStoreState {
   handleUpdateCorrectiveIntervention: (
     id: string | number,
     patch?: Partial<CorrectiveInterventionItem> & Record<string, unknown>
-  ) => void;
-  handleDeleteCorrectiveIntervention: (id: string | number) => void;
+  ) => boolean;
+  handleDeleteCorrectiveIntervention: (id: string | number) => boolean;
   handleBulkImportCorrective: (importedItems: CorrectiveInterventionItem[]) => void;
   handleResetCorrectiveToSeed: (
     ctx?: Record<string, unknown>

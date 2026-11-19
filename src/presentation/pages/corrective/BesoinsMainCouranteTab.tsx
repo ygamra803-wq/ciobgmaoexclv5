@@ -869,11 +869,11 @@ export default function BesoinsMainCouranteTab({
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
               <Package className="w-4 h-4 text-amber-600" />
               <span>
-                Main Courante des Besoins & Chaîne de Remise (`COR-HANDOFF-P0`)
+                Main Courante des Besoins &amp; Chaîne de Remise
               </span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Séparation stricte : le technicien déclare le besoin (`DEMANDE_TECH`), le superviseur arbitre le canal (`STOCK`, `ACHAT`, `ATELIER`, `EXTERNE`), puis la pièce suit `RECU_STRUCTURE` ➔ `REMIS_TECHNICIEN` ➔ `POSE_ESSAI` ➔ `CLOTURE_FIELD`.
+              Circuit maîtrisé : le technicien déclare le besoin, le superviseur arbitre le canal (Stock, Achat, Atelier, Externe), puis la pièce suit Réception Structure ➔ Remise Technicien ➔ Pose &amp; Essai ➔ Clôture Terrain.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1085,10 +1085,10 @@ export default function BesoinsMainCouranteTab({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  Déclarer un Besoin Matière / Pièce (`DEMANDE_TECH`)
+                  Déclarer un Besoin Matière / Pièce
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Le technicien exprime le besoin technique. Le canal d’approvisionnement (`STOCK`, `ACHAT`, `ATELIER`, `EXTERNE`) sera arbitré par le responsable.
+                  Le technicien exprime le besoin technique. Le canal d’approvisionnement (Stock, Achat, Atelier, Externe) sera arbitré par le responsable.
                 </p>
               </div>
               <button
@@ -1161,7 +1161,7 @@ export default function BesoinsMainCouranteTab({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                    Classe du Besoin (`material_class`) *
+                    Classe du Besoin *
                   </label>
                   <select
                     value={createForm.material_class}
@@ -1213,7 +1213,7 @@ export default function BesoinsMainCouranteTab({
 
               <div>
                 <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                  Politique de Maintenance & Tag Pièce (`POLICY-TAGS`)
+                  Politique de Maintenance &amp; Type de Traitement
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(['REPLACING', 'REPAIRABLE', 'MODIFYING'] as MaintenancePolicyTag[]).map((tag) => {
@@ -1292,7 +1292,7 @@ export default function BesoinsMainCouranteTab({
                   data-testid="confirm-create-need-btn"
                   className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black uppercase cursor-pointer shadow-xs"
                 >
-                  Enregistrer Demande (`DEMANDE_TECH`)
+                  Enregistrer la Demande
                 </button>
               </div>
             </form>
@@ -1394,7 +1394,7 @@ export default function BesoinsMainCouranteTab({
                 <div className="space-y-3 p-3.5 rounded-2xl bg-purple-50/60 border border-purple-200">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-black text-purple-950 uppercase">
-                      Canal d’Approvisionnement (`canal_appro`) *
+                      Canal d’Approvisionnement *
                     </label>
                     <span className="text-[10px] font-mono font-bold text-purple-800 bg-white px-2 py-0.5 rounded border border-purple-200">
                       Recommandé ({reviewModalItem.material_class} ·{' '}
@@ -1455,7 +1455,7 @@ export default function BesoinsMainCouranteTab({
                     <div className="p-2.5 rounded-xl bg-amber-100 border border-amber-300 text-amber-950 text-[11px] flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 shrink-0 text-amber-700" />
                       <span>
-                        Attention : Cette référence est balisée en Remplacement Standard (`REPLACING`). L’orientation vers l’Atelier Mécanique (`ATELIER`) requiert une dérogation (confection de substitution ou retouche d'adaptation).
+                        Attention : Cette référence est balisée en Remplacement Standard (REPLACING). L’orientation vers l’Atelier Mécanique (ATELIER) requiert une dérogation (confection de substitution ou retouche d&apos;adaptation).
                       </span>
                     </div>
                   )}
@@ -1464,7 +1464,7 @@ export default function BesoinsMainCouranteTab({
                     <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-[11px] flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 shrink-0 text-blue-700" />
                       <span>
-                        Note : Cette pièce est balisée en Modifiable / Sur mesure (`MODIFYING`). Vérifiez la faisabilité si vous l'orientez vers `{reviewCanal}` au lieu de l'Atelier / Externe.
+                        Note : Cette pièce est balisée en Modifiable / Sur mesure (MODIFYING). Vérifiez la faisabilité si vous l&apos;orientez vers {reviewCanal} au lieu de l&apos;Atelier / Externe.
                       </span>
                     </div>
                   )}

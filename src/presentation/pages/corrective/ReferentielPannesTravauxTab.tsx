@@ -13,7 +13,7 @@ import {
   Filter,
   RotateCcw,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import CustomSelect from '../../components/common/CustomSelect';
 import PannesCatalogTab from './referentiel/PannesCatalogTab';
 import TravauxStandardTab from './referentiel/TravauxStandardTab';
@@ -242,9 +242,6 @@ export default function ReferentielPannesTravauxTab({
 
   const handleExportExcel = () => {
     try {
-      const wb = XLSX.utils.book_new();
-
-      // Sheet 1: Pannes
       const pannesData = flatPannes.map((p) => ({
         Catégorie_Code: p.category,
         Catégorie_Nom: t(`corrective.categories.${p.category}`, CATEGORY_META[p.category]?.label || p.category),
@@ -252,19 +249,13 @@ export default function ReferentielPannesTravauxTab({
         Anomalie_Libellé: p.name,
         Nombre_Actions_Standard: p.actions.length,
       }));
-      const wsPannes = XLSX.utils.json_to_sheet(pannesData);
-      XLSX.utils.book_append_sheet(wb, wsPannes, 'Pannes_Par_Categorie');
 
-      // Sheet 2: Travaux
       const travauxData = (travauxAFaire || []).map((t, idx) => ({
         N_Ordre: idx + 1,
         Description_Travail_Standard: t,
       }));
-      const wsTravaux = XLSX.utils.json_to_sheet(travauxData);
-      XLSX.utils.book_append_sheet(wb, wsTravaux, 'Travaux_A_Faire_114');
 
-      // Sheet 3: Actions Matrix
-      const actionsData: any[] = [];
+      const actionsData: Record<string, unknown>[] = [];
       Object.entries(actionsByPanne || {}).forEach(([p, acts]: [string, any]) => {
         (Array.isArray(acts) ? acts : []).forEach((a: any, i: number) => {
           actionsData.push({
@@ -274,10 +265,7 @@ export default function ReferentielPannesTravauxTab({
           });
         });
       });
-      const wsActions = XLSX.utils.json_to_sheet(actionsData);
-      XLSX.utils.book_append_sheet(wb, wsActions, 'Actions_Par_Panne');
 
-      // Sheet 4: Intervenants (Calculés dynamiquement depuis Utilisateurs SSOT)
       const techData = (resolvedIntervenants || []).map((i) => ({
         ID_Technicien: i.id_technician || i.id || '',
         Nom: i.nom || i.name || '',
@@ -285,10 +273,18 @@ export default function ReferentielPannesTravauxTab({
         Specialite: i.specialite || '',
         Total_Interventions_BT: i.total || 0,
       }));
-      const wsTech = XLSX.utils.json_to_sheet(techData);
-      XLSX.utils.book_append_sheet(wb, wsTech, 'Intervenants_Equipe');
 
-      XLSX.writeFile(wb, `GMAO_Referentiel_Pannes_Travaux_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `GMAO_Referentiel_Pannes_Travaux_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Référentiel Pannes & Travaux',
+        sheets: [
+          { name: 'Pannes_Par_Categorie', jsonRows: pannesData },
+          { name: 'Travaux_A_Faire', jsonRows: travauxData },
+          { name: 'Actions_Par_Panne', jsonRows: actionsData },
+          { name: 'Intervenants_Equipe', jsonRows: techData },
+        ],
+      });
+
       showToast?.(t('corrective.catalogue.toast_export_success', 'Export Excel du catalogue complet généré avec succès (.xlsx)'), 'success');
     } catch (e) {
       Logger.error(e);

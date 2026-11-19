@@ -15,7 +15,7 @@ import { useI18n } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { Logger } from '../../../core/logger/LoggerService';
-import * as XLSX from 'xlsx';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 
 export default function CatalogueDonneesView({
   panneCategories = {},
@@ -124,10 +124,7 @@ export default function CatalogueDonneesView({
 
   const handleExportExcel = () => {
     try {
-      const wb = XLSX.utils.book_new();
-
-      // Sheet 1: Pannes
-      const pannesData = [];
+      const pannesData: Record<string, unknown>[] = [];
       Object.entries(panneCategories || {}).forEach(([cat, pannes]) => {
         if (Array.isArray(pannes)) {
           pannes.forEach((p) => {
@@ -139,18 +136,12 @@ export default function CatalogueDonneesView({
           });
         }
       });
-      const wsPannes = XLSX.utils.json_to_sheet(pannesData);
-      XLSX.utils.book_append_sheet(wb, wsPannes, 'Pannes_Cataloguées');
 
-      // Sheet 2: Travaux
       const travauxData = (travauxAFaire || []).map((t, idx) => ({
         N_Ordre: idx + 1,
         Description_Tâche_Standard: t,
       }));
-      const wsTravaux = XLSX.utils.json_to_sheet(travauxData);
-      XLSX.utils.book_append_sheet(wb, wsTravaux, 'Travaux_Standard');
 
-      // Sheet 3: Intervenants (Calculés dynamiquement depuis Utilisateurs & BTs)
       const techData = (resolvedIntervenants || []).map((i) => ({
         ID_Technicien: i.id_technician || i.id || '',
         Nom_Prenom: i.nom || i.name || '',
@@ -159,10 +150,17 @@ export default function CatalogueDonneesView({
         Nombre_Interventions_BT: i.total || 0,
         Statut: 'Habilité GMAO',
       }));
-      const wsTech = XLSX.utils.json_to_sheet(techData);
-      XLSX.utils.book_append_sheet(wb, wsTech, 'Équipe_Intervenants');
 
-      XLSX.writeFile(wb, `GMAO_Catalogue_Donnees_${new Date().toISOString().split('T')[0]}.xlsx`);
+      exportTypeBWorkbook({
+        filename: `GMAO_Catalogue_Donnees_${new Date().toISOString().split('T')[0]}.xlsx`,
+        screenName: 'Catalogue & Données GMAO',
+        sheets: [
+          { name: 'Pannes_Cataloguées', jsonRows: pannesData },
+          { name: 'Travaux_Standard', jsonRows: travauxData },
+          { name: 'Équipe_Intervenants', jsonRows: techData },
+        ],
+      });
+
       showToast?.('Export Excel du catalogue généré avec succès (.xlsx)', 'success');
     } catch (e) {
       Logger.error(e);
