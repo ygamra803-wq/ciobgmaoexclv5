@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neural Core — Light Mode</title>
+  <style>
+    :root {
+      /* ألوان الوضع الفاتح (الأبيض الثلجي والأزرق البحري) */
+      --bg: #f7f9fc; /* اجعله transparent إذا أردت وضعه فوق واجهة أخرى */
+      --primary: 210, 70%, 55%;       /* Sea Blue */
+      --primary-deep: 214, 82%, 46%;  /* أزرق أعمق لوضوح النبضات والخيوط على الخلفية الفاتحة */
+      --cube-top: rgba(255, 255, 255, 0.92);
+      --cube-bottom: rgba(238, 245, 255, 0.75);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    /* الحاوية المركزية الطافية */
+    .neural-core {
+      position: relative;
+      width: 176px;
+      height: 176px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: core-float 6s ease-in-out infinite;
+    }
+
+    /* الهالة المحيطة بالمربع */
+    .core-aura-outer {
+      position: absolute;
+      inset: -85px;
+      border-radius: 9999px;
+      filter: blur(90px);
+      background: radial-gradient(circle, hsla(var(--primary), 0.24), transparent 70%);
+      animation: soft-pulse 3s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .core-aura-inner {
+      position: absolute;
+      inset: -48px;
+      border-radius: 9999px;
+      filter: blur(50px);
+      background: radial-gradient(circle, hsla(var(--primary), 0.18), transparent 70%);
+      animation: soft-pulse 2.5s ease-in-out 0.5s infinite;
+      pointer-events: none;
+    }
+
+    /* الحلقات المدارية */
+    .orbit-ring {
+      position: absolute;
+      border-radius: 9999px;
+      border: 1.5px solid hsla(var(--primary), 0.22);
+      pointer-events: none;
+    }
+
+    /* شبكة الخيوط والنبضات SVG */
+    .neural-svg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 600px;
+      height: 600px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      overflow: visible;
+      z-index: 10;
+    }
+
+    .conn-line {
+      stroke-linecap: round;
+      transition: opacity 0.45s ease, stroke-width 0.45s ease;
+    }
+
+    /* المربع الزجاجي المركزي في الوضع الفاتح */
+    .glass-cube {
+      position: relative;
+      z-index: 20;
+      width: 176px;
+      height: 176px;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--cube-top), var(--cube-bottom));
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      border: 2px solid hsla(var(--primary), 0.35);
+      box-shadow:
+        0 14px 45px hsla(var(--primary), 0.22),
+        0 6px 20px rgba(15, 23, 42, 0.06),
+        inset 0 0 32px hsla(var(--primary), 0.1);
+    }
+
+    .cube-ping {
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      border: 2px solid hsla(var(--primary), 0.42);
+      box-shadow: 0 0 18px hsla(var(--primary), 0.22);
+      animation: cube-ping 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+      pointer-events: none;
+    }
+
+    .cube-icon {
+      width: 96px;
+      height: 96px;
+      color: hsl(var(--primary));
+      filter: drop-shadow(0 4px 16px hsla(var(--primary), 0.45));
+      animation: icon-pulse 2.4s ease-in-out infinite;
+    }
+
+    /* ================= النقاط العصبية (Nodes) ================= */
+    .node-anchor {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      z-index: 18;
+      pointer-events: none;
+    }
+
+    .node-ping-bg {
+      position: absolute;
+      inset: -28px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, hsla(var(--primary), 0.34), transparent 70%);
+      opacity: 0;
+    }
+
+    .node-glow-mid {
+      position: absolute;
+      inset: -14px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, hsla(var(--primary), 0.42), transparent 60%);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .node-spin-ring {
+      position: absolute;
+      inset: -8px;
+      border-radius: 9999px;
+      border: 2px solid transparent;
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .node-sweep {
+      position: absolute;
+      inset: -20px;
+      border-radius: 9999px;
+      background: conic-gradient(from 0deg, transparent 0deg, hsla(var(--primary), 0.45) 45deg, transparent 95deg);
+      filter: blur(2.5px);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+    }
+
+    .node-ripple-1,
+    .node-ripple-2 {
+      position: absolute;
+      border-radius: 9999px;
+      opacity: 0;
+    }
+    .node-ripple-1 {
+      inset: -12px;
+      border: 2px solid hsla(var(--primary), 0.45);
+    }
+    .node-ripple-2 {
+      inset: -16px;
+      border: 1px solid hsla(var(--primary), 0.3);
+    }
+
+    .node-dot {
+      position: relative;
+      width: 14px;
+      height: 14px;
+      border-radius: 9999px;
+      background: radial-gradient(circle, hsla(var(--primary), 0.6), hsla(var(--primary), 0.35));
+      border: 2px solid hsla(var(--primary), 0.38);
+      box-shadow: 0 0 6px hsla(var(--primary), 0.25);
+      opacity: 0.35;
+      transform: scale(1);
+      transition: all 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .node-dot-inner {
+      position: absolute;
+      inset: 3px;
+      border-radius: 9999px;
+      background: hsla(var(--primary), 0.55);
+    }
+
+    .node-dot-white {
+      position: absolute;
+      inset: 5px;
+      border-radius: 9999px;
+      background: #ffffff;
+      box-shadow: 0 0 4px hsla(var(--primary-deep), 0.6);
+    }
+
+    /* --- الحالة النشطة للنقطة --- */
+    .node-anchor.active .node-dot {
+      opacity: 1;
+      transform: scale(1.4);
+      background: radial-gradient(circle, hsl(var(--primary)), hsl(var(--primary-deep)));
+      border-color: hsla(var(--primary-deep), 0.85);
+      box-shadow:
+        0 0 16px hsla(var(--primary), 0.85),
+        0 0 32px hsla(var(--primary), 0.45),
+        inset 0 0 8px hsla(var(--primary), 0.7);
+    }
+
+    .node-anchor.active .node-dot-inner {
+      background: hsl(var(--primary));
+      box-shadow: 0 0 8px hsl(var(--primary));
+      animation: soft-pulse 1s ease-in-out infinite;
+    }
+
+    .node-anchor.active .node-ping-bg {
+      animation: ring-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    .node-anchor.active .node-glow-mid {
+      opacity: 1;
+      animation: soft-pulse 1.5s ease-in-out 0.3s infinite;
+    }
+
+    .node-anchor.active .node-spin-ring {
+      border-color: hsla(var(--primary), 0.75);
+      box-shadow: 0 0 12px hsla(var(--primary), 0.45);
+      animation: spin 3s linear infinite;
+    }
+
+    .node-anchor.active .node-sweep {
+      opacity: 0.55;
+      animation: spin 2s linear infinite;
+    }
+
+    .node-anchor.active .node-ripple-1 {
+      animation: ring-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    .node-anchor.active .node-ripple-2 {
+      animation: ring-ping 2.5s cubic-bezier(0, 0, 0.2, 1) 0.5s infinite;
+    }
+
+    /* --- وميض لحظة وصول النبضة (Synapse Arrival Flash) --- */
+    .node-anchor.synapse-hit .node-dot {
+      transform: scale(1.75) !important;
+      box-shadow:
+        0 0 18px hsl(var(--primary-deep)),
+        0 0 36px hsla(var(--primary), 0.85),
+        0 0 54px hsla(var(--primary), 0.45) !important;
+    }
+
+    /* الحركات الأساسية */
+    @keyframes core-float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-12px); }
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes soft-pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    @keyframes icon-pulse {
+      0%, 100% { opacity: 0.88; transform: scale(0.97); }
+      50% { opacity: 1; transform: scale(1.04); }
+    }
+
+    @keyframes cube-ping {
+      0% { transform: scale(1); opacity: 0.65; }
+      75%, 100% { transform: scale(1.22); opacity: 0; }
+    }
+
+    @keyframes ring-ping {
+      0% { transform: scale(0.8); opacity: 0.85; }
+      80%, 100% { transform: scale(2); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="neural-core" id="neuralCore">
+    <div class="core-aura-outer"></div>
+    <div class="core-aura-inner"></div>
+
+    <!-- شبكة الخيوط والنبضات المترابطة -->
+    <svg class="neural-svg" viewBox="0 0 600 600" id="neuralSvg">
+      <defs id="svgDefs">
+        <radialGradient id="pulseHeadGrad">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="1" />
+          <stop offset="40%" stop-color="hsl(var(--primary))" stop-opacity="0.95" />
+          <stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0" />
+        </radialGradient>
+
+        <filter id="glowFilter" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="2.8" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <g id="linesLayer"></g>
+      <g id="pulsesLayer"></g>
+    </svg>
+
+    <!-- المربع الزجاجي المركزي -->
+    <div class="glass-cube">
+      <div class="cube-ping"></div>
+      <svg
+        class="cube-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+        <path d="M9 13a4.5 4.5 0 0 0 3-4" />
+        <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+        <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+        <path d="M6 18a4 4 0 0 1-1.967-.516" />
+        <path d="M12 13h4" />
+        <path d="M12 18h6a2 2 0 0 1 2 2v1" />
+        <path d="M12 8h8" />
+        <path d="M16 8V5a2 2 0 0 1 2-2" />
+        <circle cx="16" cy="13" r=".5" />
+        <circle cx="18" cy="3" r=".5" />
+        <circle cx="20" cy="21" r=".5" />
+        <circle cx="20" cy="8" r=".5" />
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const NODE_COUNT = 12;
+      const RADIUS = 160;
+      const CONNECTION_THRESHOLD = 200;
+      const MAX_CONCURRENT_PULSES = 10;
+      const RING_SPEEDS = [25, 20, 15, 12, 10];
+      const RING_OPACITIES = [0.12, 0.16, 0.2, 0.24, 0.28];
+
+      const core = document.getElementById("neuralCore");
+      const svgDefs = document.getElementById("svgDefs");
+      const linesLayer = document.getElementById("linesLayer");
+      const pulsesLayer = document.getElementById("pulsesLayer");
+      const SVG_NS = "http://www.w3.org/2000/svg";
+
+      // 1. الحلقات المدارية الـ 5
+      RING_SPEEDS.forEach((speed, i) => {
+        const ring = document.createElement("div");
+        ring.className = "orbit-ring";
+        ring.style.inset = `${-(40 + i * 12)}px`;
+        ring.style.opacity = RING_OPACITIES[i];
+        ring.style.boxShadow = `
+          0 0 ${12 + i * 4}px hsla(var(--primary), 0.22),
+          inset 0 0 ${8 + i * 2}px hsla(var(--primary), 0.12)
+        `;
+        ring.style.animation = `spin ${speed}s linear ${i % 2 === 0 ? "normal" : "reverse"} infinite`;
+        core.insertBefore(ring, core.firstChild);
+      });
+
+      // 2. إنشاء الـ 12 نقطة وتجهيز خريطة الجيران
+      const nodes = [];
+      const activeNodes = new Set([0, 2, 5, 7, 10]);
+      const adjacency = Array.from({ length: NODE_COUNT }, () => []);
+
+      for (let i = 0; i < NODE_COUNT; i++) {
+        const angle = (i * (360 / NODE_COUNT) * Math.PI) / 180;
+        const x = Math.cos(angle) * RADIUS;
+        const y = Math.sin(angle) * RADIUS;
+
+        const anchor = document.createElement("div");
+        anchor.className = "node-anchor" + (activeNodes.has(i) ? " active" : "");
+        anchor.style.left = `calc(50% + ${x}px)`;
+        anchor.style.top = `calc(50% + ${y}px)`;
+
+        anchor.innerHTML = `
+          <div class="node-ping-bg"></div>
+          <div class="node-glow-mid"></div>
+          <div class="node-spin-ring"></div>
+          <div class="node-sweep"></div>
+          <div class="node-ripple-1"></div>
+          <div class="node-ripple-2"></div>
+          <div class="node-dot">
+            <div class="node-dot-inner"></div>
+            <div class="node-dot-white"></div>
+          </div>
+        `;
+
+        core.appendChild(anchor);
+        nodes.push({ idx: i, x, y, el: anchor });
+      }
+
+      // 3. رسم الخيوط بتدرج خاص لكل خيط
+      const connections = [];
+      const edgeDistMap = new Map();
+
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dist = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+
+          if (dist < CONNECTION_THRESHOLD) {
+            adjacency[i].push(j);
+            adjacency[j].push(i);
+            edgeDistMap.set(`${i}-${j}`, dist);
+            edgeDistMap.set(`${j}-${i}`, dist);
+
+            const x1 = 300 + nodes[i].x;
+            const y1 = 300 + nodes[i].y;
+            const x2 = 300 + nodes[j].x;
+            const y2 = 300 + nodes[j].y;
+
+            const gradId = `edgeGrad-${i}-${j}`;
+            const grad = document.createElementNS(SVG_NS, "linearGradient");
+            grad.setAttribute("id", gradId);
+            grad.setAttribute("gradientUnits", "userSpaceOnUse");
+            grad.setAttribute("x1", x1);
+            grad.setAttribute("y1", y1);
+            grad.setAttribute("x2", x2);
+            grad.setAttribute("y2", y2);
+            grad.innerHTML = `
+              <stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0.3" />
+              <stop offset="50%" stop-color="hsl(var(--primary-deep))" stop-opacity="0.95" />
+              <stop offset="100%" stop-color="hsl(var(--primary))" stop-opacity="0.3" />
+            `;
+            svgDefs.appendChild(grad);
+
+            const glowLine = document.createElementNS(SVG_NS, "line");
+            glowLine.setAttribute("x1", x1);
+            glowLine.setAttribute("y1", y1);
+            glowLine.setAttribute("x2", x2);
+            glowLine.setAttribute("y2", y2);
+            glowLine.setAttribute("stroke", "hsl(var(--primary))");
+            glowLine.setAttribute("filter", "url(#glowFilter)");
+            glowLine.classList.add("conn-line");
+
+            const baseLine = document.createElementNS(SVG_NS, "line");
+            baseLine.setAttribute("x1", x1);
+            baseLine.setAttribute("y1", y1);
+            baseLine.setAttribute("x2", x2);
+            baseLine.setAttribute("y2", y2);
+            baseLine.setAttribute("stroke", `url(#${gradId})`);
+            baseLine.classList.add("conn-line");
+
+            linesLayer.appendChild(glowLine);
+            linesLayer.appendChild(baseLine);
+            connections.push({ from: i, to: j, glowLine, baseLine });
+          }
+        }
+      }
+
+      function syncConnections() {
+        for (const c of connections) {
+          const a = activeNodes.has(c.from);
+          const b = activeNodes.has(c.to);
+          const both = a && b;
+          const any = a || b;
+
+          const opacity = both ? 0.92 : any ? 0.58 : 0.25;
+          const width = both ? 3 : 2;
+
+          c.baseLine.setAttribute("stroke-width", width);
+          c.baseLine.setAttribute("opacity", opacity);
+
+          c.glowLine.setAttribute("stroke-width", width + 3.5);
+          c.glowLine.setAttribute("opacity", any ? opacity * 0.28 : 0);
+        }
+      }
+      syncConnections();
+
+      // 4. دورة تنشيط وتحديث النقاط
+      setInterval(() => {
+        if (activeNodes.size < NODE_COUNT) {
+          let candidate;
+          do {
+            candidate = Math.floor(Math.random() * NODE_COUNT);
+          } while (activeNodes.has(candidate));
+          activeNodes.add(candidate);
+          nodes[candidate].el.classList.add("active");
+        }
+
+        if (Math.random() > 0.55 && activeNodes.size > 5) {
+          const arr = Array.from(activeNodes);
+          const drop = arr[Math.floor(Math.random() * arr.length)];
+          activeNodes.delete(drop);
+          nodes[drop].el.classList.remove("active");
+        }
+        syncConnections();
+      }, 480);
+
+      // 5. نظام النبضات المترابطة عبر الخيوط
+      const activePulses = [];
+      let pulseCounter = 0;
+
+      function triggerNodeHit(idx) {
+        const el = nodes[idx].el;
+        if (!activeNodes.has(idx)) {
+          activeNodes.add(idx);
+          el.classList.add("active");
+          syncConnections();
+        }
+        el.classList.remove("synapse-hit");
+        void el.offsetWidth;
+        el.classList.add("synapse-hit");
+        setTimeout(() => el.classList.remove("synapse-hit"), 240);
+      }
+
+      function spawnPulse(fromIdx, toIdx, hopsLeft = 2, prevIdx = -1) {
+        if (activePulses.length >= MAX_CONCURRENT_PULSES) return;
+
+        const neighbors = adjacency[fromIdx];
+        if (!neighbors || neighbors.length === 0) return;
+
+        if (toIdx === undefined) {
+          const preferred = neighbors.filter((n) => n !== prevIdx);
+          const pool = preferred.length > 0 ? preferred : neighbors;
+          toIdx = pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        const id = ++pulseCounter;
+        const gradId = `tailGrad-${id}`;
+        const dist = edgeDistMap.get(`${fromIdx}-${toIdx}`) || 120;
+
+        const tailGrad = document.createElementNS(SVG_NS, "linearGradient");
+        tailGrad.setAttribute("id", gradId);
+        tailGrad.setAttribute("gradientUnits", "userSpaceOnUse");
+        tailGrad.innerHTML = `
+          <stop offset="0%" stop-color="hsl(var(--primary))" stop-opacity="0" />
+          <stop offset="65%" stop-color="hsl(var(--primary-deep))" stop-opacity="0.95" />
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="1" />
+        `;
+        svgDefs.appendChild(tailGrad);
+
+        const group = document.createElementNS(SVG_NS, "g");
+
+        const trail = document.createElementNS(SVG_NS, "line");
+        trail.setAttribute("stroke", `url(#${gradId})`);
+        trail.setAttribute("stroke-width", "3.5");
+        trail.setAttribute("stroke-linecap", "round");
+        trail.setAttribute("filter", "url(#glowFilter)");
+
+        const halo = document.createElementNS(SVG_NS, "circle");
+        halo.setAttribute("r", "12");
+        halo.setAttribute("fill", "url(#pulseHeadGrad)");
+        halo.setAttribute("opacity", "0.75");
+
+        const coreDot = document.createElementNS(SVG_NS, "circle");
+        coreDot.setAttribute("r", "4");
+        coreDot.setAttribute("fill", "hsl(var(--primary-deep))");
+        coreDot.setAttribute("filter", "url(#glowFilter)");
+
+        const hotTip = document.createElementNS(SVG_NS, "circle");
+        hotTip.setAttribute("r", "1.8");
+        hotTip.setAttribute("fill", "#ffffff");
+
+        group.appendChild(trail);
+        group.appendChild(halo);
+        group.appendChild(coreDot);
+        group.appendChild(hotTip);
+        pulsesLayer.appendChild(group);
+
+        activePulses.push({
+          fromIdx,
+          toIdx,
+          hopsLeft,
+          from: nodes[fromIdx],
+          to: nodes[toIdx],
+          start: performance.now(),
+          duration: dist * 5.2,
+          group,
+          tailGrad,
+          trail,
+          halo,
+          coreDot,
+          hotTip,
+        });
+      }
+
+      setInterval(() => {
+        const arr = Array.from(activeNodes);
+        if (arr.length === 0) return;
+        const startIdx = arr[Math.floor(Math.random() * arr.length)];
+        spawnPulse(startIdx, undefined, 2);
+      }, 520);
+
+      function animatePulses(now) {
+        for (let i = activePulses.length - 1; i >= 0; i--) {
+          const p = activePulses[i];
+          const t = Math.min((now - p.start) / p.duration, 1);
+
+          const x1 = 300 + p.from.x;
+          const y1 = 300 + p.from.y;
+          const x2 = 300 + p.to.x;
+          const y2 = 300 + p.to.y;
+
+          const hx = x1 + (x2 - x1) * t;
+          const hy = y1 + (y2 - y1) * t;
+
+          const tailT = Math.max(0, t - 0.32);
+          const tx = x1 + (x2 - x1) * tailT;
+          const ty = y1 + (y2 - y1) * tailT;
+
+          p.trail.setAttribute("x1", tx);
+          p.trail.setAttribute("y1", ty);
+          p.trail.setAttribute("x2", hx);
+          p.trail.setAttribute("y2", hy);
+
+          p.tailGrad.setAttribute("x1", tx);
+          p.tailGrad.setAttribute("y1", ty);
+          p.tailGrad.setAttribute("x2", hx);
+          p.tailGrad.setAttribute("y2", hy);
+
+          p.halo.setAttribute("cx", hx);
+          p.halo.setAttribute("cy", hy);
+          p.halo.setAttribute("r", 10 + Math.sin(t * Math.PI * 3) * 3.5);
+
+          p.coreDot.setAttribute("cx", hx);
+          p.coreDot.setAttribute("cy", hy);
+          p.coreDot.setAttribute("r", 3.2 + Math.sin(t * Math.PI * 2) * 1.4);
+
+          p.hotTip.setAttribute("cx", hx);
+          p.hotTip.setAttribute("cy", hy);
+
+          if (t >= 1) {
+            triggerNodeHit(p.toIdx);
+            if (p.hopsLeft > 0) {
+              spawnPulse(p.toIdx, undefined, p.hopsLeft - 1, p.fromIdx);
+              if (Math.random() > 0.65) {
+                spawnPulse(p.toIdx, undefined, 0, p.fromIdx);
+              }
+            }
+
+            p.group.remove();
+            p.tailGrad.remove();
+            activePulses.splice(i, 1);
+          }
+        }
+        requestAnimationFrame(animatePulses);
+      }
+      requestAnimationFrame(animatePulses);
+    })();
+  </script>
+</body>
+</html>
