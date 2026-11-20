@@ -244,6 +244,9 @@ export interface AssetsMachineRow {
   compteur_actuel?: number;
   compteur_heures?: number;
   unite_compteur?: string;
+  cout_arret_horaire?: number;
+  valeur_acquisition?: number;
+  regime_travail?: string;
   notes?: string;
   [key: string]: unknown;
 }

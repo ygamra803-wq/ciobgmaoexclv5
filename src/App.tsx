@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { useState } from 'react';
 import LoginScreen from './presentation/pages/auth/LoginScreen';
 import SplashScreen from './presentation/pages/auth/SplashScreen';
 import RequirePasswordChange from './presentation/pages/auth/RequirePasswordChange';
@@ -7,12 +7,17 @@ import ErrorBoundary from './presentation/components/common/ErrorBoundary';
 import { AppBootGuard } from './presentation/components/common/loaders/AppBootGuard';
 import { NeuralWatermark } from './presentation/components/common/loaders/NeuralWatermark';
 import { useAuth } from './context/AuthContext';
+import { createRetryableLazy } from './utils/lazyWithRetry';
 
-const AuthenticatedApp = lazy(() => import('./AuthenticatedApp'));
+const AuthenticatedApp = createRetryableLazy(
+  () => import('./AuthenticatedApp'),
+  'AuthenticatedApp'
+);
 
 export default function App() {
   const { user: currentUser } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
+  const [authRetryKey, setAuthRetryKey] = useState(0);
 
   if (showSplash) {
     return (
@@ -44,16 +49,19 @@ export default function App() {
   }
 
   return (
-    <ErrorBoundary>
-      <Suspense
+    <ErrorBoundary
+      key={authRetryKey}
+      sectionName="Espace GMAO"
+      onReset={() => setAuthRetryKey((prev) => prev + 1)}
+    >
+      <AuthenticatedApp
+        retryNonce={authRetryKey}
         fallback={
           <div className="relative z-10 w-full min-h-screen overflow-hidden">
             <NeuralWatermark label="Chargement de l'espace GMAO..." />
           </div>
         }
-      >
-        <AuthenticatedApp />
-      </Suspense>
+      />
     </ErrorBoundary>
   );
 }

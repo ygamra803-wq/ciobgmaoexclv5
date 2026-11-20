@@ -175,6 +175,12 @@ export interface IMachine {
   unite_compteur?: string;
   /** Coût horaire de perte de production en cas d'arrêt machine (ex: DH/h). 0 si non configuré. */
   cout_arret_horaire?: number;
+  /** Valeur d'acquisition ou de remplacement à neuf (RAV en DH) pour le calcul du ratio BER économique. */
+  valeur_acquisition?: number;
+  valeur_a_neuf?: number;
+  /** Régime de travail / postes d'ouverture ('1x8' = 176h/mois, '2x8' = 352h/mois, '3x8' = 720h/mois). */
+  regime_travail?: '1x8' | '2x8' | '3x8' | string;
+  heures_ouverture_mensuelles?: number;
   [key: string]: unknown;
 }
 

@@ -22,6 +22,14 @@ import { isArchivedMachine, type MachineLifecycleLike } from './activeMachines';
 
 export type AssetHierarchyLevel = 'MACHINE' | 'LINE';
 
+export type MachineShiftRegime = '1x8' | '2x8' | '3x8';
+
+export const MACHINE_SHIFT_REGIME_HOURS: Record<MachineShiftRegime, number> = {
+  '1x8': 176,
+  '2x8': 352,
+  '3x8': 720,
+};
+
 export interface HierarchyMachineLike extends MachineLifecycleLike {
   parent_id?: string | null;
   id_parent?: string | null;
@@ -29,6 +37,10 @@ export interface HierarchyMachineLike extends MachineLifecycleLike {
   asset_level?: AssetHierarchyLevel | string;
   id_family?: string;
   id_blueprint?: string;
+  cout_arret_horaire?: number | string;
+  valeur_acquisition?: number | string;
+  regime_travail?: MachineShiftRegime | string;
+  heures_ouverture_mensuelles?: number | string;
 }
 
 export interface HierarchyCorrectiveLike {
@@ -48,12 +60,33 @@ export interface HierarchyCorrectiveLike {
   temps_reparation_min?: number | string;
   duree_arret_heures?: number | string;
   temps_arret?: number | string;
+  cout_arret_horaire?: number | string;
 }
 
 export const ASSET_HIERARCHY_LEVEL_LABELS: Record<AssetHierarchyLevel, string> = {
   MACHINE: 'Machine / Équipement individuel',
   LINE: 'Ligne de Production / Machine Mère (Regroupement)',
 };
+
+/**
+ * Resolves monthly planned operating hours for a machine based on explicit `heures_ouverture_mensuelles`
+ * or `regime_travail` ('1x8' -> 176h, '2x8' -> 352h, '3x8' -> 720h), falling back to `fallbackHours`.
+ */
+export function resolveMonthlyOperatingHours(
+  machine?: HierarchyMachineLike | null,
+  fallbackHours = 720
+): number {
+  if (!machine || typeof machine !== 'object') return fallbackHours;
+  const explicitHours = Number(machine.heures_ouverture_mensuelles);
+  if (Number.isFinite(explicitHours) && explicitHours > 0) {
+    return explicitHours;
+  }
+  const regime = String(machine.regime_travail || '').trim().toLowerCase();
+  if (regime === '1x8') return MACHINE_SHIFT_REGIME_HOURS['1x8'];
+  if (regime === '2x8') return MACHINE_SHIFT_REGIME_HOURS['2x8'];
+  if (regime === '3x8') return MACHINE_SHIFT_REGIME_HOURS['3x8'];
+  return fallbackHours;
+}
 
 export function getMachineCanonicalId(
   machine: HierarchyMachineLike | null | undefined
@@ -406,6 +439,9 @@ export interface IParentCorrectiveRollup {
   approvedFailuresCount: number;
   totalDowntimeHours: number;
   totalRepairHours: number;
+  totalDowntimeCost: number;
+  totalPlannedHours: number;
+  availabilityRatePercent: number;
   mttrHours: number;
   mtbfHours: number | null;
 }
@@ -480,15 +516,25 @@ export function computeParentCorrectiveRollup(
   parentId: string,
   machines: HierarchyMachineLike[] = [],
   correctiveInterventions: HierarchyCorrectiveLike[] = [],
-  operatingWindowHours = 720
+  operatingWindowHours?: number
 ): IParentCorrectiveRollup {
   const cleanParentId = String(parentId || '').trim().toUpperCase();
   const descendantIds = getDescendantMachineIds(cleanParentId, machines);
   const scopeIds = new Set<string>([cleanParentId, ...descendantIds].filter(Boolean));
 
+  const machinesById = new Map<string, HierarchyMachineLike>();
+  if (Array.isArray(machines)) {
+    for (const m of machines) {
+      const id = getMachineCanonicalId(m);
+      if (id) machinesById.set(id, m);
+    }
+  }
+  const parentMachine = machinesById.get(cleanParentId);
+
   let approvedFailuresCount = 0;
   let totalDowntimeMinutes = 0;
   let totalRepairMinutes = 0;
+  let totalDowntimeCost = 0;
 
   if (Array.isArray(correctiveInterventions)) {
     for (const ci of correctiveInterventions) {
@@ -507,6 +553,21 @@ export function computeParentCorrectiveRollup(
 
       totalDowntimeMinutes += effectiveDowntimeMin;
       totalRepairMinutes += effectiveRepairMin;
+
+      const unitMachine = machinesById.get(machineRef);
+      const hourlyRate =
+        Math.max(
+          0,
+          Number(
+            ci.cout_arret_horaire ??
+              unitMachine?.cout_arret_horaire ??
+              parentMachine?.cout_arret_horaire ??
+              0
+          ) || 0
+        );
+      if (hourlyRate > 0 && effectiveDowntimeMin > 0) {
+        totalDowntimeCost += (effectiveDowntimeMin / 60) * hourlyRate;
+      }
     }
   }
 
@@ -517,8 +578,21 @@ export function computeParentCorrectiveRollup(
       ? Number((totalRepairHours / approvedFailuresCount).toFixed(2))
       : 0;
 
-  const activeUnitsCount = Math.max(1, descendantIds.length || 1);
-  const totalAvailableHours = Math.max(0, operatingWindowHours * activeUnitsCount - totalDowntimeHours);
+  const activeUnitIds = descendantIds.length > 0 ? descendantIds : [cleanParentId];
+  const activeUnitsCount = Math.max(1, activeUnitIds.length);
+  const totalPlannedHours =
+    operatingWindowHours !== undefined
+      ? operatingWindowHours * activeUnitsCount
+      : activeUnitIds.reduce((sum, uId) => {
+          const unit = machinesById.get(uId) || parentMachine;
+          return sum + resolveMonthlyOperatingHours(unit, 720);
+        }, 0);
+
+  const totalAvailableHours = Math.max(0, totalPlannedHours - totalDowntimeHours);
+  const availabilityRatePercent =
+    totalPlannedHours > 0
+      ? Number(Math.max(0, Math.min(100, (totalAvailableHours / totalPlannedHours) * 100)).toFixed(1))
+      : 100;
   const mtbfHours =
     approvedFailuresCount > 0
       ? Number((totalAvailableHours / approvedFailuresCount).toFixed(2))
@@ -531,6 +605,9 @@ export function computeParentCorrectiveRollup(
     approvedFailuresCount,
     totalDowntimeHours,
     totalRepairHours,
+    totalDowntimeCost: Number(totalDowntimeCost.toFixed(2)),
+    totalPlannedHours,
+    availabilityRatePercent,
     mttrHours,
     mtbfHours,
   };

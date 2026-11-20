@@ -491,6 +491,9 @@ export default function MachinesRegisteredView({
           'Technicien ID (G)': m.technician || '',
           'Technicien Nom (G)': techObj?.nom || m.technician || '',
           'Statut Opérationnel (H)': m.status || 'En Service',
+          'Régime Travail': m.regime_travail || '2x8',
+          'Coût Arrêt Horaire (DH/h)': Number(m.cout_arret_horaire || 0),
+          'Valeur Acquisition (DH)': Number(m.valeur_acquisition ?? m.valeur_a_neuf ?? 0),
           'Interventions / Sorties': sortiesCount,
         };
       });
@@ -1338,15 +1341,21 @@ export default function MachinesRegisteredView({
                               )}
                               {showRollup && (
                                 <div
-                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50/90 text-emerald-900 border border-emerald-200 text-[10px] font-mono font-semibold"
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50/90 text-emerald-900 border border-emerald-200 text-[10px] font-mono font-semibold flex-wrap"
                                   title="Agrégation corrective validée (parent + équipements enfants rattachés)"
                                 >
                                   <Activity className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
                                   <span>Enfants: {parentRollup.descendantCount}</span>
                                   <span>• BT validés: {parentRollup.approvedFailuresCount}</span>
+                                  <span>• Dispo: {parentRollup.availabilityRatePercent}%</span>
                                   <span>• MTTR: {parentRollup.mttrHours}h</span>
                                   {parentRollup.mtbfHours !== null && (
                                     <span>• MTBF: {parentRollup.mtbfHours}h</span>
+                                  )}
+                                  {parentRollup.totalDowntimeCost > 0 && (
+                                    <span className="text-rose-700 font-bold">
+                                      • Perte arrêt: {parentRollup.totalDowntimeCost.toLocaleString('fr-FR')} DH
+                                    </span>
                                   )}
                                 </div>
                               )}
@@ -1368,6 +1377,14 @@ export default function MachinesRegisteredView({
                             <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                             <span>Mise en serv. : <b className="text-slate-700 font-mono">{getMachineCommissioningDate(m) || '—'}</b></span>
                           </div>
+                          {(Number(m.cout_arret_horaire || 0) > 0 || m.regime_travail) && (
+                            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70">
+                              <span>{m.regime_travail || '2x8'}</span>
+                              {Number(m.cout_arret_horaire || 0) > 0 && (
+                                <span>• {Number(m.cout_arret_horaire).toLocaleString('fr-FR')} DH/h</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
 

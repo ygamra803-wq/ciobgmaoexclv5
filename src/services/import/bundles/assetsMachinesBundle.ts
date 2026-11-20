@@ -532,6 +532,42 @@ export function validateAndCommitAssetsMachinesBundle(
             ),
           }
         : {}),
+      ...((row as Record<string, unknown>).cout_arret_horaire !== undefined ||
+      prev?.cout_arret_horaire !== undefined
+        ? {
+            cout_arret_horaire: Math.max(
+              0,
+              Number(
+                (row as Record<string, unknown>).cout_arret_horaire ??
+                  prev?.cout_arret_horaire ??
+                  0
+              ) || 0
+            ),
+          }
+        : {}),
+      ...((row as Record<string, unknown>).valeur_acquisition !== undefined ||
+      (row as Record<string, unknown>).valeur_a_neuf !== undefined ||
+      prev?.valeur_acquisition !== undefined
+        ? {
+            valeur_acquisition: Math.max(
+              0,
+              Number(
+                (row as Record<string, unknown>).valeur_acquisition ??
+                  (row as Record<string, unknown>).valeur_a_neuf ??
+                  prev?.valeur_acquisition ??
+                  0
+              ) || 0
+            ),
+          }
+        : {}),
+      ...((row as Record<string, unknown>).regime_travail !== undefined ||
+      prev?.regime_travail !== undefined
+        ? {
+            regime_travail: cleanStr(
+              (row as Record<string, unknown>).regime_travail ?? prev?.regime_travail ?? '2x8'
+            ),
+          }
+        : {}),
     };
 
     if (prev) {
@@ -767,6 +803,13 @@ export function exportAssetsMachinesBundle(snapshot?: {
           ? { compteur_heures: Number(m.compteur_heures) }
           : {}),
         ...(cleanStr(m.unite_compteur) ? { unite_compteur: cleanStr(m.unite_compteur) } : {}),
+        ...(m.cout_arret_horaire !== undefined && Number.isFinite(Number(m.cout_arret_horaire))
+          ? { cout_arret_horaire: Number(m.cout_arret_horaire) }
+          : {}),
+        ...(m.valeur_acquisition !== undefined && Number.isFinite(Number(m.valeur_acquisition))
+          ? { valeur_acquisition: Number(m.valeur_acquisition) }
+          : {}),
+        ...(cleanStr(m.regime_travail) ? { regime_travail: cleanStr(m.regime_travail) } : {}),
       };
     }),
   };

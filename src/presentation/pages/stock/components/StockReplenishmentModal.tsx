@@ -21,6 +21,14 @@ interface StockReplenishmentModalProps {
   showToast?: (msg: string, type?: string) => void;
 }
 
+interface ReceptionLineDraft {
+  qty: number;
+  prix_unitaire_reel: number;
+  lot_number: string;
+  date_peremption: string;
+  emplacement_reception: string;
+}
+
 export default function StockReplenishmentModal({
   onClose,
   reorderAlerts,
@@ -29,6 +37,7 @@ export default function StockReplenishmentModal({
 }: StockReplenishmentModalProps) {
   const { user } = useAuth();
   const canManageReplenishment = usePermission('stock.edit');
+  const rawStock = useGmaoStore((s) => s.rawStock) || [];
   const replenishmentOrders: IReplenishmentOrder[] = useGmaoStore((s) => s.replenishmentOrders) || [];
   const handleCreateReplenishmentOrder = useGmaoStore((s) => s.handleCreateReplenishmentOrder);
   const handleUpdateReplenishmentOrderStatus = useGmaoStore((s) => s.handleUpdateReplenishmentOrderStatus);
@@ -43,7 +52,7 @@ export default function StockReplenishmentModal({
 
   // Active Reception Modal state
   const [receptionOrder, setReceptionOrder] = useState<IReplenishmentOrder | null>(null);
-  const [receptionItems, setReceptionItems] = useState<Record<string, number>>({});
+  const [receptionItems, setReceptionItems] = useState<Record<string, ReceptionLineDraft>>({});
   const [bonReceptionNum, setBonReceptionNum] = useState('');
 
   // Items eligible for reorder
@@ -674,13 +683,25 @@ export default function StockReplenishmentModal({
                           type="number"
                           min="0"
                           max={remaining}
-                          value={receptionItems[it.ref] ?? remaining}
+                          value={receptionItems[it.ref]?.qty ?? remaining}
                           onChange={(e) => {
-                            const val = Math.max(0, parseInt(e.target.value) || 0);
-                            setReceptionItems((prev) => ({
-                              ...prev,
-                              [it.ref]: val,
-                            }));
+                            const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setReceptionItems((prev) => {
+                              const current = prev[it.ref] || {
+                                qty: remaining,
+                                prix_unitaire_reel: Number(it.prix_unitaire_reel ?? it.prix_unitaire_estime ?? 0),
+                                lot_number: it.lot_number || '',
+                                date_peremption: it.date_peremption || '',
+                                emplacement_reception: it.emplacement_reception || '',
+                              };
+                              return {
+                                ...prev,
+                                [it.ref]: {
+                                  ...current,
+                                  qty: val,
+                                },
+                              };
+                            });
                           }}
                           className="w-16 px-2 py-1 bg-white border border-slate-300 rounded-lg text-center font-mono font-bold text-xs"
                         />

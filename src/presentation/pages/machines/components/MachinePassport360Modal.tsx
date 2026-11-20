@@ -75,18 +75,30 @@ export default function MachinePassport360Modal({
     if (!machine) {
       return {
         machineCode: '',
-        designation: '',
+        windowMonths: 12,
         healthScore: 100,
-        healthStatus: 'OPTIMAL' as const,
+        healthStatus: 'SAIN' as const,
         correctiveCount12m: 0,
         preventiveCount12m: 0,
-        externalCount12m: 0,
+        externalBobinageCount12m: 0,
         correctivePdrCost12m: 0,
         preventiveTotalCost12m: 0,
-        externalTotalCost12m: 0,
+        externalBobinageCost12m: 0,
         totalMaintenanceCost12m: 0,
-        totalDowntimeMinutes12m: 0,
         totalDowntimeHours12m: 0,
+        hourlyDowntimeCost: 0,
+        downtimeProductionLossCost12m: 0,
+        totalEconomicImpact12m: 0,
+        acquisitionValue: 0,
+        berRatioPercent: null,
+        berThresholdPercent: 50,
+        isEconomicBerExceeded: false,
+        regimeTravail: '2x8',
+        monthlyOperatingHours: 352,
+        plannedOperatingHours12m: 4224,
+        availabilityRate12m: 100,
+        mttrHours12m: 0,
+        mtbfHours12m: null,
         recurrentOrganAlerts: [],
       };
     }
@@ -307,25 +319,47 @@ export default function MachinePassport360Modal({
 
           <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Coût Total TCO 12M
+              Coût Maintenance & Impact 12M
             </span>
             <div className="text-base font-black font-mono text-indigo-700 mt-0.5">
               {healthPassport.totalMaintenanceCost12m.toLocaleString('fr-FR')} <span className="text-xs font-sans font-normal text-slate-500">DH</span>
             </div>
+            {healthPassport.downtimeProductionLossCost12m > 0 ? (
+              <div className="text-[10px] font-mono text-rose-700 font-semibold mt-0.5">
+                + {healthPassport.downtimeProductionLossCost12m.toLocaleString('fr-FR')} DH perte arrêt (Total: {healthPassport.totalEconomicImpact12m.toLocaleString('fr-FR')} DH)
+              </div>
+            ) : healthPassport.berRatioPercent !== null ? (
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                Ratio BER : <b className={healthPassport.isEconomicBerExceeded ? 'text-rose-700' : 'text-slate-700'}>{healthPassport.berRatioPercent}%</b> de la valeur à neuf
+              </div>
+            ) : null}
           </div>
 
           <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Heures d'Arrêt (Downtime)
+              Arrêt & Disponibilité ({healthPassport.regimeTravail})
             </span>
-            <div className="text-base font-black font-mono text-amber-700 mt-0.5">
-              {healthPassport.totalDowntimeHours12m} <span className="text-xs font-sans font-normal text-slate-500">heures</span>
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-base font-black font-mono text-amber-700">
+                {healthPassport.totalDowntimeHours12m} <span className="text-xs font-sans font-normal text-slate-500">h</span>
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold text-[10px]">
+                Dispo {healthPassport.availabilityRate12m}%
+              </span>
             </div>
+            {healthPassport.correctiveCount12m > 0 && (
+              <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                MTTR: <b>{healthPassport.mttrHours12m}h</b>
+                {healthPassport.mtbfHours12m !== null && (
+                  <span> • MTBF: <b>{healthPassport.mtbfHours12m}h</b></span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-              Compteur d'Heures
+              Compteur d&apos;Heures
             </span>
             <div className="flex items-center gap-1.5 mt-0.5">
               <Gauge className="w-4 h-4 text-cyan-600 shrink-0" />
@@ -476,17 +510,71 @@ export default function MachinePassport360Modal({
                       {techObj ? `${techObj.nom} (${techObj.id_technician})` : machine.technician || '—'}
                     </span>
                   </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Régime d&apos;Ouverture</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {healthPassport.regimeTravail} ({healthPassport.monthlyOperatingHours} h/mois)
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Coût Horaire d&apos;Arrêt</span>
+                    <span className="font-mono font-semibold text-amber-800">
+                      {healthPassport.hourlyDowntimeCost > 0
+                        ? `${healthPassport.hourlyDowntimeCost.toLocaleString('fr-FR')} DH/h`
+                        : 'Non configuré (0 DH/h)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Valeur d&apos;Acquisition (RAV)</span>
+                    <span className="font-mono font-semibold text-slate-800">
+                      {healthPassport.acquisitionValue > 0
+                        ? `${healthPassport.acquisitionValue.toLocaleString('fr-FR')} DH`
+                        : 'Non renseignée'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 font-bold block">Indice BER Économique (12M)</span>
+                    <span
+                      className={`font-mono font-bold ${
+                        healthPassport.isEconomicBerExceeded
+                          ? 'text-rose-700'
+                          : healthPassport.berRatioPercent !== null
+                          ? 'text-emerald-700'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {healthPassport.berRatioPercent !== null
+                        ? `${healthPassport.berRatioPercent}% (Seuil ${healthPassport.berThresholdPercent}%)`
+                        : '—'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* BER Recurrent Organ Failure Alert Banner if any */}
-              {healthPassport.recurrentOrganAlerts.length > 0 && (
+              {/* Economic BER & Recurrent Organ Failure Alert Banner if any */}
+              {(healthPassport.isEconomicBerExceeded ||
+                healthPassport.recurrentOrganAlerts.length > 0) && (
                 <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
                   <div className="flex items-center gap-2 text-rose-800 font-bold text-xs">
                     <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>Alerte Récurrence d'Organes (Beyond Economical Repair - BER)</span>
+                    <span>Alerte Récurrence &amp; Seuil Économique (Beyond Economical Repair - BER)</span>
                   </div>
                   <div className="space-y-1.5">
+                    {healthPassport.isEconomicBerExceeded && (
+                      <div className="text-xs bg-white/90 p-2.5 rounded-xl border border-rose-300 flex items-start justify-between gap-3">
+                        <div>
+                          <span className="font-bold text-rose-950 block">
+                            Dépassement du Seuil BER Économique ({healthPassport.berRatioPercent}% &ge; {healthPassport.berThresholdPercent}%)
+                          </span>
+                          <span className="text-[11px] text-slate-600">
+                            Le coût cumulé de maintenance sur 12 mois ({healthPassport.totalMaintenanceCost12m.toLocaleString('fr-FR')} DH) dépasse {healthPassport.berThresholdPercent}% de la valeur d&apos;acquisition ({healthPassport.acquisitionValue.toLocaleString('fr-FR')} DH). Évaluer la réforme ou le remplacement de l&apos;équipement.
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded text-[11px] shrink-0">
+                          BER {healthPassport.berRatioPercent}%
+                        </span>
+                      </div>
+                    )}
                     {healthPassport.recurrentOrganAlerts.map((al) => (
                       <div key={al.organKey} className="text-xs bg-white/80 p-2.5 rounded-xl border border-rose-200 flex items-start justify-between gap-3">
                         <div>

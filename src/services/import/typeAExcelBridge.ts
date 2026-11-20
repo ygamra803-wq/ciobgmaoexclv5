@@ -150,6 +150,9 @@ export const TYPE_A_WORKBOOK_SPECS: Record<
           'commissioning_date',
           'compteur_actuel',
           'unite_compteur',
+          'cout_arret_horaire',
+          'valeur_acquisition',
+          'regime_travail',
         ],
       },
     ],
@@ -522,6 +525,15 @@ export function buildTypeAExcelWorkbookBuffer(
           ? Number(m.compteur_actuel)
           : '',
       unite_compteur: cleanCellStr(m.unite_compteur),
+      cout_arret_horaire:
+        m.cout_arret_horaire !== undefined && Number.isFinite(Number(m.cout_arret_horaire))
+          ? Number(m.cout_arret_horaire)
+          : '',
+      valeur_acquisition:
+        m.valeur_acquisition !== undefined && Number.isFinite(Number(m.valeur_acquisition))
+          ? Number(m.valeur_acquisition)
+          : '',
+      regime_travail: cleanCellStr(m.regime_travail),
     }));
 
     appendSheetWithColumns(wb, 'MACHINES', machines, spec.sheets[0].columns);
@@ -1119,6 +1131,13 @@ export function parseTypeAExcelWorkbook(buffer: ArrayBuffer | Uint8Array): Parse
           ? { compteur_actuel: optionalNumberCell(r.compteur_actuel) }
           : {}),
         ...(cleanCellStr(r.unite_compteur) ? { unite_compteur: cleanCellStr(r.unite_compteur) } : {}),
+        ...(optionalNumberCell(r.cout_arret_horaire) !== undefined
+          ? { cout_arret_horaire: optionalNumberCell(r.cout_arret_horaire) }
+          : {}),
+        ...(optionalNumberCell(r.valeur_acquisition) !== undefined
+          ? { valeur_acquisition: optionalNumberCell(r.valeur_acquisition) }
+          : {}),
+        ...(cleanCellStr(r.regime_travail) ? { regime_travail: cleanCellStr(r.regime_travail) } : {}),
       }));
 
     return {

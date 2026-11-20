@@ -417,6 +417,69 @@ export function MachinesRegisteredModals({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-2xl bg-amber-50/40 border border-amber-200/70">
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Coût Arrêt (DH/h)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={toEdit.cout_arret_horaire ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0);
+                      setToEdit({
+                        ...toEdit,
+                        cout_arret_horaire: val,
+                      });
+                    }}
+                    placeholder="Ex: 800 DH/h"
+                    className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Valeur Acquisition (DH)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={toEdit.valeur_acquisition ?? toEdit.valeur_a_neuf ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0);
+                      setToEdit({
+                        ...toEdit,
+                        valeur_acquisition: val,
+                        valeur_a_neuf: val,
+                      });
+                    }}
+                    placeholder="Ex: 150000 (Seuil BER)"
+                    className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                    Régime Travail
+                  </label>
+                  <select
+                    value={toEdit.regime_travail || '2x8'}
+                    onChange={(e) =>
+                      setToEdit({
+                        ...toEdit,
+                        regime_travail: e.target.value,
+                      })
+                    }
+                    className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                  >
+                    <option value="1x8">1x8 (176 h/mois)</option>
+                    <option value="2x8">2x8 (352 h/mois)</option>
+                    <option value="3x8">3x8 (720 h/mois)</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block mb-1">

@@ -309,6 +309,12 @@ export function useAppComplexHandlers({
         existingMachine.id_templates !== finalMachinePayload?.id_templates ||
         existingMachine.id_blueprint !== finalMachinePayload?.id_blueprint ||
         existingMachine.designation !== finalMachinePayload?.designation ||
+        Number(existingMachine.cout_arret_horaire || 0) !==
+          Number(finalMachinePayload?.cout_arret_horaire || 0) ||
+        Number(existingMachine.valeur_acquisition || 0) !==
+          Number(finalMachinePayload?.valeur_acquisition || 0) ||
+        (existingMachine.regime_travail || '2x8') !==
+          (finalMachinePayload?.regime_travail || '2x8') ||
         oldCodeNorm !== newCodeNorm)
     ) {
       appendAuditEvent?.({
@@ -326,6 +332,9 @@ export function useAppComplexHandlers({
           id_family: existingMachine.id_family,
           id_templates: existingMachine.id_templates,
           id_blueprint: existingMachine.id_blueprint,
+          cout_arret_horaire: existingMachine.cout_arret_horaire ?? 0,
+          valeur_acquisition: existingMachine.valeur_acquisition ?? 0,
+          regime_travail: existingMachine.regime_travail ?? '2x8',
         },
         after: {
           id_machine_registered: newId,
@@ -338,6 +347,9 @@ export function useAppComplexHandlers({
           id_family: finalMachinePayload?.id_family,
           id_templates: finalMachinePayload?.id_templates,
           id_blueprint: finalMachinePayload?.id_blueprint,
+          cout_arret_horaire: finalMachinePayload?.cout_arret_horaire ?? 0,
+          valeur_acquisition: finalMachinePayload?.valeur_acquisition ?? 0,
+          regime_travail: finalMachinePayload?.regime_travail ?? '2x8',
         },
       });
     }

@@ -147,6 +147,9 @@ export default function AddMachineModal({
     id_zone_default: zones[0]?.id_zone || zones[0]?.code_zone || '',
     technician: activeTechnicians[0]?.id_technician || '',
     status: 'En Service',
+    cout_arret_horaire: '',
+    valeur_acquisition: '',
+    regime_travail: '2x8',
   });
 
   useEffect(() => {
@@ -175,6 +178,9 @@ export default function AddMachineModal({
         id_zone_default: zones[0]?.id_zone || zones[0]?.code_zone || '',
         technician: activeTechnicians[0]?.id_technician || '',
         status: 'En Service',
+        cout_arret_horaire: '',
+        valeur_acquisition: '',
+        regime_travail: '2x8',
       });
     }
   }, [isOpen]);
@@ -357,6 +363,8 @@ export default function AddMachineModal({
         setFormError('Rattachement hiérarchique invalide : boucle circulaire détectée.');
         return false;
       }
+      const parsedHourlyCost = Math.max(0, Number(form.cout_arret_horaire) || 0);
+      const parsedAcquisitionVal = Math.max(0, Number(form.valeur_acquisition) || 0);
       setIsSubmittingMachine(true);
       onAddMachine({
         id_machine_registered: codeNorm,
@@ -374,6 +382,14 @@ export default function AddMachineModal({
         id_zone_default: form.id_zone_default,
         technician: form.technician,
         status: form.status,
+        cout_arret_horaire: parsedHourlyCost,
+        ...(parsedAcquisitionVal > 0
+          ? {
+              valeur_acquisition: parsedAcquisitionVal,
+              valeur_a_neuf: parsedAcquisitionVal,
+            }
+          : {}),
+        regime_travail: form.regime_travail || '2x8',
       });
 
       onClose();
@@ -632,6 +648,52 @@ export default function AddMachineModal({
             onChange={(e) => setForm({ ...form, date_mise_en_service: e.target.value })}
             className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-emerald-500"
           />
+        </div>
+      </div>
+
+      {/* Paramètres Économiques & Régime de Travail (TCO / BER / Disponibilité) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-2xl bg-amber-50/40 border border-amber-200/70">
+        <div>
+          <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+            Coût Arrêt (DH/h)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={form.cout_arret_horaire}
+            onChange={(e) => setForm({ ...form, cout_arret_horaire: e.target.value })}
+            placeholder="Ex: 800 DH/h"
+            className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+          />
+        </div>
+        <div>
+          <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+            Valeur Acquisition (DH)
+          </label>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={form.valeur_acquisition}
+            onChange={(e) => setForm({ ...form, valeur_acquisition: e.target.value })}
+            placeholder="Ex: 150000 (BER)"
+            className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-mono font-medium focus:outline-none focus:ring-1 focus:ring-amber-500"
+          />
+        </div>
+        <div>
+          <label className="text-[10.5px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+            Régime Travail
+          </label>
+          <select
+            value={form.regime_travail || '2x8'}
+            onChange={(e) => setForm({ ...form, regime_travail: e.target.value })}
+            className="w-full h-9 px-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            <option value="1x8">1x8 (176 h/mois)</option>
+            <option value="2x8">2x8 (352 h/mois)</option>
+            <option value="3x8">3x8 (720 h/mois)</option>
+          </select>
         </div>
       </div>
 

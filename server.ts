@@ -329,6 +329,8 @@ self.addEventListener('activate', (event) => {
         if (vite && vite.middlewares) {
           vite.middlewares(req, res, next);
         } else {
+          res.setHeader('Retry-After', '1');
+          res.setHeader('Cache-Control', 'no-store');
           res.status(503).send('Server initializing, please retry...');
         }
       } catch (err) {

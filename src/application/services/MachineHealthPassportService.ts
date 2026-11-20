@@ -7,7 +7,11 @@
  *    Downtime hours, and Recurrent Component/Organ Failure BER Alerts).
  */
 
-import { extractCorrectiveDowntimeMinutes } from '../../utils/assetHierarchy';
+import {
+  extractCorrectiveDowntimeMinutes,
+  extractCorrectiveRepairMinutes,
+  resolveMonthlyOperatingHours,
+} from '../../utils/assetHierarchy';
 
 export interface PreventiveAnomalyExecutionInput {
   roundStatus?: string;
@@ -58,8 +62,13 @@ export interface PassportCorrectiveInterventionInput {
   submitted_at?: string | null;
   created_at?: string | null;
   temps_arret_minutes?: number | string;
+  temps_arret_machine_min?: number | string;
+  duree_arret_min?: number | string;
   temps_intervention_mins?: number | string;
+  duree_intervention_min?: number | string;
+  temps_reparation_min?: number | string;
   duree_arret_heures?: number | string;
+  temps_arret?: number | string;
   nom_composant?: string;
   id_composant?: string;
   organe?: string;
@@ -217,6 +226,12 @@ export interface PassportMachineInput {
   archived_by?: string;
   updated_by?: string;
   lifecycle_events?: PassportLifecycleEventInput[];
+  cout_arret_horaire?: number | string;
+  valeur_acquisition?: number | string;
+  valeur_a_neuf?: number | string;
+  prix_achat?: number | string;
+  regime_travail?: string;
+  heures_ouverture_mensuelles?: number | string;
 }
 
 const UNAPPROVED_STATUSES = new Set([
@@ -284,6 +299,19 @@ export interface MachineHealthPassport {
   externalBobinageCost12m: number;
   totalMaintenanceCost12m: number;
   totalDowntimeHours12m: number;
+  hourlyDowntimeCost: number;
+  downtimeProductionLossCost12m: number;
+  totalEconomicImpact12m: number;
+  acquisitionValue: number;
+  berRatioPercent: number | null;
+  berThresholdPercent: number;
+  isEconomicBerExceeded: boolean;
+  regimeTravail: string;
+  monthlyOperatingHours: number;
+  plannedOperatingHours12m: number;
+  availabilityRate12m: number;
+  mttrHours12m: number;
+  mtbfHours12m: number | null;
   recurrentOrganAlerts: RecurrentOrganAlert[];
   healthScore: number;
   healthStatus: 'SAIN' | 'SURVEILLANCE' | 'CRITIQUE_BER';
@@ -351,22 +379,29 @@ export function computeMachineHealthPassport(params: {
   preventiveExecutions?: PassportPreventiveExecutionInput[];
   sortiesExterne?: PassportExternalSortieInput[];
   stockItems?: PassportStockItemInput[];
+  rawStock?: PassportStockItemInput[];
+  mouvements?: unknown[];
   referenceDate?: string | Date;
   windowMonths?: number;
   recurrenceWindowDays?: number;
   recurrenceThreshold?: number;
+  berThresholdPercent?: number;
 }): MachineHealthPassport {
   const {
     machine,
     correctiveInterventions = [],
     preventiveExecutions = [],
     sortiesExterne = [],
-    stockItems = [],
+    stockItems,
+    rawStock,
     referenceDate,
     windowMonths = 12,
     recurrenceWindowDays = 60,
     recurrenceThreshold = 3,
+    berThresholdPercent = 50,
   } = params;
+
+  const effectiveStockItems = stockItems ?? rawStock ?? [];
 
   const machineCode = String(
     machine?.id_machine_registered || machine?.id || machine?.code || ''
@@ -381,6 +416,7 @@ export function computeMachineHealthPassport(params: {
   let correctiveCount12m = 0;
   let correctivePdrCost12m = 0;
   let totalDowntimeMinutes12m = 0;
+  let totalRepairMinutes12m = 0;
 
   const byOrgan = new Map<
     string,
@@ -388,14 +424,14 @@ export function computeMachineHealthPassport(params: {
   >();
 
   const stockPriceMap = new Map<string, number>();
-  for (const item of stockItems || []) {
+  for (const item of effectiveStockItems) {
     const ref = String(item?.ref || item?.reference || item?.code_article || '').trim().toUpperCase();
-    const price = Number(item?.prix_unitaire ?? item?.prix_achat_ht ?? item?.prix ?? item?.unitPrice ?? 0);
+    const price = Number(item?.prix_unitaire ?? item?.prixUnitaire ?? item?.prix_achat_ht ?? item?.prix ?? item?.unitPrice ?? 0);
     if (ref && price > 0) stockPriceMap.set(ref, price);
   }
 
   for (const ci of correctiveInterventions || []) {
-    const code = String(ci?.code_machine || ci?.id_machine_registered || '')
+    const code = String(ci?.code_machine || ci?.id_machine_registered || ci?.id_machine || '')
       .trim()
       .toUpperCase();
     if (!code || code !== machineCode) continue;
@@ -420,7 +456,9 @@ export function computeMachineHealthPassport(params: {
     correctivePdrCost12m += cost;
 
     const mins = extractCorrectiveDowntimeMinutes(ci);
+    const repairMins = extractCorrectiveRepairMinutes(ci);
     totalDowntimeMinutes12m += mins;
+    totalRepairMinutes12m += repairMins;
 
     const organRaw = String(
       ci?.nom_composant ||
@@ -451,7 +489,7 @@ export function computeMachineHealthPassport(params: {
   let preventiveTotalCost12m = 0;
 
   for (const ex of preventiveExecutions || []) {
-    const code = String(ex?.machineCode || ex?.id_machine || '')
+    const code = String(ex?.machineCode || ex?.id_machine || ex?.code_machine || '')
       .trim()
       .toUpperCase();
     if (!code || code !== machineCode) continue;
@@ -472,7 +510,7 @@ export function computeMachineHealthPassport(params: {
   let externalBobinageCost12m = 0;
 
   for (const se of sortiesExterne || []) {
-    const code = String(se?.id_machine || se?.code_machine || '')
+    const code = String(se?.id_machine || se?.code_machine || se?.machineCode || '')
       .trim()
       .toUpperCase();
     if (!code || code !== machineCode) continue;
@@ -487,7 +525,8 @@ export function computeMachineHealthPassport(params: {
     if (d && d < cutoff12m) continue;
 
     externalBobinageCount12m += 1;
-    const bobinageCost = Number(se?.cout_bobinage || 0) || 0;
+    const bobinageCost =
+      Number(se?.cout_bobinage ?? se?.cout_reparation ?? se?.cout ?? se?.montant ?? 0) || 0;
     externalBobinageCost12m += bobinageCost;
 
     const motorRaw = String(
@@ -541,20 +580,81 @@ export function computeMachineHealthPassport(params: {
   );
   const totalDowntimeHours12m = Number((totalDowntimeMinutes12m / 60).toFixed(1));
 
+  // Economic Downtime Production Loss & Economic BER Ratio
+  const hourlyDowntimeCost = Math.max(0, Number(machine?.cout_arret_horaire || 0) || 0);
+  const downtimeProductionLossCost12m = Number(
+    (totalDowntimeHours12m * hourlyDowntimeCost).toFixed(2)
+  );
+  const totalEconomicImpact12m = Number(
+    (totalMaintenanceCost12m + downtimeProductionLossCost12m).toFixed(2)
+  );
+
+  const acquisitionValue = Math.max(
+    0,
+    Number(
+      machine?.valeur_acquisition ?? machine?.valeur_a_neuf ?? machine?.prix_achat ?? 0
+    ) || 0
+  );
+  const berRatioPercent =
+    acquisitionValue > 0
+      ? Number(((totalMaintenanceCost12m / acquisitionValue) * 100).toFixed(1))
+      : null;
+  const isEconomicBerExceeded =
+    berRatioPercent !== null && berRatioPercent >= berThresholdPercent;
+
+  // Shift regime & Availability / MTBF / MTTR over the window
+  const rawRegime = String(machine?.regime_travail || '').trim().toLowerCase();
+  const regimeTravail =
+    rawRegime === '1x8' || rawRegime === '2x8' || rawRegime === '3x8' ? rawRegime : '2x8';
+  const monthlyOperatingHours = resolveMonthlyOperatingHours(
+    {
+      regime_travail: regimeTravail,
+      heures_ouverture_mensuelles: machine?.heures_ouverture_mensuelles,
+    },
+    352
+  );
+  const plannedOperatingHours12m = Number((monthlyOperatingHours * windowMonths).toFixed(1));
+  const availableHours12m = Math.max(0, plannedOperatingHours12m - totalDowntimeHours12m);
+  const availabilityRate12m =
+    plannedOperatingHours12m > 0
+      ? Number(
+          Math.max(0, Math.min(100, (availableHours12m / plannedOperatingHours12m) * 100)).toFixed(1)
+        )
+      : 100;
+
+  const totalRepairHours12m = totalRepairMinutes12m / 60;
+  const mttrHours12m =
+    correctiveCount12m > 0
+      ? Number((totalRepairHours12m / correctiveCount12m).toFixed(2))
+      : 0;
+  const mtbfHours12m =
+    correctiveCount12m > 0
+      ? Number((availableHours12m / correctiveCount12m).toFixed(1))
+      : null;
+
   // Compute Health Score (0-100)
   let penalty =
     correctiveCount12m * 8 +
     externalBobinageCount12m * 10 +
     recurrentOrganAlerts.length * 20;
   if (totalDowntimeHours12m > 24) penalty += 15;
+  if (isEconomicBerExceeded) {
+    penalty += 35;
+  } else if (berRatioPercent !== null && berRatioPercent >= berThresholdPercent * 0.7) {
+    penalty += 15;
+  }
   const healthScore = Math.max(10, Math.min(100, 100 - penalty));
 
   const healthStatus: 'SAIN' | 'SURVEILLANCE' | 'CRITIQUE_BER' =
+    isEconomicBerExceeded ||
     recurrentOrganAlerts.some((a) => a.count60d >= recurrenceThreshold) ||
     recurrentOrganAlerts.some((a) => a.recommendation.includes('Rebobinages multiples')) ||
     healthScore < 50
       ? 'CRITIQUE_BER'
-      : recurrentOrganAlerts.length > 0 || correctiveCount12m >= 2 || externalBobinageCount12m >= 1
+      : recurrentOrganAlerts.length > 0 ||
+        correctiveCount12m >= 2 ||
+        externalBobinageCount12m >= 1 ||
+        (berRatioPercent !== null && berRatioPercent >= berThresholdPercent * 0.7)
       ? 'SURVEILLANCE'
       : 'SAIN';
 
@@ -569,6 +669,19 @@ export function computeMachineHealthPassport(params: {
     externalBobinageCost12m: Number(externalBobinageCost12m.toFixed(2)),
     totalMaintenanceCost12m,
     totalDowntimeHours12m,
+    hourlyDowntimeCost,
+    downtimeProductionLossCost12m,
+    totalEconomicImpact12m,
+    acquisitionValue,
+    berRatioPercent,
+    berThresholdPercent,
+    isEconomicBerExceeded,
+    regimeTravail,
+    monthlyOperatingHours,
+    plannedOperatingHours12m,
+    availabilityRate12m,
+    mttrHours12m,
+    mtbfHours12m,
     recurrentOrganAlerts,
     healthScore,
     healthStatus,
