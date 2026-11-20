@@ -755,10 +755,18 @@ export function exportAssetsMachinesBundle(snapshot?: {
         parent_code_machine: cleanStr(m.parent_id) || null,
         asset_level:
           cleanStr(m.asset_level || 'MACHINE').toUpperCase() === 'LINE' ? 'LINE' : 'MACHINE',
+        id_blueprint: cleanStr(m.id_blueprint) || null,
         status: cleanStr(m.status || m.statut || 'En service'),
         is_active: m.is_active !== false && normKey(m.status || m.statut) !== 'ARCHIVEE',
         serial_number: cleanStr(m.serial_number || m.numero_serie),
         commissioning_date: cleanStr(m.date_mise_en_service || m.date_installation),
+        ...(m.compteur_actuel !== undefined && Number.isFinite(Number(m.compteur_actuel))
+          ? { compteur_actuel: Number(m.compteur_actuel) }
+          : {}),
+        ...(m.compteur_heures !== undefined && Number.isFinite(Number(m.compteur_heures))
+          ? { compteur_heures: Number(m.compteur_heures) }
+          : {}),
+        ...(cleanStr(m.unite_compteur) ? { unite_compteur: cleanStr(m.unite_compteur) } : {}),
       };
     }),
   };

@@ -251,18 +251,70 @@ export function createAssetNexusSlice(set: StoreSet, get: StoreGet): AssetNexusS
         id: String(element.id || safeId('BOM')).trim(),
       };
       get().setMachineElementsLedger((prev) => [created, ...(prev || [])]);
+      get().appendAuditEvent?.({
+        actionType: 'MACHINE_BOM_ELEMENT_ADDED',
+        entityType: 'MACHINE',
+        entityId: targetMachKey || String(created.id),
+        before: null,
+        after: {
+          elementId: created.id,
+          element_type: created.element_type,
+          ref_element: created.ref_element || created.id_element,
+          designation: created.designation || created.nom_element,
+          qte_montee: created.qte_montee,
+        },
+      });
     },
 
     updateMachineElement: (id: string, updates: Partial<MachineElement>) => {
+      const existing = (get().machineElementsLedger || []).find(
+        (el) => String(el.id) === String(id)
+      );
       get().setMachineElementsLedger((prev) =>
         (prev || []).map((el) => (String(el.id) === String(id) ? { ...el, ...updates } : el))
       );
+      if (existing) {
+        get().appendAuditEvent?.({
+          actionType: 'MACHINE_BOM_ELEMENT_UPDATED',
+          entityType: 'MACHINE',
+          entityId: String(existing.id_machine_registered || id).trim(),
+          before: {
+            elementId: existing.id,
+            ref_element: existing.ref_element || existing.id_element,
+            qte_montee: existing.qte_montee,
+            statut: existing.statut,
+          },
+          after: {
+            elementId: existing.id,
+            ref_element: updates.ref_element ?? existing.ref_element ?? existing.id_element,
+            qte_montee: updates.qte_montee ?? existing.qte_montee,
+            statut: updates.statut ?? existing.statut,
+          },
+        });
+      }
     },
 
     deleteMachineElement: (id: string) => {
+      const existing = (get().machineElementsLedger || []).find(
+        (el) => String(el.id) === String(id)
+      );
       get().setMachineElementsLedger((prev) =>
         (prev || []).filter((el) => String(el.id) !== String(id))
       );
+      if (existing) {
+        get().appendAuditEvent?.({
+          actionType: 'MACHINE_BOM_ELEMENT_DELETED',
+          entityType: 'MACHINE',
+          entityId: String(existing.id_machine_registered || id).trim(),
+          before: {
+            elementId: existing.id,
+            element_type: existing.element_type,
+            ref_element: existing.ref_element || existing.id_element,
+            designation: existing.designation || existing.nom_element,
+          },
+          after: null,
+        });
+      }
     },
 
     duplicateBOMToTwins: (sourceMachineId: string, targetMachineIds: string[]) => {
@@ -317,6 +369,17 @@ export function createAssetNexusSlice(set: StoreSet, get: StoreGet): AssetNexusS
 
       if (newEntries.length > 0) {
         get().setMachineElementsLedger((prev) => [...newEntries, ...(prev || [])]);
+        get().appendAuditEvent?.({
+          actionType: 'MACHINE_BOM_DUPLICATED_TO_TWINS',
+          entityType: 'MACHINE',
+          entityId: srcKey,
+          before: null,
+          after: {
+            sourceMachineId: srcKey,
+            targetMachineIds,
+            addedElementsCount: newEntries.length,
+          },
+        });
       }
     },
 

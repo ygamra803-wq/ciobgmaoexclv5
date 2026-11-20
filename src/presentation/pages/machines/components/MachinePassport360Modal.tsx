@@ -445,7 +445,7 @@ export default function MachinePassport360Modal({
                   <div>
                     <span className="text-[10px] text-slate-400 font-bold block">N° Série Fabricant</span>
                     <span className="font-mono font-semibold text-slate-800">
-                      {machine.serial_number || machine.numero_serie || `SN-${machineCode}`}
+                      {machine.serial_number || machine.numero_serie || '—'}
                     </span>
                   </div>
                   <div>

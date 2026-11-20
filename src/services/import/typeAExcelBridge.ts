@@ -143,10 +143,13 @@ export const TYPE_A_WORKBOOK_SPECS: Record<
           'code_technician',
           'parent_code_machine',
           'asset_level',
+          'id_blueprint',
           'status',
           'is_active',
           'serial_number',
           'commissioning_date',
+          'compteur_actuel',
+          'unite_compteur',
         ],
       },
     ],
@@ -509,10 +512,16 @@ export function buildTypeAExcelWorkbookBuffer(
       code_technician: cleanCellStr(m.code_technician),
       parent_code_machine: cleanCellStr(m.parent_code_machine),
       asset_level: cleanCellStr(m.asset_level || 'MACHINE'),
+      id_blueprint: cleanCellStr(m.id_blueprint),
       status: cleanCellStr(m.status || 'En service'),
       is_active: m.is_active !== false,
       serial_number: cleanCellStr(m.serial_number),
       commissioning_date: cleanCellStr(m.commissioning_date),
+      compteur_actuel:
+        m.compteur_actuel !== undefined && Number.isFinite(Number(m.compteur_actuel))
+          ? Number(m.compteur_actuel)
+          : '',
+      unite_compteur: cleanCellStr(m.unite_compteur),
     }));
 
     appendSheetWithColumns(wb, 'MACHINES', machines, spec.sheets[0].columns);
@@ -1101,10 +1110,15 @@ export function parseTypeAExcelWorkbook(buffer: ArrayBuffer | Uint8Array): Parse
         code_technician: nullableCellStr(r.code_technician),
         parent_code_machine: nullableCellStr(r.parent_code_machine),
         asset_level: cleanCellStr(r.asset_level) || 'MACHINE',
+        id_blueprint: nullableCellStr(r.id_blueprint),
         status: cleanCellStr(r.status) || 'En service',
         is_active: parseExcelBoolean(r.is_active, true),
         serial_number: cleanCellStr(r.serial_number),
         commissioning_date: cleanCellStr(r.commissioning_date),
+        ...(optionalNumberCell(r.compteur_actuel) !== undefined
+          ? { compteur_actuel: optionalNumberCell(r.compteur_actuel) }
+          : {}),
+        ...(cleanCellStr(r.unite_compteur) ? { unite_compteur: cleanCellStr(r.unite_compteur) } : {}),
       }));
 
     return {

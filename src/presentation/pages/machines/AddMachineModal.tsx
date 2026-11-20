@@ -140,7 +140,7 @@ export default function AddMachineModal({
     id_machine_registered: '',
     designation: '',
     serial_number: '',
-    date_mise_en_service: new Date().toISOString().slice(0, 10),
+    date_mise_en_service: '',
     id_family: families[0]?.id_family || '',
     id_templates: templates[0]?.id_templates || '',
     id_blueprint: '',
@@ -167,8 +167,8 @@ export default function AddMachineModal({
         id_general_system_type: activeSystemTypes[0]?.id || '',
         id_machine_registered: autoCode,
         designation: '',
-        serial_number: `SN-${new Date().getFullYear()}-${autoCode.replace(/[^A-Z0-9]/g, '')}`,
-        date_mise_en_service: new Date().toISOString().slice(0, 10),
+        serial_number: '',
+        date_mise_en_service: '',
         id_family: initialFam,
         id_templates: initialTpl,
         id_blueprint: '',
@@ -361,10 +361,8 @@ export default function AddMachineModal({
       onAddMachine({
         id_machine_registered: codeNorm,
         designation: form.designation.trim(),
-        serial_number:
-          form.serial_number?.trim() ||
-          `SN-${new Date().getFullYear()}-${codeNorm.replace(/[^A-Z0-9]/g, '')}`,
-        date_mise_en_service: form.date_mise_en_service || new Date().toISOString().slice(0, 10),
+        serial_number: form.serial_number?.trim() || '',
+        date_mise_en_service: form.date_mise_en_service || '',
         asset_class: 'PRODUCTION',
         asset_level: form.asset_level || 'MACHINE',
         parent_id: cleanParent,

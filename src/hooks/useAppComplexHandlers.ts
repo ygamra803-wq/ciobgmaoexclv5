@@ -40,6 +40,7 @@ export function useAppComplexHandlers({
   warehouseItems = [],
   setWarehouseItems,
   blueprints = [],
+  setBlueprints,
   sortiesExterne = [],
   setSortiesExterne,
   sortieDemands = [],
@@ -48,10 +49,13 @@ export function useAppComplexHandlers({
   setPreventiveTasks,
   preventiveExecutions = [],
   setPreventiveExecutions,
+  meterReadings = [],
+  setMeterReadings,
   correctiveInterventions = [],
   setCorrectiveInterventions,
   machineElementsLedger = [],
   setMachineElementsLedger,
+  appendAuditEvent,
   showToast,
   setCurrentTab,
 }: Record<string, any>) {
@@ -126,6 +130,16 @@ export function useAppComplexHandlers({
       );
       return;
     }
+    setZones((prev) =>
+      (prev || []).filter((z) => !matchesZone(z?.id_zone) && !matchesZone(z?.code_zone || z?.code))
+    );
+    appendAuditEvent?.({
+      actionType: 'ZONE_DELETED',
+      entityType: 'ZONE',
+      entityId: String(targetZone?.id_zone || id || '').trim(),
+      before: targetZone || { id_zone: id },
+      after: null,
+    });
     showToast?.(`Zone ${id} supprimée.`, 'info');
   };
 
@@ -255,9 +269,78 @@ export function useAppComplexHandlers({
       }
     }
 
-    setMachines((prev) =>
-      prev.map((m) => (m.id_machine_registered === id ? finalMachinePayload : m))
-    );
+    setMachines((prev) => {
+      const parentArchiveTriggered = targetArchived && !wasArchived;
+      return (prev || []).map((m) => {
+        const mCodeNorm = String(m?.id_machine_registered || m?.id || '').trim().toUpperCase();
+        if (mCodeNorm === oldCodeNorm || m.id_machine_registered === id) {
+          return finalMachinePayload;
+        }
+        const mParentNorm = String(m?.parent_id ?? m?.id_parent ?? '').trim().toUpperCase();
+        if (!mParentNorm || mParentNorm !== oldCodeNorm) {
+          return m;
+        }
+        if (parentArchiveTriggered && !isArchivedMachine(m)) {
+          return {
+            ...m,
+            previous_parent_id: m.previous_parent_id || oldCodeNorm,
+            parent_id: null,
+            id_parent: null,
+          };
+        }
+        if (oldCodeNorm && newCodeNorm && oldCodeNorm !== newCodeNorm) {
+          return {
+            ...m,
+            parent_id: newCodeNorm,
+            id_parent: newCodeNorm,
+          };
+        }
+        return m;
+      });
+    });
+
+    if (
+      existingMachine &&
+      (statusOrLifecycleChanged ||
+        existingMachine.id_zone_default !== finalMachinePayload?.id_zone_default ||
+        existingMachine.technician !== finalMachinePayload?.technician ||
+        existingMachine.parent_id !== finalMachinePayload?.parent_id ||
+        existingMachine.id_family !== finalMachinePayload?.id_family ||
+        existingMachine.id_templates !== finalMachinePayload?.id_templates ||
+        existingMachine.id_blueprint !== finalMachinePayload?.id_blueprint ||
+        existingMachine.designation !== finalMachinePayload?.designation ||
+        oldCodeNorm !== newCodeNorm)
+    ) {
+      appendAuditEvent?.({
+        actionType: 'MACHINE_UPDATED',
+        entityType: 'MACHINE',
+        entityId: String(newId || id || '').trim(),
+        before: {
+          id_machine_registered: existingMachine.id_machine_registered,
+          designation: existingMachine.designation,
+          status: existingMachine.status ?? existingMachine.statut,
+          is_active: existingMachine.is_active,
+          id_zone_default: existingMachine.id_zone_default,
+          technician: existingMachine.technician,
+          parent_id: existingMachine.parent_id ?? null,
+          id_family: existingMachine.id_family,
+          id_templates: existingMachine.id_templates,
+          id_blueprint: existingMachine.id_blueprint,
+        },
+        after: {
+          id_machine_registered: newId,
+          designation: finalMachinePayload?.designation,
+          status: finalMachinePayload?.status ?? finalMachinePayload?.statut,
+          is_active: finalMachinePayload?.is_active,
+          id_zone_default: finalMachinePayload?.id_zone_default,
+          technician: finalMachinePayload?.technician,
+          parent_id: finalMachinePayload?.parent_id ?? null,
+          id_family: finalMachinePayload?.id_family,
+          id_templates: finalMachinePayload?.id_templates,
+          id_blueprint: finalMachinePayload?.id_blueprint,
+        },
+      });
+    }
 
     if (oldCodeNorm && newCodeNorm && oldCodeNorm !== newCodeNorm) {
       const matchesOldMachine = (val: unknown) =>
@@ -300,6 +383,19 @@ export function useAppComplexHandlers({
                 ...(newName && ex?.machineName ? { machineName: newName } : {}),
               }
             : ex
+        )
+      );
+
+      setMeterReadings?.((prev) =>
+        (prev || []).map((r) =>
+          matchesOldMachine(r?.machineId || r?.id_machine || r?.id_machine_registered)
+            ? {
+                ...r,
+                machineId: newId,
+                ...(r?.id_machine !== undefined ? { id_machine: newId } : {}),
+                ...(newName ? { machineDesignation: newName } : {}),
+              }
+            : r
         )
       );
 
@@ -406,20 +502,30 @@ export function useAppComplexHandlers({
 
       const archiveReason = `Archivage automatique (historique protégé : ${parts.join(', ')})`;
 
-      // Soft-archive machine + record lifecycle event to preserve Preventive / Corrective / Movements / External history
+      // Soft-archive machine + detach active child pointers + preserve history
       setMachines((prev) =>
-        prev.map((m) => {
-          if (m.id_machine_registered !== id && String(m.id_machine_registered || '').trim().toUpperCase() !== targetCodeNorm) {
-            return m;
+        (prev || []).map((m) => {
+          const mCodeNorm = String(m?.id_machine_registered || m?.id || '').trim().toUpperCase();
+          if (m.id_machine_registered === id || mCodeNorm === targetCodeNorm) {
+            const { updatedMachine } = transitionMachineLifecycle({
+              machine: m,
+              targetStatus: 'ARCHIVEE',
+              preventiveTasks,
+              timestamp: archiveTimestamp,
+              reason: archiveReason,
+            });
+            return updatedMachine;
           }
-          const { updatedMachine } = transitionMachineLifecycle({
-            machine: m,
-            targetStatus: 'ARCHIVEE',
-            preventiveTasks,
-            timestamp: archiveTimestamp,
-            reason: archiveReason,
-          });
-          return updatedMachine;
+          const parentNorm = String(m?.parent_id ?? m?.id_parent ?? '').trim().toUpperCase();
+          if (parentNorm === targetCodeNorm && !isArchivedMachine(m)) {
+            return {
+              ...m,
+              previous_parent_id: m.previous_parent_id || targetCodeNorm,
+              parent_id: null,
+              id_parent: null,
+            };
+          }
+          return m;
         })
       );
 
@@ -439,14 +545,24 @@ export function useAppComplexHandlers({
       });
 
       showToast?.(
-        `Machine ${id} archivée (et ses gammes suspendues) car liée à : ${parts.join(', ')}. L'historique est préservé.`,
+        `Machine ${id} archivée (et ses gammes suspendues${parentPolicy.hasActiveChildren ? `, ${parentPolicy.activeChildrenIds.length} enfant(s) détaché(s)` : ''}) car liée à : ${parts.join(', ')}. L'historique est préservé.`,
         'info'
       );
       return;
     }
 
     // No dependencies → hard delete
+    const targetToDelete = (activeMachines || []).find((m) => m.id_machine_registered === id) || {
+      id_machine_registered: id,
+    };
     setMachines((prev) => prev.filter((m) => m.id_machine_registered !== id));
+    appendAuditEvent?.({
+      actionType: 'MACHINE_DELETED',
+      entityType: 'MACHINE',
+      entityId: String(id || '').trim(),
+      before: targetToDelete,
+      after: null,
+    });
     showToast?.(`Machine ${id} supprimée définitivement.`, 'success');
   };
 
@@ -594,7 +710,19 @@ export function useAppComplexHandlers({
       setMachines((prev) =>
         prev.map((m) => (m.id_family === id ? { ...m, id_family: updatedFamily.id_family } : m))
       );
+      setBlueprints?.((prev) =>
+        (prev || []).map((b) =>
+          b.id_family === id ? { ...b, id_family: updatedFamily.id_family } : b
+        )
+      );
     }
+    appendAuditEvent?.({
+      actionType: 'FAMILY_UPDATED',
+      entityType: 'MACHINE_FAMILY',
+      entityId: String(updatedFamily?.id_family || id || '').trim(),
+      before: { id_family: id },
+      after: updatedFamily,
+    });
   };
   const handleDeleteFamily = (id) => {
     const linkedTemplates = (templates || []).filter((t) => t.id_family === id).length;
@@ -608,6 +736,13 @@ export function useAppComplexHandlers({
       return;
     }
     setFamilies((prev) => prev.filter((f) => f.id_family !== id));
+    appendAuditEvent?.({
+      actionType: 'FAMILY_DELETED',
+      entityType: 'MACHINE_FAMILY',
+      entityId: String(id || '').trim(),
+      before: { id_family: id },
+      after: null,
+    });
     showToast?.(`Famille "${id}" supprimée.`, 'info');
   };
 
@@ -842,7 +977,25 @@ export function useAppComplexHandlers({
           m.id_templates === id ? { ...m, id_templates: updatedTpl.id_templates } : m
         )
       );
+      setBlueprints?.((prev) =>
+        (prev || []).map((b) =>
+          b.id_templates === id || b.id_template === id
+            ? {
+                ...b,
+                id_templates: updatedTpl.id_templates,
+                ...(b.id_template !== undefined ? { id_template: updatedTpl.id_templates } : {}),
+              }
+            : b
+        )
+      );
     }
+    appendAuditEvent?.({
+      actionType: 'TEMPLATE_UPDATED',
+      entityType: 'MACHINE_TEMPLATE',
+      entityId: String(updatedTpl?.id_templates || id || '').trim(),
+      before: { id_templates: id },
+      after: updatedTpl,
+    });
   };
   const handleDeleteTemplate = (id) => {
     const linkedMachines = (machines || []).filter(
@@ -859,6 +1012,13 @@ export function useAppComplexHandlers({
       return;
     }
     setTemplates((prev) => prev.filter((t) => t.id_templates !== id));
+    appendAuditEvent?.({
+      actionType: 'TEMPLATE_DELETED',
+      entityType: 'MACHINE_TEMPLATE',
+      entityId: String(id || '').trim(),
+      before: { id_templates: id },
+      after: null,
+    });
     showToast?.(`Modèle "${id}" supprimé.`, 'info');
   };
 
@@ -996,6 +1156,21 @@ export function useAppComplexHandlers({
     const service = new MachineApplicationService();
     const saved = await service.createMachine(newMch);
     setMachines((prev) => [...prev, saved]);
+    appendAuditEvent?.({
+      actionType: 'MACHINE_CREATED',
+      entityType: 'MACHINE',
+      entityId: String(saved?.id_machine_registered || codeNorm || '').trim(),
+      before: null,
+      after: {
+        id_machine_registered: saved?.id_machine_registered,
+        designation: saved?.designation,
+        id_zone_default: saved?.id_zone_default,
+        id_family: saved?.id_family,
+        id_templates: saved?.id_templates,
+        id_blueprint: saved?.id_blueprint,
+        status: saved?.status,
+      },
+    });
     showToast?.(`Machine "${saved.id_machine_registered}" enregistrée avec succès !`, 'success');
   };
 

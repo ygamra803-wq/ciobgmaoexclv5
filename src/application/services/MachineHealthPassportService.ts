@@ -7,6 +7,8 @@
  *    Downtime hours, and Recurrent Component/Organ Failure BER Alerts).
  */
 
+import { extractCorrectiveDowntimeMinutes } from '../../utils/assetHierarchy';
+
 export interface PreventiveAnomalyExecutionInput {
   roundStatus?: string;
   etat_ronde?: string;
@@ -417,12 +419,7 @@ export function computeMachineHealthPassport(params: {
     const cost = computeOfficialCorrectiveBtCost(ci, stockPriceMap);
     correctivePdrCost12m += cost;
 
-    const mins =
-      Number(
-        ci?.temps_arret_minutes ??
-          ci?.temps_intervention_mins ??
-          (ci?.duree_arret_heures ? Number(ci.duree_arret_heures) * 60 : 0)
-      ) || 0;
+    const mins = extractCorrectiveDowntimeMinutes(ci);
     totalDowntimeMinutes12m += mins;
 
     const organRaw = String(

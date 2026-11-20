@@ -715,6 +715,7 @@ export function useAppRouterProps({
       templates: {
         templates: effectiveTemplates,
         families: effectiveFamilies,
+        blueprints,
         machines,
         search: filters.whSearch,
         setSearch: filters.setWhSearch,
@@ -762,6 +763,7 @@ export function useAppRouterProps({
         onNavigateToFamily: navigation.handleNavigateToFamilyFiltered,
         onNavigateToTemplate: navigation.handleNavigateToTemplatesFiltered,
         onNavigateToTab: navigateTo,
+        showToast: resolvedShowToast,
       },
 
       zones: {

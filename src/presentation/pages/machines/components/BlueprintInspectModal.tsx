@@ -125,6 +125,7 @@ export interface BlueprintInspectModalProps {
   onUpdateBlueprint: (id: string, updated: BlueprintRecord) => void;
   newCommonFailureItem: BlueprintCommonFailureDraft;
   setNewCommonFailureItem: React.Dispatch<React.SetStateAction<BlueprintCommonFailureDraft>>;
+  canEdit?: boolean;
 }
 
 export function BlueprintInspectModal({
@@ -144,6 +145,7 @@ export function BlueprintInspectModal({
   onUpdateBlueprint,
   newCommonFailureItem,
   setNewCommonFailureItem,
+  canEdit = true,
 }: BlueprintInspectModalProps) {
   if (!selectedInspectBlueprint) return null;
 
@@ -446,15 +448,17 @@ export function BlueprintInspectModal({
                       Gamme préventive standard associée au modèle ({activeLinkedMachines.length} machine(s) active(s) sur {totalLinkedMachines.length} liée(s)).
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    disabled={currentItems.length === 0 || activeLinkedMachines.length === 0}
-                    onClick={() => handleTriggerApplyPreventivePlan(selectedInspectBlueprint)}
-                    className="h-8 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Appliquer aux machines actives liées ({activeLinkedMachines.length})</span>
-                  </button>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      disabled={currentItems.length === 0 || activeLinkedMachines.length === 0}
+                      onClick={() => handleTriggerApplyPreventivePlan(selectedInspectBlueprint)}
+                      className="h-8 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Appliquer aux machines actives liées ({activeLinkedMachines.length})</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* 3-KPI Summary Strip for Blueprint Preventive Status */}
@@ -494,6 +498,7 @@ export function BlueprintInspectModal({
                 )}
 
                 {/* Add Preventive Plan Item Row */}
+                {canEdit && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                     <input
@@ -625,6 +630,7 @@ export function BlueprintInspectModal({
                     </button>
                   </div>
                 </div>
+                )}
 
                 {/* Items List */}
                 {currentItems.length > 0 ? (
@@ -660,22 +666,24 @@ export function BlueprintInspectModal({
                             <p className="text-[11px] text-slate-500 mt-1 truncate">{item.description}</p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextItems = currentItems.filter((_, i) => i !== idx);
-                            const updatedBp: BlueprintRecord = {
-                              ...selectedInspectBlueprint,
-                              preventivePlanItems: nextItems,
-                            };
-                            setSelectedInspectBlueprint(updatedBp);
-                            onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
-                          }}
-                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
-                          title="Supprimer cet élément du plan"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextItems = currentItems.filter((_, i) => i !== idx);
+                              const updatedBp: BlueprintRecord = {
+                                ...selectedInspectBlueprint,
+                                preventivePlanItems: nextItems,
+                              };
+                              setSelectedInspectBlueprint(updatedBp);
+                              onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                            }}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
+                            title="Supprimer cet élément du plan"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -707,6 +715,7 @@ export function BlueprintInspectModal({
                 </div>
 
                 {/* Add Common Failure Row */}
+                {canEdit && (
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                     <input
@@ -825,6 +834,7 @@ export function BlueprintInspectModal({
                     </button>
                   </div>
                 </div>
+                )}
 
                 {/* Failures List */}
                 {currentFailures.length > 0 ? (
@@ -865,22 +875,24 @@ export function BlueprintInspectModal({
                             </p>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const nextFailures = currentFailures.filter((_, i) => i !== idx);
-                            const updatedBp: BlueprintRecord = {
-                              ...selectedInspectBlueprint,
-                              commonFailures: nextFailures,
-                            };
-                            setSelectedInspectBlueprint(updatedBp);
-                            onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
-                          }}
-                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
-                          title="Supprimer cette panne fréquente"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextFailures = currentFailures.filter((_, i) => i !== idx);
+                              const updatedBp: BlueprintRecord = {
+                                ...selectedInspectBlueprint,
+                                commonFailures: nextFailures,
+                              };
+                              setSelectedInspectBlueprint(updatedBp);
+                              onUpdateBlueprint(updatedBp.id_blueprint, updatedBp);
+                            }}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition shrink-0"
+                            title="Supprimer cette panne fréquente"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

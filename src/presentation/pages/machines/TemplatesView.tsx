@@ -1,10 +1,12 @@
 import {  useState, useRef, useMemo, useEffect  } from 'react';
+import * as XLSX from 'xlsx';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import CustomSelect from '../../components/common/CustomSelect';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { usePermission } from '../../components/common/PermissionGate';
 import { HubIcon } from '../../components/common/icons/HubIcon';
 import { CategoryIcon } from '../../components/common/icons/CategoryIcon';
 import {
@@ -32,6 +34,7 @@ import { useI18n } from '../../../i18n/I18nContext';
 export default function TemplatesView({
   templates,
   families,
+  blueprints = [],
   machines,
   templateFamilyFilter,
   setTemplateFamilyFilter,
@@ -47,6 +50,9 @@ export default function TemplatesView({
   onQuickCreateBlueprint,
 }) {
   const { t } = useI18n();
+  const canCreate = usePermission('machine.create');
+  const canEdit = usePermission('machine.edit');
+  const canDelete = usePermission('machine.delete');
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -64,19 +70,36 @@ export default function TemplatesView({
     libelle: '',
     id_family: families[0]?.id_family || '',
   });
+  const [formError, setFormError] = useState('');
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
   useEffect(() => {
     if (quickCreateTemplateFamily) {
+      const famUpper = String(quickCreateTemplateFamily).trim().toUpperCase();
+      const baseCode = `TPL-${famUpper}`;
+      const existingCodes = new Set(
+        (templates || []).map((tpl) => String(tpl?.id_templates || '').trim().toUpperCase())
+      );
+      let candidate = baseCode;
+      if (existingCodes.has(candidate)) {
+        let suffix = 2;
+        while (existingCodes.has(`${baseCode}-${String(suffix).padStart(2, '0')}`)) {
+          suffix += 1;
+        }
+        candidate = `${baseCode}-${String(suffix).padStart(2, '0')}`;
+      }
+      setFormError('');
       setForm((prev) => ({
         ...prev,
         id_family: quickCreateTemplateFamily,
-        id_templates: prev.id_templates || `TPL-${String(quickCreateTemplateFamily).toUpperCase()}`,
+        id_templates: prev.id_templates && !existingCodes.has(prev.id_templates.trim().toUpperCase())
+          ? prev.id_templates
+          : candidate,
       }));
       setShowAddModal(true);
     }
-  }, [quickCreateTemplateFamily]);
+  }, [quickCreateTemplateFamily, templates]);
 
   const filtered = templates.filter((t) => {
     if (templateFamilyFilter !== 'ALL' && t.id_family !== templateFamilyFilter) return false;
@@ -203,6 +226,7 @@ export default function TemplatesView({
 
   const handleCloseAddModal = () => {
     setShowAddModal(false);
+    setFormError('');
     if (quickCreateTemplateFamily && setQuickCreateTemplateFamily) {
       setQuickCreateTemplateFamily(null);
     }
@@ -210,8 +234,19 @@ export default function TemplatesView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.id_templates || !form.libelle || !form.id_family) return;
-    onAddTemplate(form);
+    if (!canCreate) return;
+    const codeNorm = String(form.id_templates || '').trim().toUpperCase();
+    const labelClean = String(form.libelle || '').trim();
+    if (!codeNorm || !labelClean || !form.id_family) return;
+    const isDuplicate = (templates || []).some(
+      (tpl) => String(tpl?.id_templates || '').trim().toUpperCase() === codeNorm
+    );
+    if (isDuplicate) {
+      setFormError(`Le code template "${codeNorm}" existe déjà.`);
+      return;
+    }
+    setFormError('');
+    onAddTemplate({ ...form, id_templates: codeNorm, libelle: labelClean });
     setForm({ id_templates: '', libelle: '', id_family: families[0]?.id_family || '' });
     setShowAddModal(false);
     if (quickCreateTemplateFamily && setQuickCreateTemplateFamily) {
@@ -220,30 +255,30 @@ export default function TemplatesView({
   };
 
   const handleExportExcel = () => {
-    const headers = [
-      t('machines.template.col_id', 'ID Template'),
-      t('machines.template.col_libelle', 'Désignation'),
-      t('machines.template.col_family', 'Famille Parente'),
-      t('machines.template.col_blueprints', 'Nb Blueprints'),
-      t('machines.template.col_machines', 'Nb Machines'),
-    ];
-    const rows = filtered.map((t) => [
-      t.id_templates || '',
-      t.libelle || '',
-      t.familyLibelle ? `${t.familyLibelle} (${t.id_family})` : t.id_family || '',
-      t.blueprintCount ?? 0,
-      t.machineCount ?? 0,
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `templates_machines_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const safeBlueprints = Array.isArray(blueprints) ? blueprints : [];
+    const safeMachines = Array.isArray(machines) ? machines : [];
+    const safeFamilies = Array.isArray(families) ? families : [];
+    const exportRows = filtered.map((tItem, idx) => {
+      const fam = safeFamilies.find((f) => f.id_family === tItem.id_family);
+      return {
+        'N°': idx + 1,
+        [t('machines.template.col_id', 'ID Template')]: tItem.id_templates || '',
+        [t('machines.template.col_libelle', 'Désignation')]: tItem.libelle || '',
+        [t('machines.template.col_family', 'Famille Parente')]: fam?.libelle
+          ? `${fam.libelle} (${tItem.id_family})`
+          : tItem.id_family || '',
+        [t('machines.template.col_blueprints', 'Nb Blueprints')]: safeBlueprints.filter(
+          (bp) => bp.id_templates === tItem.id_templates
+        ).length,
+        [t('machines.template.col_machines', 'Nb Machines')]: safeMachines.filter(
+          (m) => m.id_templates === tItem.id_templates
+        ).length,
+      };
+    });
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Templates_Machines');
+    XLSX.writeFile(wb, `templates_machines_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -271,17 +306,20 @@ export default function TemplatesView({
             title={t('machines.template.formulas_button', 'Formules Excel (Templates de Machines)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="amber"
-            icon={CategoryIcon}
-            showAddBadge={true}
-            onClick={() => {
-              setForm({ id_templates: '', libelle: '', id_family: families[0]?.id_family || '' });
-              setShowAddModal(true);
-            }}
-            title={t('machines.template.new_template_button', 'Nouveau Template')}
-          />
+          {canCreate && (
+            <Action3DButton
+              variant="circle"
+              color="amber"
+              icon={CategoryIcon}
+              showAddBadge={true}
+              onClick={() => {
+                setFormError('');
+                setForm({ id_templates: '', libelle: '', id_family: families[0]?.id_family || '' });
+                setShowAddModal(true);
+              }}
+              title={t('machines.template.new_template_button', 'Nouveau Template')}
+            />
+          )}
         </div>
       </div>
 
@@ -624,20 +662,22 @@ export default function TemplatesView({
               <td className="py-3 px-3.5 text-center whitespace-nowrap">
                 <div className="relative inline-flex items-center justify-center action-menu-container">
                   <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onQuickCreateBlueprint) {
-                          onQuickCreateBlueprint(tItem.id_family, tItem.id_templates);
-                        } else if (onNavigateToBlueprints) {
-                          onNavigateToBlueprints(tItem.id_family, tItem.id_templates);
-                        }
-                        setActiveActionMenuId(null);
-                      }}
-                      className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
-                    >
-                      <BlueprintPlusIcon className="w-3.5 h-3.5 text-slate-900" />
-                    </button>
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onQuickCreateBlueprint) {
+                            onQuickCreateBlueprint(tItem.id_family, tItem.id_templates);
+                          } else if (onNavigateToBlueprints) {
+                            onNavigateToBlueprints(tItem.id_family, tItem.id_templates);
+                          }
+                          setActiveActionMenuId(null);
+                        }}
+                        className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
+                      >
+                        <BlueprintPlusIcon className="w-3.5 h-3.5 text-slate-900" />
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -665,21 +705,23 @@ export default function TemplatesView({
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          if (onQuickCreateBlueprint) {
-                            onQuickCreateBlueprint(tItem.id_family, tItem.id_templates);
-                          } else if (onNavigateToBlueprints) {
-                            onNavigateToBlueprints(tItem.id_family, tItem.id_templates);
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <BlueprintPlusIcon className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{t('machines.blueprint.new_blueprint_button')} ({tItem.id_templates})</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            if (onQuickCreateBlueprint) {
+                              onQuickCreateBlueprint(tItem.id_family, tItem.id_templates);
+                            } else if (onNavigateToBlueprints) {
+                              onNavigateToBlueprints(tItem.id_family, tItem.id_templates);
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <BlueprintPlusIcon className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>{t('machines.blueprint.new_blueprint_button')} ({tItem.id_templates})</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -705,31 +747,35 @@ export default function TemplatesView({
                         <span>{t('machines.template.col_machines')} ({mCount})</span>
                       </button>
 
-                      <div className="my-1 border-t border-slate-100" />
+                      {(canEdit || canDelete) && <div className="my-1 border-t border-slate-100" />}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          setToEdit({ ...tItem });
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 text-slate-600" />
-                        <span>{t('machines.template.edit_title')}</span>
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            setToEdit({ ...tItem });
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-slate-600" />
+                          <span>{t('machines.template.edit_title')}</span>
+                        </button>
+                      )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          setToDelete(tItem);
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                        <span>{t('machines.template.delete_title')}</span>
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            setToDelete(tItem);
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          <span>{t('machines.template.delete_title')}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -759,6 +805,11 @@ export default function TemplatesView({
               {t('machines.template.add_desc')}
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {formError}
+                </div>
+              )}
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
                   {t('machines.template.code_label')}
@@ -767,7 +818,10 @@ export default function TemplatesView({
                   type="text"
                   placeholder="TPL-HYD200"
                   value={form.id_templates}
-                  onChange={(e) => setForm({ ...form, id_templates: e.target.value })}
+                  onChange={(e) => {
+                    setFormError('');
+                    setForm({ ...form, id_templates: e.target.value });
+                  }}
                   className="mt-1 w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-mono font-bold uppercase"
                   required
                 />

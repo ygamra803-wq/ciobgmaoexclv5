@@ -236,10 +236,14 @@ export interface AssetsMachineRow {
   code_technician?: string | null;
   parent_code_machine?: string | null;
   asset_level?: 'MACHINE' | 'LINE' | string;
+  id_blueprint?: string | null;
   status?: MachineStatus | string;
   is_active?: boolean;
   serial_number?: string;
   commissioning_date?: string;
+  compteur_actuel?: number;
+  compteur_heures?: number;
+  unite_compteur?: string;
   notes?: string;
   [key: string]: unknown;
 }

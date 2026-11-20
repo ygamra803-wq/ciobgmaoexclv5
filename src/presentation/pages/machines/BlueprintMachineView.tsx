@@ -1,9 +1,11 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import CustomSelect from '../../components/common/CustomSelect';
+import { usePermission } from '../../components/common/PermissionGate';
 import {
   FingerprintPattern,
   Layers,
@@ -117,6 +119,7 @@ export interface BlueprintMachineViewProps {
   onNavigateToFamily?: (familyId: string) => void;
   onNavigateToTemplate?: (templateId: string) => void;
   onNavigateToTab?: (tabId: string, params?: Record<string, unknown>) => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export default function BlueprintMachineView({
@@ -149,8 +152,12 @@ export default function BlueprintMachineView({
   onNavigateToFamily: _onNavigateToFamily = () => {},
   onNavigateToTemplate: _onNavigateToTemplate = () => {},
   onNavigateToTab = () => {},
+  showToast,
 }: BlueprintMachineViewProps) {
   const { t } = useI18n();
+  const canCreate = usePermission('machine.create');
+  const canEdit = usePermission('machine.edit');
+  const canDelete = usePermission('machine.delete');
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -222,6 +229,7 @@ export default function BlueprintMachineView({
     pdr_ref: '',
   });
   const [applyFeedback, setApplyFeedback] = useState<BlueprintApplyFeedback | null>(null);
+  const [formError, setFormError] = useState('');
 
   // Taken blueprint numbers for SequentialCodePicker
   const takenBlueprintNumbers = useMemo(() => {
@@ -426,6 +434,8 @@ export default function BlueprintMachineView({
   const handleCloseModal = () => {
     setShowAddModal(false);
     setToEdit(null);
+    setFormError('');
+    setApplyFeedback(null);
     if (quickCreateBlueprintPreset && setQuickCreateBlueprintPreset) {
       setQuickCreateBlueprintPreset(null);
     }
@@ -433,6 +443,9 @@ export default function BlueprintMachineView({
 
   // Open Add Modal
   const handleOpenAddModal = () => {
+    if (!canCreate) return;
+    setFormError('');
+    setApplyFeedback(null);
     setForm({
       ...initialFormState,
       id_blueprint: autoNextBlueprintId,
@@ -445,6 +458,8 @@ export default function BlueprintMachineView({
 
   // Open Edit Modal
   const handleOpenEditModal = (bp: BlueprintRecord) => {
+    if (!canEdit) return;
+    setFormError('');
     setApplyFeedback(null);
     setToEdit({
       ...bp,
@@ -467,9 +482,23 @@ export default function BlueprintMachineView({
   // Submit Add
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!form.id_blueprint || !form.libelle) return;
+    if (!canCreate) return;
+    const codeNorm = String(form.id_blueprint || '').trim().toUpperCase();
+    if (!codeNorm || !form.libelle?.trim()) return;
+    const isDuplicate = blueprints.some(
+      (b) => String(b?.id_blueprint || '').trim().toUpperCase() === codeNorm
+    );
+    if (isDuplicate) {
+      const msg = `Le code Blueprint "${codeNorm}" existe déjà.`;
+      setFormError(msg);
+      showToast?.(msg, 'warning');
+      return;
+    }
+    setFormError('');
     onAddBlueprint({
       ...form,
+      id_blueprint: codeNorm,
+      libelle: form.libelle.trim(),
       preventivePlanItems: Array.isArray(form.preventivePlanItems) ? form.preventivePlanItems : [],
       commonFailures: Array.isArray(form.commonFailures) ? form.commonFailures : [],
     });
@@ -483,9 +512,11 @@ export default function BlueprintMachineView({
   // Submit Edit
   const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!toEdit || !toEdit.id_blueprint || !toEdit.libelle) return;
+    if (!canEdit) return;
+    if (!toEdit || !toEdit.id_blueprint || !toEdit.libelle?.trim()) return;
     onUpdateBlueprint(toEdit.id_blueprint, {
       ...toEdit,
+      libelle: toEdit.libelle.trim(),
       preventivePlanItems: Array.isArray(toEdit.preventivePlanItems) ? toEdit.preventivePlanItems : [],
       commonFailures: Array.isArray(toEdit.commonFailures) ? toEdit.commonFailures : [],
     });
@@ -494,7 +525,7 @@ export default function BlueprintMachineView({
 
   // Apply Blueprint Preventive Plan to Active Linked Machines Only
   const handleTriggerApplyPreventivePlan = (targetBlueprint: BlueprintRecord) => {
-    if (!targetBlueprint) return;
+    if (!targetBlueprint || !canEdit) return;
     const normalizedBp = {
       ...targetBlueprint,
       preventivePlanItems: Array.isArray(targetBlueprint.preventivePlanItems)
@@ -553,14 +584,15 @@ export default function BlueprintMachineView({
     );
   };
 
-  // Extract real PDR from machine history into form
+  // Extract real PDR from machine Sortie history into form
   const handleExtractFromMachineHistory = (machineCode?: string, target: 'add' | 'edit' = 'add') => {
     if (!machineCode) return;
-    const relatedMvts = mouvements.filter(
-      (m) =>
-        (m.id_machine_registered === machineCode || m.machine === machineCode) &&
-        (m.type === 'Sortie' || Number(m.quantite) > 0)
-    );
+    const normCode = String(machineCode).trim().toUpperCase();
+    const relatedMvts = mouvements.filter((m) => {
+      const mMachine = String(m.id_machine_registered || m.machine || '').trim().toUpperCase();
+      const mType = String(m.type || '').trim().toLowerCase();
+      return mMachine === normCode && mType.includes('sortie');
+    });
 
     const map = new Map<string, BlueprintPdrItem>();
     relatedMvts.forEach((m) => {
@@ -573,7 +605,9 @@ export default function BlueprintMachineView({
 
     const extractedPdr = Array.from(map.values());
     if (extractedPdr.length === 0) {
-      alert(`Aucune consommation PDR enregistrée pour la machine ${machineCode}.`);
+      const msg = `Aucune consommation PDR enregistrée pour la machine ${machineCode}.`;
+      setApplyFeedback({ type: 'warning', message: msg });
+      showToast?.(msg, 'warning');
       return;
     }
 
@@ -598,39 +632,33 @@ export default function BlueprintMachineView({
           : prev
       );
     }
+    const okMsg = `${extractedPdr.length} référence(s) PDR extraite(s) depuis les sorties de ${machineCode}.`;
+    setApplyFeedback({ type: 'success', message: okMsg });
+    showToast?.(okMsg, 'success');
   };
 
   const handleExportExcel = () => {
-    const headers = [
-      'ID Blueprint',
-      'Désignation',
-      'Famille Machine',
-      'Template / Modèle',
-      'Réf Plan',
-      'Type Schéma',
-      'Puissance',
-      'Course',
-    ];
-    const rows = filteredBlueprints.map((b) => [
-      b.id_blueprint || '',
-      b.libelle || '',
-      b.id_family || '',
-      b.id_templates || '',
-      b.ref_plan || '',
-      b.type_schema || '',
-      b.specs?.puissance || '',
-      b.specs?.course || '',
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `blueprints_bom_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const exportRows = filteredBlueprints.map((b, idx) => ({
+      'N°': idx + 1,
+      'ID Blueprint': b.id_blueprint || '',
+      'Désignation': b.libelle || '',
+      'Famille Machine': b.id_family || '',
+      'Template / Modèle': b.id_templates || '',
+      'Réf Plan': b.ref_plan || '',
+      'Type Schéma': b.type_schema || '',
+      'Puissance': b.specs?.puissance || '',
+      'Course': b.specs?.course || '',
+      'Composants': b.components_theoriques?.length || 0,
+      'Parts': b.parts_theoriques?.length || 0,
+      'PDR': b.pdr_theoriques?.length || 0,
+      'Plan PM': Array.isArray(b.preventivePlanItems) ? b.preventivePlanItems.length : 0,
+      'Machines Liées': blueprintMachineCountMap[b.id_blueprint] || 0,
+      'Statut': b.statut || 'Approuvé',
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Blueprints_BOM');
+    XLSX.writeFile(wb, `blueprints_bom_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   const blueprintColumns = useMemo(
@@ -745,14 +773,16 @@ export default function BlueprintMachineView({
             ariaLabel="Nexus Matrix"
           />
 
-          <Action3DButton
-            variant="circle"
-            color="indigo"
-            icon={FingerprintPattern}
-            showAddBadge={true}
-            onClick={handleOpenAddModal}
-            title={t('machines.blueprint.new_blueprint_button', 'Nouveau Blueprint (BOM)')}
-          />
+          {canCreate && (
+            <Action3DButton
+              variant="circle"
+              color="indigo"
+              icon={FingerprintPattern}
+              showAddBadge={true}
+              onClick={handleOpenAddModal}
+              title={t('machines.blueprint.new_blueprint_button', 'Nouveau Blueprint (BOM)')}
+            />
+          )}
         </div>
       </div>
 
@@ -1374,29 +1404,33 @@ export default function BlueprintMachineView({
                               <span>Pannes fréquentes du blueprint ({(bp.commonFailures || []).length})</span>
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveActionMenuId(null);
-                                handleOpenEditModal(bp);
-                              }}
-                              className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                            >
-                              <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Modifier ce Blueprint</span>
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  handleOpenEditModal(bp);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>Modifier ce Blueprint</span>
+                              </button>
+                            )}
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveActionMenuId(null);
-                                setToDelete(bp);
-                              }}
-                              className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                              <span>Supprimer ce Blueprint</span>
-                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveActionMenuId(null);
+                                  setToDelete(bp);
+                                }}
+                                className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                <span>Supprimer ce Blueprint</span>
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1423,6 +1457,7 @@ export default function BlueprintMachineView({
         onUpdateBlueprint={onUpdateBlueprint}
         newCommonFailureItem={newCommonFailureItem}
         setNewCommonFailureItem={setNewCommonFailureItem}
+        canEdit={canEdit}
       />
 
       <BlueprintFormModal
@@ -1431,6 +1466,8 @@ export default function BlueprintMachineView({
         setToEdit={setToEdit}
         form={form}
         setForm={setForm}
+        formError={formError}
+        setFormError={setFormError}
         handleCloseModal={handleCloseModal}
         activeModalTab={activeModalTab}
         setActiveModalTab={setActiveModalTab}

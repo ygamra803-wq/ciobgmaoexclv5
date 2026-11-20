@@ -108,6 +108,8 @@ export interface BlueprintFormModalProps {
   setNewCommonFailureItem: React.Dispatch<React.SetStateAction<BlueprintCommonFailureDraft>>;
   handleExtractFromMachineHistory: (machineCode?: string, target?: 'add' | 'edit') => void;
   handleTriggerApplyPreventivePlan: (bp: BlueprintRecord) => void;
+  formError?: string;
+  setFormError?: React.Dispatch<React.SetStateAction<string>>;
 }
 
 export function BlueprintFormModal({
@@ -147,7 +149,25 @@ export function BlueprintFormModal({
   setNewCommonFailureItem,
   handleExtractFromMachineHistory,
   handleTriggerApplyPreventivePlan,
+  formError = '',
+  setFormError,
 }: BlueprintFormModalProps) {
+  const activeMachines = React.useMemo(() => filterActiveMachines(machines), [machines]);
+  const [selectedExtractMachine, setSelectedExtractMachine] = React.useState('');
+
+  React.useEffect(() => {
+    if (activeMachines.length === 0) {
+      setSelectedExtractMachine('');
+      return;
+    }
+    const stillExists = activeMachines.some(
+      (m) => m.id_machine_registered === selectedExtractMachine
+    );
+    if (!selectedExtractMachine || !stillExists) {
+      setSelectedExtractMachine(activeMachines[0]?.id_machine_registered || '');
+    }
+  }, [activeMachines, selectedExtractMachine]);
+
   if (!showAddModal && !toEdit) return null;
 
   return (
@@ -268,6 +288,11 @@ export function BlueprintFormModal({
 
         <form onSubmit={toEdit ? handleEditSubmit : handleAddSubmit} className="flex-1 flex flex-col overflow-hidden">
           <div className="p-5 overflow-y-auto flex-1 space-y-4 text-xs">
+            {formError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                {formError}
+              </div>
+            )}
             {/* TAB 1: Specs */}
             {activeModalTab === 'specs' && (
               <div className="space-y-4">
@@ -279,6 +304,7 @@ export function BlueprintFormModal({
                       prefix="BPT-"
                       currentCode={toEdit ? toEdit.id_blueprint : form.id_blueprint}
                       onChangeCode={(code: string) => {
+                        setFormError?.('');
                         if (toEdit) setToEdit({ ...toEdit, id_blueprint: code });
                         else setForm({ ...form, id_blueprint: code });
                       }}
@@ -683,16 +709,17 @@ export function BlueprintFormModal({
 
                   <div className="flex items-center gap-1.5">
                     <select
-                      id="nexus-mch-select"
-                      disabled={filterActiveMachines(machines).length === 0}
+                      value={selectedExtractMachine}
+                      onChange={(e) => setSelectedExtractMachine(e.target.value)}
+                      disabled={activeMachines.length === 0}
                       className="h-8 px-2 rounded-lg border border-indigo-200 bg-white text-xs font-mono text-slate-800 disabled:opacity-50"
                     >
-                      {filterActiveMachines(machines).length === 0 ? (
+                      {activeMachines.length === 0 ? (
                         <option value="" disabled>
                           Aucune machine active enregistrée
                         </option>
                       ) : (
-                        filterActiveMachines(machines).map((m, idx) => (
+                        activeMachines.map((m, idx) => (
                           <option key={`nexus-mch-${m.id_machine_registered || idx}-${idx}`} value={m.id_machine_registered}>
                             {m.id_machine_registered}
                           </option>
@@ -701,10 +728,9 @@ export function BlueprintFormModal({
                     </select>
                     <button
                       type="button"
-                      disabled={filterActiveMachines(machines).length === 0}
+                      disabled={activeMachines.length === 0 || !selectedExtractMachine}
                       onClick={() => {
-                        const sel = (document.getElementById('nexus-mch-select') as HTMLSelectElement | null)?.value;
-                        handleExtractFromMachineHistory(sel, toEdit ? 'edit' : 'add');
+                        handleExtractFromMachineHistory(selectedExtractMachine, toEdit ? 'edit' : 'add');
                       }}
                       className="h-8 px-3 rounded-lg bg-indigo-600 text-white font-semibold text-xs hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -712,6 +738,20 @@ export function BlueprintFormModal({
                     </button>
                   </div>
                 </div>
+
+                {applyFeedback && (
+                  <div
+                    className={`p-3 rounded-xl text-xs font-semibold border ${
+                      applyFeedback.type === 'success'
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                        : applyFeedback.type === 'warning'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-sky-50 text-sky-800 border-sky-200'
+                    }`}
+                  >
+                    {applyFeedback.message}
+                  </div>
+                )}
 
                 {/* Manual PDR Add Row */}
                 <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">

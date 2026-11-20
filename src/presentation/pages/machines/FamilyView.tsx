@@ -1,10 +1,12 @@
 import {  useState, useRef, useMemo, useEffect  } from 'react';
+import * as XLSX from 'xlsx';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import Action3DButton from '../../components/common/Action3DButton';
 import FormulasModalButton from '../../components/common/FormulasModalButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
+import { usePermission } from '../../components/common/PermissionGate';
 import { HubIcon } from '../../components/common/icons/HubIcon';
 import { CategoryIcon } from '../../components/common/icons/CategoryIcon';
 import {
@@ -42,6 +44,9 @@ export default function FamilyView({
   onNavigateToMachinesByFamily,
 }) {
   const { t } = useI18n();
+  const canCreate = usePermission('machine.create');
+  const canEdit = usePermission('machine.edit');
+  const canDelete = usePermission('machine.delete');
   const [localSearch, setLocalSearch] = useState('');
   const [search, setSearch] = useState('');
 
@@ -55,6 +60,7 @@ export default function FamilyView({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [form, setForm] = useState({ id_family: '', libelle: '' });
+  const [formError, setFormError] = useState('');
   const [toEdit, setToEdit] = useState(null);
   const [toDelete, setToDelete] = useState(null);
 
@@ -82,6 +88,7 @@ export default function FamilyView({
 
   useEffect(() => {
     if (showAddModal) {
+      setFormError('');
       setForm((prev) => ({
         ...prev,
         id_family: prev.id_family || autoFamilyId,
@@ -211,35 +218,41 @@ export default function FamilyView({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.id_family || !form.libelle) return;
-    onAddFamily(form);
+    if (!canCreate) return;
+    const codeNorm = String(form.id_family || '').trim().toUpperCase();
+    const labelClean = String(form.libelle || '').trim();
+    if (!codeNorm || !labelClean) return;
+    const isDuplicate = safeFamilies.some(
+      (f) => String(f?.id_family || '').trim().toUpperCase() === codeNorm
+    );
+    if (isDuplicate) {
+      setFormError(`Le code famille "${codeNorm}" existe déjà.`);
+      return;
+    }
+    setFormError('');
+    onAddFamily({ ...form, id_family: codeNorm, libelle: labelClean });
     setForm({ id_family: '', libelle: '' });
     setShowAddModal(false);
   };
 
   const handleExportExcel = () => {
-    const headers = [
-      t('machines.family.col_id', 'ID Famille'),
-      t('machines.family.col_libelle', 'Libellé / Désignation'),
-      t('machines.family.col_templates', 'Nb Templates'),
-      t('machines.family.col_machines', 'Nb Machines'),
-    ];
-    const rows = filtered.map((f) => [
-      f.id_family || '',
-      f.libelle || '',
-      f.templatesCount ?? 0,
-      f.machinesCount ?? 0,
-    ]);
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `familles_machines_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const safeTemplates = Array.isArray(templates) ? templates : [];
+    const safeMachines = Array.isArray(machines) ? machines : [];
+    const exportRows = filtered.map((f, idx) => ({
+      'N°': idx + 1,
+      [t('machines.family.col_id', 'ID Famille')]: f.id_family || '',
+      [t('machines.family.col_libelle', 'Libellé / Désignation')]: f.libelle || '',
+      [t('machines.family.col_templates', 'Nb Templates')]: safeTemplates.filter(
+        (tpl) => tpl.id_family === f.id_family
+      ).length,
+      [t('machines.family.col_machines', 'Nb Machines')]: safeMachines.filter(
+        (m) => m.id_family === f.id_family
+      ).length,
+    }));
+    const ws = XLSX.utils.json_to_sheet(exportRows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Familles_Machines');
+    XLSX.writeFile(wb, `familles_machines_${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -267,14 +280,16 @@ export default function FamilyView({
             title={t('machines.family.formulas_button', 'Formules Excel (Familles de Machines)')}
           />
 
-          <Action3DButton
-            variant="circle"
-            color="teal"
-            icon={HubIcon}
-            showAddBadge={true}
-            onClick={() => setShowAddModal(true)}
-            title={t('machines.family.new_family_button', 'Nouvelle Famille')}
-          />
+          {canCreate && (
+            <Action3DButton
+              variant="circle"
+              color="teal"
+              icon={HubIcon}
+              showAddBadge={true}
+              onClick={() => setShowAddModal(true)}
+              title={t('machines.family.new_family_button', 'Nouvelle Famille')}
+            />
+          )}
         </div>
       </div>
 
@@ -541,20 +556,22 @@ export default function FamilyView({
               <td className="py-3 px-3.5 text-center whitespace-nowrap">
                 <div className="relative inline-flex items-center justify-center action-menu-container">
                   <div className="inline-flex rounded-xl border border-slate-200 bg-white shadow-2xs overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (onQuickCreateTemplate) {
-                          onQuickCreateTemplate(f.id_family);
-                        } else if (onNavigateToTemplatesFiltered) {
-                          onNavigateToTemplatesFiltered(f.id_family);
-                        }
-                        setActiveActionMenuId(null);
-                      }}
-                      className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
-                    >
-                      <CategoryPlusIcon className="w-3.5 h-3.5 text-slate-900" />
-                    </button>
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onQuickCreateTemplate) {
+                            onQuickCreateTemplate(f.id_family);
+                          } else if (onNavigateToTemplatesFiltered) {
+                            onNavigateToTemplatesFiltered(f.id_family);
+                          }
+                          setActiveActionMenuId(null);
+                        }}
+                        className="p-1.5 bg-white hover:bg-slate-100/80 text-slate-800 hover:text-black transition flex items-center justify-center cursor-pointer border-r border-slate-200"
+                      >
+                        <CategoryPlusIcon className="w-3.5 h-3.5 text-slate-900" />
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -582,21 +599,23 @@ export default function FamilyView({
                         </span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          if (onQuickCreateTemplate) {
-                            onQuickCreateTemplate(f.id_family);
-                          } else if (onNavigateToTemplatesFiltered) {
-                            onNavigateToTemplatesFiltered(f.id_family);
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <CategoryPlusIcon className="w-3.5 h-3.5 text-amber-600" />
-                        <span>{t('machines.template.add_title')} ({f.id_family})</span>
-                      </button>
+                      {canCreate && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            if (onQuickCreateTemplate) {
+                              onQuickCreateTemplate(f.id_family);
+                            } else if (onNavigateToTemplatesFiltered) {
+                              onNavigateToTemplatesFiltered(f.id_family);
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-amber-50 hover:text-amber-800 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <CategoryPlusIcon className="w-3.5 h-3.5 text-amber-600" />
+                          <span>{t('machines.template.add_title')} ({f.id_family})</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -622,31 +641,35 @@ export default function FamilyView({
                         <span>{t('machines.family.col_machines')} ({mCount})</span>
                       </button>
 
-                      <div className="my-1 border-t border-slate-100" />
+                      {(canEdit || canDelete) && <div className="my-1 border-t border-slate-100" />}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          setToEdit({ ...f });
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 text-slate-600" />
-                        <span>{t('machines.family.edit_title')}</span>
-                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            setToEdit({ ...f });
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-slate-600" />
+                          <span>{t('machines.family.edit_title')}</span>
+                        </button>
+                      )}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveActionMenuId(null);
-                          setToDelete(f);
-                        }}
-                        className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-500" />
-                        <span>{t('machines.family.delete_title')}</span>
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveActionMenuId(null);
+                            setToDelete(f);
+                          }}
+                          className="w-full px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                          <span>{t('machines.family.delete_title')}</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -676,11 +699,19 @@ export default function FamilyView({
               {t('machines.family.add_desc')}
             </p>
             <form onSubmit={handleSubmit} className="space-y-3">
+              {formError && (
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold">
+                  {formError}
+                </div>
+              )}
               <div>
                 <SequentialCodePicker
                   prefix="FAM-"
                   currentCode={form.id_family}
-                  onChangeCode={(newCode) => setForm((prev) => ({ ...prev, id_family: newCode }))}
+                  onChangeCode={(newCode) => {
+                    setFormError('');
+                    setForm((prev) => ({ ...prev, id_family: newCode }));
+                  }}
                   autoGeneratedCode={autoFamilyId}
                   takenNumbers={takenFamilyNumbers}
                   label={t('machines.family.code_label')}

@@ -40,8 +40,10 @@ export interface HierarchyCorrectiveLike {
   code_machine?: string;
   id_machine_registered?: string;
   machineId?: string;
+  temps_arret_minutes?: number | string;
   temps_arret_machine_min?: number | string;
   duree_arret_min?: number | string;
+  temps_intervention_mins?: number | string;
   duree_intervention_min?: number | string;
   temps_reparation_min?: number | string;
   duree_arret_heures?: number | string;
@@ -424,6 +426,56 @@ export function isApprovedCorrectiveIntervention(
   return statut === 'CLOTURE' || statut === 'TERMINEE' || closedFlag === 'OUI';
 }
 
+export function extractCorrectiveDowntimeMinutes(
+  ci: HierarchyCorrectiveLike | null | undefined
+): number {
+  if (!ci || typeof ci !== 'object') return 0;
+
+  const arretMinCandidates = [
+    ci.temps_arret_minutes,
+    ci.temps_arret_machine_min,
+    ci.duree_arret_min,
+  ];
+  for (const cand of arretMinCandidates) {
+    const val = Number(cand);
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+
+  const arretHoursCandidates = [ci.duree_arret_heures, ci.temps_arret];
+  for (const cand of arretHoursCandidates) {
+    const val = Number(cand);
+    if (Number.isFinite(val) && val > 0) return val * 60;
+  }
+
+  const repairCandidates = [
+    ci.temps_intervention_mins,
+    ci.duree_intervention_min,
+    ci.temps_reparation_min,
+  ];
+  for (const cand of repairCandidates) {
+    const val = Number(cand);
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+
+  return 0;
+}
+
+export function extractCorrectiveRepairMinutes(
+  ci: HierarchyCorrectiveLike | null | undefined
+): number {
+  if (!ci || typeof ci !== 'object') return 0;
+  const repairCandidates = [
+    ci.temps_intervention_mins,
+    ci.duree_intervention_min,
+    ci.temps_reparation_min,
+  ];
+  for (const cand of repairCandidates) {
+    const val = Number(cand);
+    if (Number.isFinite(val) && val > 0) return val;
+  }
+  return extractCorrectiveDowntimeMinutes(ci);
+}
+
 export function computeParentCorrectiveRollup(
   parentId: string,
   machines: HierarchyMachineLike[] = [],
@@ -450,21 +502,8 @@ export function computeParentCorrectiveRollup(
 
       approvedFailuresCount += 1;
 
-      const arretMin = Number(ci.temps_arret_machine_min ?? ci.duree_arret_min ?? 0);
-      const interMin = Number(ci.duree_intervention_min ?? ci.temps_reparation_min ?? 0);
-      const arretHoursFallback = Number(ci.duree_arret_heures ?? ci.temps_arret ?? 0) * 60;
-
-      const effectiveDowntimeMin =
-        Number.isFinite(arretMin) && arretMin > 0
-          ? arretMin
-          : Number.isFinite(arretHoursFallback) && arretHoursFallback > 0
-          ? arretHoursFallback
-          : Number.isFinite(interMin) && interMin > 0
-          ? interMin
-          : 0;
-
-      const effectiveRepairMin =
-        Number.isFinite(interMin) && interMin > 0 ? interMin : effectiveDowntimeMin;
+      const effectiveDowntimeMin = extractCorrectiveDowntimeMinutes(ci);
+      const effectiveRepairMin = extractCorrectiveRepairMinutes(ci);
 
       totalDowntimeMinutes += effectiveDowntimeMin;
       totalRepairMinutes += effectiveRepairMin;

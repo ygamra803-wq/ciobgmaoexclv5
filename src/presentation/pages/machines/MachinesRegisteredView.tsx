@@ -38,27 +38,17 @@ import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { storageService } from '../../../utils/storageService';
 import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 
-// Helper to retrieve machine serial number with smart fallback
+// Helper to retrieve real machine serial number without fabricating fake data
 export const getMachineSerialNumber = (m) => {
-  if (m?.serial_number) return m.serial_number;
-  if (m?.numero_serie) return m.numero_serie;
-  if (m?.num_serie) return m.num_serie;
-  // Deterministic realistic fallback based on machine code
-  const code = String(m?.id_machine_registered || '01').replace(/[^A-Z0-9]/gi, '');
-  return `SN-2022-${code}`;
+  return String(m?.serial_number || m?.numero_serie || m?.num_serie || '').trim();
 };
 
-// Helper to retrieve machine commissioning date with smart fallback
+// Helper to retrieve real machine commissioning date without fabricating fake data
 export const getMachineCommissioningDate = (m) => {
-  if (m?.date_mise_en_service) return m.date_mise_en_service;
-  if (m?.date_installation) return m.date_installation;
+  if (m?.date_mise_en_service) return String(m.date_mise_en_service).trim();
+  if (m?.date_installation) return String(m.date_installation).trim();
   if (m?.annee) return `${m.annee}-01-15`;
-  // Deterministic realistic date based on machine code
-  const num = parseInt((m?.id_machine_registered || '').replace(/\D/g, ''), 10) || 5;
-  const year = 2018 + (num % 6);
-  const month = String(1 + (num % 12)).padStart(2, '0');
-  const day = String(10 + (num % 18)).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return '';
 };
 
 // Helper to find a zone object from any zone/sector reference (id_zone, code_zone, code, or libelle)
@@ -388,8 +378,8 @@ export default function MachinesRegisteredView({
     if (!sortField) return filteredMachines;
     return [...filteredMachines].sort((a, b) => {
       if (sortField === 'sorties') {
-        const cntA = sortiesCountMap[a.id_machine_registered] || 0;
-        const cntB = sortiesCountMap[b.id_machine_registered] || 0;
+        const cntA = sortiesCountMap[String(a.id_machine_registered || '').trim().toUpperCase()] || 0;
+        const cntB = sortiesCountMap[String(b.id_machine_registered || '').trim().toUpperCase()] || 0;
         return sortOrder === 'asc' ? cntA - cntB : cntB - cntA;
       }
       if (sortField === 'serial_number') {
@@ -479,7 +469,7 @@ export default function MachinesRegisteredView({
         const famObj = families.find((f) => f.id_family === m.id_family);
         const tmplObj = templates.find((t) => t.id_templates === m.id_templates);
         const sysObj = generalSystemTypes.find((t) => t.id === m.id_general_system_type);
-        const sortiesCount = sortiesCountMap[m.id_machine_registered] || 0;
+        const sortiesCount = sortiesCountMap[String(m.id_machine_registered || '').trim().toUpperCase()] || 0;
         const mClass = getMachineAssetClass(m);
 
         return {
@@ -1255,7 +1245,7 @@ export default function MachinesRegisteredView({
                   );
                   const sysType = generalSystemTypes.find((t) => t.id === m.id_general_system_type);
                   const isSysGeneral = getMachineAssetClass(m) === 'SYSTEM_GENERAL';
-                  const sortiesCount = sortiesCountMap[m.id_machine_registered] || 0;
+                  const sortiesCount = sortiesCountMap[String(m.id_machine_registered || '').trim().toUpperCase()] || 0;
                   const isArchived = isArchivedMachine(m);
                   const isService =
                     !isArchived && String(m.status || 'En Service').toLowerCase().includes('service');
@@ -1371,12 +1361,12 @@ export default function MachinesRegisteredView({
                           {/* N° de Série badge */}
                           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 border border-slate-200/80 text-[11px] font-mono font-bold shadow-2xs">
                             <Hash className="w-3 h-3 text-slate-500 shrink-0" />
-                            <span>{getMachineSerialNumber(m)}</span>
+                            <span>{getMachineSerialNumber(m) || '—'}</span>
                           </div>
                           {/* Date Mise en service */}
                           <div className="inline-flex items-center gap-1 text-[10.5px] text-slate-500 font-medium pl-0.5">
                             <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                            <span>Mise en serv. : <b className="text-slate-700 font-mono">{getMachineCommissioningDate(m)}</b></span>
+                            <span>Mise en serv. : <b className="text-slate-700 font-mono">{getMachineCommissioningDate(m) || '—'}</b></span>
                           </div>
                         </div>
                       </td>
