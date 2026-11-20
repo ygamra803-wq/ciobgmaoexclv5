@@ -355,17 +355,24 @@ export default function ComponentsTable({
                               <div className="flex flex-wrap items-center gap-1 mt-1">
                                 {item.historique_bobinage &&
                                   item.historique_bobinage.length > 0 &&
-                                  item.historique_bobinage.map((b, bIdx) => (
-                                    <span
-                                      key={bIdx}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 font-medium text-[10px] shadow-2xs"
-                                      title={`Historique Rebobinage:\n- Cause: ${b.cause || 'grille'}\n- Démonté le: ${b.date_demontage || ''} par ${b.technicien_demontage || ''}\n- Société de bobinage: ${b.societe_bobinage || ''}\n- Réception le: ${b.date_reception || ''}\n- Observation: ${b.observation || ''}`}
-                                    >
-                                      <Flame className="w-3 h-3 text-amber-600 shrink-0" />
-                                      <span className="font-bold">Rebobiné ({b.societe_bobinage || 'STE AMAL'})</span>
-                                      <span className="text-amber-700 text-[9px] font-mono">[{b.date_reception || b.date_demontage}]</span>
-                                    </span>
-                                  ))}
+                                  item.historique_bobinage.map((b: any, bIdx: number) => {
+                                    const societe = b.societe_bobinage || b.fournisseur || 'Atelier / Externe';
+                                    const cause = b.cause || b.type_probleme || 'Révision / Bobinage';
+                                    const dateDem = b.date_demontage || b.date_expedition || '';
+                                    const dateRec = b.date_reception || b.date_arrivee_reelle || '';
+                                    const obs = b.observation || b.note || '';
+                                    return (
+                                      <span
+                                        key={bIdx}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-300 font-medium text-[10px] shadow-2xs"
+                                        title={`Historique Rebobinage:\n- Cause: ${cause}\n- Démonté le: ${dateDem} par ${b.technicien_demontage || ''}\n- Société de bobinage: ${societe}\n- Réception le: ${dateRec}\n- Observation: ${obs}`}
+                                      >
+                                        <Flame className="w-3 h-3 text-amber-600 shrink-0" />
+                                        <span className="font-bold">Rebobiné ({societe})</span>
+                                        <span className="text-amber-700 text-[9px] font-mono">[{dateRec || dateDem}]</span>
+                                      </span>
+                                    );
+                                  })}
 
                                 {wearInfo.shouldReform && (
                                   <button
@@ -503,22 +510,48 @@ export default function ComponentsTable({
 
                     {/* Col 6: Statut Opérationnel (G) */}
                     <td className="py-2.5 px-3 whitespace-nowrap">
-                      {String(item.status).includes('service') ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          <span>En service</span>
-                        </span>
-                      ) : String(item.status).includes('stock') || String(item.status).includes('dispo') ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
-                          <span>En stock</span>
-                        </span>
-                      ) : String(item.status).includes('rev') || String(item.status).includes('ext') ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                          <span>En révision</span>
-                        </span>
-                      ) : (
+                      {(() => {
+                        const st = String(item.status || (item as any).statut || item.etat || '').toLowerCase();
+                        const inStock =
+                          st.includes('stock') ||
+                          st.includes('dispo') ||
+                          st.includes('retourné') ||
+                          st.includes('retourne') ||
+                          st.includes('terminé atelier') ||
+                          st.includes('termine atelier');
+                        if (st.includes('service') || st === 'actif' || st.includes('monté') || st.includes('monte')) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              <span>En service</span>
+                            </span>
+                          );
+                        }
+                        if (inStock) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-sky-500"></span>
+                              <span>En stock</span>
+                            </span>
+                          );
+                        }
+                        if (
+                          st.includes('rev') ||
+                          st.includes('rév') ||
+                          st.includes('ext') ||
+                          st.includes('réparation') ||
+                          st.includes('reparation') ||
+                          st.includes('atelier')
+                        ) {
+                          return (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                              <span>En révision</span>
+                            </span>
+                          );
+                        }
+                        return null;
+                      })() || (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
                           <span>{item.status || 'Arrêt'}</span>

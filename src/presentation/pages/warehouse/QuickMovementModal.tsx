@@ -16,10 +16,13 @@ import {
   MapPin,
   Tag,
   Boxes,
+  AlertTriangle,
 } from 'lucide-react';
 import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { useGmaoStore } from '../../../store/useGmaoStore';
+import { resolveActiveActorContext } from '../../../store/slices/storeBootstrapSlice';
 
 export default function QuickMovementModal({
   isOpen,
@@ -32,7 +35,6 @@ export default function QuickMovementModal({
   technicians = [],
   mouvements = [],
   onAddMouvement,
-  onDirectAdjustStock,
 }: any) {
   const activeMachines = useMemo(() => filterActiveMachines(machines), [machines]);
   const activeTechnicians = useMemo(
@@ -43,21 +45,31 @@ export default function QuickMovementModal({
     [technicians]
   );
 
-  const normalizeFlow = (flow: string) =>
-    flow === 'Ajustement & Recalibrage' ? 'Ajustement' : flow || 'Sortie Interne';
-  const normalizeAction = (action: string) =>
-    action === 'RETOUR_ATELIER' ? 'RETOUR' : action || 'CORRECTIVE';
+  const normalizeFlow = (flow: string) => {
+    if (flow === 'Ajustement & Recalibrage' || flow === 'Ajustement') return 'Ajustement';
+    if (flow === 'Sortie') return 'Sortie Interne';
+    if (flow === 'Entrée') return 'Entrée Externe';
+    return flow || 'Sortie Interne';
+  };
+  const normalizeAction = (action: string, flow?: string) => {
+    if (action === 'RETOUR_ATELIER') return 'RETOUR';
+    if (flow === 'Ajustement' && (!action || action === 'INVENTAIRE')) return 'AJUSTEMENT_ENTREE';
+    return action || 'CORRECTIVE';
+  };
 
   const [flowType, setFlowType] = useState(() => normalizeFlow(initialFlow));
-  const [actionId, setActionId] = useState(() => normalizeAction(initialAction));
+  const [actionId, setActionId] = useState(() =>
+    normalizeAction(initialAction, normalizeFlow(initialFlow))
+  );
   const [quantite, setQuantite] = useState(1);
   const [targetStock, setTargetStock] = useState(article?.stockActuel ?? 0);
-  const [adjustMode, setAdjustMode] = useState('DELTA'); // 'DELTA' (Mouvement +/-) | 'DIRECT' (Corriger valeur réelle)
+  const [adjustMode, setAdjustMode] = useState<'DIRECT' | 'DELTA'>('DIRECT');
   const [idZone, setIdZone] = useState(zones[0]?.id_zone || '');
   const [idMachine, setIdMachine] = useState(activeMachines[0]?.id_machine_registered || '');
   const [technicien, setTechnicien] = useState(activeTechnicians[0]?.nom || '');
   const [fournisseur, setFournisseur] = useState('Fournisseur Central Industriel');
   const [commentaire, setCommentaire] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const autoBonCode = useMemo(() => {
     const nums = (mouvements || [])
@@ -85,12 +97,14 @@ export default function QuickMovementModal({
   // Synchronize when initialFlow or article changes
   useEffect(() => {
     if (article) {
-      setFlowType(normalizeFlow(initialFlow));
-      setActionId(normalizeAction(initialAction));
+      const normFlow = normalizeFlow(initialFlow);
+      setFlowType(normFlow);
+      setActionId(normalizeAction(initialAction, normFlow));
       setQuantite(1);
       setTargetStock(article.stockActuel ?? 0);
-      setAdjustMode('DELTA');
+      setAdjustMode(normFlow === 'Ajustement' ? 'DIRECT' : 'DELTA');
       setCommentaire('');
+      setValidationError(null);
       setCodeBon(autoBonCode);
     }
   }, [initialFlow, initialAction, article, autoBonCode]);
@@ -107,8 +121,9 @@ export default function QuickMovementModal({
   if (!isOpen || !article) return null;
 
   // Handle flow change
-  const handleFlowChange = (newFlow) => {
+  const handleFlowChange = (newFlow: string) => {
     setFlowType(newFlow);
+    setValidationError(null);
     if (newFlow === 'Sortie Interne') {
       setActionId('CORRECTIVE');
     } else if (newFlow === 'Entrée Interne') {
@@ -116,7 +131,9 @@ export default function QuickMovementModal({
     } else if (newFlow === 'Entrée Externe') {
       setActionId('REAPPRO');
     } else if (newFlow === 'Ajustement') {
-      setActionId('INVENTAIRE');
+      setAdjustMode('DIRECT');
+      setTargetStock(Number(article.stockActuel || 0));
+      setActionId('AJUSTEMENT_ENTREE');
     }
   };
 
@@ -125,36 +142,80 @@ export default function QuickMovementModal({
     ? activeMachines.filter((m) => m.id_zone_default === idZone)
     : activeMachines;
 
-  const currentStock = Number(article.stockActuel || 0);
+  const currentStock = Number(article.stockActuel ?? article.stockInitial ?? 0);
+  const articleRef = String(article.ref || article.id_warehouse_item || article.code || '').trim();
+  const isDeltaOut =
+    flowType === 'Sortie Interne' ||
+    (flowType === 'Ajustement' && adjustMode === 'DELTA' && actionId === 'AJUSTEMENT_SORTIE');
+  const qteNum = Math.max(1, Number(quantite || 1));
 
-  // Calculate previewed stock after movement
+  // Calculate previewed stock after movement & detect stock deficit
   let previewStock = currentStock;
   if (flowType === 'Sortie Interne') {
-    previewStock = Math.max(0, currentStock - Number(quantite || 0));
+    previewStock = currentStock - qteNum;
   } else if (flowType === 'Entrée Interne' || flowType === 'Entrée Externe') {
-    previewStock = currentStock + Number(quantite || 0);
+    previewStock = currentStock + qteNum;
   } else if (flowType === 'Ajustement') {
     if (adjustMode === 'DIRECT') {
-      previewStock = Number(targetStock || 0);
+      previewStock = Math.max(0, Number(targetStock || 0));
     } else {
-      // Delta adjustment
-      previewStock = actionId === 'AJUSTEMENT_SORTIE' || actionId === 'INVENTAIRE'
-        ? Math.max(0, currentStock - Number(quantite || 0))
-        : currentStock + Number(quantite || 0);
+      previewStock =
+        actionId === 'AJUSTEMENT_SORTIE' ? currentStock - qteNum : currentStock + qteNum;
     }
   }
 
-  const handleSubmit = (e) => {
+  const hasStockDeficit =
+    (flowType !== 'Ajustement' || adjustMode === 'DELTA') && isDeltaOut && qteNum > currentStock;
+
+  const handleSubmit = (e: any) => {
     e.preventDefault();
+    setValidationError(null);
+
+    if (hasStockDeficit) {
+      setValidationError(
+        `Stock insuffisant pour [${articleRef}] : disponible ${currentStock}, demandé ${qteNum}.`
+      );
+      return;
+    }
 
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     const actualCodeBon = codeBon || autoBonCode;
+    const actor = resolveActiveActorContext();
+    const isFieldOnlyRole = actor.actorRole === 'TECHNICIEN' || actor.actorRole === 'OPERATEUR';
+
+    // Maker-Checker enforcement: if a field technician submits a Sortie Interne, route through SortieDemand
+    if (isFieldOnlyRole && flowType === 'Sortie Interne') {
+      const store = useGmaoStore.getState();
+      if (typeof store.handleSubmitSortieDemand === 'function') {
+        store.handleSubmitSortieDemand({
+          code_bon_tech: actualCodeBon,
+          type: 'Sortie Interne',
+          date: dateStr,
+          technicien: technicien || actor.actorName,
+          submitted_by_id: actor.actorId,
+          submitted_by_name: technicien || actor.actorName,
+          id_machine_registered: idMachine,
+          id_zone: idZone,
+          notes: commentaire || `Sortie rapide (${actionId})`,
+          items: [
+            {
+              ref: articleRef,
+              designation: article.designation || articleRef,
+              quantite: qteNum,
+              prix_unitaire: Number(article.prix_unitaire ?? article.prixUnitaire ?? article.prix ?? 0) || 0,
+            },
+          ],
+        });
+      }
+      onClose();
+      return;
+    }
 
     if (flowType === 'Ajustement' && adjustMode === 'DIRECT') {
-      // Direct adjustment of real stock value (Fix rawStock Initial or register exact balance)
-      const diff = Number(targetStock) - currentStock;
+      const clampedTarget = Math.max(0, Number(targetStock) || 0);
+      const diff = clampedTarget - currentStock;
       if (diff === 0) {
         onClose();
         return;
@@ -167,27 +228,49 @@ export default function QuickMovementModal({
         date: dateStr,
         heure: timeStr,
         timestamp: now.toISOString(),
-        ref: article.ref,
+        ref: articleRef,
         designation: article.designation,
         quantite: Math.abs(diff),
         stock_avant: currentStock,
-        stock_apres: Number(targetStock),
+        stock_apres: clampedTarget,
         type: mvtType,
         action_id: 'INVENTAIRE',
-        technicien: technicien || 'Magasinier Central',
+        technicien: technicien || actor.actorName || 'Magasinier Central',
         id_zone: idZone || '',
         id_machine_registered: '',
-        commentaire: commentaire ? `[Ajustement Inventaire Réel] ${commentaire}` : `[Ajustement Inventaire Réel] Rectification du stock de ${currentStock} à ${targetStock}`,
+        commentaire: commentaire
+          ? `[Ajustement Inventaire Réel] ${commentaire}`
+          : `[Ajustement Inventaire Réel] Rectification du stock de ${currentStock} à ${clampedTarget}`,
       };
 
       if (onAddMouvement) {
         onAddMouvement(mvtRecord);
       }
+
+      const store = useGmaoStore.getState();
+      if (typeof store.appendAuditEvent === 'function') {
+        store.appendAuditEvent({
+          actorId: actor.actorId,
+          actorName: actor.actorName,
+          actorRole: actor.actorRole,
+          actionType: 'STOCK_INVENTORY_ADJUSTED',
+          entityType: 'STOCK_ITEM',
+          entityId: articleRef,
+          before: { stockActuel: currentStock },
+          after: {
+            stockActuel: clampedTarget,
+            delta: diff,
+            mode: 'DIRECT',
+            code_bon: actualCodeBon,
+            commentaire: mvtRecord.commentaire,
+          },
+        });
+      }
     } else {
       // Delta Movement
-      const isOut = flowType === 'Sortie Interne' || (flowType === 'Ajustement' && (actionId === 'AJUSTEMENT_SORTIE' || actionId === 'INVENTAIRE'));
-      const mvtType = isOut ? 'Sortie' : 'Entrée';
-      const qteNum = Math.max(1, Number(quantite || 1));
+      const mvtType = isDeltaOut ? 'Sortie' : 'Entrée';
+      const effectiveActionId =
+        flowType === 'Ajustement' ? 'INVENTAIRE' : actionId;
 
       const mvtRecord = {
         id: crypto.randomUUID(),
@@ -195,23 +278,50 @@ export default function QuickMovementModal({
         date: dateStr,
         heure: timeStr,
         timestamp: now.toISOString(),
-        ref: article.ref,
+        ref: articleRef,
         designation: article.designation,
         quantite: qteNum,
         stock_avant: currentStock,
         stock_apres: previewStock,
         type: mvtType,
-        action_id: actionId,
-        id_zone: flowType.includes('Entrée') ? '' : idZone,
-        id_machine_registered: flowType.includes('Entrée') ? '' : idMachine,
-        technicien: technicien || 'Technicien Intervenant',
+        action_id: effectiveActionId,
+        id_zone: flowType.includes('Entrée') || flowType === 'Ajustement' ? '' : idZone,
+        id_machine_registered:
+          flowType.includes('Entrée') || flowType === 'Ajustement' ? '' : idMachine,
+        technicien: technicien || actor.actorName || 'Technicien Intervenant',
         fournisseur: flowType === 'Entrée Externe' ? fournisseur : '',
         emplacement_reception: article.emplacement || '',
-        commentaire: commentaire || `Action Rapide: ${flowType} - ${actionId}`,
+        commentaire:
+          commentaire ||
+          (flowType === 'Ajustement'
+            ? `[Ajustement Inventaire Delta ${isDeltaOut ? '-' : '+'}${qteNum}]`
+            : `Action Rapide: ${flowType} - ${actionId}`),
       };
 
       if (onAddMouvement) {
         onAddMouvement(mvtRecord);
+      }
+
+      if (flowType === 'Ajustement') {
+        const store = useGmaoStore.getState();
+        if (typeof store.appendAuditEvent === 'function') {
+          store.appendAuditEvent({
+            actorId: actor.actorId,
+            actorName: actor.actorName,
+            actorRole: actor.actorRole,
+            actionType: 'STOCK_INVENTORY_ADJUSTED',
+            entityType: 'STOCK_ITEM',
+            entityId: articleRef,
+            before: { stockActuel: currentStock },
+            after: {
+              stockActuel: previewStock,
+              delta: isDeltaOut ? -qteNum : qteNum,
+              mode: 'DELTA',
+              code_bon: actualCodeBon,
+              commentaire: mvtRecord.commentaire,
+            },
+          });
+        }
       }
     }
 
@@ -411,7 +521,10 @@ export default function QuickMovementModal({
                 <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 gap-1">
                   <button
                     type="button"
-                    onClick={() => setAdjustMode('DIRECT')}
+                    onClick={() => {
+                      setAdjustMode('DIRECT');
+                      setValidationError(null);
+                    }}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                       adjustMode === 'DIRECT'
                         ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
@@ -422,7 +535,13 @@ export default function QuickMovementModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAdjustMode('DELTA')}
+                    onClick={() => {
+                      setAdjustMode('DELTA');
+                      if (actionId !== 'AJUSTEMENT_ENTREE' && actionId !== 'AJUSTEMENT_SORTIE') {
+                        setActionId('AJUSTEMENT_ENTREE');
+                      }
+                      setValidationError(null);
+                    }}
                     className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                       adjustMode === 'DELTA'
                         ? 'bg-white text-slate-900 shadow-xs border border-slate-200'
@@ -432,6 +551,45 @@ export default function QuickMovementModal({
                     Ajustement par Quantité (+ / -)
                   </button>
                 </div>
+
+                {adjustMode === 'DELTA' && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionId('AJUSTEMENT_ENTREE');
+                        setValidationError(null);
+                      }}
+                      className={`p-2 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                        actionId === 'AJUSTEMENT_ENTREE'
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 font-bold ring-1 ring-emerald-300'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                        <span className="text-xs">+ Écart Positif (Ajout)</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActionId('AJUSTEMENT_SORTIE');
+                        setValidationError(null);
+                      }}
+                      className={`p-2 rounded-xl border text-left transition cursor-pointer flex items-center justify-between ${
+                        actionId === 'AJUSTEMENT_SORTIE'
+                          ? 'bg-rose-50 border-rose-400 text-rose-950 font-bold ring-1 ring-rose-300'
+                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                        <span className="text-xs">- Écart Négatif (Retrait)</span>
+                      </div>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -451,10 +609,18 @@ export default function QuickMovementModal({
               <div className="text-center font-black text-slate-400">→</div>
 
               <div className="text-right">
-                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider block">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wider block ${
+                    hasStockDeficit ? 'text-rose-600' : 'text-emerald-600'
+                  }`}
+                >
                   Nouveau Solde Estimé
                 </span>
-                <span className="font-mono text-base font-black text-emerald-700">
+                <span
+                  className={`font-mono text-base font-black ${
+                    hasStockDeficit ? 'text-rose-700' : 'text-emerald-700'
+                  }`}
+                >
                   {previewStock} <span className="text-xs font-normal text-slate-500">pcs</span>
                 </span>
               </div>
@@ -469,7 +635,7 @@ export default function QuickMovementModal({
                   type="number"
                   min="0"
                   value={targetStock}
-                  onChange={(e) => setTargetStock(parseInt(e.target.value, 10) || 0)}
+                  onChange={(e) => setTargetStock(Math.max(0, parseInt(e.target.value, 10) || 0))}
                   className="w-full h-10 px-3 rounded-xl border border-slate-300 bg-white font-mono font-black text-sm text-slate-900 focus:ring-1 focus:ring-amber-500"
                   required
                 />
@@ -477,15 +643,22 @@ export default function QuickMovementModal({
             ) : (
               <div>
                 <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Quantité à {flowType === 'Sortie Interne' ? 'déduire (-)' : 'ajouter (+)'}
+                  Quantité à {isDeltaOut ? 'déduire (-)' : 'ajouter (+)'}
                 </label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
                     min="1"
                     value={quantite}
-                    onChange={(e) => setQuantite(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-300 bg-white font-mono font-black text-sm text-slate-900 focus:ring-1 focus:ring-cyan-500"
+                    onChange={(e) => {
+                      setQuantite(Math.max(1, parseInt(e.target.value, 10) || 1));
+                      setValidationError(null);
+                    }}
+                    className={`w-full h-10 px-3 rounded-xl border bg-white font-mono font-black text-sm text-slate-900 focus:ring-1 ${
+                      hasStockDeficit
+                        ? 'border-rose-400 focus:ring-rose-500'
+                        : 'border-slate-300 focus:ring-cyan-500'
+                    }`}
                     required
                   />
                   <div className="flex gap-1">
@@ -493,14 +666,27 @@ export default function QuickMovementModal({
                       <button
                         key={quickQte}
                         type="button"
-                        onClick={() => setQuantite(quickQte)}
+                        onClick={() => {
+                          setQuantite(quickQte);
+                          setValidationError(null);
+                        }}
                         className="px-2.5 h-10 rounded-xl bg-white border border-slate-200 text-xs font-mono font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
                       >
-                        +{quickQte}
+                        {isDeltaOut ? `-${quickQte}` : `+${quickQte}`}
                       </button>
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {(hasStockDeficit || validationError) && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 flex items-center gap-2 text-[11px] font-semibold">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  {validationError ||
+                    `Stock insuffisant pour [${articleRef}] : disponible ${currentStock} pcs, demandé ${qteNum} pcs.`}
+                </span>
               </div>
             )}
           </div>
@@ -594,9 +780,14 @@ export default function QuickMovementModal({
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-black text-white font-bold transition shadow-xs cursor-pointer text-xs flex items-center gap-1.5 active:scale-[0.98]"
+              disabled={hasStockDeficit}
+              className={`px-5 py-2.5 rounded-xl font-bold transition shadow-xs text-xs flex items-center gap-1.5 ${
+                hasStockDeficit
+                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : 'bg-slate-900 hover:bg-black text-white cursor-pointer active:scale-[0.98]'
+              }`}
             >
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <CheckCircle2 className={`w-4 h-4 ${hasStockDeficit ? 'text-slate-400' : 'text-emerald-400'}`} />
               <span>Valider l'Opération Immédiate</span>
             </button>
           </div>

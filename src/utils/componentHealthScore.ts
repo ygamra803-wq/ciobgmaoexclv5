@@ -121,16 +121,23 @@ export function evaluateComponentWearAndLifecycle(
   });
 
   // 3. Match External Repairs (Sorties Externe)
+  const itemRef = normalizeStr(component?.ref);
   const linkedExterne = (sortiesExterne || []).filter((se: any) => {
-    const sCompId = normalizeStr(
-      se?.id_composant ||
-        se?.code_composant ||
-        se?.id_warehouse_item ||
-        se?.code_moteur
-    );
-    if (itemId && sCompId === itemId) return true;
-    if (itemCode && sCompId === itemCode) return true;
-    const sDesig = normalizeStr(se?.designation || se?.nom_composant);
+    const candidates = [
+      se?.id_composant,
+      se?.code_composant,
+      se?.id_warehouse_item,
+      se?.code_moteur_reel,
+      se?.code_moteur,
+      se?.id_part,
+      se?.ref_moteur,
+    ]
+      .map(normalizeStr)
+      .filter(Boolean);
+    if (itemId && candidates.includes(itemId)) return true;
+    if (itemCode && candidates.includes(itemCode)) return true;
+    if (itemRef && candidates.includes(itemRef)) return true;
+    const sDesig = normalizeStr(se?.designation_moteur || se?.designation || se?.nom_composant);
     return Boolean(itemDesig && sDesig === itemDesig);
   });
 
@@ -188,21 +195,39 @@ export function evaluateComponentWearAndLifecycle(
     }
   }
 
-  // 6. Calculate External / Bobinage Cost
-  const bobinages = Array.isArray(component?.historique_bobinage)
+  // 6. Calculate External / Bobinage Cost (deduplicating historique_bobinage entries synced from linkedExterne)
+  const rawBobinages = Array.isArray(component?.historique_bobinage)
     ? component.historique_bobinage
     : [];
+  const linkedExterneIds = new Set(
+    linkedExterne
+      .flatMap((se: any) => [se?.id, se?.code])
+      .map(normalizeStr)
+      .filter(Boolean)
+  );
+  const bobinages = rawBobinages.filter((bob: any) => {
+    const bId = normalizeStr(bob?.id_sortie);
+    const bCode = normalizeStr(bob?.code_sortie);
+    if (bId && linkedExterneIds.has(bId)) return false;
+    if (bCode && linkedExterneIds.has(bCode)) return false;
+    return true;
+  });
+
   let externalCost = 0;
 
   for (const se of linkedExterne) {
-    const c = Number(se?.cout_reparation ?? se?.cout ?? se?.montant ?? se?.prix ?? 220);
+    const c = Number(se?.cout_bobinage ?? se?.cout_reparation ?? se?.cout ?? se?.montant ?? se?.prix ?? 220);
     externalCost += Number.isFinite(c) && c > 0 ? c : 220;
+    const seDate = parseDateSafe(se?.date_expedition || se?.date_arrivee_reelle || se?.date_sortie);
+    if (seDate && seDate >= sixMonthsAgo) {
+      recentBreakdowns6Months += 1;
+    }
   }
 
   for (const bob of bobinages) {
     const c = Number(bob?.cout ?? bob?.cout_bobinage ?? bob?.montant ?? 240);
     externalCost += Number.isFinite(c) && c > 0 ? c : 240;
-    const bDate = parseDateSafe(bob?.date_demontage || bob?.date_reception);
+    const bDate = parseDateSafe(bob?.date_demontage || bob?.date_expedition || bob?.date_reception);
     if (bDate && bDate >= sixMonthsAgo) {
       recentBreakdowns6Months += 1;
     }

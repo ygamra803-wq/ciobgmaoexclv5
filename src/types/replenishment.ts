@@ -16,6 +16,12 @@ export interface IReplenishmentOrderItem {
   quantite_demandee: number;
   quantite_recue: number;
   prix_unitaire_estime: number;
+  prix_unitaire_reel?: number;
+  lot_number?: string;
+  date_peremption?: string;
+  emplacement_reception?: string;
+  cump_avant?: number;
+  cump_apres?: number;
   stock_actuel_moment: number;
   seuil_alerte: number;
   unite?: string;
@@ -27,12 +33,15 @@ export interface IReplenishmentOrder {
   date_creation: string;
   date_commande?: string;
   date_reception?: string;
+  date_reception_reelle?: string;
   fournisseur: string;
   statut: ReplenishmentOrderStatus;
   cree_par: string;
   valide_par?: string;
+  recepteur?: string;
   items: IReplenishmentOrderItem[];
   montant_total_estime: number;
+  montant_total_reel?: number;
   notes?: string;
   numero_bon_reception?: string;
   motif_annulation?: string;

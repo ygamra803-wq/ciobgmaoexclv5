@@ -488,7 +488,14 @@ export interface GmaoStoreState {
   ) => Promise<void>;
   handleReceiveReplenishmentOrder: (
     orderId: string,
-    receivedItems: { ref: string; quantite_recue: number }[],
+    receivedItems: {
+      ref: string;
+      quantite_recue: number;
+      prix_unitaire_reel?: number;
+      lot_number?: string;
+      date_peremption?: string;
+      emplacement_reception?: string;
+    }[],
     numBonReception?: string,
     recepteur?: string
   ) => Promise<void>;

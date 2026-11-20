@@ -7,6 +7,7 @@ import { ExecutionService } from '../../application/services/preventive/Executio
 import { MeterService } from '../../application/services/meter/MeterService';
 import SortieExterneService from '../../application/services/SortieExterneService';
 import { StockCalculationService } from '../../core/domain/services/StockCalculationService';
+import { applyReplacementMovementToLedger } from '../../core/domain/Blueprint';
 import {
   computeNextDueDateForMode,
   resolvePreventiveLaborRate,
@@ -772,17 +773,16 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
       const sparesUsed = normalizePreventiveSparesList(rawApproved, stockMap);
       const skipDeduction = Boolean(decisionData?.skipStockDeduction || existing.skip_stock_deduction);
       const currentMovements = get().mouvements || [];
-      const bonCode = String(
-        decisionData?.code_bon_magasin ||
-          existing.num_bon_saisi_par_tech ||
-          `BS-PRV-${existing.taskId}`
+      const explicitStoreBon = String(
+        decisionData?.code_bon_magasin || existing.num_bon_saisi_par_tech || ''
       ).trim();
+      const bonCode = explicitStoreBon || `BS-PRV-${existing.id || existing.taskId}`;
 
       const stockCheck = validatePreventiveStockSufficiency(
         sparesUsed,
         stockMap,
         currentMovements,
-        existing.num_bon_saisi_par_tech || bonCode,
+        explicitStoreBon,
         skipDeduction
       );
       if (!stockCheck.valid) {
@@ -809,7 +809,7 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
               (sp) =>
                 !isPartAlreadyDeductedByStoreBon(
                   currentMovements,
-                  existing.num_bon_saisi_par_tech || bonCode,
+                  explicitStoreBon,
                   sp.ref
                 )
             )
@@ -1332,6 +1332,28 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
       );
       if (syncedWarehouse !== get().warehouseItems) {
         get().setWarehouseItems(syncedWarehouse);
+      }
+
+      // Sync Machine BOM Ledger (reset hours, installation date, operational status) when remounting a repaired component
+      const targetMachine = String(updated.id_machine || '').trim();
+      const targetRef = String(
+        updated.code_moteur_reel ||
+          (updated as Record<string, unknown>).id_composant ||
+          (updated as Record<string, unknown>).id_part ||
+          updated.ref_moteur ||
+          ''
+      ).trim();
+      if (targetMachine && targetRef) {
+        const currentLedger = get().machineElementsLedger || [];
+        const { updatedElement, updatedLedger } = applyReplacementMovementToLedger(currentLedger, {
+          id_machine_registered: targetMachine,
+          ref: targetRef,
+          date: String(updated.date_montage || new Date().toISOString().slice(0, 10)),
+          technicien: String(updated.technicien_montage || ''),
+        });
+        if (updatedElement && typeof get().setMachineElementsLedger === 'function') {
+          get().setMachineElementsLedger(updatedLedger);
+        }
       }
 
       const { changed, nextInterventions } = syncCorrectiveInterventionsWithSortieRecord(

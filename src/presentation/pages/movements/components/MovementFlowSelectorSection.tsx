@@ -735,7 +735,7 @@ export function buildUnifiedMovementSearchCatalog(
       badgeColor: isPartie
         ? 'bg-purple-50 text-purple-800 border-purple-200'
         : 'bg-blue-50 text-blue-800 border-blue-200',
-      stockActuel: Number(w.quantite ?? w.stockActuel ?? 1),
+      stockActuel: Number(w.stockActuel ?? w.quantite ?? w.stockInitial ?? 1),
       emplacement: String(w.emplacement || w.rattachement_val || 'Entrepôt'),
       type: String(isPartie ? w.id_family || 'Machine' : w.id_type || 'Composant'),
       unit: String(w.unite || 'pcs'),

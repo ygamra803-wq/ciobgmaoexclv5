@@ -338,16 +338,23 @@ export class SortieExterneService {
   /** Marks a repaired motor/organ as remounted on the target machine after load verification. */
   static markAsMounted(
     id: string | number,
-    { technicien_montage, date_montage, id_machine_cible, note }: SortieMountedPayload,
+    {
+      technicien_montage,
+      date_montage,
+      id_machine_cible,
+      id_machine,
+      note,
+    }: SortieMountedPayload & { id_machine?: string },
     existingList?: SortieExterneItem[]
   ): SortieExterneItem | null {
+    const resolvedTargetMachine = String(id_machine_cible || id_machine || '').trim();
     return this.updateSortie(
       id,
       {
         etat: 'Monté',
         technicien_montage: technicien_montage || 'Ismaayl',
         date_montage: date_montage || new Date().toISOString().split('T')[0],
-        id_machine: id_machine_cible || undefined,
+        ...(resolvedTargetMachine ? { id_machine: resolvedTargetMachine } : {}),
         note: note || 'Organe remonté et testé en charge OK',
       },
       existingList
@@ -390,14 +397,31 @@ export class SortieExterneService {
       return warehouseItems;
     }
 
-    const motorCode = String(sortieRecord.code_moteur_reel || '').trim().toLowerCase();
-    if (!motorCode) return warehouseItems;
+    const candidateCodes = new Set(
+      [
+        sortieRecord.code_moteur_reel,
+        (sortieRecord as Record<string, unknown>).id_composant,
+        (sortieRecord as Record<string, unknown>).id_part,
+        sortieRecord.ref_moteur,
+      ]
+        .map((v) => String(v || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    if (candidateCodes.size === 0) return warehouseItems;
 
     let changed = false;
     const nextList = warehouseItems.map((item) => {
       if (!item || typeof item !== 'object') return item;
-      const itemCode = String(item.id_warehouse_item || item.code || '').trim().toLowerCase();
-      if (itemCode !== motorCode) return item;
+      const itemCandidates = [
+        item.id_warehouse_item,
+        item.code,
+        (item as Record<string, unknown>).ref,
+        (item as Record<string, unknown>).id,
+      ]
+        .map((v) => String(v || '').trim().toLowerCase())
+        .filter(Boolean);
+      const isMatch = itemCandidates.some((c) => candidateCodes.has(c));
+      if (!isMatch) return item;
 
       changed = true;
       const existingHistory: Array<Record<string, unknown>> = Array.isArray(item.historique_bobinage)
@@ -409,13 +433,30 @@ export class SortieExterneService {
         bon_ref: sortieRecord.ref,
         id_machine: sortieRecord.id_machine,
         fournisseur: sortieRecord.fournisseur_externe,
+        societe_bobinage: sortieRecord.fournisseur_externe || 'Atelier Interne',
         type_probleme: sortieRecord.type_probleme,
+        cause:
+          sortieRecord.type_probleme ||
+          (sortieRecord as Record<string, unknown>).nature_travail ||
+          'Révision / Bobinage',
         date_expedition: sortieRecord.date_expedition,
+        date_demontage: sortieRecord.date_expedition,
+        technicien_demontage:
+          (sortieRecord as Record<string, unknown>).technicien_suivi ||
+          sortieRecord.technicien_montage ||
+          item.technician ||
+          '',
         date_arrivee_reelle: sortieRecord.date_arrivee_reelle || null,
+        date_reception: sortieRecord.date_arrivee_reelle || null,
         date_montage: sortieRecord.date_montage || null,
         etat: sortieRecord.etat,
+        statut_bobinage: sortieRecord.etat,
         cout_bobinage: Number(sortieRecord.cout_bobinage) || 0,
         note: sortieRecord.note || '',
+        observation:
+          (sortieRecord as Record<string, unknown>).travaux_effectues ||
+          sortieRecord.note ||
+          '',
       };
 
       const histIdx = existingHistory.findIndex(

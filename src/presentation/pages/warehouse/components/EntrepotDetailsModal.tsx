@@ -146,15 +146,27 @@ export function EntrepotDetailsModal({ selectedDetails, onClose, t }: EntrepotDe
     return Boolean(itemDesig && peComp === itemDesig && (!itemMach || peMach === itemMach));
   });
 
+  const itemRef = String(selectedDetails.ref || '').trim().toUpperCase();
   const linkedExterne = allSortiesExterne.filter((se) => {
-    const sCompId = String(
-      se.id_composant || se.code_composant || se.id_warehouse_item || se.code_moteur || ''
+    const candidates = [
+      se.id_composant,
+      se.code_composant,
+      se.id_warehouse_item,
+      se.code_moteur_reel,
+      se.code_moteur,
+      se.id_part,
+      se.ref_moteur,
+    ]
+      .map((v) => String(v || '').trim().toUpperCase())
+      .filter(Boolean);
+    if (itemId && candidates.includes(itemId)) return true;
+    if (itemCode && candidates.includes(itemCode)) return true;
+    if (itemRef && candidates.includes(itemRef)) return true;
+    const sDesig = String(
+      se.designation_moteur || se.designation || se.nom_composant || ''
     )
       .trim()
       .toUpperCase();
-    if (itemId && sCompId === itemId) return true;
-    if (itemCode && sCompId === itemCode) return true;
-    const sDesig = String(se.designation || se.nom_composant || '').trim().toUpperCase();
     return Boolean(itemDesig && sDesig === itemDesig);
   });
 

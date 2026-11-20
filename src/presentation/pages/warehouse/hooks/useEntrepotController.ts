@@ -1024,6 +1024,21 @@ export function useEntrepotController({
 
   const filteredItems = useMemo(() => {
     return warehouseItems.filter((item) => {
+      const rec = item as Record<string, unknown>;
+      const statusUpper = String(rec.statut || rec.status || rec.etat || '')
+        .trim()
+        .toUpperCase();
+      const isArchived =
+        rec.is_active === false ||
+        rec.actif === false ||
+        rec.archived === true ||
+        statusUpper === 'ARCHIVE' ||
+        statusUpper === 'ARCHIVEE' ||
+        statusUpper === 'ARCHIVED';
+      if (isArchived && String(currentStatusFilter).trim().toUpperCase() !== 'ARCHIVE') {
+        return false;
+      }
+
       const itemIsComp = isWarehouseComponent(item);
       const itemIsPart = !itemIsComp;
 
@@ -1035,14 +1050,29 @@ export function useEntrepotController({
         if (isPartNature(currentNatureFilter) && !itemIsPart) return false;
       }
 
+      const stLower = String(item.status || (item as Record<string, unknown>).statut || item.etat || '').toLowerCase();
+      const isInServiceStatus =
+        stLower.includes('service') || stLower === 'actif' || stLower.includes('monté') || stLower.includes('monte');
+      const isInStockStatus =
+        stLower.includes('stock') ||
+        stLower.includes('dispo') ||
+        stLower.includes('retourné') ||
+        stLower.includes('retourne') ||
+        stLower.includes('terminé atelier') ||
+        stLower.includes('termine atelier');
+      const isUnderRevisionStatus =
+        !isInStockStatus &&
+        (stLower.includes('rev') ||
+          stLower.includes('rév') ||
+          stLower.includes('ext') ||
+          stLower.includes('réparation') ||
+          stLower.includes('reparation') ||
+          stLower.includes('atelier'));
+
       if (isComponentNature(activeKpiFilter) && !itemIsComp) return false;
       if (isPartNature(activeKpiFilter) && !itemIsPart) return false;
-      if (activeKpiFilter === 'SERVICE' && !String(item.status || '').toLowerCase().includes('service')) return false;
-      if (
-        activeKpiFilter === 'RESERVE' &&
-        !String(item.status || '').toLowerCase().includes('stock') &&
-        !String(item.status || '').toLowerCase().includes('dispo')
-      ) {
+      if (activeKpiFilter === 'SERVICE' && !isInServiceStatus) return false;
+      if (activeKpiFilter === 'RESERVE' && !isInStockStatus) {
         return false;
       }
 
@@ -1067,9 +1097,16 @@ export function useEntrepotController({
       if (currentRattachementFilter !== 'ALL' && item.rattachement_type !== currentRattachementFilter) return false;
 
       if (currentStatusFilter !== 'ALL') {
-        const itemStatus = String(item.status || '').toLowerCase();
         const filterStatus = String(currentStatusFilter).toLowerCase();
-        if (!itemStatus.includes(filterStatus)) return false;
+        if (filterStatus.includes('service')) {
+          if (!isInServiceStatus) return false;
+        } else if (filterStatus.includes('stock') || filterStatus.includes('dispo')) {
+          if (!isInStockStatus) return false;
+        } else if (filterStatus.includes('rev') || filterStatus.includes('rév') || filterStatus.includes('ext')) {
+          if (!isUnderRevisionStatus) return false;
+        } else if (!stLower.includes(filterStatus)) {
+          return false;
+        }
       }
 
       if (localSearch) {
@@ -1196,10 +1233,25 @@ export function useEntrepotController({
       if (isWarehouseComponent(item)) components++;
       else parts++;
 
-      const st = String(item.status || '').toLowerCase();
-      if (st.includes('service')) enService++;
-      else if (st.includes('stock') || st.includes('dispo')) enStock++;
-      else if (st.includes('rev') || st.includes('ext')) enRevision++;
+      const st = String(item.status || (item as Record<string, unknown>).statut || item.etat || '').toLowerCase();
+      const inStock =
+        st.includes('stock') ||
+        st.includes('dispo') ||
+        st.includes('retourné') ||
+        st.includes('retourne') ||
+        st.includes('terminé atelier') ||
+        st.includes('termine atelier');
+      if (st.includes('service') || st === 'actif' || st.includes('monté') || st.includes('monte')) enService++;
+      else if (inStock) enStock++;
+      else if (
+        st.includes('rev') ||
+        st.includes('rév') ||
+        st.includes('ext') ||
+        st.includes('réparation') ||
+        st.includes('reparation') ||
+        st.includes('atelier')
+      )
+        enRevision++;
     });
 
     return {

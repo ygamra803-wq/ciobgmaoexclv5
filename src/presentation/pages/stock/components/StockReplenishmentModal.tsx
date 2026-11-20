@@ -158,21 +158,44 @@ export default function StockReplenishmentModal({
   const handleOpenReception = (order: IReplenishmentOrder) => {
     if (!canManageReplenishment) return;
     setReceptionOrder(order);
-    const initItems: Record<string, number> = {};
+    const compactDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const initItems: Record<string, ReceptionLineDraft> = {};
     for (const it of order.items) {
       const remaining = Math.max(0, it.quantite_demandee - (it.quantite_recue || 0));
-      initItems[it.ref] = remaining;
+      const stockMatch = rawStock.find(
+        (s) => String(s.ref || '').trim().toUpperCase() === String(it.ref || '').trim().toUpperCase()
+      );
+      const fallbackPrice = Number(
+        it.prix_unitaire_reel ??
+          it.prix_unitaire_estime ??
+          stockMatch?.prixUnitaire ??
+          stockMatch?.prix_unitaire ??
+          stockMatch?.prix ??
+          0
+      );
+      initItems[it.ref] = {
+        qty: remaining,
+        prix_unitaire_reel: fallbackPrice,
+        lot_number: it.lot_number || `LOT-${compactDate}-${String(it.ref || '').trim().toUpperCase()}`,
+        date_peremption: it.date_peremption || '',
+        emplacement_reception:
+          it.emplacement_reception || String(stockMatch?.emplacement || '').trim() || 'MAG-CENTRAL-A1',
+      };
     }
     setReceptionItems(initItems);
-    setBonReceptionNum(`BR-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${order.numero_commande.slice(-4)}`);
+    setBonReceptionNum(`BR-${compactDate}-${order.numero_commande.slice(-4)}`);
   };
 
   const handleConfirmReception = async () => {
     if (!canManageReplenishment || !receptionOrder) return;
 
-    const payload = Object.entries(receptionItems).map(([ref, qty]) => ({
+    const payload = Object.entries(receptionItems).map(([ref, draft]) => ({
       ref,
-      quantite_recue: Number(qty) || 0,
+      quantite_recue: Number(draft?.qty) || 0,
+      prix_unitaire_reel: Number(draft?.prix_unitaire_reel) || 0,
+      lot_number: String(draft?.lot_number || '').trim() || undefined,
+      date_peremption: String(draft?.date_peremption || '').trim() || undefined,
+      emplacement_reception: String(draft?.emplacement_reception || '').trim() || undefined,
     }));
 
     if (typeof handleReceiveReplenishmentOrder === 'function') {
@@ -182,7 +205,10 @@ export default function StockReplenishmentModal({
         bonReceptionNum.trim(),
         user?.name || user?.nom || 'Magasinier'
       );
-      showToast?.(`Réception validée et intégrée au stock avec succès (BR: ${bonReceptionNum}).`, 'success');
+      showToast?.(
+        `Réception validée : CUMP recalculé et traçabilité Lot/Emplacement intégrée (BR: ${bonReceptionNum}).`,
+        'success'
+      );
       setReceptionOrder(null);
     }
   };

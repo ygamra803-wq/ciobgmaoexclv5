@@ -1,6 +1,8 @@
 import { DataGateway } from '../../application/DataGateway';
 import { movementRepository } from '../../application/MovementRepository';
 import { reactiveCalculationEngine } from '../../services/reactiveCalculationEngine';
+import { StockCalculationService } from '../../core/domain/services/StockCalculationService';
+import { Logger } from '../../core/logger/LoggerService';
 import { safeId } from '../../utils/safeId';
 import type { GmaoStoreState, StateUpdater, ValidationReviewDecisionPayload } from '../../types/store';
 import type {
@@ -20,7 +22,82 @@ import {
   getInitialStock,
   getInitialMovements,
   resolveActiveActorContext,
+  resolveActiveSessionRole,
+  isPartAlreadyDeductedByStoreBon,
 } from './storeBootstrapSlice';
+
+const STOCK_MANAGER_ROLES = new Set([
+  'ADMIN',
+  'RESPONSABLE',
+  'RESPONSABLE_MAINTENANCE',
+  'RESPONSABLE_MAGASIN',
+]);
+
+const STOCK_DEMAND_SUBMITTER_ROLES = new Set([
+  'ADMIN',
+  'RESPONSABLE',
+  'RESPONSABLE_MAINTENANCE',
+  'RESPONSABLE_MAGASIN',
+  'TECHNICIEN',
+  'OPERATEUR',
+]);
+
+function resolveStockRole(explicitRole?: unknown): string {
+  return String(explicitRole || resolveActiveSessionRole() || '')
+    .trim()
+    .toUpperCase();
+}
+
+function canManageStockSession(explicitRole?: unknown): boolean {
+  const role = resolveStockRole(explicitRole);
+  if (!role) return true; // Headless unit test without active browser session
+  return STOCK_MANAGER_ROLES.has(role);
+}
+
+function canSubmitSortieDemandSession(explicitRole?: unknown): boolean {
+  const role = resolveStockRole(explicitRole);
+  if (!role) return true;
+  return STOCK_DEMAND_SUBMITTER_ROLES.has(role);
+}
+
+function validateSortieDemandStockSufficiency(
+  items: ISortieDemandItem[],
+  stockMap: Map<string, any>,
+  currentMovements: IMouvement[],
+  numBonSaisi: unknown
+): { valid: boolean; reason?: string } {
+  if (!Array.isArray(items) || items.length === 0) return { valid: true };
+  const requestedByRef = new Map<string, { ref: string; qty: number }>();
+
+  for (const it of items) {
+    if (!it) continue;
+    const refRaw = String(it.ref || '').trim();
+    const refKey = refRaw.toUpperCase();
+    const qty = Number(it.quantite) || 0;
+    if (!refKey || qty <= 0) continue;
+    if (isPartAlreadyDeductedByStoreBon(currentMovements, numBonSaisi, refRaw)) continue;
+    const prev = requestedByRef.get(refKey);
+    if (prev) {
+      prev.qty += qty;
+    } else {
+      requestedByRef.set(refKey, { ref: refRaw, qty });
+    }
+  }
+
+  for (const [refKey, req] of requestedByRef.entries()) {
+    const stockMatch = stockMap.get(refKey);
+    if (!stockMatch) continue;
+    const liveStock = StockCalculationService.calculateStockActuel(stockMatch, currentMovements);
+    if (req.qty > liveStock) {
+      return {
+        valid: false,
+        reason: `Stock insuffisant pour ${req.ref} : demandé ${req.qty}, disponible ${liveStock}.`,
+      };
+    }
+  }
+
+  return { valid: true };
+}
 
 type StoreSet = (
   partial: Partial<GmaoStoreState> | ((state: GmaoStoreState) => Partial<GmaoStoreState>)
@@ -178,6 +255,10 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
 
     handleSubmitSortieDemand: (demandPayload) => {
       if (!demandPayload || typeof demandPayload !== 'object') return null;
+      if (!canSubmitSortieDemandSession((demandPayload as any)?.actorRole)) {
+        Logger.warn('[StockSlice] RBAC blocked handleSubmitSortieDemand');
+        return null;
+      }
       const nowIso = new Date().toISOString();
       const actor = resolveActiveActorContext();
       const rawItems = Array.isArray(demandPayload.items) ? demandPayload.items : [];
@@ -221,6 +302,11 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
       decisionData: ValidationReviewDecisionPayload = {},
       onAddMouvement = null
     ) => {
+      if (!canManageStockSession(decisionData?.actorRole)) {
+        Logger.warn('[StockSlice] RBAC blocked handleReviewSortieDemandValidation');
+        return null;
+      }
+
       const currentDemands = get().sortieDemands || [];
       const existing = currentDemands.find((d) => String(d.id) === String(demandId));
       if (!existing) return null;
@@ -339,7 +425,7 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
         return updatedDemand;
       }
 
-      // Standard approval: emit 1 Sortie movement per approved item
+      // Standard approval: emit 1 Sortie movement per approved item after atomic stock sufficiency check
       const approvedItems: ISortieDemandItem[] = Array.isArray(decisionData?.approvedItems)
         ? decisionData.approvedItems
         : Array.isArray(existing.items)
@@ -349,9 +435,37 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
         decisionData?.code_bon_magasin || existing.code_bon_tech || `BS-${Date.now().toString().slice(-5)}`
       ).trim();
 
+      const currentMovements = get().mouvements || [];
+      const stockMap = new Map<string, any>();
+      for (const s of get().rawStock || []) {
+        const refKey = String(s?.ref || '').trim().toUpperCase();
+        if (refKey) stockMap.set(refKey, s);
+      }
+
+      const stockCheck = validateSortieDemandStockSufficiency(
+        approvedItems,
+        stockMap,
+        currentMovements,
+        existing.code_bon_tech || officialBonCode
+      );
+      if (!stockCheck.valid) {
+        Logger.warn(`[StockSlice] Blocked SortieDemand approval: ${stockCheck.reason}`);
+        return null;
+      }
+
       const emittedIds: string[] = [];
       const newMovements: IMouvement[] = approvedItems
-        .filter((it) => it && String(it.ref || '').trim() && Number(it.quantite) > 0)
+        .filter(
+          (it) =>
+            it &&
+            String(it.ref || '').trim() &&
+            Number(it.quantite) > 0 &&
+            !isPartAlreadyDeductedByStoreBon(
+              currentMovements,
+              existing.code_bon_tech || officialBonCode,
+              it.ref
+            )
+        )
         .map((it) => {
           const mvtId = safeId('MVT');
           emittedIds.push(mvtId);
@@ -418,6 +532,10 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
     },
 
     handleCreateReplenishmentOrder: async (orderData: Partial<IReplenishmentOrder>) => {
+      if (!canManageStockSession((orderData as any)?.actorRole)) {
+        Logger.warn('[StockSlice] RBAC blocked handleCreateReplenishmentOrder');
+        throw new Error('Permission refusée : rôle magasinier ou responsable requis pour créer une commande fournisseur.');
+      }
       const nowIso = new Date().toISOString();
       const yyyymm = nowIso.slice(0, 7).replace('-', '');
       const existingOrders = get().replenishmentOrders || [];
@@ -465,6 +583,10 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
       status: ReplenishmentOrderStatus,
       metadata: Record<string, any> = {}
     ) => {
+      if (!canManageStockSession(metadata?.actorRole)) {
+        Logger.warn('[StockSlice] RBAC blocked handleUpdateReplenishmentOrderStatus');
+        return;
+      }
       const orders = get().replenishmentOrders || [];
       const target = orders.find((o) => String(o.id) === String(orderId));
       if (!target) return;
@@ -494,10 +616,21 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
 
     handleReceiveReplenishmentOrder: async (
       orderId: string,
-      receivedItems: { ref: string; quantite_recue: number }[],
+      receivedItems: {
+        ref: string;
+        quantite_recue: number;
+        prix_unitaire_reel?: number;
+        lot_number?: string;
+        date_peremption?: string;
+        emplacement_reception?: string;
+      }[],
       numBonReception?: string,
       recepteur?: string
     ) => {
+      if (!canManageStockSession()) {
+        Logger.warn('[StockSlice] RBAC blocked handleReceiveReplenishmentOrder');
+        return;
+      }
       const orders = get().replenishmentOrders || [];
       const target = orders.find((o) => String(o.id) === String(orderId));
       if (!target) return;
@@ -506,26 +639,98 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
       }
 
       const today = new Date().toISOString().slice(0, 10);
+      const compactDate = today.replace(/-/g, '');
       const actor = resolveActiveActorContext();
       const bonCode = String(numBonReception || `BR-${Date.now().toString().slice(-6)}`).trim();
       const receiverName = String(recepteur || actor.actorName).trim();
 
-      const receivedByRef = new Map<string, number>();
+      const currentStockList = get().rawStock || [];
+      const currentMovements = get().mouvements || [];
+
+      const receivedMetaByRef = new Map<
+        string,
+        {
+          qty: number;
+          prix_unitaire_reel?: number;
+          lot_number?: string;
+          date_peremption?: string;
+          emplacement_reception?: string;
+        }
+      >();
       for (const rec of receivedItems || []) {
         const refKey = String(rec?.ref || '').trim().toUpperCase();
         const qty = Math.max(0, Number(rec?.quantite_recue) || 0);
         if (refKey && qty > 0) {
-          receivedByRef.set(refKey, (receivedByRef.get(refKey) || 0) + qty);
+          const prev = receivedMetaByRef.get(refKey);
+          receivedMetaByRef.set(refKey, {
+            qty: (prev?.qty || 0) + qty,
+            prix_unitaire_reel:
+              rec.prix_unitaire_reel !== undefined ? Number(rec.prix_unitaire_reel) : prev?.prix_unitaire_reel,
+            lot_number: rec.lot_number ? String(rec.lot_number).trim() : prev?.lot_number,
+            date_peremption: rec.date_peremption ? String(rec.date_peremption).trim() : prev?.date_peremption,
+            emplacement_reception: rec.emplacement_reception
+              ? String(rec.emplacement_reception).trim()
+              : prev?.emplacement_reception,
+          });
         }
       }
 
       const newMovements: IMouvement[] = [];
+      const stockPriceAndBinUpdates = new Map<
+        string,
+        { cumpAfter: number; realPrice: number; emplacement?: string }
+      >();
+
       const updatedItems = (target.items || []).map((item) => {
         const refKey = String(item.ref || '').trim().toUpperCase();
-        const requestedDelta = receivedByRef.get(refKey) || 0;
+        const recMeta = receivedMetaByRef.get(refKey);
+        const requestedDelta = recMeta?.qty || 0;
         const alreadyReceived = Math.max(0, Number(item.quantite_recue) || 0);
         const remainingNeeded = Math.max(0, (Number(item.quantite_demandee) || 0) - alreadyReceived);
         const clampedAdded = Math.min(requestedDelta, remainingNeeded);
+
+        const stockMatch = currentStockList.find(
+          (s) => String(s.ref || '').trim().toUpperCase() === refKey
+        );
+        const stockBefore = stockMatch
+          ? Math.max(0, StockCalculationService.calculateStockActuel(stockMatch, currentMovements))
+          : 0;
+        const oldPrice = Math.max(
+          0,
+          Number(
+            stockMatch?.prixUnitaire ??
+              stockMatch?.prix_unitaire ??
+              stockMatch?.prix ??
+              item.prix_unitaire_estime ??
+              0
+          ) || 0
+        );
+
+        const hasExplicitRealPrice =
+          recMeta?.prix_unitaire_reel !== undefined &&
+          Number.isFinite(Number(recMeta.prix_unitaire_reel)) &&
+          Number(recMeta.prix_unitaire_reel) > 0;
+        const realPrice = hasExplicitRealPrice
+          ? Number(recMeta!.prix_unitaire_reel)
+          : Math.max(0, Number(item.prix_unitaire_reel ?? item.prix_unitaire_estime ?? oldPrice) || 0);
+
+        const cumpAfter =
+          clampedAdded > 0
+            ? stockBefore > 0 && oldPrice > 0
+              ? Number(((stockBefore * oldPrice + clampedAdded * realPrice) / (stockBefore + clampedAdded)).toFixed(2))
+              : Number(realPrice.toFixed(2))
+            : Number((item.cump_apres ?? (oldPrice || realPrice)).toFixed(2));
+
+        const resolvedLot =
+          recMeta?.lot_number ||
+          item.lot_number ||
+          `LOT-${compactDate}-${refKey}`;
+        const resolvedExpiry = recMeta?.date_peremption || item.date_peremption || undefined;
+        const resolvedBin =
+          recMeta?.emplacement_reception ||
+          item.emplacement_reception ||
+          String(stockMatch?.emplacement || '').trim() ||
+          undefined;
 
         if (clampedAdded > 0) {
           newMovements.push({
@@ -538,14 +743,34 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
             date: today,
             technicien: receiverName,
             action_id: 'reapprovisionnement',
-            prix_unitaire: item.prix_unitaire_estime,
+            prix_unitaire: realPrice,
+            cout_total: Number((clampedAdded * realPrice).toFixed(2)),
             fournisseur: target.fournisseur,
+            lot_number: resolvedLot,
+            ...(resolvedExpiry ? { date_peremption: resolvedExpiry, expiry_date: resolvedExpiry } : {}),
+            ...(resolvedBin ? { emplacement_reception: resolvedBin, bin_code: resolvedBin } : {}),
+            cump_avant: oldPrice,
+            cump_apres: cumpAfter,
           });
+
+          if (cumpAfter > 0 || resolvedBin) {
+            stockPriceAndBinUpdates.set(refKey, {
+              cumpAfter,
+              realPrice,
+              emplacement: resolvedBin,
+            });
+          }
         }
 
         return {
           ...item,
           quantite_recue: alreadyReceived + clampedAdded,
+          prix_unitaire_reel: realPrice,
+          lot_number: resolvedLot,
+          ...(resolvedExpiry ? { date_peremption: resolvedExpiry } : {}),
+          ...(resolvedBin ? { emplacement_reception: resolvedBin } : {}),
+          cump_avant: oldPrice,
+          cump_apres: cumpAfter,
         };
       });
 
@@ -556,6 +781,18 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
         ? 'RECU_CONFORME'
         : 'RECEPTION_PARTIELLE';
 
+      const montantTotalReel = Number(
+        updatedItems
+          .reduce(
+            (sum, it) =>
+              sum +
+              (Number(it.quantite_recue) || 0) *
+                (Number(it.prix_unitaire_reel ?? it.prix_unitaire_estime) || 0),
+            0
+          )
+          .toFixed(2)
+      );
+
       const updatedOrder: IReplenishmentOrder = {
         ...target,
         items: updatedItems,
@@ -563,7 +800,26 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
         date_reception_reelle: today,
         numero_bon_reception: bonCode,
         recepteur: receiverName,
+        montant_total_reel: montantTotalReel,
       };
+
+      if (stockPriceAndBinUpdates.size > 0) {
+        get().setRawStock((prev) =>
+          (prev || []).map((s) => {
+            const refKey = String(s.ref || '').trim().toUpperCase();
+            const upd = stockPriceAndBinUpdates.get(refKey);
+            if (!upd) return s;
+            const nextPrice = upd.cumpAfter > 0 ? upd.cumpAfter : Number(s.prixUnitaire ?? s.prix_unitaire ?? 0);
+            const currentBin = String(s.emplacement || '').trim();
+            return {
+              ...s,
+              ...(nextPrice > 0 ? { prixUnitaire: nextPrice, prix_unitaire: nextPrice } : {}),
+              ...(upd.realPrice > 0 ? { dernier_prix_achat: upd.realPrice } : {}),
+              ...(!currentBin && upd.emplacement ? { emplacement: upd.emplacement } : {}),
+            };
+          })
+        );
+      }
 
       if (newMovements.length > 0) {
         get().setMouvements((prev) => [...newMovements, ...(prev || [])]);
@@ -582,6 +838,12 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
           statut: nextStatus,
           numero_bon_reception: bonCode,
           itemsCount: newMovements.length,
+          montant_total_reel: montantTotalReel,
+          cumpUpdates: Array.from(stockPriceAndBinUpdates.entries()).map(([ref, u]) => ({
+            ref,
+            cumpAfter: u.cumpAfter,
+            realPrice: u.realPrice,
+          })),
         },
       });
     },

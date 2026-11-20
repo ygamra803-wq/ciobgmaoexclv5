@@ -90,6 +90,22 @@ const DEFAULT_KPIS: StockKPIsSummary = {
   totalEntrees: 0,
 };
 
+export function isArchivedStockArticle(
+  item: Partial<IStockItem> | Record<string, unknown> | null | undefined
+): boolean {
+  if (!item || typeof item !== 'object') return false;
+  const rec = item as Record<string, unknown>;
+  const statusUpper = String(rec.statut || rec.status || '').trim().toUpperCase();
+  return (
+    rec.is_active === false ||
+    rec.actif === false ||
+    rec.archived === true ||
+    statusUpper === 'ARCHIVE' ||
+    statusUpper === 'ARCHIVEE' ||
+    statusUpper === 'ARCHIVED'
+  );
+}
+
 export function useStockViewController({
   stockItems: propStockItems = [],
   stockSearch = '',
@@ -208,11 +224,21 @@ export function useStockViewController({
     [reservedStockMap]
   );
 
+  const activeOnlyStockItems = useMemo(
+    () => stockItems.filter((item) => !isArchivedStockArticle(item)),
+    [stockItems]
+  );
+
+  const archivedStockCount = useMemo(
+    () => stockItems.filter((item) => isArchivedStockArticle(item)).length,
+    [stockItems]
+  );
+
   const reservedSummary = useMemo(() => {
     let articlesCount = 0;
     let totalUnits = 0;
     let riskCount = 0;
-    for (const item of stockItems) {
+    for (const item of activeOnlyStockItems) {
       const entry = getReservedEntry(item.ref);
       if (entry && entry.reservedQty > 0) {
         articlesCount += 1;
@@ -225,31 +251,36 @@ export function useStockViewController({
       }
     }
     return { articlesCount, totalUnits, riskCount };
-  }, [stockItems, getReservedEntry]);
+  }, [activeOnlyStockItems, getReservedEntry]);
 
   const reorderAlerts = useMemo(
     () =>
       computeStockReorderAlerts({
-        stockItems,
+        stockItems: activeOnlyStockItems,
         reservedStockMap,
       }),
-    [stockItems, reservedStockMap]
+    [activeOnlyStockItems, reservedStockMap]
   );
 
   const emplacements = useMemo(() => {
     const set = new Set<string>();
-    stockItems.forEach((item) => {
+    activeOnlyStockItems.forEach((item) => {
       if (item.emplacement) set.add(String(item.emplacement));
     });
     return Array.from(set).sort();
-  }, [stockItems]);
+  }, [activeOnlyStockItems]);
 
   const deferredStockSearch = useDeferredValue(stockSearch);
   const filteredStock = useMemo(() => {
     if (!stockItems.length) return [];
 
+    const sourceList =
+      activeKpiFilter === 'ARCHIVE'
+        ? stockItems.filter((item) => isArchivedStockArticle(item))
+        : activeOnlyStockItems;
+
     const baseGroupFiltered = listStockItemsByGroupType(
-      stockItems,
+      sourceList,
       types,
       stockGroupFilter,
       stockTypeFilter
@@ -302,6 +333,8 @@ export function useStockViewController({
     });
   }, [
     stockItems,
+    activeOnlyStockItems,
+    activeKpiFilter,
     types,
     effectivePdrGroups,
     stockGroupFilter,
@@ -326,7 +359,7 @@ export function useStockViewController({
   );
 
   const effectiveFiltered = useMemo(() => {
-    if (activeKpiFilter === 'ALL') return filteredStock;
+    if (activeKpiFilter === 'ALL' || activeKpiFilter === 'ARCHIVE') return filteredStock;
     if (activeKpiFilter === 'RESERVED') {
       return filteredStock.filter((item) => {
         const entry = getReservedEntry(item.ref);
@@ -417,7 +450,7 @@ export function useStockViewController({
       {
         key: 'ALL',
         label: t('common.filters.all'),
-        count: stockItems.length,
+        count: activeOnlyStockItems.length,
         activeBg: 'bg-slate-900 text-white shadow-xs',
         onClick: () => {
           setActiveKpiFilter('ALL');
@@ -485,9 +518,26 @@ export function useStockViewController({
         },
         isActive: activeKpiFilter === 'RESERVED',
       },
+      ...(archivedStockCount > 0
+        ? [
+            {
+              key: 'ARCHIVE',
+              label: 'Archivés',
+              count: archivedStockCount,
+              activeBg: 'bg-slate-600 text-white shadow-xs',
+              colorDot: 'bg-slate-400',
+              onClick: () => {
+                setActiveKpiFilter(activeKpiFilter === 'ARCHIVE' ? 'ALL' : 'ARCHIVE');
+                setStockAlertOnly(false);
+              },
+              isActive: activeKpiFilter === 'ARCHIVE',
+            },
+          ]
+        : []),
     ],
     [
-      stockItems.length,
+      activeOnlyStockItems.length,
+      archivedStockCount,
       stockKPIs,
       activeKpiFilter,
       stockAlertOnly,

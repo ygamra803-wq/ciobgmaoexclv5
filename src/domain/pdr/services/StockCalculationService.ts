@@ -27,6 +27,8 @@ export interface StockCalculationResult {
   stockActuel: number;
   alerte: 'OK' | 'ALERTE' | 'RUPTURE';
   seuil: number;
+  unitPrice?: number;
+  totalValue?: number;
   lastUpdated: Date;
 }
 
@@ -46,8 +48,8 @@ export class StockCalculationService {
   static normalizeType = normalizeType;
 
   /**
-   * Computes a lightweight `O(1)` fingerprint hash for a movement array based on its length
-   * and boundary/midpoint elements (`first`, `mid`, `last`).
+   * Computes a collision-resistant deterministic 32-bit FNV-1a fingerprint hash across all
+   * movements (`id/code_bon`, `ref`, `type`, `quantite`) so any edit at any index invalidates L1 cache.
    *
    * @param movements - Array of stock movement records (`IMouvement[]`).
    * @returns Deterministic string fingerprint used as part of the L1 cache key.
@@ -55,10 +57,21 @@ export class StockCalculationService {
   static getMovementHash(movements) {
     if (!Array.isArray(movements) || movements.length === 0) return 'mvt_0';
     const len = movements.length;
-    const first = movements[0];
-    const mid = movements[Math.floor(len / 2)];
-    const last = movements[len - 1];
-    return `mvt_${len}_${first?.id || first?.code_bon || '0'}_${mid?.quantite || '0'}_${last?.id || last?.code_bon || '0'}`;
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < len; i++) {
+      const m = movements[i];
+      if (!m) continue;
+      const idStr = String(m.id || m.code_bon || i);
+      const refStr = String(m.ref || m.Ref || '');
+      const typeStr = String(m.type || '');
+      const qtyStr = String(m.quantite ?? m.quantity ?? 0);
+      const token = `${idStr}|${refStr}|${typeStr}|${qtyStr}`;
+      for (let j = 0; j < token.length; j++) {
+        h ^= token.charCodeAt(j);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+    }
+    return `mvt_${len}_${h.toString(36)}`;
   }
 
   /**
@@ -478,11 +491,16 @@ export class StockCalculationService {
       const key = ref.toUpperCase();
       const stockInitial = safeNum(article?.stockInitial, 0);
       const seuil = safeNum(article?.seuil, 0);
+      const unitPrice = safeNum(
+        article?.prix_unitaire ?? article?.prixUnitaire ?? article?.unitPrice ?? article?.prix,
+        0
+      );
       const mvt = index.get(key);
       const entrees = mvt ? mvt.entreesSum : 0;
       const sorties = mvt ? mvt.sortiesSum : 0;
       const rawActuel = stockInitial + entrees - sorties;
       const stockActuel = Math.max(0, rawActuel);
+      const totalValue = Number((stockActuel * unitPrice).toFixed(2));
       const alerte: 'OK' | 'ALERTE' | 'RUPTURE' =
         rawActuel <= 0 ? 'RUPTURE' : rawActuel <= seuil ? 'ALERTE' : 'OK';
 
@@ -495,6 +513,8 @@ export class StockCalculationService {
         stockActuel,
         alerte,
         seuil,
+        unitPrice,
+        totalValue,
         lastUpdated: now,
       };
     });
@@ -546,9 +566,20 @@ export class StockCalculationService {
    * @returns Summary metrics (`totalArticles`, `totalValue`, `articlesInRupture`, `articlesInAlerte`, `articlesOK`, `averageStock`).
    */
   static getStockStatistics(stocks: StockCalculationResult[] = []) {
+    const rawValue = stocks.reduce((sum, s: any) => {
+      if (typeof s?.totalValue === 'number' && Number.isFinite(s.totalValue)) {
+        return sum + s.totalValue;
+      }
+      const price = safeNum(
+        s?.unitPrice ?? s?.prix_unitaire ?? s?.prixUnitaire ?? s?.prix,
+        0
+      );
+      return sum + safeNum(s?.stockActuel, 0) * price;
+    }, 0);
+
     return {
       totalArticles: stocks.length,
-      totalValue: stocks.reduce((sum, s) => sum + s.stockActuel * 100, 0),
+      totalValue: Number(rawValue.toFixed(2)),
       articlesInRupture: stocks.filter((s) => s.alerte === 'RUPTURE').length,
       articlesInAlerte: stocks.filter((s) => s.alerte === 'ALERTE').length,
       articlesOK: stocks.filter((s) => s.alerte === 'OK').length,

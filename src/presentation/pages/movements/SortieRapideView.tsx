@@ -1087,16 +1087,83 @@ export default function SortieRapideView({
         }
       }
 
-      // If this is an Entrée Interne directly to Entrepôt, synchronize or track with warehouse
-      if (isEntreeInterne && isWarehouseDest && onAddWarehouseItem) {
-        // Find if item already exists in warehouse
-        const existingWh = warehouseItems.find((w) => w.id_warehouse_item === item.ref || w.code === item.ref);
-        if (existingWh && onUpdateWarehouseItem) {
+      // Synchronize rotating Entrepôt components (warehouseItems) across Sortie Interne, Sortie Externe, and Entrée (Never mutate quantite/stockInitial directly — AGENTS.md Rule #3)
+      const existingWh = warehouseItems.find(
+        (w: any) =>
+          String(w?.id_warehouse_item || w?.code || w?.ref || '').trim().toUpperCase() ===
+          String(item.ref || '').trim().toUpperCase()
+      );
+      if (existingWh && onUpdateWarehouseItem) {
+        const existingHistory = Array.isArray(existingWh.historique_bobinage)
+          ? [...existingWh.historique_bobinage]
+          : [];
+        if (isBonSortie) {
+          // Sortie Externe (sent to external subcontractor / workshop)
+          const entry = {
+            id_sortie: mvtRecord.id,
+            code_sortie: mvtRecord.code_bon,
+            bon_ref: mvtRecord.code_bon,
+            id_machine: form.id_machine_registered || existingWh.id_machine_registered || existingWh.id_machine || '',
+            fournisseur: form.prestataire_externe || form.fournisseur || 'Prestataire Externe',
+            societe_bobinage: form.prestataire_externe || form.fournisseur || 'Prestataire Externe',
+            type_probleme: form.commentaire || resolvedActionId || 'Révision / Bobinage',
+            cause: form.commentaire || resolvedActionId || 'Révision / Bobinage',
+            date_expedition: form.date,
+            date_demontage: form.date,
+            technicien_demontage: mvtTech,
+            etat: 'En réparation externe',
+            statut_bobinage: 'En réparation externe',
+            cout_bobinage: 0,
+            observation: form.commentaire || '',
+          };
           onUpdateWarehouseItem(existingWh.id, {
             ...existingWh,
-            quantite: (Number(existingWh.quantite) || 0) + Number(item.quantite),
+            rattachement_type: 'STOCK',
+            status: 'En réparation externe',
+            statut: 'En réparation externe',
+            etat: 'En réparation externe',
+            historique_bobinage: [entry, ...existingHistory],
+          });
+        } else if (isSortie && form.id_machine_registered) {
+          // Sortie Interne (mounted on a registered shopfloor machine)
+          onUpdateWarehouseItem(existingWh.id, {
+            ...existingWh,
+            rattachement_type: 'MACHINE',
+            id_machine: form.id_machine_registered,
+            id_machine_registered: form.id_machine_registered,
+            emplacement: form.id_machine_registered,
+            technician: mvtTech,
+            status: 'En service',
+            statut: 'En service',
+            etat: 'Actif',
+          });
+        } else if (form.type.includes('Entrée')) {
+          // Entrée Interne or Entrée Externe (RETOUR from subcontractor)
+          const updatedHistory =
+            resolvedActionId === 'RETOUR' && existingHistory.length > 0
+              ? existingHistory.map((h: any, idx: number) =>
+                  idx === 0
+                    ? {
+                        ...h,
+                        date_arrivee_reelle: form.date,
+                        date_reception: form.date,
+                        etat: 'Retourné OK',
+                        statut_bobinage: 'Retourné OK',
+                        observation: form.commentaire || h.observation || '',
+                      }
+                    : h
+                )
+              : existingHistory;
+          onUpdateWarehouseItem(existingWh.id, {
+            ...existingWh,
+            rattachement_type: 'ENTREPOT',
+            id_machine: '',
+            id_machine_registered: '',
             emplacement: form.emplacement_reception || existingWh.emplacement,
-            etat: form.entrepot_etat || existingWh.etat,
+            etat: form.entrepot_etat || 'Retourné OK',
+            status: 'En stock (Disponible)',
+            statut: 'En stock (Disponible)',
+            historique_bobinage: updatedHistory,
           });
         }
       }
