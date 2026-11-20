@@ -201,7 +201,18 @@ export default function AddUserModal({
       return;
     }
 
-    const finalId = customCode || autoNextId;
+    const finalId = String(customCode || autoNextId).trim().toUpperCase();
+    const idExists =
+      technicians.some(
+        (t) => String(t.id_technician || t.id || '').trim().toUpperCase() === finalId
+      ) ||
+      operations.some(
+        (o) => String(o.id_operation || o.id || '').trim().toUpperCase() === finalId
+      );
+    if (idExists) {
+      setError(`Le code identifiant "${finalId}" est déjà attribué à un membre existant.`);
+      return;
+    }
 
     if (profileType === 'TECHNICIEN') {
       if (technicians.some((t) => t.nom.toLowerCase().trim() === form.nom.toLowerCase().trim())) {

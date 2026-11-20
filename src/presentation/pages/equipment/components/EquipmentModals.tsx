@@ -477,6 +477,67 @@ export default function EquipmentModals({
                 </div>
               </div>
 
+              {/* Economic & Reliability Context (Owner Downtime Impact & BER) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 border-t border-slate-100">
+                <div>
+                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
+                    Coût Arrêt / h (DH)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={equipForm.cout_arret_horaire ?? 0}
+                    onChange={(e) =>
+                      setEquipForm((prev: any) => ({
+                        ...prev,
+                        cout_arret_horaire: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Ex: 1500"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-mono text-xs text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
+                    Valeur Acquisition (DH)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={equipForm.valeur_acquisition ?? 0}
+                    onChange={(e) =>
+                      setEquipForm((prev: any) => ({
+                        ...prev,
+                        valeur_acquisition: Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                    placeholder="Ex: 120000"
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-mono text-xs text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-black uppercase text-slate-700 mb-1">
+                    Régime de Marche
+                  </label>
+                  <select
+                    value={equipForm.regime_travail || '2x8'}
+                    onChange={(e) =>
+                      setEquipForm((prev: any) => ({
+                        ...prev,
+                        regime_travail: e.target.value,
+                      }))
+                    }
+                    className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white font-mono text-xs font-bold text-slate-900"
+                  >
+                    <option value="1x8">1x8 (176 h/mois)</option>
+                    <option value="2x8">2x8 (352 h/mois)</option>
+                    <option value="3x8">3x8 (528 h/mois)</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
                 <button
                   type="button"
@@ -622,6 +683,21 @@ export default function EquipmentModals({
                     <li>{archiveDependencies.mouvementsCount} mouvement(s) PDR</li>
                     <li>{archiveDependencies.preventiveCount} tâche(s) préventive(s)</li>
                     <li>{archiveDependencies.correctiveCount} intervention(s) corrective(s)</li>
+                    {(archiveDependencies.preventiveExecutionsCount || 0) > 0 && (
+                      <li>{archiveDependencies.preventiveExecutionsCount} exécution(s) PM</li>
+                    )}
+                    {(archiveDependencies.sortieDemandsCount || 0) > 0 && (
+                      <li>{archiveDependencies.sortieDemandsCount} demande(s) PDR</li>
+                    )}
+                    {(archiveDependencies.warehouseCount || 0) > 0 && (
+                      <li>{archiveDependencies.warehouseCount} organe(s) d&apos;entrepôt</li>
+                    )}
+                    {(archiveDependencies.externalSortiesCount || 0) > 0 && (
+                      <li>{archiveDependencies.externalSortiesCount} sortie(s) externe(s)</li>
+                    )}
+                    {(archiveDependencies.bomCount || 0) > 0 && (
+                      <li>{archiveDependencies.bomCount} élément(s) BOM</li>
+                    )}
                   </ul>
                   <p className="pt-1 font-semibold">
                     Conformément aux règles d&apos;intégrité GMAO, il sera placé en statut ARCHIVEE sans perte d&apos;historique.
@@ -653,10 +729,6 @@ export default function EquipmentModals({
                       handleUpdateMachine(
                         archiveTarget.id_machine_registered,
                         updatedMachine
-                      );
-                      showToast?.(
-                        `Équipement ${archiveTarget.id_machine_registered} archivé`,
-                        'info'
                       );
                       setArchiveTarget(null);
                     }}

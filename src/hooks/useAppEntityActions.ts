@@ -295,7 +295,37 @@ export function useAppEntityActions({ gmaoState, showToast, setCurrentTab }) {
   };
 
   const handleAddZone = (newZone) => {
-    setZones((prev) => [...prev, newZone]);
+    const cleanId = String(newZone?.id_zone || '').trim().toUpperCase();
+    const cleanCode = String(newZone?.code_zone || newZone?.code || cleanId).trim().toUpperCase();
+    const cleanLibelle = String(newZone?.libelle || '').trim();
+    if (!cleanId || !cleanLibelle) {
+      showToast?.('Veuillez renseigner identifiant et libellé de la zone.', 'warning');
+      return false;
+    }
+    const duplicate = (zones || []).some((z) => {
+      const zId = String(z?.id_zone || '').trim().toUpperCase();
+      const zCode = String(z?.code_zone || z?.code || '').trim().toUpperCase();
+      return zId === cleanId || (cleanCode && (zCode === cleanCode || zId === cleanCode));
+    });
+    if (duplicate) {
+      showToast?.(`Une zone avec l'identifiant "${cleanId}" ou le code "${cleanCode}" existe déjà.`, 'warning');
+      return false;
+    }
+    const normalizedZone = {
+      ...newZone,
+      id_zone: cleanId,
+      code_zone: cleanCode,
+      libelle: cleanLibelle,
+    };
+    setZones((prev) => [...prev, normalizedZone]);
+    appendAuditEvent?.({
+      actionType: 'ZONE_CREATED',
+      entityType: 'ZONE',
+      entityId: cleanId,
+      before: null,
+      after: normalizedZone,
+    });
+    return true;
   };
 
   const complexHandlers = useAppComplexHandlers({

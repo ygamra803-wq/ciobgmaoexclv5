@@ -23,6 +23,8 @@ export function useAppNavigation({ setCurrentTab }) {
   const [quickSortiePreset, setQuickSortiePreset] = useState(null);
   const [opZoneFilter, setOpZoneFilter] = useState('ALL');
   const [techZoneFilter, setTechZoneFilter] = useState('ALL');
+  const [zoneSearch, setZoneSearch] = useState('');
+  const [equipZoneFilter, setEquipZoneFilter] = useState('ALL');
   const [templateFamilyFilter, setTemplateFamilyFilter] = useState('ALL');
   const [blueprintFamilyFilter, setBlueprintFamilyFilter] = useState('ALL');
   const [blueprintTemplateFilter, setBlueprintTemplateFilter] = useState('ALL');
@@ -168,17 +170,22 @@ export function useAppNavigation({ setCurrentTab }) {
 
   const handleNavigateToTechsByZone = (zoneId) => {
     setTechZoneFilter(zoneId);
-    startTransition(() => setCurrentTab('technicians'));
+    startTransition(() => setCurrentTab('utilisateurs'));
   };
 
   const handleNavigateToOpsByZone = (zoneId) => {
     setOpZoneFilter(zoneId);
-    startTransition(() => setCurrentTab('operations'));
+    startTransition(() => setCurrentTab('utilisateurs'));
   };
 
   const handleNavigateToMachinesByZone = (zoneId) => {
     setMchZoneFilter(zoneId);
     startTransition(() => setCurrentTab('machines'));
+  };
+
+  const handleNavigateToEquipmentByZone = (zoneId) => {
+    setEquipZoneFilter(zoneId || 'ALL');
+    startTransition(() => setCurrentTab('equipment'));
   };
 
   // GROUPE ENTREPÔT NAVIGATION HANDLERS
@@ -273,9 +280,7 @@ export function useAppNavigation({ setCurrentTab }) {
   };
 
   const handleNavigateToZoneById = (zoneId) => {
-    if (typeof zoneId === 'string') {
-      setWhSearch(zoneId);
-    }
+    setZoneSearch(typeof zoneId === 'string' ? zoneId : '');
     startTransition(() => setCurrentTab('zones'));
   };
 
@@ -335,6 +340,10 @@ export function useAppNavigation({ setCurrentTab }) {
       setOpZoneFilter,
       techZoneFilter,
       setTechZoneFilter,
+      zoneSearch,
+      setZoneSearch,
+      equipZoneFilter,
+      setEquipZoneFilter,
       templateFamilyFilter,
       setTemplateFamilyFilter,
       blueprintFamilyFilter,
@@ -387,6 +396,7 @@ export function useAppNavigation({ setCurrentTab }) {
       handleNavigateToTechsByZone,
       handleNavigateToOpsByZone,
       handleNavigateToMachinesByZone,
+      handleNavigateToEquipmentByZone,
       handleNavigateToCompGroups,
       handleNavigateToCompFamiliesByGroup,
       handleNavigateToCompTemplatesByGroup,

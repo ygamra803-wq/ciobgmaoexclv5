@@ -30,13 +30,25 @@ import {
   ChevronDown,
   Calculator,
   Sparkles,
+  Activity,
+  Save,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { normalizeType } from '../../../application/IncrementalStockIndex';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
+import { useGmaoStore } from '../../../store/useGmaoStore';
 import {
   getMachineAssetClass,
   isArchivedMachine,
   transitionMachineLifecycle,
 } from '../../../utils/activeMachines';
+import { computeMachineHealthPassport } from '../../../application/services/MachineHealthPassportService';
+import { matchesZoneRef } from '../../../application/services/ZoneOperationalAnalyticsService';
+import {
+  computeEquipmentCockpitMetrics,
+  buildQuickEditEquipmentUpdates,
+  type EquipmentCockpitFilter,
+  type EquipmentQuickEditDraft,
+} from '../../../application/services/ZoneEquipmentPhaseCService';
 import { generateSystemGeneralCode } from '../machines/AddMachineModal';
 import { dataIntegrityService } from '../../../services/dataIntegrityService';
 import { storageService } from '../../../utils/storageService';
@@ -52,6 +64,7 @@ import GmaoIndustrialDataGrid, {
 } from '../../components/common/GmaoIndustrialDataGrid';
 import CustomSelect from '../../components/common/CustomSelect';
 import SequentialCodePicker from '../../components/common/SequentialCodePicker';
+import MachinePassport360Modal from '../machines/components/MachinePassport360Modal';
 import type {
   IGeneralSystemType,
   IMachine,
@@ -66,6 +79,28 @@ import type {
 } from '../../../types/store';
 import EquipmentModals from './components/EquipmentModals';
 
+export type CanonicalEquipmentStatus = 'En Service' | 'En Maintenance' | "À l'Arrêt";
+
+export function normalizeEquipStatus(rawStatus: unknown): CanonicalEquipmentStatus {
+  const s = String(rawStatus || 'En Service').trim().toLowerCase();
+  if (s === 'en maintenance' || s === 'maintenance') return 'En Maintenance';
+  if (
+    s === "à l'arrêt" ||
+    s === "a l'arrêt" ||
+    s === "a l'arret" ||
+    s === 'arrêt' ||
+    s === 'arret' ||
+    s === 'hors service' ||
+    s === 'hors_service' ||
+    s === 'stopped' ||
+    s === 'inactif' ||
+    s === 'inactive'
+  ) {
+    return "À l'Arrêt";
+  }
+  return 'En Service';
+}
+
 export interface EquipmentViewProps {
   machines: IMachine[];
   generalSystemTypes: IGeneralSystemType[];
@@ -76,15 +111,35 @@ export interface EquipmentViewProps {
   technicians: ITechnician[];
   mouvements: IMouvement[];
   preventiveTasks: PreventiveTaskItem[];
+  preventiveExecutions?: any[];
   correctiveInterventions: CorrectiveInterventionItem[];
-  handleAddMachine: (machine: Partial<IMachine>) => boolean | void;
+  machineElementsLedger?: any[];
+  sortiesExterne?: any[];
+  sortieDemands?: any[];
+  warehouseItems?: any[];
+  stockItems?: any[];
+  equipZoneFilter?: string;
+  setEquipZoneFilter?: (zoneId: string) => void;
+  handleAddMachine: (machine: Partial<IMachine>) => Promise<unknown> | boolean | void;
   handleUpdateMachine: (id: string, machine: Partial<IMachine>) => boolean | void;
   handleDeleteMachine: (id: string) => void;
   onNavigateToZone?: (zoneId: string) => void;
-  onNavigateToQuickSortie?: (machineId: string) => void;
+  onNavigateToQuickSortie?: (machine: IMachine) => void;
   onNavigateToPreventive?: (machineId: string) => void;
   showToast?: (message: string, type?: string) => void;
 }
+
+const CLOSED_BT_STATUSES = new Set([
+  'CLOTURE',
+  'CLÔTURÉ',
+  'CLOTURÉ',
+  'CLOSED',
+  'TERMINE',
+  'TERMINÉ',
+  'ANNULE',
+  'ANNULÉ',
+  'RESOLVED',
+]);
 
 const EquipmentView: React.FC<EquipmentViewProps> = ({
   machines = [],
@@ -96,7 +151,15 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   technicians = [],
   mouvements = [],
   preventiveTasks = [],
+  preventiveExecutions = [],
   correctiveInterventions = [],
+  machineElementsLedger = [],
+  sortiesExterne = [],
+  sortieDemands = [],
+  warehouseItems = [],
+  stockItems = [],
+  equipZoneFilter,
+  setEquipZoneFilter,
   handleAddMachine,
   handleUpdateMachine,
   handleDeleteMachine,
@@ -123,7 +186,10 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [systemTypeFilter, setSystemTypeFilter] = useState<string>('ALL');
   const [zoneFilter, setZoneFilter] = useState<string>('ALL');
+  const [cockpitFilter, setCockpitFilter] = useState<EquipmentCockpitFilter>('NONE');
   const [focusedEquipmentId, setFocusedEquipmentId] = useState<string | null>(null);
+  const [quickEditMode, setQuickEditMode] = useState(false);
+  const [quickEditDrafts, setQuickEditDrafts] = useState<Record<string, EquipmentQuickEditDraft>>({});
 
   // Sorting & Pagination for equipments
   const [sortField, setSortField] = useState<string>('id_machine_registered');
@@ -145,6 +211,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [showEquipmentModal, setShowEquipmentModal] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<IMachine | null>(null);
+  const [passportMachine, setPassportMachine] = useState<IMachine | null>(null);
   const [equipForm, setEquipForm] = useState({
     id_machine_registered: '',
     designation: '',
@@ -155,6 +222,9 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     date_mise_en_service: new Date().toISOString().split('T')[0],
     compteur_heures: 0,
     compteur_unite_defaut: 'HEURES' as 'HEURES' | 'CYCLES' | 'TONNES' | 'KM',
+    cout_arret_horaire: 0,
+    valeur_acquisition: 0,
+    regime_travail: '2x8' as '1x8' | '2x8' | '3x8',
     status: 'En Service',
   });
   const [equipFormError, setEquipFormError] = useState('');
@@ -212,6 +282,16 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     }
   }, [machines]);
 
+  // Sync incoming zone filter when navigating from ZonesView Sys.Gén pill
+  useEffect(() => {
+    if (equipZoneFilter && equipZoneFilter !== 'ALL') {
+      setActiveSection('equipments');
+      setZoneFilter(equipZoneFilter);
+      setCockpitFilter('NONE');
+      setEquipZoneFilter?.('ALL');
+    }
+  }, [equipZoneFilter, setEquipZoneFilter]);
+
   // Normalized Lookup Maps (supporting both id/name and id_zone/libelle or id_technician/nom)
   const systemTypeMap = useMemo(() => {
     const map = new Map<string, IGeneralSystemType>();
@@ -263,14 +343,141 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     return (generalSystemTypes || []).filter((t) => t.is_active !== false);
   }, [generalSystemTypes]);
 
+  // Precompute Health Passport & Flux counts per SYSTEM_GENERAL equipment (O(N))
+  const { passportByCode, fluxByCode, totalOpenBts, totalMaintCost12m } = useMemo(() => {
+    const btByCode = new Map<string, any[]>();
+    for (const ci of correctiveInterventions || []) {
+      const c = String(
+        ci?.id_machine ||
+          ci?.code_machine ||
+          ci?.machine_id ||
+          ci?.id_machine_registered ||
+          ci?.machine_code ||
+          ci?.machine ||
+          ''
+      )
+        .trim()
+        .toUpperCase();
+      if (!c) continue;
+      const arr = btByCode.get(c) || [];
+      arr.push(ci);
+      btByCode.set(c, arr);
+    }
+
+    const pmByCode = new Map<string, any[]>();
+    for (const pt of preventiveTasks || []) {
+      const etatNorm = String(pt?.etat || pt?.statut || '').trim().toUpperCase();
+      if (pt?.is_active === false || etatNorm === 'SUSPENDUE' || etatNorm === 'ARCHIVEE' || etatNorm === 'ARCHIVE') {
+        continue;
+      }
+      const c = String(
+        pt?.id_machine || pt?.code_machine || pt?.machine_id || pt?.id_machine_registered || pt?.machine || ''
+      )
+        .trim()
+        .toUpperCase();
+      if (!c) continue;
+      const arr = pmByCode.get(c) || [];
+      arr.push(pt);
+      pmByCode.set(c, arr);
+    }
+
+    const movByCode = new Map<string, number>();
+    for (const mv of mouvements || []) {
+      if (normalizeType(mv?.type) !== 'SORTIE') continue;
+      const c = String(
+        mv?.id_machine_registered || mv?.code_machine || mv?.id_machine || mv?.machine || ''
+      )
+        .trim()
+        .toUpperCase();
+      if (!c) continue;
+      movByCode.set(c, (movByCode.get(c) || 0) + 1);
+    }
+
+    const pMap = new Map<string, ReturnType<typeof computeMachineHealthPassport>>();
+    const fMap = new Map<
+      string,
+      { pmCount: number; woCount: number; openWoCount: number; movCount: number }
+    >();
+    let openBtsSum = 0;
+    let maintCostSum = 0;
+
+    for (const m of systemGeneralEquipments) {
+      const code = String(m.id_machine_registered || m.id || '').trim().toUpperCase();
+      if (!code) continue;
+      const btList = btByCode.get(code) || [];
+      const openWoCount = btList.filter((ci) => {
+        const valSt = String(ci?.validation_status || '').trim().toUpperCase();
+        if (valSt === 'REJECTED') return false;
+        const st = String(ci?.statut || ci?.status || 'OUVERTE').trim().toUpperCase();
+        return !CLOSED_BT_STATUSES.has(st);
+      }).length;
+      const pmCount = (pmByCode.get(code) || []).length;
+      const movCount = movByCode.get(code) || 0;
+      fMap.set(code, { pmCount, woCount: btList.length, openWoCount, movCount });
+
+      const passport = computeMachineHealthPassport({
+        machine: m,
+        correctiveInterventions: btList,
+        preventiveExecutions: preventiveExecutions || [],
+        sortiesExterne: sortiesExterne || [],
+        stockItems: stockItems || [],
+      });
+      pMap.set(code, passport);
+
+      if (!isArchivedMachine(m)) {
+        openBtsSum += openWoCount;
+        maintCostSum += passport.totalMaintenanceCost12m;
+      }
+    }
+
+    return {
+      passportByCode: pMap,
+      fluxByCode: fMap,
+      totalOpenBts: openBtsSum,
+      totalMaintCost12m: Number(maintCostSum.toFixed(2)),
+    };
+  }, [
+    systemGeneralEquipments,
+    correctiveInterventions,
+    preventiveTasks,
+    preventiveExecutions,
+    sortiesExterne,
+    mouvements,
+    stockItems,
+  ]);
+
+  const cockpitMetrics = useMemo(
+    () =>
+      computeEquipmentCockpitMetrics({
+        machines,
+        correctiveInterventions,
+        preventiveTasks,
+        preventiveExecutions,
+        sortiesExterne,
+        stockItems,
+      }),
+    [
+      machines,
+      correctiveInterventions,
+      preventiveTasks,
+      preventiveExecutions,
+      sortiesExterne,
+      stockItems,
+    ]
+  );
+
   // KPI calculations
   const kpiStats = useMemo(() => {
     const activeEquips = systemGeneralEquipments.filter((m) => !isArchivedMachine(m));
     const archivedEquips = systemGeneralEquipments.filter((m) => isArchivedMachine(m));
-    const enService = activeEquips.filter((m) => m.status === 'En Service').length;
-    const enMaintenance = activeEquips.filter((m) => m.status === 'En Maintenance').length;
+    const enService = activeEquips.filter(
+      (m) => normalizeEquipStatus(m.status || m.statut) === 'En Service'
+    ).length;
+    const enMaintenance = activeEquips.filter(
+      (m) => normalizeEquipStatus(m.status || m.statut) === 'En Maintenance'
+    ).length;
     const enArret = activeEquips.filter(
-      (m) => m.status === "À l'Arrêt" || m.status === 'Hors Service'
+      (m) => normalizeEquipStatus(m.status || m.statut) === "À l'Arrêt"
     ).length;
 
     return {
@@ -282,8 +489,16 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
       attentionCount: enMaintenance + enArret,
       activeTypesCount: activeSystemTypes.length,
       totalTypesCount: (generalSystemTypes || []).length,
+      totalOpenBts,
+      totalMaintCost12m,
     };
-  }, [systemGeneralEquipments, activeSystemTypes, generalSystemTypes]);
+  }, [
+    systemGeneralEquipments,
+    activeSystemTypes,
+    generalSystemTypes,
+    totalOpenBts,
+    totalMaintCost12m,
+  ]);
 
   // Equipment count per System Type
   const equipCountByType = useMemo(() => {
@@ -300,30 +515,41 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   // Filtered Equipments
   const filteredEquipments = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
+    const filterZoneObj =
+      zoneFilter !== 'ALL'
+        ? zoneMap.get(zoneFilter)?.raw || { id_zone: zoneFilter, code_zone: zoneFilter }
+        : null;
     return systemGeneralEquipments.filter((m) => {
       const archived = isArchivedMachine(m);
+      const normStatus = normalizeEquipStatus(m.status || m.statut);
       if (statusFilter === 'ARCHIVEE') {
         if (!archived) return false;
       } else if (statusFilter === 'ALERTE') {
         if (archived) return false;
-        if (
-          m.status !== 'En Maintenance' &&
-          m.status !== "À l'Arrêt" &&
-          m.status !== 'Hors Service'
-        ) {
+        if (normStatus !== 'En Maintenance' && normStatus !== "À l'Arrêt") {
           return false;
         }
       } else {
         if (archived) return false;
-        if (statusFilter !== 'ALL' && m.status !== statusFilter) return false;
+        if (statusFilter !== 'ALL' && normStatus !== statusFilter) return false;
       }
 
       if (systemTypeFilter !== 'ALL' && m.id_general_system_type !== systemTypeFilter) {
         return false;
       }
 
-      if (zoneFilter !== 'ALL' && m.id_zone_default !== zoneFilter) {
+      if (filterZoneObj && !matchesZoneRef(m.id_zone_default, filterZoneObj, true)) {
         return false;
+      }
+
+      if (cockpitFilter !== 'NONE') {
+        const codeNorm = String(m.id_machine_registered || m.id || '').trim().toUpperCase();
+        const sig = cockpitMetrics.perEquipmentSignals[codeNorm];
+        if (!sig) return false;
+        if (cockpitFilter === 'STOPPED_OR_MAINT' && !sig.isStoppedOrMaint) return false;
+        if (cockpitFilter === 'BAD_ACTORS' && !sig.isBadActor) return false;
+        if (cockpitFilter === 'MAINT_DUE' && !sig.hasMaintDue) return false;
+        if (cockpitFilter === 'INCOMPLETE_SETUP' && !sig.isIncompleteSetup) return false;
       }
 
       if (q) {
@@ -356,6 +582,8 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     statusFilter,
     systemTypeFilter,
     zoneFilter,
+    cockpitFilter,
+    cockpitMetrics,
     systemTypeMap,
     zoneMap,
     techMap,
@@ -365,17 +593,33 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
   const sortedEquipments = useMemo(() => {
     if (!sortField) return filteredEquipments;
     return [...filteredEquipments].sort((a, b) => {
-      let valA = String(a[sortField] || '').toLowerCase();
-      let valB = String(b[sortField] || '').toLowerCase();
+      if (sortField === 'status') {
+        const sA = isArchivedMachine(a) ? 'ZZZ_ARCHIVEE' : normalizeEquipStatus(a.status || a.statut).toLowerCase();
+        const sB = isArchivedMachine(b) ? 'ZZZ_ARCHIVEE' : normalizeEquipStatus(b.status || b.statut).toLowerCase();
+        if (sA < sB) return sortOrder === 'asc' ? -1 : 1;
+        if (sA > sB) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
+      }
+      if (sortField === 'tco') {
+        const cA =
+          passportByCode.get(String(a.id_machine_registered || '').trim().toUpperCase())
+            ?.totalMaintenanceCost12m || 0;
+        const cB =
+          passportByCode.get(String(b.id_machine_registered || '').trim().toUpperCase())
+            ?.totalMaintenanceCost12m || 0;
+        return sortOrder === 'asc' ? cA - cB : cB - cA;
+      }
+      const valA = String(a[sortField] || '').toLowerCase();
+      const valB = String(b[sortField] || '').toLowerCase();
       if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredEquipments, sortField, sortOrder]);
+  }, [filteredEquipments, sortField, sortOrder, passportByCode]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, systemTypeFilter, zoneFilter, pageSize]);
+  }, [searchTerm, statusFilter, systemTypeFilter, zoneFilter, cockpitFilter, pageSize]);
 
   const totalEquipItems = sortedEquipments.length;
   const effectiveEquipPageSize = pageSize === 0 ? totalEquipItems : pageSize;
@@ -509,6 +753,9 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
       date_mise_en_service: new Date().toISOString().split('T')[0],
       compteur_heures: 0,
       compteur_unite_defaut: 'HEURES',
+      cout_arret_horaire: 0,
+      valeur_acquisition: 0,
+      regime_travail: '2x8',
       status: 'En Service',
     });
     setEquipFormError('');
@@ -530,14 +777,17 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
       compteur_heures: Number(equip.compteur_heures ?? equip.compteur_actuel ?? 0) || 0,
       compteur_unite_defaut:
         (equip.compteur_unite_defaut as 'HEURES' | 'CYCLES' | 'TONNES' | 'KM') || 'HEURES',
-      status: equip.status || 'En Service',
+      cout_arret_horaire: Number(equip.cout_arret_horaire ?? 0) || 0,
+      valeur_acquisition: Number(equip.valeur_acquisition ?? 0) || 0,
+      regime_travail: (equip.regime_travail as '1x8' | '2x8' | '3x8') || '2x8',
+      status: normalizeEquipStatus(equip.status || equip.statut),
     });
     setEquipFormError('');
     setShowEquipmentModal(true);
   };
 
   // Submit Equipment Create / Edit
-  const handleSaveEquipment = (e: React.FormEvent) => {
+  const handleSaveEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
     setEquipFormError('');
 
@@ -587,17 +837,19 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         compteur_heures: Math.max(0, Number(equipForm.compteur_heures) || 0),
         compteur_actuel: Math.max(0, Number(equipForm.compteur_heures) || 0),
         compteur_unite_defaut: equipForm.compteur_unite_defaut || 'HEURES',
-        status: equipForm.status || 'En Service',
+        cout_arret_horaire: Math.max(0, Number(equipForm.cout_arret_horaire) || 0),
+        valeur_acquisition: Math.max(0, Number(equipForm.valeur_acquisition) || 0),
+        regime_travail: equipForm.regime_travail || '2x8',
+        status: normalizeEquipStatus(equipForm.status),
         asset_level: 'MACHINE' as const,
         parent_id: null,
         is_active: true,
         archived: false,
       };
 
-      const res = handleAddMachine(newEquipmentPayload);
-      if (res !== false) {
+      const res = await handleAddMachine(newEquipmentPayload);
+      if (res && res !== false) {
         setShowEquipmentModal(false);
-        showToast?.(`Équipement ${code} créé avec succès`, 'success');
       }
     } else {
       const updatedPayload = {
@@ -612,7 +864,10 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         compteur_heures: Math.max(0, Number(equipForm.compteur_heures) || 0),
         compteur_actuel: Math.max(0, Number(equipForm.compteur_heures) || 0),
         compteur_unite_defaut: equipForm.compteur_unite_defaut || 'HEURES',
-        status: equipForm.status || 'En Service',
+        cout_arret_horaire: Math.max(0, Number(equipForm.cout_arret_horaire) || 0),
+        valeur_acquisition: Math.max(0, Number(equipForm.valeur_acquisition) || 0),
+        regime_travail: equipForm.regime_travail || '2x8',
+        status: normalizeEquipStatus(equipForm.status),
       };
 
       const res = handleUpdateMachine(editingEquipment.id_machine_registered, updatedPayload);
@@ -697,11 +952,19 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         return;
       }
       if (setGeneralSystemTypes) {
+        const updatedRecord = { ...editingType, code: cleanCode, name: cleanName };
         setGeneralSystemTypes((prev: IGeneralSystemType[]) =>
           (prev || []).map((t) =>
-            t.id === editingType.id ? { ...t, code: cleanCode, name: cleanName } : t
+            t.id === editingType.id ? updatedRecord : t
           )
         );
+        useGmaoStore.getState().appendAuditEvent?.({
+          actionType: 'GENERAL_SYSTEM_TYPE_UPDATED',
+          entityType: 'GENERAL_SYSTEM_TYPE',
+          entityId: String(editingType.id),
+          before: editingType,
+          after: updatedRecord,
+        });
         setShowTypeModal(false);
         setEditingType(null);
         showToast?.(`Type de système ${cleanCode} mis à jour`, 'success');
@@ -709,12 +972,58 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     }
   };
 
-  // Excel export for SYSTEM_GENERAL equipments
+  const handleDeleteSystemType = (sysType: IGeneralSystemType) => {
+    const linkedCount = equipCountByType[sysType.id] || 0;
+    if (linkedCount > 0) {
+      showToast?.(
+        `Suppression refusée : "${sysType.code}" est lié à ${linkedCount} équipement(s).`,
+        'warning'
+      );
+      return;
+    }
+    if (!setGeneralSystemTypes) return;
+    setGeneralSystemTypes((prev: IGeneralSystemType[]) =>
+      (prev || []).filter((t) => t.id !== sysType.id)
+    );
+    useGmaoStore.getState().appendAuditEvent?.({
+      actionType: 'GENERAL_SYSTEM_TYPE_DELETED',
+      entityType: 'GENERAL_SYSTEM_TYPE',
+      entityId: String(sysType.id),
+      before: sysType,
+      after: null,
+    });
+    showToast?.(`Type de système ${sysType.code} supprimé.`, 'info');
+  };
+
+  const pendingQuickEditUpdates = useMemo(
+    () => buildQuickEditEquipmentUpdates(systemGeneralEquipments, quickEditDrafts),
+    [systemGeneralEquipments, quickEditDrafts]
+  );
+
+  const handleCommitQuickEdits = () => {
+    if (!canEdit || pendingQuickEditUpdates.length === 0) return;
+    let updatedCount = 0;
+    for (const item of pendingQuickEditUpdates) {
+      const ok = handleUpdateMachine(item.id, item.updatedEquipment);
+      if (ok !== false) updatedCount += 1;
+    }
+    setQuickEditDrafts({});
+    setQuickEditMode(false);
+    showToast?.(
+      `${updatedCount} équipement(s) mis à jour en Mode Pilotage Rapide.`,
+      'success'
+    );
+  };
+
+  // Excel export for SYSTEM_GENERAL equipments (Type B sanitized export)
   const handleExportExcel = () => {
-    const rows = sortedEquipments.map((m) => {
+    const jsonRows = sortedEquipments.map((m) => {
+      const codeNorm = String(m.id_machine_registered || m.id || '').trim().toUpperCase();
       const sysType = systemTypeMap.get(String(m.id_general_system_type || ''));
       const zoneObj = zoneMap.get(String(m.id_zone_default || ''));
       const techObj = techMap.get(String(m.technician || ''));
+      const passport = passportByCode.get(codeNorm);
+      const flux = fluxByCode.get(codeNorm);
       return {
         'Code Équipement (B)': m.id_machine_registered,
         'Désignation (C)': m.designation,
@@ -727,16 +1036,29 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         'Technicien (F)': techObj ? `${techObj.name} (${techObj.id})` : m.technician || 'Non assigné',
         'N° Série': m.serial_number || '',
         'Mise en Service': m.date_mise_en_service || '',
-        'Statut (H)': isArchivedMachine(m) ? 'ARCHIVEE' : m.status || 'En Service',
+        'Régime Travail': passport?.regimeTravail || m.regime_travail || '2x8',
+        'Coût Arrêt/h (DH)': Number(m.cout_arret_horaire || 0),
+        'BT Ouverts': flux?.openWoCount ?? 0,
+        'TCO Maint. 12m (DH)': passport?.totalMaintenanceCost12m ?? 0,
+        'Perte Arrêt 12m (DH)': passport?.downtimeProductionLossCost12m ?? 0,
+        'Arrêts 12m (h)': passport?.totalDowntimeHours12m ?? 0,
+        'Disponibilité 12m (%)': passport?.availabilityRate12m ?? 100,
+        'Score Santé (/100)': passport?.healthScore ?? 100,
+        'Statut (H)': isArchivedMachine(m)
+          ? 'ARCHIVEE'
+          : normalizeEquipStatus(m.status || m.statut),
       };
     });
-    const ws = XLSX.utils.json_to_sheet(rows);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Equipements_SysGeneral');
-    XLSX.writeFile(
-      wb,
-      `GMAO_Equipements_Systeme_General_${new Date().toISOString().slice(0, 10)}.xlsx`
-    );
+    exportTypeBWorkbook({
+      filename: `GMAO_Equipements_Systeme_General_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      screenName: 'Équipements & Système Général',
+      sheets: [
+        {
+          name: 'Equipements_SysGeneral',
+          jsonRows,
+        },
+      ],
+    });
   };
 
   // Canonical DataGrid Columns for Equipments (matching UtilisateursView 100%)
@@ -864,6 +1186,31 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         icon: UserCheck,
         sortable: true,
         render: (m) => {
+          const archived = isArchivedMachine(m);
+          const id = String(m.id_machine_registered || '').trim();
+          const draft = quickEditDrafts[id];
+          if (quickEditMode && canEdit && !archived) {
+            const val = draft?.technician !== undefined ? draft.technician : m.technician || '';
+            return (
+              <select
+                value={val}
+                onChange={(e) =>
+                  setQuickEditDrafts((prev) => ({
+                    ...prev,
+                    [id]: { ...(prev[id] || {}), technician: e.target.value },
+                  }))
+                }
+                className="h-8 px-2 rounded-lg border border-indigo-200 bg-indigo-50/40 text-xs font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 max-w-[175px]"
+              >
+                <option value="">— Équipe Générale —</option>
+                {activeTechnicians.map((tech) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name} ({tech.id})
+                  </option>
+                ))}
+              </select>
+            );
+          }
           const techObj = techMap.get(String(m.technician || ''));
           if (!m.technician) {
             return (
@@ -886,41 +1233,127 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
           );
         },
       },
+      ...(quickEditMode
+        ? [
+            {
+              key: 'economie',
+              label: 'Régime & Coût Arrêt/h',
+              icon: Calculator,
+              align: 'center' as const,
+              render: (m: IMachine) => {
+                const archived = isArchivedMachine(m);
+                if (archived) return <span className="text-xs text-slate-400">—</span>;
+                const id = String(m.id_machine_registered || '').trim();
+                const draft = quickEditDrafts[id];
+                const regimeVal =
+                  draft?.regime_travail !== undefined
+                    ? draft.regime_travail
+                    : m.regime_travail || '2x8';
+                const costVal =
+                  draft?.cout_arret_horaire !== undefined
+                    ? draft.cout_arret_horaire
+                    : Number(m.cout_arret_horaire || 0);
+                return (
+                  <div className="flex items-center justify-center gap-1.5">
+                    <select
+                      value={regimeVal}
+                      onChange={(e) =>
+                        setQuickEditDrafts((prev) => ({
+                          ...prev,
+                          [id]: { ...(prev[id] || {}), regime_travail: e.target.value },
+                        }))
+                      }
+                      className="h-8 px-1.5 rounded-lg border border-indigo-200 bg-indigo-50/40 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="1x8">1x8</option>
+                      <option value="2x8">2x8</option>
+                      <option value="3x8">3x8</option>
+                    </select>
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={costVal}
+                      onChange={(e) =>
+                        setQuickEditDrafts((prev) => ({
+                          ...prev,
+                          [id]: { ...(prev[id] || {}), cout_arret_horaire: e.target.value },
+                        }))
+                      }
+                      className="h-8 w-20 px-2 rounded-lg border border-indigo-200 bg-indigo-50/40 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-indigo-500 text-right"
+                      title="Coût d'arrêt horaire (DH/h)"
+                    />
+                  </div>
+                );
+              },
+            },
+          ]
+        : []),
       {
         key: 'flux',
-        label: 'Flux PM / BT / PDR',
+        label: 'Flux & Passeport 12m',
         colLetter: 'G',
         icon: Calendar,
         align: 'center',
         render: (m) => {
-          const code = m.id_machine_registered;
-          const pmCount = (preventiveTasks || []).filter((t) => t.machine === code).length;
-          const woCount = (correctiveInterventions || []).filter(
-            (i) => (i.machine_code || i.machine) === code
-          ).length;
-          const movCount = (mouvements || []).filter(
-            (mv) => mv.machine === code && mv.type === 'Sortie'
-          ).length;
+          const codeNorm = String(m.id_machine_registered || m.id || '').trim().toUpperCase();
+          const flux = fluxByCode.get(codeNorm) || {
+            pmCount: 0,
+            woCount: 0,
+            openWoCount: 0,
+            movCount: 0,
+          };
+          const passport = passportByCode.get(codeNorm);
+          const healthStatus = passport?.healthStatus || 'SAIN';
           return (
-            <div className="flex items-center justify-center gap-1">
-              <span
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs"
-                title="Plans préventifs rattachés"
-              >
-                {pmCount} PM
-              </span>
-              <span
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs"
-                title="Bons de travail / interventions correctives"
-              >
-                {woCount} BT
-              </span>
-              <span
-                className="px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs"
-                title="Sorties PDR rattachées"
-              >
-                {movCount} PDR
-              </span>
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex items-center justify-center gap-1 flex-wrap">
+                <span
+                  className="px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs"
+                  title="Plans préventifs actifs rattachés"
+                >
+                  {flux.pmCount} PM
+                </span>
+                <span
+                  className={`px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold border shadow-2xs ${
+                    flux.openWoCount > 0
+                      ? 'bg-rose-600 text-white border-rose-600'
+                      : 'bg-rose-50 text-rose-700 border-rose-200/80'
+                  }`}
+                  title={`${flux.openWoCount} BT ouvert(s) / ${flux.woCount} BT total`}
+                >
+                  {flux.openWoCount > 0 ? `${flux.openWoCount} BT ouv.` : `${flux.woCount} BT`}
+                </span>
+                <span
+                  className="px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs"
+                  title="Sorties PDR rattachées"
+                >
+                  {flux.movCount} PDR
+                </span>
+              </div>
+              {passport && (
+                <button
+                  type="button"
+                  onClick={() => setPassportMachine(m)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition cursor-pointer ${
+                    healthStatus === 'CRITIQUE_BER'
+                      ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                      : healthStatus === 'SURVEILLANCE'
+                        ? 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-800'
+                  }`}
+                  title="Ouvrir le Passeport Santé 360° (TCO, Arrêts, MTTR/MTBF)"
+                >
+                  <Activity className="w-2.5 h-2.5 shrink-0" />
+                  <span>{passport.healthScore}/100</span>
+                  {passport.totalMaintenanceCost12m > 0 && (
+                    <span>• {Math.round(passport.totalMaintenanceCost12m).toLocaleString()} DH</span>
+                  )}
+                  {passport.totalDowntimeHours12m > 0 && (
+                    <span>• {passport.totalDowntimeHours12m}h</span>
+                  )}
+                </button>
+              )}
             </div>
           );
         },
@@ -942,7 +1375,30 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
               </span>
             );
           }
-          if (m.status === 'En Service') {
+          const normStatus = normalizeEquipStatus(m.status || m.statut);
+          const id = String(m.id_machine_registered || '').trim();
+          if (quickEditMode && canEdit) {
+            const draft = quickEditDrafts[id];
+            const val =
+              draft?.status !== undefined ? normalizeEquipStatus(draft.status) : normStatus;
+            return (
+              <select
+                value={val}
+                onChange={(e) =>
+                  setQuickEditDrafts((prev) => ({
+                    ...prev,
+                    [id]: { ...(prev[id] || {}), status: e.target.value },
+                  }))
+                }
+                className="h-8 px-2 rounded-lg border border-indigo-200 bg-indigo-50/40 text-xs font-bold text-slate-800 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="En Service">En Service</option>
+                <option value="En Maintenance">En Maintenance</option>
+                <option value="À l'Arrêt">À l&apos;Arrêt</option>
+              </select>
+            );
+          }
+          if (normStatus === 'En Service') {
             return (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                 <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
@@ -950,7 +1406,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
               </span>
             );
           }
-          if (m.status === 'En Maintenance') {
+          if (normStatus === 'En Maintenance') {
             return (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
                 <Wrench className="w-3 h-3 text-amber-600 shrink-0" />
@@ -961,7 +1417,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
           return (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs">
               <PowerOff className="w-3 h-3 text-rose-600 shrink-0" />
-              <span>{m.status || "À l'Arrêt"}</span>
+              <span>À l&apos;Arrêt</span>
             </span>
           );
         },
@@ -970,11 +1426,19 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         key: 'actions',
         label: 'Actions',
         align: 'center',
-        headerClassName: 'w-32 text-center font-bold text-slate-400 tracking-widest select-none',
+        headerClassName: 'w-36 text-center font-bold text-slate-400 tracking-widest select-none',
         render: (m) => {
           const archived = isArchivedMachine(m);
           return (
             <div className="flex items-center justify-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPassportMachine(m)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-purple-700 hover:bg-purple-50 border border-slate-200 hover:border-purple-200 transition cursor-pointer shadow-2xs"
+                title="Passeport Santé & TCO 360°"
+              >
+                <Activity className="w-3.5 h-3.5" />
+              </button>
               {!archived && onNavigateToPreventive && (
                 <button
                   type="button"
@@ -988,7 +1452,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
               {!archived && onNavigateToQuickSortie && (
                 <button
                   type="button"
-                  onClick={() => onNavigateToQuickSortie(m.id_machine_registered)}
+                  onClick={() => onNavigateToQuickSortie(m)}
                   className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-amber-700 hover:bg-amber-50 border border-slate-200 hover:border-amber-200 transition cursor-pointer shadow-2xs"
                   title="Sortie PDR pour cet équipement"
                 >
@@ -1035,9 +1499,11 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     systemTypeMap,
     zoneMap,
     techMap,
-    preventiveTasks,
-    correctiveInterventions,
-    mouvements,
+    fluxByCode,
+    passportByCode,
+    quickEditMode,
+    quickEditDrafts,
+    activeTechnicians,
     canEdit,
     canDelete,
     onNavigateToZone,
@@ -1188,22 +1654,47 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                   )}
                 </button>
               )}
+              {canDelete && (equipCountByType[t.id] || 0) === 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSystemType(t)}
+                  className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition cursor-pointer shadow-2xs"
+                  title="Supprimer ce type inutilisé"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           );
         },
       },
     ];
-  }, [equipCountByType, canCreate, canEdit, handleToggleGeneralSystemType]);
+  }, [equipCountByType, canCreate, canEdit, canDelete, handleToggleGeneralSystemType]);
 
-  // Dependencies for archive modal
+  // Dependencies for archive modal (pass all 8 dependency collections)
   const archiveDependencies = useMemo(() => {
     if (!archiveTarget) return null;
     return dataIntegrityService.getMachineDependencies(archiveTarget.id_machine_registered, {
       mouvements,
       preventiveTasks,
+      preventiveExecutions,
       correctiveInterventions,
+      machineElementsLedger,
+      sortiesExterne,
+      sortieDemands,
+      warehouseItems,
     });
-  }, [archiveTarget, mouvements, preventiveTasks, correctiveInterventions]);
+  }, [
+    archiveTarget,
+    mouvements,
+    preventiveTasks,
+    preventiveExecutions,
+    correctiveInterventions,
+    machineElementsLedger,
+    sortiesExterne,
+    sortieDemands,
+    warehouseItems,
+  ]);
 
   const confirmArchiveOrDelete = () => {
     if (!archiveTarget) return;
@@ -1217,13 +1708,8 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         preventiveTasks,
       });
       handleUpdateMachine(code, updatedMachine);
-      showToast?.(
-        `Équipement ${code} archivé en toute sécurité (historique préservé)`,
-        'info'
-      );
     } else {
       handleDeleteMachine(code);
-      showToast?.(`Équipement ${code} supprimé`, 'success');
     }
     setArchiveTarget(null);
   };
@@ -1233,6 +1719,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
     statusFilter !== 'ALL' ||
     systemTypeFilter !== 'ALL' ||
     zoneFilter !== 'ALL' ||
+    cockpitFilter !== 'NONE' ||
     sortField !== 'id_machine_registered' ||
     sortOrder !== 'asc';
 
@@ -1381,9 +1868,13 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
             setActiveSection('equipments');
             setStatusFilter(statusFilter === 'ALERTE' ? 'ALL' : 'ALERTE');
           }}
-          badgeText={`${kpiStats.enMaintenance} Maint. • ${kpiStats.enArret} Arrêt`}
-          footerLabel="Cycle de vie :"
-          footerValue={`${kpiStats.archivedCount} archivé(s)`}
+          badgeText={`${kpiStats.enMaintenance} Maint. • ${kpiStats.enArret} Arrêt • ${kpiStats.totalOpenBts} BT`}
+          footerLabel={kpiStats.totalMaintCost12m > 0 ? 'TCO Maint. 12m :' : 'Cycle de vie :'}
+          footerValue={
+            kpiStats.totalMaintCost12m > 0
+              ? `${Math.round(kpiStats.totalMaintCost12m).toLocaleString()} DH`
+              : `${kpiStats.archivedCount} archivé(s)`
+          }
         />
 
         {/* Card 4: System Types */}
@@ -1404,6 +1895,100 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
       {/* 3A. SECTION 1: EQUIPMENTS INSTALLED */}
       {activeSection === 'equipments' && (
         <>
+          {/* Owner & Utility Live Cockpit Strip */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl px-4 py-3 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+              <Activity className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Cockpit Utilités</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setCockpitFilter(
+                    cockpitFilter === 'STOPPED_OR_MAINT' ? 'NONE' : 'STOPPED_OR_MAINT'
+                  )
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                  cockpitFilter === 'STOPPED_OR_MAINT'
+                    ? 'bg-rose-600 text-white border-rose-600'
+                    : cockpitMetrics.stoppedOrMaintCount > 0
+                      ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <PowerOff className="w-3.5 h-3.5 shrink-0" />
+                <span>Arrêt / Maint. :</span>
+                <span className="font-mono font-black">
+                  {cockpitMetrics.stoppedOrMaintCount} ({Math.round(cockpitMetrics.activeHourlyLossDh).toLocaleString()} DH/h)
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCockpitFilter(cockpitFilter === 'BAD_ACTORS' ? 'NONE' : 'BAD_ACTORS')
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                  cockpitFilter === 'BAD_ACTORS'
+                    ? 'bg-rose-700 text-white border-rose-700'
+                    : cockpitMetrics.badActorsCount > 0
+                      ? 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                <span>Critiques / BER :</span>
+                <span className="font-mono font-black">
+                  {cockpitMetrics.badActorsCount}
+                  {cockpitMetrics.badActorsEconomicImpact12m > 0
+                    ? ` (${Math.round(cockpitMetrics.badActorsEconomicImpact12m).toLocaleString()} DH)`
+                    : ''}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCockpitFilter(cockpitFilter === 'MAINT_DUE' ? 'NONE' : 'MAINT_DUE')
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                  cockpitFilter === 'MAINT_DUE'
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : cockpitMetrics.maintDueCount > 0
+                      ? 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <Wrench className="w-3.5 h-3.5 shrink-0" />
+                <span>Maint. Requise :</span>
+                <span className="font-mono font-black">
+                  {cockpitMetrics.maintDueCount} équip. ({cockpitMetrics.totalOpenBtsCount} BT)
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setCockpitFilter(
+                    cockpitFilter === 'INCOMPLETE_SETUP' ? 'NONE' : 'INCOMPLETE_SETUP'
+                  )
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+                  cockpitFilter === 'INCOMPLETE_SETUP'
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : cockpitMetrics.incompleteSetupCount > 0
+                      ? 'bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                }`}
+                title="Équipements actifs sans Zone, Technicien ou Coût d'arrêt horaire"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <span>Fiches Incomplètes :</span>
+                <span className="font-mono font-black">{cockpitMetrics.incompleteSetupCount}</span>
+              </button>
+            </div>
+          </div>
           {/* Elevated Filter & Search Card (matching UtilisateursView) */}
           <div className="relative z-30 bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
             {/* Header Toolbar: Icon + Title + Count Badge + Status Presets + Excel Export + Circular Reset */}
@@ -1458,6 +2043,43 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                   })}
                 </div>
 
+                {/* Mode Pilotage Rapide Toggle + Batch Save */}
+                {canEdit && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (quickEditMode) {
+                          setQuickEditMode(false);
+                          setQuickEditDrafts({});
+                        } else {
+                          setQuickEditMode(true);
+                        }
+                      }}
+                      className={`h-8 px-3 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                        quickEditMode
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200/80'
+                      }`}
+                      title="Modifier Statut, Technicien, Régime et Coût Arrêt/h directement dans le tableau"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>{quickEditMode ? 'Quitter Pilotage' : 'Pilotage Rapide'}</span>
+                    </button>
+
+                    {quickEditMode && pendingQuickEditUpdates.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleCommitQuickEdits}
+                        className="h-8 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Enregistrer ({pendingQuickEditUpdates.length})</span>
+                      </button>
+                    )}
+                  </>
+                )}
+
                 {/* Export Excel Button */}
                 <button
                   type="button"
@@ -1479,6 +2101,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                       setStatusFilter('ALL');
                       setSystemTypeFilter('ALL');
                       setZoneFilter('ALL');
+                      setCockpitFilter('NONE');
                       setFocusedEquipmentId(null);
                       setSortField('id_machine_registered');
                       setSortOrder('asc');
@@ -1619,7 +2242,9 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                               ? 'SYSTÈME (D)'
                               : sortField === 'id_zone_default'
                                 ? 'ZONE (E)'
-                                : 'STATUT (H)'}
+                                : sortField === 'tco'
+                                  ? 'TCO 12M (DH)'
+                                  : 'STATUT (H)'}
                       </b>
                     </span>
                   </div>
@@ -1644,6 +2269,7 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
                         { field: 'designation', label: 'Désignation (Col. C)' },
                         { field: 'id_general_system_type', label: 'Type de Système (Col. D)' },
                         { field: 'id_zone_default', label: 'Zone Géographique (Col. E)' },
+                        { field: 'tco', label: 'TCO Maint. 12m (DH)' },
                         { field: 'status', label: 'Statut Opérationnel (Col. H)' },
                       ].map((opt) => (
                         <button
@@ -1675,11 +2301,25 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
             {(searchTerm ||
               statusFilter !== 'ALL' ||
               systemTypeFilter !== 'ALL' ||
-              zoneFilter !== 'ALL') && (
+              zoneFilter !== 'ALL' ||
+              cockpitFilter !== 'NONE') && (
               <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
                 <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Filtres actifs :
                 </span>
+                {cockpitFilter !== 'NONE' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                    <Activity className="w-3 h-3 text-amber-600" />
+                    Cockpit: {cockpitFilter}
+                    <button
+                      type="button"
+                      onClick={() => setCockpitFilter('NONE')}
+                      className="hover:bg-amber-200/60 p-0.5 rounded-full transition cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
                 {searchTerm && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold">
                     <Search className="w-3 h-3 text-indigo-600" />
@@ -1940,6 +2580,15 @@ const EquipmentView: React.FC<EquipmentViewProps> = ({
         showToast={showToast}
         confirmArchiveOrDelete={confirmArchiveOrDelete}
       />
+
+      {passportMachine && (
+        <MachinePassport360Modal
+          machine={passportMachine}
+          onClose={() => setPassportMachine(null)}
+          onNavigateToPreventive={onNavigateToPreventive}
+          onNavigateToQuickSortie={(m) => onNavigateToQuickSortie?.(m)}
+        />
+      )}
     </AnimatedPage>
   );
 };

@@ -2,6 +2,7 @@ import type express from 'express';
 import {
   ADMIN_ONLY_ENTITIES,
   CATALOG_PROTECTED_ENTITIES,
+  STRICT_ADMIN_ONLY_ENTITIES,
   canRoleMutateEntity,
   evaluateBootstrapWriteAllowance,
   evaluateServerApiTokenGuard,
@@ -292,11 +293,21 @@ export function createAuthenticateApiMiddleware(deps: {
         }
       }
 
+      if (resolvedActor.sessionVerified && fullPath === '/api/gmao/authaccounts') {
+        const readRole = normalizeServerRole(resolvedActor.effectiveRole);
+        if (readRole !== 'ADMIN') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Role '${readRole}' is not authorized to read identity accounts endpoint '${fullPath}'.`,
+          });
+        }
+      }
+
       if (
         resolvedActor.sessionVerified &&
         (fullPath === '/api/gmao/audit' ||
           fullPath === '/api/gmao/auditevents' ||
-          fullPath === '/api/gmao/authaccounts' ||
           fullPath === '/api/gmao/db/info')
       ) {
         const readRole = normalizeServerRole(resolvedActor.effectiveRole);
@@ -399,6 +410,13 @@ export function createAuthenticateApiMiddleware(deps: {
       }
 
       if (targetEntity && targetEntity !== 'state' && targetEntity !== 'audit') {
+        if (STRICT_ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: `Role '${role}' is not authorized to modify identity entity '${targetEntity}' (ADMIN only).`,
+          });
+        }
         if (
           ADMIN_ONLY_ENTITIES.has(targetEntity) &&
           role !== 'ADMIN' &&

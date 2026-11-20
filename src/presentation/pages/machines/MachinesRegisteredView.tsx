@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown,
   ArrowUp, Activity, Cpu, X, Radio, FileText, Calculator, MoreVertical, Calendar,
   Hash, Wrench, FileSpreadsheet, RotateCcw, ShieldCheck, Clock, Sparkles, ShieldAlert,
-  Settings2, Plus, Check, QrCode, Gauge,
+  Settings2, Plus, Check, QrCode, Gauge, Smartphone, Flame,
 } from 'lucide-react';
 import PreventiveService from '../../../application/services/PreventiveService';
 import { filterActiveMachines, getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
@@ -31,6 +31,14 @@ import {
 import { MachinesRegisteredModals } from './components/MachinesRegisteredModals';
 import MachineQrFieldModal from './components/MachineQrFieldModal';
 import MachinePassport360Modal from './components/MachinePassport360Modal';
+import { MachinesCockpitBar } from './components/MachinesCockpitBar';
+import BatchQrPrintModal from './components/BatchQrPrintModal';
+import {
+  buildQuickEditMachineUpdates,
+  computeMachinesCockpitMetrics,
+  type MachineQuickEditDraft,
+  type MachinesCockpitFilter,
+} from '../../../domain/machines/machinesCockpitService';
 import { useGmaoStore } from '../../../store/useGmaoStore';
 import { buildMachineActivityLedger } from '../../../application/services/MachineHealthPassportService';
 import { usePermission } from '../../components/common/PermissionGate';
@@ -150,6 +158,7 @@ export default function MachinesRegisteredView({
   const preventiveExecutions = useGmaoStore((s) => s.preventiveExecutions) || [];
   const sortiesExterne = useGmaoStore((s) => s.sortiesExterne) || [];
   const sortieDemands = useGmaoStore((s) => s.sortieDemands) || [];
+  const rawStock = useGmaoStore((s) => s.rawStock) || [];
   const machineElementsLedger = useGmaoStore((s) => s.machineElementsLedger) || [];
   const warehouseItems = useGmaoStore((s) => s.warehouseItems) || [];
 
@@ -191,6 +200,10 @@ export default function MachinesRegisteredView({
   const [qrMachine, setQrMachine] = useState<{ machine: any; mode: 'ETIQUETTE' | 'FICHE_TERRAIN' } | null>(null);
   const [passport360Machine, setPassport360Machine] = useState<any | null>(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL | 'En Service' | 'En Maintenance' | 'Arrêt'
+  const [cockpitFilter, setCockpitFilter] = useState<MachinesCockpitFilter>('NONE');
+  const [quickEditMode, setQuickEditMode] = useState(false);
+  const [quickEditDrafts, setQuickEditDrafts] = useState<Record<string, MachineQuickEditDraft>>({});
+  const [showBatchQrModal, setShowBatchQrModal] = useState(false);
   const [assetClassFilter, setAssetClassFilter] = useState<'ALL' | 'PRODUCTION' | 'SYSTEM_GENERAL'>('ALL');
   const [sysTypeFilter, setSysTypeFilter] = useState('ALL');
   const [showFormulasModal, setShowFormulasModal] = useState(false);
@@ -253,6 +266,48 @@ export default function MachinesRegisteredView({
     return map;
   }, [mouvements]);
 
+  const cockpitMetrics = useMemo(
+    () =>
+      computeMachinesCockpitMetrics({
+        machines,
+        correctiveInterventions,
+        preventiveTasks,
+        preventiveExecutions,
+        sortiesExterne,
+        stockItems: rawStock,
+      }),
+    [machines, correctiveInterventions, preventiveTasks, preventiveExecutions, sortiesExterne, rawStock]
+  );
+
+  const pendingQuickUpdates = useMemo(
+    () => buildQuickEditMachineUpdates(machines, quickEditDrafts),
+    [machines, quickEditDrafts]
+  );
+
+  const handleStageQuickDraft = (machineId: string, patch: MachineQuickEditDraft) => {
+    setQuickEditDrafts((prev) => ({
+      ...prev,
+      [machineId]: {
+        ...(prev[machineId] || {}),
+        ...patch,
+      },
+    }));
+  };
+
+  const handleCommitQuickEdits = () => {
+    if (!canEdit || pendingQuickUpdates.length === 0) return;
+    pendingQuickUpdates.forEach((item) => {
+      onUpdateMachine(item.id, item.updatedMachine);
+    });
+    const updatedCount = pendingQuickUpdates.length;
+    setQuickEditDrafts({});
+    setQuickEditMode(false);
+    showToast?.(
+      `${updatedCount} équipement(s) mis à jour avec journalisation AUDIT_EVENTS.`,
+      'success'
+    );
+  };
+
   // KPI Statistics
   const kpis = useMemo(() => {
     const total = machines.length;
@@ -286,12 +341,22 @@ export default function MachinesRegisteredView({
       archivees,
       activeFamiliesCount,
       totalInterventions,
+      totalEconomicImpact12m: cockpitMetrics.totalEconomicImpact12m,
     };
-  }, [machines, sortiesCountMap]);
+  }, [machines, sortiesCountMap, cockpitMetrics.totalEconomicImpact12m]);
 
   // Filtering
   const filteredMachines = useMemo(() => {
     return machines.filter((m) => {
+      const codeNorm = String(m?.id_machine_registered || m?.id || m?.code || '')
+        .trim()
+        .toUpperCase();
+      const rowSignal = cockpitMetrics.perMachineSignals[codeNorm];
+      if (cockpitFilter === 'BAD_ACTORS' && !rowSignal?.isBadActor) return false;
+      if (cockpitFilter === 'MAINT_DUE' && !rowSignal?.hasMaintDue) return false;
+      if (cockpitFilter === 'INCOMPLETE_SETUP' && !rowSignal?.isIncompleteSetup) return false;
+      if (cockpitFilter === 'STOPPED_OR_MAINT' && !rowSignal?.isStoppedOrMaint) return false;
+
       const mClass = getMachineAssetClass(m);
       if (assetClassFilter !== 'ALL' && mClass !== assetClassFilter) return false;
       if (sysTypeFilter !== 'ALL' && String(m.id_general_system_type || '') !== sysTypeFilter) return false;
@@ -344,7 +409,7 @@ export default function MachinesRegisteredView({
       }
       return true;
     });
-  }, [machines, assetClassFilter, sysTypeFilter, mchFamilyFilter, mchTemplateFilter, mchZoneFilter, statusFilter, mchSearch, technicians, zones, blueprints, generalSystemTypes]);
+  }, [machines, cockpitMetrics.perMachineSignals, cockpitFilter, assetClassFilter, sysTypeFilter, mchFamilyFilter, mchTemplateFilter, mchZoneFilter, statusFilter, mchSearch, technicians, zones, blueprints, generalSystemTypes]);
 
   const [pageSize, setPageSize] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
@@ -356,7 +421,7 @@ export default function MachinesRegisteredView({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [mchSearch, assetClassFilter, sysTypeFilter, mchFamilyFilter, mchTemplateFilter, mchZoneFilter, statusFilter, sortField, sortOrder]);
+  }, [mchSearch, cockpitFilter, assetClassFilter, sysTypeFilter, mchFamilyFilter, mchTemplateFilter, mchZoneFilter, statusFilter, sortField, sortOrder]);
 
   // Active Action Menu Popover
   const [activeActionMenuId, setActiveActionMenuId] = useState(null);
@@ -439,6 +504,7 @@ export default function MachinesRegisteredView({
   };
 
   const hasActiveFilters =
+    cockpitFilter !== 'NONE' ||
     assetClassFilter !== 'ALL' ||
     sysTypeFilter !== 'ALL' ||
     mchFamilyFilter !== 'ALL' ||
@@ -448,6 +514,7 @@ export default function MachinesRegisteredView({
     Boolean(localSearch);
 
   const clearAllFilters = () => {
+    setCockpitFilter('NONE');
     setAssetClassFilter('ALL');
     setSysTypeFilter('ALL');
     setMchFamilyFilter('ALL');
@@ -551,7 +618,39 @@ export default function MachinesRegisteredView({
       <MachinesKPIBar
         kpis={kpis}
         statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
+        setStatusFilter={(val: string) => {
+          setStatusFilter(val);
+          if (val !== 'STOPPED_OR_MAINT' && cockpitFilter === 'STOPPED_OR_MAINT') {
+            setCockpitFilter('NONE');
+          }
+        }}
+      />
+
+      {/* Phase C1: Owner & Field Live Cockpit */}
+      <MachinesCockpitBar
+        metrics={cockpitMetrics}
+        statusFilter={statusFilter}
+        cockpitFilter={cockpitFilter}
+        onToggleStopped={() => {
+          const isActive =
+            cockpitFilter === 'STOPPED_OR_MAINT' || statusFilter === 'STOPPED_OR_MAINT';
+          if (isActive) {
+            setCockpitFilter('NONE');
+            setStatusFilter('ALL');
+          } else {
+            setCockpitFilter('STOPPED_OR_MAINT');
+            setStatusFilter('STOPPED_OR_MAINT');
+          }
+        }}
+        onToggleBadActors={() =>
+          setCockpitFilter((prev) => (prev === 'BAD_ACTORS' ? 'NONE' : 'BAD_ACTORS'))
+        }
+        onToggleMaintDue={() =>
+          setCockpitFilter((prev) => (prev === 'MAINT_DUE' ? 'NONE' : 'MAINT_DUE'))
+        }
+        onToggleIncompleteSetup={() =>
+          setCockpitFilter((prev) => (prev === 'INCOMPLETE_SETUP' ? 'NONE' : 'INCOMPLETE_SETUP'))
+        }
       />
 
       {/* Filter Bar with Cascading Selects, Status Presets, Search & Active Chips */}
@@ -577,7 +676,42 @@ export default function MachinesRegisteredView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+            {canEdit && (
+              <button
+                type="button"
+                data-testid="machines-quick-edit-toggle"
+                onClick={() => {
+                  if (quickEditMode) {
+                    setQuickEditDrafts({});
+                    setQuickEditMode(false);
+                  } else {
+                    setQuickEditMode(true);
+                  }
+                }}
+                className={`h-8 px-3 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95 ${
+                  quickEditMode
+                    ? 'bg-amber-600 text-white border-amber-700'
+                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300/90'
+                }`}
+                title="Activer l'édition rapide en ligne (Statut, Technicien, Régime, Coût arrêt) sans ouvrir les fiches une par une"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>{quickEditMode ? 'Quitter Pilotage Terrain' : 'Pilotage Terrain'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              data-testid="machines-batch-qr-btn"
+              onClick={() => setShowBatchQrModal(true)}
+              className="h-8 px-3 rounded-xl border border-cyan-300/90 bg-cyan-50 hover:bg-cyan-100 text-cyan-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+              title="Imprimer une planche A4 d'étiquettes QR pour toutes les machines actives filtrées"
+            >
+              <QrCode className="w-3.5 h-3.5 text-cyan-700" />
+              <span className="hidden sm:inline">Planche QR (Lot)</span>
+            </button>
+
             {/* Direct Excel Export Button */}
             <button
               type="button"
@@ -618,7 +752,12 @@ export default function MachinesRegisteredView({
             <button
               key={preset.key}
               type="button"
-              onClick={() => setStatusFilter(preset.key)}
+              onClick={() => {
+                setStatusFilter(preset.key);
+                if (cockpitFilter === 'STOPPED_OR_MAINT') {
+                  setCockpitFilter('NONE');
+                }
+              }}
               className={`h-7 px-2.5 rounded-lg border text-[11px] font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
                 statusFilter === preset.key
                   ? preset.color === 'emerald'
@@ -970,6 +1109,26 @@ export default function MachinesRegisteredView({
                   </button>
                 </span>
               )}
+              {cockpitFilter !== 'NONE' && cockpitFilter !== 'STOPPED_OR_MAINT' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 font-bold text-[11px] border border-amber-200">
+                  <span>
+                    Cockpit:{' '}
+                    {cockpitFilter === 'BAD_ACTORS'
+                      ? 'Bad Actors & Alertes BER'
+                      : cockpitFilter === 'MAINT_DUE'
+                        ? 'BT Ouverts / PM en cours'
+                        : 'Fiches à compléter'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCockpitFilter('NONE')}
+                    className="hover:text-rose-600 cursor-pointer"
+                    title="Supprimer ce filtre"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
               {statusFilter !== 'ALL' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-[11px] border border-emerald-200">
                   <span>
@@ -977,7 +1136,10 @@ export default function MachinesRegisteredView({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setStatusFilter('ALL')}
+                    onClick={() => {
+                      setStatusFilter('ALL');
+                      if (cockpitFilter === 'STOPPED_OR_MAINT') setCockpitFilter('NONE');
+                    }}
                     className="hover:text-rose-600 cursor-pointer"
                     title="Supprimer ce filtre"
                   >
@@ -1075,6 +1237,51 @@ export default function MachinesRegisteredView({
           </div>
         )}
       </div>
+
+      {/* Phase C2: Pilotage Terrain Inline Quick-Edit Batch Bar */}
+      {quickEditMode && (
+        <div
+          data-testid="machines-quick-edit-bar"
+          className="bg-amber-50/95 border border-amber-300 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-sm animate-in fade-in"
+        >
+          <div className="flex items-center gap-2.5 text-xs text-amber-950">
+            <span className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <Edit2 className="w-4 h-4" />
+            </span>
+            <div>
+              <div className="font-black">
+                Mode Pilotage Terrain Actif — Modifiez Statut, Technicien, Régime et Coût d&apos;Arrêt en ligne
+              </div>
+              <div className="text-[11px] text-amber-800">
+                Chaque validation déclenche le workflow de cycle de vie (suspension PM si archivée) et le journal AUDIT_EVENTS.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickEditDrafts({});
+                setQuickEditMode(false);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 font-bold text-xs cursor-pointer"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              data-testid="machines-quick-edit-commit"
+              disabled={pendingQuickUpdates.length === 0}
+              onClick={handleCommitQuickEdits}
+              className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Valider les modifications ({pendingQuickUpdates.length})</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Table with Iconic Excel Mirror Headers */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out">
@@ -1307,6 +1514,8 @@ export default function MachinesRegisteredView({
                           );
                           const showRollup =
                             parentRollup.descendantCount > 0 || hierarchyCtx.level === 'LINE';
+                          const rowCodeUpper = String(m.id_machine_registered || '').trim().toUpperCase();
+                          const rowSig = cockpitMetrics.perMachineSignals[rowCodeUpper];
                           return (
                             <div className="flex flex-col items-start gap-1">
                               <div className="flex items-center gap-1.5">
@@ -1325,6 +1534,29 @@ export default function MachinesRegisteredView({
                                   </span>
                                 )}
                               </div>
+                              {!isArchived && rowSig && (rowSig.isBadActor || rowSig.openBtCount > 0 || rowSig.isIncompleteSetup) && (
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {rowSig.isBadActor && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200 text-[9.5px] font-mono font-bold">
+                                      <Flame className="w-2.5 h-2.5 text-rose-600" />
+                                      {rowSig.isEconomicBerExceeded
+                                        ? `BER ${rowSig.berRatioPercent ?? 0}%`
+                                        : `Santé ${rowSig.healthScore}/100`}
+                                    </span>
+                                  )}
+                                  {rowSig.openBtCount > 0 && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200 text-[9.5px] font-mono font-bold">
+                                      <Wrench className="w-2.5 h-2.5 text-indigo-600" />
+                                      {rowSig.openBtCount} BT ouvert(s)
+                                    </span>
+                                  )}
+                                  {rowSig.isIncompleteSetup && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200 text-[9.5px] font-semibold">
+                                      Fiche à compléter
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               {hierarchyCtx.parentId && (
                                 <div
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-mono font-semibold"
@@ -1377,13 +1609,49 @@ export default function MachinesRegisteredView({
                             <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                             <span>Mise en serv. : <b className="text-slate-700 font-mono">{getMachineCommissioningDate(m) || '—'}</b></span>
                           </div>
-                          {(Number(m.cout_arret_horaire || 0) > 0 || m.regime_travail) && (
-                            <div className="inline-flex items-center gap-1.5 text-[10px] font-mono text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70">
-                              <span>{m.regime_travail || '2x8'}</span>
-                              {Number(m.cout_arret_horaire || 0) > 0 && (
-                                <span>• {Number(m.cout_arret_horaire).toLocaleString('fr-FR')} DH/h</span>
-                              )}
+                          {quickEditMode && canEdit && !isArchived ? (
+                            <div className="flex items-center gap-1 pt-0.5">
+                              <select
+                                value={quickEditDrafts[m.id_machine_registered]?.regime_travail ?? (m.regime_travail || '2x8')}
+                                onChange={(e) =>
+                                  handleStageQuickDraft(m.id_machine_registered, {
+                                    regime_travail: e.target.value,
+                                  })
+                                }
+                                className="px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-[10.5px] font-mono font-bold text-slate-800 focus:outline-none"
+                                title="Régime de travail"
+                              >
+                                <option value="1x8">1x8</option>
+                                <option value="2x8">2x8</option>
+                                <option value="3x8">3x8</option>
+                              </select>
+                              <input
+                                type="number"
+                                min="0"
+                                step="10"
+                                value={
+                                  quickEditDrafts[m.id_machine_registered]?.cout_arret_horaire ??
+                                  Number(m.cout_arret_horaire || 0)
+                                }
+                                onChange={(e) =>
+                                  handleStageQuickDraft(m.id_machine_registered, {
+                                    cout_arret_horaire: e.target.value,
+                                  })
+                                }
+                                className="w-20 px-1.5 py-0.5 rounded border border-amber-300 bg-white text-[10.5px] font-mono font-bold text-slate-800 text-right focus:outline-none"
+                                title="Coût d'arrêt horaire (DH/h)"
+                              />
+                              <span className="text-[10px] font-mono text-slate-500">DH/h</span>
                             </div>
+                          ) : (
+                            (Number(m.cout_arret_horaire || 0) > 0 || m.regime_travail) && (
+                              <div className="inline-flex items-center gap-1.5 text-[10px] font-mono text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/70">
+                                <span>{m.regime_travail || '2x8'}</span>
+                                {Number(m.cout_arret_horaire || 0) > 0 && (
+                                  <span>• {Number(m.cout_arret_horaire).toLocaleString('fr-FR')} DH/h</span>
+                                )}
+                              </div>
+                            )
                           )}
                         </div>
                       </td>
@@ -1516,45 +1784,84 @@ export default function MachinesRegisteredView({
                             )}
                           </button>
 
-                          {/* Technician Badge */}
-                          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200/70 text-[11px] font-semibold shadow-2xs">
-                            <Users className="w-3 h-3 text-blue-600 shrink-0" />
-                            <span className="font-bold text-slate-800">
-                              {tech ? tech.nom : m.technician || 'Non assigné'}
-                            </span>
-                            {tech?.id_technician && (
-                              <span className="font-mono text-[10px] text-blue-600 bg-blue-100/70 px-1 rounded">
-                                {tech.id_technician}
+                          {/* Technician Badge / Quick-Edit Select */}
+                          {quickEditMode && canEdit && !isArchived ? (
+                            <select
+                              value={quickEditDrafts[m.id_machine_registered]?.technician ?? (m.technician || '')}
+                              onChange={(e) =>
+                                handleStageQuickDraft(m.id_machine_registered, {
+                                  technician: e.target.value,
+                                })
+                              }
+                              className="px-2 py-1 rounded-md border border-blue-300 bg-blue-50/70 text-[11px] font-bold text-slate-800 max-w-[190px] focus:outline-none"
+                              title="Réaffecter le technicien responsable"
+                            >
+                              <option value="">— Non assigné —</option>
+                              {technicians
+                                .filter((t) => t?.is_active !== false)
+                                .map((t) => (
+                                  <option key={t.id_technician || t.nom} value={t.id_technician || t.nom}>
+                                    {t.nom} ({t.id_technician || 'TECH'})
+                                  </option>
+                                ))}
+                            </select>
+                          ) : (
+                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200/70 text-[11px] font-semibold shadow-2xs">
+                              <Users className="w-3 h-3 text-blue-600 shrink-0" />
+                              <span className="font-bold text-slate-800">
+                                {tech ? tech.nom : m.technician || 'Non assigné'}
                               </span>
-                            )}
-                          </div>
+                              {tech?.id_technician && (
+                                <span className="font-mono text-[10px] text-blue-600 bg-blue-100/70 px-1 rounded">
+                                  {tech.id_technician}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </td>
 
                       {/* Status (H) */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-2xs ${
-                            isArchived
-                              ? 'bg-slate-200 text-slate-700 border-slate-300'
-                              : isService
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                : isMaintenance
-                                  ? 'bg-amber-50 text-amber-800 border-amber-300'
-                                  : 'bg-rose-50 text-rose-800 border-rose-300'
-                          }`}
-                        >
-                          {isArchived ? (
-                            <RotateCcw className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                          ) : isService ? (
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                          ) : isMaintenance ? (
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          ) : (
-                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                          )}
-                          <span>{isArchived ? 'ARCHIVEE' : m.status || 'En Service'}</span>
-                        </span>
+                        {quickEditMode && canEdit && !isArchived ? (
+                          <select
+                            value={quickEditDrafts[m.id_machine_registered]?.status ?? (m.status || 'En Service')}
+                            onChange={(e) =>
+                              handleStageQuickDraft(m.id_machine_registered, {
+                                status: e.target.value,
+                              })
+                            }
+                            className="px-2 py-1 rounded-lg border border-amber-300 bg-white text-[11px] font-bold text-slate-900 focus:outline-none shadow-2xs"
+                            title="Basculer le statut opérationnel en 1 clic"
+                          >
+                            <option value="En Service">En Service</option>
+                            <option value="En Maintenance">En Maintenance</option>
+                            <option value="Arrêt">Arrêt</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border shadow-2xs ${
+                              isArchived
+                                ? 'bg-slate-200 text-slate-700 border-slate-300'
+                                : isService
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  : isMaintenance
+                                    ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                    : 'bg-rose-50 text-rose-800 border-rose-300'
+                            }`}
+                          >
+                            {isArchived ? (
+                              <RotateCcw className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                            ) : isService ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            ) : isMaintenance ? (
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                            )}
+                            <span>{isArchived ? 'ARCHIVEE' : m.status || 'En Service'}</span>
+                          </span>
+                        )}
                       </td>
 
                       {/* Interventions Count */}
@@ -1599,6 +1906,19 @@ export default function MachinesRegisteredView({
                               title={`Sortie Rapide / Intervention (1-clic) pour ${m.id_machine_registered} (${m.designation})`}
                             >
                               <Wrench className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                            </button>
+
+                            {/* Quick Action Button: Fiche Terrain / DI Express (Poste partagé 1-clic) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQrMachine({ machine: m, mode: 'FICHE_TERRAIN' });
+                                setActiveActionMenuId(null);
+                              }}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 hover:text-rose-900 transition flex items-center justify-center cursor-pointer border-r border-slate-200 group"
+                              title={`Fiche Terrain Atelier (Signaler DI / Clôture 3-Clics / Préventif) pour ${m.id_machine_registered}`}
+                            >
+                              <Smartphone className="w-3.5 h-3.5 text-rose-600 group-hover:scale-110 transition-transform" />
                             </button>
 
                             {/* Quick Action Button: Étiquette QR & Fiche Terrain Offline */}
@@ -1968,6 +2288,14 @@ export default function MachinesRegisteredView({
             setPassport360Machine(null);
             setQrMachine({ machine: m, mode: 'ETIQUETTE' });
           }}
+        />
+      )}
+
+      {showBatchQrModal && (
+        <BatchQrPrintModal
+          machines={sortedData}
+          zones={zones}
+          onClose={() => setShowBatchQrModal(false)}
         />
       )}
     </AnimatedPage>

@@ -87,8 +87,14 @@ export default function MachinesKPIBar({
         color="indigo"
         valueColored={true}
         badgeText="Historique PDR & BT"
-        footerLabel="Formule Excel :"
-        footerValue="=COUNTIF(Mvt[Machine])"
+        footerLabel="Impact 12 mois :"
+        footerValue={
+          Number(kpis.totalEconomicImpact12m || 0) > 0
+            ? `${Number(kpis.totalEconomicImpact12m).toLocaleString('fr-FR', {
+                maximumFractionDigits: 0,
+              })} DH`
+            : 'Traçabilité PDR & BT'
+        }
       />
     </GmaoKpiGrid>
   );

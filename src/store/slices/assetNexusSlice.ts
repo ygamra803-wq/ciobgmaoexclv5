@@ -202,17 +202,36 @@ export function createAssetNexusSlice(set: StoreSet, get: StoreGet): AssetNexusS
         is_active: true,
       };
       get().setGeneralSystemTypes((prev) => [...(prev || []), created]);
+      get().appendAuditEvent?.({
+        actionType: 'GENERAL_SYSTEM_TYPE_CREATED',
+        entityType: 'GENERAL_SYSTEM_TYPE',
+        entityId: created.id,
+        before: null,
+        after: created,
+      });
       return created;
     },
 
     handleToggleGeneralSystemType: (id: string, isActive?: boolean) => {
+      const existing = (get().generalSystemTypes || []).find(
+        (t) => String(t.id) === String(id)
+      );
+      if (!existing) return;
+      const wasActive = existing.is_active !== false;
+      const nextActive = typeof isActive === 'boolean' ? isActive : !wasActive;
       get().setGeneralSystemTypes((prev) =>
         (prev || []).map((t) => {
           if (String(t.id) !== String(id)) return t;
-          const nextActive = typeof isActive === 'boolean' ? isActive : t.is_active === false;
           return { ...t, is_active: nextActive };
         })
       );
+      get().appendAuditEvent?.({
+        actionType: 'GENERAL_SYSTEM_TYPE_TOGGLED',
+        entityType: 'GENERAL_SYSTEM_TYPE',
+        entityId: String(existing.id),
+        before: { is_active: wasActive },
+        after: { is_active: nextActive },
+      });
     },
 
     setZones: (updater: StateUpdater<IZone[]>) => {

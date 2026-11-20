@@ -40,6 +40,15 @@ const ROLE_TILES = [
     badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
   },
   {
+    role: 'RESPONSABLE_MAINTENANCE',
+    label: 'Resp. Maintenance',
+    subLabel: 'Validation & Pilotage',
+    icon: Users,
+    activeClass: 'border-purple-600 bg-purple-50/70 ring-2 ring-purple-500/20 text-purple-950',
+    iconClass: 'bg-purple-100 text-purple-700 border-purple-200',
+    badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
+  },
+  {
     role: 'TECHNICIEN',
     label: 'Technicien',
     subLabel: 'PM, Pannes & PDR',
@@ -56,6 +65,15 @@ const ROLE_TILES = [
     activeClass: 'border-amber-600 bg-amber-50/70 ring-2 ring-amber-500/20 text-amber-950',
     iconClass: 'bg-amber-100 text-amber-700 border-amber-200',
     badgeClass: 'bg-amber-100 text-amber-800 border-amber-200',
+  },
+  {
+    role: 'OPERATEUR',
+    label: 'Opérateur',
+    subLabel: 'Signalement DI',
+    icon: User,
+    activeClass: 'border-cyan-600 bg-cyan-50/70 ring-2 ring-cyan-500/20 text-cyan-950',
+    iconClass: 'bg-cyan-100 text-cyan-700 border-cyan-200',
+    badgeClass: 'bg-cyan-100 text-cyan-800 border-cyan-200',
   },
   {
     role: 'VIEWER',
@@ -421,10 +439,14 @@ export default function LoginScreen() {
     switch (role) {
       case 'ADMIN':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'RESPONSABLE_MAINTENANCE':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
       case 'RESPONSABLE_MAGASIN':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'TECHNICIEN':
         return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'OPERATEUR':
+        return 'bg-cyan-50 text-cyan-700 border-cyan-200';
       default:
         return 'bg-slate-100 text-slate-600 border-slate-200';
     }
@@ -882,7 +904,7 @@ export default function LoginScreen() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {ROLE_TILES.map((tile) => {
                     const IconComp = tile.icon;
                     const isSelected = selectedRole === tile.role;

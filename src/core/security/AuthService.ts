@@ -564,6 +564,7 @@ export class AuthService {
       id_zone: found.id_zone || null,
       specialite: found.specialite || null,
       isActive: found.isActive !== false,
+      hasPassword: Boolean(found.passwordHash && !String(found.passwordHash).includes('_init_seed')),
     };
   }
 
@@ -629,22 +630,34 @@ export class AuthService {
     const badgeColor =
       finalRole === 'ADMIN'
         ? 'emerald'
-        : finalRole === 'RESPONSABLE_MAGASIN'
-          ? 'amber'
-          : finalRole === 'VIEWER'
-            ? 'slate'
-            : 'blue';
+        : finalRole === 'RESPONSABLE_MAINTENANCE'
+          ? 'purple'
+          : finalRole === 'RESPONSABLE_MAGASIN'
+            ? 'amber'
+            : finalRole === 'OPERATEUR'
+              ? 'cyan'
+              : finalRole === 'VIEWER'
+                ? 'slate'
+                : 'blue';
 
     const titleFr =
       finalRole === 'TECHNICIEN'
         ? cleanZone
           ? `Technicien (${cleanZone})`
           : 'Technicien Maintenance'
-        : finalRole === 'RESPONSABLE_MAGASIN'
-          ? 'Responsable Magasin (RMG)'
-          : finalRole === 'ADMIN'
-            ? 'Administrateur Système'
-            : 'Observateur / Consultation';
+        : finalRole === 'RESPONSABLE_MAINTENANCE'
+          ? cleanZone
+            ? `Responsable Maintenance (${cleanZone})`
+            : 'Responsable Maintenance'
+          : finalRole === 'RESPONSABLE_MAGASIN'
+            ? 'Responsable Magasin (RMG)'
+            : finalRole === 'OPERATEUR'
+              ? cleanZone
+                ? `Opérateur Production (${cleanZone})`
+                : 'Opérateur Production'
+              : finalRole === 'ADMIN'
+                ? 'Administrateur Système'
+                : 'Observateur / Consultation';
 
     const accountObj = {
       ...(existing || {}),
@@ -704,7 +717,50 @@ export class AuthService {
       }
     }
 
-    return accountObj;
+    return {
+      ...accountObj,
+      hasPassword: Boolean(passwordHash && !String(passwordHash).includes('_init_seed')),
+    };
+  }
+
+  /**
+   * Cascade a Zone identifier rename to all personnel-linked login accounts and active session.
+   */
+  cascadeZoneRename(oldZoneId: string, newZoneId: string) {
+    const oldNorm = String(oldZoneId || '').trim().toUpperCase();
+    const nextZone = String(newZoneId || '').trim();
+    if (!oldNorm || !nextZone || oldNorm === nextZone.toUpperCase()) return 0;
+
+    const users = this.getStoredUsersList();
+    let changed = 0;
+    const nextUsers = users.map((u) => {
+      if (!u || !u.id_zone) return u;
+      const rawZone = String(u.id_zone).trim();
+      const parts = rawZone.split(',').map((p) => p.trim()).filter(Boolean);
+      const updatedParts = parts.map((p) => (p.toUpperCase() === oldNorm ? nextZone : p));
+      const nextZoneStr = updatedParts.join(', ');
+      if (nextZoneStr !== rawZone) {
+        changed += 1;
+        return { ...u, id_zone: nextZoneStr };
+      }
+      return u;
+    });
+
+    if (changed > 0) {
+      this.saveStoredUsersList(nextUsers, true);
+      const currentSession = this.getCurrentUser();
+      if (currentSession?.id_zone) {
+        const sParts = String(currentSession.id_zone)
+          .split(',')
+          .map((p) => p.trim())
+          .filter(Boolean);
+        const sNext = sParts.map((p) => (p.toUpperCase() === oldNorm ? nextZone : p)).join(', ');
+        if (sNext !== String(currentSession.id_zone).trim()) {
+          this.saveSignedSession({ ...currentSession, id_zone: sNext });
+        }
+      }
+    }
+    return changed;
   }
 
   /**
@@ -781,6 +837,7 @@ export class AuthService {
         id_zone: u.id_zone || null,
         specialite: u.specialite || null,
         isActive: u.isActive !== false,
+        hasPassword: Boolean(u.passwordHash && !String(u.passwordHash).includes('_init_seed')),
       }));
   }
 

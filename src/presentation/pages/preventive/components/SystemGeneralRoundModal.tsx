@@ -224,7 +224,24 @@ export default function SystemGeneralRoundModal({
 
   const baseRoundTasks = roundScope === 'WEEKLY_ALL' ? weeklyDueAllTasks : sysGenTasks;
 
+  const zoneAliasesMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const z of activeZones) {
+      const zId = String(z?.id_zone || '').trim().toUpperCase();
+      const zCode = String(z?.code_zone || z?.code || '').trim().toUpperCase();
+      const keys = new Set<string>([zId, zCode].filter(Boolean));
+      keys.forEach((k) => map.set(k, keys));
+    }
+    return map;
+  }, [activeZones]);
+
   const filteredRoundTasks = useMemo(() => {
+    const selectedZoneNorm = String(selectedZone || '').trim().toUpperCase();
+    const selectedZoneAliases =
+      selectedZoneNorm && selectedZoneNorm !== 'ALL'
+        ? zoneAliasesMap.get(selectedZoneNorm) || new Set([selectedZoneNorm])
+        : null;
+
     return baseRoundTasks.filter((t) => {
       const m =
         machineMap.get(t.id_machine) ||
@@ -233,9 +250,11 @@ export default function SystemGeneralRoundModal({
         const mSysType = String(m?.id_general_system_type || '');
         if (mSysType !== selectedSysType) return false;
       }
-      if (selectedZone !== 'ALL') {
-        const tZone = String(t.id_zone || m?.id_zone_default || m?.id_zone || '').trim();
-        if (tZone !== selectedZone) return false;
+      if (selectedZoneAliases) {
+        const tZoneNorm = String(t.id_zone || m?.id_zone_default || m?.id_zone || '')
+          .trim()
+          .toUpperCase();
+        if (!tZoneNorm || !selectedZoneAliases.has(tZoneNorm)) return false;
       }
       if (onlyDueTasks) {
         const machineMeter = m?.compteur_heures ?? (m as any)?.compteur_actuel;
@@ -246,7 +265,7 @@ export default function SystemGeneralRoundModal({
       }
       return true;
     });
-  }, [baseRoundTasks, roundScope, machineMap, selectedSysType, selectedZone, onlyDueTasks]);
+  }, [baseRoundTasks, roundScope, machineMap, selectedSysType, selectedZone, zoneAliasesMap, onlyDueTasks]);
 
   // Initialize pointStates when filteredRoundTasks changes
   useEffect(() => {

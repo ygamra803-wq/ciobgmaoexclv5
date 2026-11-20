@@ -13,6 +13,11 @@
  */
 import { constantTimeEqual } from './nativeCrypto.ts';
 
+export const STRICT_ADMIN_ONLY_ENTITIES = new Set<string>([
+  'users',
+  'authAccounts',
+]);
+
 export const ADMIN_ONLY_ENTITIES = new Set<string>([
   'users',
   'technicians',
@@ -592,6 +597,13 @@ export function canRoleMutateEntity(
     };
   }
 
+  if (STRICT_ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN') {
+    return {
+      allowed: false,
+      reason: `Role '${role}' is not authorized to modify identity entity '${targetEntity}' (ADMIN only).`,
+    };
+  }
+
   if (ADMIN_ONLY_ENTITIES.has(targetEntity) && role !== 'ADMIN' && role !== 'RESPONSABLE_MAINTENANCE') {
     return {
       allowed: false,
@@ -753,11 +765,28 @@ export function sanitizeBulkStateForRole<TState extends ServerStatePayload = Ser
     };
   }
 
-  if (role === 'ADMIN' || role === 'RESPONSABLE_MAINTENANCE') {
+  if (role === 'ADMIN') {
     return {
       allowed: true,
       sanitizedState: incomingState,
       strippedKeys: [],
+    };
+  }
+
+  if (role === 'RESPONSABLE_MAINTENANCE') {
+    const sanitizedSupervisorState: ServerStatePayload = {};
+    const supervisorStrippedKeys: string[] = [];
+    for (const [key, value] of Object.entries(incomingState || {})) {
+      if (STRICT_ADMIN_ONLY_ENTITIES.has(key)) {
+        supervisorStrippedKeys.push(key);
+        continue;
+      }
+      sanitizedSupervisorState[key] = value;
+    }
+    return {
+      allowed: true,
+      sanitizedState: sanitizedSupervisorState as Partial<TState> & ServerStatePayload,
+      strippedKeys: supervisorStrippedKeys,
     };
   }
 

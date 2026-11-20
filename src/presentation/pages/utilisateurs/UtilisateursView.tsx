@@ -26,11 +26,11 @@ import {
   Globe,
   X,
   RotateCcw,
-  Calculator,
   FileSpreadsheet,
   Key,
   Lock,
   Unlock,
+  ArrowRightLeft,
 } from 'lucide-react';
 import SupervisorAccount from '../../components/common/icons/SupervisorAccount';
 import UserCodePicker from '../../components/common/UserCodePicker';
@@ -47,12 +47,22 @@ import {
 import { useTranslation } from '../../../i18n/I18nContext';
 import { useAuth } from '../../../context/AuthContext';
 import { usePermission } from '../../components/common/PermissionGate';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
 import UtilisateursModals from './components/UtilisateursModals';
+import { computePersonnelWorkload } from '../../../application/services/PersonnelWorkloadService';
+import { matchesMemberZone } from '../../../application/services/ZoneOperationalAnalyticsService';
+import { validatePasswordPolicy } from '../../../core/security/AuthService';
+import { LicenseGateService } from '../../../core/security/LicenseGateService';
 
 export default function UtilisateursView({
   technicians = [],
   operations = [],
   zones = [],
+  machines = [],
+  correctiveInterventions = [],
+  preventiveTasks = [],
+  preventiveExecutions = [],
+  sortiesExterne = [],
   techZoneFilter,
   setTechZoneFilter,
   opZoneFilter,
@@ -60,6 +70,7 @@ export default function UtilisateursView({
   onAddTechnician,
   onUpdateTechnician,
   onDeleteTechnician,
+  onReassignTechnicianWorkload,
   onAddOperation,
   onUpdateOperation,
   onDeleteOperation,
@@ -73,6 +84,7 @@ export default function UtilisateursView({
     accounts: authAccounts,
     getAccountForPersonnel,
     upsertPersonnelAuthAccount,
+    toggleAccountActive,
     removePersonnelAuthAccount,
   } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -92,12 +104,15 @@ export default function UtilisateursView({
 
   const [profileFilter, setProfileFilter] = useState('ALL'); // ALL, TECHNICIEN, OPERATEUR, RESPONSABLE, RMT, RZN, RPD, RMG
   const [zoneFilter, setZoneFilter] = useState('ALL');
+  const [accessFilter, setAccessFilter] = useState<
+    'ALL' | 'ACTIVE' | 'OVERLOADED' | 'NO_ACCOUNT' | 'NO_PASSWORD' | 'DISABLED' | 'ARCHIVED'
+  >('ALL');
 
   // Sync incoming zone navigation filters from ZonesView
   useEffect(() => {
     if (techZoneFilter !== undefined && techZoneFilter !== 'ALL') {
       setZoneFilter(techZoneFilter || 'ALL');
-      setProfileFilter(techZoneFilter ? 'TECHNICIEN' : 'ALL');
+      setProfileFilter('TECHNICIEN');
       if (setTechZoneFilter) setTechZoneFilter('ALL');
     }
   }, [techZoneFilter]);
@@ -105,6 +120,7 @@ export default function UtilisateursView({
   useEffect(() => {
     if (opZoneFilter !== undefined && opZoneFilter !== 'ALL') {
       setZoneFilter(opZoneFilter || 'ALL');
+      setProfileFilter('ALL');
       if (setOpZoneFilter) setOpZoneFilter('ALL');
     }
   }, [opZoneFilter]);
@@ -125,14 +141,37 @@ export default function UtilisateursView({
   const [accessError, setAccessError] = useState(null);
   const [accessSavedMsg, setAccessSavedMsg] = useState(null);
 
+  // Phase C: 1-Click Workload Reassignment Modal state
+  const [userToReassign, setUserToReassign] = useState<{ id: string; nom?: string } | null>(null);
+  const [reassignTargetId, setReassignTargetId] = useState('');
+  const [reassignScopes, setReassignScopes] = useState({
+    includeMachines: true,
+    includeOpenBts: true,
+    includeActivePm: true,
+  });
+
+  // Phase C: Optional 1-Step Onboarding Auth Account creation inside Add User modal
+  const [onboardingAccess, setOnboardingAccess] = useState({
+    enabled: false,
+    username: '',
+    usernameTouched: false,
+    role: 'TECHNICIEN',
+    plainPassword: '',
+    error: '',
+  });
+
   const openAccessModal = (person) => {
     const existingAcc = getAccountForPersonnel ? getAccountForPersonnel(person.id) : null;
     const defaultRole =
       person.type === 'TECHNICIEN'
         ? 'TECHNICIEN'
-        : person.template_ids?.includes('RMG')
-          ? 'RESPONSABLE_MAGASIN'
-          : 'VIEWER';
+        : person.type === 'OPERATEUR'
+          ? 'OPERATEUR'
+          : Array.isArray(person.template_ids) &&
+              person.template_ids.includes('RMG') &&
+              !person.template_ids.includes('RMT')
+            ? 'RESPONSABLE_MAGASIN'
+            : 'RESPONSABLE_MAINTENANCE';
     setUserForAccessModal(person);
     setAccessForm({
       username: existingAcc?.username || String(person.id || '').toLowerCase(),
@@ -149,6 +188,17 @@ export default function UtilisateursView({
     if (!userForAccessModal || !upsertPersonnelAuthAccount) return;
     setAccessError(null);
     setAccessSavedMsg(null);
+    const existingAcc = getAccountForPersonnel
+      ? getAccountForPersonnel(userForAccessModal.id)
+      : null;
+    const hasConfiguredPassword = Boolean(existingAcc?.hasPassword);
+    const trimmedPassword = String(accessForm.plainPassword || '').trim();
+    if (accessForm.isActive && !hasConfiguredPassword && !trimmedPassword) {
+      setAccessError(
+        'Veuillez saisir un mot de passe sécurisé (min. 8 caractères, 1 lettre et 1 chiffre) lors de la première activation.'
+      );
+      return;
+    }
     try {
       await upsertPersonnelAuthAccount({
         personnelId: userForAccessModal.id,
@@ -157,7 +207,7 @@ export default function UtilisateursView({
         specialite: userForAccessModal.specialite || null,
         role: accessForm.role,
         username: accessForm.username,
-        plainPassword: accessForm.plainPassword,
+        plainPassword: trimmedPassword,
         isActive: accessForm.isActive,
       });
       setAccessSavedMsg('Accès GMAO mis à jour avec succès.');
@@ -347,8 +397,107 @@ export default function UtilisateursView({
     return list;
   }, [technicians, operations]);
 
-  // Filters with multi-template awareness
+  const workloadReport = useMemo(
+    () =>
+      computePersonnelWorkload({
+        technicians,
+        operations,
+        machines,
+        correctiveInterventions,
+        preventiveTasks,
+        preventiveExecutions,
+        sortiesExterne,
+        authAccounts,
+      }),
+    [
+      technicians,
+      operations,
+      machines,
+      correctiveInterventions,
+      preventiveTasks,
+      preventiveExecutions,
+      sortiesExterne,
+      authAccounts,
+    ]
+  );
+
+  const overloadedCount = useMemo(
+    () =>
+      combinedUsers.filter(
+        (u) => !u.isArchived && workloadReport.byPersonId[u.id]?.workloadLevel === 'SURCHARGE'
+      ).length,
+    [combinedUsers, workloadReport]
+  );
+
+  const noAccountCount = useMemo(
+    () =>
+      combinedUsers.filter(
+        (u) => !u.isArchived && !workloadReport.byPersonId[u.id]?.hasAccount
+      ).length,
+    [combinedUsers, workloadReport]
+  );
+
+  const activeTechniciansForReassign = useMemo(
+    () =>
+      combinedUsers
+        .filter((u) => !u.isArchived && u.type === 'TECHNICIEN')
+        .map((u) => ({
+          id: u.id,
+          nom: u.nom || u.id,
+          specialite: u.specialite,
+          id_zone: u.id_zone,
+          assignedCount: workloadReport.byPersonId[u.id]?.totalActiveWorkload ?? 0,
+        })),
+    [combinedUsers, workloadReport]
+  );
+
+  const openReassignModal = (person: { id: string; nom?: string }) => {
+    const firstCandidate =
+      activeTechniciansForReassign.find((t) => t.id !== person.id)?.id || '';
+    setUserToReassign({ id: person.id, nom: person.nom });
+    setReassignTargetId(firstCandidate);
+    setReassignScopes({
+      includeMachines: true,
+      includeOpenBts: true,
+      includeActivePm: true,
+    });
+  };
+
+  const handleSubmitReassign = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToReassign || !reassignTargetId || !onReassignTechnicianWorkload) return;
+    const res = onReassignTechnicianWorkload({
+      sourceTechId: userToReassign.id,
+      targetTechId: reassignTargetId,
+      includeMachines: reassignScopes.includeMachines,
+      includeOpenBts: reassignScopes.includeOpenBts,
+      includeActivePm: reassignScopes.includeActivePm,
+    });
+    if (res) {
+      setUserToReassign(null);
+    }
+  };
+
+  // Filters with multi-template, case-insensitive zone, and security/lifecycle awareness
   const filtered = combinedUsers.filter((u) => {
+    if (accessFilter === 'ACTIVE') {
+      if (u.isArchived) return false;
+    } else if (accessFilter === 'OVERLOADED') {
+      const w = workloadReport.byPersonId[u.id];
+      if (u.isArchived || w?.workloadLevel !== 'SURCHARGE') return false;
+    } else if (accessFilter === 'NO_ACCOUNT') {
+      const w = workloadReport.byPersonId[u.id];
+      if (u.isArchived || w?.hasAccount) return false;
+    } else if (accessFilter === 'ARCHIVED') {
+      if (!u.isArchived) return false;
+    } else if (accessFilter === 'NO_PASSWORD') {
+      const w = workloadReport.byPersonId[u.id];
+      if (u.isArchived || !w?.missingPasswordWarning) return false;
+    } else if (accessFilter === 'DISABLED') {
+      const acc = getAccountForPersonnel ? getAccountForPersonnel(u.id) : null;
+      if (u.isArchived || !acc || acc.isActive !== false) return false;
+    }
+
     if (profileFilter !== 'ALL') {
       if (profileFilter === 'TECHNICIEN' || profileFilter === 'OPERATEUR' || profileFilter === 'RESPONSABLE') {
         if (u.type !== profileFilter) return false;
@@ -362,9 +511,15 @@ export default function UtilisateursView({
       }
     }
     if (zoneFilter !== 'ALL') {
-      const hasAll = u.zones?.includes('ALL') || u.id_zone === 'ALL';
-      const hasZone = u.zones?.includes(zoneFilter) || u.id_zone === zoneFilter;
-      if (!hasAll && !hasZone) return false;
+      const targetZoneObj =
+        zones.find(
+          (z) =>
+            String(z.id_zone || '').trim().toUpperCase() === String(zoneFilter).trim().toUpperCase() ||
+            String(z.code_zone || '').trim().toUpperCase() === String(zoneFilter).trim().toUpperCase()
+        ) || { id_zone: zoneFilter };
+      if (!matchesMemberZone(u, targetZoneObj, { includeAll: true })) {
+        return false;
+      }
     }
     if (!search) return true;
     const q = search.toLowerCase();
@@ -385,9 +540,18 @@ export default function UtilisateursView({
   const [sortField, setSortField] = useState('nom');
   const [sortOrder, setSortOrder] = useState('asc');
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, profileFilter, zoneFilter, accessFilter, pageSize]);
+
   const sortedData = useMemo(() => {
     if (!sortField) return filtered;
     return [...filtered].sort((a, b) => {
+      if (sortField === 'workload') {
+        const wA = workloadReport.byPersonId[a.id]?.totalActiveWorkload ?? 0;
+        const wB = workloadReport.byPersonId[b.id]?.totalActiveWorkload ?? 0;
+        return sortOrder === 'asc' ? wA - wB : wB - wA;
+      }
       let valA = a[sortField] || '';
       let valB = b[sortField] || '';
       if (typeof valA === 'string') valA = valA.toLowerCase();
@@ -396,7 +560,7 @@ export default function UtilisateursView({
       if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filtered, sortField, sortOrder]);
+  }, [filtered, sortField, sortOrder, workloadReport]);
 
   const totalItems = sortedData.length;
   const effectivePageSize = pageSize === 0 ? totalItems : pageSize;
@@ -415,7 +579,7 @@ export default function UtilisateursView({
   };
 
   // Submit Handler
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!canManageUsers) return;
     if (!form.nom.trim()) return;
@@ -452,11 +616,12 @@ export default function UtilisateursView({
             : [form.template_id || 'RMT']
           : [];
         const tplLabel = isResp ? formatTemplateLabels(selectedTpls) : null;
+        const resolvedZoneStr = isResp ? (isAll ? 'ALL' : form.zones.join(', ')) : form.id_zone;
         onUpdateOperation(userToEdit.id, {
           ...userToEdit.raw,
           id_operation: userToEdit.id,
           nom: form.nom.trim(),
-          id_zone: isResp ? (isAll ? 'ALL' : form.zones.join(', ')) : form.id_zone,
+          id_zone: resolvedZoneStr,
           zones: isResp ? form.zones : [form.id_zone],
           type_profil: isResp ? 'RESPONSABLE' : 'OPERATEUR',
           templates: isResp ? selectedTpls : null,
@@ -464,6 +629,18 @@ export default function UtilisateursView({
           template_id: isResp ? selectedTpls.join(', ') : null,
           template_label: tplLabel,
         });
+        const existingAcc = getAccountForPersonnel ? getAccountForPersonnel(userToEdit.id) : null;
+        if (existingAcc && upsertPersonnelAuthAccount) {
+          upsertPersonnelAuthAccount({
+            personnelId: userToEdit.id,
+            nom: form.nom.trim(),
+            id_zone: resolvedZoneStr || null,
+            specialite: isResp ? tplLabel || 'Supervision & Validation' : 'Opérateur Ligne de Production',
+            role: existingAcc.role,
+            username: existingAcc.username,
+            isActive: existingAcc.isActive,
+          }).catch(() => {});
+        }
       }
       setUserToEdit(null);
       setShowAddModal(false);
@@ -484,6 +661,57 @@ export default function UtilisateursView({
         return;
       }
 
+      // Pre-validate 1-step GMAO login onboarding BEFORE mutating personnel list
+      const wantsImmediateAccess = Boolean(
+        isAdmin && onboardingAccess.enabled && upsertPersonnelAuthAccount
+      );
+      const loginUsername = String(onboardingAccess.username || nextId)
+        .trim()
+        .toLowerCase();
+      if (wantsImmediateAccess) {
+        if (loginUsername.length < 3 || !/^[a-zA-Z0-9_.-]+$/.test(loginUsername)) {
+          setOnboardingAccess((prev) => ({
+            ...prev,
+            error: "L'identifiant de connexion doit contenir au moins 3 caractères valides.",
+          }));
+          return;
+        }
+        const usernameCollision = (authAccounts || []).some(
+          (a) => String(a?.username || '').trim().toLowerCase() === loginUsername
+        );
+        if (usernameCollision) {
+          setOnboardingAccess((prev) => ({
+            ...prev,
+            error: `L'identifiant "${loginUsername}" est déjà utilisé par un autre compte.`,
+          }));
+          return;
+        }
+        try {
+          const validPass = validatePasswordPolicy(onboardingAccess.plainPassword);
+          if (LicenseGateService.isLicenseActive()) {
+            const matchesLicense = await LicenseGateService.verifyLicenseKey(validPass, {
+              touchLastAuth: false,
+            });
+            if (matchesLicense) {
+              throw new Error(
+                'Le mot de passe utilisateur doit être différent de la clé de licence commerciale.'
+              );
+            }
+          }
+        } catch (err: any) {
+          setOnboardingAccess((prev) => ({
+            ...prev,
+            error:
+              err?.message ||
+              'Mot de passe invalide (min. 8 caractères, 1 lettre et 1 chiffre).',
+          }));
+          return;
+        }
+      }
+
+      let resolvedZoneForAccount: string | null = form.id_zone || null;
+      let resolvedSpecForAccount: string | null = form.specialite || null;
+
       if (form.type === 'TECHNICIEN') {
         onAddTechnician({
           id_technician: nextId,
@@ -491,6 +719,7 @@ export default function UtilisateursView({
           id_zone: form.id_zone,
           specialite: form.specialite || 'Spécialité Maintenance',
         });
+        resolvedSpecForAccount = form.specialite || 'Spécialité Maintenance';
       } else if (form.type === 'OPERATEUR') {
         onAddOperation({
           id_operation: nextId,
@@ -498,6 +727,7 @@ export default function UtilisateursView({
           id_zone: form.id_zone,
           type_profil: 'OPERATEUR',
         });
+        resolvedSpecForAccount = 'Opérateur Ligne de Production';
       } else {
         const isAll = (form.zones || []).includes('ALL');
         const selectedTpls =
@@ -505,10 +735,11 @@ export default function UtilisateursView({
             ? form.templates
             : [form.template_id || 'RMT'];
         const tplLabel = formatTemplateLabels(selectedTpls);
+        const zoneStr = isAll ? 'ALL' : form.zones.join(', ');
         onAddOperation({
           id_operation: nextId,
           nom: cleanName,
-          id_zone: isAll ? 'ALL' : form.zones.join(', '),
+          id_zone: zoneStr,
           zones: form.zones,
           type_profil: 'RESPONSABLE',
           templates: selectedTpls,
@@ -516,7 +747,39 @@ export default function UtilisateursView({
           template_id: selectedTpls.join(', '),
           template_label: tplLabel,
         });
+        resolvedZoneForAccount = zoneStr || null;
+        resolvedSpecForAccount = tplLabel || 'Supervision & Validation';
       }
+
+      if (wantsImmediateAccess && upsertPersonnelAuthAccount) {
+        try {
+          await upsertPersonnelAuthAccount({
+            personnelId: nextId,
+            nom: cleanName,
+            id_zone: resolvedZoneForAccount,
+            specialite: resolvedSpecForAccount,
+            role: onboardingAccess.role,
+            username: loginUsername,
+            plainPassword: onboardingAccess.plainPassword.trim(),
+            isActive: true,
+          });
+          showToast?.(`Membre ${cleanName} créé avec accès @${loginUsername} activé.`, 'success');
+        } catch (err: any) {
+          showToast?.(
+            `Membre ${cleanName} créé, mais accès non activé : ${err?.message || 'Erreur'}`,
+            'warning'
+          );
+        }
+      }
+
+      setOnboardingAccess({
+        enabled: false,
+        username: '',
+        usernameTouched: false,
+        role: 'TECHNICIEN',
+        plainPassword: '',
+        error: '',
+      });
       setShowAddModal(false);
     }
 
@@ -533,17 +796,17 @@ export default function UtilisateursView({
     });
   };
 
-  // Delete Handler
+  // Delete / Soft-Archive Handler
   const confirmDelete = () => {
     if (!canManageUsers || !userToDelete) return;
     const isTech = userToDelete.id.startsWith('TECH-');
-    if (isTech) {
-      onDeleteTechnician(userToDelete.id);
+    const result = isTech
+      ? onDeleteTechnician(userToDelete.id)
+      : onDeleteOperation(userToDelete.id);
+    if (result === 'ARCHIVED') {
+      toggleAccountActive?.(userToDelete.id, false);
     } else {
-      onDeleteOperation(userToDelete.id);
-    }
-    if (removePersonnelAuthAccount) {
-      removePersonnelAuthAccount(userToDelete.id);
+      removePersonnelAuthAccount?.(userToDelete.id);
     }
     setUserToDelete(null);
   };
@@ -576,31 +839,45 @@ export default function UtilisateursView({
       'Rôle / Profil',
       "Zone d'affectation",
       'Spécialité / Templates',
+      'Machines Affectées',
+      'BT Ouverts',
+      'Tâches PM Actives',
       'Statut Fiche',
       'Accès GMAO',
     ];
     const rows = filtered.map((u) => {
       const acc = getAccountForPersonnel ? getAccountForPersonnel(u.id) : null;
+      const w = workloadReport.byPersonId[u.id];
       return [
         u.id || '',
         u.nom || '',
         u.type || '',
         u.id_zone || '',
         u.template_label || u.specialite || '',
+        w?.assignedMachinesCount ?? 0,
+        w?.openCorrectiveCount ?? 0,
+        w?.activePreventiveTasksCount ?? 0,
         u.isArchived ? 'ARCHIVÉ' : 'ACTIF',
-        acc ? (acc.isActive !== false ? `@${acc.username} (${acc.role})` : 'Désactivé') : 'Non activé',
+        acc
+          ? acc.isActive === false
+            ? 'Désactivé'
+            : acc.hasPassword === false
+              ? `@${acc.username} (Sans mot de passe)`
+              : `@${acc.username} (${acc.role})`
+          : 'Non activé',
       ];
     });
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [headers.join(';'), ...rows.map((e) => e.join(';'))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `utilisateurs_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportTypeBWorkbook({
+      filename: `Utilisateurs_Equipes_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      screenName: 'Utilisateurs & Équipes GMAO',
+      sheets: [
+        {
+          name: 'Personnel_GMAO',
+          headers,
+          rows,
+        },
+      ],
+    });
   };
 
   const renderSortIcon = (field) => {
@@ -788,12 +1065,66 @@ export default function UtilisateursView({
         ),
       },
       {
+        key: 'workload',
+        label: 'Charge & Parc',
+        icon: Wrench,
+        sortable: true,
+        render: (user) => {
+          const w = workloadReport.byPersonId[user.id];
+          if (!w || user.isArchived) {
+            return <span className="text-[11px] font-mono text-slate-400">— Archivé —</span>;
+          }
+          if (w.totalActiveWorkload === 0) {
+            return (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                {user.type === 'TECHNICIEN' ? 'Aucune affectation' : 'Sans ticket actif'}
+              </span>
+            );
+          }
+          return (
+            <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+              {w.assignedMachinesCount > 0 && (
+                <span
+                  className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold"
+                  title={w.assignedMachineCodes.join(', ')}
+                >
+                  {w.assignedMachinesCount} mach.
+                </span>
+              )}
+              {w.openCorrectiveCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold">
+                  {w.openCorrectiveCount} BT
+                </span>
+              )}
+              {w.activePreventiveTasksCount > 0 && (
+                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold">
+                  {w.activePreventiveTasksCount} PM
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         key: 'acces_gmao',
         label: 'Accès GMAO',
         colLetter: 'G',
         icon: Key,
         render: (user) => {
           const acc = getAccountForPersonnel ? getAccountForPersonnel(user.id) : null;
+          if (acc && acc.isActive !== false && acc.hasPassword === false) {
+            return (
+              <button
+                type="button"
+                onClick={() => isAdmin && openAccessModal(user)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100 transition cursor-pointer shadow-2xs"
+                title={`Compte @${acc.username} sans mot de passe — Cliquer pour définir un mot de passe`}
+              >
+                <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                <span>Sans mot de passe</span>
+              </button>
+            );
+          }
           if (acc && acc.isActive !== false) {
             return (
               <button
@@ -838,7 +1169,18 @@ export default function UtilisateursView({
         label: t('utilisateurs.columns.actions'),
         align: 'center',
         headerClassName: 'w-28 text-center font-bold text-slate-400 tracking-widest select-none',
-        render: (user) => (
+        render: (user) => {
+          const w = workloadReport.byPersonId[user.id];
+          const hasTechWorkload =
+            !user.isArchived &&
+            user.type === 'TECHNICIEN' &&
+            Boolean(
+              w &&
+                (w.assignedMachinesCount > 0 ||
+                  w.openCorrectiveCount > 0 ||
+                  w.activePreventiveTasksCount > 0)
+            );
+          return (
           <div className="flex items-center justify-center gap-1.5">
             {isAdmin && (
               <button
@@ -848,6 +1190,16 @@ export default function UtilisateursView({
                 title="Configurer l'accès GMAO (Identifiant / Mot de passe / Activation)"
               >
                 <Key className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canManageUsers && hasTechWorkload && onReassignTechnicianWorkload && (
+              <button
+                type="button"
+                onClick={() => openReassignModal(user)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 transition cursor-pointer shadow-2xs"
+                title="Réaffecter machines / BT / PM vers un autre technicien"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5" />
               </button>
             )}
             {canManageUsers && user.isArchived && (
@@ -908,10 +1260,11 @@ export default function UtilisateursView({
               </>
             )}
           </div>
-        ),
+          );
+        },
       },
     ],
-    [zones, authAccounts, isAdmin, canManageUsers, getAccountForPersonnel]
+    [zones, authAccounts, workloadReport, isAdmin, canManageUsers, getAccountForPersonnel, onReassignTechnicianWorkload]
   );
 
   return (
@@ -946,6 +1299,7 @@ export default function UtilisateursView({
                 icon={Users}
                 showAddBadge={true}
                 onClick={() => {
+                  const initNextCode = getNextId('TECHNICIEN');
                   setForm({
                     type: 'TECHNICIEN',
                     nom: '',
@@ -954,7 +1308,15 @@ export default function UtilisateursView({
                     templates: ['RMT'],
                     template_id: 'RMT',
                     specialite: '',
-                    customCode: getNextId('TECHNICIEN'),
+                    customCode: initNextCode,
+                  });
+                  setOnboardingAccess({
+                    enabled: false,
+                    username: initNextCode.toLowerCase(),
+                    usernameTouched: false,
+                    role: 'TECHNICIEN',
+                    plainPassword: '',
+                    error: '',
                   });
                   setUserToEdit(null);
                   setShowAddModal(true);
@@ -967,10 +1329,10 @@ export default function UtilisateursView({
 
         {/* Unified 4-Tier Light Excel KPI Bar (Interactive Profile Filters) */}
         <GmaoKpiGrid columns={4}>
-          {/* Card 1: Total Membres */}
+          {/* Card 1: Total Membres Actifs */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.total_users')}
-            value={combinedUsers.length}
+            value={combinedUsers.filter((u) => !u.isArchived).length}
             unit={t('utilisateurs.stats.unit_members', 'membres')}
             icon={Users}
             color="slate"
@@ -979,13 +1341,17 @@ export default function UtilisateursView({
             onClick={() => setProfileFilter('ALL')}
             badgeText={t('utilisateurs.stats.registered_members')}
             footerLabel={t('utilisateurs.stats.footer_sheet', 'Feuille Personnel :')}
-            footerValue={t('utilisateurs.stats.footer_directory', 'Annuaire global')}
+            footerValue={
+              combinedUsers.some((u) => u.isArchived)
+                ? `${combinedUsers.filter((u) => u.isArchived).length} archivé(s)`
+                : t('utilisateurs.stats.footer_directory', 'Annuaire global')
+            }
           />
 
-          {/* Card 2: Techniciens */}
+          {/* Card 2: Techniciens Actifs */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.technicians')}
-            value={technicians.length}
+            value={combinedUsers.filter((u) => !u.isArchived && u.type === 'TECHNICIEN').length}
             unit={t('utilisateurs.stats.unit_technicians', 'techniciens')}
             icon={Wrench}
             color="blue"
@@ -996,10 +1362,10 @@ export default function UtilisateursView({
             footerValue={t('utilisateurs.stats.footer_prev_corr', 'Préventif & Correctif')}
           />
 
-          {/* Card 3: Opérateurs */}
+          {/* Card 3: Opérateurs Actifs */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.operators')}
-            value={operations.filter((o) => o.type_profil === 'OPERATEUR').length}
+            value={combinedUsers.filter((u) => !u.isArchived && u.type === 'OPERATEUR').length}
             unit={t('utilisateurs.stats.unit_operators', 'opérateurs')}
             icon={ClipboardList}
             color="indigo"
@@ -1010,18 +1376,10 @@ export default function UtilisateursView({
             footerValue={t('utilisateurs.stats.footer_di', 'Signalement DI')}
           />
 
-          {/* Card 4: Responsables */}
+          {/* Card 4: Responsables Actifs */}
           <GmaoKpiCard
             title={t('utilisateurs.stats.responsables')}
-            value={
-              operations.filter(
-                (o) =>
-                  o.type_profil === 'RESPONSABLE' ||
-                  o.type_profil === 'CHEF' ||
-                  String(o.id_operation).startsWith('RESP') ||
-                  String(o.id_operation).startsWith('CHEF')
-              ).length
-            }
+            value={combinedUsers.filter((u) => !u.isArchived && u.type === 'RESPONSABLE').length}
             unit={t('utilisateurs.stats.unit_managers', 'cadres')}
             icon={ShieldCheck}
             color="rose"
@@ -1056,7 +1414,58 @@ export default function UtilisateursView({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap shrink-0">
+              {/* Access / Security / Lifecycle Quick Filter Pills */}
+              <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200/70">
+                {[
+                  { id: 'ALL' as const, label: 'Tous', count: combinedUsers.length },
+                  { id: 'ACTIVE' as const, label: 'Actifs', count: workloadReport.summary.totalActive },
+                  ...(overloadedCount > 0
+                    ? [{ id: 'OVERLOADED' as const, label: 'Surchargés', count: overloadedCount }]
+                    : []),
+                  ...(noAccountCount > 0
+                    ? [{ id: 'NO_ACCOUNT' as const, label: 'Sans accès', count: noAccountCount }]
+                    : []),
+                  ...(workloadReport.summary.missingPasswordCount > 0
+                    ? [
+                        {
+                          id: 'NO_PASSWORD' as const,
+                          label: 'Sans MDP',
+                          count: workloadReport.summary.missingPasswordCount,
+                        },
+                      ]
+                    : []),
+                  { id: 'DISABLED' as const, label: 'Désactivés', count: workloadReport.summary.disabledAccessCount },
+                  { id: 'ARCHIVED' as const, label: 'Archivés', count: workloadReport.summary.archivedCount },
+                ].map((pill) => (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setAccessFilter(pill.id)}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                      accessFilter === pill.id
+                        ? pill.id === 'NO_PASSWORD' || pill.id === 'OVERLOADED'
+                          ? 'bg-rose-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-900 shadow-2xs'
+                        : pill.id === 'NO_PASSWORD' || pill.id === 'OVERLOADED'
+                          ? 'text-rose-700 hover:bg-rose-50'
+                          : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span>{pill.label}</span>
+                    <span
+                      className={`text-[10px] font-mono px-1 rounded ${
+                        accessFilter === pill.id && (pill.id === 'NO_PASSWORD' || pill.id === 'OVERLOADED')
+                          ? 'bg-rose-700 text-white'
+                          : 'bg-slate-200/70 text-slate-700'
+                      }`}
+                    >
+                      {pill.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {/* Export Excel Button (Type B — Consultation externe) */}
               <button
                 onClick={handleExportExcel}
@@ -1068,12 +1477,13 @@ export default function UtilisateursView({
               </button>
 
               {/* Circular Reset Button */}
-              {(localSearch || profileFilter !== 'ALL' || zoneFilter !== 'ALL' || sortField !== 'nom' || sortOrder !== 'asc') && (
+              {(localSearch || profileFilter !== 'ALL' || zoneFilter !== 'ALL' || accessFilter !== 'ALL' || sortField !== 'nom' || sortOrder !== 'asc') && (
                 <button
                   onClick={() => {
                     setLocalSearch('');
                     setProfileFilter('ALL');
                     setZoneFilter('ALL');
+                    setAccessFilter('ALL');
                     setSortField('nom');
                     setSortOrder('asc');
                   }}
@@ -1314,6 +1724,30 @@ export default function UtilisateursView({
                           <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
                         ))}
                     </button>
+
+                    <button
+                      onClick={() => {
+                        if (sortField === 'workload') {
+                          setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('workload');
+                          setSortOrder('desc');
+                        }
+                      }}
+                      className={`flex items-center justify-between px-3 py-2 rounded-lg font-medium transition cursor-pointer ${
+                        sortField === 'workload'
+                          ? 'bg-amber-50 text-amber-950 border border-amber-300 font-bold'
+                          : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <span>Charge &amp; Parc (Mach. / BT / PM)</span>
+                      {sortField === 'workload' &&
+                        (sortOrder === 'asc' ? (
+                          <ArrowUp className="w-3 h-3 text-amber-700 shrink-0" />
+                        ) : (
+                          <ArrowDown className="w-3 h-3 text-amber-700 shrink-0" />
+                        ))}
+                    </button>
                   </div>
                 </div>
               )}
@@ -1321,7 +1755,7 @@ export default function UtilisateursView({
           </div>
 
           {/* Active Filter Chips */}
-          {(localSearch || profileFilter !== 'ALL' || zoneFilter !== 'ALL') && (
+          {(localSearch || profileFilter !== 'ALL' || zoneFilter !== 'ALL' || accessFilter !== 'ALL') && (
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('utilisateurs.filters.active_filters')}</span>
               {localSearch && (
@@ -1355,6 +1789,18 @@ export default function UtilisateursView({
                   <button
                     onClick={() => setZoneFilter('ALL')}
                     className="hover:bg-indigo-200/60 p-0.5 rounded-full transition cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+              {accessFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold">
+                  <Key className="w-3 h-3 text-rose-600" />
+                  Statut/Accès: {accessFilter}
+                  <button
+                    onClick={() => setAccessFilter('ALL')}
+                    className="hover:bg-rose-200/60 p-0.5 rounded-full transition cursor-pointer"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -1429,13 +1875,28 @@ export default function UtilisateursView({
                         key={`profile-tab-${item.key || itmIdx}`}
                         type="button"
                         disabled={!!userToEdit}
-                        onClick={() =>
+                        onClick={() => {
+                          const nextCode = getNextId(item.key);
                           setForm({
                             ...form,
                             type: item.key,
-                            customCode: getNextId(item.key),
-                          })
-                        }
+                            customCode: nextCode,
+                          });
+                          setOnboardingAccess((prev) => ({
+                            ...prev,
+                            username: prev.usernameTouched ? prev.username : nextCode.toLowerCase(),
+                            role:
+                              item.key === 'TECHNICIEN'
+                                ? 'TECHNICIEN'
+                                : item.key === 'OPERATEUR'
+                                  ? 'OPERATEUR'
+                                  : (form.templates || []).includes('RMG') &&
+                                      !(form.templates || []).includes('RMT')
+                                    ? 'RESPONSABLE_MAGASIN'
+                                    : 'RESPONSABLE_MAINTENANCE',
+                            error: '',
+                          }));
+                        }}
                         className={`py-2 px-2 text-center text-xs font-bold rounded-lg transition flex items-center justify-center gap-1 cursor-pointer ${
                           form.type === item.key
                             ? 'bg-white text-slate-900 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out border border-slate-200/60'
@@ -1680,6 +2141,111 @@ export default function UtilisateursView({
                   </div>
                 )}
 
+                {/* 1-Step GMAO Login Onboarding (Admin only, New User creation) */}
+                {!userToEdit && isAdmin && upsertPersonnelAuthAccount && (
+                  <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-3">
+                    <label className="flex items-center justify-between gap-3 cursor-pointer">
+                      <div>
+                        <div className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Key className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>Activer l&apos;accès GMAO immédiatement (1 étape)</span>
+                        </div>
+                        <div className="text-[10.5px] text-slate-500 mt-0.5">
+                          Crée le compte de connexion (identifiant + mot de passe) en même temps que la fiche.
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={onboardingAccess.enabled}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          const defaultCode = (form.customCode || modalAutoNextId || '').toLowerCase();
+                          setOnboardingAccess((prev) => ({
+                            ...prev,
+                            enabled: checked,
+                            username: prev.usernameTouched ? prev.username : defaultCode,
+                            error: '',
+                          }));
+                        }}
+                        className="w-4 h-4 text-emerald-600 rounded border-slate-300 shrink-0"
+                      />
+                    </label>
+
+                    {onboardingAccess.enabled && (
+                      <div className="space-y-3 pt-2 border-t border-emerald-200/70">
+                        {onboardingAccess.error && (
+                          <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-semibold flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{onboardingAccess.error}</span>
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <div>
+                            <label className="block text-[10.5px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                              Identifiant de connexion
+                            </label>
+                            <input
+                              type="text"
+                              value={onboardingAccess.username}
+                              onChange={(e) =>
+                                setOnboardingAccess((prev) => ({
+                                  ...prev,
+                                  username: e.target.value,
+                                  usernameTouched: true,
+                                  error: '',
+                                }))
+                              }
+                              placeholder={(form.customCode || modalAutoNextId || 'tech-01').toLowerCase()}
+                              className="w-full h-9 px-2.5 text-xs font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-600"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10.5px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                              Rôle applicatif
+                            </label>
+                            <select
+                              value={onboardingAccess.role}
+                              onChange={(e) =>
+                                setOnboardingAccess((prev) => ({
+                                  ...prev,
+                                  role: e.target.value,
+                                  error: '',
+                                }))
+                              }
+                              className="w-full h-9 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-600"
+                            >
+                              <option value="TECHNICIEN">Technicien</option>
+                              <option value="OPERATEUR">Opérateur Ligne</option>
+                              <option value="RESPONSABLE_MAGASIN">Magasin / RMG</option>
+                              <option value="RESPONSABLE_MAINTENANCE">Responsable Maint.</option>
+                              <option value="VIEWER">Observateur</option>
+                              <option value="ADMIN">Administrateur</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10.5px] font-bold uppercase tracking-wider text-slate-600 mb-1">
+                            Mot de passe initial
+                          </label>
+                          <input
+                            type="password"
+                            value={onboardingAccess.plainPassword}
+                            onChange={(e) =>
+                              setOnboardingAccess((prev) => ({
+                                ...prev,
+                                plainPassword: e.target.value,
+                                error: '',
+                              }))
+                            }
+                            placeholder="Min. 8 car. (lettre + chiffre, distinct de la licence)"
+                            className="w-full h-9 px-2.5 text-xs font-mono bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-600"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                   <button
                     type="button"
@@ -1702,8 +2268,23 @@ export default function UtilisateursView({
 
         <UtilisateursModals
           userToDelete={userToDelete}
+          userToDeleteWorkload={
+            userToDelete ? workloadReport.byPersonId[userToDelete.id] || null : null
+          }
           setUserToDelete={setUserToDelete}
           confirmDelete={confirmDelete}
+          onOpenReassign={onReassignTechnicianWorkload ? openReassignModal : undefined}
+          userToReassign={userToReassign}
+          userToReassignWorkload={
+            userToReassign ? workloadReport.byPersonId[userToReassign.id] || null : null
+          }
+          setUserToReassign={setUserToReassign}
+          reassignTargetId={reassignTargetId}
+          setReassignTargetId={setReassignTargetId}
+          reassignScopes={reassignScopes}
+          setReassignScopes={setReassignScopes}
+          activeTechniciansForReassign={activeTechniciansForReassign}
+          handleSubmitReassign={handleSubmitReassign}
           userForAccessModal={userForAccessModal}
           setUserForAccessModal={setUserForAccessModal}
           accessForm={accessForm}

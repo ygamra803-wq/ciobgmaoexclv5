@@ -14,6 +14,9 @@ import {
   transitionMachineLifecycle,
 } from '../utils/activeMachines';
 import { evaluateParentArchivePolicy } from '../utils/assetHierarchy';
+import { AuthService } from '../core/security/AuthService';
+import { reconcileTechnicianReassignment } from '../application/services/ZoneEquipmentPhaseCService';
+import { isArchivedPersonnel } from '../application/services/ZoneOperationalAnalyticsService';
 
 export function useAppComplexHandlers({
   zones, setZones,
@@ -61,47 +64,165 @@ export function useAppComplexHandlers({
 }: Record<string, any>) {
   const activeMachines = machines || _machines || [];
   const handleUpdateZone = (id, updatedZone) => {
-    setZones((prev) => prev.map((z) => (z.id_zone === id ? updatedZone : z)));
-    const oldZone = zones.find((z) => z.id_zone === id);
-    if (oldZone && oldZone.id_zone !== updatedZone.id_zone) {
-      const nextZoneId = updatedZone.id_zone;
+    const targetIdNorm = String(id || '').trim().toUpperCase();
+    const oldZone = (zones || []).find(
+      (z) =>
+        String(z?.id_zone || '').trim().toUpperCase() === targetIdNorm ||
+        String(z?.code_zone || z?.code || '').trim().toUpperCase() === targetIdNorm
+    );
+    const oldZoneId = String(oldZone?.id_zone || id || '').trim();
+    const oldZoneIdNorm = oldZoneId.toUpperCase();
+    const oldCodeNorm = String(oldZone?.code_zone || oldZone?.code || oldZoneId).trim().toUpperCase();
+
+    const nextZoneId = String(updatedZone?.id_zone || oldZoneId).trim().toUpperCase();
+    const nextCodeZone = String(
+      updatedZone?.code_zone || updatedZone?.code || oldZone?.code_zone || nextZoneId
+    )
+      .trim()
+      .toUpperCase();
+    const nextLibelle = String(updatedZone?.libelle || oldZone?.libelle || '').trim();
+
+    if (!nextZoneId || !nextLibelle) {
+      showToast?.("L'identifiant et le libellé de zone sont obligatoires.", 'warning');
+      return false;
+    }
+
+    const hasCollision = (zones || []).some((z) => {
+      const zIdNorm = String(z?.id_zone || '').trim().toUpperCase();
+      const zCodeNorm = String(z?.code_zone || z?.code || '').trim().toUpperCase();
+      const isSelf = zIdNorm === oldZoneIdNorm || (oldCodeNorm && zCodeNorm === oldCodeNorm);
+      if (isSelf) return false;
+      return zIdNorm === nextZoneId || (nextCodeZone && zCodeNorm === nextCodeZone);
+    });
+    if (hasCollision) {
+      showToast?.(
+        `Impossible de renommer : l'identifiant "${nextZoneId}" ou le code "${nextCodeZone}" existe déjà.`,
+        'warning'
+      );
+      return false;
+    }
+
+    const normalizedUpdated = {
+      ...oldZone,
+      ...updatedZone,
+      id_zone: nextZoneId,
+      code_zone: nextCodeZone,
+      libelle: nextLibelle,
+    };
+
+    setZones((prev) =>
+      (prev || []).map((z) => {
+        const zIdNorm = String(z?.id_zone || '').trim().toUpperCase();
+        return zIdNorm === oldZoneIdNorm || z?.id_zone === id ? normalizedUpdated : z;
+      })
+    );
+
+    const matchesOldZone = (val: unknown) => {
+      const v = String(val || '').trim().toUpperCase();
+      return Boolean(v && (v === oldZoneIdNorm || (oldCodeNorm && v === oldCodeNorm)));
+    };
+
+    if (oldZoneIdNorm && oldZoneIdNorm !== nextZoneId) {
       setTechnicians((prev) =>
-        prev.map((t) => (t.id_zone === id ? { ...t, id_zone: nextZoneId } : t))
+        (prev || []).map((t) =>
+          matchesOldZone(t?.id_zone) ? { ...t, id_zone: nextZoneId } : t
+        )
       );
       setOperations((prev) =>
-        prev.map((o) => {
-          const hasZoneInArr = Array.isArray(o.zones) && o.zones.includes(id);
+        (prev || []).map((o) => {
+          const hasZoneInArr = Array.isArray(o?.zones) && o.zones.some((zId) => matchesOldZone(zId));
+          const zoneTokens = String(o?.id_zone || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const hasZoneInStr = zoneTokens.some((tok) => matchesOldZone(tok));
+          if (!hasZoneInArr && !hasZoneInStr) return o;
           const nextZones = hasZoneInArr
-            ? o.zones.map((zId) => (zId === id ? nextZoneId : zId))
+            ? o.zones.map((zId) => (matchesOldZone(zId) ? nextZoneId : zId))
             : o.zones;
-          if (o.id_zone === id || hasZoneInArr) {
-            return {
-              ...o,
-              id_zone: o.id_zone === id ? nextZoneId : hasZoneInArr ? nextZones.join(', ') : o.id_zone,
-              ...(nextZones ? { zones: nextZones } : {}),
-            };
-          }
-          return o;
+          const nextStr = zoneTokens
+            .map((tok) => (matchesOldZone(tok) ? nextZoneId : tok))
+            .join(', ');
+          return {
+            ...o,
+            id_zone: nextStr || (nextZones ? nextZones.join(', ') : nextZoneId),
+            ...(nextZones ? { zones: nextZones } : {}),
+          };
         })
       );
       setMachines((prev) =>
-        prev.map((m) =>
-          m.id_zone_default === id || m.id_zone === id
+        (prev || []).map((m) =>
+          matchesOldZone(m?.id_zone_default) || matchesOldZone(m?.id_zone)
             ? {
                 ...m,
-                ...(m.id_zone_default === id ? { id_zone_default: nextZoneId } : {}),
-                ...(m.id_zone === id ? { id_zone: nextZoneId } : {}),
+                ...(matchesOldZone(m?.id_zone_default) ? { id_zone_default: nextZoneId } : {}),
+                ...(matchesOldZone(m?.id_zone) ? { id_zone: nextZoneId } : {}),
               }
             : m
         )
       );
       setWarehouseItems?.((prev) =>
-        (prev || []).map((w) => (w.id_zone === id ? { ...w, id_zone: nextZoneId } : w))
+        (prev || []).map((w) =>
+          matchesOldZone(w?.id_zone) || matchesOldZone(w?.id_zone_default)
+            ? {
+                ...w,
+                ...(matchesOldZone(w?.id_zone) ? { id_zone: nextZoneId } : {}),
+                ...(matchesOldZone(w?.id_zone_default) ? { id_zone_default: nextZoneId } : {}),
+              }
+            : w
+        )
       );
       setMouvements((prev) =>
-        prev.map((m) => (m.id_zone === id ? { ...m, id_zone: nextZoneId } : m))
+        (prev || []).map((m) =>
+          matchesOldZone(m?.id_zone) ? { ...m, id_zone: nextZoneId } : m
+        )
       );
+      setPreventiveTasks?.((prev) =>
+        (prev || []).map((pt) =>
+          matchesOldZone(pt?.id_zone) ? { ...pt, id_zone: nextZoneId } : pt
+        )
+      );
+      setPreventiveExecutions?.((prev) =>
+        (prev || []).map((ex) =>
+          matchesOldZone(ex?.id_zone) ? { ...ex, id_zone: nextZoneId } : ex
+        )
+      );
+      setCorrectiveInterventions?.((prev) =>
+        (prev || []).map((ci) =>
+          matchesOldZone(ci?.id_zone) || matchesOldZone(ci?.zone)
+            ? {
+                ...ci,
+                ...(matchesOldZone(ci?.id_zone) ? { id_zone: nextZoneId } : {}),
+                ...(matchesOldZone(ci?.zone) ? { zone: nextZoneId } : {}),
+              }
+            : ci
+        )
+      );
+      setSortieDemands?.((prev) =>
+        (prev || []).map((sd) =>
+          matchesOldZone(sd?.id_zone) ? { ...sd, id_zone: nextZoneId } : sd
+        )
+      );
+      setMachineElementsLedger?.((prev) =>
+        (prev || []).map((el) =>
+          matchesOldZone(el?.id_zone) ? { ...el, id_zone: nextZoneId } : el
+        )
+      );
+      try {
+        new AuthService().cascadeZoneRename(oldZoneIdNorm, nextZoneId);
+      } catch {
+        // Non-blocking storage sync fallback
+      }
     }
+
+    appendAuditEvent?.({
+      actionType: 'ZONE_UPDATED',
+      entityType: 'ZONE',
+      entityId: nextZoneId,
+      before: oldZone || { id_zone: id },
+      after: normalizedUpdated,
+    });
+    return true;
   };
   const handleDeleteZone = (id) => {
     const targetZone = (zones || []).find((z) => z.id_zone === id || z.code_zone === id);
@@ -144,15 +265,86 @@ export function useAppComplexHandlers({
   };
 
   const handleUpdateOperation = (id, updatedOp) => {
-    setOperations((prev) => prev.map((o) => (o.id_operation === id ? updatedOp : o)));
-    const oldOp = operations.find((o) => o.id_operation === id);
-    if (oldOp && oldOp.nom !== updatedOp.nom) {
+    const oldOp = (operations || []).find((o) => o.id_operation === id || o.id === id);
+    setOperations((prev) =>
+      (prev || []).map((o) => (o.id_operation === id || o.id === id ? updatedOp : o))
+    );
+    if (oldOp && oldOp.nom && updatedOp?.nom && oldOp.nom !== updatedOp.nom) {
+      const oldName = oldOp.nom;
+      const newName = updatedOp.nom;
       setMouvements((prev) =>
-        prev.map((m) => (m.operation === oldOp.nom ? { ...m, operation: updatedOp.nom } : m))
+        (prev || []).map((m) =>
+          m.operation === oldName || m.demandeur === oldName
+            ? {
+                ...m,
+                ...(m.operation === oldName ? { operation: newName } : {}),
+                ...(m.demandeur === oldName ? { demandeur: newName } : {}),
+              }
+            : m
+        )
+      );
+      setCorrectiveInterventions?.((prev) =>
+        (prev || []).map((ci) =>
+          ci?.demandeur === oldName ||
+          ci?.intervenant === oldName ||
+          ci?.submitted_by_name === oldName
+            ? {
+                ...ci,
+                ...(ci?.demandeur === oldName ? { demandeur: newName } : {}),
+                ...(ci?.intervenant === oldName ? { intervenant: newName } : {}),
+                ...(ci?.submitted_by_name === oldName ? { submitted_by_name: newName } : {}),
+              }
+            : ci
+        )
+      );
+      setPreventiveTasks?.((prev) =>
+        (prev || []).map((pt) =>
+          pt?.responsable === oldName ? { ...pt, responsable: newName } : pt
+        )
+      );
+      setPreventiveExecutions?.((prev) =>
+        (prev || []).map((ex) =>
+          ex?.executorName === oldName || ex?.technicien === oldName
+            ? {
+                ...ex,
+                ...(ex?.executorName === oldName ? { executorName: newName } : {}),
+                ...(ex?.technicien === oldName ? { technicien: newName } : {}),
+              }
+            : ex
+        )
+      );
+      setSortiesExterne?.((prev) =>
+        (prev || []).map((se) =>
+          se?.technicien_demontage === oldName || se?.technicien_montage === oldName
+            ? {
+                ...se,
+                ...(se?.technicien_demontage === oldName ? { technicien_demontage: newName } : {}),
+                ...(se?.technicien_montage === oldName ? { technicien_montage: newName } : {}),
+              }
+            : se
+        )
+      );
+      setSortieDemands?.((prev) =>
+        (prev || []).map((sd) =>
+          sd?.demandeur_nom === oldName || sd?.technicien_nom === oldName
+            ? {
+                ...sd,
+                ...(sd?.demandeur_nom === oldName ? { demandeur_nom: newName } : {}),
+                ...(sd?.technicien_nom === oldName ? { technicien_nom: newName } : {}),
+              }
+            : sd
+        )
       );
     }
+    appendAuditEvent?.({
+      actionType: 'OPERATION_UPDATED',
+      entityType: 'OPERATION',
+      entityId: String(updatedOp?.id_operation || id || '').trim(),
+      before: oldOp || { id_operation: id },
+      after: updatedOp,
+    });
   };
-  const handleDeleteOperation = (id) => {
+  const handleDeleteOperation = (id): 'ARCHIVED' | 'DELETED' => {
     const targetOp = (operations || []).find((o) => o.id_operation === id || o.id === id);
     const opName = String(targetOp?.nom || targetOp?.name || id || '').trim();
     const opIdNorm = String(id || '').trim().toUpperCase();
@@ -189,28 +381,44 @@ export function useAppComplexHandlers({
     );
 
     if (hasMovements || hasCorrective || hasPreventiveTasks || hasSortieDemands) {
+      const archivedPayload = {
+        ...(targetOp || { id_operation: id }),
+        is_active: false,
+        actif: false,
+        statut: 'ARCHIVE',
+        date_archivage: new Date().toISOString(),
+      };
       setOperations((prev) =>
         prev.map((o) =>
           o.id_operation === id || o.id === id
-            ? {
-                ...o,
-                is_active: false,
-                actif: false,
-                statut: 'ARCHIVE',
-                date_archivage: new Date().toISOString(),
-              }
+            ? archivedPayload
             : o
         )
       );
+      appendAuditEvent?.({
+        actionType: 'OPERATION_ARCHIVED',
+        entityType: 'OPERATION',
+        entityId: String(id || '').trim(),
+        before: targetOp || { id_operation: id },
+        after: archivedPayload,
+      });
       showToast?.(
         `Membre ${opName} archivé (désactivé) pour préserver l'historique des opérations et interventions.`,
         'info'
       );
-      return;
+      return 'ARCHIVED';
     }
 
     setOperations((prev) => prev.filter((o) => o.id_operation !== id && o.id !== id));
+    appendAuditEvent?.({
+      actionType: 'OPERATION_DELETED',
+      entityType: 'OPERATION',
+      entityId: String(id || '').trim(),
+      before: targetOp || { id_operation: id },
+      after: null,
+    });
     showToast?.(`Membre ${opName} supprimé avec succès.`, 'success');
+    return 'DELETED';
   };
 
   const handleUpdateMachine = (id, updatedMch) => {
@@ -1036,13 +1244,22 @@ export function useAppComplexHandlers({
 
   const handleAddTechnician = (newTech) => {
     setTechnicians((prev) => [...prev, newTech]);
+    appendAuditEvent?.({
+      actionType: 'TECHNICIAN_CREATED',
+      entityType: 'TECHNICIAN',
+      entityId: String(newTech?.id_technician || newTech?.id || '').trim(),
+      before: null,
+      after: newTech,
+    });
   };
 
   const handleUpdateTechnician = (id, updatedTech) => {
-    setTechnicians((prev) => prev.map((t) => (t.id_technician === id ? updatedTech : t)));
+    const oldTech = (technicians || []).find((t) => t.id_technician === id || t.id === id);
+    setTechnicians((prev) =>
+      prev.map((t) => (t.id_technician === id || t.id === id ? updatedTech : t))
+    );
 
     // Cascade update to Machines, Mouvements, Preventive & Corrective if name changed
-    const oldTech = technicians.find((t) => t.id_technician === id);
     if (oldTech && oldTech.nom && updatedTech?.nom && oldTech.nom !== updatedTech.nom) {
       const oldName = oldTech.nom;
       const newName = updatedTech.nom;
@@ -1075,10 +1292,40 @@ export function useAppComplexHandlers({
           ci?.intervenant === oldName ? { ...ci, intervenant: newName } : ci
         )
       );
+      setSortiesExterne?.((prev) =>
+        (prev || []).map((se) =>
+          se?.technicien_demontage === oldName || se?.technicien_montage === oldName
+            ? {
+                ...se,
+                ...(se?.technicien_demontage === oldName ? { technicien_demontage: newName } : {}),
+                ...(se?.technicien_montage === oldName ? { technicien_montage: newName } : {}),
+              }
+            : se
+        )
+      );
+      setSortieDemands?.((prev) =>
+        (prev || []).map((sd) =>
+          sd?.demandeur_nom === oldName || sd?.technicien_nom === oldName
+            ? {
+                ...sd,
+                ...(sd?.demandeur_nom === oldName ? { demandeur_nom: newName } : {}),
+                ...(sd?.technicien_nom === oldName ? { technicien_nom: newName } : {}),
+              }
+            : sd
+        )
+      );
     }
+
+    appendAuditEvent?.({
+      actionType: 'TECHNICIAN_UPDATED',
+      entityType: 'TECHNICIAN',
+      entityId: String(updatedTech?.id_technician || id || '').trim(),
+      before: oldTech || { id_technician: id },
+      after: updatedTech,
+    });
   };
 
-  const handleDeleteTechnician = (id) => {
+  const handleDeleteTechnician = (id): 'ARCHIVED' | 'DELETED' => {
     const targetTech = (technicians || []).find((t) => t.id_technician === id || t.id === id);
     const techName = String(targetTech?.nom || targetTech?.name || id || '').trim();
     const techIdNorm = String(id || '').trim().toUpperCase();
@@ -1126,32 +1373,134 @@ export function useAppComplexHandlers({
       hasPreventiveExecs ||
       hasExternalSorties
     ) {
+      const archivedPayload = {
+        ...(targetTech || { id_technician: id }),
+        is_active: false,
+        actif: false,
+        statut: 'ARCHIVE',
+        date_archivage: new Date().toISOString(),
+      };
       // Soft Delete: Mark as inactive / archived to preserve integrity of Work Orders, PMs & KPIs
       setTechnicians((prev) =>
         prev.map((t) =>
           t.id_technician === id || t.id === id
-            ? {
-                ...t,
-                is_active: false,
-                actif: false,
-                statut: 'ARCHIVE',
-                date_archivage: new Date().toISOString(),
-              }
+            ? archivedPayload
             : t
         )
       );
+      appendAuditEvent?.({
+        actionType: 'TECHNICIAN_ARCHIVED',
+        entityType: 'TECHNICIAN',
+        entityId: String(id || '').trim(),
+        before: targetTech || { id_technician: id },
+        after: archivedPayload,
+      });
       showToast?.(
         `Technicien ${techName} archivé (désactivé) pour préserver l'historique et les KPI des interventions passées.`,
         'info'
       );
-    } else {
-      setTechnicians((prev) => prev.filter((t) => t.id_technician !== id && t.id !== id));
-      showToast?.(`Technicien ${techName} supprimé avec succès.`, 'success');
+      return 'ARCHIVED';
     }
+
+    setTechnicians((prev) => prev.filter((t) => t.id_technician !== id && t.id !== id));
+    appendAuditEvent?.({
+      actionType: 'TECHNICIAN_DELETED',
+      entityType: 'TECHNICIAN',
+      entityId: String(id || '').trim(),
+      before: targetTech || { id_technician: id },
+      after: null,
+    });
+    showToast?.(`Technicien ${techName} supprimé avec succès.`, 'success');
+    return 'DELETED';
+  };
+
+  const handleReassignTechnicianWorkload = (params: {
+    sourceTechId: string;
+    targetTechId: string;
+    includeMachines?: boolean;
+    includeOpenBts?: boolean;
+    includeActivePm?: boolean;
+  }) => {
+    const srcId = String(params?.sourceTechId || '').trim();
+    const tgtId = String(params?.targetTechId || '').trim();
+    if (!srcId || !tgtId || srcId.toUpperCase() === tgtId.toUpperCase()) {
+      showToast?.('Veuillez sélectionner un technicien remplaçant différent.', 'warning');
+      return null;
+    }
+
+    const sourceTech = (technicians || []).find(
+      (t) => String(t?.id_technician || t?.id || '').trim().toUpperCase() === srcId.toUpperCase()
+    );
+    const targetTech = (technicians || []).find(
+      (t) => String(t?.id_technician || t?.id || '').trim().toUpperCase() === tgtId.toUpperCase()
+    );
+
+    if (!targetTech || isArchivedPersonnel(targetTech)) {
+      showToast?.('Le technicien remplaçant doit être actif.', 'warning');
+      return null;
+    }
+
+    const result = reconcileTechnicianReassignment({
+      sourceTechId: srcId,
+      sourceTechName: sourceTech?.nom || sourceTech?.name || '',
+      targetTechId: String(targetTech?.id_technician || targetTech?.id || tgtId).trim(),
+      targetTechName: targetTech?.nom || targetTech?.name || tgtId,
+      machines: activeMachines,
+      correctiveInterventions,
+      preventiveTasks,
+      includeMachines: params.includeMachines,
+      includeOpenBts: params.includeOpenBts,
+      includeActivePm: params.includeActivePm,
+    });
+
+    if (result.totalReassigned === 0) {
+      showToast?.('Aucune charge active correspondante à transférer.', 'info');
+      return result;
+    }
+
+    if (result.reassignedMachinesCount > 0) {
+      setMachines(result.updatedMachines);
+    }
+    if (result.reassignedBtsCount > 0) {
+      setCorrectiveInterventions?.(result.updatedCorrectiveInterventions);
+    }
+    if (result.reassignedPmCount > 0) {
+      setPreventiveTasks?.(result.updatedPreventiveTasks);
+    }
+
+    appendAuditEvent?.({
+      actionType: 'PERSONNEL_WORKLOAD_REASSIGNED',
+      entityType: 'TECHNICIAN',
+      entityId: String(targetTech?.id_technician || tgtId).trim(),
+      before: {
+        sourceTechId: srcId,
+        sourceTechName: sourceTech?.nom || srcId,
+      },
+      after: {
+        targetTechId: String(targetTech?.id_technician || tgtId).trim(),
+        targetTechName: targetTech?.nom || tgtId,
+        reassignedMachinesCount: result.reassignedMachinesCount,
+        reassignedBtsCount: result.reassignedBtsCount,
+        reassignedPmCount: result.reassignedPmCount,
+      },
+    });
+
+    showToast?.(
+      `Réaffectation effectuée vers ${targetTech?.nom || tgtId} : ${result.reassignedMachinesCount} machine(s), ${result.reassignedBtsCount} BT, ${result.reassignedPmCount} PM.`,
+      'success'
+    );
+    return result;
   };
 
   const handleAddOperation = (newOp) => {
     setOperations((prev) => [...prev, newOp]);
+    appendAuditEvent?.({
+      actionType: 'OPERATION_CREATED',
+      entityType: 'OPERATION',
+      entityId: String(newOp?.id_operation || newOp?.id || '').trim(),
+      before: null,
+      after: newOp,
+    });
   };
 
   const handleAddMachine = async (newMch) => {
@@ -1163,7 +1512,7 @@ export function useAppComplexHandlers({
       )
     ) {
       showToast?.(`Erreur : Le code machine "${codeNorm}" existe déjà dans le parc.`, 'error');
-      return;
+      return false;
     }
     const service = new MachineApplicationService();
     const saved = await service.createMachine(newMch);
@@ -1184,6 +1533,7 @@ export function useAppComplexHandlers({
       },
     });
     showToast?.(`Machine "${saved.id_machine_registered}" enregistrée avec succès !`, 'success');
+    return saved;
   };
 
   const handleAddArticle = async (newArt) => {
@@ -1471,7 +1821,7 @@ export function useAppComplexHandlers({
     handleUpdatePartType, handleDeletePartType,
     handleUpdatePartDesignation, handleDeletePartDesignation,
     handleUpdateTemplate, handleDeleteTemplate,
-    handleAddTechnician, handleUpdateTechnician, handleDeleteTechnician,
+    handleAddTechnician, handleUpdateTechnician, handleDeleteTechnician, handleReassignTechnicianWorkload,
     handleAddOperation, handleAddMachine, handleAddArticle, handleAddMouvement,
     handleUpdateArticle, handleDeleteArticle,
     handleUpdateMouvement, handleDeleteMouvement,

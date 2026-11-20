@@ -6,9 +6,17 @@ import Action3DButton from '../../components/common/Action3DButton';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
 import GmaoIndustrialDataGrid from '../../components/common/GmaoIndustrialDataGrid';
 import { GmaoKpiCard, GmaoKpiGrid } from '../../components/common/GmaoKpiCard';
-import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, Calculator, RotateCcw, X, FileSpreadsheet } from 'lucide-react';
+import { MapPin, Search, ArrowRight, Users, Wrench, Trash2, Edit2, AlertTriangle, SlidersHorizontal, ArrowUpDown, ChevronDown, ArrowDown, ArrowUp, AlignLeft, Tag, Hash, Key, Shield, User, RotateCcw, X, FileSpreadsheet, Activity, ShieldAlert, CheckCircle2, Calculator } from 'lucide-react';
 import { useTranslation } from '../../../i18n/I18nContext';
 import { usePermission } from '../../components/common/PermissionGate';
+import { exportTypeBWorkbook } from '../../../utils/safeExcelExport';
+import {
+  computeZoneOperationalAnalytics,
+  getCanonicalZoneKey,
+  isArchivedPersonnel,
+  matchesMemberZone,
+  matchesZoneRef,
+} from '../../../application/services/ZoneOperationalAnalyticsService';
 
 export default function ZonesView({
   zones = [],
@@ -16,13 +24,20 @@ export default function ZonesView({
   operations = [],
   machines = [],
   warehouseItems = [],
+  correctiveInterventions = [],
+  preventiveTasks = [],
+  preventiveExecutions = [],
+  sortiesExterne = [],
+  stockItems = [],
   search: externalSearch = '',
   setSearch: setExternalSearch,
   onAddZone,
   onUpdateZone,
   onDeleteZone,
   onNavigateToTechs,
+  onNavigateToOps,
   onNavigateToMachines,
+  onNavigateToEquipment,
   showToast,
 }) {
   const { t } = useTranslation();
@@ -51,14 +66,51 @@ export default function ZonesView({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
   const [form, setForm] = useState({ code_zone: '', id_zone: '', libelle: '', type: 'FINITION', description: '' });
-  const [toEdit, setToEdit] = useState(null);
+  const [toEdit, setToEdit] = useState<any>(null);
+  const [editOriginalId, setEditOriginalId] = useState<string>('');
   const [toDelete, setToDelete] = useState(null);
+  const [healthFilter, setHealthFilter] = useState<'ALL' | 'ALERTS' | 'NO_TECH'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
 
   const safeZones = Array.isArray(zones) ? zones : [];
   const safeTechs = Array.isArray(technicians) ? technicians : [];
   const safeOps = Array.isArray(operations) ? operations : [];
   const safeMachines = Array.isArray(machines) ? machines : [];
   const safeWarehouse = Array.isArray(warehouseItems) ? warehouseItems : [];
+
+  const matchesZoneValue = (val: unknown, z: any, includeLibelle = false) =>
+    matchesZoneRef(val, z, includeLibelle);
+
+  const matchesOpZone = (op: any, z: any) =>
+    matchesMemberZone(op, z, { includeAll: false });
+
+  const zoneAnalytics = useMemo(
+    () =>
+      computeZoneOperationalAnalytics({
+        zones: safeZones,
+        machines: safeMachines,
+        technicians: safeTechs,
+        operations: safeOps,
+        warehouseItems: safeWarehouse,
+        correctiveInterventions,
+        preventiveTasks,
+        preventiveExecutions,
+        sortiesExterne,
+        stockItems,
+      }),
+    [
+      safeZones,
+      safeMachines,
+      safeTechs,
+      safeOps,
+      safeWarehouse,
+      correctiveInterventions,
+      preventiveTasks,
+      preventiveExecutions,
+      sortiesExterne,
+      stockItems,
+    ]
+  );
 
   // Auto-calculation of next Code Zone (e.g. ZONE-01)
   const autoCodeZone = useMemo(() => {
@@ -93,7 +145,27 @@ export default function ZonesView({
     }
   }, [showAddModal, autoCodeZone]);
 
+  const zoneTypes = useMemo(() => {
+    const set = new Set<string>();
+    safeZones.forEach((z) => {
+      const tp = String(z?.type || '').trim().toUpperCase();
+      if (tp) set.add(tp);
+    });
+    return Array.from(set).sort();
+  }, [safeZones]);
+
   const filtered = safeZones.filter((z) => {
+    const zSummary = zoneAnalytics.byZoneKey[getCanonicalZoneKey(z)];
+    if (healthFilter === 'ALERTS') {
+      if (!zSummary || zSummary.zoneStatus === 'NOMINAL') return false;
+    } else if (healthFilter === 'NO_TECH') {
+      if (!zSummary || zSummary.activeMachinesCount === 0 || zSummary.activeTechniciansCount > 0) {
+        return false;
+      }
+    }
+    if (typeFilter !== 'ALL') {
+      if (String(z?.type || '').trim().toUpperCase() !== typeFilter) return false;
+    }
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -113,15 +185,9 @@ export default function ZonesView({
 
   const sortMenuRef = useRef(null);
 
-  const [prevFilters, setPrevFilters] = useState({ search, sortField, sortOrder });
-  if (
-    prevFilters.search !== search ||
-    prevFilters.sortField !== sortField ||
-    prevFilters.sortOrder !== sortOrder
-  ) {
-    setPrevFilters({ search, sortField, sortOrder });
+  useEffect(() => {
     setCurrentPage(1);
-  }
+  }, [search, sortField, sortOrder, healthFilter, typeFilter]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -182,50 +248,49 @@ export default function ZonesView({
       'Libellé / Atelier (C)',
       'Type',
       'Description',
-      'Nb Techniciens (D)',
-      'Nb Opérations/Responsables (E)',
-      'Nb Machines (F)',
+      'Techniciens Actifs (D)',
+      'Opérateurs / Resp. Actifs (E)',
+      'Machines Production Actives',
+      'Système Général Actifs',
+      'Total Machines Actives (F)',
+      'BT Ouverts',
+      'PM en Retard',
+      'Coût Maint. 12m (DH)',
+      'Perte Arrêt 12m (DH)',
+      'Statut Zone',
     ];
     const rows = filtered.map((z) => {
       const zId = z.id_zone || z.code_zone;
-      const nbTechs = safeTechs.filter((t) => t.id_zone === z.id_zone || t.id_zone === z.code_zone).length;
-      const nbOps = safeOps.filter(
-        (op) =>
-          op.id_zone === z.id_zone ||
-          op.id_zone === z.code_zone ||
-          (Array.isArray(op.zones) && op.zones.includes(z.id_zone))
-      ).length;
-      const nbMachines = safeMachines.filter((m) => {
-        const mZ = String(m.id_zone_default || m.id_zone || '').trim().toLowerCase();
-        const idZ = String(z.id_zone || '').trim().toLowerCase();
-        const codeZ = String(z.code_zone || z.code || '').trim().toLowerCase();
-        const libZ = String(z.libelle || '').trim().toLowerCase();
-        return Boolean(mZ && (mZ === idZ || mZ === codeZ || mZ === libZ));
-      }).length;
+      const summary = zoneAnalytics.byZoneKey[getCanonicalZoneKey(z)];
       return [
         z.code_zone || z.code || zId || '',
         z.id_zone || '',
         z.libelle || '',
         z.type || '',
         z.description || '',
-        nbTechs,
-        nbOps,
-        nbMachines,
+        summary?.activeTechniciansCount ?? 0,
+        (summary?.activeResponsablesCount ?? 0) + (summary?.activeOperatorsCount ?? 0),
+        summary?.activeProductionCount ?? 0,
+        summary?.activeSystemGeneralCount ?? 0,
+        summary?.activeMachinesCount ?? 0,
+        summary?.openCorrectiveCount ?? 0,
+        summary?.overduePreventiveCount ?? 0,
+        summary?.totalMaintenanceCost12m ?? 0,
+        summary?.downtimeProductionLossCost12m ?? 0,
+        summary?.zoneStatus || 'NOMINAL',
       ];
     });
-    const csvContent =
-      'data:text/csv;charset=utf-8,\uFEFF' +
-      [
-        headers.join(';'),
-        ...rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')),
-      ].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `zones_ateliers_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    exportTypeBWorkbook({
+      filename: `Zones_Ateliers_${new Date().toISOString().slice(0, 10)}.xlsx`,
+      screenName: 'Zones & Ateliers',
+      sheets: [
+        {
+          name: 'Zones_Ateliers',
+          headers,
+          rows,
+        },
+      ],
+    });
   };
 
   const handleSubmit = (e) => {
@@ -233,17 +298,25 @@ export default function ZonesView({
     if (!canCreate) return;
     if (!form.code_zone || !form.id_zone || !form.libelle) return;
     const cleanId = form.id_zone.trim().toUpperCase();
-    if (safeZones.some((z) => String(z.id_zone || '').trim().toUpperCase() === cleanId)) {
-      showToast?.(`L'identifiant de zone "${cleanId}" existe déjà.`, 'warning');
+    const cleanCode = form.code_zone.trim().toUpperCase();
+    if (
+      safeZones.some((z) => {
+        const zId = String(z.id_zone || '').trim().toUpperCase();
+        const zCode = String(z.code_zone || z.code || '').trim().toUpperCase();
+        return zId === cleanId || (cleanCode && zCode === cleanCode);
+      })
+    ) {
+      showToast?.(`L'identifiant "${cleanId}" ou le code "${cleanCode}" existe déjà.`, 'warning');
       return;
     }
-    onAddZone({
-      code_zone: form.code_zone.trim().toUpperCase(),
+    const created = onAddZone({
+      code_zone: cleanCode,
       id_zone: cleanId,
       libelle: form.libelle.trim(),
       type: form.type,
       description: form.description || '',
     });
+    if (created === false) return;
     setForm({ code_zone: '', id_zone: '', libelle: '', type: 'FINITION', description: '' });
     setShowAddModal(false);
   };
@@ -314,18 +387,39 @@ export default function ZonesView({
         colLetter: 'D/E',
         icon: Users,
         render: (z) => {
-          const zoneOps = safeOps.filter((op) => op.id_zone === z.id_zone || op.id_zone === z.code_zone);
-          const zoneTechs = safeTechs.filter((t) => t.id_zone === z.id_zone || t.id_zone === z.code_zone);
-          const responsables = zoneOps.filter(op => op.type_profil === 'CHEF' || op.type_profil === 'SUPERVISEUR' || op.type_profil === 'RESPONSABLE');
+          const zoneOpsAll = safeOps.filter((op) => matchesOpZone(op, z));
+          const zoneTechsAll = safeTechs.filter((tech) => matchesMemberZone(tech, z, { includeAll: false }));
+          const zoneOps = zoneOpsAll.filter((op) => !isArchivedPersonnel(op));
+          const zoneTechs = zoneTechsAll.filter((tech) => !isArchivedPersonnel(tech));
+          const archivedMembersCount =
+            zoneOpsAll.length - zoneOps.length + (zoneTechsAll.length - zoneTechs.length);
+
+          const responsables = zoneOps.filter(
+            (op) =>
+              op.type_profil === 'CHEF' ||
+              op.type_profil === 'SUPERVISEUR' ||
+              op.type_profil === 'RESPONSABLE' ||
+              String(op.id_operation || '').toUpperCase().startsWith('RESP') ||
+              String(op.id_operation || '').toUpperCase().startsWith('CHEF')
+          );
+          const operators = zoneOps.filter((op) => !responsables.includes(op));
+          const zoneTargetId = z.id_zone || z.code_zone;
+
           return (
             <div className="flex flex-col gap-2">
               {responsables.length > 0 && (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1">
                   {responsables.map((resp, i) => (
-                    <div key={i} className="flex flex-col gap-0.5">
+                    <button
+                      key={`resp-${resp.id_operation || i}`}
+                      type="button"
+                      onClick={() => onNavigateToOps && onNavigateToOps(zoneTargetId)}
+                      className="flex flex-col gap-0.5 text-left hover:bg-purple-50/60 rounded-lg px-1.5 py-0.5 transition cursor-pointer"
+                      title="Voir les responsables dans Utilisateurs"
+                    >
                       <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase text-slate-400">
-                        <Shield className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate" title={resp.type_profil || 'RESPONSABLE'}>{resp.type_profil || 'RESPONSABLE'}</span>
+                        <Shield className="w-3 h-3 text-purple-500 shrink-0" />
+                        <span className="truncate">{resp.type_profil || 'RESPONSABLE'}</span>
                       </div>
                       <div className="flex items-start gap-1.5 pl-[1.125rem]">
                         <User className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
@@ -333,15 +427,16 @@ export default function ZonesView({
                           {resp.nom}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
+
               {zoneTechs.length > 0 && (
                 <div className="flex flex-col gap-0.5 mt-0.5">
                   <button
                     type="button"
-                    onClick={() => onNavigateToTechs && onNavigateToTechs(z.id_zone || z.code_zone)}
+                    onClick={() => onNavigateToTechs && onNavigateToTechs(zoneTargetId)}
                     className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase text-slate-400 hover:text-blue-600 transition text-left cursor-pointer"
                   >
                     <Wrench className="w-3 h-3 text-slate-400 shrink-0" />
@@ -350,16 +445,61 @@ export default function ZonesView({
                   <div className="flex flex-wrap items-center gap-1.5 pl-[1.125rem] mt-0.5">
                     {zoneTechs.map((tech, i) => (
                       <button
-                        key={i}
+                        key={`tech-${tech.id_technician || i}`}
                         type="button"
-                        onClick={() => onNavigateToTechs && onNavigateToTechs(z.id_zone || z.code_zone)}
+                        onClick={() => onNavigateToTechs && onNavigateToTechs(zoneTargetId)}
                         className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 border border-blue-200 text-[10px] font-bold text-blue-700 shadow-2xs cursor-pointer transition"
+                        title={tech.nom ? `${tech.nom} — ${tech.specialite || 'Maintenance'}` : undefined}
                       >
                         {tech.id_technician || tech.code || 'TECH'}
                       </button>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {operators.length > 0 && (
+                <div className="flex flex-col gap-0.5 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToOps && onNavigateToOps(zoneTargetId)}
+                    className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide uppercase text-slate-400 hover:text-indigo-600 transition text-left cursor-pointer"
+                  >
+                    <Users className="w-3 h-3 text-indigo-400 shrink-0" />
+                    <span>OPÉRATEURS ({operators.length})</span>
+                  </button>
+                  <div className="flex flex-wrap items-center gap-1.5 pl-[1.125rem] mt-0.5">
+                    {operators.slice(0, 4).map((op, i) => (
+                      <button
+                        key={`op-${op.id_operation || i}`}
+                        type="button"
+                        onClick={() => onNavigateToOps && onNavigateToOps(zoneTargetId)}
+                        className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-[10px] font-bold text-indigo-700 shadow-2xs cursor-pointer transition"
+                        title={op.nom || op.id_operation}
+                      >
+                        {op.id_operation || 'OP'}
+                      </button>
+                    ))}
+                    {operators.length > 4 && (
+                      <span className="text-[10px] font-mono font-bold text-indigo-600">
+                        +{operators.length - 4}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {zoneOps.length === 0 && zoneTechs.length === 0 && (
+                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md inline-flex items-center gap-1 w-fit">
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  <span>Aucun actif affecté</span>
+                </span>
+              )}
+
+              {archivedMembersCount > 0 && (
+                <span className="text-[10px] font-mono text-slate-400">
+                  +{archivedMembersCount} archivé(s) masqué(s)
+                </span>
               )}
             </div>
           );
@@ -371,24 +511,117 @@ export default function ZonesView({
         colLetter: 'F',
         icon: Wrench,
         render: (z) => {
-          const mCount = safeMachines.filter((m) => {
-            const mZ = String(m.id_zone_default || m.id_zone || '').trim().toLowerCase();
-            const idZ = String(z.id_zone || '').trim().toLowerCase();
-            const codeZ = String(z.code_zone || z.code || '').trim().toLowerCase();
-            const libZ = String(z.libelle || '').trim().toLowerCase();
-            return mZ && (mZ === idZ || mZ === codeZ || mZ === libZ);
-          }).length;
+          const summary = zoneAnalytics.byZoneKey[getCanonicalZoneKey(z)];
+          const mCount = summary?.activeMachinesCount ?? 0;
+          const prodCount = summary?.activeProductionCount ?? 0;
+          const sysGenCount = summary?.activeSystemGeneralCount ?? 0;
+          const stoppedCount = summary?.stoppedMachinesCount ?? 0;
+          const archivedCount = summary?.archivedMachinesCount ?? 0;
           return (
-            <button
-              type="button"
-              onClick={() => onNavigateToMachines && onNavigateToMachines(z.id_zone || z.code_zone)}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition group cursor-pointer shadow-2xs"
-              title={t('zones.columns.machines')}
-            >
-              <Wrench className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{mCount} {mCount > 1 ? t('zones.columns.machines_plural') : t('zones.columns.machine')}</span>
-              <ArrowRight className="w-3 h-3 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
-            </button>
+            <div className="flex flex-col items-start gap-1.5">
+              <button
+                type="button"
+                onClick={() => onNavigateToMachines && onNavigateToMachines(z.id_zone || z.code_zone)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold transition group cursor-pointer shadow-2xs"
+                title={t('zones.columns.machines')}
+              >
+                <Wrench className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{mCount} {mCount > 1 ? t('zones.columns.machines_plural') : t('zones.columns.machine')}</span>
+                <ArrowRight className="w-3 h-3 text-emerald-600 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+                {prodCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToMachines?.(z.id_zone || z.code_zone)}
+                    className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold transition cursor-pointer"
+                    title="Voir les machines de production de cette zone"
+                  >
+                    {prodCount} Prod
+                  </button>
+                )}
+                {sysGenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      (onNavigateToEquipment || onNavigateToMachines)?.(z.id_zone || z.code_zone)
+                    }
+                    className="px-1.5 py-0.5 rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold transition cursor-pointer"
+                    title="Voir les équipements Système Général (utilités) de cette zone"
+                  >
+                    {sysGenCount} Sys.Gén
+                  </button>
+                )}
+                {stoppedCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold">
+                    {stoppedCount} Arrêt
+                  </span>
+                )}
+                {archivedCount > 0 && (
+                  <span className="text-slate-400">({archivedCount} arch.)</span>
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'health',
+        label: 'État & Coût 12m',
+        icon: Activity,
+        render: (z) => {
+          const summary = zoneAnalytics.byZoneKey[getCanonicalZoneKey(z)];
+          if (!summary) return <span className="text-xs text-slate-400">—</span>;
+          const totalImpact =
+            summary.totalMaintenanceCost12m + summary.downtimeProductionLossCost12m;
+          return (
+            <div className="flex flex-col items-start gap-1.5">
+              {summary.zoneStatus === 'CRITIQUE' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-rose-50 text-rose-800 border border-rose-200 shadow-2xs">
+                  <ShieldAlert className="w-3 h-3 text-rose-600 shrink-0" />
+                  <span>CRITIQUE</span>
+                </span>
+              ) : summary.zoneStatus === 'VIGILANCE' ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                  <span>VIGILANCE</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>NOMINAL</span>
+                </span>
+              )}
+
+              <div className="flex flex-wrap items-center gap-1 text-[10px] font-mono">
+                {summary.openCorrectiveCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-bold">
+                    {summary.openCorrectiveCount} BT ouv.
+                  </span>
+                )}
+                {summary.overduePreventiveCount > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-bold">
+                    {summary.overduePreventiveCount} PM ret.
+                  </span>
+                )}
+                {summary.activeMachinesCount > 0 && summary.activeTechniciansCount === 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-800 border border-orange-200 font-bold">
+                    Sans tech
+                  </span>
+                )}
+              </div>
+
+              {totalImpact > 0 && (
+                <div className="text-[10px] font-mono text-slate-600 font-bold">
+                  {Math.round(totalImpact).toLocaleString()} DH
+                  {summary.downtimeHours12m > 0 && (
+                    <span className="text-slate-400 font-normal">
+                      {' '}• {summary.downtimeHours12m}h arrêt
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           );
         },
       },
@@ -402,7 +635,10 @@ export default function ZonesView({
             {canEdit && (
               <button
                 type="button"
-                onClick={() => setToEdit(z)}
+                onClick={() => {
+                  setEditOriginalId(String(z.id_zone || z.code_zone || ''));
+                  setToEdit({ ...z });
+                }}
                 className="p-1.5 bg-white hover:bg-purple-50 text-slate-600 hover:text-purple-700 rounded-lg border border-slate-200 transition cursor-pointer shadow-2xs"
                 title={t('zones.buttons.edit')}
               >
@@ -423,7 +659,7 @@ export default function ZonesView({
         ),
       },
     ],
-    [safeOps, safeTechs, safeMachines, onNavigateToTechs, onNavigateToMachines, t, canEdit, canDelete]
+    [safeOps, safeTechs, zoneAnalytics, onNavigateToTechs, onNavigateToOps, onNavigateToMachines, onNavigateToEquipment, t, canEdit, canDelete]
   );
 
   return (
@@ -468,52 +704,144 @@ export default function ZonesView({
       <GmaoKpiGrid columns={4}>
         <GmaoKpiCard
           title="Total Zones & Ateliers"
-          value={safeZones.length}
+          value={zoneAnalytics.totals.totalZones}
           unit="secteurs"
           icon={MapPin}
           color="purple"
           valueColored={false}
+          isActive={healthFilter === 'ALL'}
+          onClick={() => setHealthFilter('ALL')}
           badgeText="Topologie Usine"
-          footerLabel="Feuille Zones :"
-          footerValue="Col A → E"
+          footerLabel="Alertes actives :"
+          footerValue={
+            zoneAnalytics.totals.alertZonesCount > 0
+              ? `${zoneAnalytics.totals.alertZonesCount} zone(s) à surveiller`
+              : 'Toutes nominales'
+          }
         />
         <GmaoKpiCard
-          title="Machines Rattachées"
-          value={safeMachines.length}
+          title="Machines Actives"
+          value={zoneAnalytics.totals.activeMachinesCount}
           unit="équipements"
           icon={Wrench}
           color="emerald"
-          badgeText="Parc affecté"
-          footerLabel="Formule :"
-          footerValue="=COUNTIF(Machines[Zone])"
+          badgeText={`${zoneAnalytics.totals.activeProductionCount} Prod • ${zoneAnalytics.totals.activeSystemGeneralCount} Sys.Gén`}
+          footerLabel="Cycle de vie :"
+          footerValue={
+            zoneAnalytics.totals.archivedMachinesCount > 0
+              ? `${zoneAnalytics.totals.archivedMachinesCount} archivée(s)`
+              : '=COUNTIF(Machines[Zone])'
+          }
           onClick={onNavigateToMachines ? () => onNavigateToMachines('') : undefined}
         />
         <GmaoKpiCard
-          title="Techniciens Affectés"
-          value={safeTechs.length}
+          title="Techniciens Actifs"
+          value={zoneAnalytics.totals.activeTechniciansCount}
           unit="techniciens"
           icon={Users}
           color="blue"
-          badgeText="Équipe Maintenance"
+          isActive={healthFilter === 'NO_TECH'}
+          badgeText={`${zoneAnalytics.totals.activeResponsablesCount} Resp. • ${zoneAnalytics.totals.activeOperatorsCount} Op.`}
           footerLabel="Couverture :"
-          footerValue="Secteurs actifs"
+          footerValue={
+            zoneAnalytics.totals.zonesWithoutActiveTechCount > 0
+              ? `${zoneAnalytics.totals.zonesWithoutActiveTechCount} zone(s) sans tech`
+              : 'Secteurs couverts'
+          }
           onClick={onNavigateToTechs ? () => onNavigateToTechs('') : undefined}
         />
         <GmaoKpiCard
-          title="Opérateurs & Responsables"
-          value={safeOps.length}
-          unit="membres"
-          icon={Shield}
-          color="indigo"
-          badgeText="Exploitation & Cadres"
-          footerLabel="Supervision :"
-          footerValue="Multi-zones"
+          title="Risques & Coût Maint. 12m"
+          value={zoneAnalytics.totals.openCorrectiveCount}
+          unit="BT ouverts"
+          icon={ShieldAlert}
+          color={
+            zoneAnalytics.totals.criticalZonesCount > 0 || zoneAnalytics.totals.openCorrectiveCount > 0
+              ? 'rose'
+              : 'indigo'
+          }
+          isActive={healthFilter === 'ALERTS'}
+          onClick={() => setHealthFilter(healthFilter === 'ALERTS' ? 'ALL' : 'ALERTS')}
+          badgeText={`${zoneAnalytics.totals.overduePreventiveCount} PM retard • ${zoneAnalytics.totals.stoppedMachinesCount} arrêt(s)`}
+          footerLabel="Impact 12m :"
+          footerValue={`${Math.round(
+            zoneAnalytics.totals.totalMaintenanceCost12m +
+              zoneAnalytics.totals.downtimeProductionLossCost12m
+          ).toLocaleString()} DH`}
         />
       </GmaoKpiGrid>
 
+      {/* Small-Factory Owner Live Cockpit Strip */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl px-4 py-3 shadow-2xs flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-700">
+          <Activity className="w-4 h-4 text-purple-600 shrink-0" />
+          <span>Cockpit Ateliers</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setHealthFilter(healthFilter === 'ALERTS' ? 'ALL' : 'ALERTS')}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+              healthFilter === 'ALERTS'
+                ? 'bg-rose-600 text-white border-rose-600'
+                : zoneAnalytics.totals.criticalZonesCount > 0
+                  ? 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+            <span>Zones Critiques / Alerte :</span>
+            <span className="font-mono font-black">
+              {zoneAnalytics.totals.criticalZonesCount} crit. / {zoneAnalytics.totals.alertZonesCount} alerte
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setHealthFilter(healthFilter === 'NO_TECH' ? 'ALL' : 'NO_TECH')}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
+              healthFilter === 'NO_TECH'
+                ? 'bg-amber-600 text-white border-amber-600'
+                : zoneAnalytics.totals.zonesWithoutActiveTechCount > 0
+                  ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span>Zones sans Tech. :</span>
+            <span className="font-mono font-black">{zoneAnalytics.totals.zonesWithoutActiveTechCount}</span>
+          </button>
+
+          {onNavigateToEquipment && (
+            <button
+              type="button"
+              onClick={() => onNavigateToEquipment('ALL')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 transition cursor-pointer"
+              title="Ouvrir la vue Système Général (Utilités)"
+            >
+              <Wrench className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+              <span>Utilités Sys.Gén :</span>
+              <span className="font-mono font-black">{zoneAnalytics.totals.activeSystemGeneralCount}</span>
+              <ArrowRight className="w-3 h-3 text-amber-700" />
+            </button>
+          )}
+
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-50 text-slate-800 border border-slate-200 font-mono">
+            <span>Impact 12m :</span>
+            <span className="text-indigo-700 font-black">
+              {Math.round(
+                zoneAnalytics.totals.totalMaintenanceCost12m +
+                  zoneAnalytics.totals.downtimeProductionLossCost12m
+              ).toLocaleString()}{' '}
+              DH
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Filter Bar */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-[0_12px_32px_-6px_rgba(0,0,0,0.12),0_4px_12px_-2px_rgba(0,0,0,0.06)] hover:shadow-[0_16px_40px_-8px_rgba(0,0,0,0.16),0_6px_16px_-3px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-300 ease-out space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/80 flex items-center justify-center text-amber-700 shadow-2xs shrink-0">
               <SlidersHorizontal className="w-4 h-4" />
@@ -533,7 +861,32 @@ export default function ZonesView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* Operational Health Preset Pills */}
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200/70">
+              {[
+                { id: 'ALL' as const, label: 'Toutes', count: safeZones.length },
+                { id: 'ALERTS' as const, label: 'En Alerte', count: zoneAnalytics.totals.alertZonesCount },
+                { id: 'NO_TECH' as const, label: 'Sans Tech.', count: zoneAnalytics.totals.zonesWithoutActiveTechCount },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => setHealthFilter(pill.id)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    healthFilter === pill.id
+                      ? 'bg-white text-slate-900 shadow-2xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{pill.label}</span>
+                  <span className="text-[10px] font-mono px-1 rounded bg-slate-200/70 text-slate-700">
+                    {pill.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
             <button
               type="button"
               onClick={handleExportExcel}
@@ -544,10 +897,12 @@ export default function ZonesView({
               <span>{t('common.filters.export_excel', 'Export Excel')}</span>
             </button>
 
-            {localSearch && (
+            {(localSearch || healthFilter !== 'ALL' || typeFilter !== 'ALL') && (
               <button
                 onClick={() => {
                   setLocalSearch('');
+                  setHealthFilter('ALL');
+                  setTypeFilter('ALL');
                   if (setExternalSearch) setExternalSearch('');
                 }}
                 title={t('zones.filters.reset_tooltip')}
@@ -559,7 +914,7 @@ export default function ZonesView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
           {/* Search */}
           <div className="relative w-full">
             <div className="flex items-center justify-between mb-1.5">
@@ -590,6 +945,30 @@ export default function ZonesView({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Zone Type Filter */}
+          <div className="w-full">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                Type d&apos;Atelier
+              </label>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
+                SECTEUR
+              </span>
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
+            >
+              <option value="ALL">Tous les types de zones</option>
+              {zoneTypes.map((tp) => (
+                <option key={tp} value={tp}>
+                  {tp}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Sort Dropdown */}
@@ -872,8 +1251,25 @@ export default function ZonesView({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  onUpdateZone(toEdit.id_zone, toEdit);
-                  setToEdit(null);
+                  const originalKey = editOriginalId || toEdit.id_zone;
+                  const nextId = String(toEdit.id_zone || '').trim().toUpperCase();
+                  const nextCode = String(toEdit.code_zone || toEdit.code || '').trim().toUpperCase();
+                  const origNorm = String(originalKey || '').trim().toUpperCase();
+                  const dup = safeZones.some((z) => {
+                    const zId = String(z.id_zone || '').trim().toUpperCase();
+                    const zCode = String(z.code_zone || z.code || '').trim().toUpperCase();
+                    if (zId === origNorm) return false;
+                    return zId === nextId || (nextCode && zCode === nextCode);
+                  });
+                  if (dup) {
+                    showToast?.(`Une zone utilise déjà l'identifiant "${nextId}".`, 'warning');
+                    return;
+                  }
+                  const ok = onUpdateZone(originalKey, { ...toEdit, id_zone: nextId });
+                  if (ok !== false) {
+                    setToEdit(null);
+                    setEditOriginalId('');
+                  }
                 }}
                 className="space-y-3"
               >
@@ -939,7 +1335,10 @@ export default function ZonesView({
                 <div className="flex gap-2 pt-3">
                   <button
                     type="button"
-                    onClick={() => setToEdit(null)}
+                    onClick={() => {
+                      setToEdit(null);
+                      setEditOriginalId('');
+                    }}
                     className="flex-1 h-10 rounded-xl bg-slate-100 text-xs font-medium"
                   >
                     {t('zones.buttons.cancel')}
@@ -957,18 +1356,14 @@ export default function ZonesView({
         </div>
       )}
       {toDelete && (() => {
-        const zIdNorm = String(toDelete.id_zone || '').trim().toUpperCase();
-        const matchesZ = (val: unknown) => String(val || '').trim().toUpperCase() === zIdNorm;
         const linkedMachinesCount = safeMachines.filter(
-          (m) => matchesZ(m.id_zone_default) || matchesZ(m.id_zone)
+          (m) => matchesZoneValue(m.id_zone_default, toDelete, true) || matchesZoneValue(m.id_zone, toDelete, true)
         ).length;
-        const linkedTechsCount = safeTechs.filter((t) => matchesZ(t.id_zone)).length;
-        const linkedOpsCount = safeOps.filter(
-          (o) =>
-            matchesZ(o.id_zone) ||
-            (Array.isArray(o.zones) && o.zones.some((zId) => matchesZ(zId)))
+        const linkedTechsCount = safeTechs.filter((t) => matchesZoneValue(t.id_zone, toDelete)).length;
+        const linkedOpsCount = safeOps.filter((o) => matchesOpZone(o, toDelete)).length;
+        const linkedWhCount = safeWarehouse.filter(
+          (w) => matchesZoneValue(w.id_zone, toDelete) || matchesZoneValue(w.id_zone_default, toDelete)
         ).length;
-        const linkedWhCount = safeWarehouse.filter((w) => matchesZ(w.id_zone)).length;
         const totalLinked = linkedMachinesCount + linkedTechsCount + linkedOpsCount + linkedWhCount;
 
         return (

@@ -362,6 +362,7 @@ export default function AuthenticatedApp() {
     preventiveExecutions,
     meterReadings,
     sortiesExterne,
+    sortieDemands,
     correctiveInterventions,
     correctiveActionsByPanne,
     correctivePanneCategories,
