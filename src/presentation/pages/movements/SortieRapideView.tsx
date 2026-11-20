@@ -7,13 +7,16 @@ import {
   FileSpreadsheet, Check, AlertTriangle, RotateCcw, Package, Wrench, Clock, TrendingDown,
   TrendingUp, Puzzle, MapPin, Users, Boxes, HelpCircle, X, ChevronDown, Crown, UserCheck,
   ShoppingCart, Activity, Sparkles, ShieldAlert, Inbox, CornerDownRight, ShieldCheck,
-  Hammer, Truck, Gauge, Layers, Calculator, Receipt, Columns2, Maximize2,
+  Hammer, Truck, Gauge, Layers, Calculator, Receipt, Columns2, Maximize2, Search,
 } from 'lucide-react';
 import MouvementsJournalTable from '../warehouse/MouvementsJournalTable';
 import SortieEntreeIcon from '../../components/common/SortieEntreeIcon';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import SortieExterneBobinageTab from './components/SortieExterneBobinageTab';
 import { filterActiveMachines } from '../../../utils/activeMachines';
+import { safeId } from '../../../utils/safeId';
+import { storageService } from '../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../infrastructure/persistence/storageKeys';
 import { applyReplacementMovementToLedger } from '../../../core/domain';
 import { useAuth } from '../../../context/AuthContext';
 import { usePermission } from '../../components/common/PermissionGate';
@@ -105,6 +108,10 @@ export default function SortieRapideView({
   const [reviewMergeMovementId, setReviewMergeMovementId] = useState<string>('');
   const [reviewDemandItems, setReviewDemandItems] = useState<any[]>([]);
   const [reviewDemandNote, setReviewDemandNote] = useState('');
+
+  // Phase C3: Shared-workstation (1-4 PCs) quick beneficiary & direct store validation
+  const [beneficiarySearch, setBeneficiarySearch] = useState('');
+  const [directStoreValidation, setDirectStoreValidation] = useState(true);
 
   // Scope movements & sortie demands to logged-in technician when TECHNICIEN
   const scopedMouvements = useMemo(() => {
@@ -213,6 +220,32 @@ export default function SortieRapideView({
     setReviewDemand(null);
   };
 
+  const handleQuickApproveDemand = (dem: any) => {
+    if (!canEditMovement || !dem) return;
+    const approved = handleReviewSortieDemandValidation(
+      dem.id,
+      {
+        decision: 'APPROVED',
+        code_bon_magasin: dem.code_bon_tech,
+        validated_by_id: user?.id || user?.code || 'admin',
+        validated_by_name: user?.name || 'Magasinier / Admin',
+        validation_note: 'Validation directe sur poste magasin',
+      },
+      onAddMouvement
+    );
+    if (!approved && showToast) {
+      showToast(
+        'Validation bloquée : stock insuffisant pour un article ou demande déjà traitée.',
+        'error'
+      );
+    } else if (approved && showToast) {
+      showToast(
+        `Bon ${approved.code_bon_magasin || dem.code_bon_tech} validé directement — stock mis à jour.`,
+        'success'
+      );
+    }
+  };
+
   const handleReloadClarificationDemand = (dem: any) => {
     if (!dem) return;
     setEditingDemandId(dem.id);
@@ -243,6 +276,21 @@ export default function SortieRapideView({
   const effectiveSubTab = isTechUser ? 'JOURNAL' : activeSubTab;
   const [isFloatingFormOpen, setIsFloatingFormOpen] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
+
+  // Consume deep-link sub-tab target from Stock Cockpit ("Demandes Sortie en attente")
+  useEffect(() => {
+    if (isTechUser) return;
+    const targetSubTab = storageService.getItem<string>(STORAGE_KEYS.SORTIE_TARGET_SUBTAB, '');
+    if (
+      targetSubTab === 'VALIDATION_TERRAIN' ||
+      targetSubTab === 'COMMANDES' ||
+      targetSubTab === 'REPARATION_EXTERNE' ||
+      targetSubTab === 'JOURNAL'
+    ) {
+      setActiveSubTab(targetSubTab);
+      storageService.removeItem(STORAGE_KEYS.SORTIE_TARGET_SUBTAB);
+    }
+  }, [isTechUser]);
 
   // Toggle between Split view (Vue Scindée) and Full-Screen Table view (Vue Dédiée)
   const handleToggleSplitSolo = () => {
@@ -513,6 +561,27 @@ export default function SortieRapideView({
     const otherTechs = activeList.filter((t) => t.id_zone !== form.id_zone);
     return [...zoneTechs, ...otherTechs];
   }, [technicians, form.id_zone, form.action_id]);
+
+  // Phase C3: Fast searchable beneficiary candidates (Nom + Matricule / Code) for shared storekeeper PC
+  const beneficiaryCandidates = useMemo(() => {
+    const q = beneficiarySearch.trim().toLowerCase();
+    const list = availableTechs || [];
+    if (!q) return list.slice(0, 6);
+    return list
+      .filter((t: any) => {
+        const nom = String(t?.nom || t?.name || '').toLowerCase();
+        const prenom = String(t?.prenom || '').toLowerCase();
+        const matricule = String(t?.matricule || t?.code || t?.id_technician || '').toLowerCase();
+        const spec = String(t?.specialite || '').toLowerCase();
+        return (
+          nom.includes(q) ||
+          prenom.includes(q) ||
+          matricule.includes(q) ||
+          spec.includes(q)
+        );
+      })
+      .slice(0, 6);
+  }, [availableTechs, beneficiarySearch]);
 
   // Filtered lists for Responsables (all RESP / CHEF profiles)
   const responsablesList = useMemo(() => {
@@ -986,6 +1055,7 @@ export default function SortieRapideView({
 
     // Submit movement records for each item in the bon (Admin / Magasinier / Responsable)
     mouvementItems.forEach((item) => {
+      const resolvedActionId = String(form.action_id || '').trim();
       const rawOt = form.num_commande ? form.num_commande.trim() : '';
       const finalNumCommande = rawOt !== '' ? rawOt : 'INCONNU';
 
@@ -1033,7 +1103,18 @@ export default function SortieRapideView({
         }
       }
 
+      const selectedTechObj = (technicians || []).find(
+        (t: any) =>
+          (mvtIdTech && String(t?.id_technician || t?.id || '').trim() === String(mvtIdTech).trim()) ||
+          (mvtTech && String(t?.nom || '').trim().toUpperCase() === String(mvtTech).trim().toUpperCase())
+      );
+      const beneficiaireNom = String(mvtTech || mvtDemandeur || '').trim();
+      const beneficiaireMatricule = String(
+        selectedTechObj?.matricule || selectedTechObj?.code || mvtIdTech || ''
+      ).trim();
+
       const mvtRecord = {
+        id: safeId('MVT'),
         code_bon: form.code_bon,
         num_commande: finalNumCommande,
         date: form.date,
@@ -1055,6 +1136,11 @@ export default function SortieRapideView({
         id_machine_registered: form.type.includes('Entrée') ? '' : form.id_machine_registered,
         technicien: mvtTech,
         id_technician: mvtIdTech,
+        beneficiaire_nom: beneficiaireNom,
+        beneficiaire_matricule: beneficiaireMatricule,
+        validated_by_id: user?.id || user?.code || 'magasin',
+        validated_by_name: user?.name || 'Magasinier / Admin',
+        poste_partage_validation_directe: Boolean(directStoreValidation),
         operation: form.type.includes('Entrée') ? '' : mvtOp,
         id_operation: mvtIdOp,
         demandeur: mvtDemandeur,
@@ -1508,6 +1594,7 @@ export default function SortieRapideView({
             correctiveInterventions={storeCorrectiveInterventions}
             preventiveExecutions={storePreventiveExecutions}
             onOpenReviewModal={handleOpenReviewDemandModal}
+            onQuickApproveDemand={canEditMovement ? handleQuickApproveDemand : undefined}
           />
         )}
 
@@ -1613,6 +1700,123 @@ export default function SortieRapideView({
                       </div>
                     </div>
                   </div>
+
+                  {/* Phase C3: Shared-Workstation Quick Beneficiary Picker & Direct Store Validation Bar */}
+                  {!isTechUser && canCreateMovement && (isSortieInterne || isEntreeInterne || isBonSortie) && (
+                    <div
+                      data-testid="shared-pc-beneficiary-bar"
+                      className="rounded-xl border border-indigo-200/80 bg-indigo-50/50 p-3 space-y-2.5"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserCheck className="w-4 h-4 text-indigo-700 shrink-0" />
+                          <span className="text-[11px] font-black uppercase tracking-wider text-indigo-950">
+                            Poste Partagé Magasin · Bénéficiaire (Nom / Matricule)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDirectStoreValidation((prev) => !prev)}
+                          className={`px-2.5 py-1 rounded-lg border text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                            directStoreValidation
+                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                              : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                          }`}
+                          title="Le magasinier ou responsable valide directement la sortie sur le PC partagé sans attendre une demande séparée"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {directStoreValidation
+                              ? 'Validation directe active (Déduction immédiate)'
+                              : 'Enregistrement standard'}
+                          </span>
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <div className="relative flex-1">
+                          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            value={beneficiarySearch}
+                            onChange={(e) => setBeneficiarySearch(e.target.value)}
+                            placeholder="Rechercher technicien par nom ou matricule..."
+                            className="w-full h-8 pl-8 pr-3 rounded-lg border border-indigo-200 bg-white text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                          />
+                        </div>
+                        <div className="text-[11px] font-semibold text-indigo-950 bg-white border border-indigo-200 rounded-lg px-2.5 h-8 flex items-center gap-1.5 shrink-0">
+                          <span className="text-slate-400">Reçu par :</span>
+                          <span className="font-bold text-indigo-900">
+                            {form.technicien || form.operation || 'Non sélectionné'}
+                          </span>
+                          {(form.id_technician || form.id_operation) && (
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                              {form.id_technician || form.id_operation}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {beneficiaryCandidates.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {beneficiaryCandidates.map((t: any) => {
+                            const techId = String(t?.id_technician || t?.id || '').trim();
+                            const techMat = String(t?.matricule || t?.code || techId).trim();
+                            const techName = String(t?.nom || t?.name || '').trim();
+                            const isSelected =
+                              (techId && form.id_technician === techId) ||
+                              (techName && form.technicien === techName);
+                            return (
+                              <button
+                                key={techId || techName}
+                                type="button"
+                                onClick={() =>
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    technicien: techName,
+                                    id_technician: techId,
+                                    ...(prev.action_id === 'USAGE' && prev.usage_type === 'technician'
+                                      ? { demandeur: techName }
+                                      : {}),
+                                  }))
+                                }
+                                className={`px-2 py-1 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
+                                    : 'bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/70'
+                                }`}
+                              >
+                                {techMat && (
+                                  <span
+                                    className={`font-mono text-[9.5px] px-1 py-0.2 rounded ${
+                                      isSelected
+                                        ? 'bg-indigo-500 text-white'
+                                        : 'bg-slate-100 text-slate-600'
+                                    }`}
+                                  >
+                                    {techMat}
+                                  </span>
+                                )}
+                                <span>{techName}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {directStoreValidation && (
+                        <div className="text-[10.5px] text-emerald-900 bg-emerald-50/90 border border-emerald-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2">
+                          <span>
+                            Signé par <b>{user?.name || 'Magasinier / Admin'}</b> au profit de{' '}
+                            <b>{form.technicien || form.operation || 'bénéficiaire'}</b>
+                          </span>
+                          <span className="font-mono text-[10px] font-bold text-emerald-700 shrink-0">
+                            TRAÇABILITÉ POSTE MAGASIN
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
           {(() => {
             const step1FluxSection = (

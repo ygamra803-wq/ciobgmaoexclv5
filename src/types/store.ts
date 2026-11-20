@@ -392,6 +392,32 @@ export interface MeterReadingRecordPayload {
   allowMeterReset?: boolean;
 }
 
+export interface BatchInventoryEntry {
+  ref: string;
+  countedQty: number;
+}
+
+export interface BatchInventoryAdjustmentDetail {
+  ref: string;
+  designation: string;
+  before: number;
+  counted: number;
+  ecart: number;
+  unitPrice: number;
+  ecartValue: number;
+  code_bon: string;
+}
+
+export interface BatchInventoryResult {
+  success: boolean;
+  reason?: string;
+  adjustedCount: number;
+  netEcartUnits: number;
+  netEcartValueMad: number;
+  adjustments: BatchInventoryAdjustmentDetail[];
+  emittedMovements: IMouvement[];
+}
+
 export interface GmaoStoreState {
   // ==========================================
   // 1. Stock Slice
@@ -474,6 +500,13 @@ export interface GmaoStoreState {
     decisionData?: ValidationReviewDecisionPayload,
     onAddMouvement?: ((mvt: IMouvement) => void) | null
   ) => ISortieDemand | null;
+  handleBatchPhysicalInventory: (payload: {
+    entries: BatchInventoryEntry[];
+    reason: string;
+    actorRole?: string;
+    actorId?: string;
+    actorName?: string;
+  }) => BatchInventoryResult;
 
   // ==========================================
   // 5b. Replenishment & Purchase Orders Slice (المحور 4)

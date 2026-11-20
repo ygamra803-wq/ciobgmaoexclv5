@@ -362,6 +362,7 @@ export function useAppRouterProps({
         onNavigateToPdrGroups: navigation.handleNavigateToPdrGroups || (() => navigateTo('pdr_groups')),
         onNavigateToDesignations: navigation.handleNavigateToDesignationsFiltered,
         onNavigateToSortie: () => navigateTo('sortie'),
+        showToast: resolvedShowToast,
       },
 
       pdrGroups: {

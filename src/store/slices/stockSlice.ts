@@ -4,7 +4,13 @@ import { reactiveCalculationEngine } from '../../services/reactiveCalculationEng
 import { StockCalculationService } from '../../core/domain/services/StockCalculationService';
 import { Logger } from '../../core/logger/LoggerService';
 import { safeId } from '../../utils/safeId';
-import type { GmaoStoreState, StateUpdater, ValidationReviewDecisionPayload } from '../../types/store';
+import type {
+  BatchInventoryAdjustmentDetail,
+  BatchInventoryResult,
+  GmaoStoreState,
+  StateUpdater,
+  ValidationReviewDecisionPayload,
+} from '../../types/store';
 import type {
   IStockItem,
   IType,
@@ -120,6 +126,7 @@ export type StockSliceKeys = Pick<
   | 'setSortieDemands'
   | 'handleSubmitSortieDemand'
   | 'handleReviewSortieDemandValidation'
+  | 'handleBatchPhysicalInventory'
   | 'replenishmentOrders'
   | 'setReplenishmentOrders'
   | 'handleCreateReplenishmentOrder'
@@ -529,6 +536,172 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
         },
       });
       return updatedDemand;
+    },
+
+    handleBatchPhysicalInventory: (payload): BatchInventoryResult => {
+      if (!canManageStockSession(payload?.actorRole)) {
+        Logger.warn('[StockSlice] RBAC blocked handleBatchPhysicalInventory');
+        return {
+          success: false,
+          reason: 'Accès refusé : rôle Magasinier ou Responsable requis pour valider un inventaire.',
+          adjustedCount: 0,
+          netEcartUnits: 0,
+          netEcartValueMad: 0,
+          adjustments: [],
+          emittedMovements: [],
+        };
+      }
+
+      const rawEntries = Array.isArray(payload?.entries) ? payload.entries : [];
+      const reason = String(payload?.reason || '').trim() || 'Inventaire physique périodique';
+      if (rawEntries.length === 0) {
+        return {
+          success: false,
+          reason: 'Aucune ligne de comptage fournie.',
+          adjustedCount: 0,
+          netEcartUnits: 0,
+          netEcartValueMad: 0,
+          adjustments: [],
+          emittedMovements: [],
+        };
+      }
+
+      // Deduplicate by normalized ref keeping last explicit count
+      const countedByRef = new Map<string, number>();
+      for (const entry of rawEntries) {
+        const refKey = String(entry?.ref || '').trim().toUpperCase();
+        if (!refKey) continue;
+        const parsedQty = Number(entry?.countedQty);
+        if (!Number.isFinite(parsedQty) || parsedQty < 0) continue;
+        countedByRef.set(refKey, parsedQty);
+      }
+
+      const currentStockList = get().rawStock || [];
+      const currentMovements = get().mouvements || [];
+      const stockByRef = new Map<string, IStockItem>();
+      for (const item of currentStockList) {
+        const refKey = String(item?.ref || '').trim().toUpperCase();
+        if (refKey) stockByRef.set(refKey, item);
+      }
+
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const dateStr = nowIso.slice(0, 10);
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const actor = resolveActiveActorContext();
+      const actorName = String(payload?.actorName || actor.actorName || 'Magasinier Central').trim();
+      const actorId = String(payload?.actorId || actor.actorId || 'system').trim();
+      const actorRole = String(payload?.actorRole || actor.actorRole || 'ADMIN').trim();
+      const batchStamp = Date.now().toString().slice(-6);
+
+      const adjustments: BatchInventoryAdjustmentDetail[] = [];
+      const emittedMovements: IMouvement[] = [];
+      let netEcartUnits = 0;
+      let netEcartValueMad = 0;
+      let seqIdx = 1;
+
+      for (const [refKey, countedQty] of countedByRef.entries()) {
+        const stockMatch = stockByRef.get(refKey);
+        if (!stockMatch) continue;
+
+        const stockBefore = StockCalculationService.calculateStockActuel(stockMatch, currentMovements);
+        const ecart = Number((countedQty - stockBefore).toFixed(4));
+        if (ecart === 0) continue;
+
+        const absDelta = Math.abs(ecart);
+        const unitPrice = Math.max(
+          0,
+          Number(
+            stockMatch.prixUnitaire ??
+              stockMatch.prix_unitaire ??
+              stockMatch.prix ??
+              0
+          ) || 0
+        );
+        const ecartValue = Number((ecart * unitPrice).toFixed(2));
+        const codeBon = `INV-${batchStamp}-${String(seqIdx).padStart(2, '0')}`;
+        seqIdx += 1;
+
+        const mvtType = ecart > 0 ? 'Entrée' : 'Sortie';
+        const mvt: IMouvement = {
+          id: safeId('MVT'),
+          code_bon: codeBon,
+          date: dateStr,
+          heure: timeStr,
+          timestamp: nowIso,
+          ref: stockMatch.ref,
+          designation: stockMatch.designation || stockMatch.ref,
+          quantite: absDelta,
+          stock_avant: stockBefore,
+          stock_apres: countedQty,
+          type: mvtType,
+          action_id: 'INVENTAIRE',
+          technicien: actorName,
+          prix_unitaire: unitPrice,
+          cout_total: Number((absDelta * unitPrice).toFixed(2)),
+          emplacement_reception: stockMatch.emplacement || '',
+          commentaire: `[Inventaire Batch] ${reason} (${stockBefore} → ${countedQty})`,
+        };
+
+        emittedMovements.push(mvt);
+        adjustments.push({
+          ref: stockMatch.ref,
+          designation: stockMatch.designation || stockMatch.ref,
+          before: stockBefore,
+          counted: countedQty,
+          ecart,
+          unitPrice,
+          ecartValue,
+          code_bon: codeBon,
+        });
+        netEcartUnits += ecart;
+        netEcartValueMad += ecartValue;
+      }
+
+      if (emittedMovements.length === 0) {
+        return {
+          success: true,
+          adjustedCount: 0,
+          netEcartUnits: 0,
+          netEcartValueMad: 0,
+          adjustments: [],
+          emittedMovements: [],
+        };
+      }
+
+      // AGENTS.md §1.3: Never mutate stockInitial alongside movements — append movements only.
+      get().setMouvements((prev) => [...emittedMovements, ...(prev || [])]);
+
+      if (typeof get().appendAuditEvent === 'function') {
+        get().appendAuditEvent({
+          actorId,
+          actorName,
+          actorRole,
+          actionType: 'INVENTORY_BATCH_ADJUSTED',
+          entityType: 'STOCK_ITEM',
+          entityId: `INV-BATCH-${batchStamp}`,
+          before: {
+            adjustedCount: adjustments.length,
+            refs: adjustments.map((a) => ({ ref: a.ref, stock: a.before })),
+          },
+          after: {
+            reason,
+            adjustedCount: adjustments.length,
+            netEcartUnits: Number(netEcartUnits.toFixed(4)),
+            netEcartValueMad: Number(netEcartValueMad.toFixed(2)),
+            adjustments,
+          },
+        });
+      }
+
+      return {
+        success: true,
+        adjustedCount: adjustments.length,
+        netEcartUnits: Number(netEcartUnits.toFixed(4)),
+        netEcartValueMad: Number(netEcartValueMad.toFixed(2)),
+        adjustments,
+        emittedMovements,
+      };
     },
 
     handleCreateReplenishmentOrder: async (orderData: Partial<IReplenishmentOrder>) => {

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { StockItem } from '../../../../core/domain';
 import { resolvePdrHierarchy } from '../../../../domain/stock/pdrHierarchyService';
+import { resolveStockUnitPrice } from '../../../../domain/stock/stockCockpitService';
 import type { IStockItem, IType, PdrGroup } from '../../../../types/domain';
 import type { ReservedStockEntry } from '../../../../core/security/validationReconciliation';
 
@@ -53,6 +54,9 @@ interface StockDataGridRowProps {
   onFilterType: (typeVal: string) => void;
   onOpenQuickModal: (item: IStockItem, flow: string, action: string) => void;
   onOpenEditArticle: (item: IStockItem) => void;
+  isInventoryMode?: boolean;
+  inventoryCountStr?: string;
+  onChangeInventoryCount?: (ref: string, value: string) => void;
 }
 
 export function StockDataGridRow({
@@ -71,6 +75,9 @@ export function StockDataGridRow({
   onFilterType,
   onOpenQuickModal,
   onOpenEditArticle,
+  isInventoryMode = false,
+  inventoryCountStr,
+  onChangeInventoryCount,
 }: StockDataGridRowProps) {
   const domainItem = new StockItem(item);
   const typeObj = types.find((typeItem) => typeItem.id_type === item.id_type || typeItem.libelle === item.type);
@@ -293,6 +300,60 @@ export function StockDataGridRow({
           <span>{item.emplacement || t('stock.not_assigned', 'Non assigné')}</span>
         </span>
       </td>
+
+      {isInventoryMode && (() => {
+        const hasVal = inventoryCountStr !== undefined && inventoryCountStr.trim() !== '';
+        const parsedCount = hasVal ? Number(inventoryCountStr) : NaN;
+        const isValidCount = hasVal && Number.isFinite(parsedCount) && parsedCount >= 0;
+        const ecart = isValidCount ? Number((parsedCount - actuel).toFixed(4)) : 0;
+        const unitPrice = resolveStockUnitPrice(item);
+        const ecartValue = Number((ecart * unitPrice).toFixed(2));
+        return (
+          <>
+            <td className="py-2.5 px-3 bg-indigo-50/40 border-l border-indigo-200/70 whitespace-nowrap">
+              <input
+                type="number"
+                min="0"
+                step="1"
+                placeholder={String(actuel)}
+                value={inventoryCountStr ?? ''}
+                onChange={(e) => onChangeInventoryCount?.(item.ref, e.target.value)}
+                data-testid={`inv-count-input-${item.ref}`}
+                className="w-24 h-8 px-2.5 rounded-lg border border-indigo-300 bg-white font-mono font-black text-xs text-right text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </td>
+            <td className="py-2.5 px-3 bg-indigo-50/40 text-right font-mono whitespace-nowrap">
+              {!isValidCount ? (
+                <span className="text-[11px] text-slate-400">—</span>
+              ) : (
+                <div className="flex flex-col items-end gap-0.5">
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-black border ${
+                      ecart > 0
+                        ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                        : ecart < 0
+                          ? 'bg-rose-100 text-rose-900 border-rose-300'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    {ecart > 0 ? `+${ecart}` : ecart} {uom}
+                  </span>
+                  {unitPrice > 0 && ecart !== 0 && (
+                    <span
+                      className={`text-[10px] font-bold ${
+                        ecart > 0 ? 'text-emerald-700' : 'text-rose-700'
+                      }`}
+                    >
+                      {ecartValue > 0 ? '+' : ''}
+                      {ecartValue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH
+                    </span>
+                  )}
+                </div>
+              )}
+            </td>
+          </>
+        );
+      })()}
 
       <td className="py-3 px-3.5 text-center whitespace-nowrap action-menu-container relative">
         {canCreateMovement ? (

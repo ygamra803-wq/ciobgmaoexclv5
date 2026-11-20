@@ -17,12 +17,14 @@ import { IReplenishmentOrder } from '../../../../types/replenishment';
 interface StockReplenishmentModalProps {
   onClose: () => void;
   reorderAlerts: any;
+  initialTab?: 'BASKET' | 'ORDERS';
   showToast?: (msg: string, type?: string) => void;
 }
 
 export default function StockReplenishmentModal({
   onClose,
   reorderAlerts,
+  initialTab = 'BASKET',
   showToast,
 }: StockReplenishmentModalProps) {
   const { user } = useAuth();
@@ -32,7 +34,7 @@ export default function StockReplenishmentModal({
   const handleUpdateReplenishmentOrderStatus = useGmaoStore((s) => s.handleUpdateReplenishmentOrderStatus);
   const handleReceiveReplenishmentOrder = useGmaoStore((s) => s.handleReceiveReplenishmentOrder);
 
-  const [activeTab, setActiveTab] = useState<'BASKET' | 'ORDERS'>('BASKET');
+  const [activeTab, setActiveTab] = useState<'BASKET' | 'ORDERS'>(initialTab);
   const [selectedFournisseur, setSelectedFournisseur] = useState('Fournisseur Industriel Principal');
   const [orderNotes, setOrderNotes] = useState('');
 

@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Inbox,
   ShieldCheck,
@@ -108,6 +109,7 @@ export interface ValidationTerrainQueueSubTabProps {
   correctiveInterventions: unknown[];
   preventiveExecutions: unknown[];
   onOpenReviewModal: (demand: SortieDemandRecord) => void;
+  onQuickApproveDemand?: (demand: SortieDemandRecord) => void;
 }
 
 export function ValidationTerrainQueueSubTab({
@@ -117,6 +119,7 @@ export function ValidationTerrainQueueSubTab({
   correctiveInterventions,
   preventiveExecutions,
   onOpenReviewModal,
+  onQuickApproveDemand,
 }: ValidationTerrainQueueSubTabProps) {
   return (
     <motion.div
@@ -258,13 +261,26 @@ export function ValidationTerrainQueueSubTab({
                 </div>
 
                 {(isPending || isClarif) && (
-                  <button
-                    type="button"
-                    onClick={() => onOpenReviewModal(dem)}
-                    className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer transition shadow-2xs"
-                  >
-                    Contrôler & Réconcilier
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {isPending && onQuickApproveDemand && (
+                      <button
+                        type="button"
+                        onClick={() => onQuickApproveDemand(dem)}
+                        className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer transition shadow-2xs"
+                        title="Validation directe sur poste magasin (N° Bon identique & déduction immédiate)"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Valider Direct</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onOpenReviewModal(dem)}
+                      className="px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs cursor-pointer transition shadow-2xs"
+                    >
+                      Contrôler & Réconcilier
+                    </button>
+                  </div>
                 )}
               </div>
             );

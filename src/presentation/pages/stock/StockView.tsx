@@ -6,10 +6,12 @@ import {
   ArrowUpDown,
   Boxes,
   CheckCircle2,
+  ClipboardCheck,
   Inbox,
   MapPin,
   Package,
   Radio,
+  RotateCcw,
   ShoppingCart,
   Tag,
   TrendingDown,
@@ -29,6 +31,7 @@ import PdrCatalogExcelModal from './components/PdrCatalogExcelModal';
 import StockLotCumpModal from './components/StockLotCumpModal';
 import StockFormulasModal from './components/StockFormulasModal';
 import { StockAlertBanners } from './components/StockAlertBanners';
+import { StockCockpitBar } from './components/StockCockpitBar';
 import { StockFilterPanel } from './components/StockFilterPanel';
 import { StockDataGridRow } from './components/StockDataGridRow';
 import { useStockViewController, type StockViewProps } from './hooks/useStockViewController';
@@ -99,10 +102,22 @@ export default function StockView(props: StockViewProps) {
     setShowReorderPanel,
     showReplenishmentModal,
     setShowReplenishmentModal,
+    replenishmentInitialTab,
+    openReplenishmentModal,
     showLotCumpModal,
     setShowLotCumpModal,
     showFormulasModal,
     setShowFormulasModal,
+    cockpitMetrics,
+    handleNavigateToSortieValidation,
+    isInventoryMode,
+    inventoryCounts,
+    inventoryReason,
+    setInventoryReason,
+    inventorySummary,
+    handleToggleInventoryMode,
+    handleChangeInventoryCount,
+    handleCommitBatchInventory,
     quickModalState,
     setQuickModalState,
     editArticleModalState,
@@ -205,6 +220,23 @@ export default function StockView(props: StockViewProps) {
         icon: MapPin,
         sortable: true,
       },
+      ...(isInventoryMode
+        ? [
+            {
+              key: 'inventoryCounted',
+              label: 'QTÉ COMPTÉE',
+              icon: ClipboardCheck,
+              align: 'right',
+              headerClassName: 'bg-indigo-100/80 text-indigo-950 border-l border-indigo-200',
+            },
+            {
+              key: 'inventoryEcart',
+              label: 'ÉCART / VALEUR',
+              align: 'right',
+              headerClassName: 'bg-indigo-100/80 text-indigo-950',
+            },
+          ]
+        : []),
       {
         key: 'actions',
         label: '•••',
@@ -212,7 +244,7 @@ export default function StockView(props: StockViewProps) {
         headerClassName: 'min-w-[130px] font-bold text-slate-400 tracking-widest select-none',
       },
     ],
-    [t]
+    [t, isInventoryMode]
   );
 
   return (
@@ -235,7 +267,23 @@ export default function StockView(props: StockViewProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 relative">
+        <div className="flex items-center gap-2.5 shrink-0 relative flex-wrap">
+          {canEditStock && (
+            <button
+              type="button"
+              onClick={handleToggleInventoryMode}
+              data-testid="btn-toggle-batch-inventory"
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-2 transition cursor-pointer shadow-2xs border ${
+                isInventoryMode
+                  ? 'bg-indigo-600 text-white border-indigo-700 ring-2 ring-indigo-300'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-200'
+              }`}
+              title="Activer la saisie directe du comptage physique par rayon ou classe ABC"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              <span>{isInventoryMode ? 'Inventaire Actif' : 'Inventaire Physique'}</span>
+            </button>
+          )}
           <FormulasModalButton
             onClick={() => setShowFormulasModal(true)}
             title={t('stock.formulas_button', 'Formules Excel (Col. B → K)')}
@@ -253,7 +301,7 @@ export default function StockView(props: StockViewProps) {
               color="warning"
               icon={ShoppingCart}
               badgeCount={reorderAlerts.totalAlertCount > 0 ? reorderAlerts.totalAlertCount : undefined}
-              onClick={() => setShowReplenishmentModal(true)}
+              onClick={() => openReplenishmentModal('BASKET')}
               title="Réapprovisionnement PDR & Commandes Fournisseurs"
             />
           )}
@@ -269,6 +317,23 @@ export default function StockView(props: StockViewProps) {
           )}
         </div>
       </div>
+
+      {/* Phase C1: Storekeeper & Owner Live Cockpit */}
+      <StockCockpitBar
+        metrics={cockpitMetrics}
+        activeKpiFilter={activeKpiFilter}
+        canEditStock={canEditStock}
+        onFilterClasseARuptures={() => {
+          setActiveKpiFilter(activeKpiFilter === 'RUPTURE_CLASS_A' ? 'ALL' : 'RUPTURE_CLASS_A');
+          setStockAlertOnly(false);
+        }}
+        onFilterDeadStock90d={() => {
+          setActiveKpiFilter(activeKpiFilter === 'DEAD_STOCK_90D' ? 'ALL' : 'DEAD_STOCK_90D');
+          setStockAlertOnly(false);
+        }}
+        onNavigatePendingDemands={handleNavigateToSortieValidation}
+        onOpenActivePOs={() => openReplenishmentModal('ORDERS')}
+      />
 
       <StockKPIBar
         stockItems={stockItems}
@@ -290,7 +355,7 @@ export default function StockView(props: StockViewProps) {
         canEditStock={canEditStock}
         showReorderPanel={showReorderPanel}
         setShowReorderPanel={setShowReorderPanel}
-        onOpenReplenishment={() => setShowReplenishmentModal(true)}
+        onOpenReplenishment={() => openReplenishmentModal('BASKET')}
       />
 
       <StockFilterPanel
@@ -334,11 +399,91 @@ export default function StockView(props: StockViewProps) {
         onOpenGroupsModal={() => setShowGroupsModal(true)}
       />
 
+      {/* Phase C2: Batch Physical Inventory Confirmation Bar */}
+      {isInventoryMode && canEditStock && (
+        <div
+          data-testid="batch-inventory-bar"
+          className="bg-indigo-50/95 border-2 border-indigo-300 rounded-2xl p-4 shadow-sm space-y-3"
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-black uppercase tracking-wider text-indigo-950">
+                    Mode J — Inventaire Physique Rapide (Batch)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold bg-white text-indigo-900 border border-indigo-200">
+                    {inventorySummary.countedRowsCount} saisi(s) • {inventorySummary.modifiedCount} écart(s)
+                  </span>
+                  {inventorySummary.modifiedCount > 0 && (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10.5px] font-mono font-bold border ${
+                        inventorySummary.netValueDeltaMad >= 0
+                          ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                          : 'bg-rose-100 text-rose-900 border-rose-300'
+                      }`}
+                    >
+                      Impact net : {inventorySummary.netValueDeltaMad >= 0 ? '+' : ''}
+                      {inventorySummary.netValueDeltaMad.toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      DH ({inventorySummary.netUnitsDelta >= 0 ? '+' : ''}
+                      {inventorySummary.netUnitsDelta} u.)
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-indigo-900/80 mt-0.5">
+                  Saisissez directement la <b>Qté Comptée</b> dans la grille (utilisez les filtres Emplacement ou Classe A si besoin). Toutes les régularisations sont enregistrées en mouvements d&apos;inventaire tracés dans <code>AUDIT_EVENTS</code>.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+              <input
+                type="text"
+                value={inventoryReason}
+                onChange={(e) => setInventoryReason(e.target.value)}
+                placeholder="Motif de l'inventaire (ex: Comptage Rayon MAG-A1)..."
+                data-testid="inv-reason-input"
+                className="h-9 px-3 rounded-xl border border-indigo-300 bg-white text-xs font-semibold text-slate-900 min-w-[240px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={handleToggleInventoryMode}
+                className="h-9 px-3 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Quitter</span>
+              </button>
+              <button
+                type="button"
+                disabled={inventorySummary.modifiedCount === 0}
+                onClick={handleCommitBatchInventory}
+                data-testid="btn-commit-batch-inventory"
+                className={`h-9 px-4 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition ${
+                  inventorySummary.modifiedCount > 0
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Valider {inventorySummary.modifiedCount} Régularisation(s)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <GmaoIndustrialDataGrid
         title={t('stock.grid_title', 'Tableau Stock_Actuel • Ordre Excel Row 3 : B → K')}
         icon={<Package className="w-4 h-4 text-cyan-600" />}
         excelMapping="N° | Ref (B) | Désignation (C) | Type (D) | Initial (E) | Entrées (F) | Sorties (G) | Actuel (H) | Seuil (I) | Alerte (J) | Emplacement (K)"
         bannerColor="slate"
+        minWidth={isInventoryMode ? 'min-w-[1180px]' : 'min-w-[980px]'}
         columns={stockColumns}
         data={displayedStock}
         isLoading={false}
@@ -363,6 +508,7 @@ export default function StockView(props: StockViewProps) {
         }}
         renderRow={(item: IStockItem, idx: number) => {
           const rowNum = startIndex + idx + 1;
+          const refKey = String(item.ref || '').trim().toUpperCase();
           return (
             <StockDataGridRow
               key={`stock-row-${item.id || item.ref || 'stk'}-${rowNum}`}
@@ -381,6 +527,9 @@ export default function StockView(props: StockViewProps) {
               onFilterType={setStockTypeFilter}
               onOpenQuickModal={handleOpenQuickModal}
               onOpenEditArticle={handleOpenEditArticle}
+              isInventoryMode={isInventoryMode}
+              inventoryCountStr={inventoryCounts[refKey]}
+              onChangeInventoryCount={handleChangeInventoryCount}
             />
           );
         }}
@@ -444,6 +593,8 @@ export default function StockView(props: StockViewProps) {
         <StockReplenishmentModal
           onClose={() => setShowReplenishmentModal(false)}
           reorderAlerts={reorderAlerts}
+          initialTab={replenishmentInitialTab}
+          showToast={props.showToast}
         />
       )}
 

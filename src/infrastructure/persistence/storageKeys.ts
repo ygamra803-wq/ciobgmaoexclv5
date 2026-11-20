@@ -77,6 +77,7 @@ export const STORAGE_KEYS = {
   ACTIVE_TAB: 'gmao_active_tab',
   LANGUAGE: 'gmao_language',
   SETTINGS_TARGET_TAB: 'gmao_settings_target_tab',
+  SORTIE_TARGET_SUBTAB: 'gmao_sortie_target_subtab',
   EQUIPMENT_FOCUS_ID: 'gmao_equipment_focus_id',
   PREVENTIVE_TARGET_MACHINE: 'gmao_preventive_target_machine',
   SHARED_FOLDER_PATH: 'gmao_shared_folder_path',

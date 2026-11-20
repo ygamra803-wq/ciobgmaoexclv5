@@ -23,6 +23,13 @@ import {
   listStockItemsByGroupType,
   resolvePdrHierarchy,
 } from '../../../../domain/stock/pdrHierarchyService';
+import {
+  computeStockCockpitMetrics,
+  resolveStockUnitPrice,
+} from '../../../../domain/stock/stockCockpitService';
+import { storageService } from '../../../../utils/storageService';
+import { STORAGE_KEYS } from '../../../../infrastructure/persistence/storageKeys';
+import type { BatchInventoryEntry } from '../../../../types/store';
 import type {
   IMachine,
   IMouvement,
@@ -77,6 +84,8 @@ export interface StockViewProps {
   stockKPIs?: StockKPIsSummary;
   onNavigateToType?: (...args: unknown[]) => void;
   onNavigateToPdrGroups?: () => void;
+  onNavigateToSortie?: () => void;
+  showToast?: (message: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
   pdrGroups?: PdrGroup[];
   setPdrGroups?: (groups: PdrGroup[]) => void;
 }
@@ -115,9 +124,12 @@ export function useStockViewController({
   stockAlertOnly = false,
   setStockAlertOnly = () => {},
   types = [],
+  mouvements: propMouvements = [],
   stockKPIs = DEFAULT_KPIS,
   pdrGroups: propPdrGroups = [],
   setPdrGroups: propSetPdrGroups,
+  onNavigateToSortie,
+  showToast,
 }: StockViewProps) {
   const { t } = useI18n();
   const stockItems = useMemo(() => propStockItems || [], [propStockItems]);
@@ -134,8 +146,12 @@ export function useStockViewController({
   const [showPdrExcelModal, setShowPdrExcelModal] = useState(false);
   const [showReorderPanel, setShowReorderPanel] = useState(false);
   const [showReplenishmentModal, setShowReplenishmentModal] = useState(false);
+  const [replenishmentInitialTab, setReplenishmentInitialTab] = useState<'BASKET' | 'ORDERS'>('BASKET');
   const [showLotCumpModal, setShowLotCumpModal] = useState(false);
   const [showFormulasModal, setShowFormulasModal] = useState(false);
+  const [isInventoryMode, setIsInventoryMode] = useState(false);
+  const [inventoryCounts, setInventoryCounts] = useState<Record<string, string>>({});
+  const [inventoryReason, setInventoryReason] = useState('Inventaire physique périodique');
   const [stockEmplacementFilter, setStockEmplacementFilter] = useState('ALL');
   const [stockCriticiteFilter, setStockCriticiteFilter] = useState('ALL');
   const [stockDomaineFilter, setStockDomaineFilter] = useState('ALL');
@@ -204,6 +220,12 @@ export function useStockViewController({
   const storePreventiveExecs = useGmaoStore((s) => s.preventiveExecutions);
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
   const storePreventiveTasks = useGmaoStore((s) => s.preventiveTasks);
+  const storeReplenishmentOrders = useGmaoStore((s) => s.replenishmentOrders);
+  const storeMouvements = useGmaoStore((s) => s.mouvements);
+  const effectiveMouvements = useMemo(
+    () => (propMouvements && propMouvements.length > 0 ? propMouvements : storeMouvements || []),
+    [propMouvements, storeMouvements]
+  );
 
   const reservedStockMap = useMemo(
     () =>
@@ -261,6 +283,110 @@ export function useStockViewController({
       }),
     [activeOnlyStockItems, reservedStockMap]
   );
+
+  const cockpitMetrics = useMemo(
+    () =>
+      computeStockCockpitMetrics({
+        stockItems: activeOnlyStockItems,
+        mouvements: effectiveMouvements,
+        sortieDemands: storeSortieDemands || [],
+        replenishmentOrders: storeReplenishmentOrders || [],
+      }),
+    [activeOnlyStockItems, effectiveMouvements, storeSortieDemands, storeReplenishmentOrders]
+  );
+
+  const openReplenishmentModal = useCallback((initialTab: 'BASKET' | 'ORDERS' = 'BASKET') => {
+    setReplenishmentInitialTab(initialTab);
+    setShowReplenishmentModal(true);
+  }, []);
+
+  const handleNavigateToSortieValidation = useCallback(() => {
+    try {
+      storageService.setItem(STORAGE_KEYS.SORTIE_TARGET_SUBTAB, 'VALIDATION_TERRAIN');
+    } catch {
+      // ignore storage errors
+    }
+    onNavigateToSortie?.();
+  }, [onNavigateToSortie]);
+
+  const inventorySummary = useMemo(() => {
+    const entries: BatchInventoryEntry[] = [];
+    let countedRowsCount = 0;
+    let positiveCount = 0;
+    let negativeCount = 0;
+    let netUnitsDelta = 0;
+    let netValueDeltaMad = 0;
+
+    for (const item of activeOnlyStockItems) {
+      const refKey = String(item.ref || '').trim().toUpperCase();
+      if (!refKey) continue;
+      const rawCountStr = inventoryCounts[refKey];
+      if (rawCountStr === undefined || rawCountStr.trim() === '') continue;
+      const counted = Number(rawCountStr);
+      if (!Number.isFinite(counted) || counted < 0) continue;
+
+      countedRowsCount += 1;
+      const actuel = Number(item.stockActuel ?? item.stockInitial ?? 0) || 0;
+      const ecart = Number((counted - actuel).toFixed(4));
+      if (ecart !== 0) {
+        entries.push({ ref: item.ref, countedQty: counted });
+        if (ecart > 0) positiveCount += 1;
+        else negativeCount += 1;
+        netUnitsDelta += ecart;
+        const unitPrice = resolveStockUnitPrice(item);
+        netValueDeltaMad += ecart * unitPrice;
+      }
+    }
+
+    return {
+      entries,
+      countedRowsCount,
+      modifiedCount: entries.length,
+      positiveCount,
+      negativeCount,
+      netUnitsDelta: Number(netUnitsDelta.toFixed(4)),
+      netValueDeltaMad: Number(netValueDeltaMad.toFixed(2)),
+    };
+  }, [activeOnlyStockItems, inventoryCounts]);
+
+  const handleToggleInventoryMode = useCallback(() => {
+    setIsInventoryMode((prev) => {
+      if (prev) {
+        setInventoryCounts({});
+      }
+      return !prev;
+    });
+  }, []);
+
+  const handleChangeInventoryCount = useCallback((ref: string, rawVal: string) => {
+    const key = String(ref || '').trim().toUpperCase();
+    if (!key) return;
+    setInventoryCounts((prev) => ({
+      ...prev,
+      [key]: rawVal,
+    }));
+  }, []);
+
+  const handleCommitBatchInventory = useCallback(() => {
+    if (inventorySummary.entries.length === 0) {
+      showToast?.('Aucun écart de comptage à régulariser.', 'info');
+      return;
+    }
+    const res = useGmaoStore.getState().handleBatchPhysicalInventory({
+      entries: inventorySummary.entries,
+      reason: inventoryReason,
+    });
+    if (!res.success) {
+      showToast?.(res.reason || 'Erreur lors de la validation de l’inventaire.', 'error');
+      return;
+    }
+    showToast?.(
+      `Inventaire validé : ${res.adjustedCount} article(s) régularisé(s) (Impact: ${res.netEcartValueMad >= 0 ? '+' : ''}${res.netEcartValueMad} DH).`,
+      'success'
+    );
+    setInventoryCounts({});
+    setIsInventoryMode(false);
+  }, [inventorySummary.entries, inventoryReason, showToast]);
 
   const emplacements = useMemo(() => {
     const set = new Set<string>();
@@ -366,8 +492,18 @@ export function useStockViewController({
         return Boolean(entry && entry.reservedQty > 0);
       });
     }
+    if (activeKpiFilter === 'RUPTURE_CLASS_A') {
+      return filteredStock.filter((item) =>
+        cockpitMetrics.classeARuptureRefs.has(String(item.ref || '').trim().toUpperCase())
+      );
+    }
+    if (activeKpiFilter === 'DEAD_STOCK_90D') {
+      return filteredStock.filter((item) =>
+        cockpitMetrics.deadStock90dRefs.has(String(item.ref || '').trim().toUpperCase())
+      );
+    }
     return filteredStock.filter((item) => item.alerte === activeKpiFilter);
-  }, [filteredStock, activeKpiFilter, getReservedEntry]);
+  }, [filteredStock, activeKpiFilter, getReservedEntry, cockpitMetrics]);
 
   const sortedStock = useMemo(() => {
     if (!sortField || !effectiveFiltered.length) return effectiveFiltered;
@@ -575,9 +711,15 @@ export function useStockViewController({
       });
     }
     if (activeKpiFilter !== 'ALL') {
+      const stateLabelMap: Record<string, string> = {
+        RUPTURE_CLASS_A: 'Ruptures Classe A / Critique',
+        DEAD_STOCK_90D: 'Dead Stock > 90j',
+        RESERVED: 'Réservé (Maker-Checker)',
+        ARCHIVE: 'Archivés',
+      };
       chips.push({
         key: 'state',
-        label: `${t('common.filters.state')} ${activeKpiFilter}`,
+        label: stateLabelMap[activeKpiFilter] || `${t('common.filters.state')} ${activeKpiFilter}`,
         onRemove: () => setActiveKpiFilter('ALL'),
       });
     }
@@ -794,10 +936,23 @@ export function useStockViewController({
     setShowReorderPanel,
     showReplenishmentModal,
     setShowReplenishmentModal,
+    replenishmentInitialTab,
+    openReplenishmentModal,
     showLotCumpModal,
     setShowLotCumpModal,
     showFormulasModal,
     setShowFormulasModal,
+    cockpitMetrics,
+    handleNavigateToSortieValidation,
+    isInventoryMode,
+    setIsInventoryMode,
+    inventoryCounts,
+    inventoryReason,
+    setInventoryReason,
+    inventorySummary,
+    handleToggleInventoryMode,
+    handleChangeInventoryCount,
+    handleCommitBatchInventory,
     quickModalState,
     setQuickModalState,
     editArticleModalState,
