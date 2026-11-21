@@ -90,6 +90,13 @@ export class MonthlyReportExportService {
         '-',
       ],
       [
+        `Coût Atelier / Fabrication BT Approuvé (Séparé PDR) (${isoCode})`,
+        conv(currentReport.correctiveWorkshopCost || 0),
+        conv(previousReport.correctiveWorkshopCost || 0),
+        conv(Number(((currentReport.correctiveWorkshopCost || 0) - (previousReport.correctiveWorkshopCost || 0)).toFixed(2))),
+        '-',
+      ],
+      [
         `Coût Préventif Approuvé du Mois (${isoCode})`,
         conv(currentReport.preventiveTotalCost),
         conv(previousReport.preventiveTotalCost),
@@ -151,6 +158,13 @@ export class MonthlyReportExportService {
         `${previousReport.preventiveExecutedCount} / ${previousReport.preventiveScheduledCount}`,
         currentReport.preventiveExecutedCount - previousReport.preventiveExecutedCount,
         `${currentReport.preventiveLaborHours}h MO`,
+      ],
+      [
+        'Conformité PM À Temps (ON_TIME / LATE / OVERDUE)',
+        `${currentReport.pmCompliance.onTimeComplianceRate}% (${currentReport.pmCompliance.onTimeCount} à temps / ${currentReport.pmCompliance.lateCompletedCount} tardif / ${currentReport.pmCompliance.overdueCount} en retard)`,
+        `${previousReport.pmCompliance.onTimeComplianceRate}% (${previousReport.pmCompliance.onTimeCount} / ${previousReport.pmCompliance.lateCompletedCount} / ${previousReport.pmCompliance.overdueCount})`,
+        `${currentReport.pmCompliance.onTimeCount - previousReport.pmCompliance.onTimeCount}`,
+        `${currentReport.pmCompliance.totalEligibleCount} éligible(s)`,
       ],
       [
         'Total Interventions Correctives (Pannes Approuvées)',
@@ -386,6 +400,7 @@ export class MonthlyReportExportService {
       ['Correctif Ouverts Actuellement (Snapshot)', report.correctiveOpenSnapshotCount, 'BT en cours', report.assetClassFilter],
       ['Temps d’Arrêt Correctif Cumulé', report.totalDowntimeHours, 'heures', report.assetClassFilter],
       ['Coût PDR Correctif Approuvé', conv(report.correctiveSparesCost), isoCode, report.assetClassFilter],
+      ['Coût Atelier / Fabrication BT (Séparé PDR)', conv(report.correctiveWorkshopCost || 0), isoCode, report.assetClassFilter],
       ['Exécutions Préventives Approuvées', report.preventiveExecutedInPeriodCount, `${report.preventiveLaborHours}h MO`, report.assetClassFilter],
       ['Coût Préventif Approuvé', conv(report.preventiveTotalCost), isoCode, report.assetClassFilter],
       ['Dossiers Bobinage / Externe Approuvés', report.externalBobinageCount || 0, 'dossiers', report.assetClassFilter],

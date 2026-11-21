@@ -20,11 +20,11 @@ import {
 } from '../../core/security/validationReconciliation';
 import {
   isUnapprovedFieldClaim,
+  resolveCorrectiveBtCosts,
   type ConsumedPartSummary,
   type FailingMachineSummary,
   type ReportAssetMetaSource,
   type ReportCorrectiveLike,
-  type ReportCorrectivePieceLike,
   type ReportMachineLike,
   type ReportMovementLike,
   type ReportPreventiveExecutionLike,
@@ -76,6 +76,7 @@ export interface MachineOfficialCostRow {
   correctiveCount: number;
   correctiveCost: number;
   correctivePdrCost: number;
+  correctiveWorkshopCost?: number;
   preventiveCount: number;
   preventiveCost: number;
   externalBobinageCount: number;
@@ -140,6 +141,7 @@ export interface ShiftOrWeeklyReportData {
   correctiveOpenSnapshotCount: number; // Currently open BTs/DIs (EN_COURS / EN_ATTENTE_PDR / DEMANDE)
   totalDowntimeHours: number;
   correctiveSparesCost: number;
+  correctiveWorkshopCost: number;
   topFailingMachines: Array<FailingMachineSummary & { assetClass: 'PRODUCTION' | 'SYSTEM_GENERAL' }>;
 
   // Production-only reliability (never mixes SYSTEM_GENERAL assets into MTBF)
@@ -698,6 +700,7 @@ export function buildShiftOrWeeklyReport({
   let correctiveOpenSnapshotCount = 0;
   let totalDowntimeHours = 0;
   let correctiveSparesCost = 0;
+  let correctiveWorkshopCost = 0;
 
   let systemGeneralCorrectiveInPeriod = 0;
   let systemGeneralCorrectiveClosedInPeriod = 0;
@@ -724,6 +727,7 @@ export function buildShiftOrWeeklyReport({
         correctiveCount: 0,
         correctiveCost: 0,
         correctivePdrCost: 0,
+        correctiveWorkshopCost: 0,
         preventiveCount: 0,
         preventiveCost: 0,
         externalBobinageCount: 0,
@@ -820,38 +824,21 @@ export function buildShiftOrWeeklyReport({
       totalDowntimeHours += dtHours;
     }
 
-    let btOfficialCost = 0;
-    const explicitCost = Number(ci.pdr_cost ?? ci.cout_pdr ?? ci.cout_total ?? 0);
-    if (Number.isFinite(explicitCost) && explicitCost > 0) {
-      btOfficialCost = explicitCost;
-    } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
-      ci.pieces_utilisees.forEach((p: ReportCorrectivePieceLike) => {
-        const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
-        const pQty = Number(p?.quantite ?? p?.qte ?? p?.qty ?? 0);
-        const pPrice =
-          Number(p?.prix_unitaire ?? p?.prix ?? p?.unitPrice ?? 0) ||
-          (pRef ? stockPriceMap.get(pRef) || 0 : 0);
-        if (pQty > 0 && pPrice > 0) {
-          btOfficialCost += pQty * pPrice;
-        }
-      });
-    } else {
-      const pdrRef = String(ci.pdr_ref || ci.pdr || '').trim().toUpperCase();
-      const qty = Number(ci.pdr_quantite ?? ci.quantite ?? (pdrRef ? 1 : 0));
-      const unitPrice =
-        Number(ci.pdr_prix ?? ci.prix_unitaire ?? 0) ||
-        (pdrRef ? stockPriceMap.get(pdrRef) || 0 : 0);
-      if (qty > 0 && unitPrice > 0) {
-        btOfficialCost = qty * unitPrice;
-      }
-    }
+    const { sparesCost: btOfficialCost, workshopCost: btWorkshopCost } = resolveCorrectiveBtCosts(
+      ci,
+      stockPriceMap
+    );
     correctiveSparesCost += btOfficialCost;
+    correctiveWorkshopCost += btWorkshopCost;
 
     const costRow = ensureMachineCostRow(meta);
     costRow.failureCount++;
     costRow.correctiveCount++;
     costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
     costRow.correctivePdrCost = costRow.correctiveCost;
+    costRow.correctiveWorkshopCost = Number(
+      ((costRow.correctiveWorkshopCost || 0) + btWorkshopCost).toFixed(2)
+    );
     costRow.totalDowntimeHours = Number(
       (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
     );
@@ -1029,7 +1016,9 @@ export function buildShiftOrWeeklyReport({
       ? pmCompliance.totalEligibleCount
       : Math.max(preventiveExecutedInPeriodCount + preventiveOverdueSnapshotCount, dueInWindowTasksCount);
   const preventiveDisciplineRate =
-    preventiveDueInWindowCount > 0
+    pmCompliance.totalEligibleCount > 0
+      ? pmCompliance.overallCompletionRate
+      : preventiveDueInWindowCount > 0
       ? Math.min(100, Math.round((preventiveExecutedInPeriodCount / preventiveDueInWindowCount) * 100))
       : 100;
 
@@ -1188,6 +1177,7 @@ export function buildShiftOrWeeklyReport({
     correctiveOpenSnapshotCount,
     totalDowntimeHours: Number(totalDowntimeHours.toFixed(1)),
     correctiveSparesCost: Number(correctiveSparesCost.toFixed(2)),
+    correctiveWorkshopCost: Number(correctiveWorkshopCost.toFixed(2)),
     topFailingMachines,
 
     productionMachinesCount,
@@ -1276,6 +1266,7 @@ export function buildShiftWeeklyReportExportRows(
     ['Correctif Ouverts (Snapshot)', String(report.correctiveOpenSnapshotCount), 'BT en cours', report.assetClassFilter],
     ['Temps Arret Correctif', String(report.totalDowntimeHours), 'heures', report.assetClassFilter],
     ['Cout PDR Correctif (Approuve)', String(conv(report.correctiveSparesCost)), isoCode, report.assetClassFilter],
+    ['Cout Atelier / Fabrication BT (Separe)', String(conv(report.correctiveWorkshopCost || 0)), isoCode, report.assetClassFilter],
     ['Preventif Executes (Approuves)', String(report.preventiveExecutedInPeriodCount), 'executions', report.assetClassFilter],
     ['Cout Preventif (Approuve)', String(conv(report.preventiveTotalCost)), isoCode, report.assetClassFilter],
     ['Bobinage / Sous-traitance Externe (Approuve)', String(report.externalBobinageCount || 0), 'dossiers', report.assetClassFilter],
@@ -1380,6 +1371,7 @@ export function buildShiftWeeklyReportJson(
   const summary = {
     currencyCode: isoCode,
     correctiveSparesCost: conv(report.correctiveSparesCost),
+    correctiveWorkshopCost: conv(report.correctiveWorkshopCost || 0),
     preventiveTotalCost: conv(report.preventiveTotalCost),
     externalBobinageCost: conv(report.externalBobinageCost || 0),
     totalOfficialMaintenanceCost: conv(report.totalOfficialMaintenanceCost),
@@ -1411,6 +1403,7 @@ export function buildShiftWeeklyReportJson(
         correctiveCount: m.correctiveCount,
         correctiveCost: conv(m.correctiveCost),
         correctivePdrCost: conv(m.correctivePdrCost),
+        correctiveWorkshopCost: conv(m.correctiveWorkshopCost || 0),
         preventiveCount: m.preventiveCount,
         preventiveCost: conv(m.preventiveCost),
         externalBobinageCount: m.externalBobinageCount,

@@ -413,8 +413,8 @@ export default function MonthlyExecutiveReportView({
           unit={`% (${currentReport.preventiveExecutedCount}/${currentReport.preventiveScheduledCount} tâches)`}
           icon={ShieldCheck}
           color="emerald"
-          badgeText={`${currentReport.preventiveLaborHours}h Main-d'œuvre PM`}
-          footerLabel="Coût Préventif du mois"
+          badgeText={`À temps (ON_TIME): ${currentReport.pmCompliance.onTimeComplianceRate}% · ${currentReport.pmCompliance.onTimeCount} OK / ${currentReport.pmCompliance.lateCompletedCount} tard / ${currentReport.pmCompliance.overdueCount} retard`}
+          footerLabel={`Coût PM (${currentReport.preventiveLaborHours}h MO)`}
           footerValue={formatCurrency(currentReport.preventiveTotalCost)}
           isActive={focusedPillar === 'PM'}
           onClick={() => setFocusedPillar(focusedPillar === 'PM' ? null : 'PM')}
@@ -869,6 +869,11 @@ export default function MonthlyExecutiveReportView({
               <div className="text-sm font-black font-mono text-purple-700 mt-0.5">
                 {formatCurrency(currentReport.correctiveSparesCost)}
               </div>
+              {(currentReport.correctiveWorkshopCost ?? 0) > 0 && (
+                <div className="text-[10px] font-semibold text-slate-500 mt-0.5">
+                  Atelier séparé: {formatCurrency(currentReport.correctiveWorkshopCost)}
+                </div>
+              )}
             </div>
           </div>
         </div>

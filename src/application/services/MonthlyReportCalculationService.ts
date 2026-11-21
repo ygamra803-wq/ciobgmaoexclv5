@@ -268,6 +268,62 @@ export function isUnapprovedFieldClaim(record: UnapprovedClaimLike | null | unde
   return UNAPPROVED_VALIDATION_STATUSES.has(status) || wfStatus === 'EN_ATTENTE_VALIDATION';
 }
 
+/**
+ * Separates pure PDR spares cost (`pdr_cost` / `cout_pdr` / `cout_pieces` / `pieces_utilisees` / `pdr_ref`)
+ * from workshop/atelier cost (`cout_atelier`) so `cout_atelier` NEVER leaks into `correctiveSparesCost`.
+ */
+export function resolveCorrectiveBtCosts(
+  ci: ReportCorrectiveLike,
+  stockPriceMap: Map<string, number>
+): { sparesCost: number; workshopCost: number } {
+  const workshopRaw = Number(ci?.cout_atelier ?? 0);
+  const workshopCost = Number.isFinite(workshopRaw) && workshopRaw > 0 ? workshopRaw : 0;
+
+  let sparesCost = 0;
+  const explicitPdrRaw = ci?.pdr_cost ?? ci?.cout_pdr ?? ci?.cout_pieces;
+  const explicitPdr =
+    explicitPdrRaw !== undefined && explicitPdrRaw !== null && explicitPdrRaw !== ''
+      ? Number(explicitPdrRaw)
+      : NaN;
+
+  if (Number.isFinite(explicitPdr) && explicitPdr > 0) {
+    sparesCost = explicitPdr;
+  } else if (Array.isArray(ci?.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
+    ci.pieces_utilisees.forEach((p: ReportCorrectivePieceLike) => {
+      const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
+      const pQty = Number(p?.quantite ?? p?.qte ?? p?.qty ?? 0);
+      const pPrice =
+        Number(p?.prix_unitaire ?? p?.prix ?? p?.unitPrice ?? 0) ||
+        (pRef ? stockPriceMap.get(pRef) || 0 : 0);
+      if (pQty > 0 && pPrice > 0) {
+        sparesCost += pQty * pPrice;
+      }
+    });
+  } else {
+    const pdrRef = String(ci?.pdr_ref || ci?.pdr || '').trim().toUpperCase();
+    const qty = Number(ci?.pdr_quantite ?? ci?.quantite ?? (pdrRef ? 1 : 0));
+    const unitPrice =
+      Number(ci?.pdr_prix ?? ci?.prix_unitaire ?? 0) ||
+      (pdrRef ? stockPriceMap.get(pdrRef) || 0 : 0);
+    if (qty > 0 && unitPrice > 0) {
+      sparesCost = qty * unitPrice;
+    }
+  }
+
+  // Fallback for legacy records without explicit PDR fields: subtract cout_atelier from cout_total
+  if (sparesCost === 0 && !(Number.isFinite(explicitPdr) && explicitPdr === 0)) {
+    const legacyTotal = Number(ci?.cout_total ?? 0);
+    if (Number.isFinite(legacyTotal) && legacyTotal > workshopCost) {
+      sparesCost = Number((legacyTotal - workshopCost).toFixed(2));
+    }
+  }
+
+  return {
+    sparesCost: Number(sparesCost.toFixed(2)),
+    workshopCost: Number(workshopCost.toFixed(2)),
+  };
+}
+
 export interface ConsumedPartSummary {
   ref: string;
   designation: string;
@@ -318,6 +374,7 @@ export interface MonthlyFactoryReportData {
   correctiveInProgressCount: number;
   totalDowntimeHours: number;
   correctiveSparesCost: number;
+  correctiveWorkshopCost: number;
   mttrHours: number;
   mttrFormatted: string;
   mtbfHours: number;
@@ -327,9 +384,10 @@ export interface MonthlyFactoryReportData {
   // 4. Preventive Maintenance Discipline & Technician Breakdown
   preventiveScheduledCount: number;
   preventiveExecutedCount: number;
-  preventiveDisciplineRate: number; // percentage 0-100%
+  preventiveDisciplineRate: number; // percentage 0-100% (unified with Shift/Weekly PM compliance)
   preventiveTotalCost: number;
   preventiveLaborHours: number;
+  pmCompliance: PmWindowComplianceSummary;
   technicianBreakdown: TechnicianMonthlySummary[];
 
   // 5. External Subcontracting / Bobinage (Sorties Externe) & C1 Total Official Maintenance Cost
@@ -575,6 +633,7 @@ export class MonthlyReportCalculationService {
     let correctiveInProgressCount = 0;
     let totalDowntimeHours = 0;
     let correctiveSparesCost = 0;
+    let correctiveWorkshopCost = 0;
     const machineFailuresMap = new Map<
       string,
       FailingMachineSummary & { assetClass?: 'PRODUCTION' | 'SYSTEM_GENERAL' }
@@ -596,6 +655,7 @@ export class MonthlyReportCalculationService {
           correctiveCount: 0,
           correctiveCost: 0,
           correctivePdrCost: 0,
+          correctiveWorkshopCost: 0,
           preventiveCount: 0,
           preventiveCost: 0,
           externalBobinageCount: 0,
@@ -680,39 +740,22 @@ export class MonthlyReportCalculationService {
         totalDowntimeHours += dtHours;
       }
 
-      // Spares cost calculation (supports explicit cost, multi-PDR pieces_utilisees, or single pdr_ref)
-      let btOfficialCost = 0;
-      const explicitCost = Number(ci.pdr_cost ?? ci.cout_pdr ?? ci.cout_total ?? 0);
-      if (Number.isFinite(explicitCost) && explicitCost > 0) {
-        btOfficialCost = explicitCost;
-      } else if (Array.isArray(ci.pieces_utilisees) && ci.pieces_utilisees.length > 0) {
-        ci.pieces_utilisees.forEach((p: ReportCorrectivePieceLike) => {
-          const pRef = String(p?.ref || p?.code_article || '').trim().toUpperCase();
-          const pQty = Number(p?.quantite ?? p?.qte ?? 0);
-          const pPrice =
-            Number(p?.prix_unitaire ?? p?.prix ?? 0) ||
-            (pRef ? stockPriceMap.get(pRef) || 0 : 0);
-          if (pQty > 0 && pPrice > 0) {
-            btOfficialCost += pQty * pPrice;
-          }
-        });
-      } else {
-        const pdrRef = String(ci.pdr_ref || ci.pdr || '').trim().toUpperCase();
-        const qty = Number(ci.pdr_quantite ?? ci.quantite ?? (pdrRef ? 1 : 0));
-        const unitPrice =
-          Number(ci.pdr_prix ?? ci.prix_unitaire ?? 0) ||
-          (pdrRef ? stockPriceMap.get(pdrRef) || 0 : 0);
-        if (qty > 0 && unitPrice > 0) {
-          btOfficialCost = qty * unitPrice;
-        }
-      }
+      // Spares cost strictly separated from cout_atelier (workshop fabrication/bobinage cost)
+      const { sparesCost: btOfficialCost, workshopCost: btWorkshopCost } = resolveCorrectiveBtCosts(
+        ci,
+        stockPriceMap
+      );
       correctiveSparesCost += btOfficialCost;
+      correctiveWorkshopCost += btWorkshopCost;
 
       const costRow = ensureMachineCostRow(meta);
       costRow.failureCount++;
       costRow.correctiveCount++;
       costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
       costRow.correctivePdrCost = costRow.correctiveCost;
+      costRow.correctiveWorkshopCost = Number(
+        ((costRow.correctiveWorkshopCost || 0) + btWorkshopCost).toFixed(2)
+      );
       costRow.totalDowntimeHours = Number(
         (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
       );
@@ -830,12 +873,32 @@ export class MonthlyReportCalculationService {
       return true;
     });
 
-    const totalActiveTasks = scheduledTasksForMonth.length;
-    const preventiveScheduledCount = Math.max(preventiveExecutedCount, totalActiveTasks);
+    const [yearPart, monthPart] = targetMonth.split('-');
+    const monthLastDay = new Date(Number(yearPart), Number(monthPart), 0).getDate();
+    const monthFromYMD = `${targetMonth}-01`;
+    const monthToYMD = `${targetMonth}-${String(monthLastDay).padStart(2, '0')}`;
 
-    const preventiveDisciplineRate = preventiveScheduledCount > 0
-      ? Math.min(100, Math.round((preventiveExecutedCount / preventiveScheduledCount) * 100))
-      : 100;
+    const pmCompliance = computePmWindowCompliance({
+      fromYMD: monthFromYMD,
+      toYMD: monthToYMD,
+      assetClass,
+      preventiveTasks,
+      preventiveExecutions,
+      machines,
+    });
+
+    const totalActiveTasks = scheduledTasksForMonth.length;
+    const preventiveScheduledCount =
+      pmCompliance.totalEligibleCount > 0
+        ? pmCompliance.totalEligibleCount
+        : Math.max(preventiveExecutedCount, totalActiveTasks);
+
+    const preventiveDisciplineRate =
+      pmCompliance.totalEligibleCount > 0
+        ? pmCompliance.overallCompletionRate
+        : preventiveScheduledCount > 0
+        ? Math.min(100, Math.round((preventiveExecutedCount / preventiveScheduledCount) * 100))
+        : 100;
 
     let externalBobinageCount = 0;
     let externalBobinageCost = 0;
@@ -902,6 +965,7 @@ export class MonthlyReportCalculationService {
       correctiveInProgressCount,
       totalDowntimeHours: Number(totalDowntimeHours.toFixed(1)),
       correctiveSparesCost: Number(correctiveSparesCost.toFixed(2)),
+      correctiveWorkshopCost: Number(correctiveWorkshopCost.toFixed(2)),
       mttrHours,
       mttrFormatted,
       mtbfHours,
@@ -913,6 +977,7 @@ export class MonthlyReportCalculationService {
       preventiveDisciplineRate,
       preventiveTotalCost: Number(preventiveTotalCost.toFixed(2)),
       preventiveLaborHours,
+      pmCompliance,
       technicianBreakdown,
 
       externalBobinageCount,

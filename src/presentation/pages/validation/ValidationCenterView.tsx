@@ -27,8 +27,10 @@ import { useGmaoStore } from '../../../store/useGmaoStore';
 import { AuthorizationService } from '../../../core/security/AuthorizationService';
 import { isTechnicianRole } from '../../../core/security/technicianScope';
 import {
+  createClaimReconciliationIndex,
   reconcileFieldClaim,
   selectValidationCenterQueues,
+  type ClaimReconciliationResult,
 } from '../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
@@ -315,6 +317,118 @@ export default function ValidationCenterView({
     });
   }, [queues, statusFocus, includeClarifications, searchQuery, machineMetaMap]);
 
+  // O(1) Pre-Indexed Reconciliation Lookup (memoized outside JSX .map() loops)
+  const reconciliationIndex = useMemo(
+    () =>
+      createClaimReconciliationIndex({
+        stockItems,
+        mouvements,
+        correctiveInterventions,
+        preventiveExecutions,
+        sortieDemands,
+      }),
+    [stockItems, mouvements, correctiveInterventions, preventiveExecutions, sortieDemands]
+  );
+
+  const correctiveReconciliationsById = useMemo(() => {
+    const map = new Map<string, ClaimReconciliationResult>();
+    for (const bt of visibleCorrective) {
+      const idStr = String(bt.id);
+      const proposed = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
+      map.set(
+        idStr,
+        reconcileFieldClaim({
+          claimType: 'CORRECTIVE',
+          claimId: idStr,
+          numBonSaisi: bt.num_bon_saisi_par_tech,
+          machineCode: bt.code_machine,
+          proposedSpares: proposed,
+          stockItems,
+          mouvements,
+          correctiveInterventions,
+          preventiveExecutions,
+          sortieDemands,
+          reconciliationIndex,
+        })
+      );
+    }
+    return map;
+  }, [
+    visibleCorrective,
+    stockItems,
+    mouvements,
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+    reconciliationIndex,
+  ]);
+
+  const preventiveReconciliationsById = useMemo(() => {
+    const map = new Map<string, ClaimReconciliationResult>();
+    for (const ex of visiblePreventive) {
+      const idStr = String(ex.id);
+      const proposed = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
+      map.set(
+        idStr,
+        reconcileFieldClaim({
+          claimType: 'PREVENTIVE',
+          claimId: idStr,
+          numBonSaisi: ex.num_bon_saisi_par_tech,
+          machineCode: ex.machineCode,
+          proposedSpares: proposed,
+          stockItems,
+          mouvements,
+          correctiveInterventions,
+          preventiveExecutions,
+          sortieDemands,
+          reconciliationIndex,
+        })
+      );
+    }
+    return map;
+  }, [
+    visiblePreventive,
+    stockItems,
+    mouvements,
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+    reconciliationIndex,
+  ]);
+
+  const sortieReconciliationsById = useMemo(() => {
+    const map = new Map<string, ClaimReconciliationResult>();
+    for (const dem of visibleSortieDemands) {
+      const idStr = String(dem.id);
+      const items = Array.isArray(dem?.items) ? dem.items : [];
+      map.set(
+        idStr,
+        reconcileFieldClaim({
+          claimType: 'SORTIE',
+          claimId: idStr,
+          numBonSaisi: dem.code_bon_tech,
+          machineCode: dem.id_machine_registered,
+          proposedSpares: items,
+          stockItems,
+          mouvements,
+          correctiveInterventions,
+          preventiveExecutions,
+          sortieDemands,
+          reconciliationIndex,
+        })
+      );
+    }
+    return map;
+  }, [
+    visibleSortieDemands,
+    stockItems,
+    mouvements,
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+    reconciliationIndex,
+  ]);
+
   // Active Modal Reconciliations
   const activeBtReconciliation = useMemo(() => {
     if (!reviewBt) return null;
@@ -329,6 +443,7 @@ export default function ValidationCenterView({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
   }, [
     reviewBt,
@@ -338,6 +453,7 @@ export default function ValidationCenterView({
     correctiveInterventions,
     preventiveExecutions,
     sortieDemands,
+    reconciliationIndex,
   ]);
 
   const activeExecReconciliation = useMemo(() => {
@@ -353,6 +469,7 @@ export default function ValidationCenterView({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
   }, [
     reviewExec,
@@ -362,6 +479,7 @@ export default function ValidationCenterView({
     correctiveInterventions,
     preventiveExecutions,
     sortieDemands,
+    reconciliationIndex,
   ]);
 
   const activeDemandReconciliation = useMemo(() => {
@@ -377,6 +495,7 @@ export default function ValidationCenterView({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
   }, [
     reviewDemand,
@@ -386,6 +505,7 @@ export default function ValidationCenterView({
     correctiveInterventions,
     preventiveExecutions,
     sortieDemands,
+    reconciliationIndex,
   ]);
 
   // Open & Submit Handlers for Section 1 (Corrective BT)
@@ -412,6 +532,7 @@ export default function ValidationCenterView({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
     setReviewBt(bt);
     setBtActionRealisee(bt?.action_realisee || bt?.travail_a_faire || '');
@@ -534,6 +655,7 @@ export default function ValidationCenterView({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
     setReviewExecSpares(mappedSpares);
     setExecSkipStockDeduction(Boolean(rec?.exactMovementMatch));
@@ -1363,18 +1485,13 @@ export default function ValidationCenterView({
             <div className="space-y-3">
               {visibleCorrective.map((bt: CorrectiveInterventionItem) => {
                 const proposed = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
-                const reconciliation = reconcileFieldClaim({
-                  claimType: 'CORRECTIVE',
-                  claimId: String(bt.id),
-                  numBonSaisi: bt.num_bon_saisi_par_tech,
-                  machineCode: bt.code_machine,
-                  proposedSpares: proposed,
-                  stockItems,
-                  mouvements,
-                  correctiveInterventions,
-                  preventiveExecutions,
-                  sortieDemands,
-                });
+                const reconciliation = correctiveReconciliationsById.get(String(bt.id)) || {
+                  alerts: [],
+                  hasCritical: false,
+                  hasWarning: false,
+                  candidateStoreMovements: [],
+                  exactMovementMatch: null,
+                };
                 const isClarify = bt.validation_status === 'NEEDS_CLARIFICATION';
                 const mMeta = resolveMachineMeta(bt.code_machine || bt.id_machine_registered, bt.nom_machine);
 
@@ -1582,18 +1699,13 @@ export default function ValidationCenterView({
             <div className="space-y-3">
               {visiblePreventive.map((ex: PreventiveExecutionRecord) => {
                 const proposed = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
-                const reconciliation = reconcileFieldClaim({
-                  claimType: 'PREVENTIVE',
-                  claimId: String(ex.id),
-                  numBonSaisi: ex.num_bon_saisi_par_tech,
-                  machineCode: ex.machineCode,
-                  proposedSpares: proposed,
-                  stockItems,
-                  mouvements,
-                  correctiveInterventions,
-                  preventiveExecutions,
-                  sortieDemands,
-                });
+                const reconciliation = preventiveReconciliationsById.get(String(ex.id)) || {
+                  alerts: [],
+                  hasCritical: false,
+                  hasWarning: false,
+                  candidateStoreMovements: [],
+                  exactMovementMatch: null,
+                };
                 const isClarify = ex.validation_status === 'NEEDS_CLARIFICATION';
                 const mMeta = resolveMachineMeta(ex.machineCode, ex.machineName);
 
@@ -1787,18 +1899,13 @@ export default function ValidationCenterView({
             <div className="space-y-3">
               {visibleSortieDemands.map((dem: ISortieDemand) => {
                 const items = Array.isArray(dem?.items) ? dem.items : [];
-                const reconciliation = reconcileFieldClaim({
-                  claimType: 'SORTIE',
-                  claimId: String(dem.id),
-                  numBonSaisi: dem.code_bon_tech,
-                  machineCode: dem.id_machine_registered,
-                  proposedSpares: items,
-                  stockItems,
-                  mouvements,
-                  correctiveInterventions,
-                  preventiveExecutions,
-                  sortieDemands,
-                });
+                const reconciliation = sortieReconciliationsById.get(String(dem.id)) || {
+                  alerts: [],
+                  hasCritical: false,
+                  hasWarning: false,
+                  candidateStoreMovements: [],
+                  exactMovementMatch: null,
+                };
                 const isClarify = dem.validation_status === 'NEEDS_CLARIFICATION';
                 const mMeta = resolveMachineMeta(dem.id_machine_registered || dem.id_zone);
 

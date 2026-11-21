@@ -513,7 +513,11 @@ export default function ShiftWeeklyReportView({
           unit={`clôturé(s) / ${report.correctiveTotalInPeriodCount} BT`}
           icon={Wrench}
           color="amber"
-          badgeText={`Ouverts: ${report.correctiveOpenSnapshotCount} · Arrêt: ${report.totalDowntimeHours}h`}
+          badgeText={`Ouverts: ${report.correctiveOpenSnapshotCount} · Arrêt: ${report.totalDowntimeHours}h${
+            (report.correctiveWorkshopCost ?? 0) > 0
+              ? ` · Atelier: ${formatCurrency(report.correctiveWorkshopCost)}`
+              : ''
+          }`}
           footerLabel="Coût PDR validé"
           footerValue={formatCurrency(report.correctiveSparesCost)}
           isActive={focusedKpi === 'CORRECTIVE'}

@@ -157,6 +157,28 @@ export interface ClaimReconciliationResult {
   exactMovementMatch?: ReconciliationMovement | null;
 }
 
+export interface BonMatchEntry {
+  id: string;
+  label: string;
+}
+
+export interface PendingSourceEntry {
+  claimKey: string;
+  label: string;
+}
+
+export interface ClaimReconciliationIndex {
+  movementByBon: Map<string, ReconciliationMovement>;
+  btByBon: Map<string, BonMatchEntry[]>;
+  pmByBon: Map<string, BonMatchEntry[]>;
+  sortieByBon: Map<string, BonMatchEntry[]>;
+  stockByRef: Map<string, ReconciliationStockItem>;
+  totalPendingQtyByRef: Map<string, number>;
+  pendingClaimContribByClaimKey: Map<string, Map<string, number>>;
+  pendingSourcesByRef: Map<string, PendingSourceEntry[]>;
+  sortieMovementsByRef: Map<string, ReconciliationMovement[]>;
+}
+
 export interface ReconcileFieldClaimParams {
   claimType?: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE';
   claimId?: string;
@@ -172,6 +194,7 @@ export interface ReconcileFieldClaimParams {
   preventiveExecutions?: ReconciliationPreventiveExec[];
   sortieDemands?: ReconciliationSortieDemand[];
   reservedStockMap?: Map<string, ReservedStockEntry> | Record<string, ReservedStockEntry>;
+  reconciliationIndex?: ClaimReconciliationIndex;
 }
 
 function normalizeToken(value: unknown): string {
@@ -196,6 +219,206 @@ function extractSpareRefAndQty(raw: SpareClaimLine | null | undefined): {
   };
 }
 
+function pushBoundedBonMatch(
+  map: Map<string, BonMatchEntry[]>,
+  bonKey: string,
+  entry: BonMatchEntry
+): void {
+  if (!bonKey) return;
+  const list = map.get(bonKey);
+  if (!list) {
+    map.set(bonKey, [entry]);
+    return;
+  }
+  // Keep at most two entries with distinct claim IDs so skipping self still finds the first peer in O(1).
+  if (list.length < 2 && list[0].id !== entry.id) {
+    list.push(entry);
+  }
+}
+
+function findFirstPeerBonMatch(
+  map: Map<string, BonMatchEntry[]>,
+  bonKey: string,
+  excludeSelf: boolean,
+  selfId: string
+): BonMatchEntry | undefined {
+  const list = map.get(bonKey);
+  if (!list || list.length === 0) return undefined;
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    if (excludeSelf && entry.id === selfId) continue;
+    return entry;
+  }
+  return undefined;
+}
+
+/**
+ * Builds an O(1) lookup index across stockItems, mouvements, and active pending/non-rejected field claims.
+ * Intended to be memoized once outside render loops (ValidationCenterView / buildAdminValidationRadar)
+ * so reconciling N claims against 10k+ movements stays O(M + N) instead of O(N * M).
+ */
+export function createClaimReconciliationIndex({
+  stockItems = [],
+  mouvements = [],
+  correctiveInterventions = [],
+  preventiveExecutions = [],
+  sortieDemands = [],
+}: {
+  stockItems?: ReconciliationStockItem[];
+  mouvements?: ReconciliationMovement[];
+  correctiveInterventions?: ReconciliationCorrectiveBt[];
+  preventiveExecutions?: ReconciliationPreventiveExec[];
+  sortieDemands?: ReconciliationSortieDemand[];
+}): ClaimReconciliationIndex {
+  const movementByBon = new Map<string, ReconciliationMovement>();
+  const sortieMovementsByRef = new Map<string, ReconciliationMovement[]>();
+
+  for (const mvt of mouvements || []) {
+    if (!mvt) continue;
+    const mvtBon = normalizeToken(mvt.code_bon || mvt.num_bon_saisi_par_tech);
+    if (mvtBon && !movementByBon.has(mvtBon)) {
+      movementByBon.set(mvtBon, mvt);
+    }
+
+    if (!mvt.merged_demand_id) {
+      const mvtType = String(mvt.type || '').toLowerCase();
+      if (mvtType.includes('sort')) {
+        const mvtRef = normalizeToken(mvt.ref || mvt.code_article);
+        if (mvtRef) {
+          let bucket = sortieMovementsByRef.get(mvtRef);
+          if (!bucket) {
+            bucket = [];
+            sortieMovementsByRef.set(mvtRef, bucket);
+          }
+          bucket.push(mvt);
+        }
+      }
+    }
+  }
+
+  const stockByRef = new Map<string, ReconciliationStockItem>();
+  for (const item of stockItems || []) {
+    if (!item) continue;
+    const refKey = normalizeToken(item.ref || item.code_article);
+    if (refKey) stockByRef.set(refKey, item);
+  }
+
+  const btByBon = new Map<string, BonMatchEntry[]>();
+  const pmByBon = new Map<string, BonMatchEntry[]>();
+  const sortieByBon = new Map<string, BonMatchEntry[]>();
+
+  const totalPendingQtyByRef = new Map<string, number>();
+  const pendingClaimContribByClaimKey = new Map<string, Map<string, number>>();
+  const pendingSourcesByRef = new Map<string, PendingSourceEntry[]>();
+  const seenSourcePerRefClaim = new Set<string>();
+
+  const recordPendingContribution = (
+    claimKey: string,
+    ref: string,
+    qty: number,
+    label: string
+  ) => {
+    const refKey = normalizeToken(ref);
+    if (!refKey || qty <= 0) return;
+
+    totalPendingQtyByRef.set(refKey, (totalPendingQtyByRef.get(refKey) || 0) + qty);
+
+    let claimMap = pendingClaimContribByClaimKey.get(claimKey);
+    if (!claimMap) {
+      claimMap = new Map<string, number>();
+      pendingClaimContribByClaimKey.set(claimKey, claimMap);
+    }
+    claimMap.set(refKey, (claimMap.get(refKey) || 0) + qty);
+
+    const dedupKey = `${refKey}::${claimKey}`;
+    if (!seenSourcePerRefClaim.has(dedupKey)) {
+      seenSourcePerRefClaim.add(dedupKey);
+      let srcList = pendingSourcesByRef.get(refKey);
+      if (!srcList) {
+        srcList = [];
+        pendingSourcesByRef.set(refKey, srcList);
+      }
+      srcList.push({ claimKey, label });
+    }
+  };
+
+  for (const bt of correctiveInterventions || []) {
+    if (!bt) continue;
+    const btId = String(bt.id ?? '').trim();
+    const label = `BT ${bt.num_bt || bt.id}`;
+    if (bt.validation_status !== 'REJECTED') {
+      const btBon = normalizeToken(bt.num_bon_saisi_par_tech || bt.num_bon);
+      pushBoundedBonMatch(btByBon, btBon, { id: btId, label });
+    }
+    if (bt.validation_status === 'PENDING_VALIDATION') {
+      const claimKey = `CORRECTIVE:${btId}`;
+      const pieces = Array.isArray(bt.pieces_proposees) ? bt.pieces_proposees : [];
+      for (const p of pieces) {
+        const parsed = extractSpareRefAndQty(p);
+        recordPendingContribution(claimKey, parsed.ref, parsed.qty, label);
+      }
+    }
+  }
+
+  for (const ex of preventiveExecutions || []) {
+    if (!ex) continue;
+    const exId = String(ex.id ?? '').trim();
+    if (ex.validation_status !== 'REJECTED') {
+      const exBon = normalizeToken(ex.num_bon_saisi_par_tech);
+      pushBoundedBonMatch(pmByBon, exBon, {
+        id: exId,
+        label: `Exéc. Préventive ${ex.taskCode || ex.id}`,
+      });
+    }
+    if (ex.validation_status === 'PENDING_VALIDATION') {
+      const claimKey = `PREVENTIVE:${exId}`;
+      const label = `Prév. ${ex.machineCode || ex.id}`;
+      const pieces = Array.isArray(ex.sparesProposed) ? ex.sparesProposed : [];
+      for (const p of pieces) {
+        const parsed = extractSpareRefAndQty(p);
+        recordPendingContribution(claimKey, parsed.ref, parsed.qty, label);
+      }
+    }
+  }
+
+  for (const dem of sortieDemands || []) {
+    if (!dem) continue;
+    const demId = String(dem.id ?? '').trim();
+    if (dem.validation_status !== 'REJECTED') {
+      const demBonTech = normalizeToken(dem.code_bon_tech);
+      const demBonMag = normalizeToken(dem.code_bon_magasin);
+      const dupLabel = `Demande Sortie ${dem.code_bon_tech || dem.id}`;
+      if (demBonTech) {
+        pushBoundedBonMatch(sortieByBon, demBonTech, { id: demId, label: dupLabel });
+      }
+      if (demBonMag && demBonMag !== demBonTech) {
+        pushBoundedBonMatch(sortieByBon, demBonMag, { id: demId, label: dupLabel });
+      }
+    }
+    if (dem.validation_status === 'PENDING_VALIDATION') {
+      const claimKey = `SORTIE:${demId}`;
+      const label = `Sortie ${dem.code_bon_tech || dem.id}`;
+      const items = Array.isArray(dem.items) ? dem.items : [];
+      for (const it of items) {
+        const parsed = extractSpareRefAndQty(it);
+        recordPendingContribution(claimKey, parsed.ref, parsed.qty, label);
+      }
+    }
+  }
+
+  return {
+    movementByBon,
+    btByBon,
+    pmByBon,
+    sortieByBon,
+    stockByRef,
+    totalPendingQtyByRef,
+    pendingClaimContribByClaimKey,
+    pendingSourcesByRef,
+    sortieMovementsByRef,
+  };
+}
+
 /**
  * V4: Evaluates a technician's field claim (Corrective BT, Preventive Execution, or Sortie Demand)
  * before Admin/Magasin approval to detect stock shortages, duplicate paper bon numbers,
@@ -216,6 +439,7 @@ export function reconcileFieldClaim({
   correctiveInterventions = [],
   preventiveExecutions = [],
   sortieDemands = [],
+  reconciliationIndex,
 }: ReconcileFieldClaimParams): ClaimReconciliationResult {
   const claimType: 'CORRECTIVE' | 'PREVENTIVE' | 'SORTIE' =
     rawClaimType ||
@@ -235,6 +459,7 @@ export function reconcileFieldClaim({
   const candidateStoreMovements: CandidateStoreMovementMatch[] = [];
   let exactMovementMatch: ReconciliationMovement | null = null;
   const normClaimId = String(claimId ?? '').trim();
+  const selfClaimKey = `${claimType}:${normClaimId}`;
   const normBon = normalizeToken(numBonSaisi);
   const normMachine = normalizeToken(machineCode);
 
@@ -256,46 +481,78 @@ export function reconcileFieldClaim({
   if (normBon) {
     const duplicateSources: string[] = [];
 
-    for (const mvt of mouvements || []) {
-      const mvtBon = normalizeToken(mvt?.code_bon || mvt?.num_bon_saisi_par_tech);
-      if (mvtBon && mvtBon === normBon) {
-        exactMovementMatch = mvt;
-        duplicateSources.push(`Mouvement ${mvt?.code_bon || mvt?.id || normBon}`);
-        break;
+    if (reconciliationIndex) {
+      const mvtMatch = reconciliationIndex.movementByBon.get(normBon);
+      if (mvtMatch) {
+        exactMovementMatch = mvtMatch;
+        duplicateSources.push(`Mouvement ${mvtMatch.code_bon || mvtMatch.id || normBon}`);
       }
-    }
 
-    for (const bt of correctiveInterventions || []) {
-      const btId = String(bt?.id ?? '').trim();
-      if (claimType === 'CORRECTIVE' && btId === normClaimId) continue;
-      if (bt?.validation_status === 'REJECTED') continue;
-      const btBon = normalizeToken(bt?.num_bon_saisi_par_tech || bt?.num_bon);
-      if (btBon && btBon === normBon) {
-        duplicateSources.push(`BT ${bt?.num_bt || bt?.id}`);
-        break;
+      const btPeer = findFirstPeerBonMatch(
+        reconciliationIndex.btByBon,
+        normBon,
+        claimType === 'CORRECTIVE',
+        normClaimId
+      );
+      if (btPeer) duplicateSources.push(btPeer.label);
+
+      const pmPeer = findFirstPeerBonMatch(
+        reconciliationIndex.pmByBon,
+        normBon,
+        claimType === 'PREVENTIVE',
+        normClaimId
+      );
+      if (pmPeer) duplicateSources.push(pmPeer.label);
+
+      const sortiePeer = findFirstPeerBonMatch(
+        reconciliationIndex.sortieByBon,
+        normBon,
+        claimType === 'SORTIE',
+        normClaimId
+      );
+      if (sortiePeer) duplicateSources.push(sortiePeer.label);
+    } else {
+      for (const mvt of mouvements || []) {
+        const mvtBon = normalizeToken(mvt?.code_bon || mvt?.num_bon_saisi_par_tech);
+        if (mvtBon && mvtBon === normBon) {
+          exactMovementMatch = mvt;
+          duplicateSources.push(`Mouvement ${mvt?.code_bon || mvt?.id || normBon}`);
+          break;
+        }
       }
-    }
 
-    for (const ex of preventiveExecutions || []) {
-      const exId = String(ex?.id ?? '').trim();
-      if (claimType === 'PREVENTIVE' && exId === normClaimId) continue;
-      if (ex?.validation_status === 'REJECTED') continue;
-      const exBon = normalizeToken(ex?.num_bon_saisi_par_tech);
-      if (exBon && exBon === normBon) {
-        duplicateSources.push(`Exéc. Préventive ${ex?.taskCode || ex?.id}`);
-        break;
+      for (const bt of correctiveInterventions || []) {
+        const btId = String(bt?.id ?? '').trim();
+        if (claimType === 'CORRECTIVE' && btId === normClaimId) continue;
+        if (bt?.validation_status === 'REJECTED') continue;
+        const btBon = normalizeToken(bt?.num_bon_saisi_par_tech || bt?.num_bon);
+        if (btBon && btBon === normBon) {
+          duplicateSources.push(`BT ${bt?.num_bt || bt?.id}`);
+          break;
+        }
       }
-    }
 
-    for (const dem of sortieDemands || []) {
-      const demId = String(dem?.id ?? '').trim();
-      if (claimType === 'SORTIE' && demId === normClaimId) continue;
-      if (dem?.validation_status === 'REJECTED') continue;
-      const demBonTech = normalizeToken(dem?.code_bon_tech);
-      const demBonMag = normalizeToken(dem?.code_bon_magasin);
-      if ((demBonTech && demBonTech === normBon) || (demBonMag && demBonMag === normBon)) {
-        duplicateSources.push(`Demande Sortie ${dem?.code_bon_tech || dem?.id}`);
-        break;
+      for (const ex of preventiveExecutions || []) {
+        const exId = String(ex?.id ?? '').trim();
+        if (claimType === 'PREVENTIVE' && exId === normClaimId) continue;
+        if (ex?.validation_status === 'REJECTED') continue;
+        const exBon = normalizeToken(ex?.num_bon_saisi_par_tech);
+        if (exBon && exBon === normBon) {
+          duplicateSources.push(`Exéc. Préventive ${ex?.taskCode || ex?.id}`);
+          break;
+        }
+      }
+
+      for (const dem of sortieDemands || []) {
+        const demId = String(dem?.id ?? '').trim();
+        if (claimType === 'SORTIE' && demId === normClaimId) continue;
+        if (dem?.validation_status === 'REJECTED') continue;
+        const demBonTech = normalizeToken(dem?.code_bon_tech);
+        const demBonMag = normalizeToken(dem?.code_bon_magasin);
+        if ((demBonTech && demBonTech === normBon) || (demBonMag && demBonMag === normBon)) {
+          duplicateSources.push(`Demande Sortie ${dem?.code_bon_tech || dem?.id}`);
+          break;
+        }
       }
     }
 
@@ -309,53 +566,62 @@ export function reconcileFieldClaim({
     }
   }
 
-  // 3. Build lookup for Stock Actuel & concurrent PENDING_VALIDATION claims
-  const stockByRef = new Map<string, ReconciliationStockItem>();
-  for (const item of stockItems || []) {
-    const refKey = normalizeToken(item?.ref || item?.code_article);
-    if (refKey) stockByRef.set(refKey, item);
-  }
+  // 3. Build lookup for Stock Actuel & concurrent PENDING_VALIDATION claims (or reuse O(1) index)
+  let stockByRef: Map<string, ReconciliationStockItem>;
+  let otherPendingQtyByRef: Map<string, { qty: number; sources: string[] }> | null = null;
+  let selfContribs: Map<string, number> | undefined;
 
-  const otherPendingQtyByRef = new Map<string, { qty: number; sources: string[] }>();
-  const addOtherPending = (ref: string, qty: number, label: string) => {
-    const key = normalizeToken(ref);
-    if (!key || qty <= 0) return;
-    const prev = otherPendingQtyByRef.get(key) || { qty: 0, sources: [] };
-    prev.qty += qty;
-    if (!prev.sources.includes(label)) prev.sources.push(label);
-    otherPendingQtyByRef.set(key, prev);
-  };
-
-  for (const bt of correctiveInterventions || []) {
-    const btId = String(bt?.id ?? '').trim();
-    if (claimType === 'CORRECTIVE' && btId === normClaimId) continue;
-    if (bt?.validation_status !== 'PENDING_VALIDATION') continue;
-    const pieces = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
-    for (const p of pieces) {
-      const parsed = extractSpareRefAndQty(p);
-      addOtherPending(parsed.ref, parsed.qty, `BT ${bt?.num_bt || bt?.id}`);
+  if (reconciliationIndex) {
+    stockByRef = reconciliationIndex.stockByRef;
+    selfContribs = reconciliationIndex.pendingClaimContribByClaimKey.get(selfClaimKey);
+  } else {
+    stockByRef = new Map<string, ReconciliationStockItem>();
+    for (const item of stockItems || []) {
+      const refKey = normalizeToken(item?.ref || item?.code_article);
+      if (refKey) stockByRef.set(refKey, item);
     }
-  }
 
-  for (const ex of preventiveExecutions || []) {
-    const exId = String(ex?.id ?? '').trim();
-    if (claimType === 'PREVENTIVE' && exId === normClaimId) continue;
-    if (ex?.validation_status !== 'PENDING_VALIDATION') continue;
-    const pieces = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
-    for (const p of pieces) {
-      const parsed = extractSpareRefAndQty(p);
-      addOtherPending(parsed.ref, parsed.qty, `Prév. ${ex?.machineCode || ex?.id}`);
+    otherPendingQtyByRef = new Map<string, { qty: number; sources: string[] }>();
+    const addOtherPending = (ref: string, qty: number, label: string) => {
+      const key = normalizeToken(ref);
+      if (!key || qty <= 0) return;
+      const prev = otherPendingQtyByRef!.get(key) || { qty: 0, sources: [] };
+      prev.qty += qty;
+      if (!prev.sources.includes(label)) prev.sources.push(label);
+      otherPendingQtyByRef!.set(key, prev);
+    };
+
+    for (const bt of correctiveInterventions || []) {
+      const btId = String(bt?.id ?? '').trim();
+      if (claimType === 'CORRECTIVE' && btId === normClaimId) continue;
+      if (bt?.validation_status !== 'PENDING_VALIDATION') continue;
+      const pieces = Array.isArray(bt?.pieces_proposees) ? bt.pieces_proposees : [];
+      for (const p of pieces) {
+        const parsed = extractSpareRefAndQty(p);
+        addOtherPending(parsed.ref, parsed.qty, `BT ${bt?.num_bt || bt?.id}`);
+      }
     }
-  }
 
-  for (const dem of sortieDemands || []) {
-    const demId = String(dem?.id ?? '').trim();
-    if (claimType === 'SORTIE' && demId === normClaimId) continue;
-    if (dem?.validation_status !== 'PENDING_VALIDATION') continue;
-    const items = Array.isArray(dem?.items) ? dem.items : [];
-    for (const it of items) {
-      const parsed = extractSpareRefAndQty(it);
-      addOtherPending(parsed.ref, parsed.qty, `Sortie ${dem?.code_bon_tech || dem?.id}`);
+    for (const ex of preventiveExecutions || []) {
+      const exId = String(ex?.id ?? '').trim();
+      if (claimType === 'PREVENTIVE' && exId === normClaimId) continue;
+      if (ex?.validation_status !== 'PENDING_VALIDATION') continue;
+      const pieces = Array.isArray(ex?.sparesProposed) ? ex.sparesProposed : [];
+      for (const p of pieces) {
+        const parsed = extractSpareRefAndQty(p);
+        addOtherPending(parsed.ref, parsed.qty, `Prév. ${ex?.machineCode || ex?.id}`);
+      }
+    }
+
+    for (const dem of sortieDemands || []) {
+      const demId = String(dem?.id ?? '').trim();
+      if (claimType === 'SORTIE' && demId === normClaimId) continue;
+      if (dem?.validation_status !== 'PENDING_VALIDATION') continue;
+      const items = Array.isArray(dem?.items) ? dem.items : [];
+      for (const it of items) {
+        const parsed = extractSpareRefAndQty(it);
+        addOtherPending(parsed.ref, parsed.qty, `Sortie ${dem?.code_bon_tech || dem?.id}`);
+      }
     }
   }
 
@@ -376,8 +642,31 @@ export function reconcileFieldClaim({
     if (!stockMatch) continue;
 
     const stockActuel = Number(stockMatch?.stockActuel ?? 0);
-    const otherPending = otherPendingQtyByRef.get(refKey);
-    const otherQty = otherPending?.qty || 0;
+    let otherQty = 0;
+    const resolveOtherSources = (): string[] => {
+      if (!reconciliationIndex) {
+        return otherPendingQtyByRef?.get(refKey)?.sources || [];
+      }
+      const entries = reconciliationIndex.pendingSourcesByRef.get(refKey) || [];
+      const seen = new Set<string>();
+      const out: string[] = [];
+      for (const e of entries) {
+        if (e.claimKey === selfClaimKey) continue;
+        if (!seen.has(e.label)) {
+          seen.add(e.label);
+          out.push(e.label);
+        }
+      }
+      return out;
+    };
+
+    if (reconciliationIndex) {
+      const totalForRef = reconciliationIndex.totalPendingQtyByRef.get(refKey) || 0;
+      const selfForRef = selfContribs?.get(refKey) || 0;
+      otherQty = Math.max(0, totalForRef - selfForRef);
+    } else {
+      otherQty = otherPendingQtyByRef?.get(refKey)?.qty || 0;
+    }
 
     if (req.qty > stockActuel) {
       alerts.push({
@@ -388,24 +677,31 @@ export function reconcileFieldClaim({
         detail: `Quantité demandée (${req.qty}) supérieure au Stock Actuel (${stockActuel}).`,
       });
     } else if (otherQty > 0 && req.qty + otherQty > stockActuel) {
+      const otherSources = resolveOtherSources();
       alerts.push({
         code: 'CONCURRENT_CLAIM_OVERFLOW',
         severity: 'critical',
         ref: req.ref,
         title: `Conflit de réservation (${req.ref})`,
-        detail: `Demandé ${req.qty} + ${otherQty} réservé(s) sur ${otherPending?.sources.join(', ')} (Total ${
+        detail: `Demandé ${req.qty} + ${otherQty} réservé(s) sur ${otherSources.join(', ')} (Total ${
           req.qty + otherQty
         } > Stock Actuel ${stockActuel}).`,
       });
     }
 
     // 4. V4 Storekeeper Bon × Technician Bon Discrepancy / Candidate Merge Detection
-    for (const mvt of mouvements || []) {
-      if (mvt?.merged_demand_id) continue; // Already merged with a demand
-      const mvtType = String(mvt?.type || '').toLowerCase();
-      if (!mvtType.includes('sort')) continue;
-      const mvtRef = normalizeToken(mvt?.ref || mvt?.code_article);
-      if (mvtRef !== refKey) continue;
+    const candidatePool = reconciliationIndex
+      ? reconciliationIndex.sortieMovementsByRef.get(refKey) || []
+      : mouvements || [];
+
+    for (const mvt of candidatePool) {
+      if (!reconciliationIndex) {
+        if (mvt?.merged_demand_id) continue; // Already merged with a demand
+        const mvtType = String(mvt?.type || '').toLowerCase();
+        if (!mvtType.includes('sort')) continue;
+        const mvtRef = normalizeToken(mvt?.ref || mvt?.code_article);
+        if (mvtRef !== refKey) continue;
+      }
 
       const mvtMachine = normalizeToken(mvt?.id_machine_registered || mvt?.machine);
       if (normMachine && mvtMachine && mvtMachine !== normMachine) continue;
@@ -515,6 +811,14 @@ export function buildAdminValidationRadar({
     (dem) => dem?.validation_status === 'NEEDS_CLARIFICATION'
   ).length;
 
+  const reconciliationIndex = createClaimReconciliationIndex({
+    stockItems,
+    mouvements,
+    correctiveInterventions,
+    preventiveExecutions,
+    sortieDemands,
+  });
+
   const items: ValidationRadarItem[] = [];
 
   for (const bt of pendingCorrective) {
@@ -530,6 +834,7 @@ export function buildAdminValidationRadar({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
 
     items.push({
@@ -559,6 +864,7 @@ export function buildAdminValidationRadar({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
 
     items.push({
@@ -588,6 +894,7 @@ export function buildAdminValidationRadar({
       correctiveInterventions,
       preventiveExecutions,
       sortieDemands,
+      reconciliationIndex,
     });
 
     const firstRef = proposed[0]?.ref ? `${proposed[0].ref} (x${proposed[0].quantite})` : 'Sortie PDR';
