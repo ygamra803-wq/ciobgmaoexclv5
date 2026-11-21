@@ -125,7 +125,7 @@ export default function MonthlyExecutiveReportView({
   showToast,
 }: MonthlyExecutiveReportViewProps) {
   const { user } = useAuth();
-  const { formatCurrency, currencySymbol } = useCurrency();
+  const { config: currencyConfig, formatCurrency, currencySymbol } = useCurrency();
   const canViewReport =
     Boolean(user) && AuthorizationService.canAccessTab(user, 'executive_report');
   const canExportReport =
@@ -213,6 +213,7 @@ export default function MonthlyExecutiveReportView({
         mouvements,
         correctiveInterventions,
         preventiveExecutions,
+        currencyConfig,
       });
       showToast?.(`Rapport mensuel exporté vers Excel (${file})`, 'success');
     } catch (err) {

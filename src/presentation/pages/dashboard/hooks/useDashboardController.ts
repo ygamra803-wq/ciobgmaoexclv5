@@ -11,6 +11,8 @@ import {
 import { useGmaoStore } from '../../../../store/useGmaoStore';
 import { serverSyncService } from '../../../../services/serverSyncService';
 import { isArchivedMachine, getMachineLifecycleState } from '../../../../utils/activeMachines';
+import { isUnapprovedFieldClaim } from '../../../../application/services/MonthlyReportCalculationService';
+import { AvailabilityCalculationService } from '../../../../domain/services/AvailabilityCalculationService';
 import { useTranslation } from '../../../../i18n/I18nContext';
 import { ROLES, normalizeRole } from '../../../../core/security/Roles';
 import type {
@@ -388,6 +390,7 @@ export function useDashboardController({
     let totalEntreeQty = 0;
 
     (mouvements || []).forEach((m) => {
+      if (!m || isUnapprovedFieldClaim(m)) return;
       const act = String(m.action_id || m.type_intervention || '').toUpperCase();
       const type = String(m.type || '').toLowerCase();
       const q = Number(m.quantite || 0);
@@ -425,6 +428,7 @@ export function useDashboardController({
   const topConsumedArticles = useMemo(() => {
     const usageByRef: Record<string, number> = {};
     (mouvements || []).forEach((m) => {
+      if (!m || isUnapprovedFieldClaim(m)) return;
       const type = String(m.type || '').toLowerCase();
       const isExternalLoan =
         type === 'sortie externe' ||
@@ -472,25 +476,41 @@ export function useDashboardController({
       }
     });
 
+    const hasRegisteredMachines = (machines || []).length > 0;
+    const archivedMachineCodeSet = new Set<string>();
+    (machines || []).forEach((m) => {
+      if (!m || !isArchivedMachine(m)) return;
+      [m.id_machine_registered, m.id_machine, m.code, m.id]
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((c) => archivedMachineCodeSet.add(c));
+    });
+
     const mchInterventions: Record<string, number> = {};
     const countedBtCodes = new Set<string>();
 
     (correctiveInterventions || []).forEach((ci) => {
+      if (!ci || isUnapprovedFieldClaim(ci)) return;
+      const stUpper = String(ci?.statut || '').trim().toUpperCase();
+      if (stUpper === 'ANNULE' || stUpper === 'REJECTED') return;
       const code = String(ci?.code_machine || ci?.id_machine || ci?.id_machine_registered || '').trim();
-      if (code) {
-        mchInterventions[code] = (mchInterventions[code] || 0) + 1;
-        if (ci?.id) countedBtCodes.add(String(ci.id).trim());
-        if (ci?.num_bt) countedBtCodes.add(String(ci.num_bt).trim());
-      }
+      if (!code) return;
+      if (hasRegisteredMachines && archivedMachineCodeSet.has(code.toUpperCase())) return;
+      mchInterventions[code] = (mchInterventions[code] || 0) + 1;
+      if (ci?.id) countedBtCodes.add(String(ci.id).trim());
+      if (ci?.num_bt) countedBtCodes.add(String(ci.num_bt).trim());
     });
 
     (mouvements || []).forEach((m) => {
+      if (!m || isUnapprovedFieldClaim(m)) return;
       const type = String(m?.type || '').toLowerCase();
       if (type === 'commande') return;
       if (m?.id_machine_registered) {
         const id = String(m.id_machine_registered).trim();
+        if (!id) return;
+        if (hasRegisteredMachines && archivedMachineCodeSet.has(id.toUpperCase())) return;
         const bon = String(m.code_bon || '').trim();
-        if (id && (!bon || !countedBtCodes.has(bon))) {
+        if (!bon || !countedBtCodes.has(bon)) {
           mchInterventions[id] = (mchInterventions[id] || 0) + 1;
         }
       }
@@ -500,8 +520,11 @@ export function useDashboardController({
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([id, count]) => {
-        const mch = (machines || []).find(
-          (m) => String(m.id_machine_registered || m.id_machine || m.code || m.id || '').trim() === id
+        const mch = operationalMachines.find(
+          (m) =>
+            String(m.id_machine_registered || m.id_machine || m.code || m.id || '')
+              .trim()
+              .toUpperCase() === id.toUpperCase()
         );
         return {
           id,
@@ -596,7 +619,29 @@ export function useDashboardController({
   }, [allOrders]);
 
   const executiveMaintenanceSummary = useMemo(() => {
-    const activeTasks = Array.isArray(preventiveTasks) ? preventiveTasks : [];
+    const hasRegisteredMachines = (machines || []).length > 0;
+    const archivedMachineCodeSet = new Set<string>();
+    (machines || []).forEach((m) => {
+      if (!m || !isArchivedMachine(m)) return;
+      [m.id_machine_registered, m.id_machine, m.code, m.id]
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean)
+        .forEach((c) => archivedMachineCodeSet.add(c));
+    });
+
+    const activeTasks = (Array.isArray(preventiveTasks) ? preventiveTasks : []).filter((task) => {
+      if (!task) return false;
+      if (task.active === false || task.is_active === false) return false;
+      const st = String(task.statut || task.status || '').trim().toUpperCase();
+      if (st === 'ARCHIVE' || st === 'ARCHIVEE' || st === 'INACTIF' || st === 'ANNULE') return false;
+      if (hasRegisteredMachines) {
+        const mCode = String(task.code_machine || task.id_machine || task.machine_id || '')
+          .trim()
+          .toUpperCase();
+        if (mCode && archivedMachineCodeSet.has(mCode)) return false;
+      }
+      return true;
+    });
     const pmTotalCount = activeTasks.length;
     const pmDoneCount = activeTasks.filter(
       (task) => task?.etat === 'Fait' || task?.statut === 'FAIT'
@@ -607,7 +652,13 @@ export function useDashboardController({
     const pmComplianceRate =
       pmTotalCount > 0 ? Math.round((pmDoneCount / pmTotalCount) * 100) : 100;
 
-    const interventions = Array.isArray(correctiveInterventions) ? correctiveInterventions : [];
+    const interventions = (Array.isArray(correctiveInterventions) ? correctiveInterventions : []).filter((i) => {
+      if (!i) return false;
+      const valStatus = String(i?.validation_status || '').trim().toUpperCase();
+      const st = String(i?.statut || '').trim().toUpperCase();
+      if (valStatus === 'REJECTED' || st === 'ANNULE' || st === 'REJECTED') return false;
+      return true;
+    });
     const openDiCount = interventions.filter(
       (i) =>
         i?.statut === 'DEMANDE' ||
@@ -618,7 +669,9 @@ export function useDashboardController({
       (i) => i?.statut === 'BT_PLANIFIE' || i?.statut === 'EN_ATTENTE_PDR'
     ).length;
     const liveBtCount = interventions.filter((i) => i?.statut === 'EN_COURS').length;
-    const closedList = interventions.filter((i) => i?.statut === 'CLOTURE');
+    const closedList = interventions.filter(
+      (i) => i?.statut === 'CLOTURE' && !isUnapprovedFieldClaim(i)
+    );
     const closedBtCount = closedList.length;
 
     let mttrMinutes: number | null = null;
@@ -631,7 +684,8 @@ export function useDashboardController({
             Number(i?.duree_nette_min) ||
             Number(i?.duree_intervention_min) ||
             Number(i?.temps_arret_min) ||
-            (Number(i?.duree_heures) > 0 ? Number(i.duree_heures) * 60 : 0)
+            (Number(i?.duree_heures) > 0 ? Number(i.duree_heures) * 60 : 0) ||
+            AvailabilityCalculationService.getInterventionDurationMinutes(i)
         )
         .filter((v) => v > 0);
       if (durations.length > 0) {
@@ -658,7 +712,7 @@ export function useDashboardController({
       closedBtCount,
       mttrDisplay,
     };
-  }, [preventiveTasks, correctiveInterventions, correctiveKpis]);
+  }, [machines, preventiveTasks, correctiveInterventions, correctiveKpis]);
 
   const handleOpenOrderForArticle = useCallback(
     (article: AnyRecord) => {
@@ -718,7 +772,22 @@ export function useDashboardController({
     (e: FormEvent) => {
       e.preventDefault();
       if (!canCreateMovement) return;
-      if (!orderForm.ref || !orderForm.quantite) return;
+      const cleanRef = String(orderForm.ref || '').trim();
+      const qty = Number(orderForm.quantite);
+      if (!cleanRef || !Number.isFinite(qty) || qty <= 0) {
+        showToast?.('Veuillez saisir une référence valide et une quantité strictement positive (> 0).', 'warning');
+        return;
+      }
+
+      const cleanCodeBon = String(orderForm.code_bon || '').trim() || `CMD-${Date.now()}`;
+      const normalizedBon = cleanCodeBon.toUpperCase();
+      const hasDuplicateBon = (mouvements || []).some(
+        (m) => String(m?.code_bon || '').trim().toUpperCase() === normalizedBon
+      );
+      if (hasDuplicateBon) {
+        showToast?.(`Le N° de commande "${cleanCodeBon}" existe déjà dans le journal des mouvements.`, 'warning');
+        return;
+      }
 
       const isAchatUnique = orderForm.order_nature === 'ACHAT_UNIQUE';
       const tags = ['#COMMANDE_EN_ATTENTE'];
@@ -730,20 +799,20 @@ export function useDashboardController({
 
       const newOrderMouvement = {
         id: crypto.randomUUID(),
-        code_bon: orderForm.code_bon || `CMD-${Date.now()}`,
+        code_bon: cleanCodeBon,
         date: new Date().toISOString().split('T')[0],
         heure: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         timestamp: new Date().toISOString(),
-        ref: orderForm.ref,
-        designation: orderForm.designation,
-        quantite: Number(orderForm.quantite) || 1,
+        ref: cleanRef,
+        designation: String(orderForm.designation || '').trim(),
+        quantite: qty,
         type: 'COMMANDE',
         action_id: 'COMMANDE',
         technicien: orderForm.technicien,
-        fournisseur: orderForm.fournisseur,
+        fournisseur: String(orderForm.fournisseur || '').trim(),
         id_zone: orderForm.id_zone,
         id_machine_registered: orderForm.id_machine_registered,
-        commentaire: `${isAchatUnique ? '[ACHAT UNIQUE] ' : ''}${orderForm.commentaire}`,
+        commentaire: `${isAchatUnique ? '[ACHAT UNIQUE] ' : ''}${String(orderForm.commentaire || '').trim()}`,
         tags,
         is_achat_unique: isAchatUnique,
       };
@@ -751,12 +820,16 @@ export function useDashboardController({
       onAddMouvement?.(newOrderMouvement);
       setShowOrderModal(false);
     },
-    [canCreateMovement, orderForm, onAddMouvement]
+    [canCreateMovement, orderForm, onAddMouvement, mouvements, showToast]
   );
 
   const handleValidateReception = useCallback(
     (order: AnyRecord) => {
       if (!canEditMovement || !onUpdateMouvement) return;
+      if (Array.isArray(order?.tags) && order.tags.includes('#RECEPTION_VALIDE')) {
+        showToast?.('Cette commande a déjà été réceptionnée en stock.', 'info');
+        return;
+      }
       const today = new Date().toISOString().split('T')[0];
       const isAchatUnique =
         order.is_achat_unique ||
@@ -778,7 +851,7 @@ export function useDashboardController({
         is_achat_unique: isAchatUnique,
       });
     },
-    [canEditMovement, onUpdateMouvement]
+    [canEditMovement, onUpdateMouvement, showToast]
   );
 
   return {

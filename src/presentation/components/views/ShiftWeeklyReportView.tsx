@@ -91,7 +91,7 @@ export default function ShiftWeeklyReportView({
   showToast,
 }: ShiftWeeklyReportViewProps) {
   const { user: currentUser } = useAuth();
-  const { formatCurrency } = useCurrency();
+  const { config: currencyConfig, formatCurrency } = useCurrency();
   const storeSortieDemands = useGmaoStore((s) => s.sortieDemands);
   const storeSortiesExterne = useGmaoStore((s) => s.sortiesExterne);
   const sortieDemands = propSortieDemands ?? storeSortieDemands ?? [];
@@ -261,7 +261,10 @@ export default function ShiftWeeklyReportView({
   const handleExportExcel = () => {
     if (!canExportReport) return;
     try {
-      const fileName = MonthlyReportExportService.exportShiftWeeklyReportToExcel(report);
+      const fileName = MonthlyReportExportService.exportShiftWeeklyReportToExcel(
+        report,
+        currencyConfig
+      );
       showToast?.(`Rapport d'exploitation multi-feuilles exporté : ${fileName}`, 'success');
     } catch (err) {
       Logger.error('Failed to export shift/weekly Excel:', err);
@@ -272,7 +275,7 @@ export default function ShiftWeeklyReportView({
   const handleExportCsv = () => {
     if (!canExportReport) return;
     try {
-      const csvContent = buildShiftWeeklyReportCsv(report);
+      const csvContent = buildShiftWeeklyReportCsv(report, currencyConfig);
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -292,7 +295,7 @@ export default function ShiftWeeklyReportView({
   const handleExportJson = () => {
     if (!canExportReport) return;
     try {
-      const jsonContent = buildShiftWeeklyReportJson(report);
+      const jsonContent = buildShiftWeeklyReportJson(report, currencyConfig);
       const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

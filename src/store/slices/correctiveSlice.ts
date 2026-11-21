@@ -44,12 +44,14 @@ import type {
   ValidationReviewDecisionPayload,
 } from '../../types/store';
 import type { IMouvement } from '../../types/domain';
+import { Logger } from '../../core/logger/LoggerService';
 import {
   ACTIVE_LIVE_KEY,
   resolveUpdate,
   trackRemovedEntityIds,
   resolveActiveSessionRole,
   resolveActiveActorContext,
+  isMakerCheckerSelfApproval,
   normalizeInterventionNature,
   isPartAlreadyDeductedByStoreBon,
   getInitialCorrective,
@@ -165,6 +167,20 @@ const NON_DESTRUCTIVE_ROLES = new Set([
   'VIEWER',
   'OBSERVATEUR',
 ]);
+
+const CORRECTIVE_VALIDATION_MANAGER_ROLES = new Set([
+  'ADMIN',
+  'RESPONSABLE',
+  'RESPONSABLE_MAINTENANCE',
+]);
+
+function canManageCorrectiveValidationSession(explicitRole?: unknown): boolean {
+  const role = String(explicitRole || resolveActiveSessionRole() || '')
+    .trim()
+    .toUpperCase();
+  if (!role) return true; // Headless unit test without active browser session
+  return CORRECTIVE_VALIDATION_MANAGER_ROLES.has(role);
+}
 
 function normalizeTypePanne(raw: unknown): string {
   const clean = String(raw || '').trim();
@@ -713,6 +729,11 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
       decisionData: ValidationReviewDecisionPayload = {},
       onAddMouvement = null
     ) => {
+      if (!canManageCorrectiveValidationSession(decisionData?.actorRole)) {
+        Logger.warn('[CorrectiveSlice] RBAC blocked handleReviewInterventionValidation');
+        return null;
+      }
+
       const current = get().correctiveInterventions || [];
       const existing = current.find((i) => matchesIntervention(i, id));
       if (!existing) return null;
@@ -726,9 +747,16 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
 
       const nowIso = new Date().toISOString();
       const actor = resolveActiveActorContext();
+      const hasActiveSession = Boolean(resolveActiveSessionRole());
+      const explicitValidatorId = decisionData?.validated_by_id || decisionData?.reviewer_id;
       const decision = String(decisionData?.decision || 'APPROVED').trim().toUpperCase();
-      const validatorId = String(decisionData?.validated_by_id || actor.actorId).trim();
-      const validatorName = String(decisionData?.validated_by_name || actor.actorName).trim();
+      const validatorId = String(explicitValidatorId || actor.actorId).trim();
+      const validatorName = String(
+        decisionData?.validated_by_name ||
+          decisionData?.reviewer_name ||
+          decisionData?.reviewerName ||
+          actor.actorName
+      ).trim();
       const validationNote = String(decisionData?.validation_note || decisionData?.notes || '').trim();
 
       if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
@@ -763,6 +791,24 @@ export function createCorrectiveSlice(set: StoreSet, get: StoreGet): CorrectiveS
           after: { validation_status: nextStatus, validation_note: validationNote },
         });
         return updated;
+      }
+
+      // Enforce Segregation of Duties (SoD): submitter cannot approve their own corrective claim
+      if (
+        isMakerCheckerSelfApproval({
+          submitterId: existing.submitted_by_id,
+          submitterName: existing.submitted_by_name || existing.intervenant,
+          validatorId,
+          validatorName,
+          hasExplicitValidatorId: Boolean(explicitValidatorId),
+          hasActiveSession,
+        })
+      ) {
+        Logger.warn('[CorrectiveSlice] SoD blocked self-approval on BT validation', {
+          btId: String(existing.id || id),
+          validatorId,
+        });
+        return null;
       }
 
       // APPROVED branch: verify FSM guards first

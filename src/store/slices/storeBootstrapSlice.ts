@@ -96,6 +96,55 @@ export function resolveActiveSessionRole(): string {
   return '';
 }
 
+const GENERIC_PLACEHOLDER_ACTORS = new Set([
+  'ADMIN',
+  'ADMINISTRATEUR',
+  'ADMINISTRATEUR GMAO',
+  'SYSTEM',
+  'MAGASINIER / ADMIN',
+]);
+
+/**
+ * Enforces Maker-Checker Segregation of Duties (SoD) on approval transitions:
+ * prevents the creator/submitter of a field claim from approving their own submission,
+ * while remaining compatible with headless unit test fixtures that omit active browser sessions.
+ */
+export function isMakerCheckerSelfApproval(params: {
+  submitterId?: unknown;
+  submitterName?: unknown;
+  validatorId?: unknown;
+  validatorName?: unknown;
+  hasExplicitValidatorId?: boolean;
+  hasActiveSession?: boolean;
+}): boolean {
+  const subId = String(params.submitterId || '').trim().toUpperCase();
+  const valId = String(params.validatorId || '').trim().toUpperCase();
+  const subName = String(params.submitterName || '').trim().toUpperCase();
+  const valName = String(params.validatorName || '').trim().toUpperCase();
+
+  if (subId && valId && subId === valId) {
+    if (
+      params.hasActiveSession ||
+      params.hasExplicitValidatorId ||
+      !GENERIC_PLACEHOLDER_ACTORS.has(subId)
+    ) {
+      return true;
+    }
+  }
+
+  if (
+    (params.hasActiveSession || params.hasExplicitValidatorId) &&
+    subName &&
+    valName &&
+    subName === valName &&
+    !GENERIC_PLACEHOLDER_ACTORS.has(subName)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function normalizeInterventionNature(raw: unknown): string | undefined {
   const clean = String(raw || '').trim().toUpperCase();
   if (

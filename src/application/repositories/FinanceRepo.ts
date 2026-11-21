@@ -9,6 +9,46 @@ import {
   type FiscalBudgetConfig,
 } from '../../domain/finance/entities/FinancialBudget';
 import { AuditRepo } from './AuditRepo';
+import { SecurityService } from '../../core/security/SecurityService';
+
+export interface FinanceActorInput {
+  id?: string;
+  name?: string;
+  role?: string;
+}
+
+function resolveFinanceAuditActor(
+  actorInput?: string | FinanceActorInput,
+  fallbackUpdatedBy?: string
+): { updatedBy: string; actorId: string; actorName: string; actorRole: string } {
+  let sessionId = '';
+  let sessionName = '';
+  let sessionRole = '';
+  try {
+    const raw = SecurityService.getSessionSecure('gmao_session_v2') as Record<string, any> | null;
+    const payload = (raw && typeof raw === 'object' ? raw.payload || raw : null) as Record<string, any> | null;
+    if (payload && typeof payload === 'object') {
+      sessionId = String(payload.userId || payload.id || payload.username || '').trim();
+      sessionName = String(payload.nom || payload.name || payload.username || '').trim();
+      sessionRole = String(payload.role || '').trim().toUpperCase();
+    }
+  } catch {
+    // ignore headless/storage errors
+  }
+
+  if (actorInput && typeof actorInput === 'object') {
+    const name = String(actorInput.name || sessionName || fallbackUpdatedBy || 'ADMIN').trim();
+    const id = String(actorInput.id || sessionId || name).trim();
+    const role = String(actorInput.role || sessionRole || 'RESPONSABLE').trim().toUpperCase();
+    return { updatedBy: name, actorId: id, actorName: name, actorRole: role };
+  }
+
+  const explicitStr = typeof actorInput === 'string' ? actorInput.trim() : '';
+  const updatedBy = explicitStr || sessionName || String(fallbackUpdatedBy || 'ADMIN').trim();
+  const actorId = sessionId && (!explicitStr || explicitStr === sessionName) ? sessionId : updatedBy;
+  const actorRole = sessionRole || (updatedBy === 'FACTORY_RESET' || updatedBy === 'DEMO_SEED' ? 'SYSTEM' : 'RESPONSABLE');
+  return { updatedBy, actorId, actorName: updatedBy, actorRole };
+}
 
 function sanitizeSeries(arr: unknown, len: number): number[] {
   if (!Array.isArray(arr)) return Array(len).fill(0);
@@ -41,7 +81,10 @@ export const FinanceRepo = {
     return isDemo && startMode !== 'empty' ? { ...DEMO_FISCAL_BUDGET } : { ...EMPTY_FISCAL_BUDGET };
   },
 
-  saveFinancialBudget(budget: Partial<FiscalBudgetConfig>, actorName?: string): FiscalBudgetConfig {
+  saveFinancialBudget(
+    budget: Partial<FiscalBudgetConfig>,
+    actorInput?: string | FinanceActorInput
+  ): FiscalBudgetConfig {
     const clean = sanitizeObject(budget || {}) as Partial<FiscalBudgetConfig>;
     const prevSaved = storageService.getItem(STORAGE_KEYS.FINANCIAL_BUDGETS) as Partial<FiscalBudgetConfig> | null;
 
@@ -54,7 +97,8 @@ export const FinanceRepo = {
       clean.periodMode === 'MONTHLY' || clean.periodMode === 'QUARTERLY' ? clean.periodMode : 'ANNUAL';
     const burnWarningPercent = Math.max(50, Math.min(100, Number(clean.burnWarningPercent ?? 90)));
     const updatedAt = clean.updatedAt || new Date().toISOString();
-    const updatedBy = actorName || clean.updatedBy || 'ADMIN';
+    const resolvedActor = resolveFinanceAuditActor(actorInput, clean.updatedBy);
+    const updatedBy = resolvedActor.updatedBy;
 
     const monthlyAllocations = clean.monthlyAllocations
       ? {
@@ -124,9 +168,9 @@ export const FinanceRepo = {
 
     if (updatedBy !== 'FACTORY_RESET' && updatedBy !== 'DEMO_SEED') {
       AuditRepo.appendAuditEvent({
-        actorId: updatedBy,
-        actorName: updatedBy,
-        actorRole: 'ADMIN',
+        actorId: resolvedActor.actorId,
+        actorName: resolvedActor.actorName,
+        actorRole: resolvedActor.actorRole,
         actionType: 'BUDGET_UPDATED',
         entityType: 'FINANCIAL_BUDGET',
         entityId: String(fiscalYear),

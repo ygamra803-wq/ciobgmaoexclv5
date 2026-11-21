@@ -29,6 +29,7 @@ import {
   getInitialMovements,
   resolveActiveActorContext,
   resolveActiveSessionRole,
+  isMakerCheckerSelfApproval,
   isPartAlreadyDeductedByStoreBon,
 } from './storeBootstrapSlice';
 
@@ -323,9 +324,16 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
 
       const nowIso = new Date().toISOString();
       const actor = resolveActiveActorContext();
+      const hasActiveSession = Boolean(resolveActiveSessionRole());
+      const explicitValidatorId = decisionData?.validated_by_id || decisionData?.reviewer_id;
       const decision = String(decisionData?.decision || 'APPROVED').trim().toUpperCase();
-      const validatorId = String(decisionData?.validated_by_id || actor.actorId).trim();
-      const validatorName = String(decisionData?.validated_by_name || actor.actorName).trim();
+      const validatorId = String(explicitValidatorId || actor.actorId).trim();
+      const validatorName = String(
+        decisionData?.validated_by_name ||
+          decisionData?.reviewer_name ||
+          decisionData?.reviewerName ||
+          actor.actorName
+      ).trim();
       const validationNote = String(decisionData?.validation_note || decisionData?.notes || '').trim();
 
       let updatedDemand: ISortieDemand = existing;
@@ -356,6 +364,24 @@ export function createStockSlice(set: StoreSet, get: StoreGet): StockSliceKeys {
           after: { validation_status: nextStatus, validation_note: validationNote },
         });
         return updatedDemand;
+      }
+
+      // Enforce Segregation of Duties (SoD): submitter cannot approve their own sortie demand
+      if (
+        isMakerCheckerSelfApproval({
+          submitterId: existing.submitted_by_id,
+          submitterName: existing.submitted_by_name || existing.technicien,
+          validatorId,
+          validatorName,
+          hasExplicitValidatorId: Boolean(explicitValidatorId),
+          hasActiveSession,
+        })
+      ) {
+        Logger.warn('[StockSlice] SoD blocked self-approval on sortie demand', {
+          demandId: String(demandId),
+          validatorId,
+        });
+        return null;
       }
 
       // APPROVED branch

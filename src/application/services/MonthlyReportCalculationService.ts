@@ -708,19 +708,17 @@ export class MonthlyReportCalculationService {
       }
       correctiveSparesCost += btOfficialCost;
 
-      if (!meta.isArchived) {
-        const costRow = ensureMachineCostRow(meta);
-        costRow.failureCount++;
-        costRow.correctiveCount++;
-        costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
-        costRow.correctivePdrCost = costRow.correctiveCost;
-        costRow.totalDowntimeHours = Number(
-          (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
-        );
-        costRow.totalOfficialCost = Number(
-          (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
-        );
-      }
+      const costRow = ensureMachineCostRow(meta);
+      costRow.failureCount++;
+      costRow.correctiveCount++;
+      costRow.correctiveCost = Number((costRow.correctiveCost + btOfficialCost).toFixed(2));
+      costRow.correctivePdrCost = costRow.correctiveCost;
+      costRow.totalDowntimeHours = Number(
+        (costRow.totalDowntimeHours + (dtHours > 0 ? dtHours : 0)).toFixed(1)
+      );
+      costRow.totalOfficialCost = Number(
+        (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+      );
 
       // Track technician corrective workload
       if (ci.intervenant) {
@@ -776,17 +774,15 @@ export class MonthlyReportCalculationService {
     monthExecutions.forEach((exec) => {
       const meta = resolveRecordAssetMeta(exec, 'machineCode');
       const exOfficialCost = Number(exec.totalCost ?? exec.sparesCost ?? 0) || 0;
-      if (!meta.isArchived) {
-        const costRow = ensureMachineCostRow(meta);
-        costRow.preventiveCount++;
-        costRow.preventiveCost = Number((costRow.preventiveCost + exOfficialCost).toFixed(2));
-        costRow.totalOfficialCost = Number(
-          (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
-        );
-      }
+      const costRow = ensureMachineCostRow(meta);
+      costRow.preventiveCount++;
+      costRow.preventiveCost = Number((costRow.preventiveCost + exOfficialCost).toFixed(2));
+      costRow.totalOfficialCost = Number(
+        (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+      );
       const tEntry = ensureTech(exec.executorName || 'Technicien');
       tEntry.preventiveCount++;
-      tEntry.totalHours = Number((tEntry.totalHours + (Number(exec.durationMinutes) || 30) / 60).toFixed(1));
+      tEntry.totalHours = Number((tEntry.totalHours + (Number(exec.durationMinutes) || 0) / 60).toFixed(1));
     });
 
     const technicianBreakdown = Array.from(techMap.values()).sort(
@@ -794,7 +790,10 @@ export class MonthlyReportCalculationService {
     );
 
     const preventiveExecutedCount = monthExecutions.length;
-    const preventiveTotalCost = monthExecutions.reduce((sum, e) => sum + (Number(e.totalCost) || 0), 0);
+    const preventiveTotalCost = monthExecutions.reduce(
+      (sum, e) => sum + (Number(e.totalCost ?? e.sparesCost ?? 0) || 0),
+      0
+    );
     const totalMinutes = monthExecutions.reduce((sum, e) => sum + (Number(e.durationMinutes) || 0), 0);
     const preventiveLaborHours = Number((totalMinutes / 60).toFixed(1));
 
@@ -859,14 +858,12 @@ export class MonthlyReportCalculationService {
           Number(se.cout_bobinage ?? se.cout_reparation ?? se.cout ?? se.montant ?? 0) || 0;
         externalBobinageCount++;
         externalBobinageCost += extCost;
-        if (!meta.isArchived) {
-          const costRow = ensureMachineCostRow(meta);
-          costRow.externalBobinageCount++;
-          costRow.externalBobinageCost = Number((costRow.externalBobinageCost + extCost).toFixed(2));
-          costRow.totalOfficialCost = Number(
-            (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
-          );
-        }
+        const costRow = ensureMachineCostRow(meta);
+        costRow.externalBobinageCount++;
+        costRow.externalBobinageCost = Number((costRow.externalBobinageCost + extCost).toFixed(2));
+        costRow.totalOfficialCost = Number(
+          (costRow.correctiveCost + costRow.preventiveCost + costRow.externalBobinageCost).toFixed(2)
+        );
       }
     });
 

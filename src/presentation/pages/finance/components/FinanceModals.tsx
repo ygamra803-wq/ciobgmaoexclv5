@@ -12,7 +12,7 @@ export interface FinanceBudgetEditModalProps {
   canManage: boolean;
   editBudgetDraft: FiscalBudgetConfig;
   setEditBudgetDraft: (next: FiscalBudgetConfig) => void;
-  symbol: string;
+  symbol?: string;
   onClose: () => void;
   onSave: (updated: FiscalBudgetConfig) => void;
 }
@@ -22,7 +22,6 @@ export function FinanceBudgetEditModal({
   canManage,
   editBudgetDraft,
   setEditBudgetDraft,
-  symbol,
   onClose,
   onSave,
 }: FinanceBudgetEditModalProps) {
@@ -41,7 +40,7 @@ export function FinanceBudgetEditModal({
                 Configurer les Plafonds &amp; le Suivi Budgétaire ({editBudgetDraft.fiscalYear})
               </h3>
               <p className="text-[11px] text-slate-500">
-                Les allocations mensuelles (1/12) ou trimestrielles (1/4) sont calculées automatiquement à partir des plafonds annuels.
+                Tous les plafonds et taux sont saisis en devise de base (MAD) · Répartition mensuelle (1/12) ou trimestrielle (1/4) automatique.
               </p>
             </div>
           </div>
@@ -96,7 +95,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Budget Maintenance Préventive ({symbol})
+              Budget Maintenance Préventive (MAD)
             </label>
             <input
               type="number"
@@ -105,7 +104,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  allocatedPreventive: Number(e.target.value) || 0,
+                  allocatedPreventive: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
@@ -114,7 +113,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Budget Correctif &amp; Pannes ({symbol})
+              Budget Correctif &amp; Pannes (MAD)
             </label>
             <input
               type="number"
@@ -123,7 +122,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  allocatedCorrective: Number(e.target.value) || 0,
+                  allocatedCorrective: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
@@ -132,7 +131,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Budget Sous-traitance &amp; Bobinage ({symbol})
+              Budget Sous-traitance &amp; Bobinage (MAD)
             </label>
             <input
               type="number"
@@ -141,7 +140,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  allocatedExternal: Number(e.target.value) || 0,
+                  allocatedExternal: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
@@ -150,7 +149,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Budget Achats &amp; Stock PDR ({symbol})
+              Budget Achats &amp; Stock PDR (MAD)
             </label>
             <input
               type="number"
@@ -159,7 +158,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  allocatedSparesStock: Number(e.target.value) || 0,
+                  allocatedSparesStock: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
@@ -168,7 +167,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Taux Horaire Technicien ({symbol}/h)
+              Taux Horaire Technicien (MAD/h)
             </label>
             <input
               type="number"
@@ -177,7 +176,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  technicianHourlyRate: Number(e.target.value) || 0,
+                  technicianHourlyRate: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
@@ -186,7 +185,7 @@ export function FinanceBudgetEditModal({
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Coût Horaire Arrêt Usine ({symbol}/h)
+              Coût Horaire Arrêt Usine (MAD/h)
             </label>
             <input
               type="number"
@@ -195,7 +194,7 @@ export function FinanceBudgetEditModal({
               onChange={(e) =>
                 setEditBudgetDraft({
                   ...editBudgetDraft,
-                  productionDowntimeCostPerHour: Number(e.target.value) || 0,
+                  productionDowntimeCostPerHour: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               className="w-full rounded-xl border border-slate-200 p-2.5 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"

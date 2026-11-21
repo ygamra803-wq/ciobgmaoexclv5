@@ -2829,6 +2829,8 @@ describe('Phase 1 — B1 Asset Lifecycle (ACTIVE ➔ STOPPED ➔ ARCHIVED & Reac
       durationMinutes: 30,
       taux_horaire: 40,
       submitForValidation: true,
+      submitted_by_id: 'TECH-S5',
+      technicien: 'Tech S5',
       sparesProposed: [{ ref: 'PDR-S5-1', qty: 1 }], // ExecutionService stores unitPrice: 0 on PENDING
     });
     const pendingExec = useGmaoStore.getState().preventiveExecutions[0];

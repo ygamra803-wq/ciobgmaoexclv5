@@ -14,7 +14,6 @@ import {
   User,
   Factory,
   X,
-  Trash2,
   Layers,
   ArrowLeft,
   ShieldAlert,
@@ -22,7 +21,6 @@ import {
   Lock,
   SlidersHorizontal,
   RotateCcw,
-  Calculator,
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useGmaoStore } from '../../../store/useGmaoStore';
@@ -34,9 +32,9 @@ import {
 } from '../../../core/security/validationReconciliation';
 import { hasPreventiveExecutionAnomaly } from '../../../application/services/MachineHealthPassportService';
 import { getMachineAssetClass, isArchivedMachine } from '../../../utils/activeMachines';
+import { sanitizeSpreadsheetRows } from '../../../utils/spreadsheetSanitize';
 import ValidationStatusBadge, {
   getInterventionNatureMeta,
-  INTERVENTION_NATURE_OPTIONS,
 } from '../../components/common/ValidationStatusBadge';
 import AnimatedPage from '../../components/common/AnimatedPage';
 import PageHeaderIcon from '../../components/common/PageHeaderIcon';
@@ -448,11 +446,19 @@ export default function ValidationCenterView({
       return;
     }
 
+    const normalizedPieces: CorrectivePdrConsumedItem[] = btPieces
+      .map((p) => ({
+        ...p,
+        ref: String(p.ref || '').trim(),
+        quantite: Math.max(1, Number(p.quantite ?? p.qty ?? 1)),
+      }))
+      .filter((p) => Boolean(p.ref));
+    if (decision === 'APPROVED' && btPieces.length > 0 && normalizedPieces.length !== btPieces.length) {
+      showToast?.('Certaines lignes PDR ne contiennent pas de référence article valide.', 'warning');
+      return;
+    }
+
     const reviewFn = onReviewCorrectiveValidation || storeReviewCorrective;
-    const normalizedPieces: CorrectivePdrConsumedItem[] = btPieces.map((p) => ({
-      ...p,
-      quantite: Math.max(1, Number(p.quantite ?? p.qty ?? 1)),
-    }));
     const result = reviewFn(
       String(reviewBt.id ?? reviewBt.num_bt ?? ''),
       {
@@ -470,8 +476,11 @@ export default function ValidationCenterView({
       onAddMouvement
     );
 
-    if (result === null) {
-      showToast?.('Action impossible : vérifiez le statut du Bon de Travail.', 'warning');
+    if (!result) {
+      showToast?.(
+        'Action impossible : vérifiez le statut du BT, le stock disponible ou la séparation des tâches (auto-validation interdite).',
+        'warning'
+      );
       return;
     }
 
@@ -545,6 +554,22 @@ export default function ValidationCenterView({
       return;
     }
 
+    if (decision === 'APPROVED' && execCreateFollowUpDi && !execFollowUpDiAnomalie.trim()) {
+      showToast?.(
+        'Veuillez décrire l’anomalie pour créer la DI corrective de suivi (Auto-DI).',
+        'warning'
+      );
+      return;
+    }
+
+    const normalizedExecSpares = execSpares
+      .map((s) => ({
+        ...s,
+        ref: String(s.ref || s.reference || '').trim(),
+        qty: Math.max(1, Number(s.qty ?? s.quantite ?? 1)),
+      }))
+      .filter((s) => Boolean(s.ref));
+
     const reviewFn = onReviewPreventiveValidation || storeReviewPreventive;
     const updated = reviewFn(
       String(reviewExec.id),
@@ -553,13 +578,21 @@ export default function ValidationCenterView({
         validation_note: execNote.trim(),
         validated_by_id: user?.id || user?.code || 'admin',
         validated_by_name: user?.name || user?.nom || 'Administrateur',
-        approvedSpares: execSpares,
+        approvedSpares: normalizedExecSpares,
         skipStockDeduction: execSkipStockDeduction,
         createFollowUpDi: decision === 'APPROVED' && execCreateFollowUpDi,
         followUpDiAnomalie: execFollowUpDiAnomalie.trim(),
       },
       onAddMouvement
     );
+
+    if (!updated) {
+      showToast?.(
+        'Action impossible : vérifiez le statut, le stock disponible ou la séparation des tâches (auto-validation interdite).',
+        'warning'
+      );
+      return;
+    }
 
     if (decision === 'APPROVED') {
       const diSuffix =
@@ -607,20 +640,42 @@ export default function ValidationCenterView({
       return;
     }
 
+    const normalizedDemandItems = demandItems
+      .map((it) => ({
+        ...it,
+        ref: String(it.ref || '').trim(),
+        quantite: Math.max(1, Number(it.quantite ?? it.qty ?? 1)),
+        qty: Math.max(1, Number(it.quantite ?? it.qty ?? 1)),
+      }))
+      .filter((it) => Boolean(it.ref));
+
+    if (decision === 'APPROVED' && normalizedDemandItems.length === 0) {
+      showToast?.('Une demande de sortie approuvée doit contenir au moins une référence PDR valide.', 'warning');
+      return;
+    }
+
     const reviewFn = onReviewSortieDemandValidation || storeReviewSortieDemand;
-    reviewFn(
+    const updated = reviewFn(
       String(reviewDemand.id),
       {
         decision,
-        code_bon_magasin: demandCodeBonMagasin || reviewDemand.code_bon_tech,
+        code_bon_magasin: String(demandCodeBonMagasin || reviewDemand.code_bon_tech || '').trim(),
         mergeWithMovementId: demandMergeMovementId || null,
-        approvedItems: demandItems,
+        approvedItems: normalizedDemandItems,
         validation_note: demandNote.trim(),
         validated_by_id: user?.id || user?.code || 'admin',
         validated_by_name: user?.name || user?.nom || 'Magasinier / Admin',
       },
       onAddMouvement
     );
+
+    if (!updated) {
+      showToast?.(
+        'Action impossible : vérifiez le statut, le stock disponible ou la séparation des tâches (auto-validation interdite).',
+        'warning'
+      );
+      return;
+    }
 
     if (decision === 'APPROVED') {
       showToast?.(
@@ -691,7 +746,7 @@ export default function ValidationCenterView({
           pcs || 'Aucune PDR',
         ];
       });
-      const btAll = [btHeader, ...btRows];
+      const btAll = sanitizeSpreadsheetRows([btHeader, ...btRows]) as ValidationExportCell[][];
       const wsBt = XLSX.utils.aoa_to_sheet(btAll);
       autoFit(wsBt, btAll);
       XLSX.utils.book_append_sheet(wb, wsBt, 'BT_Correctifs_A_Valider');
@@ -729,7 +784,7 @@ export default function ValidationCenterView({
           pcs || 'Aucune PDR',
         ];
       });
-      const pmAll = [pmHeader, ...pmRows];
+      const pmAll = sanitizeSpreadsheetRows([pmHeader, ...pmRows]) as ValidationExportCell[][];
       const wsPm = XLSX.utils.aoa_to_sheet(pmAll);
       autoFit(wsPm, pmAll);
       XLSX.utils.book_append_sheet(wb, wsPm, 'Executions_PM_A_Valider');
@@ -761,7 +816,7 @@ export default function ValidationCenterView({
           pcs,
         ];
       });
-      const sdAll = [sdHeader, ...sdRows];
+      const sdAll = sanitizeSpreadsheetRows([sdHeader, ...sdRows]) as ValidationExportCell[][];
       const wsSd = XLSX.utils.aoa_to_sheet(sdAll);
       autoFit(wsSd, sdAll);
       XLSX.utils.book_append_sheet(wb, wsSd, 'Demandes_Sortie_Magasin');
@@ -773,7 +828,7 @@ export default function ValidationCenterView({
         entry.reservedQty,
         entry.sources.map((s) => s.code).join(', '),
       ]);
-      const resAll = [resHeader, ...resRows];
+      const resAll = sanitizeSpreadsheetRows([resHeader, ...resRows]) as ValidationExportCell[][];
       const wsRes = XLSX.utils.aoa_to_sheet(resAll);
       autoFit(wsRes, resAll);
       XLSX.utils.book_append_sheet(wb, wsRes, 'Reservations_PDR_Virtuelles');

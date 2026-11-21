@@ -1,4 +1,12 @@
 import { normalizeDateToYMD } from '../../utils/datePeriodUtils';
+import {
+  convertCurrencyAmount,
+  getCurrencyCode,
+  getCurrencyConfig,
+  getCurrencySymbol,
+  type CurrencyFinancialConfig,
+} from '../../utils/currencyService';
+import { sanitizeCsvCell } from '../../utils/spreadsheetSanitize';
 import { AvailabilityCalculationService } from '../../domain/services/AvailabilityCalculationService';
 import {
   filterActiveMachines,
@@ -938,7 +946,7 @@ export function buildShiftOrWeeklyReport({
     const tEntry = ensureTech(ex.executorName || 'Technicien');
     tEntry.preventiveCount++;
     tEntry.totalHours = Number(
-      (tEntry.totalHours + (Number(ex.durationMinutes) || 30) / 60).toFixed(1)
+      (tEntry.totalHours + (Number(ex.durationMinutes) || 0) / 60).toFixed(1)
     );
   });
 
@@ -1251,7 +1259,14 @@ export function buildShiftOrWeeklyReport({
   };
 }
 
-export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData): string[][] {
+export function buildShiftWeeklyReportExportRows(
+  report: ShiftOrWeeklyReportData,
+  currencyConfig?: CurrencyFinancialConfig
+): string[][] {
+  const cfg = currencyConfig || getCurrencyConfig();
+  const isoCode = getCurrencyCode(cfg);
+  const conv = (amount: number): number => convertCurrencyAmount(amount, cfg);
+
   const rows: string[][] = [
     ['Indicateur', 'Valeur', 'Unite / Detail', 'Perimetre'],
     ['Periode Debut', report.fromYMD, `${report.daysCount} jour(s)`, report.assetClassFilter],
@@ -1260,12 +1275,12 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
     ['Correctif Total Periode (Approuves)', String(report.correctiveTotalInPeriodCount), 'BT', report.assetClassFilter],
     ['Correctif Ouverts (Snapshot)', String(report.correctiveOpenSnapshotCount), 'BT en cours', report.assetClassFilter],
     ['Temps Arret Correctif', String(report.totalDowntimeHours), 'heures', report.assetClassFilter],
-    ['Cout PDR Correctif (Approuve)', String(report.correctiveSparesCost), 'EUR', report.assetClassFilter],
+    ['Cout PDR Correctif (Approuve)', String(conv(report.correctiveSparesCost)), isoCode, report.assetClassFilter],
     ['Preventif Executes (Approuves)', String(report.preventiveExecutedInPeriodCount), 'executions', report.assetClassFilter],
-    ['Cout Preventif (Approuve)', String(report.preventiveTotalCost), 'EUR', report.assetClassFilter],
+    ['Cout Preventif (Approuve)', String(conv(report.preventiveTotalCost)), isoCode, report.assetClassFilter],
     ['Bobinage / Sous-traitance Externe (Approuve)', String(report.externalBobinageCount || 0), 'dossiers', report.assetClassFilter],
-    ['Cout Bobinage Externe (Approuve)', String(report.externalBobinageCost || 0), 'EUR', report.assetClassFilter],
-    ['Cout Total Maintenance Officiel (C1: BT + PM + Externe)', String(report.totalOfficialMaintenanceCost), 'EUR', report.assetClassFilter],
+    ['Cout Bobinage Externe (Approuve)', String(conv(report.externalBobinageCost || 0)), isoCode, report.assetClassFilter],
+    ['Cout Total Maintenance Officiel (C1: BT + PM + Externe)', String(conv(report.totalOfficialMaintenanceCost)), isoCode, report.assetClassFilter],
     ['Preventif A Temps (ON_TIME)', String(report.pmCompliance.onTimeCount), 'taches', report.assetClassFilter],
     ['Preventif Fait En Retard (LATE)', String(report.pmCompliance.lateCompletedCount), 'taches', report.assetClassFilter],
     ['Preventif Non Realise / En Retard (OVERDUE)', String(report.pmCompliance.overdueCount), 'taches', report.assetClassFilter],
@@ -1274,7 +1289,7 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
     ['Discipline Preventive Globale', String(report.preventiveDisciplineRate), '%', report.assetClassFilter],
     ['Preventif En Retard (Snapshot)', String(report.preventiveOverdueSnapshotCount), 'taches', report.assetClassFilter],
     ['Magasin Sorties Validees', String(report.sortiesCount), `${report.sortiesTotalQuantity} pcs`, report.assetClassFilter],
-    ['Magasin Cout Consommation', String(report.consumptionCost), 'EUR', report.assetClassFilter],
+    ['Magasin Cout Consommation', String(conv(report.consumptionCost)), isoCode, report.assetClassFilter],
     ['Magasin Demandes Sortie En Attente (Non deduites)', String(report.pendingSortieDemandsWarningCount), 'demandes', 'GLOBAL'],
     ['Maker-Checker En Attente Total', String(report.makerCheckerQueue.totalPendingCount), 'elements', 'GLOBAL'],
     ['Systeme General Interventions Periode (Approuvees)', String(report.systemGeneralSummary.correctiveInPeriodCount), 'BT', 'SYSTEM_GENERAL'],
@@ -1287,10 +1302,10 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
     'Code Machine',
     'Equipement',
     'Classe',
-    'Cout BT Approuve (EUR)',
-    'Cout PM Approuve (EUR)',
-    'Cout Externe Bobinage (EUR)',
-    'Cout Total Officiel (EUR)',
+    `Cout BT Approuve (${isoCode})`,
+    `Cout PM Approuve (${isoCode})`,
+    `Cout Externe Bobinage (${isoCode})`,
+    `Cout Total Officiel (${isoCode})`,
     'Arret (h)',
   ]);
   for (const m of report.machineCostBreakdown || []) {
@@ -1299,10 +1314,10 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
       m.machineCode,
       m.machineName,
       m.assetClass,
-      String(m.correctiveCost),
-      String(m.preventiveCost),
-      String(m.externalBobinageCost),
-      String(m.totalOfficialCost),
+      String(conv(m.correctiveCost)),
+      String(conv(m.preventiveCost)),
+      String(conv(m.externalBobinageCost)),
+      String(conv(m.totalOfficialCost)),
       String(m.totalDowntimeHours),
     ]);
   }
@@ -1317,7 +1332,7 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
     'Reference PDR',
     'Designation',
     'Quantite',
-    'Cout Total (EUR)',
+    `Cout Total (${isoCode})`,
   ]);
   for (const mvt of report.officialMovementsInPeriod || []) {
     rows.push([
@@ -1329,36 +1344,57 @@ export function buildShiftWeeklyReportExportRows(report: ShiftOrWeeklyReportData
       mvt.ref,
       mvt.designation,
       `${mvt.quantity} ${mvt.unit}`,
-      String(mvt.totalCost),
+      String(conv(mvt.totalCost)),
     ]);
   }
 
   return rows;
 }
 
-export function buildShiftWeeklyReportCsv(report: ShiftOrWeeklyReportData): string {
-  const rows = buildShiftWeeklyReportExportRows(report);
+export function buildShiftWeeklyReportCsv(
+  report: ShiftOrWeeklyReportData,
+  currencyConfig?: CurrencyFinancialConfig
+): string {
+  const rows = buildShiftWeeklyReportExportRows(report, currencyConfig);
   return (
     '\uFEFF' +
-    rows
-      .map((r) => r.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(';'))
-      .join('\n')
+    rows.map((r) => r.map((cell) => sanitizeCsvCell(cell)).join(';')).join('\n')
   );
 }
 
-export function buildShiftWeeklyReportJson(report: ShiftOrWeeklyReportData): string {
+export function buildShiftWeeklyReportJson(
+  report: ShiftOrWeeklyReportData,
+  currencyConfig?: CurrencyFinancialConfig
+): string {
+  const cfg = currencyConfig || getCurrencyConfig();
+  const isoCode = getCurrencyCode(cfg);
+  const currencySymbol = getCurrencySymbol(cfg);
+  const baseRate = cfg.exchangeRates?.[cfg.baseCurrencyCode] || 1;
+  const targetRate = cfg.exchangeRates?.[isoCode] || 1;
+  const rateApplied =
+    cfg.applyExchangeRateConversion && isoCode !== cfg.baseCurrencyCode
+      ? Number((targetRate / baseRate).toFixed(6))
+      : 1;
+  const conv = (amount: number): number => convertCurrencyAmount(amount, cfg);
+
   const summary = {
-    correctiveSparesCost: report.correctiveSparesCost,
-    preventiveTotalCost: report.preventiveTotalCost,
-    externalBobinageCost: report.externalBobinageCost || 0,
-    totalOfficialMaintenanceCost: report.totalOfficialMaintenanceCost,
-    storeConsumptionCost: report.consumptionCost,
+    currencyCode: isoCode,
+    correctiveSparesCost: conv(report.correctiveSparesCost),
+    preventiveTotalCost: conv(report.preventiveTotalCost),
+    externalBobinageCost: conv(report.externalBobinageCost || 0),
+    totalOfficialMaintenanceCost: conv(report.totalOfficialMaintenanceCost),
+    storeConsumptionCost: conv(report.consumptionCost),
     excludedUnapprovedClaimsInPeriod: report.excludedUnapprovedInPeriod,
   };
   return JSON.stringify(
     {
       schemaVersion: 'CIOB-REPORT-EXPORT-V1',
       exportedAt: new Date().toISOString(),
+      currency: {
+        code: isoCode,
+        symbol: currencySymbol,
+        rateApplied,
+      },
       period: {
         from: report.fromYMD,
         to: report.toYMD,
@@ -1373,13 +1409,13 @@ export function buildShiftWeeklyReportJson(report: ShiftOrWeeklyReportData): str
         assetClass: m.assetClass,
         failureCount: m.failureCount,
         correctiveCount: m.correctiveCount,
-        correctiveCost: m.correctiveCost,
-        correctivePdrCost: m.correctivePdrCost,
+        correctiveCost: conv(m.correctiveCost),
+        correctivePdrCost: conv(m.correctivePdrCost),
         preventiveCount: m.preventiveCount,
-        preventiveCost: m.preventiveCost,
+        preventiveCost: conv(m.preventiveCost),
         externalBobinageCount: m.externalBobinageCount,
-        externalBobinageCost: m.externalBobinageCost,
-        totalOfficialCost: m.totalOfficialCost,
+        externalBobinageCost: conv(m.externalBobinageCost),
+        totalOfficialCost: conv(m.totalOfficialCost),
         totalDowntimeHours: m.totalDowntimeHours,
       })),
       officialMovementsInPeriod: (report.officialMovementsInPeriod || []).map((mvt) => ({
@@ -1392,8 +1428,8 @@ export function buildShiftWeeklyReportJson(report: ShiftOrWeeklyReportData): str
         designation: mvt.designation,
         quantity: mvt.quantity,
         unit: mvt.unit,
-        unitPrice: mvt.unitPrice,
-        totalCost: mvt.totalCost,
+        unitPrice: conv(mvt.unitPrice),
+        totalCost: conv(mvt.totalCost),
       })),
     },
     null,

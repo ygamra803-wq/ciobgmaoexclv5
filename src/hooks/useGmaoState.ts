@@ -189,6 +189,8 @@ export function useGmaoState() {
     setMouvements: store.setMouvements,
     sortieDemands: store.sortieDemands,
     setSortieDemands: store.setSortieDemands,
+    handleSubmitSortieDemand: store.handleSubmitSortieDemand,
+    handleReviewSortieDemandValidation: store.handleReviewSortieDemandValidation,
 
     // 6. Preventive
     preventiveTasks: store.preventiveTasks,

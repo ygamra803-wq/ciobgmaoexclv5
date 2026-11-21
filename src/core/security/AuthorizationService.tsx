@@ -125,7 +125,7 @@ export const PERMISSIONS: Record<string, string[]> = {
     ROLES.TECHNICIEN,
     ROLES.OPERATEUR,
   ],
-  'corrective.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE, ROLES.TECHNICIEN],
+  'corrective.manage': [ROLES.ADMIN, 'RESPONSABLE', ROLES.RESPONSABLE_MAINTENANCE],
   'workshop.view': [
     ROLES.ADMIN,
     'RESPONSABLE',
@@ -273,7 +273,6 @@ const ROLE_ALLOWED_TABS: Record<string, Set<string> | '*'> = {
   [ROLES.VIEWER]: new Set([
     'dashboard',
     'finance',
-    'shift_weekly_report',
     'executive_report',
     'stock',
     'machines',

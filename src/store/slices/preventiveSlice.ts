@@ -39,6 +39,7 @@ import {
   getInitialSorties,
   resolveActiveActorContext,
   resolveActiveSessionRole,
+  isMakerCheckerSelfApproval,
   isPartAlreadyDeductedByStoreBon,
 } from './storeBootstrapSlice';
 
@@ -709,9 +710,16 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
 
       const nowIso = new Date().toISOString();
       const actor = resolveActiveActorContext();
+      const hasActiveSession = Boolean(resolveActiveSessionRole());
+      const explicitValidatorId = decisionData?.validated_by_id || decisionData?.reviewer_id;
       const decision = String(decisionData?.decision || 'APPROVED').trim().toUpperCase();
-      const validatorId = String(decisionData?.validated_by_id || actor.actorId).trim();
-      const validatorName = String(decisionData?.validated_by_name || actor.actorName).trim();
+      const validatorId = String(explicitValidatorId || actor.actorId).trim();
+      const validatorName = String(
+        decisionData?.validated_by_name ||
+          decisionData?.reviewer_name ||
+          decisionData?.reviewerName ||
+          actor.actorName
+      ).trim();
       const validationNote = String(decisionData?.validation_note || decisionData?.notes || '').trim();
 
       if (decision === 'NEEDS_CLARIFICATION' || decision === 'REJECTED') {
@@ -755,6 +763,24 @@ export function createPreventiveSlice(set: StoreSet, get: StoreGet): PreventiveS
           after: { validation_status: nextStatus, validation_note: validationNote },
         });
         return updatedExec;
+      }
+
+      // Enforce Segregation of Duties (SoD): submitter cannot approve their own preventive execution
+      if (
+        isMakerCheckerSelfApproval({
+          submitterId: existing.submitted_by_id,
+          submitterName: existing.submitted_by_name || existing.executorName,
+          validatorId,
+          validatorName,
+          hasExplicitValidatorId: Boolean(explicitValidatorId),
+          hasActiveSession,
+        })
+      ) {
+        Logger.warn('[PreventiveSlice] SoD blocked self-approval on preventive execution', {
+          executionId: String(executionId),
+          validatorId,
+        });
+        return null;
       }
 
       // APPROVED branch

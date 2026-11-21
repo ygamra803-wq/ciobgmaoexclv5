@@ -59,6 +59,8 @@ import {
   MachineTCOCalculation,
   BudgetVarianceItem,
   PeriodFinancialSummary,
+  extractRecordYear,
+  isUnapprovedFinancialRecord,
 } from '../../../application/services/FinancialCalculationService';
 import { FinancialExportService } from '../../../services/financialExportService';
 import { useAuth } from '../../../context/AuthContext';
@@ -144,11 +146,15 @@ export default function FinanceView({
   showToast,
 }: FinanceViewProps) {
   const { user } = useAuth();
-  const { formatCurrency, currencyCode, symbol, setCurrency } = useCurrency();
+  const { config: currencyConfig, formatCurrency, currencyCode, symbol, setCurrency } = useCurrency();
+  const canViewFinance =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'finance.view');
   const canManage =
     Boolean(user) &&
     !AuthorizationService.isReadOnly(user) &&
     AuthorizationService.hasPermission(user, 'finance.manage');
+  const canExportFinance =
+    Boolean(user) && AuthorizationService.hasPermission(user, 'report.export');
 
   // 1. Budget State via DataGateway (FIN-P0: 0 allocations in empty factory mode)
   const [budget, setBudget] = useState<FiscalBudgetConfig>(() => {
@@ -192,7 +198,11 @@ export default function FinanceView({
   // Save budget changes via DataGateway with actor audit stamp (P2-5)
   const saveBudget = (updated: FiscalBudgetConfig) => {
     if (!canManage) return;
-    const actor = user?.name || user?.nom || user?.username || user?.role || 'ADMIN';
+    const actor = {
+      id: user?.id || user?.code || user?.username || 'ADMIN',
+      name: user?.name || user?.nom || user?.username || user?.role || 'ADMIN',
+      role: user?.role || 'RESPONSABLE',
+    };
     const saved = DataGateway.saveFinancialBudget(updated, actor);
     setBudget(saved);
     if (saved.periodMode) {
@@ -250,6 +260,29 @@ export default function FinanceView({
   // Edit budget modal state
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [editBudgetDraft, setEditBudgetDraft] = useState<FiscalBudgetConfig>(budget);
+
+  // Official approved external dossiers (matches FinancialCalculationService Maker-Checker filter)
+  const approvedSortiesExterne = useMemo(
+    () => (sortiesExterne || []).filter((se) => se && !isUnapprovedFinancialRecord(se)),
+    [sortiesExterne]
+  );
+
+  // Dynamic fiscal year selector list combining rolling years, selected fiscal year, and record years
+  const availableFiscalYears = useMemo(() => {
+    const nowYr = new Date().getFullYear();
+    const yrs = new Set<number>([nowYr - 2, nowYr - 1, nowYr, nowYr + 1, budget.fiscalYear]);
+    const collectYears = (rows: Array<Record<string, unknown>>) => {
+      (rows || []).forEach((r) => {
+        const yr = extractRecordYear(r);
+        if (yr !== null) yrs.add(yr);
+      });
+    };
+    collectYears(mouvements);
+    collectYears(correctiveInterventions);
+    collectYears(preventiveExecutions);
+    collectYears(sortiesExterne as unknown as Array<Record<string, unknown>>);
+    return Array.from(yrs).sort((a, b) => a - b);
+  }, [budget.fiscalYear, mouvements, correctiveInterventions, preventiveExecutions, sortiesExterne]);
 
   // Compute Full Financial Synthesis
   const synthesis: FinancialSynthesis = useMemo(() => {
@@ -431,8 +464,12 @@ export default function FinanceView({
 
   // Handle Export Excel
   const handleExportExcel = () => {
+    if (!canExportFinance) {
+      if (showToast) showToast("Droits insuffisants pour exporter les données financières.", 'warning');
+      return;
+    }
     try {
-      FinancialExportService.exportFinancialSynthesisToExcel(synthesis, symbol);
+      FinancialExportService.exportFinancialSynthesisToExcel(synthesis, symbol, currencyConfig);
       if (showToast) showToast('Rapport de pilotage des coûts exporté au format Excel (.xlsx)', 'success');
     } catch (e: unknown) {
       const errMsg = e instanceof Error ? e.message : String(e);
@@ -972,6 +1009,31 @@ export default function FinanceView({
     [formatCurrency]
   );
 
+  if (!canViewFinance) {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 rounded-3xl bg-white border border-amber-200 shadow-lg text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="text-lg font-black text-slate-900">
+          Accès réservé au Pilotage Financier
+        </h2>
+        <p className="text-xs text-slate-600">
+          Votre profil ne dispose pas des droits requis pour consulter les budgets et coûts de maintenance.
+        </p>
+        {onNavigateToTab && (
+          <button
+            type="button"
+            onClick={() => onNavigateToTab('dashboard')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold cursor-pointer"
+          >
+            <span>Retour au Tableau de Bord</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <AnimatedPage className="w-full space-y-5 pb-16">
       {/* 1. Clean Single-Row Floating Header Card */}
@@ -1019,14 +1081,16 @@ export default function FinanceView({
             />
           )}
 
-          <Action3DButton
-            variant="circle"
-            color="emerald"
-            icon={FileSpreadsheet}
-            title="Exporter la synthèse financière multi-feuilles vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
-            ariaLabel="Exporter Synthèse (.xlsx)"
-            onClick={handleExportExcel}
-          />
+          {canExportFinance && (
+            <Action3DButton
+              variant="circle"
+              color="emerald"
+              icon={FileSpreadsheet}
+              title="Exporter la synthèse financière multi-feuilles vers Excel (.xlsx) — Type B : Export externe (non réimportable)"
+              ariaLabel="Exporter Synthèse (.xlsx)"
+              onClick={handleExportExcel}
+            />
+          )}
         </div>
       </div>
 
@@ -1040,7 +1104,7 @@ export default function FinanceView({
           color="emerald"
           badgeText={
             synthesis.totalAllocated === 0
-              ? 'Plafond 0 DH'
+              ? `Plafond ${formatCurrency(0)}`
               : synthesis.totalVariance >= 0
               ? `Solde: +${formatCurrency(synthesis.totalVariance)}`
               : `Déficit: ${formatCurrency(synthesis.totalVariance)}`
@@ -1081,8 +1145,8 @@ export default function FinanceView({
           icon={Clock}
           color="indigo"
           badgeText={`Taux tech: ${formatCurrency(synthesis.budget.technicianHourlyRate)}/h`}
-          footerLabel="Dossiers externes"
-          footerValue={`${sortiesExterne.length} dossier(s)`}
+          footerLabel="Dossiers externes validés"
+          footerValue={`${approvedSortiesExterne.length} dossier(s)`}
           isActive={activeTab === 'labor_subcontracting'}
           onClick={() => setActiveTab('labor_subcontracting')}
         />
@@ -1183,7 +1247,7 @@ export default function FinanceView({
                 aria-label="Exercice fiscal"
                 className="w-full bg-transparent text-xs font-mono font-bold text-slate-900 focus:outline-none cursor-pointer"
               >
-                {[2024, 2025, 2026, 2027].map((yr) => (
+                {[...availableFiscalYears].map((yr) => (
                   <option key={yr} value={yr}>
                     Exercice {yr} {yr === new Date().getFullYear() ? '(Année en cours)' : ''}
                   </option>
@@ -1596,7 +1660,7 @@ export default function FinanceView({
                     min="0"
                     step="0.01"
                     value={simForeignPrice}
-                    onChange={(e) => setSimForeignPrice(Number(e.target.value) || 0)}
+                    onChange={(e) => setSimForeignPrice(Math.max(0, Number(e.target.value) || 0))}
                     className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
                   />
                 </div>
@@ -1618,9 +1682,10 @@ export default function FinanceView({
                   </label>
                   <input
                     type="number"
+                    min="0.001"
                     step="0.001"
                     value={simCustomRate}
-                    onChange={(e) => setSimCustomRate(Number(e.target.value) || 1)}
+                    onChange={(e) => setSimCustomRate(Math.max(0.001, Number(e.target.value) || 1))}
                     className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs font-mono font-bold text-slate-900 focus:outline-hidden"
                   />
                 </div>
@@ -1628,7 +1693,7 @@ export default function FinanceView({
                 {/* Conversion Result Box */}
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 flex flex-col justify-center">
                   <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                    Total Converti TTC (MAD)
+                    Total Converti TTC ({currencyCode})
                   </span>
                   <span className="text-base font-black text-emerald-900 font-mono mt-0.5">
                     {formatCurrency(
@@ -1800,7 +1865,7 @@ export default function FinanceView({
         <FinanceLaborSubcontractingSubTab
           synthesis={synthesis}
           budget={budget}
-          sortiesExterne={sortiesExterne}
+          sortiesExterne={approvedSortiesExterne}
           formatCurrency={formatCurrency}
           symbol={symbol}
           onOpenMachineCard={handleOpenMachineCard}

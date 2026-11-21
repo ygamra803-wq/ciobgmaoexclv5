@@ -181,6 +181,7 @@ export function useAppRouterProps({
     handleStartLiveIntervention,
     handleSubmitInterventionForValidation,
     handleReviewInterventionValidation,
+    handleReviewSortieDemandValidation,
     handleClotureIntervention,
     handleUpdateCorrectiveIntervention,
     handleDeleteCorrectiveIntervention,
@@ -285,6 +286,7 @@ export function useAppRouterProps({
         correctiveInterventions,
         preventiveTasks,
         preventiveExecutions,
+        sortieDemands,
         sortiesExterne,
         machines,
         onNavigateToTab: navigateTo,
@@ -317,6 +319,7 @@ export function useAppRouterProps({
         mouvements,
         correctiveInterventions,
         preventiveExecutions,
+        sortieDemands,
         onReviewCorrectiveValidation: (
           id: string,
           decisionData: Record<string, unknown>,
@@ -328,6 +331,16 @@ export function useAppRouterProps({
           customMvtHandler?: (...args: unknown[]) => unknown
         ) =>
           handleReviewPreventiveExecutionValidation(
+            id,
+            decisionData,
+            customMvtHandler || handleAddMouvement
+          ),
+        onReviewSortieDemandValidation: (
+          id: string,
+          decisionData: Record<string, unknown>,
+          customMvtHandler?: (...args: unknown[]) => unknown
+        ) =>
+          handleReviewSortieDemandValidation?.(
             id,
             decisionData,
             customMvtHandler || handleAddMouvement
@@ -1149,6 +1162,7 @@ export function useAppRouterProps({
     handleResetPreventiveToBaseline,
     handleClearPreventiveForRealFactory,
     sortiesExterne,
+    sortieDemands,
     handleAddSortieExterne,
     handleUpdateSortieExterne,
     handleDeleteSortieExterne,
@@ -1170,6 +1184,8 @@ export function useAppRouterProps({
     handleAddDemandeIntervention,
     handleConvertToBt,
     handleStartLiveIntervention,
+    handleReviewInterventionValidation,
+    handleReviewSortieDemandValidation,
     handleClotureIntervention,
     handleUpdateCorrectiveIntervention,
     handleDeleteCorrectiveIntervention,

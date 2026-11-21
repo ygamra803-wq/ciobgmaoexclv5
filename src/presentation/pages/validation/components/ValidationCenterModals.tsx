@@ -144,6 +144,54 @@ export default function ValidationCenterModals({
       .slice(0, 80);
   }, [stockItems, vcPdrSearch]);
 
+  const [vcExecPdrSearch, setVcExecPdrSearch] = useState('');
+  const [vcExecSelectedPdrRef, setVcExecSelectedPdrRef] = useState('');
+  const [vcExecSelectedPdrQty, setVcExecSelectedPdrQty] = useState<number>(1);
+
+  const vcExecFilteredStockOptions = useMemo(() => {
+    const q = vcExecPdrSearch.trim().toLowerCase();
+    return (stockItems || [])
+      .filter((s) => {
+        const ref = String(s?.ref || s?.code_article || '').trim();
+        if (!ref) return false;
+        if (!q) return true;
+        const des = String(s?.designation || s?.nom || '').toLowerCase();
+        return ref.toLowerCase().includes(q) || des.includes(q);
+      })
+      .slice(0, 80);
+  }, [stockItems, vcExecPdrSearch]);
+
+  const handleAddVcExecMissingPdr = () => {
+    const cleanRef = String(vcExecSelectedPdrRef || '').trim();
+    if (!cleanRef) return;
+    const matched = (stockItems || []).find(
+      (s) => String(s?.ref || s?.code_article || '').trim().toUpperCase() === cleanRef.toUpperCase()
+    );
+    const canonicalRef = String(matched?.ref || matched?.code_article || cleanRef).trim();
+    const designation = String(matched?.designation || matched?.nom || canonicalRef).trim();
+    const unit = String(matched?.unit || matched?.unite || 'pcs').trim();
+    const unitPrice = Number(matched?.prix_unitaire ?? matched?.pmp ?? matched?.prix ?? 0) || 0;
+    const qtyToAdd = Math.max(1, Math.round(Number(vcExecSelectedPdrQty) || 1));
+
+    setReviewExecSpares((prev) => {
+      const idx = prev.findIndex(
+        (s) => String(s.ref || s.reference || '').trim().toUpperCase() === canonicalRef.toUpperCase()
+      );
+      if (idx >= 0) {
+        return prev.map((s, i) => {
+          if (i !== idx) return s;
+          const nextQty = Number(s.qty ?? s.quantite ?? 0) + qtyToAdd;
+          return { ...s, qty: nextQty, quantite: nextQty };
+        });
+      }
+      return [...prev, { ref: canonicalRef, designation, qty: qtyToAdd, quantite: qtyToAdd, unit, unitPrice }];
+    });
+
+    setVcExecSelectedPdrRef('');
+    setVcExecSelectedPdrQty(1);
+    setVcExecPdrSearch('');
+  };
+
   const handleAddVcMissingPdr = () => {
     const cleanRef = String(vcSelectedPdrRef || '').trim();
     if (!cleanRef) return;
@@ -533,6 +581,66 @@ export default function ValidationCenterModals({
                     ))}
                   </div>
                 )}
+                {stockItems.length > 0 && (
+                  <div
+                    data-testid="vc-prev-add-pdr-panel"
+                    className="pt-2 border-t border-slate-200/80 space-y-1.5"
+                  >
+                    <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-700 block">
+                      + Ajouter une pièce manquante (Stock)
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-1.5">
+                      <input
+                        type="text"
+                        data-testid="vc-prev-add-pdr-search"
+                        value={vcExecPdrSearch}
+                        onChange={(e) => setVcExecPdrSearch(e.target.value)}
+                        placeholder="Filtrer réf..."
+                        className="sm:col-span-4 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs"
+                      />
+                      <select
+                        data-testid="vc-prev-add-pdr-select"
+                        value={vcExecSelectedPdrRef}
+                        onChange={(e) => setVcExecSelectedPdrRef(e.target.value)}
+                        className="sm:col-span-5 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold"
+                      >
+                        <option value="">-- Pièce ({vcExecFilteredStockOptions.length}) --</option>
+                        {vcExecFilteredStockOptions.map((s) => {
+                          const ref = String(s.ref || s.code_article || '').trim();
+                          const label = String(s.designation || s.nom || ref);
+                          const dispo = Number(s.stockActuel ?? s.stock_actuel ?? s.quantite ?? 0);
+                          return (
+                            <option key={ref} value={ref}>
+                              {ref} — {label} (Dispo: {dispo})
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        data-testid="vc-prev-add-pdr-qty"
+                        value={vcExecSelectedPdrQty}
+                        onChange={(e) =>
+                          setVcExecSelectedPdrQty(Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="sm:col-span-1 rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-xs font-mono text-center"
+                        aria-label="Quantité PDR préventive à ajouter"
+                      />
+                      <button
+                        type="button"
+                        data-testid="vc-prev-add-pdr-btn"
+                        onClick={handleAddVcExecMissingPdr}
+                        disabled={!vcExecSelectedPdrRef}
+                        className="sm:col-span-2 rounded-lg bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-bold text-xs px-2 py-1 flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Ajouter</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {execSpares.length > 0 && (
                   <label className="flex items-start gap-2 pt-2 border-t border-slate-200/80 text-[11px] text-slate-700 cursor-pointer select-none">
                     <input
@@ -726,20 +834,34 @@ export default function ValidationCenterModals({
                       <span className="font-mono font-black text-slate-900">{it.ref}</span>
                       <span className="text-slate-500 ml-1.5 truncate">{it.designation}</span>
                     </div>
-                    <input
-                      type="number"
-                      min="1"
-                      value={it.quantite ?? it.qty ?? 1}
-                      onChange={(e) => {
-                        const val = Math.max(1, Number(e.target.value) || 1);
-                        setDemandItems((prev) =>
-                          prev.map((row, i) =>
-                            i === idx ? { ...row, quantite: val, qty: val } : row
-                          )
-                        );
-                      }}
-                      className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono text-center"
-                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <input
+                        type="number"
+                        min="1"
+                        value={it.quantite ?? it.qty ?? 1}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value) || 1);
+                          setDemandItems((prev) =>
+                            prev.map((row, i) =>
+                              i === idx ? { ...row, quantite: val, qty: val } : row
+                            )
+                          );
+                        }}
+                        className="w-16 rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono text-center"
+                      />
+                      {demandItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDemandItems((prev) => prev.filter((_, i) => i !== idx))
+                          }
+                          title="Retirer cet article de la demande"
+                          className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
